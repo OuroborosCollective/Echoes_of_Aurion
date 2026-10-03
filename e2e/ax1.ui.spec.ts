@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
+import { AURION_STARTER_VILLAGE_ASSET_PLACEMENTS, AURION_STARTER_VILLAGE_CONTRACT_VERSION } from "../shared/aurionStarterVillageContract";
+import { worldAssetRegionSchema } from "../shared/worldAssetProtocol";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 import { projectPlayerReadback } from "../client/src/xaurion/integration/authoritativeHudProjection";
@@ -115,7 +117,19 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect.poll(async () => (await assetEvidence()).rendered, { timeout: 60_000 }).toBeGreaterThan(0);
       await expect.poll(async () => (await assetEvidence()).loading, { timeout: 60_000 }).toBe(0);
       expect((await assetEvidence()).failed).toBe(0);
-      expect((await assetEvidence()).planned).toBe(108);
+      const regionResponse = await page.request.get("/api/trpc/worldAssets.regionV2", {
+        params: { input: JSON.stringify({ json: { x: 0, z: 0 } }) },
+      });
+      expect(regionResponse.ok()).toBe(true);
+      const regionBody = await regionResponse.json();
+      const region = worldAssetRegionSchema.parse(regionBody.result.data.json);
+      expect(region.placements.filter(p => p.id.startsWith(`${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:`)))
+        .toEqual(AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.map(p => ({
+          ...p, id: `${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:${p.id}`,
+        })));
+      expect(region.placements).toHaveLength(8 * 12 + AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.length);
+      expect((await assetEvidence()).center).toEqual(region.center);
+      expect((await assetEvidence()).planned).toBe(region.placements.length);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-world-assets.png`) });
 
       const initial = await rpc<PlayerUiReadback>(page, "player.ui");

@@ -1,11 +1,12 @@
 import type { QuestKey, QuestState } from "./gameplayProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
+import { aurionQuestNpcForGiver, isAurionQuestNpcId, type AurionQuestGiverName, type AurionQuestNpcId } from "./aurionStarterVillageContract";
 
 export type DialogueQuestActionKind = "offer_quest" | "request_turn_in";
 
 export type DialogueQuestReadModel = {
   readonly key: QuestKey;
-  readonly giver: "Lyra" | "Orun";
+  readonly giver: AurionQuestGiverName;
   readonly state: QuestState;
   readonly readyToTurnIn: boolean;
 };
@@ -15,14 +16,14 @@ export type DialogueQuestIntentResolution =
       readonly state: "offer_available_quest";
       readonly actionKind: "offer_quest";
       readonly questKey: QuestKey;
-      readonly npcId: "lyra" | "orun";
+      readonly npcId: AurionQuestNpcId;
       readonly reason: "accepted_quest_request";
     }
   | {
       readonly state: "turn_in_available";
       readonly actionKind: "request_turn_in";
       readonly questKey: QuestKey;
-      readonly npcId: "lyra" | "orun";
+      readonly npcId: AurionQuestNpcId;
       readonly reason: "accepted_turn_in_request";
     }
   | {
@@ -33,16 +34,16 @@ export type DialogueQuestIntentResolution =
         | "no_matching_quest";
     };
 
-function normalizeNpcId(npcId: string): "lyra" | "orun" | null {
+function normalizeNpcId(npcId: string): AurionQuestNpcId | null {
   const normalized = npcId.trim().toLocaleLowerCase("de-DE");
-  return normalized === "lyra" || normalized === "orun" ? normalized : null;
+  return isAurionQuestNpcId(normalized) ? normalized : null;
 }
 
 function matchesNpc(
-  npcId: "lyra" | "orun",
+  npcId: AurionQuestNpcId,
   giver: DialogueQuestReadModel["giver"]
 ): boolean {
-  return npcId === giver.toLocaleLowerCase("de-DE");
+  return aurionQuestNpcForGiver(giver)?.id === npcId;
 }
 
 /**
