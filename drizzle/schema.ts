@@ -2100,5 +2100,21 @@ export const aurionWorldDirectorReceipts = mysqlTable("aurionWorldDirectorReceip
   index("aurionWorldDirectorReceipts_decision_idx").on(table.decisionHash),
 ]);
 
+/** Canonical, append-only combat victories eligible for server-side quest projection. */
+export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents", {
+  eventId: varchar("eventId", { length: 128 }).primaryKey(),
+  receiptId: varchar("receiptId", { length: 128 }).notNull(),
+  logicalRevision: int("logicalRevision").notNull(),
+  playerUserId: int("playerUserId").notNull(),
+  opponentEntityId: varchar("opponentEntityId", { length: 128 }).notNull(),
+  opponentSpecies: varchar("opponentSpecies", { length: 128 }).notNull(),
+  outcome: mysqlEnum("outcome", ["victory", "defeat"]).notNull(),
+  confirmed: boolean("confirmed").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionCombatVictoryEvents_receipt_uq").on(table.receiptId),
+  index("aurionCombatVictoryEvents_player_revision_idx").on(table.playerUserId, table.logicalRevision),
+]);
+
 /** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
 export * from "./aurionWorldFoundationSchema";

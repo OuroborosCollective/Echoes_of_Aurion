@@ -1,6 +1,7 @@
 import { type AurionCausalTickReceipt, computeReceiptHash } from "../../shared/aurionCausalTickContract";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
+import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContract";
 
 export interface RecordedTickEntry {
   receipt: AurionCausalTickReceipt;
@@ -21,7 +22,7 @@ export interface PersistedCheckpoint {
 }
 
 export interface CausalPersistenceAdapter {
-  saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[]): Promise<void>;
+  saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): Promise<void>;
   saveCheckpoint(zoneId: string, tick: number, stateHash: string, state: CanonicalZoneState): Promise<void>;
   saveReplayRun(run: { worldId: string; zoneId: string; fromTick: number; toTick: number; sourceRevision: string; runtimeRuleset: string; status: "MATCH" | "FIRST_DIVERGENCE" | "UNPROVABLE"; firstDivergentStage?: string; expectedHash?: string; observedHash?: string }): Promise<void>;
   getLatestReceipt(zoneId: string): Promise<AurionCausalTickReceipt | null>;
@@ -68,7 +69,7 @@ export class AurionTickRecorder {
    * durable MariaDB writes on an observer queue. Database latency never advances,
    * delays or authorizes the 10 Hz simulation tick.
    */
-  enqueueTick(receipt: AurionCausalTickReceipt, postState?: CanonicalZoneState, preState?: CanonicalZoneState, intents?: AurionZoneIntent[]): void {
+  enqueueTick(receipt: AurionCausalTickReceipt, postState?: CanonicalZoneState, preState?: CanonicalZoneState, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): void {
     const entry = snapshotRecordedEntry({ receipt, postState, preState, intents });
     this.recordSnapshot(entry);
     const adapter = this.persistenceAdapter;
@@ -76,7 +77,7 @@ export class AurionTickRecorder {
     this.pendingPersistence += 1;
     this.persistenceChain = this.persistenceChain
       .then(async () => {
-        await adapter.saveReceipt(entry.receipt, entry.intents);
+        await adapter.saveReceipt(entry.receipt, entry.intents, combatVictories);
         if (entry.receipt.tick === 1 && entry.preState) {
           await adapter.saveCheckpoint(entry.receipt.zoneId, 0, entry.receipt.preStateHash, entry.preState);
         }

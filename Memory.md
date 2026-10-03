@@ -308,3 +308,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Receipt-bound pilot wolf quest
+Status: VERIFIED repository regression; runtime deployment pending
+Task: Publish the versioned north-gate pilot quest through the canonical quest compiler and derive its six-victory objective only from persisted Aurion combat evidence.
+Decisions: Register `starter-wolves-6` v1 with stable giver `guard-north`; add no quest state machine; bind one increment to one unique persisted combat receipt whose event, player, opponent identity/species, confirmed victory and logical revision pass the strict shared contract; preserve the existing quest receipt/instance persistence transition.
+Touched surfaces: Quest contract, event matcher, pilot template/role catalog, admin service, combat-victory persistence schema/migration and focused regressions.
+Evidence: Focused quest/validator/migration-boundary suite passed 13 tests; `pnpm check`, `pnpm verify:migrations` (70 SQL / 70 journal entries) and `git diff --check` passed. The focused admin regression proves unknown, mismatched-player/species and duplicate receipts cannot increment; exactly six receipts complete, and a seventh leaves progress at six.
+Learned: Objective quantity is safe only when the server reads a unique durable combat receipt and supplies the fixed increment itself; a client event payload cannot be permitted to select species or amount.
+Open: No production deployment or live MariaDB readback is claimed by this repository candidate.
+Next safe step: Run exact-head CI/container and an isolated migrated MariaDB readback before merge or deployment claims.
