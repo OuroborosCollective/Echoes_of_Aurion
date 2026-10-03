@@ -309,6 +309,49 @@ Learned: Repository memory is now recorded automatically from the completed merg
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
+### 2026-10-03 — Bounded quest objective progress and receipt-chain revisions
+Status: VERIFIED repository regression
+Task: Bound numeric quest objective progress at its validated target and derive command event revisions from the canonical persisted receipt chain.
+Decisions: Aurion remains the sole quest and persistence authority. Numeric targets and stored progress fail closed unless they are safe integers; progress is clamped to the target; completed objective nodes reject further runtime mutation. Progress, choice, and completion receipts no longer infer event sequence from completed-node cardinality, and command callers obtain the expected next sequence from persisted receipts while existing state-hash and idempotency guards remain intact.
+Touched surfaces: `server/questCompiler/runtime.ts`, `server/questCompiler/adminService.ts`, `server/questCompiler/persistence.ts`, `server/questCompiler/runtime.test.ts`, `server/questCompiler/persistence.test.ts`.
+Evidence: `pnpm vitest run server/questCompiler/runtime.test.ts server/questCompiler/persistence.test.ts` passed 14 tests; `pnpm vitest run server/questCompiler` passed 61 tests with the environment-dependent MariaDB causal-closure test skipped; `pnpm check` passed; `git diff --check` passed. The full `pnpm test` run passed 1,840 tests and skipped 207 environment-dependent tests but reported one unrelated timing failure in `client/src/pages/Home.test.tsx`; an immediate isolated rerun of that unchanged file passed all 5 tests. Regressions cover 5 + 1 = 6, 5 + 2 = 6, completed-node rejection, identical receipt replay, a different late event without over-counting, and competing progress transitions at one expected state revision.
+Learned: Completed-node count is graph topology, not an event revision. The durable quest receipt chain is the canonical revision source, while the state hash remains the concurrency boundary and the idempotency key remains the replay boundary.
+Open: No production deployment or external database runtime claim is made; the local persistence lane used the repository's database-optional in-memory implementation, and the MariaDB-only causal-closure suite remained environment-skipped.
+Next safe step: Exercise the same revision conflict cases in the configured MariaDB evidence lane before making a production-runtime claim.
+
+### 2026-10-03 — PR 737 strict event-sequence narrowing
+Status: VERIFIED focused repository regression
+Task: Repair exact-head CI TS2322 in progress, choice and completion receipt construction.
+Decisions: Require typeof eventSequence === number before safe-integer/range checks so the existing fail-closed runtime check also narrows the TypeScript type. No assertion cast, fallback revision or lowered validation.
+Touched surfaces: server/questCompiler/runtime.ts.
+Evidence: Quest compiler suites passed 61 tests (one MariaDB case skipped locally); clean full nonincremental TypeScript check. Existing capping, replay and competing-revision regressions retained.
+Learned: Number.isSafeInteger does not narrow number | undefined in TypeScript.
+Open: Exact-head CI and integration with later combat/reward changes remain required.
+Next safe step: Push the correction, verify CI, and integrate in series order.
+
+
+### 2026-10-03 — PR #737 — fix(quest): clamp numeric objective progress and canonicalize event sequences from persisted receipts
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=737 merge=784ce2232ede1f370322c482626e3d400336c682 -->
+Task: Merge PR #737 into `main` — fix(quest): clamp numeric objective progress and canonicalize event sequences from persisted receipts.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `server/questCompiler/adminService.ts`
+- `server/questCompiler/persistence.test.ts`
+- `server/questCompiler/persistence.ts`
+- `server/questCompiler/runtime.test.ts`
+- `server/questCompiler/runtime.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/737
+- Merge commit: `784ce2232ede1f370322c482626e3d400336c682`
+- PR head: `7f4201517c93d6286cab9e36b76eaf6993d81205`
+- Merged at: 2026-10-03T05:19:02Z
+- Post-merge workflow run: 37099439617
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
 
 ### 2026-10-03 — Starter-village pilot evidence lane
 Status: PARTIAL — repository lane verified; isolated runtime execution pending CI

@@ -258,18 +258,24 @@ export class QuestRuntimeEngine {
     if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1_000) throw new Error("QUEST_PROGRESS_AMOUNT_INVALID");
     const currentNode = plan.nodes.find(n => n.id === instance.currentNodeId);
     if (!currentNode?.objective || currentNode.objective.key !== objectiveKey) throw new Error("QUEST_OBJECTIVE_KEY_MISMATCH");
+    if (instance.completedNodeIds.includes(currentNode.id)) throw new Error("QUEST_OBJECTIVE_ALREADY_COMPLETED");
+
+    const rawTarget = currentNode.objective.targetValue;
+    if (!Number.isSafeInteger(rawTarget) || (rawTarget as number) < 1) throw new Error("QUEST_OBJECTIVE_TARGET_INVALID");
+    const target = rawTarget as number;
 
     const occurredAt = operationalDate(this.clock).toISOString();
     const previousStateHash = computeQuestStateHash(instance);
-    const currentProgress = (instance.objectiveProgress[objectiveKey] as number) || 0;
-    const newProgress = currentProgress + amount;
+    const storedProgress = instance.objectiveProgress[objectiveKey] ?? 0;
+    if (!Number.isSafeInteger(storedProgress) || (storedProgress as number) < 0) throw new Error("QUEST_OBJECTIVE_PROGRESS_INVALID");
+    const currentProgress = storedProgress as number;
+    const newProgress = Math.min(currentProgress + amount, target);
 
     let completedNode = false;
     let nextNodeId = instance.currentNodeId;
     const completedNodeIds = [...instance.completedNodeIds];
 
     if (currentNode && currentNode.objective) {
-      const target = (currentNode.objective.targetValue as number) || 1;
       if (newProgress >= target) {
         completedNode = true;
         completedNodeIds.push(currentNode.id);
@@ -292,7 +298,8 @@ export class QuestRuntimeEngine {
     };
 
     const resultStateHash = computeQuestStateHash(updatedInstance);
-    const eventSequence = options?.eventSequence ?? instance.completedNodeIds.length + 2;
+    const eventSequence = options?.eventSequence;
+    if (typeof eventSequence !== "number" || !Number.isSafeInteger(eventSequence) || eventSequence < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
 
     const receiptIdentity = computeCanonicalHash(
       'aurion.quest.receipt.identity.v1',
@@ -348,7 +355,8 @@ export class QuestRuntimeEngine {
       updatedAt: occurredAt,
     };
     const resultStateHash = computeQuestStateHash(updatedInstance);
-    const eventSequence = options?.eventSequence ?? completedNodeIds.length + 2;
+    const eventSequence = options?.eventSequence;
+    if (typeof eventSequence !== "number" || !Number.isSafeInteger(eventSequence) || eventSequence < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
     const receiptIdentity = computeCanonicalHash("aurion.quest.receipt.identity.v1", {
       instanceId: instance.id,
       edgeId,
@@ -402,7 +410,8 @@ export class QuestRuntimeEngine {
       (instance.worldStateRevision !== undefined && options.source.sourceLogicalRevision !== instance.worldStateRevision)
     ) throw new Error("QUEST_CAUSAL_SOURCE_IDENTITY_MISMATCH");
 
-    const eventSequence = options?.eventSequence ?? instance.completedNodeIds.length + 3;
+    const eventSequence = options?.eventSequence;
+    if (typeof eventSequence !== "number" || !Number.isSafeInteger(eventSequence) || eventSequence < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
     const idempotencyKey = options?.idempotencyKey ?? `complete:${instance.id}`;
     const receiptIdentity = computeCanonicalHash('aurion.quest.receipt.identity.v1', {
       instanceId: instance.id,

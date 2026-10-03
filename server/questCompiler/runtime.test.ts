@@ -50,7 +50,8 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
       acceptedInstance,
       plan,
       objectiveKey,
-      1
+      1,
+      { eventSequence: 2 },
     );
     expect(progressedInstance.updatedAt).toBe(expectedIso);
     expect(progressReceipt.createdAt).toBe(expectedIso);
@@ -60,7 +61,8 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
       progressedInstance,
       plan,
       objectiveKey,
-      2
+      2,
+      { eventSequence: 3 },
     );
 
     // 5. Complete
@@ -80,7 +82,7 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
     const { updatedInstance: completedInstance, receipt: completeReceipt } = runtime.completeQuest(
       progressedInstance2,
       plan,
-      { source }
+      { source, eventSequence: 4 }
     );
     expect(completedInstance.state).toBe('completed');
     expect(completedInstance.updatedAt).toBe(expectedIso);
@@ -109,7 +111,8 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
         accepted,
         plan,
         plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key,
-        1
+        1,
+        { eventSequence: 2 },
       );
 
       runs.push({
@@ -140,7 +143,8 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
       accepted,
       plan,
       plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key,
-      1
+      1,
+      { eventSequence: 2 },
     );
 
     // Receipt ID must follow the deterministic format rcpt_<24-hex-identity>
@@ -161,14 +165,55 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
     const { updatedInstance: accepted } = runtime.acceptQuest(instance, plan);
 
     // Initial progress
-    const run1 = runtime.progressObjective(accepted, plan, plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key, 1);
+    const run1 = runtime.progressObjective(accepted, plan, plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key, 1, { eventSequence: 2 });
 
     // Retry on same input state
-    const run2 = runtime.progressObjective(accepted, plan, plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key, 1);
+    const run2 = runtime.progressObjective(accepted, plan, plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key, 1, { eventSequence: 2 });
 
     expect(run1.receipt.id).toBe(run2.receipt.id);
     expect(run1.receipt.resultStateHash).toBe(run2.receipt.resultStateHash);
     expect(run1.receipt.receiptHash).toBe(run2.receipt.receiptHash);
     expect(run1.receipt.idempotencyKey).toBe(run2.receipt.idempotencyKey);
+  });
+
+  it.each([
+    { amount: 1, label: '5 + 1 = 6' },
+    { amount: 2, label: '5 + 2 = 6' },
+  ])('caps numeric objective progress at its validated target ($label)', ({ amount }) => {
+    const { runtime } = setupEngines();
+    const { instance, plan } = runtime.compileAndOfferQuest({
+      worldId: 'world_1', playerUserId: 1, triggerEventId: 'evt_init',
+    });
+    const { updatedInstance: accepted } = runtime.acceptQuest(instance, plan);
+    const objectiveNode = plan.nodes.find(node => node.id === accepted.currentNodeId)!;
+    const objectiveKey = objectiveNode.objective!.key;
+    const targetPlan = {
+      ...plan,
+      nodes: plan.nodes.map(node => node.id === objectiveNode.id
+        ? { ...node, objective: { ...node.objective!, targetValue: 6 } }
+        : node),
+    };
+    const atFive = { ...accepted, objectiveProgress: { ...accepted.objectiveProgress, [objectiveKey]: 5 } };
+
+    const result = runtime.progressObjective(atFive, targetPlan, objectiveKey, amount, { eventSequence: 7 });
+
+    expect(result.completedNode).toBe(true);
+    expect(result.updatedInstance.objectiveProgress[objectiveKey]).toBe(6);
+    expect(result.updatedInstance.completedNodeIds.filter(id => id === objectiveNode.id)).toHaveLength(1);
+  });
+
+  it('rejects progress on an already completed objective without creating a mutated result', () => {
+    const { runtime } = setupEngines();
+    const { instance, plan } = runtime.compileAndOfferQuest({
+      worldId: 'world_1', playerUserId: 1, triggerEventId: 'evt_init',
+    });
+    const { updatedInstance: accepted } = runtime.acceptQuest(instance, plan);
+    const objectiveNode = plan.nodes.find(node => node.id === accepted.currentNodeId)!;
+    const completed = { ...accepted, completedNodeIds: [...accepted.completedNodeIds, objectiveNode.id] };
+
+    expect(() => runtime.progressObjective(
+      completed, plan, objectiveNode.objective!.key, 1, { eventSequence: 3, idempotencyKey: 'late-event' },
+    )).toThrow('QUEST_OBJECTIVE_ALREADY_COMPLETED');
+    expect(completed.objectiveProgress).toEqual(accepted.objectiveProgress);
   });
 });
