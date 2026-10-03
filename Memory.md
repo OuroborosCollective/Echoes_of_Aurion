@@ -308,3 +308,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Deterministic Aurion starter-village layout
+Status: VERIFIED repository regression
+Task: Replace seed/catalog-cyclic starter-village placement with an Aurion-owned fixed-point layout while preserving the established spawn and return-stone position.
+Decisions: Reference the immutable return-stone position directly; define the centre, ring road, four cardinal axes and exactly four gate anchors in millimetres; mark the pilot as a partial set and fail closed for any future closed-wall plan without all four geometric openings. Use only admitted world-catalog IDs and keep the client as a view-only projection of the authenticated server region.
+Touched surfaces: `shared/aurionStarterVillageContract.ts`, `shared/worldAssetProtocol.ts`, `server/aurionStarterVillageContract.test.ts`, `server/worldAssetProtocol.test.ts`, `client/src/xaurion/integration/WorldAssetProjection.ts`.
+Evidence: `pnpm vitest run server/aurionStarterVillageContract.test.ts server/worldAssetProtocol.test.ts server/worldNatureCollision.test.ts` passed 17 tests; `pnpm check` passed; `pnpm test` passed 378 files / 1,841 tests with 55 files / 207 environment-dependent tests skipped. Browser screenshot capture was attempted after installing the matching Playwright Chromium but the container lacks `libatk-1.0.so.0`, so no screenshot is claimed.
+Learned: The origin chunk must be selected from a named Aurion geometry contract before the generic seeded catalog lane; the renderer can then remain generic and cannot invent or close village geometry.
+Open: No deployment, native GPU, persistence or production-runtime claim is made. Visual browser readback remains unavailable in this container because the installed Chromium cannot start without the system ATK library.
+Next safe step: Review and merge the exact tested revision, then use the automated post-merge Memory/readback workflow; obtain browser/native visual evidence in an image that includes Chromium runtime libraries if required.

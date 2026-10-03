@@ -25,8 +25,8 @@ describe("worldwide optimized GLB selection",()=>{
   expect(()=>worldAssetsForChunk("seed",{x:WORLD_CHUNK_COORDINATE_LIMIT+1,z:0})).toThrow();
   expect(()=>worldAssetRegionSchema.parse({...worldAssetRegion("world","seed",{x:0,z:0}),catalogHash:"wrong"})).toThrow();
  });
- it("keeps spawn and central paths open and selects LOD using apparent size",()=>{
-  for(const p of worldAssetsForChunk("seed",{x:0,z:0})){expect(Math.hypot(p.xMm,p.zMm)).toBeGreaterThan(20_000);expect(Math.abs(p.xMm)).toBeGreaterThan(4_000);expect(Math.abs(p.zMm)).toBeGreaterThan(4_000);}
+ it("keeps non-starter procedural spawn paths open and selects LOD using apparent size",()=>{
+  for(const p of worldAssetsForChunk("seed",{x:6,z:0})){expect(Math.hypot(p.xMm-6*64_000,p.zMm)).toBeGreaterThan(20_000);expect(Math.abs(p.xMm-6*64_000)).toBeGreaterThan(4_000);expect(Math.abs(p.zMm)).toBeGreaterThan(4_000);}
   expect(worldAssetLod(10,5,55,true)).toBe(0);expect(worldAssetLod(1,100,55,true)).toBe(2);expect(worldAssetLod(10,60,55,true)).toBe(1);
  });
  it("binds every original GLB to bounded budgets, positive scale and per-LOD measured grounding",()=>{
