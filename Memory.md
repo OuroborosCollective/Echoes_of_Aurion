@@ -338,3 +338,11 @@ Evidence: At 6cb6a5d33fd76bde8cfe4260791c085eefecc429, Aurion Local Test Pack su
 Learned: GitHub replaces a pending run in a concurrency group even when cancel-in-progress=false; unrelated PRs must not share the main memory queue.
 Open: New head must receive all applicable successful CI; no merge or production claim yet.
 Next safe step: Read back the independent PR CI results before merge.
+
+### 2026-10-03 — PR 734 shipping browser integration
+Status: PARTIAL — exact-head browser CI required
+Task: Repair the shipping test's dependency on a procedural foundation removed from the origin by the fixed village layout.
+Decisions: Keep the village contract unchanged. Read the authenticated region, verify the existing shipped nature-root placement, and reach a safe viewing point using server-confirmed keyboard movement before rotating the real camera. Preserve all KTX decode, actual draw, fallback and resource assertions.
+Evidence: On ca363702, tablet shipping failed at aim291.assetShipping.spec.ts:70 with zero KTX models; the old test assumed a foundation at (-8m,+24m), absent from the new authoritative origin. Region readback locates nature-root-1 at (-40m,+8m). Typecheck and Playwright discovery passed locally; real exact-head CI remains required.
+Open: No merge or new production claim. The following head must pass the full shipping lane.
+Next safe step: Inspect exact-head browser results before merge.
