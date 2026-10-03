@@ -107,8 +107,8 @@ jobs:
           NODE_BIN="$(command -v node)"
           RUNTIME_ENTRY="$PWD/dist/index.js"
           test -s "$RUNTIME_ENTRY"
-          sudo -u aurion-netproof --chdir="$PWD" "$NODE_BIN" -e 'const fs=require("node:fs");const p=process.argv[1];const st=fs.statSync(p);console.log(JSON.stringify({cwd:process.cwd(),entry:p,bytes:st.size,readable:true}))' "$RUNTIME_ENTRY" | tee "$AURION_EVIDENCE_DIR/runtime-entry-before.json"
-          sudo -u aurion-netproof --chdir="$PWD" env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-before.log 2>&1 &
+          sudo -u aurion-netproof "$NODE_BIN" -e 'const fs=require("node:fs");const p=process.argv[1];const st=fs.statSync(p);console.log(JSON.stringify({cwd:process.cwd(),entry:p,bytes:st.size,readable:true}))' "$RUNTIME_ENTRY" | tee "$AURION_EVIDENCE_DIR/runtime-entry-before.json"
+          sudo -u aurion-netproof env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-before.log 2>&1 &
           for attempt in $(seq 1 50); do
             RUNTIME_PID="$(pgrep -u "$AURION_NET_UID" -f 'dist/index.js' | head -n 1 || true)"
             if [[ -n "$RUNTIME_PID" ]]; then
@@ -135,7 +135,7 @@ jobs:
           NODE_BIN="$(command -v node)"
           RUNTIME_ENTRY="$PWD/dist/index.js"
           test -s "$RUNTIME_ENTRY"
-          sudo -u aurion-netproof --chdir="$PWD" env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-after.log 2>&1 &
+          sudo -u aurion-netproof env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-after.log 2>&1 &
           rm -f /tmp/starter-pilot.pid
           for attempt in $(seq 1 50); do
             RUNTIME_PID="$(pgrep -u "$AURION_NET_UID" -f 'dist/index.js' | head -n 1 || true)"
