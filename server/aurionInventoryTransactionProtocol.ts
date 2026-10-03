@@ -1,7 +1,7 @@
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 
 export const AURION_INVENTORY_TRANSACTION_RULESET_VERSION = "aurion.inventory.transaction.v1" as const;
-export const aurionInventoryOperations = ["merge", "split", "consume"] as const;
+export const aurionInventoryOperations = ["merge", "split", "consume", "grant"] as const;
 export type AurionInventoryOperation = (typeof aurionInventoryOperations)[number];
 export const aurionInventoryRecordVersions = ["legacy", "aurion_v2"] as const;
 export type AurionInventoryRecordVersion = (typeof aurionInventoryRecordVersions)[number];
@@ -45,7 +45,25 @@ type ConsumeCommand = Readonly<{
   quantityExact: string;
 }>;
 
-export type AurionInventoryCommand = MergeCommand | SplitCommand | ConsumeCommand;
+export type GrantCommand = Readonly<{
+  operation: "grant";
+  stack: AurionInventoryStack;
+  item: Readonly<{
+    category: "weapon" | "armor" | "accessory" | "focus" | "relic" | "crafting_component" | "shaping_component";
+    equipmentSlot: "main_hand" | "off_hand" | "head" | "chest" | "hands" | "legs" | "feet" | "belt" | "ring" | "amulet" | "focus" | "relic" | null;
+    quality: "normal";
+    itemLevelExact: "1";
+    affixesJson: "[]";
+    itemPower: number;
+    deterministicHash: string;
+  }>;
+  questInstanceId: string;
+  questReceiptId: string;
+  playerUserId: number;
+  rewardDefinitionHash: string;
+}>;
+
+export type AurionInventoryCommand = MergeCommand | SplitCommand | ConsumeCommand | GrantCommand;
 
 export type AurionInventoryReceipt = Readonly<{
   receiptId: string;
@@ -120,6 +138,19 @@ function canonicalState(state: AurionInventoryState): AurionInventoryState {
 }
 
 function normalizeCommand(command: AurionInventoryCommand): AurionInventoryCommand {
+  if (command.operation === "grant") {
+    const stack = canonicalStack(command.stack);
+    if (stack.version !== "aurion_v2") throw new Error("GRANT_STACK_INVALID");
+    if (!Number.isSafeInteger(command.item.itemPower) || command.item.itemPower < 0) throw new Error("GRANT_ITEM_POWER_INVALID");
+    const item = Object.freeze({ ...command.item, deterministicHash: token(command.item.deterministicHash, "DETERMINISTIC_HASH") });
+    return Object.freeze({
+      operation: "grant", stack, item,
+      questInstanceId: token(command.questInstanceId, "QUEST_INSTANCE_ID"),
+      questReceiptId: token(command.questReceiptId, "QUEST_RECEIPT_ID"),
+      playerUserId: userId(command.playerUserId),
+      rewardDefinitionHash: token(command.rewardDefinitionHash, "REWARD_DEFINITION_HASH"),
+    });
+  }
   if (command.operation === "merge") {
     const sourceStackId = token(command.sourceStackId, "SOURCE_STACK_ID");
     const targetStackId = token(command.targetStackId, "TARGET_STACK_ID");
@@ -181,6 +212,11 @@ function resolveApplied(before: AurionInventoryState, command: AurionInventoryCo
   const state = canonicalState(before);
   const normalized = normalizeCommand(command);
   const stacks = new Map(state.stacks.map(stack => [stack.id, stack]));
+  if (normalized.operation === "grant") {
+    if (stacks.has(normalized.stack.id)) throw new Error("GRANT_STACK_ID_COLLISION");
+    stacks.set(normalized.stack.id, normalized.stack);
+    return replaceStacks(state, [...stacks.values()]);
+  }
   const source = stacks.get(normalized.sourceStackId);
   if (!source) throw new Error("SOURCE_STACK_NOT_FOUND");
 

@@ -1,6 +1,8 @@
+import { verifyEquipmentMutation, type EquipmentMutationReceipt } from "./aurionEquipmentProfileContract";
 import { canonicalJson, canonicalSha256 } from "./aurionCanonicalHash";
 
 export type AurionZoneIntentKind =
+  | "equipment_profile"
   | "move"
   | "attack"
   | "skill"
@@ -66,7 +68,15 @@ export interface AurionMobTriggerIntent extends OperationalIntentMetadata {
   triggerType: string;
 }
 
+export interface AurionEquipmentProfileIntent extends OperationalIntentMetadata {
+  type: "equipment_profile";
+  /** Server-owned revision, independent of client input sequences. */
+  clientSeq: 0;
+  receipt: EquipmentMutationReceipt;
+}
+
 export type AurionZoneIntent =
+  | AurionEquipmentProfileIntent
   | AurionMoveIntent
   | AurionAttackIntent
   | AurionSkillIntent
@@ -97,6 +107,11 @@ export function sanitizeIntentForHash(intent: AurionZoneIntent): Record<string, 
   assertIntentIdentity(intent);
   const base = { type: intent.type, entityId: intent.entityId, clientSeq: intent.clientSeq };
   switch (intent.type) {
+    case "equipment_profile": {
+      const receipt = verifyEquipmentMutation(intent.receipt);
+      if (intent.clientSeq !== 0 || intent.entityId !== `player:${receipt.mutation.userId}`) throw new Error("EQUIPMENT_INTENT_OWNER_MISMATCH");
+      return { ...base, receipt };
+    }
     case "move":
       return { ...base, input: { x: intent.input.x, z: intent.input.z } };
     case "attack":
@@ -145,6 +160,10 @@ export function orderCanonicalZoneIntents(intents: readonly AurionZoneIntent[]):
     assertIntentIdentity(left);
     assertIntentIdentity(right);
     if (left.entityId !== right.entityId) return left.entityId < right.entityId ? -1 : 1;
+    if (left.type === "equipment_profile" && right.type === "equipment_profile") {
+      const a = BigInt(left.receipt.mutation.revisionExact), b = BigInt(right.receipt.mutation.revisionExact);
+      if (a !== b) return a < b ? -1 : 1;
+    }
     if (left.clientSeq !== right.clientSeq) return left.clientSeq - right.clientSeq;
     if (left.type !== right.type) return left.type < right.type ? -1 : 1;
     const leftPayload = canonicalJson(sanitizeIntentForHash(left));

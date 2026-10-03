@@ -1,3 +1,4 @@
+import { AURION_ZONE_RULESET_VERSION } from "../../shared/aurionCausalTickContract";
 import { describe, expect, it } from "vitest";
 import {
   AURION_CAUSAL_TICK_SCHEMA_V2,
@@ -71,7 +72,7 @@ function runtimeIdentity(): WorldGenerationRuntimeIdentity {
     runtimeRevision: SOURCE_REVISION,
     runtimeImageDigest: RUNTIME_IMAGE,
     causalTickSchema: AURION_CAUSAL_TICK_SCHEMA_V2,
-    rulesetVersion: "aurion.zone.rules.v2",
+    rulesetVersion: AURION_ZONE_RULESET_VERSION,
   };
 }
 

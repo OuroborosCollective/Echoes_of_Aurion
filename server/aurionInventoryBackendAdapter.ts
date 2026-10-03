@@ -261,10 +261,28 @@ async function applyDatabaseTransition(
   before: AurionInventoryState,
   after: AurionInventoryState,
   receipt: AurionInventoryReceipt,
-  sourceRecord: Awaited<ReturnType<typeof findOwnedItem>>,
+  sourceRecord: Awaited<ReturnType<typeof findOwnedItem>> | null,
   targetRecord: Awaited<ReturnType<typeof findOwnedItem>> | null,
 ): Promise<void> {
   const afterById = new Map(after.stacks.map(stack => [stack.id, stack]));
+  if (command.operation === "grant") {
+    const granted = afterById.get(command.stack.id);
+    if (!granted) throw new Error("INVENTORY_GRANT_RESULT_MISSING");
+    await assertSplitIdFree(tx, granted.id);
+    await tx.insert(aurionItemInstancesV2).values({
+      id: granted.id, ownerUserId: userId, lootReceiptId: null, craftingReceiptId: null,
+      inventoryReceiptId: receipt.receiptId,
+      originItemId: canonicalSha256({ domain: "aurion.quest.reward.origin.v1", questReceiptId: command.questReceiptId }).slice(7),
+      baseItemDefinitionId: granted.definitionId, category: command.item.category,
+      equipmentSlot: command.item.equipmentSlot, quality: command.item.quality,
+      itemLevelExact: command.item.itemLevelExact, affixesJson: command.item.affixesJson,
+      setId: null, itemPower: command.item.itemPower, deterministicHash: command.item.deterministicHash,
+      quantityExact: granted.quantityExact, maxQuantityExact: granted.maxQuantityExact,
+      mergeKey: granted.mergeKey, provenanceHash: granted.provenanceHash, status: "owned",
+    });
+    return;
+  }
+  if (!sourceRecord) throw new Error("INVENTORY_SOURCE_RECORD_MISSING");
   const sourceAfter = afterById.get(command.sourceStackId);
 
   if (command.operation === "merge") {
@@ -362,7 +380,19 @@ export async function executeAurionInventoryTransaction(input: Readonly<{
   const db = await getDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
 
-  return db.transaction(async tx => {
+  return db.transaction(tx => executeAurionInventoryTransactionInTransaction(tx, input));
+}
+
+export async function executeAurionInventoryTransactionInTransaction(tx: InventoryTransaction, input: Readonly<{
+  userId: number;
+  command: AurionInventoryCommand;
+  idempotencyKey: string;
+  expectedRevisionExact?: string;
+  expectedStateHash?: string;
+  testFailurePoint?: "afterItemWrites";
+}>): Promise<AurionInventoryTransactionResult> {
+    if (!Number.isSafeInteger(input.userId) || input.userId < 1) throw new Error("OWNER_USER_ID_INVALID");
+    const key = normalizeIdempotencyKey(input.idempotencyKey);
     const currentRevision = await readPlayerRevision(tx, input.userId);
     const prior = await loadPriorReceipt(tx, input.userId, key);
 
@@ -378,15 +408,15 @@ export async function executeAurionInventoryTransaction(input: Readonly<{
       return replay;
     }
 
-    const expectedRevision = normalizeStateRevision(input.expectedRevisionExact);
+    const expectedRevision = normalizeStateRevision(input.expectedRevisionExact ?? currentRevision);
     if (expectedRevision !== currentRevision) throw new Error("INVENTORY_STALE_REVISION");
 
     const before = await readCanonicalInventoryState(tx, input.userId, currentRevision);
     const beforeHash = aurionInventoryStateHash(before);
-    if (beforeHash !== input.expectedStateHash) throw new Error("INVENTORY_STALE_STATE");
+    if (input.expectedStateHash !== undefined && beforeHash !== input.expectedStateHash) throw new Error("INVENTORY_STALE_STATE");
 
-    const sourceRecord = await findOwnedItem(tx, input.userId, input.command.sourceStackId);
-    if (sourceRecord.item.status !== "owned") throw new Error("INVENTORY_ITEM_NOT_TRANSITIONABLE");
+    const sourceRecord = input.command.operation === "grant" ? null : await findOwnedItem(tx, input.userId, input.command.sourceStackId);
+    if (sourceRecord && sourceRecord.item.status !== "owned") throw new Error("INVENTORY_ITEM_NOT_TRANSITIONABLE");
 
     let targetRecord: Awaited<ReturnType<typeof findOwnedItem>> | null = null;
     if (input.command.operation === "merge") {
@@ -433,7 +463,6 @@ export async function executeAurionInventoryTransaction(input: Readonly<{
     });
 
     return resolved;
-  });
 }
 
 export function replayAurionInventoryReceipts(rows: readonly {

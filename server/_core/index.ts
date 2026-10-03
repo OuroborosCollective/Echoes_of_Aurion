@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { AURION_ZONE_RULESET_VERSION } from "../../shared/aurionCausalTickContract";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -83,7 +84,7 @@ async function startServer(){
     runtimeImageDigest: activeProvenance.runtimeImageDigest || `sha256:${process.env.AURION_RUNTIME_IMAGE_DIGEST || "unknown"}`,
     releaseArchiveDigest: releaseArchiveDigest || "UNVERIFIED",
     authority: {
-      ruleset: "aurion-zone-v3",
+      ruleset: AURION_ZONE_RULESET_VERSION,
       tickHz: 10,
       causalReceipts: true
     },

@@ -91,6 +91,7 @@ export const playerProfiles = mysqlTable("playerProfiles", {
   victories: int("victories").default(0).notNull(),
   seasonPoints: int("seasonPoints").default(0).notNull(),
   inventoryRevisionExact: varchar("inventoryRevisionExact", { length: 128 }).default("0").notNull(),
+  equipmentRevisionExact: varchar("equipmentRevisionExact", { length: 128 }).default("0").notNull(),
   selectedClass: mysqlEnum("selectedClass", ["unbound", "vanguard", "seer", "warden"]).default("unbound").notNull(),
   classChosenAt: timestamp("classChosenAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -504,7 +505,7 @@ export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
 export const aurionInventoryReceipts = mysqlTable("aurionInventoryReceipts", {
   id: varchar("id", { length: 64 }).primaryKey(),
   userId: int("userId").notNull(),
-  operation: mysqlEnum("operation", ["merge", "split", "consume"]).notNull(),
+  operation: mysqlEnum("operation", ["merge", "split", "consume", "grant"]).notNull(),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
   commandHash: varchar("commandHash", { length: 96 }).notNull(),
   beforeRevisionExact: varchar("beforeRevisionExact", { length: 128 }).notNull(),
@@ -2100,5 +2101,37 @@ export const aurionWorldDirectorReceipts = mysqlTable("aurionWorldDirectorReceip
   index("aurionWorldDirectorReceipts_decision_idx").on(table.decisionHash),
 ]);
 
+/** Canonical, append-only combat victories eligible for server-side quest projection. */
+export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents", {
+  eventId: varchar("eventId", { length: 128 }).primaryKey(),
+  receiptId: varchar("receiptId", { length: 128 }).notNull(),
+  logicalRevision: int("logicalRevision").notNull(),
+  playerUserId: int("playerUserId").notNull(),
+  opponentEntityId: varchar("opponentEntityId", { length: 128 }).notNull(),
+  opponentSpecies: varchar("opponentSpecies", { length: 128 }).notNull(),
+  outcome: mysqlEnum("outcome", ["victory", "defeat"]).notNull(),
+  confirmed: boolean("confirmed").notNull(),
+  questInstanceIdsJson: text("questInstanceIdsJson").notNull(),
+  questProjected: boolean("questProjected").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionCombatVictoryEvents_receipt_uq").on(table.receiptId),
+  index("aurionCombatVictoryEvents_player_revision_idx").on(table.playerUserId, table.logicalRevision),
+]);
+
 /** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
 export * from "./aurionWorldFoundationSchema";
+
+/** Immutable equipment mutation with a durable causal-projection acknowledgment. */
+export const aurionEquipmentProfileReceipts = mysqlTable("aurionEquipmentProfileReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  revisionExact: varchar("revisionExact", { length: 128 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 71 }).notNull(),
+  mutationJson: text("mutationJson").notNull(),
+  appliedCausalReceiptHash: varchar("appliedCausalReceiptHash", { length: 71 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionEquipmentProfileReceipts_user_revision_uq").on(table.userId, table.revisionExact),
+  index("aurionEquipmentProfileReceipts_pending_idx").on(table.userId, table.appliedCausalReceiptHash),
+]);

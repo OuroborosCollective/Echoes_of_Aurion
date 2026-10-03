@@ -27,6 +27,7 @@ import { type QuestCausalClosure } from "./causalClosure";
 import { createQuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
 import { appendTemporalEventInTransaction, verifyTemporalEventSource } from "../history/aurionTemporalEventPersistence";
 import { globalAurionEffectJournal } from "../effects/aurionEffectJournal";
+import { executeAurionInventoryTransactionInTransaction } from "../aurionInventoryBackendAdapter";
 
 async function persistCausalClosure(tx: Parameters<Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]>[0], closure: QuestCausalClosure): Promise<void> {
   const [causalReceipt] = await tx.select().from(aurionCausalTickReceipts)
@@ -116,6 +117,21 @@ async function persistCausalClosure(tx: Parameters<Parameters<NonNullable<Awaite
       subjectId: intent.subjectId,
       ordinal: intent.ordinal,
       payload: intent.payload,
+    });
+  }
+  for (const reward of closure.inventoryRewards) {
+    if (
+      reward.command.questReceiptId !== closure.anchor.questReceiptId ||
+      reward.command.questInstanceId !== closure.worldEvent.data?.instanceId ||
+      String(reward.command.playerUserId) !== closure.worldEvent.data?.playerUserId ||
+      !closure.temporalEvent.subjectIds.includes(`player:${reward.command.playerUserId}`)
+    ) throw new Error("QUEST_INVENTORY_REWARD_BINDING_MISMATCH");
+    const playerUserId = Number(closure.worldEvent.data.playerUserId);
+    if (!Number.isSafeInteger(playerUserId) || playerUserId < 1) throw new Error("QUEST_INVENTORY_REWARD_PLAYER_INVALID");
+    await executeAurionInventoryTransactionInTransaction(tx, {
+      userId: playerUserId,
+      command: reward.command,
+      idempotencyKey: reward.idempotencyKey,
     });
   }
 

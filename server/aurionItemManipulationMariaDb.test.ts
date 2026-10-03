@@ -1,7 +1,7 @@
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { aurionItemInstancesV2, craftingReceipts, playerProfiles } from "../drizzle/schema";
+import { aurionEquipmentProfileReceipts, aurionInventoryReceipts, aurionItemInstancesV2, craftingReceipts, playerProfiles } from "../drizzle/schema";
 import { getDb } from "./db";
 import { executeAurionItemManipulation, itemManipulationCommandSchema, readAurionItemManipulation } from "./aurionItemManipulationPersistence";
 import { executeAurionInventoryTransaction, readAurionInventorySnapshot } from "./aurionInventoryBackendAdapter";
@@ -31,7 +31,9 @@ suite("AIM-535 real MariaDB atomic manipulation", () => {
     const db = (await getDb())!;
     await db.delete(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId, USER));
     await db.delete(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId, FOREIGN));
+    await db.delete(aurionInventoryReceipts).where(eq(aurionInventoryReceipts.userId, USER));
     await db.delete(craftingReceipts).where(eq(craftingReceipts.userId, USER));
+    await db.delete(aurionEquipmentProfileReceipts).where(eq(aurionEquipmentProfileReceipts.userId, USER));
     await db.delete(playerProfiles).where(eq(playerProfiles.userId, USER));
     await db.insert(playerProfiles).values({ userId: USER, level: 1 });
     await db.insert(aurionItemInstancesV2).values([material(`${prefix}-iron`), material(`${prefix}-clay`), material(`${prefix}-foreign`, "10", FOREIGN)]);
@@ -40,7 +42,9 @@ suite("AIM-535 real MariaDB atomic manipulation", () => {
     const db = (await getDb())!;
     await db.delete(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId, USER));
     await db.delete(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId, FOREIGN));
+    await db.delete(aurionInventoryReceipts).where(eq(aurionInventoryReceipts.userId, USER));
     await db.delete(craftingReceipts).where(eq(craftingReceipts.userId, USER));
+    await db.delete(aurionEquipmentProfileReceipts).where(eq(aurionEquipmentProfileReceipts.userId, USER));
     await db.delete(playerProfiles).where(eq(playerProfiles.userId, USER));
   });
   let sourceId: string;

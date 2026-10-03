@@ -13,6 +13,10 @@ export interface CanonicalPlayerState {
   stamina: number;
   combatLevel: number;
   weaponBonus: number;
+  /** Absent only in legacy snapshots; false is server-confirmed unarmed. */
+  weaponEquipped?: boolean;
+  equipmentRevisionExact?: string;
+  equipmentReceiptHash?: string | null;
   weaponTrack: string;
   lastAcceptedClientSeq: number;
   lastCombatSequence: number;

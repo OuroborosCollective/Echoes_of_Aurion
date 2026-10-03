@@ -19,7 +19,7 @@ suite("AIM-286 real MariaDB visual item runtime readback", () => {
   async function clean() {
     if (!isolated) throw new Error("ISOLATED_UI_DATABASE_REQUIRED");
     for (const [table, column] of [
-      ["aurionEquipmentSlots", "userId"],
+      ["aurionEquipmentProfileReceipts", "userId"], ["aurionEquipmentSlots", "userId"],
       ["aurionItemInstancesV2", "ownerUserId"],
       ["aurionLootDropReceiptsV2", "userId"],
       ["expeditionResultReceipts", "userId"],

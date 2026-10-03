@@ -56,10 +56,10 @@ export const aurionQuestRouter = router({
     .query(({ ctx, input }) => adminQuestService.playerQuestDetails(ctx.user.id, input.instanceId)),
   offer: protectedProcedure
     .input(z.object({ templateId: z.string().trim().min(3).max(96) }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.offerQuest({ playerUserId: ctx.user.id, templateId: input.templateId })),
+    .mutation(({ ctx, input }) => adminQuestService.offerPlayerQuest(ctx.user.id, input.templateId)),
   accept: protectedProcedure
     .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.acceptQuest(ctx.user.id, input.instanceId)),
+    .mutation(({ ctx, input }) => adminQuestService.acceptPlayerQuest(ctx.user.id, input.instanceId)),
   choose: protectedProcedure
     .input(z.object({
       instanceId: z.string().min(8).max(128),
@@ -67,8 +67,8 @@ export const aurionQuestRouter = router({
     }).strict())
     .mutation(({ ctx, input }) => adminQuestService.chooseQuestBranch(ctx.user.id, input.instanceId, input.edgeId)),
   complete: protectedProcedure
-    .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.completeQuest(ctx.user.id, input.instanceId)),
+    .input(z.object({ instanceId: z.string().min(8).max(128), giverNpcId: z.string().min(1).max(96) }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.completePlayerQuest(ctx.user.id, input.instanceId, input.giverNpcId)),
   visualSupport: adminProcedure
     .input(
       z.object({

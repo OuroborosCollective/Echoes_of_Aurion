@@ -1,3 +1,4 @@
+import { verifyEquipmentMutation, type EquipmentMutationReceipt } from "../shared/aurionEquipmentProfileContract";
 import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
@@ -81,6 +82,9 @@ type PresencePeer = {
   maxHealth: number;
   stamina: number;
   weaponBonus: number;
+  weaponEquipped?: boolean;
+  equipmentRevisionExact?: string;
+  equipmentReceiptHash?: string | null;
   weaponTrack: WasdZoneCombatProfile["weaponTrack"];
   skillCooldownUntilTick: Map<Ax1BladeSkillId, number>;
   lastCombatSequence: number;
@@ -104,6 +108,7 @@ export function integrateZoneMovement(position: ZonePosition, input: ZoneMove["i
  * below are donor provenance, not external runtime authorities.
  */
 export class AuthoritativeMovementZone {
+  private rulesetVersion: string = AURION_ZONE_RULESET_VERSION;
   private readonly peers = new Map<string, PresencePeer>();
   private readonly peersByEntityId = new Map<string, PresencePeer>();
   private readonly mobRuntime = new ZoneMobRuntime();
@@ -170,6 +175,8 @@ export class AuthoritativeMovementZone {
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
         weaponBonus: peer.weaponBonus,
+        ...(peer.equipmentRevisionExact === undefined ? {} : { equipmentRevisionExact: peer.equipmentRevisionExact, equipmentReceiptHash: peer.equipmentReceiptHash ?? null }),
+        ...(peer.weaponEquipped === undefined ? {} : { weaponEquipped: peer.weaponEquipped }),
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
         lastCombatSequence: peer.lastCombatSequence,
@@ -216,7 +223,7 @@ export class AuthoritativeMovementZone {
       worldId: WORLD_ID,
       zoneId: this.zoneId,
       tick: this.tickNumber,
-      ruleset: AURION_ZONE_RULESET_VERSION,
+      ruleset: this.rulesetVersion,
       combatSequence: this.combatSequence,
       players,
       mobs,
@@ -237,8 +244,10 @@ export class AuthoritativeMovementZone {
   }
 
   restoreFromCanonicalState(state: CanonicalZoneState, previousReceiptHash?: string | null): void {
+    if (!["aurion.zone.rules.v2", "aurion.zone.rules.v3", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
     if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
     if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
+    this.rulesetVersion = state.ruleset;
     this.tickNumber = state.tick;
     this.combatSequence = state.combatSequence;
     if (previousReceiptHash !== undefined) this.previousReceiptHash = previousReceiptHash;
@@ -265,6 +274,9 @@ export class AuthoritativeMovementZone {
         maxHealth: player.maxHealth,
         stamina: player.stamina,
         weaponBonus: player.weaponBonus,
+        weaponEquipped: player.weaponEquipped,
+        equipmentRevisionExact: player.equipmentRevisionExact,
+        equipmentReceiptHash: player.equipmentReceiptHash,
         weaponTrack: player.weaponTrack as WasdZoneCombatProfile["weaponTrack"],
         skillCooldownUntilTick: cooldowns,
         lastCombatSequence: player.lastCombatSequence,
@@ -307,6 +319,9 @@ export class AuthoritativeMovementZone {
       maxHealth: profile.maxHealth,
       stamina: WASD_MAX_STAMINA,
       weaponBonus: profile.weaponBonus,
+      weaponEquipped: profile.weaponEquipped,
+      equipmentRevisionExact: profile.equipmentRevisionExact,
+      equipmentReceiptHash: profile.equipmentReceiptHash,
       weaponTrack: profile.weaponTrack,
       skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
@@ -348,7 +363,18 @@ export class AuthoritativeMovementZone {
   nextClientSequenceForUser(userId: number): number {
     const peer = this.peersByEntityId.get(`player:${userId}`);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
-    return peer.lastReceivedClientSeq + 1;
+    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
+      ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
+  }
+
+  /** Called only after independent DB receipt readback; public wire parsers reject this type. */
+  enqueueEquipmentProfile(raw: EquipmentMutationReceipt): void {
+    const receipt = verifyEquipmentMutation(raw);
+    const peer = this.peersByEntityId.get(`player:${receipt.mutation.userId}`);
+    if (!peer) return;
+    if (this.pendingIntents.some(intent => intent.type === "equipment_profile" && intent.receipt.id === receipt.id)) return;
+    this.pendingIntents.push({ type: "equipment_profile", entityId: `player:${peer.userId}`, connectionId: peer.connectionId,
+      clientSeq: 0, arrivalSeq: ++this.arrivalSequence, receipt });
   }
 
   nextArrivalSequence(): number {
@@ -443,7 +469,7 @@ export class AuthoritativeMovementZone {
     const eventId = `${this.zoneId}:${entityId}->${targetEntityId}:seq:${sequence}`;
     const address = (purpose: string, drawIndex: number) => ({
       worldSeedDigest: WORLD_SEED_DIGEST,
-      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      rulesetVersion: this.rulesetVersion,
       tick: this.tickNumber,
       systemId,
       entityId,
@@ -476,7 +502,7 @@ export class AuthoritativeMovementZone {
     const attacker = { id: `player:${peer.userId}`, stamina: peer.stamina, skills: { combat: { level: peer.combatLevel } } };
     const defender = { id: mob.definition.entityId, health: mob.health, skills: { combat: { level: mob.definition.level } } };
     const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, entropy: entropyBundle.entropy });
+    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, unarmed: this.rulesetVersion !== "aurion.zone.rules.v2" && skillId === null && peer.weaponEquipped === false, entropy: entropyBundle.entropy });
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
     peer.lastCombatSequence = sequence;
@@ -536,7 +562,32 @@ export class AuthoritativeMovementZone {
       revivedEntityIds.push(`player:${peer.userId}`);
       changed = true;
     }
+    // Server equipment revisions have their own order; no client sequence is consumed.
+    if (this.rulesetVersion === AURION_ZONE_RULESET_VERSION) for (const intent of intentsToProcess) {
+      if (intent.type !== "equipment_profile") continue;
+      const receipt = verifyEquipmentMutation(intent.receipt);
+      if (intent.entityId !== `player:${receipt.mutation.userId}`) throw new Error("EQUIPMENT_INTENT_OWNER_MISMATCH");
+      const peer = this.peersByEntityId.get(intent.entityId);
+      if (!peer) continue;
+      const revision = receipt.mutation.revisionExact, current = peer.equipmentRevisionExact ?? "0";
+      if (BigInt(revision) < BigInt(current)) continue;
+      if (revision === current) {
+        if (peer.equipmentReceiptHash !== receipt.hash) throw new Error("EQUIPMENT_REVISION_HASH_CONFLICT");
+        continue;
+      }
+      const profile = receipt.mutation.afterProfile;
+      peer.weaponEquipped = profile.weaponEquipped;
+      peer.weaponBonus = profile.weaponBonus;
+      peer.maxHealth = profile.maxHealth;
+      peer.health = Math.min(peer.health, profile.maxHealth);
+      peer.equipmentRevisionExact = revision;
+      peer.equipmentReceiptHash = receipt.hash;
+      changed = true;
+    }
     captureAuthorityStage("MEMBERSHIP_REVIVAL");
+
+    // Stage ordering must not invalidate an already admitted lower-sequence action.
+    const actionSequenceWatermarks = new Map(this.sortedPeers.map(peer => [peer.userId, peer.lastAcceptedClientSeq]));
 
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {
@@ -557,10 +608,11 @@ export class AuthoritativeMovementZone {
 
     // 03 player actions and quest summaries.
     for (const intent of intentsToProcess) {
-      if (intent.type === "move") continue;
+      if (intent.type === "move" || intent.type === "equipment_profile") continue;
       const peer = this.peersByEntityId.get(intent.entityId);
-      if (!peer || intent.clientSeq <= peer.lastAcceptedClientSeq) continue;
-      peer.lastAcceptedClientSeq = intent.clientSeq;
+      if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
+      actionSequenceWatermarks.set(peer.userId, intent.clientSeq);
+      peer.lastAcceptedClientSeq = Math.max(peer.lastAcceptedClientSeq, intent.clientSeq);
 
       if (intent.type === "attack") {
         const resolution = this.resolvePlayerMelee(peer, intent.targetEntityId, null, AX1_PLAYER_BASIC_MELEE_RANGE_FIXED, ++actionIndex);
@@ -618,6 +670,11 @@ export class AuthoritativeMovementZone {
       const next = regenerateWasdStamina(peer.stamina);
       if (next !== peer.stamina) { peer.stamina = next; changed = true; }
     }
+    for (const mob of this.rulesetVersion === "aurion.zone.rules.v2" ? [] : this.mobRuntime.orderedStates()) {
+      if (mob.health <= 0) continue;
+      const next = regenerateWasdStamina(mob.stamina);
+      if (next !== mob.stamina) { this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, stamina: next }); changed = true; }
+    }
     captureAuthorityStage("REGENERATION");
 
     // 08 receipt creation; durable persistence is an observer queue.
@@ -637,7 +694,7 @@ export class AuthoritativeMovementZone {
       zoneId: this.zoneId,
       tick: this.tickNumber,
       sourceRevision: this.sourceRevisionOverride ?? activeProvenance.sourceRevision,
-      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      rulesetVersion: this.rulesetVersion,
       previousReceiptHash: this.previousReceiptHash,
       preStateHash,
       orderedIntentHash,
@@ -655,7 +712,25 @@ export class AuthoritativeMovementZone {
     } as AurionCausalTickReceipt;
     this.previousReceiptHash = receipt.receiptHash;
     this.lastReceipt = receipt;
-    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess);
+    const combatVictories = combatEvents.flatMap(event => {
+      if (!event.killed || !event.attackerEntityId.startsWith("player:")) return [];
+      const opponent = this.mobRuntime.stateFor(event.defenderEntityId);
+      if (!opponent) return [];
+      const playerUserId = Number(event.attackerEntityId.slice("player:".length));
+      const identity = canonicalSha256({ receiptHash: receipt.receiptHash, combatSequence: event.sequence });
+      return [{
+        schema: "aurion.combat.victory.v1" as const,
+        eventId: `combat-event-${identity.slice("sha256:".length, "sha256:".length + 32)}`,
+        receiptId: `combat-receipt-${identity.slice("sha256:".length, "sha256:".length + 32)}`,
+        logicalRevision: event.sequence,
+        playerUserId,
+        opponentEntityId: event.defenderEntityId,
+        opponentSpecies: opponent.definition.archetype,
+        outcome: "victory" as const,
+        confirmed: true as const,
+      }];
+    });
+    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess, combatVictories);
 
     // 09 projection/transport. Replay emits no socket or persistence side effects.
     if (!this.isReplay) {
