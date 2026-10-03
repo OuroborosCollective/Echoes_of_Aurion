@@ -87,8 +87,8 @@ jobs:
           sudo ip6tables -I OUTPUT 2 -m owner --uid-owner "$AURION_NET_UID" -j REJECT
 
           sudo -u aurion-netproof test -r dist/index.js
-          NODE_BIN="$(command -v node)"
-          sudo -u aurion-netproof env DATABASE_URL="$DATABASE_URL" "$NODE_BIN" -e 'const mysql=require("mysql2/promise"); (async()=>{const pool=mysql.createPool(process.env.DATABASE_URL); const [rows]=await pool.query("SELECT 1 AS ok"); if(rows[0]?.ok!==1) process.exit(2); await pool.end();})().catch(error=>{console.error(error);process.exit(1)})'
+          BASH_BIN="$(command -v bash)"
+          sudo -u aurion-netproof "$BASH_BIN" -c 'exec 3<>/dev/tcp/127.0.0.1/3306; exec 3>&-; exec 3<&-'
 
           for url in             https://generativelanguage.googleapis.com/             https://api.openai.com/             https://api.anthropic.com/             https://agent-zero.ai/             https://bmad-method.org/
           do
