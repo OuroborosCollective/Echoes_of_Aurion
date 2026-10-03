@@ -118,6 +118,10 @@ real("durable combat quest projection — real MariaDB", () => {
     expect(await handInCount()).toBe(1);
     const [epochRequests] = await pool.query("SELECT COUNT(*) AS count FROM aurionWorldEpochRequests");
     expect(epochRequests).toEqual([expect.objectContaining({ count: 0 })]);
+    // A live scheduler keeps ticking between the hand-in and operator proof.
+    // The first epoch must include the earlier hand-in, not only its latest tick.
+    zone.tick();
+    await (await import("./causality/tickRecorder")).globalTickRecorder.flushPersistence();
     // Explicit isolated test/operator trigger, never performed by player hand-in.
     await resolveAndRecordGlobalWorldEpoch({ requestedByUserId: userId, idempotencyKey: "handin-test-approved-proof" });
     // Advance only the isolated operator fixture. The matching hand-in proof is
