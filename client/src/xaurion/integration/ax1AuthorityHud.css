@@ -657,3 +657,105 @@
     right:max(8px,env(safe-area-inset-right));
   }
 }
+
+/* Starterdorf visible guidance — presentation-only, server-readback driven. */
+.xaurion-runtime .ax1-starter-guidance{
+  position:absolute;
+  left:50%;
+  top:82px;
+  transform:translateX(-50%);
+  z-index:6;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:220px;
+  max-width:min(420px,calc(100vw - 32px));
+  padding:8px 12px;
+  border:1px solid rgba(103,232,249,.36);
+  border-radius:999px;
+  background:linear-gradient(180deg,rgba(4,20,32,.92),rgba(2,8,14,.86));
+  box-shadow:0 0 0 1px rgba(251,191,36,.06),0 12px 30px rgba(0,0,0,.35),0 0 28px rgba(34,211,238,.11);
+  backdrop-filter:blur(12px);
+  pointer-events:none;
+  animation:ax1-starter-guidance-in .35s ease-out both;
+}
+.xaurion-runtime .ax1-starter-guidance__sigil{
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  border:1px solid rgba(251,191,36,.55);
+  color:#fde68a;
+  background:radial-gradient(circle,rgba(251,191,36,.2),rgba(34,211,238,.05) 70%,transparent 72%);
+  box-shadow:0 0 18px rgba(251,191,36,.18);
+  animation:ax1-starter-sigil 1.6s ease-in-out infinite;
+}
+.xaurion-runtime .ax1-starter-guidance__copy{display:flex;align-items:baseline;gap:7px;min-width:0}
+.xaurion-runtime .ax1-starter-guidance__copy small{font:700 8px/1 monospace;letter-spacing:.12em;color:#67e8f9}
+.xaurion-runtime .ax1-starter-guidance__copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font:700 12px/1.2 Georgia,serif}
+.xaurion-runtime .ax1-starter-guidance__copy em{font:700 8px/1 monospace;color:#86efac;font-style:normal}
+
+.xaurion-runtime .virtual-joystick{overflow:visible;transition:border-color .12s ease,box-shadow .12s ease,background .12s ease}
+.xaurion-runtime .virtual-joystick[data-active="true"]{
+  border-color:rgba(103,232,249,.72);
+  background:rgba(3,19,30,.62);
+  box-shadow:0 0 calc(16px + 18px * var(--joystick-intensity)) rgba(34,211,238,.18),inset 0 0 22px rgba(34,211,238,.07);
+}
+.xaurion-runtime .virtual-joystick__halo{
+  position:absolute;
+  inset:13%;
+  border:1px solid rgba(103,232,249,.16);
+  border-radius:50%;
+  opacity:calc(.25 + .55 * var(--joystick-intensity));
+  transform:scale(calc(.92 + .08 * var(--joystick-intensity)));
+  transition:transform .1s ease,opacity .1s ease;
+}
+.xaurion-runtime .virtual-joystick__axis{position:absolute;color:rgba(148,163,184,.42);font:700 7px/1 monospace;pointer-events:none}
+.xaurion-runtime .virtual-joystick__axis--north{top:8px;left:50%;transform:translateX(-50%)}
+.xaurion-runtime .virtual-joystick__axis--east{right:8px;top:50%;transform:translateY(-50%)}
+.xaurion-runtime .virtual-joystick__axis--south{bottom:8px;left:50%;transform:translateX(-50%)}
+.xaurion-runtime .virtual-joystick__axis--west{left:8px;top:50%;transform:translateY(-50%)}
+.xaurion-runtime .virtual-joystick__knob{display:grid;place-items:center;color:#fde68a;transition:box-shadow .1s ease,border-color .1s ease}
+.xaurion-runtime .virtual-joystick[data-active="true"] .virtual-joystick__knob{border-color:#67e8f9;box-shadow:0 0 24px rgba(34,211,238,.34),0 0 8px rgba(251,191,36,.18) inset}
+
+.xaurion-runtime .ax1-touch-destination-marker{
+  position:fixed;
+  z-index:12;
+  width:40px;
+  height:40px;
+  margin:-20px 0 0 -20px;
+  display:grid;
+  place-items:center;
+  pointer-events:none;
+  animation:ax1-touch-pulse .72s cubic-bezier(.16,.8,.2,1) both;
+}
+.xaurion-runtime .ax1-touch-destination-marker i{
+  position:absolute;
+  inset:4px;
+  border:2px solid rgba(103,232,249,.78);
+  border-radius:50%;
+  box-shadow:0 0 18px rgba(34,211,238,.28);
+}
+.xaurion-runtime .ax1-touch-destination-marker b{color:#fde68a;font-size:13px;text-shadow:0 0 10px rgba(251,191,36,.65)}
+
+.xaurion-runtime .aurion-quest-confirmation{animation:ax1-confirmation-in .28s ease-out both}
+
+@keyframes ax1-starter-guidance-in{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes ax1-starter-sigil{0%,100%{transform:scale(1);box-shadow:0 0 14px rgba(251,191,36,.12)}50%{transform:scale(1.08);box-shadow:0 0 24px rgba(251,191,36,.28)}}
+@keyframes ax1-touch-pulse{0%{opacity:0;transform:scale(.45)}18%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.75)}}
+@keyframes ax1-confirmation-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:720px){
+  .xaurion-runtime .ax1-starter-guidance{top:122px;min-width:0;width:min(260px,calc(100vw - 160px));padding:6px 9px}
+  .xaurion-runtime .ax1-starter-guidance__copy{display:grid;gap:2px}
+  .xaurion-runtime .ax1-starter-guidance__copy em{display:none}
+}
+@media(max-width:420px){
+  .xaurion-runtime .ax1-starter-guidance{top:116px;left:8px;transform:none;width:min(210px,calc(100vw - 156px));border-radius:12px}
+  .xaurion-runtime .ax1-starter-guidance__sigil{width:26px;height:26px}
+  .xaurion-runtime .ax1-starter-guidance__copy b{font-size:10px}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .xaurion-runtime .ax1-starter-guidance{top:8px;left:50%;width:auto;max-width:280px;padding:5px 9px}
+}
