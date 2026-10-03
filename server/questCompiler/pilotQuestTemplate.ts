@@ -26,7 +26,7 @@ export const PILOT_WOLF_QUEST_TEMPLATE: QuestTemplateVersion = Object.freeze({
     { id: "accept", fromNodeId: "start", toNodeId: "defeat_wolves", priority: 1 },
     { id: "wolves_defeated", fromNodeId: "defeat_wolves", toNodeId: "end", priority: 1 },
   ],
-  outcomes: [{ id: "success", semanticFlag: "starter_wolves_6_completed", factEffects: [], rewards: [] }],
+  outcomes: [{ id: "success", semanticFlag: "starter_wolves_6_completed", factEffects: [], rewards: [{ type: "item", amount: 1, targetId: "component-craft-star-iron-v2" }] }],
   maxCompositionDepth: 10,
   active: true,
   quarantined: false,

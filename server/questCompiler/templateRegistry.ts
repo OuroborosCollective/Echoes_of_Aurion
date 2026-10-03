@@ -68,8 +68,6 @@ export const DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
         rewards: [
           { type: 'xp', amount: 500 },
           { type: 'gold', amount: 150 },
-          // Existing approved Aurion Loot V2 catalog entry; never a provider asset identity.
-          { type: 'item', amount: 1, targetId: 'component-craft-star-iron-v2' },
         ],
         narrativeKey: 'narrative.caravan_investigation.outcome',
       },
@@ -145,10 +143,21 @@ export const DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
   },
 ];
 
+/** Authored successor; publish/activate explicitly, never overwrite persisted v1. */
+export const CARAVAN_ITEM_REWARD_TEMPLATE: QuestTemplateVersion = {
+  ...structuredClone(DEFAULT_SEED_TEMPLATES[0]!),
+  version: 2,
+  active: false,
+  outcomes: DEFAULT_SEED_TEMPLATES[0]!.outcomes.map(outcome => ({
+    ...structuredClone(outcome),
+    rewards: [...outcome.rewards, { type: "item" as const, amount: 1, targetId: "component-craft-star-iron-v2" }],
+  })),
+};
+
 export class QuestTemplateRegistry {
   private templates: Map<string, QuestTemplateVersion> = new Map();
 
-  constructor(initialTemplates: QuestTemplateVersion[] = DEFAULT_SEED_TEMPLATES) {
+  constructor(initialTemplates: QuestTemplateVersion[] = [...DEFAULT_SEED_TEMPLATES, CARAVAN_ITEM_REWARD_TEMPLATE]) {
     for (const tpl of initialTemplates) {
       this.registerTemplate(tpl);
     }

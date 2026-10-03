@@ -387,3 +387,13 @@ Evidence: Quest compiler suites passed 61 tests (one MariaDB case skipped locall
 Learned: Number.isSafeInteger does not narrow number | undefined in TypeScript.
 Open: Exact-head CI and integration with later combat/reward changes remain required.
 Next safe step: Push the correction, verify CI, and integrate in series order.
+
+### 2026-10-03 — PR 738 migration and immutable reward-template integration
+Status: PARTIAL — authenticated completion route remains blocked
+Task: Integrate reviewed village/combat/progress changes and repair duplicate migration 0069 plus in-place quest-version mutation.
+Decisions: Preserve combat migration 0069 and move inventory reward migration to 0070 with journal index 70 and later timestamp; synchronize manifest, artifact/readback allowlists and tests. Preserve caravan v1 verbatim; expose reward-bearing v2 as inactive for explicit authoring activation. Bind the still-unmerged six-wolf pilot to the same existing catalog reward: one component-craft-star-iron-v2. The real-MariaDB closure fixture explicitly activates v2 instead of silently rewriting v1.
+Touched surfaces: Migration/schema/artifact contracts, quest template versioning and tests, pilot reward and integrated PR 737 receipt-sequence narrowing.
+Evidence: Migration verifier 71 SQL / 71 journal entries, sequential indices and no duplicate prefixes. Focused suites: 119 tests passed / 1 DB test skipped. Nonincremental TypeScript passed. Full local suite: 383 files / 1,864 tests passed; 55 files / 207 environment-dependent tests skipped.
+Learned: Hydrating an existing published v1 must not erase or conflict with a changed seed of the same version. Migration IDs must be unique across the series, not merely within each original PR.
+Open: Public complete route still lacks independently verified causal source/hand-in orchestration; existing low-level fixture is not route evidence. Pilot additionally depends on approved wolf runtime content and authenticated giver dialogue. No merge, deployment or successful end-to-end reward claim.
+Next safe step: Complete the canonical route/evidence flow, then run exact-head MariaDB concurrency, replay, restart and browser tests.

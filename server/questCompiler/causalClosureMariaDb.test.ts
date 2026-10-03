@@ -17,7 +17,7 @@ import {
 import { buildQuestCausalClosure } from "./causalClosure";
 import { QuestPersistenceEngine } from "./persistence";
 import { QuestRuntimeEngine } from "./runtime";
-import { QuestTemplateRegistry } from "./templateRegistry";
+import { CARAVAN_ITEM_REWARD_TEMPLATE, QuestTemplateRegistry } from "./templateRegistry";
 import { WorldFactEngine } from "./worldFacts";
 import { materializeQuestDomainCommand } from "./materialization";
 import {
@@ -86,7 +86,8 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
         evidenceHash: evidence.evidenceHash,
       },
     }).event;
-    const registry = new QuestTemplateRegistry();
+    // Explicit isolated authoring activation of immutable reward version 2.
+    const registry = new QuestTemplateRegistry([{ ...CARAVAN_ITEM_REWARD_TEMPLATE, active: true }]);
     const runtime = new QuestRuntimeEngine(facts, registry);
     const persistence = new QuestPersistenceEngine();
 
