@@ -142,6 +142,69 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
 
     expect((await persistence.getReceiptsForInstance(staleInstance.id))).toHaveLength(1);
   });
+
+  it("replays an identical completion event and rejects a different late event without over-counting", async () => {
+    const persistence = new QuestPersistenceEngine();
+    const atFive = {
+      ...instance,
+      id: "qi_test_458_completed_objective",
+      objectiveProgress: { investigate: 5 },
+    };
+    await persistence.saveInstance(atFive);
+    const previousStateHash = computeQuestStateHash(atFive);
+    const atTarget = {
+      ...atFive,
+      currentNodeId: "node_end",
+      completedNodeIds: ["node_objective"],
+      objectiveProgress: { investigate: 6 },
+      updatedAt: "2026-09-22T00:00:01.000Z",
+    };
+    const resultStateHash = computeQuestStateHash(atTarget);
+    const receipt: QuestReceipt = {
+      id: "rcpt_test_458_target",
+      instanceId: atFive.id,
+      eventSequence: 1,
+      planHash: atFive.planHash,
+      graphHash: atFive.graphHash,
+      previousStateHash,
+      resultStateHash,
+      idempotencyKey: "confirmed-objective-event-identical",
+      receiptHash: computeCanonicalHash("aurion.quest.event.v1", { previousStateHash, resultStateHash }),
+      createdAt: "2026-09-22T00:00:01.000Z",
+    };
+    const commit = () => persistence.commitObjectiveTransition({
+      instanceId: atFive.id,
+      expectedStateHash: previousStateHash,
+      idempotencyKey: receipt.idempotencyKey,
+      receipt,
+      updatedInstance: atTarget,
+    });
+
+    expect((await commit()).replayed).toBe(false);
+    expect((await commit()).replayed).toBe(true);
+
+    const overCounted = { ...atTarget, objectiveProgress: { investigate: 7 } };
+    const overCountedHash = computeQuestStateHash(overCounted);
+    const lateReceipt: QuestReceipt = {
+      ...receipt,
+      id: "rcpt_test_458_late",
+      eventSequence: 2,
+      idempotencyKey: "confirmed-objective-event-different-late",
+      resultStateHash: overCountedHash,
+      receiptHash: computeCanonicalHash("aurion.quest.event.v1", { previousStateHash, resultStateHash: overCountedHash }),
+    };
+    await expect(persistence.commitObjectiveTransition({
+      instanceId: atFive.id,
+      expectedStateHash: previousStateHash,
+      idempotencyKey: lateReceipt.idempotencyKey,
+      receipt: lateReceipt,
+      updatedInstance: overCounted,
+    })).rejects.toThrow("QUEST_RUNTIME_STALE_STATE");
+
+    expect((await persistence.getInstance(atFive.id))?.objectiveProgress.investigate).toBe(6);
+    expect(await persistence.getNextEventSequence(atFive.id)).toBe(2);
+    expect(await persistence.getReceiptsForInstance(atFive.id)).toHaveLength(1);
+  });
   it("serializes concurrent identical transitions to one durable receipt", async () => {
     const persistence = new QuestPersistenceEngine();
     const concurrentInstance = { ...instance, id: "qi_test_458_concurrent" };
@@ -166,6 +229,52 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     ]);
 
     expect([a.replayed, b.replayed].sort()).toEqual([false, true]);
+    expect((await persistence.getReceiptsForInstance(concurrentInstance.id))).toHaveLength(1);
+  });
+
+  it("accepts only one of two different progress commands at the same expected state revision", async () => {
+    const persistence = new QuestPersistenceEngine();
+    const concurrentInstance = { ...instance, id: "qi_test_458_concurrent_revision" };
+    await persistence.saveInstance(concurrentInstance);
+    const first = transition(concurrentInstance);
+    const alternateInstance = {
+      ...first.updatedInstance,
+      objectiveProgress: { investigate: 2 },
+    };
+    const alternateResultHash = computeQuestStateHash(alternateInstance);
+    const alternateReceipt: QuestReceipt = {
+      ...first.receipt,
+      id: "rcpt_test_458_alternate",
+      idempotencyKey: `event:test-source-2:instance:${concurrentInstance.id}:objective:investigate`,
+      resultStateHash: alternateResultHash,
+      receiptHash: computeCanonicalHash("aurion.quest.event.v1", {
+        previousStateHash: first.previousStateHash,
+        resultStateHash: alternateResultHash,
+      }),
+    };
+
+    const results = await Promise.allSettled([
+      persistence.commitObjectiveTransition({
+        instanceId: concurrentInstance.id,
+        expectedStateHash: first.previousStateHash,
+        idempotencyKey: first.receipt.idempotencyKey,
+        receipt: first.receipt,
+        updatedInstance: first.updatedInstance,
+      }),
+      persistence.commitObjectiveTransition({
+        instanceId: concurrentInstance.id,
+        expectedStateHash: first.previousStateHash,
+        idempotencyKey: alternateReceipt.idempotencyKey,
+        receipt: alternateReceipt,
+        updatedInstance: alternateInstance,
+      }),
+    ]);
+
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    expect((results.find(result => result.status === "rejected") as PromiseRejectedResult).reason)
+      .toMatchObject({ message: "QUEST_RUNTIME_STALE_STATE" });
+    expect(await persistence.getNextEventSequence(concurrentInstance.id)).toBe(2);
     expect((await persistence.getReceiptsForInstance(concurrentInstance.id))).toHaveLength(1);
   });
 
