@@ -24,7 +24,11 @@ async function decodeModel(loader:GLTFLoader,bytes:ArrayBuffer,signal:AbortSigna
  try{return await Promise.race([pending,new Promise<never>((_,reject)=>{abort=()=>reject(signal.reason);signal.addEventListener("abort",abort,{once:true});})]);}
  finally{retired=true;if(abort)signal.removeEventListener("abort",abort);}
 }
-/** View-only projection of the authenticated, versioned server placement plan. */
+/**
+ * View-only projection of the authenticated, versioned server placement plan.
+ * This also renders the starter village exactly as returned by Aurion; it must
+ * not reconstruct, randomize or close that layout on the client.
+ */
 export class WorldAssetProjection {
  readonly root=new THREE.Group();
  private readonly cache=new Map<string,Cached>();

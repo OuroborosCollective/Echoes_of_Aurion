@@ -309,6 +309,26 @@ Learned: Repository memory is now recorded automatically from the completed merg
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
+### 2026-10-03 — Deterministic Aurion starter-village layout
+Status: VERIFIED repository regression
+Task: Replace seed/catalog-cyclic starter-village placement with an Aurion-owned fixed-point layout while preserving the established spawn and return-stone position.
+Decisions: Reference the immutable return-stone position directly; define the centre, ring road, four cardinal axes and exactly four gate anchors in millimetres; mark the pilot as a partial set and fail closed for any future closed-wall plan without all four geometric openings. Use only admitted world-catalog IDs and keep the client as a view-only projection of the authenticated server region.
+Touched surfaces: `shared/aurionStarterVillageContract.ts`, `shared/worldAssetProtocol.ts`, `server/aurionStarterVillageContract.test.ts`, `server/worldAssetProtocol.test.ts`, `client/src/xaurion/integration/WorldAssetProjection.ts`.
+Evidence: `pnpm vitest run server/aurionStarterVillageContract.test.ts server/worldAssetProtocol.test.ts server/worldNatureCollision.test.ts` passed 17 tests; `pnpm check` passed; `pnpm test` passed 378 files / 1,841 tests with 55 files / 207 environment-dependent tests skipped. Browser screenshot capture was attempted after installing the matching Playwright Chromium but the container lacks `libatk-1.0.so.0`, so no screenshot is claimed.
+Learned: The origin chunk must be selected from a named Aurion geometry contract before the generic seeded catalog lane; the renderer can then remain generic and cannot invent or close village geometry.
+Open: No deployment, native GPU, persistence or production-runtime claim is made. Visual browser readback remains unavailable in this container because the installed Chromium cannot start without the system ATK library.
+Next safe step: Review and merge the exact tested revision, then use the automated post-merge Memory/readback workflow; obtain browser/native visual evidence in an image that includes Chromium runtime libraries if required.
+
+### 2026-10-03 — PR 734 geometric review corrections
+Status: PARTIAL — local regressions verified; exact-head CI pending
+Task: Review ac86c6e7c74db7ab0ce015e70688725d4829a492 and repair demonstrated layout and browser-count regressions.
+Decisions: Reserve the 16–20 m ring corridor using all-LOD catalog bounds; move the four landmarks to fixed ±22 m anchors. The ring is a reserved layout corridor, not a rendered road surface. Reject every closed-wall request until geometric passage evidence exists; four caller-supplied IDs are not evidence. Retain the explicit decorative partial set and existing non-colliding city-asset policy.
+Touched surfaces: Starter-village contract/tests, world-asset JSON import attributes for native ESM test loading, exact server-plan browser assertion and relevant workflow path filters.
+Evidence: Original source-bound GLB audit found 1,341 market and 72 southeast-hut LOD0 vertices inside the ring corridor. Original collision readback returned zero origin obstacles and clear four-axis sweeps; no blocked gate is claimed. Corrected focused tests: 18 passed. Full suite: 378 files / 1,842 tests passed, 55 files / 207 environment-dependent tests skipped. Typecheck passed before final ESM-only adjustment; final check recorded in review logs. Playwright discovers all three phone/tablet/desktop cases; real runtime execution remains CI evidence, not a local claim.
+Learned: Placement-center tests miss footprint intersections; a catalog ID and a named open gate do not prove collision geometry.
+Open: Real MariaDB/browser CI must pass on the final head. No production, native GPU, closed-wall or rendered-ring claim.
+Next safe step: Push this reviewed correction, inspect exact-head CI and only then decide merge.
+
 ### 2026-10-03 — Canonical starter-village quest NPC contract
 Status: VERIFIED repository regression
 Task: Add the north-gate guard to Aurion's canonical NPC/quest-giver boundary without introducing a parallel authority.

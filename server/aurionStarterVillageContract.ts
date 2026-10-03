@@ -1,3 +1,5 @@
+import { AURION_STARTER_VILLAGE_GATES } from "../shared/aurionStarterVillageContract";
+
 /**
  * Canonical Aurion-owned identities and interaction anchors for starter-village
  * quest NPCs. Coordinates use the authoritative zone's fixed-point millimetres.
@@ -27,7 +29,7 @@ export const aurionStarterVillageQuestNpcs = Object.freeze({
     id: "starter_village_north_gate_guard",
     displayName: "Nordtorwache",
     zoneId: "observatory_threshold",
-    position: Object.freeze({ x: 0, z: -12_000 }),
+    position: AURION_STARTER_VILLAGE_GATES[0].position,
   }),
 } as const satisfies Record<AurionQuestNpcId, Readonly<{
   id: AurionQuestNpcId;

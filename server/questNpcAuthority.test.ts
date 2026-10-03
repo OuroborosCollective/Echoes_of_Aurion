@@ -1,3 +1,4 @@
+import { AURION_STARTER_VILLAGE_GATES } from "../shared/aurionStarterVillageContract";
 import { describe, expect, it } from "vitest";
 import { aurionStarterVillageQuestNpcs } from "./aurionStarterVillageContract";
 import { assertQuestNpcAuthorityEvidence, QUEST_NPC_INTERACTION_RADIUS_FIXED } from "./questNpcAuthority";
@@ -14,11 +15,12 @@ const valid = {
 
 describe("canonical Aurion quest NPC authority", () => {
   it("keeps the north-gate guard identity and fixed starter-village anchor in the typed contract", () => {
+    expect(aurionStarterVillageQuestNpcs.starter_village_north_gate_guard.position).toBe(AURION_STARTER_VILLAGE_GATES[0].position);
     expect(aurionStarterVillageQuestNpcs.starter_village_north_gate_guard).toEqual({
       id: "starter_village_north_gate_guard",
       displayName: "Nordtorwache",
       zoneId: "observatory_threshold",
-      position: { x: 0, z: -12_000 },
+      position: { x: 0, z: -30_000 },
     });
   });
 
