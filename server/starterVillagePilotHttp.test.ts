@@ -40,11 +40,12 @@ type ZoneCombatEvent = {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function rpc<T>(procedure: string, cookie: string, input?: unknown): Promise<{ data: T; cookie: string }> {
-  const response = await fetch(endpoint + procedure, {
-    method: input === undefined ? "GET" : "POST",
+async function rpc<T>(procedure: string, cookie: string, input?: unknown, kind: "query" | "mutation" = input === undefined ? "query" : "mutation"): Promise<{ data: T; cookie: string }> {
+  const query = input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify({ json: input }))}`;
+  const response = await fetch(endpoint + procedure + (kind === "query" ? query : ""), {
+    method: kind === "query" ? "GET" : "POST",
     headers: { "content-type": "application/json", cookie },
-    body: input === undefined ? undefined : JSON.stringify({ json: input }),
+    body: kind === "mutation" && input !== undefined ? JSON.stringify({ json: input }) : undefined,
   });
   const body = await response.json() as RpcEnvelope<T>;
   if (body.error !== undefined) {
@@ -219,7 +220,7 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
     expect(offered.instance.state).toBe("offered");
     const accepted = (await rpc<any>("aurionQuest.accept", cookie, { instanceId: offered.instance.id })).data;
     expect(accepted.updatedInstance.state).toBe("active");
-    const questBefore = (await rpc<any>("aurionQuest.details", cookie, { instanceId: offered.instance.id })).data;
+    const questBefore = (await rpc<any>("aurionQuest.details", cookie, { instanceId: offered.instance.id }, "query")).data;
     expect(questBefore.instance.state).toBe("active");
 
     const route = await runAuthoritativeZoneJourney(cookie, registration.data.id);
@@ -282,7 +283,7 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
     if (phase !== "readback") return;
     expect(revision).toMatch(/^[a-f0-9]{40}$/);
     const session = JSON.parse(await readFile(sessionFile, "utf8"));
-    const quest = (await rpc<any>("aurionQuest.details", session.cookie, { instanceId: session.questIdentity.id })).data;
+    const quest = (await rpc<any>("aurionQuest.details", session.cookie, { instanceId: session.questIdentity.id }, "query")).data;
     const inventory = (await rpc<any>("player.ui", session.cookie)).data;
 
     expect({
