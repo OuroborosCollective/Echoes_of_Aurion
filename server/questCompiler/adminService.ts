@@ -372,8 +372,7 @@ export class AdminQuestStudioService {
       }
 
       const expectedStateHash = computeQuestStateHash(instance);
-      const priorReceipts = await this.persistenceEngine.getReceiptsForInstance(instance.id);
-      const eventSequence = (priorReceipts.at(-1)?.eventSequence ?? 0) + 1;
+      const eventSequence = await this.persistenceEngine.getNextEventSequence(instance.id);
       const idempotencyKey = computeCanonicalHash("aurion.quest.event.v1", {
         source: event.source,
         sourceEventId: event.sourceEventId,
@@ -532,8 +531,7 @@ export class AdminQuestStudioService {
       seedDigest: updated.seedDigest!,
       roleBindingHash: updated.roleBindingHash!,
     };
-    const nextSequence = (await this.persistenceEngine.getReceiptsForInstance(updated.id))
-      .reduce((max, receipt) => Math.max(max, receipt.eventSequence), 0) + 1;
+    const nextSequence = await this.persistenceEngine.getNextEventSequence(updated.id);
     const completionCommand = materializeQuestDomainCommand(updated, updatedPlan, {
       kind: "complete",
       instanceId: updated.id,
@@ -616,10 +614,7 @@ export class AdminQuestStudioService {
       if (computeQuestStateHash(instance) !== prior.resultStateHash) throw new Error("QUEST_RECEIPT_READBACK_MISMATCH");
       return { updatedInstance: instance, receipt: prior };
     }
-    const nextSequence = (await this.persistenceEngine.getReceiptsForInstance(instance.id)).reduce(
-      (max, receipt) => Math.max(max, receipt.eventSequence),
-      0,
-    ) + 1;
+    const nextSequence = await this.persistenceEngine.getNextEventSequence(instance.id);
     const result = this.runtimeEngine.executeDomainCommand(
       materializeQuestDomainCommand(instance, plan, {
         kind: "choice",
@@ -666,10 +661,7 @@ export class AdminQuestStudioService {
         replayed: true as const,
       };
     }
-    const nextSequence = (await this.persistenceEngine.getReceiptsForInstance(instance.id)).reduce(
-      (max, receipt) => Math.max(max, receipt.eventSequence),
-      0,
-    ) + 1;
+    const nextSequence = await this.persistenceEngine.getNextEventSequence(instance.id);
     const completionCommand = materializeQuestDomainCommand(instance, plan, {
       kind: "complete",
       instanceId: instance.id,
