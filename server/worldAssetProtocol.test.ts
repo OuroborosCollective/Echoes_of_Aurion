@@ -1,8 +1,23 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { worldAssetCatalog, worldAssetRegion, worldAssetRegionSchema, worldAssetsForChunk, worldAssetLod, legacyWorldAssetRegion, legacyWorldAssetRegionSchema } from "../shared/worldAssetProtocol";
 import { WORLD_CHUNK_COORDINATE_LIMIT } from "../shared/worldChunkProtocol";
 
 describe("worldwide optimized GLB selection",()=>{
+ it("limits the fixed village to origin and preserves the pre-village outer-world asset pipeline",()=>{
+  const coordinates=[{x:-1,z:-1},{x:0,z:-1},{x:1,z:-1},{x:-1,z:0},{x:1,z:0},{x:-1,z:1},{x:0,z:1},{x:1,z:1},{x:6,z:0},{x:-93,z:48},{x:1_000_000,z:-1_000_000}];
+  const seeds=["echoes-of-aurion-v1","seed-a","seed-b"];
+  const plans=seeds.flatMap(seed=>coordinates.map(coordinate=>worldAssetsForChunk(seed,coordinate)));
+  // Independently captured from shared/worldAssetProtocol.ts at main 909ba47d,
+  // before the starter contract. Includes IDs, asset selection, positions and rotations.
+  expect(createHash("sha256").update(JSON.stringify(plans)).digest("hex"))
+   .toBe("2bc0d9734648dd28f485b450d5bec805aecf84d2978e866dd2bd685ae53c5f0d");
+  for(const coordinate of coordinates){
+   expect(worldAssetsForChunk("seed-a",coordinate)).not.toEqual(worldAssetsForChunk("seed-b",coordinate));
+   expect(worldAssetsForChunk("seed-a",coordinate)).toEqual(worldAssetsForChunk("seed-a",coordinate));
+  }
+  expect(worldAssetsForChunk("seed-a",{x:0,z:0})).toEqual(worldAssetsForChunk("seed-b",{x:0,z:0}));
+ });
  it("keeps the strict legacy response compatible and negotiates collision metadata through v2",()=>{
   const legacy=legacyWorldAssetRegion("world","seed",{x:0,z:-1}), current=worldAssetRegion("world","seed",{x:0,z:-1});
   expect(Object.keys(legacy).sort()).toEqual(["version","catalogHash","worldId","center","placements"].sort());
@@ -25,8 +40,8 @@ describe("worldwide optimized GLB selection",()=>{
   expect(()=>worldAssetsForChunk("seed",{x:WORLD_CHUNK_COORDINATE_LIMIT+1,z:0})).toThrow();
   expect(()=>worldAssetRegionSchema.parse({...worldAssetRegion("world","seed",{x:0,z:0}),catalogHash:"wrong"})).toThrow();
  });
- it("keeps spawn and central paths open and selects LOD using apparent size",()=>{
-  for(const p of worldAssetsForChunk("seed",{x:0,z:0})){expect(Math.hypot(p.xMm,p.zMm)).toBeGreaterThan(20_000);expect(Math.abs(p.xMm)).toBeGreaterThan(4_000);expect(Math.abs(p.zMm)).toBeGreaterThan(4_000);}
+ it("keeps non-starter procedural spawn paths open and selects LOD using apparent size",()=>{
+  for(const p of worldAssetsForChunk("seed",{x:6,z:0})){expect(Math.hypot(p.xMm-6*64_000,p.zMm)).toBeGreaterThan(20_000);expect(Math.abs(p.xMm-6*64_000)).toBeGreaterThan(4_000);expect(Math.abs(p.zMm)).toBeGreaterThan(4_000);}
   expect(worldAssetLod(10,5,55,true)).toBe(0);expect(worldAssetLod(1,100,55,true)).toBe(2);expect(worldAssetLod(10,60,55,true)).toBe(1);
  });
  it("binds every original GLB to bounded budgets, positive scale and per-LOD measured grounding",()=>{

@@ -38,7 +38,8 @@ import { WORLD_CHUNK_ROAD_MAXIMUM, WORLD_CHUNK_STRUCTURE_MAXIMUM, resolveWorldCh
 import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "../shared/worldChunkStreamingProtocol";
 import { resolveWorldEpochReaction, type WorldEpochReaction } from "./worldEpochReactionProtocol";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
-import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
+import { resolveDialogueQuestIntent, type DialogueQuestKey, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
+import { isAurionQuestNpcId } from "./aurionStarterVillageContract";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
 import { aurionEthosAxes, aurionMasteryDisciplineIds, aurionMasterySources, resolveEthosAura, resolveMasteryReadmodel, type AurionEthosAxis, type AurionMasteryDisciplineId, type AurionMasterySource } from "./aurionMasteryEthosProtocol";
@@ -355,7 +356,15 @@ async function buildWorldCausalRootForEpoch(
     if (!latest) continue;
 
     const previousZoneRoot = previousByZone.get(zoneId);
-    const candidateFromTick = previousZoneRoot ? previousZoneRoot.toTick + 1 : latest.tick;
+    // The initial proof must cover retained, unsealed receipts as well as the
+    // latest tick. Otherwise a hand-in one tick before the first operator epoch
+    // is excluded forever. Do not filter out older revisions or gaps: the range
+    // and zone-root checks below must leave contradictory history UNPROVABLE.
+    const [earliest] = previousZoneRoot ? [] : await tx.select({ tick: aurionCausalTickReceipts.tick }).from(aurionCausalTickReceipts).where(and(
+      eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
+      eq(aurionCausalTickReceipts.zoneId, zoneId),
+    )).orderBy(asc(aurionCausalTickReceipts.tick)).limit(1);
+    const candidateFromTick = previousZoneRoot ? previousZoneRoot.toTick + 1 : earliest!.tick;
     const fromTick = candidateFromTick <= latest.tick ? candidateFromTick : latest.tick;
     const rows = await tx.select().from(aurionCausalTickReceipts).where(and(
       eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
@@ -1626,7 +1635,7 @@ export async function requestQuestActionFromDialogue(values: {
   userId: number;
   dialogueReceiptId: string;
   actionKind: DialogueQuestActionKind;
-  questKey: QuestKey;
+  questKey: DialogueQuestKey;
   idempotencyKey: string;
 }) {
   const db = await getDb();
@@ -1649,17 +1658,21 @@ export async function requestQuestActionFromDialogue(values: {
       eq(aurionDialogueReceipts.userId, values.userId),
   )).limit(1))[0];
   if (!dialogue) throw new Error("Ein eigener bestätigter Dialogreceipt ist erforderlich.");
+  if (!isAurionQuestNpcId(dialogue.npcId)) throw new Error("Dieser Dialog stammt nicht von einem kanonischen Aurion-Questgeber.");
 
   const interpretation = parseDialogueInterpretationReceipt(dialogue.interpretationJson);
   const progress = await getGameplayProgress(values.userId);
   const outcome = resolveDialogueQuestIntent({
     npcId: dialogue.npcId,
     interpretation,
-    quests: progress.quests,
+    quests: values.questKey === "starter-wolves-6"
+      ? [await (await import("./routes/aurionQuestRouter")).adminQuestService.pilotDialogueReadModel(values.userId)]
+      : progress.quests,
   });
   if (outcome.state === "no_action" || outcome.actionKind !== values.actionKind || outcome.questKey !== values.questKey) {
     throw new Error("Dieser Dialog erlaubt die angefragte Questaktion nicht.");
   }
+  if (outcome.npcId !== dialogue.npcId) throw new Error("Dieser Dialog erlaubt die angefragte Questaktion nicht.");
 
   const id = newEndgameId("dialogue_cmd");
   await db.insert(aurionDialogueCommandReceipts).values({

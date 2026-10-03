@@ -309,6 +309,100 @@ Learned: Repository memory is now recorded automatically from the completed merg
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
+### 2026-10-03 — Deterministic Aurion starter-village layout
+Status: VERIFIED repository regression
+Task: Replace seed/catalog-cyclic starter-village placement with an Aurion-owned fixed-point layout while preserving the established spawn and return-stone position.
+Decisions: Reference the immutable return-stone position directly; define the centre, ring road, four cardinal axes and exactly four gate anchors in millimetres; mark the pilot as a partial set and fail closed for any future closed-wall plan without all four geometric openings. Use only admitted world-catalog IDs and keep the client as a view-only projection of the authenticated server region.
+Touched surfaces: `shared/aurionStarterVillageContract.ts`, `shared/worldAssetProtocol.ts`, `server/aurionStarterVillageContract.test.ts`, `server/worldAssetProtocol.test.ts`, `client/src/xaurion/integration/WorldAssetProjection.ts`.
+Evidence: `pnpm vitest run server/aurionStarterVillageContract.test.ts server/worldAssetProtocol.test.ts server/worldNatureCollision.test.ts` passed 17 tests; `pnpm check` passed; `pnpm test` passed 378 files / 1,841 tests with 55 files / 207 environment-dependent tests skipped. Browser screenshot capture was attempted after installing the matching Playwright Chromium but the container lacks `libatk-1.0.so.0`, so no screenshot is claimed.
+Learned: The origin chunk must be selected from a named Aurion geometry contract before the generic seeded catalog lane; the renderer can then remain generic and cannot invent or close village geometry.
+Open: No deployment, native GPU, persistence or production-runtime claim is made. Visual browser readback remains unavailable in this container because the installed Chromium cannot start without the system ATK library.
+Next safe step: Review and merge the exact tested revision, then use the automated post-merge Memory/readback workflow; obtain browser/native visual evidence in an image that includes Chromium runtime libraries if required.
+
+### 2026-10-03 — PR 734 geometric review corrections
+Status: PARTIAL — local regressions verified; exact-head CI pending
+Task: Review ac86c6e7c74db7ab0ce015e70688725d4829a492 and repair demonstrated layout and browser-count regressions.
+Decisions: Reserve the 16–20 m ring corridor using all-LOD catalog bounds; move the four landmarks to fixed ±22 m anchors. The ring is a reserved layout corridor, not a rendered road surface. Reject every closed-wall request until geometric passage evidence exists; four caller-supplied IDs are not evidence. Retain the explicit decorative partial set and existing non-colliding city-asset policy.
+Touched surfaces: Starter-village contract/tests, world-asset JSON import attributes for native ESM test loading, exact server-plan browser assertion and relevant workflow path filters.
+Evidence: Original source-bound GLB audit found 1,341 market and 72 southeast-hut LOD0 vertices inside the ring corridor. Original collision readback returned zero origin obstacles and clear four-axis sweeps; no blocked gate is claimed. Corrected focused tests: 18 passed. Full suite: 378 files / 1,842 tests passed, 55 files / 207 environment-dependent tests skipped. Typecheck passed before final ESM-only adjustment; final check recorded in review logs. Playwright discovers all three phone/tablet/desktop cases; real runtime execution remains CI evidence, not a local claim.
+Learned: Placement-center tests miss footprint intersections; a catalog ID and a named open gate do not prove collision geometry.
+Open: Real MariaDB/browser CI must pass on the final head. No production, native GPU, closed-wall or rendered-ring claim.
+Next safe step: Push this reviewed correction, inspect exact-head CI and only then decide merge.
+
+### 2026-10-03 — Canonical starter-village quest NPC contract
+Status: VERIFIED repository regression
+Task: Add the north-gate guard to Aurion's canonical NPC/quest-giver boundary without introducing a parallel authority.
+Decisions: A typed Aurion starter-village contract now owns the allowlisted quest NPC identities, display names, zones and fixed-point positions. Dialogue routing and command persistence consume that allowlist; quest mutation authorization still requires the owned dialogue-command receipt and server-confirmed AOI presence. Aurion remains the sole quest/combat owner; WASD is historical provenance only.
+Touched surfaces: `server/aurionStarterVillageContract.ts`, `server/questNpcAuthority.ts`, `server/questNpcAuthority.test.ts`, `server/wasdAurionDialogueQuestIntentProtocol.ts`, `server/wasdAurionDialogueQuestIntentProtocol.test.ts`, `server/routers.ts`, `server/db.ts`, `Memory.md`.
+Evidence: `pnpm vitest run server/questNpcAuthority.test.ts server/wasdAurionDialogueQuestIntentProtocol.test.ts server/dialogueQuestIntent.e2e.test.ts` passed 13 executable tests; the 3 MariaDB-dependent E2E cases were skipped because `DATABASE_URL` is unset. `pnpm check` passed. `pnpm test` passed the full local suite; environment-dependent database cases remained skipped. The focused regressions reject a wrong guard, player, quest, action, zone and out-of-radius position and reject arbitrary client NPC IDs.
+Learned: Quest NPC identity, display-name mapping, zone and AOI anchor must be one typed Aurion contract; widening only the transport schema would admit unowned identities or leave persistence and authorization divergent.
+Open: No production deployment or MariaDB runtime claim is made. The repository environment had no `DATABASE_URL`, so the existing real dialogue persistence E2E suite remained skipped.
+Next safe step: Run the existing dialogue intent MariaDB E2E lane against the exact committed head before deployment and retain the contract as the only source for future starter-village quest givers.
+
+### 2026-10-03 — PR 735 shares the reviewed north-gate anchor
+Status: VERIFIED focused repository regression
+Task: Integrate the corrected PR 734 layout before the NPC identity contract.
+Decisions: Preserve all append-only Memory entries; reference the north gate point directly instead of retaining the separate -12 m guard anchor 18 m away. Existing Lyra/Orun authority stays unchanged.
+Touched surfaces: server/aurionStarterVillageContract.ts and server/questNpcAuthority.test.ts.
+Evidence: 19 focused tests passed; 3 real-MariaDB tests skipped locally; nonincremental TypeScript check passed. Identity-by-reference regression binds the guard position to the shared north gate.
+Learned: A named north-gate NPC needs the same fixed-point anchor as the actual village contract.
+Open: Dependent exact-head CI and real dialogue persistence readback remain pending; this NPC contract alone does not implement the wolf quest.
+Next safe step: Push and verify CI; merge only after PR 734.
+
+### 2026-10-03 — Receipt-bound pilot wolf quest
+Status: VERIFIED repository regression; runtime deployment pending
+Task: Publish the versioned north-gate pilot quest through the canonical quest compiler and derive its six-victory objective only from persisted Aurion combat evidence.
+Decisions: Register `starter-wolves-6` v1 with stable giver `guard-north`; add no quest state machine; bind one increment to one unique persisted combat receipt whose event, player, opponent identity/species, confirmed victory and logical revision pass the strict shared contract; preserve the existing quest receipt/instance persistence transition.
+Touched surfaces: Quest contract, event matcher, pilot template/role catalog, admin service, combat-victory persistence schema/migration and focused regressions.
+Evidence: Focused quest/validator/migration-boundary suite passed 13 tests; `pnpm check`, `pnpm verify:migrations` (70 SQL / 70 journal entries) and `git diff --check` passed. The focused admin regression proves unknown, mismatched-player/species and duplicate receipts cannot increment; exactly six receipts complete, and a seventh leaves progress at six.
+Learned: Objective quantity is safe only when the server reads a unique durable combat receipt and supplies the fixed increment itself; a client event payload cannot be permitted to select species or amount.
+Open: No production deployment or live MariaDB readback is claimed by this repository candidate.
+Next safe step: Run exact-head CI/container and an isolated migrated MariaDB readback before merge or deployment claims.
+
+### 2026-10-03 — PR 736 reviewed combat projection corrections
+Status: PARTIAL — complete wolf gameplay still blocked
+Task: Repair the deterministic guard binding, MariaDB confirmed constraint and missing persisted-event consumer.
+Decisions: Consume PR 735's starter_village_north_gate_guard identity. Persist canonical combat evidence before invoking the quest service's independent receipt readback. Snapshot queued combat evidence alongside the tick. Spell the new CHECK as confirmed=1 to match MariaDB without loosening check comparison. Preserve the 0068 causal test requirement while validating the entire sequential journal.
+Touched surfaces: Pilot template/resolver/tests, tick recorder/persistence, migration 0069, schema reconciliation regression and causal receipt migration test.
+Evidence: 85 focused tests passed / 4 DB tests skipped; schema regression 16 passed / 3 skipped; TypeScript passed; full local suite 381 files / 1,856 tests passed with 207 environment-dependent tests skipped. Migration verification: 70 SQL / 70 journal entries, no duplicates/gaps.
+Learned: A persisted victory alone never called the objective consumer; existing active mob definitions contain no wolf archetype.
+Open: No wolf combat/spawn/asset definition is approved in the active mob contract. Authenticated pilot dialogue/offer/turn-in and durable completion evidence remain unproven. This PR is not merge-ready as a playable pilot.
+Next safe step: Obtain the canonical wolf definition, complete the real product path and run exact-head MariaDB/browser evidence without substituting other enemies.
+
+### 2026-10-03 — PR 736 closes schema dispatch and apply allowlists
+Status: VERIFIED contract regressions; real apply readback pending
+Task: Repair CI SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED and 0069 ABSENT_APPLY_REQUIRED caused by operational allowlists still ending at 0068.
+Decisions: Advance dispatch wave and all apply/reconcile artifact/backup/readback allowlists to the same 0069 combat migration; preserve approval, exact-source and production-write guards.
+Touched surfaces: deploy apply core and both artifact verifiers, scripts/dispatch-aurion-schema-plan.mjs, corresponding artifact fixture.
+Evidence: Four node dispatch-contract tests passed; 50 schema/readback/apply/reconcile/blocker contract tests passed; git diff --check clean. Earlier full suite remains 1,856 passed / 207 skipped, not a claim that this newly changed head ran real MariaDB yet.
+Learned: Journal/manifest updates alone do not advance the operational apply bundle.
+Open: Real 0069 schema readback, restart-safe victory projection, genuine wolf content and authorized pilot completion remain required.
+Next safe step: Run isolated MariaDB and exact-head CI, preserving failure evidence.
+
+### 2026-10-03 — PR 736 durable combat projection recovery
+Status: PARTIAL — durable observer replay verified; full pilot hand-in integration pending
+Task: Recover persisted combat victories after projection failure or restart without counting them for quests accepted later.
+Decisions: Persist original active quest target IDs with victory evidence and a projection acknowledgment. Drain unacknowledged evidence on subsequent persisted ticks, including after restart. Acknowledgment follows all target commits; existing receipt idempotency absorbs lost acknowledgments. Repeated offers preserve existing progress instead of overwriting the deterministic instance.
+Evidence: Real isolated MariaDB test passes after injected post-commit failure and service re-creation, proving one increment and no credit to a subsequently accepted quest. Focused suite:76 passed,1 skipped; full suite:381 files/1856 tests passed,208 skipped; TypeScript passed. CI Local Test Pack now explicitly executes the real outbox test. Migration0069 remains unmerged and is extended with outbox metadata.
+Open: Actual wolf content and the authenticated pilot hand-in causal chain remain to be integrated. No deployment or complete-pilot claim.
+Next safe step: Integrate the updated main baseline and finish authenticated integration before merge.
+### 2026-10-03 — PR 734 exact-head CI readback and memory queue isolation
+Status: PARTIAL — new exact-head CI required
+Task: Preserve independent PR verification while main memory sync stays serialized.
+Decisions: Give PR memory-contract runs per-PR concurrency groups; the previous global group canceled pending PR 734 verification when another PR was pushed despite cancel-in-progress=false. Main sync retains one shared group. No production sync behavior or credentials changed.
+Touched surfaces: .github/workflows/agent-memory-supabase-sync.yml.
+Evidence: At 6cb6a5d33fd76bde8cfe4260791c085eefecc429, Aurion Local Test Pack succeeded, and AIM259 job 111129801561 passed the real database and phone/tablet/desktop browser lane plus NPC readback. The GLB upload lane failed at unchanged glbImport.spec.ts:52 (wheel-scroll bottom assertion); one diagnostic retry was requested. The memory run 37097323346 was canceled before any job and GitHub refused its failed-job rerun. Final source typecheck and 18 targeted tests had passed.
+Learned: GitHub replaces a pending run in a concurrency group even when cancel-in-progress=false; unrelated PRs must not share the main memory queue.
+Open: New head must receive all applicable successful CI; no merge or production claim yet.
+Next safe step: Read back the independent PR CI results before merge.
+
+### 2026-10-03 — PR 734 shipping browser integration
+Status: PARTIAL — exact-head browser CI required
+Task: Repair the shipping test's dependency on a procedural foundation removed from the origin by the fixed village layout.
+Decisions: Keep the village contract unchanged. Read the authenticated region, verify the existing shipped nature-root placement, and reach a safe viewing point using server-confirmed keyboard movement before rotating the real camera. Preserve all KTX decode, actual draw, fallback and resource assertions.
+Evidence: On ca363702, tablet shipping failed at aim291.assetShipping.spec.ts:70 with zero KTX models; the old test assumed a foundation at (-8m,+24m), absent from the new authoritative origin. Region readback locates nature-root-1 at (-40m,+8m). Typecheck and Playwright discovery passed locally; real exact-head CI remains required.
+Open: No merge or new production claim. The following head must pass the full shipping lane.
+Next safe step: Inspect exact-head browser results before merge.
 ### 2026-10-03 — Bounded quest objective progress and receipt-chain revisions
 Status: VERIFIED repository regression
 Task: Bound numeric quest objective progress at its validated target and derive command event revisions from the canonical persisted receipt chain.
@@ -351,3 +445,77 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Authenticated pilot hand-in and durable causal closure
+Status: PARTIAL — real database/dialogue/closure verified; playable wolf content still absent
+Task: Connect pilot offer, acceptance and hand-in to owned dialogue commands, canonical north-guard AOI and durable six-victory evidence.
+Decisions: Admit the pilot key only in the authored dialogue lane, preserving legacy quest enums. Bind the offer to its exact dialogue event instead of the last unrelated global event. Independently re-read the six consumed combat receipts and reject wrong species/owner/plan. Restore the accepted zone projection from its durable acceptance after restart, require a living player and confirmed zone hand-in, then use the existing world-epoch authority and causal closure. Server sequence allocation accounts for accepted and pending intents. Completed replay reuses the persisted closure.
+Evidence:90 focused tests passed,1 DB case skipped in the default run; TypeScript passed. A fresh MariaDB run completed real dialogue confirmation, guarded offer/accept, injected lost projection acknowledgment, service recreation, six unique evidence rows, causal world-root/hand-in closure and idempotent completion replay. Tampered species is rejected. Its initial position and combat evidence are explicit fixtures: this is not an HTTP movement or real wolf-combat claim.
+Open: No active wolf archetype/model was found; the existing expedition generator and audio cues alone do not provide a playable zone creature. Final browser journey and reward integration remain pending.
+Next safe step: Integrate reward dependency, verify the exact item and restart readback, and resolve the missing creature content before merging a complete pilot.
+### 2026-10-03 — Local onboarding NPC residence
+Status: VERIFIED repository boundary; real final-head CI pending
+Task: Keep introductory quest givers and the smith at their permanent beginner anchors without freezing visiting NPCs or the outer world.
+Decisions: Gate canonical NPC persistence by identity only for Lyra, Orun, the north-gate guard and observatory_blacksmith. Reject changing their home region; generic visitors may still enter and leave. Existing needs, goals, memory and local decisions are untouched. Static service/quest projection remains present. This is a residence guard, not a new combat immortality or migration simulation.
+Evidence:43 targeted tests across residence, NPC authority/life/persistence and world snapshots passed. Full suite:380 files/1861 tests passed,207 skipped. TypeScript passed. Existing outer-world and Graph/CAG/asset owners remain unchanged.
+Open: Final CI must verify the actual persisted NPC lane. No new lore, faction or origin canon is introduced.
+Next safe step: Merge only after layout dependency and exact-head CI are verified.
+### 2026-10-03 — Starter-region isolation and outer-world preservation
+Status: VERIFIED repository boundary regressions; final-head browser CI pending
+Task: Preserve deterministic world/graph/CAG generation and canonical GLB mesh/material/texture pipelines while keeping only the small starter origin constant.
+Decisions: Scope remains exactly chunk(0,0), a64m origin square. No global seed, generator, identity, grid, collision-manifest, graph/CAG/Wolfram, shipping or texture/mesh pipeline is replaced. Add an independently captured pre-change digest covering eight neighboring chunks, settlement, negative/far coordinates and three seeds. Require different seed plans outside origin and identical seed-independent origin plans.
+Evidence:55 tests passed across nine suites: starter/world assets, nature collision, graph CAG verifier, structure CAG verifier and world-generation evidence/parity contracts. Golden digest was computed from main909ba47d implementation, not the edited generator. PR737 merge784ce223 touches only quest code/tests and Memory, with no world/asset/CAG changes. These are repository regressions, not a claim of newly implemented autonomous world evolution or successful live Wolfram service execution.
+Open: Final exact-head CI and real shipping browser regression must pass before merge.
+Next safe step: Review the completed shipping lane and verify remote main after merge.
+
+### 2026-10-03 — Confirmed asset snapshot unit boundary
+Status: VERIFIED local production-browser regression; exact-head remote CI pending
+Task: Diagnose AIM-291 KTX2 failures after moving through the fixed starter region.
+Decisions: Preserve canonical server millimetres and convert only the WorldAssetProjection snapshot adapter to renderer metres. The event publisher, server positions, frame camera coordinates, terrain generation, GLB files, materials, collision and budgets are unchanged. Add three regression vectors proving that snapshot and frame paths request one identical chunk, plus an explicit browser origin-chunk readback assertion.
+Evidence: On base 594b48c, a real authenticated browser reached (-19380,7480) mm but requested chunk (-303,117), rendered zero models and failed the KTX assertion. The three new unit cases fail on the old adapter and pass with the correction. The corrected production build passed all three original AIM-291 browser profiles (phone 1.3 min, tablet 2.0 min, desktop 2.6 min) against disposable MariaDB 11.4.13 and Chromium 151 SwiftShader, including actual KTX drawing, intentionally broken decoder, actual fallback drawing, immutable world hashes and unchanged resource limits. Captured render readbacks confirm chunk (0,0). Twenty-seven focused camera/budget/runtime/projection tests and TypeScript passed. Local run covers the working-tree patch on 594b48c; release identity/exact committed head remains a CI gate. Native hardware and production deployment are not claimed.
+Open: Remote exact-head CI and independent review before merge.
+Next safe step: Push the reviewed fix to the existing PR734 branch, rerun its exact-head checks, then follow the existing dependency order.
+### 2026-10-03 — Versioned combat continuity repair
+Status: VERIFIED local regression and isolated MariaDB boundaries; live incident cause and live equipment refresh remain unverified
+Task: Diagnose missing damage without assuming a presentation problem; preserve universal basic attack and a one-damage starting unarmed hit with existing combat-level growth.
+Decisions: Fix a reproduced admission bug where a later movement sequence in the same tick discarded an already accepted attack. Apply the existing stamina regeneration function to living mobs, which previously exhausted stamina permanently after thirteen attempts. Both baseline regressions failed before the repair. Introduce rules.v3 and retain historical rules.v2 action/stamina behavior on explicit replay restore. Read an explicit weaponEquipped marker from persisted starter-equipment state or a main-hand slot, preserve it in checkpoints only when present, and use it for basic unarmed combat. Starting unarmed successful hits deal one; the existing combat-level and mitigation terms remain, without inventing usage XP. Armed damage and skill restrictions remain unchanged. HUD pointer/touch attack and keyboard R already send basic F independently of hotbar slot one.
+Evidence: Full suite381 files/1867 tests passed,208 skipped. Final neighboring combat/replay/world-generation parity23 tests and HUD12 tests passed; TypeScript passed. An isolated real MariaDB test independently reads both directions of HP loss, causal receipt hash/post-state hash and a canonical checkpoint, then manually restores its state. This is a checkpoint roundtrip, not automatic production restart recovery. No GLB/material, world-generation, graph/CAG or Wolfram implementation changed.
+Open: The reported historical never-damaged live symptom has no production trace yet; exhausted mob stamina explains only failure after earlier attempts. Existing equip/unequip mutations do not submit a receipt-bound live zone-profile update, so an already connected peer retains its join-time equipment profile. The zone reads character level; a direct usage-based fist-XP integration is not present and is not fabricated. The DB test uses an explicit combat profile, not an authenticated equipment-ticket join.
+Next safe step: Integrate into the combat/quest branch, add a canonical live equipment-change intent if needed, and run exact-head CI plus authenticated runtime observation before claiming the full live incident resolved.
+
+### 2026-10-03 — Pilot combat evidence and hand-in recovery
+Status: VERIFIED local regression and isolated MariaDB; playable production pilot still gated
+Task: Repair the reviewed combat/outbox/hand-in failure windows without letting a player quest advance global world evolution.
+Decisions: Bind the existing pilot to the six active clockwork_stalker definitions and their existing assets/stats. Persist each causal tick and its victory/outbox rows in one transaction; run optional projection after checkpoints with explicit schema-degraded errors. Reuse exact durable hand-in identity across concurrent public calls and retries; validate stored input hash and page proof history beyond64epochs. Remove player hand-in's global epoch/CivilizationLoop side effect. Migration CI expectations derive from the approved manifest/journal. Integrate separately tested rules.v3 combat continuity and the confirmed asset millimetre conversion.
+Evidence: Before combat integration the full suite passed382files/1868tests (210 environment-gated skips); after integration72 focused tests passed with1 skip and TypeScript passed. Real MariaDB fault injection rolls back tick plus earlier victory when a later victory write fails, then retries idempotently; pre0069 checkpoint survives while capability failure is reported. A separate isolated real DB test on92fb33ad confirms six existing-species fixture victories, lost-ACK recovery, parallel public hand-ins producing exactly1tick/0epochrequests,65 explicit operator fixture epochs, tampered-input rejection, completion transaction failure and exact retry/replay. Fixtures prove persistence and authority boundaries, not six played fights. Combat's separate full suite passed1867tests and its DB checkpoint roundtrip passed; native/production execution is unverified.
+Open: No automatic production world-proof trigger was found: admin.world.resolveEpoch is the sole production caller. Completion truthfully remains QUEST_CAUSAL_WORLD_PROOF_PENDING until an authorized independent Ops epoch; no scheduler or permanent infrastructure introduced. Live equipment changes do not refresh an existing zone profile, and no new usage-XP curve was invented. Inventory browser CI timeout was reproduced during screenshot after functional assertions passed; attempted motion reduction did not fix it and was reverted. Final exact-head CI and actual pilot journey remain required.
+Next safe step: Review final CI, validate the combined reward/journey, and obtain an explicit operational design for autonomous world-proof production before calling the pilot independently playable.
+### 2026-10-03 — Equipment-backed basic combat ticket proof
+Status: VERIFIED isolated real MariaDB equipment-to-ticket boundary
+Task: Prove weaponEquipped classification using actual persisted equipment and consumed tickets rather than an injected combat profile.
+Evidence: New MariaDB regression creates one test account and server-issued single-use tickets, then calls consumeZoneTicketWithCombatProfile after real equipPlayerItem/unequipPlayerItem operations. Equipped starter yields true/+15; unequipped starter yields false/0 and stays owned after ensureAx1StarterEquipment; equipped legacy and V2 main-hand items yield true with their unchanged existing bonus0; V2 removal yields false/0; starter re-equipping restores true/+15. Physical starter-state and V2 equipment-slot readbacks agree. The actual consumed unarmed profile is passed unchanged to the authoritative zone; successful basic attacks produce one damage without a skill. Reusing every consumed ticket is rejected. The isolated database regression and TypeScript pass; no production code or balance changes were necessary.
+Open: This proves the server-issued database ticket-consumption boundary, not browser login or live profile refresh after changing equipment on an already joined connection. Those earlier limits remain explicit.
+
+### 2026-10-03 — Passive save notification must not cover combat input
+Status: VERIFIED rendered component regression; exact-head browser CI pending
+Task: Classify AIM-259 and AIM-240 failures on head 8a07026 without weakening assertions.
+Decisions: Apply pointer-events:none only to the actionless CausalBackupNotifier toast. Keep other interactive notifications, combat buttons, upload flow and existing browser timeouts unchanged. No forced clicks or skipped checks.
+Evidence: AIM-259 run 37101926963/job 111142999642 identifies the save toast as the pointer interceptor over Auto-Angriff for the entire 15s click deadline. Its configured 5s timer pauses on hover in the installed Sonner implementation. The real Sonner component regression confirms inherited pointer pass-through on the passive notification while a separate toast action remains interactive. TypeScript passes; actual browser hit testing remains the existing AIM-259 exact-head CI gate.
+Open: AIM-240 run 37101926946/job 111142999644 failed the 5s enabled assertion after upload. Artifact 11266582510 trace shows upload 201 in 41ms and both subsequent catalog reads 200 in 14–15ms; the after@call72 DOM has no disabled attribute on smartGlbFile and displays a ready one-model catalog. This does not prove a persistent upload/catalog failure or identify a runtime cause. Sparse captured frames alone cannot establish CPU starvation. No upload fix, timeout increase or green claim is made; retain original test for the next exact-head run. No parallel local browser was started during the pilot journey.
+Next safe step: Push this reviewed local fix and require fresh AIM-259/AIM-240 plus remaining exact-head gates before merge.
+
+### 2026-10-03 — First world-proof coverage under a running zone
+Status: VERIFIED isolated MariaDB regression; full HTTP replay pending
+Task: Explain why six real pilot victories and a real hand-in remained pending after an explicit operator epoch.
+Decisions: The initial world proof now starts at the earliest retained zone receipt rather than only the latest tick. Subsequent proofs retain the existing predecessor boundary. Revision, ruleset, continuity and hash checks remain strict; no historical receipt is skipped to fabricate a green proof. Add the atomic-outbox and equipment/HP database tests to LocalTestPack with separate freshly migrated loopback test databases.
+Evidence: The live isolated739 run confirmed six distinct Clockwork Stalker victories, 77 successful basic attacks with skillId=null, 60 successful enemy hits, and a 30-tick return-stone revival. Hand-in tick1059 was omitted by the otherwise VERIFIED initial root covering only1060. Adding a scheduler tick before the first operator epoch reproduces this failure in MariaDB; the producer correction restores the complete parallel/retry/65-epoch test.24 neighboring tests and TypeScript pass. Four isolated combat/outbox CI-harness tests pass without skips.
+Open: Existing incomplete world roots are immutable and were not retroactively repaired. Retained mixed revisions, mixed rulesets or gaps remain UNPROVABLE; this change is not an automatic historical reconciliation. No production proof scheduler was introduced. Repeat the actual HTTP/restart/browser journey on a fresh isolated database and final exact-head CI.
+Next safe step: Integrate the producer fix into738/739, replay the authentic journey, and keep the separate operational proof dependency explicit.
+
+### 2026-10-03 — Isolated closure fixtures and bounded causal archives
+Status: VERIFIED focused MariaDB regressions; exact-head CI pending
+Task: Repair demonstrated CI fixture contamination and the archive TEXT overflow observed during the real starter-pilot journey.
+Decisions: Root-reconciliation CI applies the exact declared migration manifest. The causal-closure fixture uses its own empty copy of the migrated schema, preserving the proof guard. Archive existing receipt history in deterministic UTF-8 packets below 60 KiB, preserve existing packet boundaries, verify hash/content and complete checkpoint coverage, and keep every original receipt. No database migration, production table alteration, NPC decision invention or global epoch scheduler.
+Evidence: The previous root fixture produced 48 matching migrations plus missing0069; the corrected fixture produces49 matches and no drift, with40 neighboring tests passing. Cross-zone then closure reproduces a tick1 receipt conflict and WORLD_PROOF_PENDING; isolated closure plus the pilot MariaDB suite pass together. Archive MariaDB readback confirms62 packets containing1100 receipts, largest60229 bytes, complete range1–1100 and all originals retained. Five archive tests cover SQL rollback, retries, growing/shrinking ranges, tampering and oversized receipts;19 neighboring tests pass. Integrated TypeScript passes.
+Open: Exact-head remote CI remains required. The real journey's restart evidence covers persisted quest/reward readback, not automatic zone checkpoint restoration. Automatic world-proof production remains an explicit operations-design decision because the existing resolver also advances CivilizationLoop.
+Next safe step: Run the integrated CI and final pilot journey before merge; preserve the evidence boundaries in the review.
