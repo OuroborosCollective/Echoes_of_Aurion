@@ -275,3 +275,13 @@ Evidence:
 Learned: An unlock projection must be asserted in the zone actually returned after progression, not only in a zone-local table that stops being selected.
 Open: No implementation blocker remains. Verify the merged main head and automated post-merge memory readback. Isolated candidate proof does not claim production deployment.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-03 — PR #733: In-game GLB catalog and mobile movement placement
+Status: VERIFIED component regression and isolated MariaDB/browser readback
+Task: Restore direct admin-imported GLB assets in the in-game catalog and anchor movement controls at the lower left.
+Decisions: Read the protected admin asset registry; distinguish loading, failure and confirmed empty results; retain server authorization. Remove the HUD-wide positioning override and reserve mobile touch space.
+Evidence: Candidate `ff058cf088553c9475c0cc0e77d188723348fa4b`; four catalog cases failed before the fix. TypeScript and full local regression passed (377 files / 1,836 tests; 207 environment-dependent tests skipped). Isolated authenticated upload, persisted asset readback, catalog selection and joystick geometry at 412×732, 800×1280 and 932×430 passed: https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/37086914153. Live read-only comparison found 78 registered runtime assets but no public community submissions.
+Learned: Public community submissions are not the admin asset registry; a broad relative-position rule can silently override HUD anchors.
+Open: Final Memory-inclusive CI and merge readback; inventory warnings and production deployment are not covered by this fix.
+Next safe step: Merge the verified final head and verify automated post-merge Memory/readback.
