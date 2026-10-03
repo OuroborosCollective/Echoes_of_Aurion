@@ -7,6 +7,7 @@ import {
   completeGameplayQuest,
   getDb,
   getGameplayProgress,
+  getOpenWorldSnapshot,
   startGameplayEncounter,
 } from "./db";
 import {
@@ -104,6 +105,10 @@ describeWithDatabase("quest chain regression E2E", () => {
     expect(beforeKeyTurnIn.quests.find(quest => quest.key === "ember_key")).toMatchObject({ readyToTurnIn: true });
     expect(beforeKeyTurnIn.keys).toEqual([]);
     expect(beforeKeyTurnIn.canEnterDungeon).toBe(false);
+    const lockedWorld = await getOpenWorldSnapshot(QUEST_CHAIN_REGRESSION_USER_ID);
+    expect(lockedWorld.zoneId).toBe("emberfall");
+    expect(lockedWorld.pointsOfInterest.find(poi => poi.id === "cinder-vault-gate")?.state).toBe("locked");
+    await expect(startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey: "cinder_vault" })).rejects.toThrow("Der Glutschlüssel und der abgeschlossene Questpfad sind für das Aschengewölbe erforderlich.");
     const afterKey = await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "ember_key", giver: "Lyra" });
     expect(afterKey.profile).toMatchObject({ totalXp: 702, aurionPoints: 115, seasonPoints: 115, victories: 3 });
     expect(afterKey.quests.map(quest => [quest.key, quest.state, quest.readyToTurnIn])).toEqual([
@@ -116,6 +121,12 @@ describeWithDatabase("quest chain regression E2E", () => {
     ]);
     expect(afterKey.keys).toEqual(["ember_key"]);
     expect(afterKey.canEnterDungeon).toBe(true);
+    const unlockedWorld = await getOpenWorldSnapshot(QUEST_CHAIN_REGRESSION_USER_ID);
+    expect(unlockedWorld.zoneId).toBe("starfall_crater");
+    expect(unlockedWorld.pointsOfInterest.filter(poi => poi.id === "cinder-vault-gate")).toEqual([
+      { id: "cinder-vault-gate", kind: "portal", state: "available", label: "Tor zum Aschengewölbe" },
+    ]);
+    expect((await getOpenWorldSnapshot(QUEST_CHAIN_REGRESSION_USER_ID)).pointsOfInterest).toEqual(unlockedWorld.pointsOfInterest);
 
     await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "starfall_resonance" });
     const starfallBoss = await defeatQuestEncounter("starfall_crater");
