@@ -318,3 +318,13 @@ Evidence: `pnpm vitest run server/aurionStarterVillageContract.test.ts server/wo
 Learned: The origin chunk must be selected from a named Aurion geometry contract before the generic seeded catalog lane; the renderer can then remain generic and cannot invent or close village geometry.
 Open: No deployment, native GPU, persistence or production-runtime claim is made. Visual browser readback remains unavailable in this container because the installed Chromium cannot start without the system ATK library.
 Next safe step: Review and merge the exact tested revision, then use the automated post-merge Memory/readback workflow; obtain browser/native visual evidence in an image that includes Chromium runtime libraries if required.
+
+### 2026-10-03 — PR 734 geometric review corrections
+Status: PARTIAL — local regressions verified; exact-head CI pending
+Task: Review ac86c6e7c74db7ab0ce015e70688725d4829a492 and repair demonstrated layout and browser-count regressions.
+Decisions: Reserve the 16–20 m ring corridor using all-LOD catalog bounds; move the four landmarks to fixed ±22 m anchors. The ring is a reserved layout corridor, not a rendered road surface. Reject every closed-wall request until geometric passage evidence exists; four caller-supplied IDs are not evidence. Retain the explicit decorative partial set and existing non-colliding city-asset policy.
+Touched surfaces: Starter-village contract/tests, world-asset JSON import attributes for native ESM test loading, exact server-plan browser assertion and relevant workflow path filters.
+Evidence: Original source-bound GLB audit found 1,341 market and 72 southeast-hut LOD0 vertices inside the ring corridor. Original collision readback returned zero origin obstacles and clear four-axis sweeps; no blocked gate is claimed. Corrected focused tests: 18 passed. Full suite: 378 files / 1,842 tests passed, 55 files / 207 environment-dependent tests skipped. Typecheck passed before final ESM-only adjustment; final check recorded in review logs. Playwright discovers all three phone/tablet/desktop cases; real runtime execution remains CI evidence, not a local claim.
+Learned: Placement-center tests miss footprint intersections; a catalog ID and a named open gate do not prove collision geometry.
+Open: Real MariaDB/browser CI must pass on the final head. No production, native GPU, closed-wall or rendered-ring claim.
+Next safe step: Push this reviewed correction, inspect exact-head CI and only then decide merge.

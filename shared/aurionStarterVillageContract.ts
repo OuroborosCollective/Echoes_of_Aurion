@@ -1,4 +1,4 @@
-import catalog from "./worldAssetCatalog.json";
+import catalog from "./worldAssetCatalog.json" with { type: "json" };
 import { AURION_RETURN_STONE_POSITION } from "./aurionReturnStoneContract";
 
 export const AURION_STARTER_VILLAGE_CONTRACT_VERSION =
@@ -22,6 +22,7 @@ function catalogAssetId<const T extends string>(id: T): T {
  */
 export const AURION_STARTER_VILLAGE_CENTER_MM = point(0, 0);
 export const AURION_STARTER_VILLAGE_SPAWN_MM = AURION_RETURN_STONE_POSITION;
+/** Reserved layout corridor; road surface rendering is not part of this pilot. */
 export const AURION_STARTER_VILLAGE_RING_ROAD = Object.freeze({
   center: AURION_STARTER_VILLAGE_CENTER_MM,
   radiusMm: 18_000,
@@ -73,15 +74,16 @@ export type StarterVillageWallPlan = Readonly<{
   geometricallyOpenGateIds: readonly string[];
 }>;
 
-/** Fail closed: a closed wall is legal only when all four contracted passages remain open. */
+/**
+ * IDs are declarations, not geometric evidence. The admitted pilot assets have
+ * no wall/gate colliders, so this version cannot certify any closed-wall plan.
+ * Keep that unsupported mode fail-closed until a geometry-backed contract exists.
+ */
 export function assertStarterVillageWallPlan(
   plan: StarterVillageWallPlan
 ): StarterVillageWallPlan {
   if (plan.presentation === "closed") {
-    const open = new Set(plan.geometricallyOpenGateIds);
-    if (AURION_STARTER_VILLAGE_GATES.some(gate => !open.has(gate.id))) {
-      throw new Error("STARTER_VILLAGE_CLOSED_WALL_REQUIRES_FOUR_OPEN_GATES");
-    }
+    throw new Error("STARTER_VILLAGE_CLOSED_WALL_REQUIRES_GEOMETRIC_EVIDENCE");
   }
   return plan;
 }
@@ -124,29 +126,29 @@ export const AURION_STARTER_VILLAGE_ASSET_PLACEMENTS = Object.freeze([
   Object.freeze({
     id: "starter-village-market-nw",
     assetId: catalogAssetId("city-market03"),
-    xMm: -15_000,
-    zMm: -15_000,
+    xMm: -22_000,
+    zMm: -22_000,
     rotation: 0 as const,
   }),
   Object.freeze({
     id: "starter-village-hut-ne",
     assetId: catalogAssetId("city-stylized-hut01"),
-    xMm: 15_000,
-    zMm: -15_000,
+    xMm: 22_000,
+    zMm: -22_000,
     rotation: 3 as const,
   }),
   Object.freeze({
     id: "starter-village-hut-se",
     assetId: catalogAssetId("city-stylized-hut02"),
-    xMm: 15_000,
-    zMm: 15_000,
+    xMm: 22_000,
+    zMm: 22_000,
     rotation: 2 as const,
   }),
   Object.freeze({
     id: "starter-village-hut-sw",
     assetId: catalogAssetId("city-stylized-hut01"),
-    xMm: -15_000,
-    zMm: 15_000,
+    xMm: -22_000,
+    zMm: 22_000,
     rotation: 1 as const,
   }),
 ] as const);

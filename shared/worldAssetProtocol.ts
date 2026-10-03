@@ -1,6 +1,6 @@
-import collision from "./worldCollisionManifest.json";
+import collision from "./worldCollisionManifest.json" with { type: "json" };
 import { z } from "zod";
-import catalog from "./worldAssetCatalog.json";
+import catalog from "./worldAssetCatalog.json" with { type: "json" };
 import { WORLD_CHUNK_COORDINATE_LIMIT, type WorldChunkCoordinate } from "./worldChunkProtocol";
 import { AURION_STARTER_VILLAGE_ASSET_PLACEMENTS, AURION_STARTER_VILLAGE_CONTRACT_VERSION } from "./aurionStarterVillageContract";
 export const WORLD_ASSET_VERSION = "aurion-world-assets.v1" as const;
