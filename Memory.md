@@ -308,3 +308,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Canonical starter-village quest NPC contract
+Status: VERIFIED repository regression
+Task: Add the north-gate guard to Aurion's canonical NPC/quest-giver boundary without introducing a parallel authority.
+Decisions: A typed Aurion starter-village contract now owns the allowlisted quest NPC identities, display names, zones and fixed-point positions. Dialogue routing and command persistence consume that allowlist; quest mutation authorization still requires the owned dialogue-command receipt and server-confirmed AOI presence. Aurion remains the sole quest/combat owner; WASD is historical provenance only.
+Touched surfaces: `server/aurionStarterVillageContract.ts`, `server/questNpcAuthority.ts`, `server/questNpcAuthority.test.ts`, `server/wasdAurionDialogueQuestIntentProtocol.ts`, `server/wasdAurionDialogueQuestIntentProtocol.test.ts`, `server/routers.ts`, `server/db.ts`, `Memory.md`.
+Evidence: `pnpm vitest run server/questNpcAuthority.test.ts server/wasdAurionDialogueQuestIntentProtocol.test.ts server/dialogueQuestIntent.e2e.test.ts` passed 13 executable tests; the 3 MariaDB-dependent E2E cases were skipped because `DATABASE_URL` is unset. `pnpm check` passed. `pnpm test` passed the full local suite; environment-dependent database cases remained skipped. The focused regressions reject a wrong guard, player, quest, action, zone and out-of-radius position and reject arbitrary client NPC IDs.
+Learned: Quest NPC identity, display-name mapping, zone and AOI anchor must be one typed Aurion contract; widening only the transport schema would admit unowned identities or leave persistence and authorization divergent.
+Open: No production deployment or MariaDB runtime claim is made. The repository environment had no `DATABASE_URL`, so the existing real dialogue persistence E2E suite remained skipped.
+Next safe step: Run the existing dialogue intent MariaDB E2E lane against the exact committed head before deployment and retain the contract as the only source for future starter-village quest givers.
