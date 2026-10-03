@@ -51,7 +51,8 @@ export class WorldAssetProjection {
   if(typeof x!=="number"||!Number.isFinite(x)||typeof z!=="number"||!Number.isFinite(z))return;
   // The first asset read is causally bound to a server-confirmed zone position,
   // not to whether a particular renderer backend has already produced a frame.
-  this.update(1,{x,z},this.renderer?.domElement.clientWidth||this.viewportWidth);
+  // Zone snapshots carry canonical millimetres; update/camera positions use metres.
+  this.update(1,{x:x/1000,z:z/1000},this.renderer?.domElement.clientWidth||this.viewportWidth);
  };
  constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer){
   this.root.name="aurion-optimized-world-assets";scene.add(this.root);
