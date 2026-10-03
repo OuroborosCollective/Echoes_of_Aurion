@@ -7,6 +7,7 @@ export function AuthoredQuestJournal() {
   const available = trpc.aurionQuest.available.useQuery();
   const instances = trpc.aurionQuest.myInstances.useQuery();
   const [selectedId, setSelectedId] = useState<string>("");
+  const [confirmation, setConfirmation] = useState<string>("");
   const details = trpc.aurionQuest.details.useQuery(
     { instanceId: selectedId },
     { enabled: Boolean(selectedId) },
@@ -52,8 +53,10 @@ export function AuthoredQuestJournal() {
               className="ax1-primary mt-2"
               disabled={busy}
               onClick={async () => {
+                setConfirmation("");
                 const offered = await offer.mutateAsync({ templateId: template.templateId });
                 await refresh(offered.instance.id);
+                setConfirmation("Angebot vom Aurion-Server bestätigt.");
               }}
             >
               Bestätigtes Angebot öffnen
@@ -99,7 +102,7 @@ export function AuthoredQuestJournal() {
           {selected.instance.state === "offered" && <button
             className="ax1-primary"
             disabled={busy}
-            onClick={async () => { await accept.mutateAsync({ instanceId: selected.instance.id }); await refresh(selected.instance.id); }}
+            onClick={async () => { setConfirmation(""); await accept.mutateAsync({ instanceId: selected.instance.id }); await refresh(selected.instance.id); setConfirmation("Questannahme serverbestätigt."); }}
           >Quest annehmen</button>}
 
           {selected.instance.state === "active" && choices.length > 0 && <div className="space-y-2">
@@ -108,16 +111,17 @@ export function AuthoredQuestJournal() {
               key={edge.id}
               className="ax1-primary mr-2"
               disabled={busy || Boolean(edge.conditionPredicate)}
-              onClick={async () => { await choose.mutateAsync({ instanceId: selected.instance.id, edgeId: edge.id }); await refresh(selected.instance.id); }}
+              onClick={async () => { setConfirmation(""); await choose.mutateAsync({ instanceId: selected.instance.id, edgeId: edge.id }); await refresh(selected.instance.id); setConfirmation("Entscheidung serverbestätigt."); }}
             >{edge.choiceLabel ?? edge.id}</button>)}
           </div>}
 
           {selected.instance.state === "active" && currentNode?.type === "end" && <button
             className="ax1-primary"
             disabled={busy}
-            onClick={async () => { await complete.mutateAsync({ instanceId: selected.instance.id }); await refresh(selected.instance.id); }}
+            onClick={async () => { setConfirmation(""); await complete.mutateAsync({ instanceId: selected.instance.id }); await refresh(selected.instance.id); setConfirmation("Questabschluss serverbestätigt."); }}
           >Quest abschließen</button>}
         </>}
+        {confirmation && <div data-testid="aurion-quest-confirmation" aria-live="polite" className="aurion-quest-confirmation flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-950/35 px-3 py-2 text-xs text-emerald-200"><CheckCircle2 size={14} /><span>{confirmation}</span></div>}
         {(offer.error || accept.error || choose.error || complete.error || details.error) && <p role="alert" className="text-xs text-red-300">Aktion nicht bestätigt. Der aktuelle Aurion-Stand wurde nicht verändert.</p>}
       </article>
     </div>
