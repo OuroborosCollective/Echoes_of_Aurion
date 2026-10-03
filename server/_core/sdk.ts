@@ -109,7 +109,8 @@ export class SDKServer {
     )
       return "microsoft";
     if (set.has("REGISTERED_PLATFORM_GITHUB")) return "github";
-    const first = Array.from(set)[0];
+    // ⚡ Bolt: O(1) set retrieval to avoid O(N) Array.from allocation
+    const first = set.values().next().value;
     return first ? first.toLowerCase() : null;
   }
 
