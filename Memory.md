@@ -253,3 +253,25 @@ Evidence: Candidate `439be44bc70167768a57e16bc1136cc39f9270c1`; four new cases f
 Learned: The unlocked Emberfall-only branch was unreachable because progression selected another zone; assert the returned snapshot across the transition.
 Open: Final Memory-inclusive CI and merge/main readback; no production deployment claim.
 Next safe step: Merge only the verified final head and verify automated post-merge Memory/readback.
+
+
+### 2026-10-03 — PR #730 — fix: preserve confirmed Cinder Vault access across quest zones
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=730 merge=4d064a3d3f4da3dffb875e43222e9304609f7046 -->
+Task: Merge PR #730 into `main` — fix: preserve confirmed Cinder Vault access across quest zones.
+Decisions: Aurion remains the sole gameplay and persistence authority. This is a display projection fix; no new teleport command, reward rule or client-side authorization is introduced.
+Touched surfaces:
+- `Memory.md`
+- `docs/balancing/aim265-candidate.json`
+- `server/openWorldProtocol.test.ts`
+- `server/openWorldProtocol.ts`
+- `server/questChainRegression.e2e.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/730
+- Merge commit: `4d064a3d3f4da3dffb875e43222e9304609f7046`
+- PR head: `9339cd065af438a175593e26dd658ad8e22b08f9`
+- Merged at: 2026-10-03T01:24:44Z
+- Post-merge workflow run: 37085989979
+Learned: An unlock projection must be asserted in the zone actually returned after progression, not only in a zone-local table that stops being selected.
+Open: No implementation blocker remains. Verify the merged main head and automated post-merge memory readback. Isolated candidate proof does not claim production deployment.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
