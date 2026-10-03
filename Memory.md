@@ -338,3 +338,13 @@ Evidence: `pnpm vitest run server/questNpcAuthority.test.ts server/wasdAurionDia
 Learned: Quest NPC identity, display-name mapping, zone and AOI anchor must be one typed Aurion contract; widening only the transport schema would admit unowned identities or leave persistence and authorization divergent.
 Open: No production deployment or MariaDB runtime claim is made. The repository environment had no `DATABASE_URL`, so the existing real dialogue persistence E2E suite remained skipped.
 Next safe step: Run the existing dialogue intent MariaDB E2E lane against the exact committed head before deployment and retain the contract as the only source for future starter-village quest givers.
+
+### 2026-10-03 — PR 735 shares the reviewed north-gate anchor
+Status: VERIFIED focused repository regression
+Task: Integrate the corrected PR 734 layout before the NPC identity contract.
+Decisions: Preserve all append-only Memory entries; reference the north gate point directly instead of retaining the separate -12 m guard anchor 18 m away. Existing Lyra/Orun authority stays unchanged.
+Touched surfaces: server/aurionStarterVillageContract.ts and server/questNpcAuthority.test.ts.
+Evidence: 19 focused tests passed; 3 real-MariaDB tests skipped locally; nonincremental TypeScript check passed. Identity-by-reference regression binds the guard position to the shared north gate.
+Learned: A named north-gate NPC needs the same fixed-point anchor as the actual village contract.
+Open: Dependent exact-head CI and real dialogue persistence readback remain pending; this NPC contract alone does not implement the wolf quest.
+Next safe step: Push and verify CI; merge only after PR 734.
