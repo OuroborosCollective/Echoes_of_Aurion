@@ -54,8 +54,10 @@ export function AuthoredQuestJournal() {
               disabled={busy}
               onClick={async () => {
                 setConfirmation("");
+                setConfirmation("");
                 const offered = await offer.mutateAsync({ templateId: template.templateId });
                 await refresh(offered.instance.id);
+                setConfirmation("Angebot vom Aurion-Server bestätigt.");
                 setConfirmation("Angebot vom Aurion-Server bestätigt.");
               }}
             >
