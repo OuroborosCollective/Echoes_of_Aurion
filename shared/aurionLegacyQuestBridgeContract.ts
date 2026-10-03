@@ -9,6 +9,7 @@ export const legacyQuestKeys = [
   "starfall_resonance",
   "clockwork_core",
   "sunwatch_vanguard",
+  "abyssal_depths",
 ] as const;
 
 export const legacyQuestKeySchema = z.enum(legacyQuestKeys);

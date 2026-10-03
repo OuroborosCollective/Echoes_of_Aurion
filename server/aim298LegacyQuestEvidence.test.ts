@@ -100,9 +100,9 @@ describeWithDatabase("AIM-298 durable encounter evidence", () => {
 });
 
 describe("AIM-298 legacy quest bridge", () => {
-  it("represents all six established QuestKeys without changing their source semantics", () => {
+  it("represents all seven established QuestKeys without changing their source semantics", () => {
     const bridges = listLegacyQuestBridges();
-    expect(bridges).toHaveLength(6);
+    expect(bridges).toHaveLength(7);
     expect(bridges.map(value => value.key)).toEqual([
       "astral_call",
       "archive_of_echoes",
@@ -110,6 +110,7 @@ describe("AIM-298 legacy quest bridge", () => {
       "starfall_resonance",
       "clockwork_core",
       "sunwatch_vanguard",
+      "abyssal_depths",
     ]);
     expect(bridges.map(value => value.encounterKey)).toEqual([
       "asterion",
@@ -118,6 +119,7 @@ describe("AIM-298 legacy quest bridge", () => {
       "starfall_crater",
       "rootgear_foundry",
       "sunwatch_bastion",
+      "abyssal_depths",
     ]);
     expect(getLegacyQuestBridge("astral_call")).toMatchObject({
       giver: "Lyra",

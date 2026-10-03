@@ -1,9 +1,9 @@
 import { ax1DamageForAction } from "./ax1CombatAuthority";
 
-export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key" | "starfall_resonance" | "clockwork_core" | "sunwatch_vanguard";
+export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key" | "starfall_resonance" | "clockwork_core" | "sunwatch_vanguard" | "abyssal_depths";
 export type QuestState = "locked" | "available" | "active" | "completed";
 export type McpAction = "run" | "attack" | "interact" | "skill_1" | "skill_2" | "skill_3" | "skill_4" | "skill_5" | "skill_6" | "skill_7" | "skill_8" | "skill_9";
-export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault" | "starfall_crater" | "rootgear_foundry" | "sunwatch_bastion";
+export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault" | "starfall_crater" | "rootgear_foundry" | "sunwatch_bastion" | "abyssal_depths";
 
 export type QuestDefinition = {
   key: QuestKey;
@@ -70,6 +70,15 @@ export const aurionQuestline: readonly QuestDefinition[] = [
     requires: "starfall_resonance",
     reward: { xp: 650, points: 100 },
   },
+  {
+    key: "abyssal_depths",
+    giver: "Orun",
+    title: "Die Abgründigen Tiefen",
+    objective: "Besiege den Abgründigen Wächter.",
+    requiredLevel: 6,
+    requires: "sunwatch_vanguard",
+    reward: { xp: 800, points: 120 },
+  },
 ] as const;
 
 export const dungeonDefinition = {
@@ -102,6 +111,7 @@ export const aurionEncounters: readonly {
   { key: "starfall_crater", name: "Sternenfall-Krater", enemyName: "Sternenfall-Wächter", maxBossHp: 320, questKey: "starfall_resonance" },
   { key: "rootgear_foundry", name: "Rootgear Foundry", enemyName: "Rootgear-Kernwächter", maxBossHp: 400, questKey: "clockwork_core" },
   { key: "sunwatch_bastion", name: "Sonnenwacht-Bastion", enemyName: "Sonnenwacht-Kommandant", maxBossHp: 400, questKey: "sunwatch_vanguard" },
+  { key: "abyssal_depths", name: "Abgründige Tiefen", enemyName: "Abgründiger Wächter", maxBossHp: 500, questKey: "abyssal_depths" },
 ] as const;
 
 export function getQuest(key: QuestKey): QuestDefinition {
