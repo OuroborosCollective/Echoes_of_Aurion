@@ -27,7 +27,11 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
     await characterGate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
     await expect(characterGate).toHaveCount(0);
   }
-  await expect(page.getByTestId("ax1-movement-control")).toBeVisible();
+  const movement = page.getByTestId("ax1-movement-control");
+  await expect(movement).toBeVisible();
+  await expect(movement).toHaveAttribute("data-active", "false");
+  await expect(page.getByTestId("ax1-starter-npc-beacon")).toBeVisible();
+  await expect(page.getByTestId("ax1-starter-npc-beacon")).toContainText("serverbestätigt");
   await expect(page.getByTestId("authoritative-world-hud")).toContainText(/Kontakt|serverbestätigt/);
   await page.keyboard.press("j");
   await expect(page.getByRole("dialog")).toBeVisible();
