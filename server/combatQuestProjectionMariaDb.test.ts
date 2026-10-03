@@ -6,6 +6,7 @@ import { readPilotCombatCompletionEvidence } from "./questCompiler/pilotCombatCo
 import { recordWorldPresenceLease, requestQuestActionFromDialogue } from "./db";
 import { interpretAndRecordDialogue } from "./wasdAurionRuntime";
 import { globalZoneRegistry } from "./zoneRuntime";
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 
 const real = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_ENCOUNTER_E2E === "1" ? describe : describe.skip;
 real("durable combat quest projection — real MariaDB", () => {
@@ -79,6 +80,11 @@ real("durable combat quest projection — real MariaDB", () => {
     const completed = await restarted.completePlayerQuest(userId, finished.id);
     expect(completed.updatedInstance.state).toBe("completed");
     expect((await new AdminQuestStudioService().completePlayerQuest(userId, finished.id)).replayed).toBe(true);
+    const [rewardItems] = await pool.query("SELECT i.baseItemDefinitionId,i.quantityExact,i.originItemId,r.operation FROM aurionItemInstancesV2 i JOIN aurionInventoryReceipts r ON r.id=i.inventoryReceiptId WHERE i.ownerUserId=?", [userId]);
+    expect(rewardItems).toEqual([expect.objectContaining({
+      baseItemDefinitionId: "component-craft-star-iron-v2", quantityExact: "1", operation: "grant",
+      originItemId: canonicalSha256({ domain: "aurion.quest.reward.origin.v1", questReceiptId: completed.receipt.id }).slice(7),
+    })]);
     await pool.query("UPDATE aurionCombatVictoryEvents SET opponentSpecies='boar' WHERE receiptId='outbox-receipt-6'");
     await expect(readPilotCombatCompletionEvidence(finished)).rejects.toThrow("QUEST_PILOT_VICTORY_IDENTITY_MISMATCH");
   });

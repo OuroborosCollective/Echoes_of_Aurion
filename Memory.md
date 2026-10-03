@@ -485,3 +485,10 @@ Decisions: Scope remains exactly chunk(0,0), a64m origin square. No global seed,
 Evidence:55 tests passed across nine suites: starter/world assets, nature collision, graph CAG verifier, structure CAG verifier and world-generation evidence/parity contracts. Golden digest was computed from main909ba47d implementation, not the edited generator. PR737 merge784ce223 touches only quest code/tests and Memory, with no world/asset/CAG changes. These are repository regressions, not a claim of newly implemented autonomous world evolution or successful live Wolfram service execution.
 Open: Final exact-head CI and real shipping browser regression must pass before merge.
 Next safe step: Review the completed shipping lane and verify remote main after merge.
+
+### 2026-10-03 — Pilot reward closure after recovery
+Status: VERIFIED isolated database boundary; playable browser journey pending
+Task: Bind the existing one-unit Star Iron reward to the repaired pilot hand-in and recovery chain.
+Evidence: A freshly migrated MariaDB through0070 passed the combined dialogue/AOI, six-victory fixture, lost-acknowledgment recovery, causal hand-in, completion replay and exact reward test. Readback proves exactly one component-craft-star-iron-v2, quantity1, grant receipt and origin hash bound to the completed quest receipt.91 focused tests passed,1 environment-gated test skipped; TypeScript passed. Combat and initial position remain explicit fixtures, so no played wolf journey or production proof is claimed.
+Open: Obtain the actual wolf definition/asset, finish the authenticated HTTP/browser journey and inspect final-head CI.
+Next safe step: Preserve all authority gates while validating the completed dependency stack.
