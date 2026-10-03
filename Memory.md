@@ -328,3 +328,13 @@ Evidence: Original source-bound GLB audit found 1,341 market and 72 southeast-hu
 Learned: Placement-center tests miss footprint intersections; a catalog ID and a named open gate do not prove collision geometry.
 Open: Real MariaDB/browser CI must pass on the final head. No production, native GPU, closed-wall or rendered-ring claim.
 Next safe step: Push this reviewed correction, inspect exact-head CI and only then decide merge.
+
+### 2026-10-03 — PR 734 exact-head CI readback and memory queue isolation
+Status: PARTIAL — new exact-head CI required
+Task: Preserve independent PR verification while main memory sync stays serialized.
+Decisions: Give PR memory-contract runs per-PR concurrency groups; the previous global group canceled pending PR 734 verification when another PR was pushed despite cancel-in-progress=false. Main sync retains one shared group. No production sync behavior or credentials changed.
+Touched surfaces: .github/workflows/agent-memory-supabase-sync.yml.
+Evidence: At 6cb6a5d33fd76bde8cfe4260791c085eefecc429, Aurion Local Test Pack succeeded, and AIM259 job 111129801561 passed the real database and phone/tablet/desktop browser lane plus NPC readback. The GLB upload lane failed at unchanged glbImport.spec.ts:52 (wheel-scroll bottom assertion); one diagnostic retry was requested. The memory run 37097323346 was canceled before any job and GitHub refused its failed-job rerun. Final source typecheck and 18 targeted tests had passed.
+Learned: GitHub replaces a pending run in a concurrency group even when cancel-in-progress=false; unrelated PRs must not share the main memory queue.
+Open: New head must receive all applicable successful CI; no merge or production claim yet.
+Next safe step: Read back the independent PR CI results before merge.
