@@ -81,6 +81,7 @@ type PresencePeer = {
   maxHealth: number;
   stamina: number;
   weaponBonus: number;
+  weaponEquipped?: boolean;
   weaponTrack: WasdZoneCombatProfile["weaponTrack"];
   skillCooldownUntilTick: Map<Ax1BladeSkillId, number>;
   lastCombatSequence: number;
@@ -104,6 +105,7 @@ export function integrateZoneMovement(position: ZonePosition, input: ZoneMove["i
  * below are donor provenance, not external runtime authorities.
  */
 export class AuthoritativeMovementZone {
+  private rulesetVersion: string = AURION_ZONE_RULESET_VERSION;
   private readonly peers = new Map<string, PresencePeer>();
   private readonly peersByEntityId = new Map<string, PresencePeer>();
   private readonly mobRuntime = new ZoneMobRuntime();
@@ -170,6 +172,7 @@ export class AuthoritativeMovementZone {
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
         weaponBonus: peer.weaponBonus,
+        ...(peer.weaponEquipped === undefined ? {} : { weaponEquipped: peer.weaponEquipped }),
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
         lastCombatSequence: peer.lastCombatSequence,
@@ -216,7 +219,7 @@ export class AuthoritativeMovementZone {
       worldId: WORLD_ID,
       zoneId: this.zoneId,
       tick: this.tickNumber,
-      ruleset: AURION_ZONE_RULESET_VERSION,
+      ruleset: this.rulesetVersion,
       combatSequence: this.combatSequence,
       players,
       mobs,
@@ -237,8 +240,10 @@ export class AuthoritativeMovementZone {
   }
 
   restoreFromCanonicalState(state: CanonicalZoneState, previousReceiptHash?: string | null): void {
+    if (!["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
     if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
     if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
+    this.rulesetVersion = state.ruleset;
     this.tickNumber = state.tick;
     this.combatSequence = state.combatSequence;
     if (previousReceiptHash !== undefined) this.previousReceiptHash = previousReceiptHash;
@@ -265,6 +270,7 @@ export class AuthoritativeMovementZone {
         maxHealth: player.maxHealth,
         stamina: player.stamina,
         weaponBonus: player.weaponBonus,
+        weaponEquipped: player.weaponEquipped,
         weaponTrack: player.weaponTrack as WasdZoneCombatProfile["weaponTrack"],
         skillCooldownUntilTick: cooldowns,
         lastCombatSequence: player.lastCombatSequence,
@@ -307,6 +313,7 @@ export class AuthoritativeMovementZone {
       maxHealth: profile.maxHealth,
       stamina: WASD_MAX_STAMINA,
       weaponBonus: profile.weaponBonus,
+      weaponEquipped: profile.weaponEquipped,
       weaponTrack: profile.weaponTrack,
       skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
@@ -444,7 +451,7 @@ export class AuthoritativeMovementZone {
     const eventId = `${this.zoneId}:${entityId}->${targetEntityId}:seq:${sequence}`;
     const address = (purpose: string, drawIndex: number) => ({
       worldSeedDigest: WORLD_SEED_DIGEST,
-      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      rulesetVersion: this.rulesetVersion,
       tick: this.tickNumber,
       systemId,
       entityId,
@@ -477,7 +484,7 @@ export class AuthoritativeMovementZone {
     const attacker = { id: `player:${peer.userId}`, stamina: peer.stamina, skills: { combat: { level: peer.combatLevel } } };
     const defender = { id: mob.definition.entityId, health: mob.health, skills: { combat: { level: mob.definition.level } } };
     const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, entropy: entropyBundle.entropy });
+    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, unarmed: this.rulesetVersion === AURION_ZONE_RULESET_VERSION && skillId === null && peer.weaponEquipped === false, entropy: entropyBundle.entropy });
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
     peer.lastCombatSequence = sequence;
@@ -539,6 +546,9 @@ export class AuthoritativeMovementZone {
     }
     captureAuthorityStage("MEMBERSHIP_REVIVAL");
 
+    // Stage ordering must not invalidate an already admitted lower-sequence action.
+    const actionSequenceWatermarks = new Map(this.sortedPeers.map(peer => [peer.userId, peer.lastAcceptedClientSeq]));
+
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {
       if (intent.type !== "move") continue;
@@ -560,8 +570,9 @@ export class AuthoritativeMovementZone {
     for (const intent of intentsToProcess) {
       if (intent.type === "move") continue;
       const peer = this.peersByEntityId.get(intent.entityId);
-      if (!peer || intent.clientSeq <= peer.lastAcceptedClientSeq) continue;
-      peer.lastAcceptedClientSeq = intent.clientSeq;
+      if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
+      actionSequenceWatermarks.set(peer.userId, intent.clientSeq);
+      peer.lastAcceptedClientSeq = Math.max(peer.lastAcceptedClientSeq, intent.clientSeq);
 
       if (intent.type === "attack") {
         const resolution = this.resolvePlayerMelee(peer, intent.targetEntityId, null, AX1_PLAYER_BASIC_MELEE_RANGE_FIXED, ++actionIndex);
@@ -619,6 +630,11 @@ export class AuthoritativeMovementZone {
       const next = regenerateWasdStamina(peer.stamina);
       if (next !== peer.stamina) { peer.stamina = next; changed = true; }
     }
+    for (const mob of this.rulesetVersion === "aurion.zone.rules.v2" ? [] : this.mobRuntime.orderedStates()) {
+      if (mob.health <= 0) continue;
+      const next = regenerateWasdStamina(mob.stamina);
+      if (next !== mob.stamina) { this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, stamina: next }); changed = true; }
+    }
     captureAuthorityStage("REGENERATION");
 
     // 08 receipt creation; durable persistence is an observer queue.
@@ -638,7 +654,7 @@ export class AuthoritativeMovementZone {
       zoneId: this.zoneId,
       tick: this.tickNumber,
       sourceRevision: this.sourceRevisionOverride ?? activeProvenance.sourceRevision,
-      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      rulesetVersion: this.rulesetVersion,
       previousReceiptHash: this.previousReceiptHash,
       preStateHash,
       orderedIntentHash,
