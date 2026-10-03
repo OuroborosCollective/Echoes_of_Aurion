@@ -309,6 +309,43 @@ Learned: Repository memory is now recorded automatically from the completed merg
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
+### 2026-10-03 — Deterministic Aurion starter-village layout
+Status: VERIFIED repository regression
+Task: Replace seed/catalog-cyclic starter-village placement with an Aurion-owned fixed-point layout while preserving the established spawn and return-stone position.
+Decisions: Reference the immutable return-stone position directly; define the centre, ring road, four cardinal axes and exactly four gate anchors in millimetres; mark the pilot as a partial set and fail closed for any future closed-wall plan without all four geometric openings. Use only admitted world-catalog IDs and keep the client as a view-only projection of the authenticated server region.
+Touched surfaces: `shared/aurionStarterVillageContract.ts`, `shared/worldAssetProtocol.ts`, `server/aurionStarterVillageContract.test.ts`, `server/worldAssetProtocol.test.ts`, `client/src/xaurion/integration/WorldAssetProjection.ts`.
+Evidence: `pnpm vitest run server/aurionStarterVillageContract.test.ts server/worldAssetProtocol.test.ts server/worldNatureCollision.test.ts` passed 17 tests; `pnpm check` passed; `pnpm test` passed 378 files / 1,841 tests with 55 files / 207 environment-dependent tests skipped. Browser screenshot capture was attempted after installing the matching Playwright Chromium but the container lacks `libatk-1.0.so.0`, so no screenshot is claimed.
+Learned: The origin chunk must be selected from a named Aurion geometry contract before the generic seeded catalog lane; the renderer can then remain generic and cannot invent or close village geometry.
+Open: No deployment, native GPU, persistence or production-runtime claim is made. Visual browser readback remains unavailable in this container because the installed Chromium cannot start without the system ATK library.
+Next safe step: Review and merge the exact tested revision, then use the automated post-merge Memory/readback workflow; obtain browser/native visual evidence in an image that includes Chromium runtime libraries if required.
+
+### 2026-10-03 — PR 734 geometric review corrections
+Status: PARTIAL — local regressions verified; exact-head CI pending
+Task: Review ac86c6e7c74db7ab0ce015e70688725d4829a492 and repair demonstrated layout and browser-count regressions.
+Decisions: Reserve the 16–20 m ring corridor using all-LOD catalog bounds; move the four landmarks to fixed ±22 m anchors. The ring is a reserved layout corridor, not a rendered road surface. Reject every closed-wall request until geometric passage evidence exists; four caller-supplied IDs are not evidence. Retain the explicit decorative partial set and existing non-colliding city-asset policy.
+Touched surfaces: Starter-village contract/tests, world-asset JSON import attributes for native ESM test loading, exact server-plan browser assertion and relevant workflow path filters.
+Evidence: Original source-bound GLB audit found 1,341 market and 72 southeast-hut LOD0 vertices inside the ring corridor. Original collision readback returned zero origin obstacles and clear four-axis sweeps; no blocked gate is claimed. Corrected focused tests: 18 passed. Full suite: 378 files / 1,842 tests passed, 55 files / 207 environment-dependent tests skipped. Typecheck passed before final ESM-only adjustment; final check recorded in review logs. Playwright discovers all three phone/tablet/desktop cases; real runtime execution remains CI evidence, not a local claim.
+Learned: Placement-center tests miss footprint intersections; a catalog ID and a named open gate do not prove collision geometry.
+Open: Real MariaDB/browser CI must pass on the final head. No production, native GPU, closed-wall or rendered-ring claim.
+Next safe step: Push this reviewed correction, inspect exact-head CI and only then decide merge.
+
+### 2026-10-03 — PR 734 exact-head CI readback and memory queue isolation
+Status: PARTIAL — new exact-head CI required
+Task: Preserve independent PR verification while main memory sync stays serialized.
+Decisions: Give PR memory-contract runs per-PR concurrency groups; the previous global group canceled pending PR 734 verification when another PR was pushed despite cancel-in-progress=false. Main sync retains one shared group. No production sync behavior or credentials changed.
+Touched surfaces: .github/workflows/agent-memory-supabase-sync.yml.
+Evidence: At 6cb6a5d33fd76bde8cfe4260791c085eefecc429, Aurion Local Test Pack succeeded, and AIM259 job 111129801561 passed the real database and phone/tablet/desktop browser lane plus NPC readback. The GLB upload lane failed at unchanged glbImport.spec.ts:52 (wheel-scroll bottom assertion); one diagnostic retry was requested. The memory run 37097323346 was canceled before any job and GitHub refused its failed-job rerun. Final source typecheck and 18 targeted tests had passed.
+Learned: GitHub replaces a pending run in a concurrency group even when cancel-in-progress=false; unrelated PRs must not share the main memory queue.
+Open: New head must receive all applicable successful CI; no merge or production claim yet.
+Next safe step: Read back the independent PR CI results before merge.
+
+### 2026-10-03 — PR 734 shipping browser integration
+Status: PARTIAL — exact-head browser CI required
+Task: Repair the shipping test's dependency on a procedural foundation removed from the origin by the fixed village layout.
+Decisions: Keep the village contract unchanged. Read the authenticated region, verify the existing shipped nature-root placement, and reach a safe viewing point using server-confirmed keyboard movement before rotating the real camera. Preserve all KTX decode, actual draw, fallback and resource assertions.
+Evidence: On ca363702, tablet shipping failed at aim291.assetShipping.spec.ts:70 with zero KTX models; the old test assumed a foundation at (-8m,+24m), absent from the new authoritative origin. Region readback locates nature-root-1 at (-40m,+8m). Typecheck and Playwright discovery passed locally; real exact-head CI remains required.
+Open: No merge or new production claim. The following head must pass the full shipping lane.
+Next safe step: Inspect exact-head browser results before merge.
 ### 2026-10-03 — Bounded quest objective progress and receipt-chain revisions
 Status: VERIFIED repository regression
 Task: Bound numeric quest objective progress at its validated target and derive command event revisions from the canonical persisted receipt chain.
@@ -351,3 +388,27 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Starter-region isolation and outer-world preservation
+Status: VERIFIED repository boundary regressions; final-head browser CI pending
+Task: Preserve deterministic world/graph/CAG generation and canonical GLB mesh/material/texture pipelines while keeping only the small starter origin constant.
+Decisions: Scope remains exactly chunk(0,0), a64m origin square. No global seed, generator, identity, grid, collision-manifest, graph/CAG/Wolfram, shipping or texture/mesh pipeline is replaced. Add an independently captured pre-change digest covering eight neighboring chunks, settlement, negative/far coordinates and three seeds. Require different seed plans outside origin and identical seed-independent origin plans.
+Evidence:55 tests passed across nine suites: starter/world assets, nature collision, graph CAG verifier, structure CAG verifier and world-generation evidence/parity contracts. Golden digest was computed from main909ba47d implementation, not the edited generator. PR737 merge784ce223 touches only quest code/tests and Memory, with no world/asset/CAG changes. These are repository regressions, not a claim of newly implemented autonomous world evolution or successful live Wolfram service execution.
+Open: Final exact-head CI and real shipping browser regression must pass before merge.
+Next safe step: Review the completed shipping lane and verify remote main after merge.
+
+### 2026-10-03 — Confirmed asset snapshot unit boundary
+Status: VERIFIED local production-browser regression; exact-head remote CI pending
+Task: Diagnose AIM-291 KTX2 failures after moving through the fixed starter region.
+Decisions: Preserve canonical server millimetres and convert only the WorldAssetProjection snapshot adapter to renderer metres. The event publisher, server positions, frame camera coordinates, terrain generation, GLB files, materials, collision and budgets are unchanged. Add three regression vectors proving that snapshot and frame paths request one identical chunk, plus an explicit browser origin-chunk readback assertion.
+Evidence: On base 594b48c, a real authenticated browser reached (-19380,7480) mm but requested chunk (-303,117), rendered zero models and failed the KTX assertion. The three new unit cases fail on the old adapter and pass with the correction. The corrected production build passed all three original AIM-291 browser profiles (phone 1.3 min, tablet 2.0 min, desktop 2.6 min) against disposable MariaDB 11.4.13 and Chromium 151 SwiftShader, including actual KTX drawing, intentionally broken decoder, actual fallback drawing, immutable world hashes and unchanged resource limits. Captured render readbacks confirm chunk (0,0). Twenty-seven focused camera/budget/runtime/projection tests and TypeScript passed. Local run covers the working-tree patch on 594b48c; release identity/exact committed head remains a CI gate. Native hardware and production deployment are not claimed.
+Open: Remote exact-head CI and independent review before merge.
+Next safe step: Push the reviewed fix to the existing PR734 branch, rerun its exact-head checks, then follow the existing dependency order.
+
+### 2026-10-03 — Passive save notification must not cover combat input
+Status: VERIFIED rendered component regression; exact-head browser CI pending
+Task: Classify AIM-259 and AIM-240 failures on head 8a07026 without weakening assertions.
+Decisions: Apply pointer-events:none only to the actionless CausalBackupNotifier toast. Keep other interactive notifications, combat buttons, upload flow and existing browser timeouts unchanged. No forced clicks or skipped checks.
+Evidence: AIM-259 run 37101926963/job 111142999642 identifies the save toast as the pointer interceptor over Auto-Angriff for the entire 15s click deadline. Its configured 5s timer pauses on hover in the installed Sonner implementation. The real Sonner component regression confirms inherited pointer pass-through on the passive notification while a separate toast action remains interactive. TypeScript passes; actual browser hit testing remains the existing AIM-259 exact-head CI gate.
+Open: AIM-240 run 37101926946/job 111142999644 failed the 5s enabled assertion after upload. Artifact 11266582510 trace shows upload 201 in 41ms and both subsequent catalog reads 200 in 14–15ms; the after@call72 DOM has no disabled attribute on smartGlbFile and displays a ready one-model catalog. This does not prove a persistent upload/catalog failure or identify a runtime cause. Sparse captured frames alone cannot establish CPU starvation. No upload fix, timeout increase or green claim is made; retain original test for the next exact-head run. No parallel local browser was started during the pilot journey.
+Next safe step: Push this reviewed local fix and require fresh AIM-259/AIM-240 plus remaining exact-head gates before merge.
