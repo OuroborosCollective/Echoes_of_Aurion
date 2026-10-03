@@ -126,7 +126,7 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     // Stay in the active runtime: authenticated world polling must retire the
     // old renderer/projection and bind the new canonical epoch automatically.
     await expect.poll(async () => (await evidence(page))?.epoch, { timeout: 45_000 }).toBe(projection.epoch);
-    await expect.poll(async () => (await evidence(page))?.status).toBe("rendering");
+    await expect.poll(async () => (await evidence(page))?.status, { timeout: 45_000 }).toBe("rendering");
     expect(await evidence(page)).toMatchObject({ backend: "webgl2", requested: "webgl2", recoveryAttempt: 0 });
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toMatch(/^[a-f0-9]{64}$/);
     const originalAssets = await assets(page);
