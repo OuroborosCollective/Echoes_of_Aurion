@@ -328,3 +328,26 @@ Evidence: Quest compiler suites passed 61 tests (one MariaDB case skipped locall
 Learned: Number.isSafeInteger does not narrow number | undefined in TypeScript.
 Open: Exact-head CI and integration with later combat/reward changes remain required.
 Next safe step: Push the correction, verify CI, and integrate in series order.
+
+
+### 2026-10-03 — PR #737 — fix(quest): clamp numeric objective progress and canonicalize event sequences from persisted receipts
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=737 merge=784ce2232ede1f370322c482626e3d400336c682 -->
+Task: Merge PR #737 into `main` — fix(quest): clamp numeric objective progress and canonicalize event sequences from persisted receipts.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `server/questCompiler/adminService.ts`
+- `server/questCompiler/persistence.test.ts`
+- `server/questCompiler/persistence.ts`
+- `server/questCompiler/runtime.test.ts`
+- `server/questCompiler/runtime.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/737
+- Merge commit: `784ce2232ede1f370322c482626e3d400336c682`
+- PR head: `7f4201517c93d6286cab9e36b76eaf6993d81205`
+- Merged at: 2026-10-03T05:19:02Z
+- Post-merge workflow run: 37099439617
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
