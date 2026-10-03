@@ -299,7 +299,7 @@ export class QuestRuntimeEngine {
 
     const resultStateHash = computeQuestStateHash(updatedInstance);
     const eventSequence = options?.eventSequence;
-    if (!Number.isSafeInteger(eventSequence) || eventSequence! < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
+    if (typeof eventSequence !== "number" || !Number.isSafeInteger(eventSequence) || eventSequence < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
 
     const receiptIdentity = computeCanonicalHash(
       'aurion.quest.receipt.identity.v1',
@@ -356,7 +356,7 @@ export class QuestRuntimeEngine {
     };
     const resultStateHash = computeQuestStateHash(updatedInstance);
     const eventSequence = options?.eventSequence;
-    if (!Number.isSafeInteger(eventSequence) || eventSequence! < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
+    if (typeof eventSequence !== "number" || !Number.isSafeInteger(eventSequence) || eventSequence < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
     const receiptIdentity = computeCanonicalHash("aurion.quest.receipt.identity.v1", {
       instanceId: instance.id,
       edgeId,
@@ -411,7 +411,7 @@ export class QuestRuntimeEngine {
     ) throw new Error("QUEST_CAUSAL_SOURCE_IDENTITY_MISMATCH");
 
     const eventSequence = options?.eventSequence;
-    if (!Number.isSafeInteger(eventSequence) || eventSequence! < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
+    if (typeof eventSequence !== "number" || !Number.isSafeInteger(eventSequence) || eventSequence < 1) throw new Error("QUEST_EVENT_SEQUENCE_REQUIRED");
     const idempotencyKey = options?.idempotencyKey ?? `complete:${instance.id}`;
     const receiptIdentity = computeCanonicalHash('aurion.quest.receipt.identity.v1', {
       instanceId: instance.id,

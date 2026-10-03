@@ -318,3 +318,13 @@ Evidence: `pnpm vitest run server/questCompiler/runtime.test.ts server/questComp
 Learned: Completed-node count is graph topology, not an event revision. The durable quest receipt chain is the canonical revision source, while the state hash remains the concurrency boundary and the idempotency key remains the replay boundary.
 Open: No production deployment or external database runtime claim is made; the local persistence lane used the repository's database-optional in-memory implementation, and the MariaDB-only causal-closure suite remained environment-skipped.
 Next safe step: Exercise the same revision conflict cases in the configured MariaDB evidence lane before making a production-runtime claim.
+
+### 2026-10-03 — PR 737 strict event-sequence narrowing
+Status: VERIFIED focused repository regression
+Task: Repair exact-head CI TS2322 in progress, choice and completion receipt construction.
+Decisions: Require typeof eventSequence === number before safe-integer/range checks so the existing fail-closed runtime check also narrows the TypeScript type. No assertion cast, fallback revision or lowered validation.
+Touched surfaces: server/questCompiler/runtime.ts.
+Evidence: Quest compiler suites passed 61 tests (one MariaDB case skipped locally); clean full nonincremental TypeScript check. Existing capping, replay and competing-revision regressions retained.
+Learned: Number.isSafeInteger does not narrow number | undefined in TypeScript.
+Open: Exact-head CI and integration with later combat/reward changes remain required.
+Next safe step: Push the correction, verify CI, and integrate in series order.
