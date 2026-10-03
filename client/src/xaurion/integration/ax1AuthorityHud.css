@@ -101,7 +101,8 @@
     linear-gradient(180deg,rgba(0,0,0,.18),transparent 22%,transparent 78%,rgba(0,0,0,.28));
   z-index:0;
 }
-.xaurion-runtime .ax1-authority-shell .xaurion-game-hud>*{position:relative;z-index:1}
+/* Preserve each surface's viewport anchor; relative positioning pulls the bottom controls into document flow. */
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud>*{z-index:1}
 .xaurion-runtime .ax1-authority-shell .ax1-player-frame{
   border-color:rgba(216,180,95,.28)!important;
   box-shadow:0 12px 36px rgba(0,0,0,.34),inset 0 0 30px rgba(216,180,95,.025);
@@ -638,5 +639,23 @@
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker,
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-minimap-shell{
     display:none;
+  }
+}
+
+/* Keep movement reachable at the lower-left safe edge and reserve its touch area. */
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-bottom-left{
+  position:absolute;
+  top:auto;
+  left:max(16px,env(safe-area-inset-left));
+  bottom:max(16px,env(safe-area-inset-bottom));
+}
+.xaurion-runtime .aurion-glb-admin-toggle{
+  left:max(16px,env(safe-area-inset-left));
+  bottom:calc(max(16px,env(safe-area-inset-bottom)) + 168px);
+}
+@media(max-width:720px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-lane{
+    left:136px;
+    right:max(8px,env(safe-area-inset-right));
   }
 }

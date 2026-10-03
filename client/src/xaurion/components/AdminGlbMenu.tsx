@@ -96,7 +96,7 @@ export const AdminGlbMenu: React.FC = () => {
   return (
     <>
       {/* Floating Admin Button */}
-      <div className="fixed bottom-4 left-4 z-[1000]">
+      <div className="aurion-glb-admin-toggle fixed left-4 z-[1000]">
         <button 
           aria-label="GLB-Admin öffnen"
           onClick={() => {
