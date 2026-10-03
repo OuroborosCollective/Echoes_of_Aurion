@@ -388,3 +388,11 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Starter-region isolation and outer-world preservation
+Status: VERIFIED repository boundary regressions; final-head browser CI pending
+Task: Preserve deterministic world/graph/CAG generation and canonical GLB mesh/material/texture pipelines while keeping only the small starter origin constant.
+Decisions: Scope remains exactly chunk(0,0), a64m origin square. No global seed, generator, identity, grid, collision-manifest, graph/CAG/Wolfram, shipping or texture/mesh pipeline is replaced. Add an independently captured pre-change digest covering eight neighboring chunks, settlement, negative/far coordinates and three seeds. Require different seed plans outside origin and identical seed-independent origin plans.
+Evidence:55 tests passed across nine suites: starter/world assets, nature collision, graph CAG verifier, structure CAG verifier and world-generation evidence/parity contracts. Golden digest was computed from main909ba47d implementation, not the edited generator. PR737 merge784ce223 touches only quest code/tests and Memory, with no world/asset/CAG changes. These are repository regressions, not a claim of newly implemented autonomous world evolution or successful live Wolfram service execution.
+Open: Final exact-head CI and real shipping browser regression must pass before merge.
+Next safe step: Review the completed shipping lane and verify remote main after merge.
