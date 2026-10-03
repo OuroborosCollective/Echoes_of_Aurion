@@ -38,7 +38,7 @@ import { WORLD_CHUNK_ROAD_MAXIMUM, WORLD_CHUNK_STRUCTURE_MAXIMUM, resolveWorldCh
 import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "../shared/worldChunkStreamingProtocol";
 import { resolveWorldEpochReaction, type WorldEpochReaction } from "./worldEpochReactionProtocol";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
-import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
+import { resolveDialogueQuestIntent, type DialogueQuestKey, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import { isAurionQuestNpcId } from "./aurionStarterVillageContract";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
@@ -1627,7 +1627,7 @@ export async function requestQuestActionFromDialogue(values: {
   userId: number;
   dialogueReceiptId: string;
   actionKind: DialogueQuestActionKind;
-  questKey: QuestKey;
+  questKey: DialogueQuestKey;
   idempotencyKey: string;
 }) {
   const db = await getDb();
@@ -1657,7 +1657,9 @@ export async function requestQuestActionFromDialogue(values: {
   const outcome = resolveDialogueQuestIntent({
     npcId: dialogue.npcId,
     interpretation,
-    quests: progress.quests,
+    quests: values.questKey === "starter-wolves-6"
+      ? [await (await import("./routes/aurionQuestRouter")).adminQuestService.pilotDialogueReadModel(values.userId)]
+      : progress.quests,
   });
   if (outcome.state === "no_action" || outcome.actionKind !== values.actionKind || outcome.questKey !== values.questKey) {
     throw new Error("Dieser Dialog erlaubt die angefragte Questaktion nicht.");

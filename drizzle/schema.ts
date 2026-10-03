@@ -2110,6 +2110,8 @@ export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents",
   opponentSpecies: varchar("opponentSpecies", { length: 128 }).notNull(),
   outcome: mysqlEnum("outcome", ["victory", "defeat"]).notNull(),
   confirmed: boolean("confirmed").notNull(),
+  questInstanceIdsJson: text("questInstanceIdsJson").notNull(),
+  questProjected: boolean("questProjected").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   uniqueIndex("aurionCombatVictoryEvents_receipt_uq").on(table.receiptId),

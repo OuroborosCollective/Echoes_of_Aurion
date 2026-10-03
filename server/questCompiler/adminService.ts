@@ -256,9 +256,9 @@ export class AdminQuestStudioService {
     }));
   }
 
-  public async offerQuest(params: { playerUserId: number; templateId: string }) {
+  public async offerQuest(params: { playerUserId: number; templateId: string; triggerEventId?: string }) {
     await this.ensureHydrated();
-    const event = this.worldFactEngine.getEvents().at(-1);
+    const event = params.triggerEventId ? this.worldFactEngine.getEvents().find(event => event.id === params.triggerEventId) : this.worldFactEngine.getEvents().at(-1);
     if (!event) throw new Error("QUEST_CANONICAL_TRIGGER_EVENT_REQUIRED");
     const { instance, plan } = this.runtimeEngine.compileAndOfferQuest({
       worldId: "echoes-of-aurion-global",
@@ -266,6 +266,11 @@ export class AdminQuestStudioService {
       triggerEventId: event.id,
       requestedTemplateId: params.templateId,
     });
+    const existing = await this.persistenceEngine.getInstance(instance.id);
+    if (existing) {
+      if (existing.planHash !== plan.planHash || existing.playerUserId !== params.playerUserId) throw new Error("QUEST_OFFER_IDENTITY_CONFLICT");
+      return { instance: existing, planHash: existing.planHash, graphHash: existing.graphHash };
+    }
     await this.persistenceEngine.savePlan(plan);
     await this.persistenceEngine.saveInstance(instance);
     return { instance, planHash: plan.planHash, graphHash: plan.graphHash };
@@ -413,12 +418,13 @@ export class AdminQuestStudioService {
   }
 
   /** Progresses combat objectives only after an authoritative MariaDB evidence readback. */
-  public async applyConfirmedCombatVictory(userId: number, receiptId: string) {
+  public async applyConfirmedCombatVictory(userId: number, receiptId: string, targetInstanceIds?: readonly string[]) {
     const evidence = await this.combatEvidenceReader(receiptId);
     if (!evidence) throw new Error("QUEST_COMBAT_RECEIPT_UNKNOWN");
     const instances = await this.persistenceEngine.listInstances({ playerUserId: userId });
     const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean; replayed: boolean }> = [];
     for (const listed of instances) {
+      if (targetInstanceIds && !targetInstanceIds.includes(listed.id)) continue;
       const instance = await this.persistenceEngine.getInstance(listed.id);
       if (!instance || instance.state !== "active") continue;
       const plan = await this.persistenceEngine.getPlan(instance.planHash);
@@ -509,14 +515,22 @@ export class AdminQuestStudioService {
     const objectiveUpdate = progressUpdates.find(item => item.instanceId === updated.id);
     if (!objectiveUpdate?.completedNode) throw new Error("QUEST_ENCOUNTER_OBJECTIVE_NOT_COMPLETED");
 
-    const zone = (await import("../zoneRuntime")).globalZoneRegistry.get("observatory_threshold");
-    const connectionId = zone.connectionIdForUser(userId);
-    if (!connectionId) throw new Error("QUEST_ZONE_CONNECTION_REQUIRED");
+    const source = await this.enqueueQuestHandIn(userId, updated, updatedPlan, { id: evidence.eventId, digest: evidence.evidenceHash });
+
+    const committed = await this.completeQuest(userId, updated.id, source);
+    // Compatibility projection only: the old gameplay read model is finalized
+    // after canonical receipt/closure. The route itself no longer calls the legacy authority.
+    const { completeGameplayQuest } = await import("../db");
+    const result = await completeGameplayQuest({ userId, questKey, giver: getLegacyQuestBridge(questKey).giver });
+    return { ...result, canonical: committed };
+  }
+
+  private async enqueueQuestHandIn(userId: number, updated: QuestInstance, updatedPlan: QuestPlan, evidence: { id: string; digest: string }): Promise<QuestCompleteSource> {
     const source = {
       triggerEventId: updated.triggerEventId!,
       triggerEventDigest: updated.triggerEventDigest!,
-      sourceEvidenceId: evidence.eventId,
-      sourceEvidenceDigest: evidence.evidenceHash,
+      sourceEvidenceId: evidence.id,
+      sourceEvidenceDigest: evidence.digest,
       sourceLogicalRevision: updated.worldStateRevision!,
       compilerVersion: updated.compilerVersion!,
       sourceRevision: updated.sourceRevision!,
@@ -525,6 +539,20 @@ export class AdminQuestStudioService {
       seedDigest: updated.seedDigest!,
       roleBindingHash: updated.roleBindingHash!,
     };
+    if (updated.state === "completed") return source;
+    const zone = (await import("../zoneRuntime")).globalZoneRegistry.get("observatory_threshold");
+    const connectionId = zone.connectionIdForUser(userId);
+    if (!connectionId) throw new Error("QUEST_ZONE_CONNECTION_REQUIRED");
+    if (!zone.combatSnapshot().find(actor => actor.entityId === `player:${userId}`)?.alive) throw new Error("QUEST_LIVING_PLAYER_REQUIRED");
+    const accepted = await this.persistenceEngine.getReceiptByIdempotencyKey(`accept:${updated.id}`);
+    if (!accepted || accepted.instanceId !== updated.id) throw new Error("QUEST_ACCEPT_RECEIPT_REQUIRED");
+    if (!zone.getCanonicalZoneState().questSummaries.some(quest => quest.userId === userId && quest.questId === updated.templateId)) {
+      // Restore the zone projection from the durable acceptance after restart.
+      zone.enqueueIntent({ type: "quest_accept", connectionId, entityId: `player:${userId}`,
+        clientSeq: zone.nextClientSequenceForUser(userId), arrivalSeq: zone.nextArrivalSequence(), questId: updated.templateId });
+      zone.tick();
+    }
+
     const nextSequence = await this.persistenceEngine.getNextEventSequence(updated.id);
     const completionCommand = materializeQuestDomainCommand(updated, updatedPlan, {
       kind: "complete",
@@ -562,17 +590,57 @@ export class AdminQuestStudioService {
       roleBindingHash: completionCommand.roleBindingHash,
     });
     await zone.tick();
+    if (!zone.getCanonicalZoneState().questSummaries.some(quest => quest.userId === userId && quest.questId === updated.templateId && quest.status === "completed")) {
+      throw new Error("QUEST_ZONE_HAND_IN_NOT_CONFIRMED");
+    }
     await (await import("../causality/tickRecorder")).globalTickRecorder.flushPersistence();
 
-    const committed = await this.completeQuest(userId, updated.id, source);
-    // Compatibility projection only: the old gameplay read model is finalized
-    // after canonical receipt/closure. The route itself no longer calls the legacy authority.
-    const { completeGameplayQuest } = await import("../db");
-    const result = await completeGameplayQuest({ userId, questKey, giver: getLegacyQuestBridge(questKey).giver });
-    return { ...result, canonical: committed };
+    await (await import("../db")).resolveAndRecordGlobalWorldEpoch({
+      requestedByUserId: userId, idempotencyKey: `quest-hand-in:${completionCommand.commandId}`,
+    });
+    return source;
   }
 
-  private async hydrateDialogueTrigger(dialogueCommandReceiptId: string, userId: number, questKey: import("../gameplayProtocol").QuestKey) {
+  public async pilotDialogueReadModel(userId: number) {
+    const instances = await this.persistenceEngine.listInstances({ playerUserId: userId });
+    const instance = instances.find(value => value.templateId === PILOT_WOLF_QUEST_TEMPLATE.templateId);
+    return {
+      key: "starter-wolves-6" as const, giver: "Nordtorwache" as const,
+      state: instance?.state === "completed" ? "completed" as const : instance?.state === "active" ? "active" as const : "available" as const,
+      readyToTurnIn: instance?.state === "active" && instance.currentNodeId === "end" && instance.objectiveProgress.wolf_victories === 6,
+    };
+  }
+
+  public async offerPlayerQuest(userId: number, templateId: string) {
+    if (templateId !== PILOT_WOLF_QUEST_TEMPLATE.templateId) return this.offerQuest({ playerUserId: userId, templateId });
+    const authority = await assertQuestNpcAuthority({ userId, questKey: "starter-wolves-6", kind: "accept" });
+    const triggerEventId = await this.hydrateDialogueTrigger(authority.dialogueCommandReceiptId, userId, "starter-wolves-6");
+    const existing = (await this.persistenceEngine.listInstances({ playerUserId: userId })).find(value => value.templateId === templateId);
+    if (existing) return { instance: existing, planHash: existing.planHash, graphHash: existing.graphHash };
+    return this.offerQuest({ playerUserId: userId, templateId, triggerEventId });
+  }
+
+  public async acceptPlayerQuest(userId: number, instanceId: string) {
+    const { instance } = await this.ownedInstance(userId, instanceId);
+    if (instance.templateId === PILOT_WOLF_QUEST_TEMPLATE.templateId) {
+      await assertQuestNpcAuthority({ userId, questKey: "starter-wolves-6", kind: "accept" });
+      // Persist and project all earlier ticks before accepting a new objective.
+      await (await import("../causality/tickRecorder")).globalTickRecorder.flushPersistence();
+    }
+    return this.acceptQuest(userId, instanceId);
+  }
+
+  public async completePlayerQuest(userId: number, instanceId: string, giverNpcId?: string) {
+    const { instance, plan } = await this.ownedInstance(userId, instanceId);
+    if (giverNpcId !== undefined && giverNpcId !== instance.giverNpcId) throw new Error("QUEST_TURN_IN_GIVER_MISMATCH");
+    if (instance.templateId !== PILOT_WOLF_QUEST_TEMPLATE.templateId) return this.completeQuest(userId, instanceId);
+    await assertQuestNpcAuthority({ userId, questKey: "starter-wolves-6", kind: "complete" });
+    const evidence = await (await import("./pilotCombatCompletionEvidence")).readPilotCombatCompletionEvidence(instance);
+    const source = await this.enqueueQuestHandIn(userId, instance, plan, evidence);
+    return this.completeQuest(userId, instanceId, source);
+  }
+
+  private async hydrateDialogueTrigger(dialogueCommandReceiptId: string, userId: number, questKey: import("../wasdAurionDialogueQuestIntentProtocol").DialogueQuestKey) {
     const db = await getDb();
     if (!db) throw new Error("Game database is not available");
     const { aurionDialogueCommandReceipts } = await import("../../drizzle/schema");
@@ -583,7 +651,7 @@ export class AdminQuestStudioService {
     )).limit(1))[0];
     if (!row) throw new Error("QUEST_DIALOGUE_TRIGGER_UNPROVABLE");
     const payload = JSON.parse(row.outcomeJson) as Record<string, unknown>;
-    this.worldFactEngine.recordEvent({
+    return this.worldFactEngine.recordEvent({
       id: `evt_legacy_dialogue_${row.id}`,
       type: "QUEST_DIALOGUE_COMMAND",
       source: "aurion.dialogue.command.receipt",
@@ -596,7 +664,7 @@ export class AdminQuestStudioService {
         questKey: row.questKey,
         outcome: payload,
       }),
-    });
+    }).event.id;
   }
 
   public async chooseQuestBranch(userId: number, instanceId: string, edgeId: string) {

@@ -368,6 +368,50 @@ Learned: Item reward identity must be established before persistence from stable
 Open: Run `causalClosureMariaDb.test.ts` in the isolated MariaDB CI lane and verify the final exact-head workflow before merge; no production deployment claim is made.
 Next safe step: Require the MariaDB lane to prove one quest receipt, one inventory receipt, one item and matching independent quest/inventory readbacks under concurrent turn-in.
 
+### 2026-10-03 — PR 736 reviewed combat projection corrections
+Status: PARTIAL — complete wolf gameplay still blocked
+Task: Repair the deterministic guard binding, MariaDB confirmed constraint and missing persisted-event consumer.
+Decisions: Consume PR 735's starter_village_north_gate_guard identity. Persist canonical combat evidence before invoking the quest service's independent receipt readback. Snapshot queued combat evidence alongside the tick. Spell the new CHECK as confirmed=1 to match MariaDB without loosening check comparison. Preserve the 0068 causal test requirement while validating the entire sequential journal.
+Touched surfaces: Pilot template/resolver/tests, tick recorder/persistence, migration 0069, schema reconciliation regression and causal receipt migration test.
+Evidence: 85 focused tests passed / 4 DB tests skipped; schema regression 16 passed / 3 skipped; TypeScript passed; full local suite 381 files / 1,856 tests passed with 207 environment-dependent tests skipped. Migration verification: 70 SQL / 70 journal entries, no duplicates/gaps.
+Learned: A persisted victory alone never called the objective consumer; existing active mob definitions contain no wolf archetype.
+Open: No wolf combat/spawn/asset definition is approved in the active mob contract. Authenticated pilot dialogue/offer/turn-in and durable completion evidence remain unproven. This PR is not merge-ready as a playable pilot.
+Next safe step: Obtain the canonical wolf definition, complete the real product path and run exact-head MariaDB/browser evidence without substituting other enemies.
+
+### 2026-10-03 — PR 736 closes schema dispatch and apply allowlists
+Status: VERIFIED contract regressions; real apply readback pending
+Task: Repair CI SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED and 0069 ABSENT_APPLY_REQUIRED caused by operational allowlists still ending at 0068.
+Decisions: Advance dispatch wave and all apply/reconcile artifact/backup/readback allowlists to the same 0069 combat migration; preserve approval, exact-source and production-write guards.
+Touched surfaces: deploy apply core and both artifact verifiers, scripts/dispatch-aurion-schema-plan.mjs, corresponding artifact fixture.
+Evidence: Four node dispatch-contract tests passed; 50 schema/readback/apply/reconcile/blocker contract tests passed; git diff --check clean. Earlier full suite remains 1,856 passed / 207 skipped, not a claim that this newly changed head ran real MariaDB yet.
+Learned: Journal/manifest updates alone do not advance the operational apply bundle.
+Open: Real 0069 schema readback, restart-safe victory projection, genuine wolf content and authorized pilot completion remain required.
+Next safe step: Run isolated MariaDB and exact-head CI, preserving failure evidence.
+
+### 2026-10-03 — PR 736 durable combat projection recovery
+Status: PARTIAL — durable observer replay verified; full pilot hand-in integration pending
+Task: Recover persisted combat victories after projection failure or restart without counting them for quests accepted later.
+Decisions: Persist original active quest target IDs with victory evidence and a projection acknowledgment. Drain unacknowledged evidence on subsequent persisted ticks, including after restart. Acknowledgment follows all target commits; existing receipt idempotency absorbs lost acknowledgments. Repeated offers preserve existing progress instead of overwriting the deterministic instance.
+Evidence: Real isolated MariaDB test passes after injected post-commit failure and service re-creation, proving one increment and no credit to a subsequently accepted quest. Focused suite:76 passed,1 skipped; full suite:381 files/1856 tests passed,208 skipped; TypeScript passed. CI Local Test Pack now explicitly executes the real outbox test. Migration0069 remains unmerged and is extended with outbox metadata.
+Open: Actual wolf content and the authenticated pilot hand-in causal chain remain to be integrated. No deployment or complete-pilot claim.
+Next safe step: Integrate the updated main baseline and finish authenticated integration before merge.
+### 2026-10-03 — PR 734 exact-head CI readback and memory queue isolation
+Status: PARTIAL — new exact-head CI required
+Task: Preserve independent PR verification while main memory sync stays serialized.
+Decisions: Give PR memory-contract runs per-PR concurrency groups; the previous global group canceled pending PR 734 verification when another PR was pushed despite cancel-in-progress=false. Main sync retains one shared group. No production sync behavior or credentials changed.
+Touched surfaces: .github/workflows/agent-memory-supabase-sync.yml.
+Evidence: At 6cb6a5d33fd76bde8cfe4260791c085eefecc429, Aurion Local Test Pack succeeded, and AIM259 job 111129801561 passed the real database and phone/tablet/desktop browser lane plus NPC readback. The GLB upload lane failed at unchanged glbImport.spec.ts:52 (wheel-scroll bottom assertion); one diagnostic retry was requested. The memory run 37097323346 was canceled before any job and GitHub refused its failed-job rerun. Final source typecheck and 18 targeted tests had passed.
+Learned: GitHub replaces a pending run in a concurrency group even when cancel-in-progress=false; unrelated PRs must not share the main memory queue.
+Open: New head must receive all applicable successful CI; no merge or production claim yet.
+Next safe step: Read back the independent PR CI results before merge.
+
+### 2026-10-03 — PR 734 shipping browser integration
+Status: PARTIAL — exact-head browser CI required
+Task: Repair the shipping test's dependency on a procedural foundation removed from the origin by the fixed village layout.
+Decisions: Keep the village contract unchanged. Read the authenticated region, verify the existing shipped nature-root placement, and reach a safe viewing point using server-confirmed keyboard movement before rotating the real camera. Preserve all KTX decode, actual draw, fallback and resource assertions.
+Evidence: On ca363702, tablet shipping failed at aim291.assetShipping.spec.ts:70 with zero KTX models; the old test assumed a foundation at (-8m,+24m), absent from the new authoritative origin. Region readback locates nature-root-1 at (-40m,+8m). Typecheck and Playwright discovery passed locally; real exact-head CI remains required.
+Open: No merge or new production claim. The following head must pass the full shipping lane.
+Next safe step: Inspect exact-head browser results before merge.
 ### 2026-10-03 — Bounded quest objective progress and receipt-chain revisions
 Status: VERIFIED repository regression
 Task: Bound numeric quest objective progress at its validated target and derive command event revisions from the canonical persisted receipt chain.
@@ -397,3 +441,47 @@ Evidence: Migration verifier 71 SQL / 71 journal entries, sequential indices and
 Learned: Hydrating an existing published v1 must not erase or conflict with a changed seed of the same version. Migration IDs must be unique across the series, not merely within each original PR.
 Open: Public complete route still lacks independently verified causal source/hand-in orchestration; existing low-level fixture is not route evidence. Pilot additionally depends on approved wolf runtime content and authenticated giver dialogue. No merge, deployment or successful end-to-end reward claim.
 Next safe step: Complete the canonical route/evidence flow, then run exact-head MariaDB concurrency, replay, restart and browser tests.
+
+### 2026-10-03 — PR #737 — fix(quest): clamp numeric objective progress and canonicalize event sequences from persisted receipts
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=737 merge=784ce2232ede1f370322c482626e3d400336c682 -->
+Task: Merge PR #737 into `main` — fix(quest): clamp numeric objective progress and canonicalize event sequences from persisted receipts.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `server/questCompiler/adminService.ts`
+- `server/questCompiler/persistence.test.ts`
+- `server/questCompiler/persistence.ts`
+- `server/questCompiler/runtime.test.ts`
+- `server/questCompiler/runtime.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/737
+- Merge commit: `784ce2232ede1f370322c482626e3d400336c682`
+- PR head: `7f4201517c93d6286cab9e36b76eaf6993d81205`
+- Merged at: 2026-10-03T05:19:02Z
+- Post-merge workflow run: 37099439617
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Authenticated pilot hand-in and durable causal closure
+Status: PARTIAL — real database/dialogue/closure verified; playable wolf content still absent
+Task: Connect pilot offer, acceptance and hand-in to owned dialogue commands, canonical north-guard AOI and durable six-victory evidence.
+Decisions: Admit the pilot key only in the authored dialogue lane, preserving legacy quest enums. Bind the offer to its exact dialogue event instead of the last unrelated global event. Independently re-read the six consumed combat receipts and reject wrong species/owner/plan. Restore the accepted zone projection from its durable acceptance after restart, require a living player and confirmed zone hand-in, then use the existing world-epoch authority and causal closure. Server sequence allocation accounts for accepted and pending intents. Completed replay reuses the persisted closure.
+Evidence:90 focused tests passed,1 DB case skipped in the default run; TypeScript passed. A fresh MariaDB run completed real dialogue confirmation, guarded offer/accept, injected lost projection acknowledgment, service recreation, six unique evidence rows, causal world-root/hand-in closure and idempotent completion replay. Tampered species is rejected. Its initial position and combat evidence are explicit fixtures: this is not an HTTP movement or real wolf-combat claim.
+Open: No active wolf archetype/model was found; the existing expedition generator and audio cues alone do not provide a playable zone creature. Final browser journey and reward integration remain pending.
+Next safe step: Integrate reward dependency, verify the exact item and restart readback, and resolve the missing creature content before merging a complete pilot.
+### 2026-10-03 — Local onboarding NPC residence
+Status: VERIFIED repository boundary; real final-head CI pending
+Task: Keep introductory quest givers and the smith at their permanent beginner anchors without freezing visiting NPCs or the outer world.
+Decisions: Gate canonical NPC persistence by identity only for Lyra, Orun, the north-gate guard and observatory_blacksmith. Reject changing their home region; generic visitors may still enter and leave. Existing needs, goals, memory and local decisions are untouched. Static service/quest projection remains present. This is a residence guard, not a new combat immortality or migration simulation.
+Evidence:43 targeted tests across residence, NPC authority/life/persistence and world snapshots passed. Full suite:380 files/1861 tests passed,207 skipped. TypeScript passed. Existing outer-world and Graph/CAG/asset owners remain unchanged.
+Open: Final CI must verify the actual persisted NPC lane. No new lore, faction or origin canon is introduced.
+Next safe step: Merge only after layout dependency and exact-head CI are verified.
+### 2026-10-03 — Starter-region isolation and outer-world preservation
+Status: VERIFIED repository boundary regressions; final-head browser CI pending
+Task: Preserve deterministic world/graph/CAG generation and canonical GLB mesh/material/texture pipelines while keeping only the small starter origin constant.
+Decisions: Scope remains exactly chunk(0,0), a64m origin square. No global seed, generator, identity, grid, collision-manifest, graph/CAG/Wolfram, shipping or texture/mesh pipeline is replaced. Add an independently captured pre-change digest covering eight neighboring chunks, settlement, negative/far coordinates and three seeds. Require different seed plans outside origin and identical seed-independent origin plans.
+Evidence:55 tests passed across nine suites: starter/world assets, nature collision, graph CAG verifier, structure CAG verifier and world-generation evidence/parity contracts. Golden digest was computed from main909ba47d implementation, not the edited generator. PR737 merge784ce223 touches only quest code/tests and Memory, with no world/asset/CAG changes. These are repository regressions, not a claim of newly implemented autonomous world evolution or successful live Wolfram service execution.
+Open: Final exact-head CI and real shipping browser regression must pass before merge.
+Next safe step: Review the completed shipping lane and verify remote main after merge.

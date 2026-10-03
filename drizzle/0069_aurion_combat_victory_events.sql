@@ -7,6 +7,8 @@ CREATE TABLE `aurionCombatVictoryEvents` (
   `opponentSpecies` varchar(128) NOT NULL,
   `outcome` enum('victory','defeat') NOT NULL,
   `confirmed` boolean NOT NULL,
+  `questInstanceIdsJson` text NOT NULL,
+  `questProjected` boolean NOT NULL DEFAULT false,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `aurionCombatVictoryEvents_eventId` PRIMARY KEY (`eventId`),
   CONSTRAINT `aurionCombatVictoryEvents_receipt_uq` UNIQUE (`receiptId`),
