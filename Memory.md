@@ -362,3 +362,27 @@ Evidence: Focused Vitest discovery passes with the environment-gated runtime cas
 Learned: Restart readback can reuse the authenticated product session while still obtaining fresh server/DB projections; progression reward replay must be compared against the pre-restart profile and unique ledger keys rather than inferred from UI text. Browser viewport coverage must carry an explicit emulation limitation in its artifact.
 Open: Obtain the first exact-head `Starter Village Pilot Evidence` run and inspect its revision-bound journey/readback/checksum artifacts; no production or physical-device claim is made.
 Next safe step: Run the workflow on this exact PR head, correct the first causal failure if any, and accept the lane only after the isolated MariaDB, HTTP/tRPC restart readback, local-only network and four viewport checks all pass.
+
+
+### 2026-10-03 — PR #739 — test: Starterdorf‑Pilot evidence lane (workflow + runtime e2e)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=739 merge=6569b8ffc83394f0864b7e027686c7aec2878e8a -->
+Task: Merge PR #739 into `main` — test: Starterdorf‑Pilot evidence lane (workflow + runtime e2e).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-deterministic-binary-atlas-proof.yml`
+- `.github/workflows/starter-village-pilot.yml`
+- `Memory.md`
+- `SUMMARY.md`
+- `docs/game-development-studio-visual-production-and-worldbuilding/starterdorf-first-60-seconds.md`
+- `e2e/starterVillagePilot.spec.ts`
+- `server/starterVillagePilotHttp.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/739
+- Merge commit: `6569b8ffc83394f0864b7e027686c7aec2878e8a`
+- PR head: `399d956b80adb8d3bcb43c2128954ed395568e13`
+- Merged at: 2026-10-03T10:25:32Z
+- Post-merge workflow run: 37116379271
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
