@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MovementMode } from "@shared/playerUiProtocol";
 import { VirtualJoystick } from "./VirtualJoystick";
 
 type TouchDestination = { screenX: number; screenY: number };
+type DestinationMarker = TouchDestination & { sequence: number };
 
 export function MobileMovementController({
   mode,
@@ -16,11 +17,19 @@ export function MobileMovementController({
   onDestination: (destination: TouchDestination) => void;
 }) {
   const onDestinationRef = useRef(onDestination);
+  const markerTimer = useRef<number | null>(null);
+  const markerSequence = useRef(0);
+  const [destinationMarker, setDestinationMarker] = useState<DestinationMarker | null>(null);
   onDestinationRef.current = onDestination;
+
+  useEffect(() => () => {
+    if (markerTimer.current !== null) window.clearTimeout(markerTimer.current);
+  }, []);
 
   useEffect(() => {
     if (mode !== "touch_to_move" || !enabled) {
       onMove(0, 0);
+      setDestinationMarker(null);
       return;
     }
     const canvas = document.getElementById("threejs-canvas");
@@ -40,6 +49,10 @@ export function MobileMovementController({
       const distance = Math.hypot(event.clientX - started.x, event.clientY - started.y);
       const duration = performance.now() - started.time;
       if (distance <= TAP_MAX_DISTANCE && duration <= TAP_MAX_DURATION_MS) {
+        const marker = { screenX: event.clientX, screenY: event.clientY, sequence: ++markerSequence.current };
+        setDestinationMarker(marker);
+        if (markerTimer.current !== null) window.clearTimeout(markerTimer.current);
+        markerTimer.current = window.setTimeout(() => setDestinationMarker(null), 720);
         onDestinationRef.current({ screenX: event.clientX, screenY: event.clientY });
       }
       started = null;
@@ -61,5 +74,14 @@ export function MobileMovementController({
   }, [enabled, mode, onMove]);
 
   if (mode === "joystick") return <VirtualJoystick onMove={onMove} />;
-  return <output data-testid="ax1-touch-to-move" aria-label="Touch-to-Move aktiv" className="sr-only">Touch-to-Move</output>;
+  return <>
+    <output data-testid="ax1-touch-to-move" aria-label="Touch-to-Move aktiv" className="sr-only">Touch-to-Move</output>
+    {destinationMarker && <span
+      key={destinationMarker.sequence}
+      data-testid="ax1-touch-destination-marker"
+      className="ax1-touch-destination-marker"
+      style={{ left: destinationMarker.screenX, top: destinationMarker.screenY }}
+      aria-hidden="true"
+    ><i /><b>✦</b></span>}
+  </>;
 }
