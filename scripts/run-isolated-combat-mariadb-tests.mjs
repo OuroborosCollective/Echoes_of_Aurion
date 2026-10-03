@@ -12,6 +12,8 @@ if (process.env.NODE_ENV !== "test" || source.protocol !== "mysql:" ||
   throw new Error("ISOLATED_LOOPBACK_CLASSLESS_TEST_DATABASE_REQUIRED");
 }
 const cases = [
+  { database: "aurion_archive_test", name: "causal-archive-packets", optIn: { AURION_ARCHIVE_DB_E2E: "1" },
+    files: ["server/causality/archivePacketsMariaDb.test.ts"] },
   { database: "aurion_atomic_test", name: "combat-outbox-atomic", optIn: { AURION_ATOMIC_OUTBOX_E2E: "1" },
     files: ["server/causality/combatOutboxAtomicMariaDb.test.ts"] },
   { database: "aurion_combat_classless_test", name: "combat-continuity-equipment", optIn: {},
