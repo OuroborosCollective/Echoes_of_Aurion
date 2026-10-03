@@ -285,3 +285,26 @@ Evidence: Candidate `ff058cf088553c9475c0cc0e77d188723348fa4b`; four catalog cas
 Learned: Public community submissions are not the admin asset registry; a broad relative-position rule can silently override HUD anchors. The neighboring phone regression additionally caught a four-pixel action-panel overlap from an older important offset; remove that override and measure the whole action panel.
 Open: Final Memory-inclusive CI and merge readback; inventory warnings and production deployment are not covered by this fix.
 Next safe step: Merge the verified final head and verify automated post-merge Memory/readback.
+
+
+### 2026-10-03 — PR #733 — fix: restore in-game GLB catalog and lower-left movement controls
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=733 merge=4635dc50a324e689a38a0655d71057a777ee0ca7 -->
+Task: Merge PR #733 into `main` — fix: restore in-game GLB catalog and lower-left movement controls.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/xaurion/components/AdminGlbMenu.test.tsx`
+- `client/src/xaurion/components/AdminGlbMenu.tsx`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx`
+- `client/src/xaurion/integration/ax1AuthorityHud.css`
+- `e2e/glbImport.spec.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/733
+- Merge commit: `4635dc50a324e689a38a0655d71057a777ee0ca7`
+- PR head: `2b790fee4cb43931074e1fb62f4585d9ff8a31bb`
+- Merged at: 2026-10-03T01:57:05Z
+- Post-merge workflow run: 37088031925
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
