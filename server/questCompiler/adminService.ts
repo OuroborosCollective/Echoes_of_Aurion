@@ -23,7 +23,7 @@ import { CandidateResolver } from "./candidateResolver";
 import { authoringHash, createQuestPublishReceipt } from "../aurionAuthoringPersistence";
 import { materializeQuestDomainCommand } from "./materialization";
 import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandContract";
-import { readQuestCausalAnchorByReceiptId, resolveQuestCausalAnchor } from "./causalAnchor";
+import { readQuestCausalAnchorByReceiptId, resolveQuestCausalAnchor, readDurableQuestHandIn } from "./causalAnchor";
 import { buildQuestCausalClosure } from "./causalClosure";
 import { LEGACY_CANONICAL_QUEST_TEMPLATES } from "./legacyQuestTemplate";
 import { PILOT_WOLF_QUEST_TEMPLATE } from "./pilotQuestTemplate";
@@ -53,6 +53,10 @@ export interface AdminQuestStudioStatus {
     available: boolean;
   };
 }
+
+// One zone runtime is owned by this process. Serialize public completion calls
+// across service instances; durable receipt reuse below covers process restarts.
+const playerCompletionQueues = new Map<string, Promise<unknown>>();
 
 export class AdminQuestStudioService {
   private readonly worldFactEngine: WorldFactEngine;
@@ -565,6 +569,13 @@ export class AdminQuestStudioService {
       ...source,
     });
     if (completionCommand.kind !== "complete") throw new Error("QUEST_LEGACY_COMPLETION_COMMAND_KIND_MISMATCH");
+    await (await import("../causality/tickRecorder")).globalTickRecorder.flushPersistence();
+    if (await readDurableQuestHandIn(updated.worldId, completionCommand, source, updated.templateId)) return source;
+    if (zone.getCanonicalZoneState().questSummaries.some(quest => quest.userId === userId && quest.questId === updated.templateId && quest.status === "completed")) {
+      // A completed projection without its persisted receipt is not permission
+      // to manufacture a second command/tick. Recovery must restore persistence.
+      throw new Error("QUEST_HAND_IN_PERSISTENCE_UNCONFIRMED");
+    }
     zone.enqueueIntent({
       type: "quest_hand_in",
       connectionId,
@@ -595,9 +606,11 @@ export class AdminQuestStudioService {
     }
     await (await import("../causality/tickRecorder")).globalTickRecorder.flushPersistence();
 
-    await (await import("../db")).resolveAndRecordGlobalWorldEpoch({
-      requestedByUserId: userId, idempotencyKey: `quest-hand-in:${completionCommand.commandId}`,
-    });
+    if (!await readDurableQuestHandIn(updated.worldId, completionCommand, source, updated.templateId)) {
+      throw new Error("QUEST_HAND_IN_PERSISTENCE_UNCONFIRMED");
+    }
+    // Completion waits for the deployment-approved world proof producer.
+    // A player's local hand-in must never advance the global civilization loop.
     return source;
   }
 
@@ -631,6 +644,15 @@ export class AdminQuestStudioService {
   }
 
   public async completePlayerQuest(userId: number, instanceId: string) {
+    const key = `${userId}:${instanceId}`;
+    const prior = playerCompletionQueues.get(key) ?? Promise.resolve();
+    const pending = prior.catch(() => undefined).then(() => this.completePlayerQuestSerial(userId, instanceId));
+    playerCompletionQueues.set(key, pending);
+    try { return await pending; }
+    finally { if (playerCompletionQueues.get(key) === pending) playerCompletionQueues.delete(key); }
+  }
+
+  private async completePlayerQuestSerial(userId: number, instanceId: string) {
     const { instance, plan } = await this.ownedInstance(userId, instanceId);
     if (instance.templateId !== PILOT_WOLF_QUEST_TEMPLATE.templateId) return this.completeQuest(userId, instanceId);
     await assertQuestNpcAuthority({ userId, questKey: "starter-wolves-6", kind: "complete" });
