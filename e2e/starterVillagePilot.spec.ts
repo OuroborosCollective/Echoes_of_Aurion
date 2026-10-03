@@ -20,8 +20,8 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
   await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
   await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-browser-pilot-only!");
   await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
-  const publicAvatarName = `Starter pilot avatar ${viewport.name}`;
-  await ensurePublicAvatar(page, handle, publicAvatarName);
+  const publicAvatarName = "AIM254 public avatar";
+  await ensurePublicAvatar(page, handle);
   await page.getByRole("button", { name: "SPIEL BETRETEN", exact: true }).click();
   await expect(page).toHaveURL(/\/play$/);
   await expect(page.getByTestId("xaurion-open-world-runtime")).toBeVisible({ timeout: 30_000 });
