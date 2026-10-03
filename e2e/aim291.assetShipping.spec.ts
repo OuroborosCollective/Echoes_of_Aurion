@@ -50,6 +50,9 @@ async function faceShippedAsset(page: Page, position: ReturnType<typeof observeM
     }
     expect(Math.abs(position()![axis] - goal)).toBeLessThanOrEqual(700);
   }
+  // Snapshot millimetres and frame metres must select the same origin chunk.
+  // The former unit mismatch requested kilometre-distant, invisible assets.
+  await expect.poll(async () => (await assets(page))?.center).toEqual({ x: 0, z: 0 });
   await page.locator("#threejs-canvas").waitFor({state: "visible"});
   await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>("#threejs-canvas");
