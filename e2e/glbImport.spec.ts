@@ -140,7 +140,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
       }).toBe(true);
       const movement = (await joystick.boundingBox())!;
       const admin = (await page.getByRole('button', { name: 'GLB-Admin öffnen', exact: true }).boundingBox())!;
-      const actions = (await page.getByRole('button', { name: 'Angriff [R]', exact: true }).boundingBox())!;
+      const actions = (await page.getByRole('button', { name: 'Angriff [R]', exact: true }).locator('..').boundingBox())!;
       expect(admin.y + admin.height).toBeLessThan(movement.y);
       expect(actions.x).toBeGreaterThan(movement.x + movement.width);
       movementLayouts.push({ viewport, movement, admin, actions });
