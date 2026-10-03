@@ -3,18 +3,18 @@ import { createPool, type RowDataPacket } from "mysql2/promise";
 import { createHash } from "node:crypto";
 import { testAnimatedPlayerGlb } from "../../server/glbImportFixtures";
 
-async function ensurePublicAvatar(page: Page, handle: string): Promise<void> {
+export async function ensurePublicAvatar(page: Page, handle: string, displayName = "AIM254 public avatar"): Promise<void> {
   const pool = createPool(process.env.DATABASE_URL!);
   try {
     const [users] = await pool.query<RowDataPacket[]>("SELECT u.id FROM users u JOIN localCredentials c ON c.userId=u.id WHERE c.handle=?", [handle]);
     expect(users).toHaveLength(1);
     const userId = Number(users[0]!.id);
     await pool.execute("UPDATE users SET role='admin' WHERE id=?", [userId]);
-    const bytes = testAnimatedPlayerGlb("AIM254_Public_Player");
+    const bytes = testAnimatedPlayerGlb(displayName.replace(/[^a-zA-Z0-9]+/g, "_"));
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     const response = await page.request.post("/api/admin/glb-smart-upload", { data: {
-      displayName: "AIM254 public avatar",
-      fileName: "aim254-public-player.glb",
+      displayName,
+      fileName: `${displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "public-player"}.glb`,
       purpose: "player-public",
       contentBase64: bytes.toString("base64"),
     } });
