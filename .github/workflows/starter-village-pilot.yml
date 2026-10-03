@@ -1,6 +1,17 @@
 name: Starter Village Pilot Evidence
 
 on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - ".github/workflows/starter-village-pilot.yml"
+      - "server/starterVillagePilotHttp.test.ts"
+      - "e2e/starterVillagePilot.spec.ts"
+      - "server/db.ts"
+      - "server/routers.ts"
+      - "server/zone**"
+      - "client/src/xaurion/**"
+      - "drizzle/**"
   pull_request:
     paths:
       - ".github/workflows/starter-village-pilot.yml"
@@ -17,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: starter-village-pilot-${{ github.event.pull_request.number || github.ref }}
+  group: starter-village-pilot-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
