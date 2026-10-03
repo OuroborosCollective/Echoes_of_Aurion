@@ -6,22 +6,57 @@ const shipping = JSON.parse(await readFile(new URL("../shared/worldAssetShipping
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable authenticated MariaDB");
 const assets = async (page: Page) => JSON.parse(await page.getByTestId("world-assets-evidence").getAttribute("data-presentation") ?? "null");
 
-/**
- * AIM-291 must prove an actual render, not merely a successful decode. The
- * confirmed spawn plan puts the shipped city-foundation asset at (-8m,+24m),
- * behind the default +Z follow camera. Orbit through the real MMOEngine mouse
- * handlers so the shipped asset is inside the view before asserting onAfterRender.
- */
-async function faceShippedCityAsset(page: Page): Promise<void> {
+/** Reach a shipped asset through confirmed movement; the starter layout no longer
+ * contains the procedural foundation formerly used by this regression. */
+function observeMovement(page: Page) {
+  let selfId: string | undefined;
+  let position: { x: number; z: number } | undefined;
+  page.on("websocket", socket => {
+    if (!socket.url().endsWith("/v1/ws")) return;
+    socket.on("framereceived", frame => {
+      try {
+        const message = JSON.parse(String(frame.payload));
+        if (message.type === "welcome") selfId = message.selfEntityId;
+        if (["welcome", "snapshot"].includes(message.type)) {
+          position = message.presences?.find((p: { entityId: string }) => p.entityId === selfId)?.position;
+        }
+      } catch { /* Invalid frames never satisfy position evidence. */ }
+    });
+  });
+  return () => position;
+}
+
+async function faceShippedAsset(page: Page, position: ReturnType<typeof observeMovement>): Promise<void> {
+  const response = await page.request.get("/api/trpc/worldAssets.regionV2", {
+    params: { input: JSON.stringify({ json: { x: 0, z: 0 } }) },
+  });
+  expect(response.ok()).toBe(true);
+  const region = (await response.json()).result.data.json;
+  const target = region.placements.find((p: { assetId: string }) => p.assetId === "nature-root-1");
+  expect(target).toMatchObject({ xMm: -40_000, zMm: 8_000 });
+  expect(shipping.manifest.assets.some((asset: { asset: string }) => asset.asset === target.assetId)).toBe(true);
+  await expect.poll(() => position(), { timeout: 15_000 }).toBeDefined();
+  // Stop twenty metres east of the collider, on the already-open central row.
+  const goalX = target.xMm + 20_000;
+  expect(Math.abs(position()!.z - target.zMm)).toBeLessThan(1_000);
+  for (let attempt = 0; attempt < 80 && Math.abs(position()!.x - goalX) > 700; attempt++) {
+    const before = position()!.x;
+    const key = before > goalX ? "a" : "d";
+    await page.keyboard.down(key);
+    try {
+      await expect.poll(() => position()!.x, { timeout: 5_000, intervals: [25, 50] }).not.toBe(before);
+    } finally { await page.keyboard.up(key); }
+    await page.waitForTimeout(150);
+  }
+  expect(Math.abs(position()!.x - goalX)).toBeLessThanOrEqual(700);
   await page.locator("#threejs-canvas").waitFor({state: "visible"});
   await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>("#threejs-canvas");
     if (!canvas) throw new Error("AIM291_CANVAS_REQUIRED");
     const rect = canvas.getBoundingClientRect();
     const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
-    // MMOEngine: cameraYaw -= deltaX * 0.006. A negative half-turn mouse delta
-    // therefore moves the follow camera to -Z and looks toward the +Z asset.
-    const targetX = x - Math.PI / 0.006;
+    // Follow camera east of player, looking west at the authenticated target.
+    const targetX = x - (Math.PI / 2) / 0.006;
     canvas.dispatchEvent(new MouseEvent("mousedown", {bubbles: true, button: 0, buttons: 1, clientX: x, clientY: y}));
     window.dispatchEvent(new MouseEvent("mousemove", {bubbles: true, buttons: 1, clientX: targetX, clientY: y}));
     window.dispatchEvent(new MouseEvent("mouseup", {bubbles: true, button: 0, buttons: 0, clientX: targetX, clientY: y}));
@@ -45,6 +80,7 @@ for (const profile of [{name: "phone", width: 412, height: 915}, {name: "tablet"
     expect(baseURL).toBe("http://127.0.0.1:3000");
     expect(new URL(process.env.DATABASE_URL!).pathname).toBe("/aurion_browser_test");
     await page.setViewportSize(profile);
+    const position = observeMovement(page);
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     const cdp = await page.context().newCDPSession(page);
@@ -66,7 +102,7 @@ for (const profile of [{name: "phone", width: 412, height: 915}, {name: "tablet"
       const compressed = await enterAx1(page);
       await page.mouse.move(profile.width/2, profile.height/2);
       await page.mouse.wheel(0, 1200);
-      await faceShippedCityAsset(page);
+      await faceShippedAsset(page, position);
       await expect.poll(async () => (await assets(page))?.shipping.ktxModels ?? 0, {timeout: 90_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.shipping.textures.transcodedMipPayloadBytes ?? 0, {timeout: 60_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.loading, {timeout: 60_000}).toBe(0);
@@ -90,7 +126,7 @@ for (const profile of [{name: "phone", width: 412, height: 915}, {name: "tablet"
       const fallback = await enterAx1(page);
       await page.mouse.move(profile.width/2, profile.height/2);
       await page.mouse.wheel(0, 1200);
-      await faceShippedCityAsset(page);
+      await faceShippedAsset(page, position);
       await expect.poll(async () => (await assets(page))?.shipping.fallbackCount ?? 0, {timeout: 90_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.loading, {timeout: 60_000}).toBe(0);
       await expect.poll(async () => (await assets(page))?.shipping.drawnFallbackModels ?? 0, {timeout: 30_000}).toBeGreaterThan(0);
