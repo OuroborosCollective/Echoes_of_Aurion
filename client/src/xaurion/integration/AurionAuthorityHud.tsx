@@ -231,6 +231,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const party = group.data?.party ?? null;
   const partyMaxHp = group.data?.ticket?.playerMaxHp ?? null;
   const objectiveItems = world.data?.pointsOfInterest.filter(value => value.state === "available").slice(0, 3) ?? [];
+  const starterNpc = world.data?.pointsOfInterest.find(value => value.kind === "npc" && value.state === "available");
   const combatMetrics = useMemo(() => reduceConfirmedCombatMetrics(combatEvents), [combatEvents]);
   const projectionState = player.state === "live" ? "confirmed" : player.state === "stale" ? "stale" : player.state === "waiting" ? "loading" : "unavailable";
   const worldProjection: Ax1ConfirmedWorld | undefined = world.data ? {
@@ -280,6 +281,14 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   });
 
   return <div className="aurion-authority-hud ax1-authority-shell" data-testid="authoritative-world-hud">
+    {connected && panel === null && world.state === "live" && starterNpc && <div className="ax1-starter-guidance" data-testid="ax1-starter-npc-beacon" aria-live="polite">
+      <span className="ax1-starter-guidance__sigil" aria-hidden="true">✦</span>
+      <span className="ax1-starter-guidance__copy">
+        <small>NÄCHSTER KONTAKT</small>
+        <b>{starterNpc.label}</b>
+        <em>serverbestätigt</em>
+      </span>
+    </div>}
     <GameHUD
       playerName={explorerView.name}
       playerIcon={explorerView.icon}

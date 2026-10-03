@@ -19,6 +19,7 @@ export function CausalBackupNotifier() {
         description: "Der Weltzustand und deine Fortschritte wurden im Kaltlager archiviert.",
         icon: <ShieldCheck className="h-4 w-4 text-emerald-400" />,
         duration: 5000,
+        style: { pointerEvents: "none" },
       });
     };
 

@@ -3,10 +3,16 @@ import { createPool, type RowDataPacket } from "mysql2/promise";
 import { createHash } from "node:crypto";
 import { testAnimatedPlayerGlb } from "../../server/glbImportFixtures";
 
-async function ensurePublicAvatar(page: Page, handle: string): Promise<void> {
+export async function ensurePublicAvatar(page: Page, handle: string): Promise<void> {
   const pool = createPool(process.env.DATABASE_URL!);
   try {
-    const [users] = await pool.query<RowDataPacket[]>("SELECT u.id FROM users u JOIN localCredentials c ON c.userId=u.id WHERE c.handle=?", [handle]);
+    let users: RowDataPacket[] = [];
+    const deadline = Date.now() + 10_000;
+    while (users.length !== 1 && Date.now() < deadline) {
+      const [rows] = await pool.query<RowDataPacket[]>("SELECT u.id FROM users u JOIN localCredentials c ON c.userId=u.id WHERE c.handle=?", [handle]);
+      users = rows;
+      if (users.length !== 1) await new Promise(resolve => setTimeout(resolve, 100));
+    }
     expect(users).toHaveLength(1);
     const userId = Number(users[0]!.id);
     await pool.execute("UPDATE users SET role='admin' WHERE id=?", [userId]);
