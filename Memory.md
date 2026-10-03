@@ -368,3 +368,13 @@ Evidence: 85 focused tests passed / 4 DB tests skipped; schema regression 16 pas
 Learned: A persisted victory alone never called the objective consumer; existing active mob definitions contain no wolf archetype.
 Open: No wolf combat/spawn/asset definition is approved in the active mob contract. Authenticated pilot dialogue/offer/turn-in and durable completion evidence remain unproven. This PR is not merge-ready as a playable pilot.
 Next safe step: Obtain the canonical wolf definition, complete the real product path and run exact-head MariaDB/browser evidence without substituting other enemies.
+
+### 2026-10-03 — PR 736 closes schema dispatch and apply allowlists
+Status: VERIFIED contract regressions; real apply readback pending
+Task: Repair CI SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED and 0069 ABSENT_APPLY_REQUIRED caused by operational allowlists still ending at 0068.
+Decisions: Advance dispatch wave and all apply/reconcile artifact/backup/readback allowlists to the same 0069 combat migration; preserve approval, exact-source and production-write guards.
+Touched surfaces: deploy apply core and both artifact verifiers, scripts/dispatch-aurion-schema-plan.mjs, corresponding artifact fixture.
+Evidence: Four node dispatch-contract tests passed; 50 schema/readback/apply/reconcile/blocker contract tests passed; git diff --check clean. Earlier full suite remains 1,856 passed / 207 skipped, not a claim that this newly changed head ran real MariaDB yet.
+Learned: Journal/manifest updates alone do not advance the operational apply bundle.
+Open: Real 0069 schema readback, restart-safe victory projection, genuine wolf content and authorized pilot completion remain required.
+Next safe step: Run isolated MariaDB and exact-head CI, preserving failure evidence.
