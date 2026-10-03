@@ -22,6 +22,8 @@ export interface PersistedCheckpoint {
 }
 
 export interface CausalPersistenceAdapter {
+  /** Observer projection runs after durable receipt/checkpoint writes. Failure remains visible. */
+  projectPendingCombatVictories?(): Promise<void>;
   saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): Promise<void>;
   saveCheckpoint(zoneId: string, tick: number, stateHash: string, state: CanonicalZoneState): Promise<void>;
   saveReplayRun(run: { worldId: string; zoneId: string; fromTick: number; toTick: number; sourceRevision: string; runtimeRuleset: string; status: "MATCH" | "FIRST_DIVERGENCE" | "UNPROVABLE"; firstDivergentStage?: string; expectedHash?: string; observedHash?: string }): Promise<void>;
@@ -85,6 +87,9 @@ export class AurionTickRecorder {
         if (entry.postState && entry.receipt.tick % 100 === 0) {
           await adapter.saveCheckpoint(entry.receipt.zoneId, entry.receipt.tick, entry.receipt.postStateHash, entry.postState);
         }
+        // Projection/schema failures remain observable, but must not suppress
+        // already valid causal checkpoints on installations before migration 0069.
+        await adapter.projectPendingCombatVictories?.();
       })
       .catch(error => {
         this.persistenceFailures += 1;
