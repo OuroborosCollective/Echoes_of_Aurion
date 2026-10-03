@@ -415,3 +415,10 @@ Decisions: Gate canonical NPC persistence by identity only for Lyra, Orun, the n
 Evidence:43 targeted tests across residence, NPC authority/life/persistence and world snapshots passed. Full suite:380 files/1861 tests passed,207 skipped. TypeScript passed. Existing outer-world and Graph/CAG/asset owners remain unchanged.
 Open: Final CI must verify the actual persisted NPC lane. No new lore, faction or origin canon is introduced.
 Next safe step: Merge only after layout dependency and exact-head CI are verified.
+### 2026-10-03 — Starter-region isolation and outer-world preservation
+Status: VERIFIED repository boundary regressions; final-head browser CI pending
+Task: Preserve deterministic world/graph/CAG generation and canonical GLB mesh/material/texture pipelines while keeping only the small starter origin constant.
+Decisions: Scope remains exactly chunk(0,0), a64m origin square. No global seed, generator, identity, grid, collision-manifest, graph/CAG/Wolfram, shipping or texture/mesh pipeline is replaced. Add an independently captured pre-change digest covering eight neighboring chunks, settlement, negative/far coordinates and three seeds. Require different seed plans outside origin and identical seed-independent origin plans.
+Evidence:55 tests passed across nine suites: starter/world assets, nature collision, graph CAG verifier, structure CAG verifier and world-generation evidence/parity contracts. Golden digest was computed from main909ba47d implementation, not the edited generator. PR737 merge784ce223 touches only quest code/tests and Memory, with no world/asset/CAG changes. These are repository regressions, not a claim of newly implemented autonomous world evolution or successful live Wolfram service execution.
+Open: Final exact-head CI and real shipping browser regression must pass before merge.
+Next safe step: Review the completed shipping lane and verify remote main after merge.
