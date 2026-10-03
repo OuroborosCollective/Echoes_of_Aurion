@@ -98,7 +98,13 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
         existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
       if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
     }
-    for (const victory of combatVictories ?? []) await persistAurionCombatVictoryEvidence(victory);
+    for (const victory of combatVictories ?? []) {
+      await persistAurionCombatVictoryEvidence(victory);
+      // Project only after durable evidence; the service independently reads the
+      // stored receipt and applies the existing quest idempotency/state guards.
+      const { adminQuestService } = await import("../routes/aurionQuestRouter");
+      await adminQuestService.applyConfirmedCombatVictory(victory.playerUserId, victory.receiptId);
+    }
   }
 
   async saveCheckpoint(zoneId: string, tick: number, stateHash: string, state: CanonicalZoneState): Promise<void> {

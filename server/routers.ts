@@ -6,6 +6,7 @@ import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from 
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
+import { aurionQuestNpcIdValues } from "./aurionStarterVillageContract";
 import { COMPANION_FEATURE_VECTOR_LENGTH, COMPANION_STATE_VECTOR_LENGTH } from "@shared/companionLearningProtocol";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
@@ -382,7 +383,7 @@ export const appRouter = router({
 
     startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault", "starfall_crater", "rootgear_foundry", "sunwatch_bastion"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
     act: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), sequence: z.number().int().positive(), command: z.string().trim().length(1), source: z.enum(["human", "gateway"]) })).mutation(({ ctx, input }) => db.applyGameplayAction({ userId: ctx.user.id, ...input })),
-    interpretNpcDialogue: protectedProcedure.input(z.object({ npcId: z.enum(["lyra", "orun"]), text: z.string().trim().min(1).max(280), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => interpretAndRecordDialogue({ userId: ctx.user.id, npcId: input.npcId, text: input.text, trust: 0.6, threat: 0.1, idempotencyKey: input.idempotencyKey })),
+    interpretNpcDialogue: protectedProcedure.input(z.object({ npcId: z.enum(aurionQuestNpcIdValues), text: z.string().trim().min(1).max(280), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => interpretAndRecordDialogue({ userId: ctx.user.id, npcId: input.npcId, text: input.text, trust: 0.6, threat: 0.1, idempotencyKey: input.idempotencyKey })),
     requestQuestActionFromDialogue: protectedProcedure.input(z.object({
       dialogueReceiptId: z.string().trim().min(8).max(64),
       actionKind: z.enum(["offer_quest", "request_turn_in"]),

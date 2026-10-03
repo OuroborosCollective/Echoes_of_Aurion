@@ -10,7 +10,7 @@ export const PILOT_WOLF_QUEST_TEMPLATE: QuestTemplateVersion = Object.freeze({
     roleName: "giver",
     entityType: "npc",
     optional: false,
-    predicates: [{ subjectField: "id", operator: "eq", expectedValue: "guard-north" }],
+    predicates: [{ subjectField: "id", operator: "eq", expectedValue: "starter_village_north_gate_guard" }],
   }],
   nodes: [
     { id: "start", type: "start", title: "Auftrag der Nordtorwache", requirements: [], actionsOnEnter: [], actionsOnExit: [] },

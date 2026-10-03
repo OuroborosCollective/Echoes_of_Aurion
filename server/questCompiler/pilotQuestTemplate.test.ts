@@ -24,7 +24,7 @@ describe("versioned pilot wolf quest", () => {
   it("binds its giver to the stable north-gate guard and requires exactly six wolves", () => {
     expect(PILOT_WOLF_QUEST_TEMPLATE).toMatchObject({ templateId: "starter-wolves-6", version: 1 });
     expect(PILOT_WOLF_QUEST_TEMPLATE.roles[0]?.predicates).toContainEqual({
-      subjectField: "id", operator: "eq", expectedValue: "guard-north",
+      subjectField: "id", operator: "eq", expectedValue: "starter_village_north_gate_guard",
     });
     expect(objective).toMatchObject({ key: "wolf_victories", targetValue: 6 });
   });

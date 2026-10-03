@@ -71,13 +71,14 @@ export class AurionTickRecorder {
    */
   enqueueTick(receipt: AurionCausalTickReceipt, postState?: CanonicalZoneState, preState?: CanonicalZoneState, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): void {
     const entry = snapshotRecordedEntry({ receipt, postState, preState, intents });
+    const victories = combatVictories ? clonePlainValue(combatVictories) : undefined;
     this.recordSnapshot(entry);
     const adapter = this.persistenceAdapter;
     if (!adapter) return;
     this.pendingPersistence += 1;
     this.persistenceChain = this.persistenceChain
       .then(async () => {
-        await adapter.saveReceipt(entry.receipt, entry.intents, combatVictories);
+        await adapter.saveReceipt(entry.receipt, entry.intents, victories);
         if (entry.receipt.tick === 1 && entry.preState) {
           await adapter.saveCheckpoint(entry.receipt.zoneId, 0, entry.receipt.preStateHash, entry.preState);
         }

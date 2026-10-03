@@ -39,6 +39,7 @@ import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, worldChunkStrea
 import { resolveWorldEpochReaction, type WorldEpochReaction } from "./worldEpochReactionProtocol";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
+import { isAurionQuestNpcId } from "./aurionStarterVillageContract";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
 import { aurionEthosAxes, aurionMasteryDisciplineIds, aurionMasterySources, resolveEthosAura, resolveMasteryReadmodel, type AurionEthosAxis, type AurionMasteryDisciplineId, type AurionMasterySource } from "./aurionMasteryEthosProtocol";
@@ -1649,6 +1650,7 @@ export async function requestQuestActionFromDialogue(values: {
       eq(aurionDialogueReceipts.userId, values.userId),
   )).limit(1))[0];
   if (!dialogue) throw new Error("Ein eigener bestätigter Dialogreceipt ist erforderlich.");
+  if (!isAurionQuestNpcId(dialogue.npcId)) throw new Error("Dieser Dialog stammt nicht von einem kanonischen Aurion-Questgeber.");
 
   const interpretation = parseDialogueInterpretationReceipt(dialogue.interpretationJson);
   const progress = await getGameplayProgress(values.userId);
@@ -1660,6 +1662,7 @@ export async function requestQuestActionFromDialogue(values: {
   if (outcome.state === "no_action" || outcome.actionKind !== values.actionKind || outcome.questKey !== values.questKey) {
     throw new Error("Dieser Dialog erlaubt die angefragte Questaktion nicht.");
   }
+  if (outcome.npcId !== dialogue.npcId) throw new Error("Dieser Dialog erlaubt die angefragte Questaktion nicht.");
 
   const id = newEndgameId("dialogue_cmd");
   await db.insert(aurionDialogueCommandReceipts).values({

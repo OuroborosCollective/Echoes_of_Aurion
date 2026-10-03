@@ -12,6 +12,6 @@ CREATE TABLE `aurionCombatVictoryEvents` (
   CONSTRAINT `aurionCombatVictoryEvents_receipt_uq` UNIQUE (`receiptId`),
   CONSTRAINT `aurionCombatVictoryEvents_revision_ck` CHECK (`logicalRevision` >= 0),
   CONSTRAINT `aurionCombatVictoryEvents_player_ck` CHECK (`playerUserId` > 0),
-  CONSTRAINT `aurionCombatVictoryEvents_confirmed_ck` CHECK (`confirmed` = true)
+  CONSTRAINT `aurionCombatVictoryEvents_confirmed_ck` CHECK (`confirmed` = 1)
 );--> statement-breakpoint
 CREATE INDEX `aurionCombatVictoryEvents_player_revision_idx` ON `aurionCombatVictoryEvents` (`playerUserId`,`logicalRevision`);
