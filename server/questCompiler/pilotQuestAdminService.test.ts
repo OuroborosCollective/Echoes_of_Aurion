@@ -6,7 +6,7 @@ function combatEvidence(receiptId: string, overrides: Partial<AurionCombatVictor
   return {
     schema: "aurion.combat.victory.v1", eventId: `event-${receiptId}`, receiptId,
     logicalRevision: Number(receiptId.replace(/\D/g, "")) || 1, playerUserId: 77,
-    opponentEntityId: `wolf-${receiptId}`, opponentSpecies: "wolf", outcome: "victory", confirmed: true,
+    opponentEntityId: `wolf-${receiptId}`, opponentSpecies: "clockwork_stalker", outcome: "victory", confirmed: true,
     ...overrides,
   };
 }

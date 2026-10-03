@@ -21,7 +21,7 @@ import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldCo
 import { operationalDate } from "../../shared/operationalClock";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
 import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContract";
-import { drainCombatQuestProjections, persistAurionCombatVictoryEvidence } from "../aurionCombatVictoryPersistence";
+import { drainCombatQuestProjections, persistAurionCombatVictoryEvidenceInTransaction } from "../aurionCombatVictoryPersistence";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
@@ -68,39 +68,45 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const id = causalReceiptPersistenceId(receipt);
     const inputJson = intents ? stableJson(intents) : null;
     const stageReceiptsJson = receipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2 ? stableJson(receipt.stages) : null;
-    try {
-      await db.insert(aurionCausalTickReceipts).values({
-        id, worldId: receipt.worldId, zoneId: receipt.zoneId, tick: receipt.tick,
-        revision: receipt.sourceRevision, rulesetVersion: receipt.rulesetVersion,
-        receiptSchema: receipt.schema,
-        preStateHash: receipt.preStateHash, inputHash: receipt.orderedIntentHash, inputJson,
-        stageReceiptsJson,
-        transitionHash: receipt.transitionHash, rngRootHash: receipt.rngRootHash,
-        postStateHash: receipt.postStateHash, previousReceiptHash: receipt.previousReceiptHash,
-        receiptHash: receipt.receiptHash,
-      });
-    } catch (error) {
-      // Natural-key readback preserves idempotency for receipts created before
-      // compact hashed IDs were introduced. Historical primary keys are never rewritten.
-      const [existing] = await db.select().from(aurionCausalTickReceipts).where(and(
-        eq(aurionCausalTickReceipts.worldId, receipt.worldId),
-        eq(aurionCausalTickReceipts.zoneId, receipt.zoneId),
-        eq(aurionCausalTickReceipts.tick, receipt.tick),
-      )).limit(1);
-      if (!existing) throw error;
-      const same = existing.worldId === receipt.worldId && existing.zoneId === receipt.zoneId && existing.tick === receipt.tick &&
-        existing.revision === receipt.sourceRevision && existing.rulesetVersion === receipt.rulesetVersion &&
-        existing.receiptSchema === receipt.schema &&
-        existing.preStateHash === receipt.preStateHash && existing.inputHash === receipt.orderedIntentHash &&
-        existing.inputJson === inputJson && existing.stageReceiptsJson === stageReceiptsJson &&
-        existing.transitionHash === receipt.transitionHash &&
-        existing.rngRootHash === receipt.rngRootHash && existing.postStateHash === receipt.postStateHash &&
-        existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
-      if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
-    }
-    for (const victory of combatVictories ?? []) {
-      await persistAurionCombatVictoryEvidence(victory);
-    }
+    // A confirmed tick must never survive without its combat evidence/outbox.
+    await db.transaction(async tx => {
+      try {
+        await tx.insert(aurionCausalTickReceipts).values({
+          id, worldId: receipt.worldId, zoneId: receipt.zoneId, tick: receipt.tick,
+          revision: receipt.sourceRevision, rulesetVersion: receipt.rulesetVersion,
+          receiptSchema: receipt.schema,
+          preStateHash: receipt.preStateHash, inputHash: receipt.orderedIntentHash, inputJson,
+          stageReceiptsJson,
+          transitionHash: receipt.transitionHash, rngRootHash: receipt.rngRootHash,
+          postStateHash: receipt.postStateHash, previousReceiptHash: receipt.previousReceiptHash,
+          receiptHash: receipt.receiptHash,
+        });
+      } catch (error) {
+        // Natural-key readback preserves idempotency for receipts created before
+        // compact hashed IDs were introduced. Historical primary keys are never rewritten.
+        const [existing] = await tx.select().from(aurionCausalTickReceipts).where(and(
+          eq(aurionCausalTickReceipts.worldId, receipt.worldId),
+          eq(aurionCausalTickReceipts.zoneId, receipt.zoneId),
+          eq(aurionCausalTickReceipts.tick, receipt.tick),
+        )).limit(1);
+        if (!existing) throw error;
+        const same = existing.worldId === receipt.worldId && existing.zoneId === receipt.zoneId && existing.tick === receipt.tick &&
+          existing.revision === receipt.sourceRevision && existing.rulesetVersion === receipt.rulesetVersion &&
+          existing.receiptSchema === receipt.schema &&
+          existing.preStateHash === receipt.preStateHash && existing.inputHash === receipt.orderedIntentHash &&
+          existing.inputJson === inputJson && existing.stageReceiptsJson === stageReceiptsJson &&
+          existing.transitionHash === receipt.transitionHash &&
+          existing.rngRootHash === receipt.rngRootHash && existing.postStateHash === receipt.postStateHash &&
+          existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
+        if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
+      }
+      for (const victory of combatVictories ?? []) {
+        await persistAurionCombatVictoryEvidenceInTransaction(tx, victory);
+      }
+    });
+  }
+
+  async projectPendingCombatVictories(): Promise<void> {
     const { adminQuestService } = await import("../routes/aurionQuestRouter");
     await drainCombatQuestProjections((userId, receiptId, instanceIds) =>
       adminQuestService.applyConfirmedCombatVictory(userId, receiptId, instanceIds));

@@ -6,10 +6,17 @@ import {
 } from "../shared/aurionQuestContract";
 import { getDb } from "./db";
 
+type CombatEvidenceWriter = Pick<NonNullable<Awaited<ReturnType<typeof getDb>>>, "select" | "insert">;
+
 export async function persistAurionCombatVictoryEvidence(raw: AurionCombatVictoryEvidence): Promise<void> {
-  const evidence = AurionCombatVictoryEvidenceSchema.parse(raw);
   const db = await getDb();
   if (!db) throw new Error("AURION_COMBAT_EVIDENCE_DATABASE_UNAVAILABLE");
+  await db.transaction(tx => persistAurionCombatVictoryEvidenceInTransaction(tx, raw));
+}
+
+/** Called in the same transaction as its causal tick receipt. */
+export async function persistAurionCombatVictoryEvidenceInTransaction(db: CombatEvidenceWriter, raw: AurionCombatVictoryEvidence): Promise<void> {
+  const evidence = AurionCombatVictoryEvidenceSchema.parse(raw);
   const existing = (await db.select().from(aurionCombatVictoryEvents)
     .where(eq(aurionCombatVictoryEvents.receiptId, evidence.receiptId)).limit(1))[0];
   if (existing) {
@@ -70,7 +77,17 @@ export async function drainCombatQuestProjections(
   if (!db) throw new Error("AURION_COMBAT_EVIDENCE_DATABASE_UNAVAILABLE");
   const pending = await db.select().from(aurionCombatVictoryEvents)
     .where(eq(aurionCombatVictoryEvents.questProjected, false))
-    .orderBy(asc(aurionCombatVictoryEvents.logicalRevision), asc(aurionCombatVictoryEvents.receiptId)).limit(100);
+    .orderBy(asc(aurionCombatVictoryEvents.logicalRevision), asc(aurionCombatVictoryEvents.receiptId)).limit(100).catch(error => {
+      let cause: unknown = error;
+      while (cause && typeof cause === "object") {
+        const detail = cause as { code?: string; cause?: unknown };
+        if (detail.code === "ER_NO_SUCH_TABLE" || detail.code === "ER_BAD_FIELD_ERROR") {
+          throw new Error("AURION_COMBAT_PROJECTION_SCHEMA_UNAVAILABLE: migration 0069 is required", { cause: error });
+        }
+        cause = detail.cause;
+      }
+      throw error;
+    });
   for (const row of pending) {
     const ids: unknown = JSON.parse(row.questInstanceIdsJson);
     if (!Array.isArray(ids) || !ids.every(id => typeof id === "string")) throw new Error("QUEST_COMBAT_OUTBOX_TARGETS_INVALID");
