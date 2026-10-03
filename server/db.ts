@@ -356,7 +356,15 @@ async function buildWorldCausalRootForEpoch(
     if (!latest) continue;
 
     const previousZoneRoot = previousByZone.get(zoneId);
-    const candidateFromTick = previousZoneRoot ? previousZoneRoot.toTick + 1 : latest.tick;
+    // The initial proof must cover retained, unsealed receipts as well as the
+    // latest tick. Otherwise a hand-in one tick before the first operator epoch
+    // is excluded forever. Do not filter out older revisions or gaps: the range
+    // and zone-root checks below must leave contradictory history UNPROVABLE.
+    const [earliest] = previousZoneRoot ? [] : await tx.select({ tick: aurionCausalTickReceipts.tick }).from(aurionCausalTickReceipts).where(and(
+      eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
+      eq(aurionCausalTickReceipts.zoneId, zoneId),
+    )).orderBy(asc(aurionCausalTickReceipts.tick)).limit(1);
+    const candidateFromTick = previousZoneRoot ? previousZoneRoot.toTick + 1 : earliest!.tick;
     const fromTick = candidateFromTick <= latest.tick ? candidateFromTick : latest.tick;
     const rows = await tx.select().from(aurionCausalTickReceipts).where(and(
       eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),

@@ -90,6 +90,25 @@ jobs:
           pnpm verify:migrations | tee .aurion-local-test-pack/evidence/migrations-verify.log
           node --test scripts/dispatch-aurion-schema-plan.test.mjs 2>&1 | tee .aurion-local-test-pack/evidence/schema-dispatch-contract.log
           pnpm exec drizzle-kit migrate 2>&1 | tee .aurion-local-test-pack/evidence/migrations-apply.log
+      - name: Verify atomic outbox and combat on separate MariaDB databases
+        env:
+          NODE_ENV: test
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/run-isolated-combat-mariadb-tests.mjs 2>&1 | tee .aurion-local-test-pack/evidence/isolated-combat-harness.log
+      - name: Archive isolated combat migration and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-isolated-combat-${{ env.AURION_RELEASE_SHA }}
+          path: |
+            .aurion-local-test-pack/evidence/isolated-combat-harness.log
+            .aurion-local-test-pack/evidence/combat-outbox-atomic-*.log
+            .aurion-local-test-pack/evidence/combat-continuity-equipment-*.log
+          if-no-files-found: warn
+          retention-days: 14
+          include-hidden-files: true
       - name: Verify donor/runtime ownership ledger
         shell: bash
         run: |
