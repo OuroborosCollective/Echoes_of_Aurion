@@ -38,17 +38,18 @@ async function faceShippedAsset(page: Page, position: ReturnType<typeof observeM
   await expect.poll(() => position(), { timeout: 15_000 }).toBeDefined();
   // Stop twenty metres east of the collider, on the already-open central row.
   const goalX = target.xMm + 20_000;
-  expect(Math.abs(position()!.z - target.zMm)).toBeLessThan(1_000);
-  for (let attempt = 0; attempt < 80 && Math.abs(position()!.x - goalX) > 700; attempt++) {
-    const before = position()!.x;
-    const key = before > goalX ? "a" : "d";
-    await page.keyboard.down(key);
-    try {
-      await expect.poll(() => position()!.x, { timeout: 5_000, intervals: [25, 50] }).not.toBe(before);
-    } finally { await page.keyboard.up(key); }
-    await page.waitForTimeout(150);
+  for (const [axis, goal, negativeKey, positiveKey] of [["x", goalX, "a", "d"], ["z", target.zMm, "w", "s"]] as const) {
+    for (let attempt = 0; attempt < 100 && Math.abs(position()![axis] - goal) > 700; attempt++) {
+      const before = position()![axis];
+      const key = before > goal ? negativeKey : positiveKey;
+      await page.keyboard.down(key);
+      try {
+        await expect.poll(() => position()![axis], { timeout: 5_000, intervals: [25, 50] }).not.toBe(before);
+      } finally { await page.keyboard.up(key); }
+      await page.waitForTimeout(150);
+    }
+    expect(Math.abs(position()![axis] - goal)).toBeLessThanOrEqual(700);
   }
-  expect(Math.abs(position()!.x - goalX)).toBeLessThanOrEqual(700);
   await page.locator("#threejs-canvas").waitFor({state: "visible"});
   await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>("#threejs-canvas");
