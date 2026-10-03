@@ -358,3 +358,13 @@ Evidence: Focused quest/validator/migration-boundary suite passed 13 tests; `pnp
 Learned: Objective quantity is safe only when the server reads a unique durable combat receipt and supplies the fixed increment itself; a client event payload cannot be permitted to select species or amount.
 Open: No production deployment or live MariaDB readback is claimed by this repository candidate.
 Next safe step: Run exact-head CI/container and an isolated migrated MariaDB readback before merge or deployment claims.
+
+### 2026-10-03 — PR 736 reviewed combat projection corrections
+Status: PARTIAL — complete wolf gameplay still blocked
+Task: Repair the deterministic guard binding, MariaDB confirmed constraint and missing persisted-event consumer.
+Decisions: Consume PR 735's starter_village_north_gate_guard identity. Persist canonical combat evidence before invoking the quest service's independent receipt readback. Snapshot queued combat evidence alongside the tick. Spell the new CHECK as confirmed=1 to match MariaDB without loosening check comparison. Preserve the 0068 causal test requirement while validating the entire sequential journal.
+Touched surfaces: Pilot template/resolver/tests, tick recorder/persistence, migration 0069, schema reconciliation regression and causal receipt migration test.
+Evidence: 85 focused tests passed / 4 DB tests skipped; schema regression 16 passed / 3 skipped; TypeScript passed; full local suite 381 files / 1,856 tests passed with 207 environment-dependent tests skipped. Migration verification: 70 SQL / 70 journal entries, no duplicates/gaps.
+Learned: A persisted victory alone never called the objective consumer; existing active mob definitions contain no wolf archetype.
+Open: No wolf combat/spawn/asset definition is approved in the active mob contract. Authenticated pilot dialogue/offer/turn-in and durable completion evidence remain unproven. This PR is not merge-ready as a playable pilot.
+Next safe step: Obtain the canonical wolf definition, complete the real product path and run exact-head MariaDB/browser evidence without substituting other enemies.
