@@ -1,8 +1,23 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { worldAssetCatalog, worldAssetRegion, worldAssetRegionSchema, worldAssetsForChunk, worldAssetLod, legacyWorldAssetRegion, legacyWorldAssetRegionSchema } from "../shared/worldAssetProtocol";
 import { WORLD_CHUNK_COORDINATE_LIMIT } from "../shared/worldChunkProtocol";
 
 describe("worldwide optimized GLB selection",()=>{
+ it("limits the fixed village to origin and preserves the pre-village outer-world asset pipeline",()=>{
+  const coordinates=[{x:-1,z:-1},{x:0,z:-1},{x:1,z:-1},{x:-1,z:0},{x:1,z:0},{x:-1,z:1},{x:0,z:1},{x:1,z:1},{x:6,z:0},{x:-93,z:48},{x:1_000_000,z:-1_000_000}];
+  const seeds=["echoes-of-aurion-v1","seed-a","seed-b"];
+  const plans=seeds.flatMap(seed=>coordinates.map(coordinate=>worldAssetsForChunk(seed,coordinate)));
+  // Independently captured from shared/worldAssetProtocol.ts at main 909ba47d,
+  // before the starter contract. Includes IDs, asset selection, positions and rotations.
+  expect(createHash("sha256").update(JSON.stringify(plans)).digest("hex"))
+   .toBe("2bc0d9734648dd28f485b450d5bec805aecf84d2978e866dd2bd685ae53c5f0d");
+  for(const coordinate of coordinates){
+   expect(worldAssetsForChunk("seed-a",coordinate)).not.toEqual(worldAssetsForChunk("seed-b",coordinate));
+   expect(worldAssetsForChunk("seed-a",coordinate)).toEqual(worldAssetsForChunk("seed-a",coordinate));
+  }
+  expect(worldAssetsForChunk("seed-a",{x:0,z:0})).toEqual(worldAssetsForChunk("seed-b",{x:0,z:0}));
+ });
  it("keeps the strict legacy response compatible and negotiates collision metadata through v2",()=>{
   const legacy=legacyWorldAssetRegion("world","seed",{x:0,z:-1}), current=worldAssetRegion("world","seed",{x:0,z:-1});
   expect(Object.keys(legacy).sort()).toEqual(["version","catalogHash","worldId","center","placements"].sort());

@@ -386,6 +386,23 @@ Decisions: Persist original active quest target IDs with victory evidence and a 
 Evidence: Real isolated MariaDB test passes after injected post-commit failure and service re-creation, proving one increment and no credit to a subsequently accepted quest. Focused suite:76 passed,1 skipped; full suite:381 files/1856 tests passed,208 skipped; TypeScript passed. CI Local Test Pack now explicitly executes the real outbox test. Migration0069 remains unmerged and is extended with outbox metadata.
 Open: Actual wolf content and the authenticated pilot hand-in causal chain remain to be integrated. No deployment or complete-pilot claim.
 Next safe step: Integrate the updated main baseline and finish authenticated integration before merge.
+### 2026-10-03 — PR 734 exact-head CI readback and memory queue isolation
+Status: PARTIAL — new exact-head CI required
+Task: Preserve independent PR verification while main memory sync stays serialized.
+Decisions: Give PR memory-contract runs per-PR concurrency groups; the previous global group canceled pending PR 734 verification when another PR was pushed despite cancel-in-progress=false. Main sync retains one shared group. No production sync behavior or credentials changed.
+Touched surfaces: .github/workflows/agent-memory-supabase-sync.yml.
+Evidence: At 6cb6a5d33fd76bde8cfe4260791c085eefecc429, Aurion Local Test Pack succeeded, and AIM259 job 111129801561 passed the real database and phone/tablet/desktop browser lane plus NPC readback. The GLB upload lane failed at unchanged glbImport.spec.ts:52 (wheel-scroll bottom assertion); one diagnostic retry was requested. The memory run 37097323346 was canceled before any job and GitHub refused its failed-job rerun. Final source typecheck and 18 targeted tests had passed.
+Learned: GitHub replaces a pending run in a concurrency group even when cancel-in-progress=false; unrelated PRs must not share the main memory queue.
+Open: New head must receive all applicable successful CI; no merge or production claim yet.
+Next safe step: Read back the independent PR CI results before merge.
+
+### 2026-10-03 — PR 734 shipping browser integration
+Status: PARTIAL — exact-head browser CI required
+Task: Repair the shipping test's dependency on a procedural foundation removed from the origin by the fixed village layout.
+Decisions: Keep the village contract unchanged. Read the authenticated region, verify the existing shipped nature-root placement, and reach a safe viewing point using server-confirmed keyboard movement before rotating the real camera. Preserve all KTX decode, actual draw, fallback and resource assertions.
+Evidence: On ca363702, tablet shipping failed at aim291.assetShipping.spec.ts:70 with zero KTX models; the old test assumed a foundation at (-8m,+24m), absent from the new authoritative origin. Region readback locates nature-root-1 at (-40m,+8m). Typecheck and Playwright discovery passed locally; real exact-head CI remains required.
+Open: No merge or new production claim. The following head must pass the full shipping lane.
+Next safe step: Inspect exact-head browser results before merge.
 ### 2026-10-03 — Bounded quest objective progress and receipt-chain revisions
 Status: VERIFIED repository regression
 Task: Bound numeric quest objective progress at its validated target and derive command event revisions from the canonical persisted receipt chain.
@@ -436,3 +453,17 @@ Decisions: Admit the pilot key only in the authored dialogue lane, preserving le
 Evidence:90 focused tests passed,1 DB case skipped in the default run; TypeScript passed. A fresh MariaDB run completed real dialogue confirmation, guarded offer/accept, injected lost projection acknowledgment, service recreation, six unique evidence rows, causal world-root/hand-in closure and idempotent completion replay. Tampered species is rejected. Its initial position and combat evidence are explicit fixtures: this is not an HTTP movement or real wolf-combat claim.
 Open: No active wolf archetype/model was found; the existing expedition generator and audio cues alone do not provide a playable zone creature. Final browser journey and reward integration remain pending.
 Next safe step: Integrate reward dependency, verify the exact item and restart readback, and resolve the missing creature content before merging a complete pilot.
+### 2026-10-03 — Local onboarding NPC residence
+Status: VERIFIED repository boundary; real final-head CI pending
+Task: Keep introductory quest givers and the smith at their permanent beginner anchors without freezing visiting NPCs or the outer world.
+Decisions: Gate canonical NPC persistence by identity only for Lyra, Orun, the north-gate guard and observatory_blacksmith. Reject changing their home region; generic visitors may still enter and leave. Existing needs, goals, memory and local decisions are untouched. Static service/quest projection remains present. This is a residence guard, not a new combat immortality or migration simulation.
+Evidence:43 targeted tests across residence, NPC authority/life/persistence and world snapshots passed. Full suite:380 files/1861 tests passed,207 skipped. TypeScript passed. Existing outer-world and Graph/CAG/asset owners remain unchanged.
+Open: Final CI must verify the actual persisted NPC lane. No new lore, faction or origin canon is introduced.
+Next safe step: Merge only after layout dependency and exact-head CI are verified.
+### 2026-10-03 — Starter-region isolation and outer-world preservation
+Status: VERIFIED repository boundary regressions; final-head browser CI pending
+Task: Preserve deterministic world/graph/CAG generation and canonical GLB mesh/material/texture pipelines while keeping only the small starter origin constant.
+Decisions: Scope remains exactly chunk(0,0), a64m origin square. No global seed, generator, identity, grid, collision-manifest, graph/CAG/Wolfram, shipping or texture/mesh pipeline is replaced. Add an independently captured pre-change digest covering eight neighboring chunks, settlement, negative/far coordinates and three seeds. Require different seed plans outside origin and identical seed-independent origin plans.
+Evidence:55 tests passed across nine suites: starter/world assets, nature collision, graph CAG verifier, structure CAG verifier and world-generation evidence/parity contracts. Golden digest was computed from main909ba47d implementation, not the edited generator. PR737 merge784ce223 touches only quest code/tests and Memory, with no world/asset/CAG changes. These are repository regressions, not a claim of newly implemented autonomous world evolution or successful live Wolfram service execution.
+Open: Final exact-head CI and real shipping browser regression must pass before merge.
+Next safe step: Review the completed shipping lane and verify remote main after merge.
