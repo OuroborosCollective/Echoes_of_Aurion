@@ -407,3 +407,11 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Local onboarding NPC residence
+Status: VERIFIED repository boundary; real final-head CI pending
+Task: Keep introductory quest givers and the smith at their permanent beginner anchors without freezing visiting NPCs or the outer world.
+Decisions: Gate canonical NPC persistence by identity only for Lyra, Orun, the north-gate guard and observatory_blacksmith. Reject changing their home region; generic visitors may still enter and leave. Existing needs, goals, memory and local decisions are untouched. Static service/quest projection remains present. This is a residence guard, not a new combat immortality or migration simulation.
+Evidence:43 targeted tests across residence, NPC authority/life/persistence and world snapshots passed. Full suite:380 files/1861 tests passed,207 skipped. TypeScript passed. Existing outer-world and Graph/CAG/asset owners remain unchanged.
+Open: Final CI must verify the actual persisted NPC lane. No new lore, faction or origin canon is introduced.
+Next safe step: Merge only after layout dependency and exact-head CI are verified.
