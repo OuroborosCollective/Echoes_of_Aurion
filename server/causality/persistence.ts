@@ -1,3 +1,4 @@
+import { acknowledgeEquipmentProfiles, drainEquipmentProfileOutbox } from "../aurionEquipmentProfilePersistence";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, lt, lte, sql as sqlDrizzle } from "drizzle-orm";
 import { getDb } from "../db";
@@ -64,7 +65,7 @@ export function causalCheckpointPersistenceId(
 }
 
 export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter {
-  async saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): Promise<void> {
+  async saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[], postState?: CanonicalZoneState): Promise<void> {
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     const id = causalReceiptPersistenceId(receipt);
@@ -102,11 +103,14 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
           existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
         if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
       }
+      await acknowledgeEquipmentProfiles(tx, receipt, intents ?? [], postState);
       for (const victory of combatVictories ?? []) {
         await persistAurionCombatVictoryEvidenceInTransaction(tx, victory);
       }
     });
   }
+
+  async projectPendingEquipmentProfiles(): Promise<void> { await drainEquipmentProfileOutbox(); }
 
   async projectPendingCombatVictories(): Promise<void> {
     const { adminQuestService } = await import("../routes/aurionQuestRouter");

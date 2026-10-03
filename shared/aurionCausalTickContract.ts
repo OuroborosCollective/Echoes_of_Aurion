@@ -13,7 +13,7 @@ export const AURION_ACTIVE_CAUSAL_TICK_SCHEMA:
   | typeof AURION_CAUSAL_TICK_SCHEMA_V1
   | typeof AURION_CAUSAL_TICK_SCHEMA_V2 = AURION_CAUSAL_TICK_SCHEMA_V2;
 
-export const AURION_ZONE_RULESET_VERSION = "aurion.zone.rules.v3" as const;
+export const AURION_ZONE_RULESET_VERSION = "aurion.zone.rules.v4" as const;
 
 export const AURION_CAUSAL_STAGE_NAMES = [
   "MEMBERSHIP_REVIVAL",

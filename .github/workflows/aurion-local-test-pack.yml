@@ -107,6 +107,7 @@ jobs:
             .aurion-local-test-pack/evidence/causal-archive-packets-*.log
             .aurion-local-test-pack/evidence/combat-outbox-atomic-*.log
             .aurion-local-test-pack/evidence/combat-continuity-equipment-*.log
+            .aurion-local-test-pack/evidence/equipment-live-*.log
           if-no-files-found: warn
           retention-days: 14
           include-hidden-files: true

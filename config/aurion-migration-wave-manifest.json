@@ -1,7 +1,7 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0070",
+  "waveId": "aurion-production-0021-0071",
   "migrations": [
     {
       "tag": "0021_aurion_global_world_state",
@@ -201,6 +201,10 @@
     },
     {
       "tag": "0070_aurion_quest_inventory_rewards",
+      "source": "aurion"
+    },
+    {
+      "tag": "0071_aurion_equipment_profile_receipts",
       "source": "aurion"
     }
   ],

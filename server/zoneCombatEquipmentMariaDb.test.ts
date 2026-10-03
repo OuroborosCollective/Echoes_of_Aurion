@@ -19,7 +19,7 @@ suite("real equipment to consumed zone ticket combat profile", () => {
   let pool: Pool;
   async function clean() {
     for (const [table, column] of [
-      ["zoneConnectionTickets", "userId"], ["aurionEquipmentSlots", "userId"],
+      ["zoneConnectionTickets", "userId"], ["aurionEquipmentProfileReceipts", "userId"], ["aurionEquipmentSlots", "userId"],
       ["aurionAx1StarterEquipmentStates", "userId"], ["aurionAx1StarterEquipmentReceipts", "userId"],
       ["aurionPlayerUiSettings", "userId"], ["weaponLoadouts", "userId"],
       ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"],

@@ -33,7 +33,7 @@ suite("AX1 starter equipment receipt and paperdoll projection", () => {
   async function clean() {
     if (!isolated) throw new Error("ISOLATED_UI_DATABASE_REQUIRED");
     for (const [table, column] of [
-      ["aurionEquipmentSlots", "userId"],
+      ["aurionEquipmentProfileReceipts", "userId"], ["aurionEquipmentSlots", "userId"],
       ["aurionAx1StarterEquipmentStates", "userId"],
       ["aurionAx1StarterEquipmentReceipts", "userId"],
       ["itemInstances", "ownerUserId"],
@@ -74,6 +74,8 @@ suite("AX1 starter equipment receipt and paperdoll projection", () => {
       name: AX1_STARTER_BLADE_NAME,
       definition: AX1_STARTER_BLADE_ITEM_ID,
       levelExact: "1",
+      quantityExact: "1",
+      maxQuantityExact: "1",
       quality: "normal",
       slot: "main_hand",
       status: "equipped",

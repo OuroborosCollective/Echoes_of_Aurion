@@ -91,6 +91,7 @@ export const playerProfiles = mysqlTable("playerProfiles", {
   victories: int("victories").default(0).notNull(),
   seasonPoints: int("seasonPoints").default(0).notNull(),
   inventoryRevisionExact: varchar("inventoryRevisionExact", { length: 128 }).default("0").notNull(),
+  equipmentRevisionExact: varchar("equipmentRevisionExact", { length: 128 }).default("0").notNull(),
   selectedClass: mysqlEnum("selectedClass", ["unbound", "vanguard", "seer", "warden"]).default("unbound").notNull(),
   classChosenAt: timestamp("classChosenAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -2120,3 +2121,17 @@ export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents",
 
 /** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
 export * from "./aurionWorldFoundationSchema";
+
+/** Immutable equipment mutation with a durable causal-projection acknowledgment. */
+export const aurionEquipmentProfileReceipts = mysqlTable("aurionEquipmentProfileReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  revisionExact: varchar("revisionExact", { length: 128 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 71 }).notNull(),
+  mutationJson: text("mutationJson").notNull(),
+  appliedCausalReceiptHash: varchar("appliedCausalReceiptHash", { length: 71 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionEquipmentProfileReceipts_user_revision_uq").on(table.userId, table.revisionExact),
+  index("aurionEquipmentProfileReceipts_pending_idx").on(table.userId, table.appliedCausalReceiptHash),
+]);

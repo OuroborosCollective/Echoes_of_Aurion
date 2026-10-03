@@ -35,7 +35,7 @@ export const lateAurionMigrationTags = [
   "0067_aurion_npc_decision_log",
   "0068_aurion_item_manipulation_runtime",
   "0069_aurion_combat_victory_events",
-  "0070_aurion_quest_inventory_rewards",
+  "0070_aurion_quest_inventory_rewards", "0071_aurion_equipment_profile_receipts",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];

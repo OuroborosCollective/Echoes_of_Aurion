@@ -1,3 +1,4 @@
+import { verifyEquipmentMutation, type EquipmentMutationReceipt } from "../shared/aurionEquipmentProfileContract";
 import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
@@ -82,6 +83,8 @@ type PresencePeer = {
   stamina: number;
   weaponBonus: number;
   weaponEquipped?: boolean;
+  equipmentRevisionExact?: string;
+  equipmentReceiptHash?: string | null;
   weaponTrack: WasdZoneCombatProfile["weaponTrack"];
   skillCooldownUntilTick: Map<Ax1BladeSkillId, number>;
   lastCombatSequence: number;
@@ -172,6 +175,7 @@ export class AuthoritativeMovementZone {
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
         weaponBonus: peer.weaponBonus,
+        ...(peer.equipmentRevisionExact === undefined ? {} : { equipmentRevisionExact: peer.equipmentRevisionExact, equipmentReceiptHash: peer.equipmentReceiptHash ?? null }),
         ...(peer.weaponEquipped === undefined ? {} : { weaponEquipped: peer.weaponEquipped }),
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
@@ -240,7 +244,7 @@ export class AuthoritativeMovementZone {
   }
 
   restoreFromCanonicalState(state: CanonicalZoneState, previousReceiptHash?: string | null): void {
-    if (!["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
+    if (!["aurion.zone.rules.v2", "aurion.zone.rules.v3", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
     if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
     if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
     this.rulesetVersion = state.ruleset;
@@ -271,6 +275,8 @@ export class AuthoritativeMovementZone {
         stamina: player.stamina,
         weaponBonus: player.weaponBonus,
         weaponEquipped: player.weaponEquipped,
+        equipmentRevisionExact: player.equipmentRevisionExact,
+        equipmentReceiptHash: player.equipmentReceiptHash,
         weaponTrack: player.weaponTrack as WasdZoneCombatProfile["weaponTrack"],
         skillCooldownUntilTick: cooldowns,
         lastCombatSequence: player.lastCombatSequence,
@@ -314,6 +320,8 @@ export class AuthoritativeMovementZone {
       stamina: WASD_MAX_STAMINA,
       weaponBonus: profile.weaponBonus,
       weaponEquipped: profile.weaponEquipped,
+      equipmentRevisionExact: profile.equipmentRevisionExact,
+      equipmentReceiptHash: profile.equipmentReceiptHash,
       weaponTrack: profile.weaponTrack,
       skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
@@ -357,6 +365,16 @@ export class AuthoritativeMovementZone {
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
     return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
       ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
+  }
+
+  /** Called only after independent DB receipt readback; public wire parsers reject this type. */
+  enqueueEquipmentProfile(raw: EquipmentMutationReceipt): void {
+    const receipt = verifyEquipmentMutation(raw);
+    const peer = this.peersByEntityId.get(`player:${receipt.mutation.userId}`);
+    if (!peer) return;
+    if (this.pendingIntents.some(intent => intent.type === "equipment_profile" && intent.receipt.id === receipt.id)) return;
+    this.pendingIntents.push({ type: "equipment_profile", entityId: `player:${peer.userId}`, connectionId: peer.connectionId,
+      clientSeq: 0, arrivalSeq: ++this.arrivalSequence, receipt });
   }
 
   nextArrivalSequence(): number {
@@ -484,7 +502,7 @@ export class AuthoritativeMovementZone {
     const attacker = { id: `player:${peer.userId}`, stamina: peer.stamina, skills: { combat: { level: peer.combatLevel } } };
     const defender = { id: mob.definition.entityId, health: mob.health, skills: { combat: { level: mob.definition.level } } };
     const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, unarmed: this.rulesetVersion === AURION_ZONE_RULESET_VERSION && skillId === null && peer.weaponEquipped === false, entropy: entropyBundle.entropy });
+    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, unarmed: this.rulesetVersion !== "aurion.zone.rules.v2" && skillId === null && peer.weaponEquipped === false, entropy: entropyBundle.entropy });
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
     peer.lastCombatSequence = sequence;
@@ -544,6 +562,28 @@ export class AuthoritativeMovementZone {
       revivedEntityIds.push(`player:${peer.userId}`);
       changed = true;
     }
+    // Server equipment revisions have their own order; no client sequence is consumed.
+    if (this.rulesetVersion === AURION_ZONE_RULESET_VERSION) for (const intent of intentsToProcess) {
+      if (intent.type !== "equipment_profile") continue;
+      const receipt = verifyEquipmentMutation(intent.receipt);
+      if (intent.entityId !== `player:${receipt.mutation.userId}`) throw new Error("EQUIPMENT_INTENT_OWNER_MISMATCH");
+      const peer = this.peersByEntityId.get(intent.entityId);
+      if (!peer) continue;
+      const revision = receipt.mutation.revisionExact, current = peer.equipmentRevisionExact ?? "0";
+      if (BigInt(revision) < BigInt(current)) continue;
+      if (revision === current) {
+        if (peer.equipmentReceiptHash !== receipt.hash) throw new Error("EQUIPMENT_REVISION_HASH_CONFLICT");
+        continue;
+      }
+      const profile = receipt.mutation.afterProfile;
+      peer.weaponEquipped = profile.weaponEquipped;
+      peer.weaponBonus = profile.weaponBonus;
+      peer.maxHealth = profile.maxHealth;
+      peer.health = Math.min(peer.health, profile.maxHealth);
+      peer.equipmentRevisionExact = revision;
+      peer.equipmentReceiptHash = receipt.hash;
+      changed = true;
+    }
     captureAuthorityStage("MEMBERSHIP_REVIVAL");
 
     // Stage ordering must not invalidate an already admitted lower-sequence action.
@@ -568,7 +608,7 @@ export class AuthoritativeMovementZone {
 
     // 03 player actions and quest summaries.
     for (const intent of intentsToProcess) {
-      if (intent.type === "move") continue;
+      if (intent.type === "move" || intent.type === "equipment_profile") continue;
       const peer = this.peersByEntityId.get(intent.entityId);
       if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
       actionSequenceWatermarks.set(peer.userId, intent.clientSeq);

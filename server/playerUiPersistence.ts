@@ -1,3 +1,4 @@
+import { readEquipmentCombatProfile, persistEquipmentMutation, confirmEquipmentProfile } from "./aurionEquipmentProfilePersistence";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { aurionAx1StarterEquipmentReceipts, aurionAx1StarterEquipmentStates } from "../drizzle/ax1StarterEquipmentSchema";
@@ -149,8 +150,10 @@ export async function collectPlayerLoot(userId: number, ref: ItemRef) {
 }
 export async function equipPlayerItem(userId: number, ref: ItemRef, expectedItem: ItemRef | null) {
   const db = await getDb(); if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  return db.transaction(async tx => {
+  const result = await db.transaction(async tx => {
     await lockPlayer(tx, userId);
+    const before = await readUi(tx, userId);
+    const beforeProfile = await readEquipmentCombatProfile(tx, userId);
     const item = await ownedItem(tx, userId, ref);
     if (!item.slot || item.status === "pending_pickup") throw new Error("COLLECTED_EQUIPMENT_REQUIRED");
     const prior = (await tx.select().from(aurionEquipmentSlots).where(and(eq(aurionEquipmentSlots.userId, userId), eq(aurionEquipmentSlots.slot, item.slot))).for("update"))[0];
@@ -158,7 +161,7 @@ export async function equipPlayerItem(userId: number, ref: ItemRef, expectedItem
     const equippedStarter = starter?.status === "equipped" ? starter : null;
     if (prior && equippedStarter) throw new Error("AX1_STARTER_EQUIPMENT_CONFLICT");
     const current = prior ? { id: prior.itemId, version: prior.itemRecordVersion as ItemRef["version"] } : equippedStarter ? { id: equippedStarter.id, version: equippedStarter.version } : null;
-    if (current?.id === item.id && current.version === item.version) return readUi(tx, userId);
+    if (current?.id === item.id && current.version === item.version) return { ui: before, receiptId: beforeProfile.equipmentReceiptHash?.slice(7) ?? null };
     if ((current?.id ?? null) !== (expectedItem?.id ?? null) || (current?.version ?? null) !== (expectedItem?.version ?? null)) throw new Error("EQUIPMENT_SLOT_STALE");
     if (prior) {
       const previous = await ownedItem(tx, userId, { id: prior.itemId, version: prior.itemRecordVersion });
@@ -173,23 +176,46 @@ export async function equipPlayerItem(userId: number, ref: ItemRef, expectedItem
       const row = { id: `equipment:${userId}:${item.slot}`, userId, slot: item.slot, itemId: item.id, itemRecordVersion: item.version };
       await tx.insert(aurionEquipmentSlots).values(row).onDuplicateKeyUpdate({ set: { itemId: item.id, itemRecordVersion: item.version } });
     }
-    return readUi(tx, userId);
+    return recordEquipmentResult(tx, userId, "equip", ref, before, beforeProfile);
   });
+  await confirmEquipmentProfile(userId, result.receiptId);
+  return result.ui;
 }
 export async function unequipPlayerItem(userId: number, ref: ItemRef) {
   const db = await getDb(); if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  return db.transaction(async tx => {
+  const result = await db.transaction(async tx => {
     await lockPlayer(tx, userId);
+    const before = await readUi(tx, userId);
+    const beforeProfile = await readEquipmentCombatProfile(tx, userId);
     const item = await ownedItem(tx, userId, ref);
     if (item.version === AX1_STARTER_ITEM_RECORD_VERSION) {
       if (item.status !== "equipped") throw new Error("EQUIPMENT_SLOT_STALE");
       await setStatus(tx, userId, item, "owned");
-      return readUi(tx, userId);
+      return recordEquipmentResult(tx, userId, "unequip", ref, before, beforeProfile);
     }
     const prior = (await tx.select().from(aurionEquipmentSlots).where(and(eq(aurionEquipmentSlots.userId, userId), eq(aurionEquipmentSlots.itemId, item.id), eq(aurionEquipmentSlots.itemRecordVersion, item.version))).for("update"))[0];
     if (!prior || item.status !== "equipped") throw new Error("EQUIPMENT_SLOT_STALE");
     await tx.delete(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.id, prior.id));
     await setStatus(tx, userId, item, "owned");
-    return readUi(tx, userId);
+    return recordEquipmentResult(tx, userId, "unequip", ref, before, beforeProfile);
   });
+  await confirmEquipmentProfile(userId, result.receiptId);
+  return result.ui;
+}
+
+async function recordEquipmentResult(tx: UiTransaction, userId: number, operation: "equip" | "unequip", item: ItemRef,
+  before: Awaited<ReturnType<typeof readUi>>, beforeProfile: Awaited<ReturnType<typeof readEquipmentCombatProfile>>) {
+  const ui = await readUi(tx, userId);
+  const afterProfile = await readEquipmentCombatProfile(tx, userId);
+  const projection = (profile: typeof beforeProfile) => ({ weaponEquipped: profile.weaponEquipped, weaponBonus: profile.weaponBonus, maxHealth: profile.maxHealth });
+  const sorted = (equipment: typeof ui.equipment) => [...equipment].sort((a, b) => a.slot < b.slot ? -1 : a.slot > b.slot ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const receiptId = await persistEquipmentMutation(tx, {
+    schema: "aurion.equipment.mutation.v1", userId, operation, item,
+    previousRevisionExact: beforeProfile.equipmentRevisionExact,
+    revisionExact: (BigInt(beforeProfile.equipmentRevisionExact) + 1n).toString(),
+    previousReceiptHash: beforeProfile.equipmentReceiptHash,
+    beforeEquipment: sorted(before.equipment), afterEquipment: sorted(ui.equipment),
+    beforeProfile: projection(beforeProfile), afterProfile: projection(afterProfile),
+  });
+  return { ui, receiptId };
 }
