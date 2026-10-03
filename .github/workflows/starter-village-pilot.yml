@@ -1,0 +1,188 @@
+name: Starter Village Pilot Evidence
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - ".github/workflows/starter-village-pilot.yml"
+      - "server/starterVillagePilotHttp.test.ts"
+      - "e2e/starterVillagePilot.spec.ts"
+      - "server/db.ts"
+      - "server/routers.ts"
+      - "server/zone**"
+      - "client/src/xaurion/**"
+      - "drizzle/**"
+  pull_request:
+    paths:
+      - ".github/workflows/starter-village-pilot.yml"
+      - "server/starterVillagePilotHttp.test.ts"
+      - "e2e/starterVillagePilot.spec.ts"
+      - "server/db.ts"
+      - "server/routers.ts"
+      - "server/zone**"
+      - "client/src/xaurion/**"
+      - "drizzle/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: starter-village-pilot-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_starter_pilot
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_starter_pilot
+      AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      AURION_EVIDENCE_DIR: test-results/starter-village-pilot
+      JWT_SECRET: starter-village-ci-disposable-never-production
+      VITE_APP_ID: starter-village-pilot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with: { run_install: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: 22, cache: pnpm }
+      - name: Freeze revision, install and migrate isolated MariaDB
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          pnpm install --frozen-lockfile
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+          pnpm check
+          pnpm build
+      - name: Canonical 10 Hz Return Stone and northward movement regressions
+        run: pnpm exec vitest run server/returnStoneZoneRuntime.test.ts server/zoneGatewayPresence.test.ts server/zoneRuntime.test.ts --no-file-parallelism --reporter=verbose
+      - name: Scope egress denial to Aurion runtime identity
+        run: |
+          set -euo pipefail
+          if ! id -u aurion-netproof >/dev/null 2>&1; then
+            sudo useradd --system --no-create-home --shell /usr/sbin/nologin aurion-netproof
+          fi
+          AURION_NET_UID="$(id -u aurion-netproof)"
+          echo "AURION_NET_UID=$AURION_NET_UID" >> "$GITHUB_ENV"
+
+          # The hosted-runner workspace is private to the runner user by default.
+          # Give the runtime identity read/traverse access only; never grant write.
+          sudo chmod o+x /home/runner /home/runner/work "$(dirname "$GITHUB_WORKSPACE")" "$GITHUB_WORKSPACE"
+          sudo chmod -R o+rX "$GITHUB_WORKSPACE"
+
+          sudo iptables -I OUTPUT 1 -m owner --uid-owner "$AURION_NET_UID" -d 127.0.0.0/8 -j ACCEPT
+          sudo iptables -I OUTPUT 2 -m owner --uid-owner "$AURION_NET_UID" -j REJECT
+          sudo ip6tables -I OUTPUT 1 -m owner --uid-owner "$AURION_NET_UID" -d ::1/128 -j ACCEPT
+          sudo ip6tables -I OUTPUT 2 -m owner --uid-owner "$AURION_NET_UID" -j REJECT
+
+          sudo -u aurion-netproof test -r dist/index.js
+          BASH_BIN="$(command -v bash)"
+          sudo -u aurion-netproof "$BASH_BIN" -c 'exec 3<>/dev/tcp/127.0.0.1/3306; exec 3>&-; exec 3<&-'
+
+          for url in             https://generativelanguage.googleapis.com/             https://api.openai.com/             https://api.anthropic.com/             https://agent-zero.ai/             https://bmad-method.org/
+          do
+            if sudo -u aurion-netproof curl --max-time 3 --silent --show-error "$url" >/dev/null 2>&1; then
+              echo "Unexpected external egress for runtime identity: $url" >&2
+              exit 1
+            fi
+          done
+
+          curl --fail --silent --show-error https://api.github.com/meta >/dev/null
+          mkdir -p "$AURION_EVIDENCE_DIR"
+          printf '{"scope":"runtime-uid","uid":%s,"loopbackAllowed":true,"externalEgressAllowed":false,"runnerControlPlaneAffected":false}\n'             "$AURION_NET_UID" > "$AURION_EVIDENCE_DIR/network-isolation.json"
+      - name: Start exact runtime and execute authenticated HTTP/tRPC journey
+        run: |
+          set -euo pipefail
+          NODE_BIN="$(command -v node)"
+          RUNTIME_ENTRY="$PWD/dist/index.js"
+          test -s "$RUNTIME_ENTRY"
+          sudo -u aurion-netproof "$NODE_BIN" -e 'const fs=require("node:fs");const p=process.argv[1];const st=fs.statSync(p);console.log(JSON.stringify({cwd:process.cwd(),entry:p,bytes:st.size,readable:true}))' "$RUNTIME_ENTRY" | tee "$AURION_EVIDENCE_DIR/runtime-entry-before.json"
+          sudo -u aurion-netproof env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-before.log 2>&1 &
+          for attempt in $(seq 1 50); do
+            RUNTIME_PID="$(pgrep -u "$AURION_NET_UID" -f 'dist/index.js' | head -n 1 || true)"
+            if [[ -n "$RUNTIME_PID" ]]; then
+              printf '%s\n' "$RUNTIME_PID" > /tmp/starter-pilot.pid
+              break
+            fi
+            sleep 0.1
+          done
+          test -s /tmp/starter-pilot.pid
+          for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
+          curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-before.json
+          AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=journey pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
+      - name: Restart application and independently read back quest and inventory
+        run: |
+          set -euo pipefail
+          RUNTIME_PID="$(cat /tmp/starter-pilot.pid)"
+          sudo kill "$RUNTIME_PID"
+          for attempt in $(seq 1 50); do
+            if ! sudo kill -0 "$RUNTIME_PID" 2>/dev/null; then break; fi
+            sleep 0.1
+          done
+          ! sudo kill -0 "$RUNTIME_PID" 2>/dev/null
+
+          NODE_BIN="$(command -v node)"
+          RUNTIME_ENTRY="$PWD/dist/index.js"
+          test -s "$RUNTIME_ENTRY"
+          sudo -u aurion-netproof env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-after.log 2>&1 &
+          rm -f /tmp/starter-pilot.pid
+          for attempt in $(seq 1 50); do
+            RUNTIME_PID="$(pgrep -u "$AURION_NET_UID" -f 'dist/index.js' | head -n 1 || true)"
+            if [[ -n "$RUNTIME_PID" ]]; then
+              printf '%s\n' "$RUNTIME_PID" > /tmp/starter-pilot.pid
+              break
+            fi
+            sleep 0.1
+          done
+          test -s /tmp/starter-pilot.pid
+          for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
+          AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
+      - name: Browser-emulated viewport acceptance (not physical Android/GPU proof)
+        run: AURION_STARTER_VILLAGE_BROWSER_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --reporter=list
+      - name: Cleanup runtime isolation
+        if: always()
+        run: |
+          set +e
+          if [[ -f /tmp/starter-pilot.pid ]]; then
+            sudo kill "$(cat /tmp/starter-pilot.pid)" 2>/dev/null || true
+          fi
+          if [[ -n "${AURION_NET_UID:-}" ]]; then
+            sudo iptables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -d 127.0.0.0/8 -j ACCEPT 2>/dev/null || true
+            sudo iptables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -j REJECT 2>/dev/null || true
+            sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -d ::1/128 -j ACCEPT 2>/dev/null || true
+            sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -j REJECT 2>/dev/null || true
+          fi
+      - name: Seal revision-bound evidence manifest
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p test-results/starter-village-pilot
+          printf '%s  %s\n' "$AURION_RELEASE_SHA" revision > test-results/starter-village-pilot/REVISION
+          find test-results/starter-village-pilot -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-results/starter-village-pilot/SHA256SUMS
+          chmod -R a-w test-results/starter-village-pilot
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: starter-village-pilot-${{ env.AURION_RELEASE_SHA }}
+          path: |
+            test-results/starter-village-pilot
+            test-results/starter-pilot-*.log
+            test-results/starter-pilot-health-*.json
+          if-no-files-found: error
+          retention-days: 30
