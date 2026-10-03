@@ -56,6 +56,9 @@ on:
       - "drizzle/0066_aurion_inventory_transaction_kernel.sql"
       - "drizzle/0067_aurion_npc_decision_log.sql"
       - "drizzle/0068_aurion_item_manipulation_runtime.sql"
+      - "drizzle/0069_aurion_combat_victory_events.sql"
+      - "drizzle/0070_aurion_quest_inventory_rewards.sql"
+      - "config/aurion-migration-wave-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -110,6 +113,9 @@ on:
       - "drizzle/0065_aurion_glb_asset_normalization.sql"
       - "drizzle/0067_aurion_npc_decision_log.sql"
       - "drizzle/0068_aurion_item_manipulation_runtime.sql"
+      - "drizzle/0069_aurion_combat_victory_events.sql"
+      - "drizzle/0070_aurion_quest_inventory_rewards.sql"
+      - "config/aurion-migration-wave-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -474,6 +480,25 @@ jobs:
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try { for(const statement of statements) await connection.query(statement); } finally { await connection.end(); }
           console.log(JSON.stringify({phase:"0068-applied",statementCount:statements.length}));
+          NODE
+
+      - name: Apply remaining declared migrations after 0068 separately
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8"));
+          const remaining=manifest.migrations.filter(({tag})=>Number(tag.slice(0,4))>68);
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            for(const {tag} of remaining) {
+              const sql=fs.readFileSync(`drizzle/${tag}.sql`,"utf8");
+              const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+              for(const statement of statements) await connection.query(statement);
+              console.log(JSON.stringify({phase:`${tag}-applied`,statementCount:statements.length}));
+            }
+          } finally { await connection.end(); }
           NODE
 
       - name: Prove all declared late migrations match after isolated apply
