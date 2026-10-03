@@ -65,9 +65,18 @@ export const ${operationName}Schema = z.object({
 `;
 
   const pipelineSource = `import { z } from "zod";
-import { createServiceCellPipeline, InMemoryIdempotencyStore } from "@shared/aurionServiceCellPipeline";
+import {
+  createServiceCellPipeline,
+  InMemoryIdempotencyStore,
+  type EffectExecutor,
+  type ObservabilitySink,
+  type ReadbackFn,
+} from "@shared/aurionServiceCellPipeline";
+import { hostOperationalClock } from "@shared/operationalClock";
 import { manifest } from "./${input.cellId}Manifest";
 import { ${operationName}Schema } from "./${input.cellId}Schema";
+
+type ${operationName}Input = z.infer<typeof ${operationName}Schema>;
 
 // ${input.cellId} — Aurion Service Cell Pipeline
 // Enforces: strict schema -> verified actor -> scope authorization ->
@@ -76,7 +85,7 @@ import { ${operationName}Schema } from "./${input.cellId}Schema";
 
 const idempotencyStore = new InMemoryIdempotencyStore();
 
-const effect = {
+const effect: EffectExecutor<${operationName}Input> = {
   contractId: "${input.cellId}",
   async execute(input, baseRevision) {
     // Implement the bounded effect here.
@@ -85,19 +94,21 @@ const effect = {
   },
 };
 
-const readback = async (input, resultRevision) => {
+const readback: ReadbackFn<${operationName}Input> = async (input, resultRevision) => {
   // Implement independent readback here.
   // Must return { readbackHash, readbackData }.
   throw new Error("READBACK_NOT_IMPLEMENTED");
 };
 
 // Observability side-channel — MUST be non-mutating.
-const observability = (event) => {
+const observability: ObservabilitySink = (event) => {
   // Log/emit metrics only. Do NOT mutate any state.
 };
 
 export const pipeline = createServiceCellPipeline(manifest, ${operationName}Schema, {
-  clock: () => Date.now(), // Replace with injected deterministic clock in production
+  // Operational wall time enters through Aurion's explicit host-I/O boundary. Never use it
+  // as gameplay simulation time, a random seed, or effect identity.
+  clock: hostOperationalClock.now,
   idempotencyStore,
   effect,
   readback,

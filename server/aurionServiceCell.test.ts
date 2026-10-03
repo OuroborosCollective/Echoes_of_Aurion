@@ -650,6 +650,22 @@ describe("Aurion Service Cell Generator (#140)", () => {
 
     expect(generated.schemaSource).toContain(".strict()");
   });
+
+  it("generates typed source with wall time behind the operational clock boundary", () => {
+    const generated = generateServiceCell({
+      cellId: "generated-cell",
+      scope: "ops",
+      operationName: "processEvidence",
+    });
+
+    expect(generated.pipelineSource).toContain('import { hostOperationalClock } from "@shared/operationalClock";');
+    expect(generated.pipelineSource).toContain("type EffectExecutor");
+    expect(generated.pipelineSource).toContain("type ReadbackFn");
+    expect(generated.pipelineSource).toContain("type ObservabilitySink");
+    expect(generated.pipelineSource).toContain("const effect: EffectExecutor<processEvidenceInput>");
+    expect(generated.pipelineSource).toContain("clock: hostOperationalClock.now");
+    expect(generated.pipelineSource).not.toContain("Date.now(");
+  });
 });
 
 // --- Example Cell Tests ---
