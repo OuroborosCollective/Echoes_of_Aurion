@@ -41,6 +41,11 @@ const fixture = vi.hoisted(() => {
 });
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: 1 }, isAuthenticated: true }) }));
 vi.mock("@/lib/trpc", () => ({ trpc: {
+  admin: { assets: {
+    list: { useQuery: () => ({ data: undefined, isLoading: false, isError: false, isSuccess: false, refetch: vi.fn() }) },
+    assign: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+    upload: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+  } },
   useUtils: () => ({ gameplay: { openWorld: { fetch: vi.fn(async () => ({ globalWorld: { worldSeed: "refreshed-world", epoch: 7 } })) } }, worldAssets: { regionV2: { fetch: vi.fn() } } }),
   player: { ui: { useQuery: () => ({}) }, me: { useQuery: () => ({}) }, chooseClass: { useMutation: () => ({}) } },
   assetSubmissions: { characterAppearance: { useQuery: () => ({ data: fixture.appearanceData, refetch: vi.fn() }) } },

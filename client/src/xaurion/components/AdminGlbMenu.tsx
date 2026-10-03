@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { trpc } from "../../lib/trpc";
 import { useAdminStore } from "../core/AdminService";
 import { soundSynth } from "../audio/SoundSynthesizer";
@@ -39,9 +39,9 @@ export const AdminGlbMenu: React.FC = () => {
   const [displayName, setDisplayName] = useState("");
   const [assetType, setAssetType] = useState<"character" | "enemy" | "weapon" | "armor" | "arena">("character");
 
-  const catalogQuery = trpc.assetSubmissions?.publicCatalog?.useQuery ? trpc.assetSubmissions.publicCatalog.useQuery(undefined, { enabled: isAdmin }) : { data: [] };
-  const assignMutation = trpc.admin?.assets?.assign?.useMutation ? trpc.admin.assets.assign.useMutation() : { mutateAsync: async () => {} };
-  const uploadMutation = trpc.admin?.assets?.upload?.useMutation ? trpc.admin.assets.upload.useMutation() : { mutateAsync: async () => {} };
+  const catalogQuery = trpc.admin.assets.list.useQuery(undefined, { enabled: isAdmin && isOpen });
+  const assignMutation = trpc.admin.assets.assign.useMutation();
+  const uploadMutation = trpc.admin.assets.upload.useMutation();
 
   if (!isAdmin) return null;
 
@@ -65,7 +65,7 @@ export const AdminGlbMenu: React.FC = () => {
         });
         soundSynth.playUiSuccess();
         setTab("catalog");
-        (catalogQuery as any).refetch?.();
+        void catalogQuery.refetch();
         setUploadFile(null);
         setDisplayName("");
       } catch (err) {
@@ -96,8 +96,9 @@ export const AdminGlbMenu: React.FC = () => {
   return (
     <>
       {/* Floating Admin Button */}
-      <div className="fixed bottom-4 left-4 z-[1000]">
+      <div className="aurion-glb-admin-toggle fixed left-4 z-[1000]">
         <button 
+          aria-label="GLB-Admin öffnen"
           onClick={() => {
             if (!isOpen) soundSynth.playUiOpen();
             else soundSynth.playUiClose();
@@ -168,14 +169,20 @@ export const AdminGlbMenu: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
-                    {(catalogQuery as any).isLoading ? (
+                    {catalogQuery.isError ? (
+                      <div role="alert" className="space-y-3 py-8 text-center text-sm text-amber-300">
+                        <p>Katalog konnte nicht geladen werden. Bitte Verbindung und Admin-Anmeldung prüfen.</p>
+                        <button type="button" onClick={() => void catalogQuery.refetch()} className="rounded border border-sky-500 px-3 py-2 text-sky-200">Erneut laden</button>
+                      </div>
+                    ) : catalogQuery.isLoading ? (
                       <div className="py-8 text-center text-gray-600 text-[10px] uppercase tracking-widest animate-pulse">Lade Katalog...</div>
-                    ) : filteredCatalog?.length === 0 ? (
+                    ) : catalogQuery.isSuccess && filteredCatalog?.length === 0 ? (
                       <div className="py-8 text-center text-gray-600 text-[10px] uppercase tracking-widest">Keine Modelle gefunden</div>
                     ) : (
                       filteredCatalog?.map(asset => (
                         <div 
-                          key={asset.id} 
+                          key={asset.id}
+                          data-testid={`admin-glb-asset-${asset.id}`}
                           onClick={() => { soundSynth.playUiClick(); setActiveModelId(asset.id); }}
                           className={`p-3 rounded-lg border transition-all cursor-pointer group ${activeModelId === asset.id ? "bg-sky-500/10 border-sky-500/50" : "bg-white/5 border-white/5 hover:border-white/10 hover:bg-white/[0.08]"}`}
                         >
@@ -243,10 +250,10 @@ export const AdminGlbMenu: React.FC = () => {
                   </div>
 
                   <button 
-                    disabled={!uploadFile || !displayName || (uploadMutation as any).isPending}
+                    disabled={!uploadFile || !displayName || uploadMutation.isPending}
                     className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
                   >
-                    {(uploadMutation as any).isPending ? "Lade hoch..." : <>Speichern & Katalogisieren <ChevronRight size={16} /></>}
+                    {uploadMutation.isPending ? "Lade hoch..." : <>Speichern & Katalogisieren <ChevronRight size={16} /></>}
                   </button>
                 </form>
               )}
@@ -348,11 +355,11 @@ export const AdminGlbMenu: React.FC = () => {
             <div className="p-4 border-t border-sky-900/30 bg-sky-500/5 flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="text-[9px] text-gray-500 uppercase font-bold">Admin Session</span>
-                <span className="text-xs text-sky-400 font-mono">Verified via MariaDB</span>
+                <span className="text-xs text-sky-400 font-mono">{catalogQuery.isError ? "Katalog nicht erreichbar" : catalogQuery.isSuccess ? "Katalog serverbestätigt" : "Katalog wird geladen"}</span>
               </div>
               <div className="flex items-center gap-2">
-                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                 <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">Online</span>
+                 <div className={`h-1.5 w-1.5 rounded-full ${catalogQuery.isSuccess ? "bg-emerald-500" : "bg-amber-500"}`} />
+                 <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">{catalogQuery.isSuccess ? "Online" : "Nicht bestätigt"}</span>
               </div>
             </div>
           </motion.div>

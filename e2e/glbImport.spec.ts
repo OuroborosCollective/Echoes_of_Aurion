@@ -129,6 +129,34 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     expect(fetched.length).toBeGreaterThan(0);
     await expect(page.locator('#three-viewport canvas')).toBeVisible();
     await page.locator('#three-viewport canvas').screenshot({ path: testInfo.outputPath('imported-avatar.png') });
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: scrollMetrics, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
+    const movementLayouts = [];
+    for (const viewport of [{ width: 412, height: 732 }, { width: 800, height: 1280 }, { width: 932, height: 430 }]) {
+      await page.setViewportSize(viewport);
+      const joystick = page.getByTestId('ax1-movement-control');
+      await expect(joystick).toBeVisible();
+      await expect.poll(async () => {
+        const box = await joystick.boundingBox();
+        return !!box && box.x >= 0 && box.x <= 32 && box.y > viewport.height * 0.6 && box.y + box.height <= viewport.height - 8;
+      }).toBe(true);
+      const movement = (await joystick.boundingBox())!;
+      const admin = (await page.getByRole('button', { name: 'GLB-Admin öffnen', exact: true }).boundingBox())!;
+      const actions = (await page.getByRole('button', { name: 'Angriff [R]', exact: true }).locator('..').boundingBox())!;
+      expect(admin.y + admin.height).toBeLessThan(movement.y);
+      expect(actions.x).toBeGreaterThan(movement.x + movement.width);
+      movementLayouts.push({ viewport, movement, admin, actions });
+      await page.screenshot({ path: testInfo.outputPath(`movement-lower-left-${viewport.width}x${viewport.height}.png`) });
+    }
+    await page.setViewportSize({ width: 412, height: 732 });
+
+    // Direct administrator uploads have no public community-submission row.
+    // The in-game admin must still show these persisted assets through its own route.
+    const adminCatalogReply = page.waitForResponse(response => response.url().includes('/api/trpc/admin.assets.list'));
+    await page.getByRole('button', { name: 'GLB-Admin öffnen', exact: true }).click();
+    expect((await adminCatalogReply).status()).toBe(200);
+    await expect(page.getByTestId(`admin-glb-asset-${receipt.assetId}`)).toBeVisible();
+    await expect(page.getByTestId(`admin-glb-asset-${publicReceipt.assetId}`)).toBeVisible();
+    await page.getByTestId(`admin-glb-asset-${receipt.assetId}`).click();
+    await expect(page.getByText('Katalog serverbestätigt', { exact: true })).toBeVisible();
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, movementLayouts, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: scrollMetrics, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
