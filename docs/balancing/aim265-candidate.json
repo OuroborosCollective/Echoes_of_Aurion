@@ -56,7 +56,7 @@
       },
       {
         "path": "server/openWorldProtocol.ts",
-        "sha256": "829d3b62c8bb068e464fa23e3ead216cfdb0c6426826bb8dda2320f97dde5e5b"
+        "sha256": "d5e3aa54c34436ca9f802905861b771bdd9b6d0403e97e652be4801db329af0c"
       },
       {
         "path": "server/wasdAurionWorldIntegrityProtocol.ts",

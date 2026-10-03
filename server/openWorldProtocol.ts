@@ -262,7 +262,6 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { id: "emberfall-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein Emberfall" },
       { id: "orun-emberfall", kind: "npc" as const, state: "available" as const, label: "Orun, Archivhüter" },
       { id: "solarium-route", kind: "encounter" as const, state: "available" as const, label: "Solarium der letzten Flamme" },
-      { id: "cinder-vault-gate", kind: "portal" as const, state: "locked" as const, label: "Tor zum Aschengewölbe" },
     ] },
     cinder_vault: { tier: 3 as const, displayName: "Aschengewölbe", narrative: "Der Glutschlüssel entzündet uralte Runen; hinter dem Tor wartet der Glutwächter auf den ersten Setfund.", pois: [
       { id: "vault-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein des Gewölbes" },
@@ -285,6 +284,16 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { id: "sunwatch-commander", kind: "encounter" as const, state: "available" as const, label: "Sonnenwacht-Kommandant" },
     ] },
   }[zoneId];
+  // Quest progress changes the projected zone as soon as the Ember Key is turned in.
+  // Keep the confirmed dungeon route visible in that zone and subsequent zones.
+  const pointsOfInterest: OpenWorldSnapshot["pointsOfInterest"] = [
+    ...zone.pois,
+    ...(zoneId === "emberfall" || input.canEnterDungeon ? [{
+      id: "cinder-vault-gate", kind: "portal" as const,
+      state: input.canEnterDungeon ? "available" as const : "locked" as const,
+      label: "Tor zum Aschengewölbe",
+    }] : []),
+  ];
   const maximumVisible = maximumVisibleEnemies(input.level);
   const epochReaction = input.epochReaction && input.epochReaction.worldId === "echoes-of-aurion-global" && input.epochReaction.worldSeed === globalWorld.worldSeed && input.epochReaction.resolutionIndex === globalWorld.epoch ? input.epochReaction : undefined;
   const resolutionIndex = epochReaction?.resolutionIndex ?? (input.level * 1_000 + input.completed.length * 10 + (input.activeQuest ? 1 : 0));
@@ -380,7 +389,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     entryNarrative: zone.narrative,
     encounter: { activeCount: Math.min(maximumVisible, Math.max(2, zone.tier + Math.floor(Math.max(1, input.level) / 12) + 1)), budget: encounterBudget(input.level, zone.tier), maximumVisible },
     primaryEncounter: primaryEncounterFor(input),
-    pointsOfInterest: zone.pois,
+    pointsOfInterest,
     serviceNpcs: worldServiceNpcs,
     npcs: npcReadModels(input, world.reaction),
     terrain: buildOpenWorldTerrain(zoneId),

@@ -24,6 +24,30 @@ describe("open-world protocol", () => {
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true }))).toBe("sunwatch_bastion");
   });
 
+  it("keeps the dungeon gate visible across the confirmed Ember Key transition", () => {
+    const before = snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
+    const locked = buildOpenWorldSnapshot(before);
+    expect(locked.zoneId).toBe("emberfall");
+    expect(locked.pointsOfInterest.find(poi => poi.id === "cinder-vault-gate")).toMatchObject({ state: "locked" });
+    const after = snapshotInput({ ...before, completed: [...before.completed, "ember_key"], activeQuest: null, canEnterDungeon: true });
+    const unlocked = buildOpenWorldSnapshot(after);
+    expect(unlocked.zoneId).toBe("starfall_crater");
+    expect(unlocked.pointsOfInterest.filter(poi => poi.id === "cinder-vault-gate")).toEqual([
+      { id: "cinder-vault-gate", kind: "portal", state: "available", label: "Tor zum Aschengewölbe" },
+    ]);
+    expect(buildOpenWorldSnapshot(after)).toEqual(unlocked);
+    expect(buildOpenWorldSnapshot(before)).toEqual(locked);
+  });
+
+  it.each(["starfall_resonance", "clockwork_core", "sunwatch_vanguard"] as const)("retains dungeon access without replacing the active %s encounter", activeQuest => {
+    const input = snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest, canEnterDungeon: true });
+    const snapshot = buildOpenWorldSnapshot(input);
+    expect(snapshot.primaryEncounter?.encounterKey).toBe(({ starfall_resonance: "starfall_crater", clockwork_core: "rootgear_foundry", sunwatch_vanguard: "sunwatch_bastion" })[activeQuest]);
+    expect(snapshot.pointsOfInterest.filter(poi => poi.id === "cinder-vault-gate")).toHaveLength(1);
+    expect(snapshot.pointsOfInterest.find(poi => poi.id === "cinder-vault-gate")?.state).toBe("available");
+    expect(buildOpenWorldSnapshot({ ...input, canEnterDungeon: false }).pointsOfInterest.some(poi => poi.id === "cinder-vault-gate" && poi.state === "available")).toBe(false);
+  });
+
   it("returns an immutable display snapshot with only explicitly confirmed skill receipts", () => {
     const snapshot = buildOpenWorldSnapshot(snapshotInput(
       { level: 12, completed: ["astral_call"], activeQuest: "archive_of_echoes", canEnterDungeon: false },
@@ -114,6 +138,7 @@ describe("open-world protocol", () => {
       { id: "clockwork-return", kind: "portal", state: "available", label: "Rückkehrstein Clockwork Woods" },
       { id: "orun-clockwork", kind: "npc", state: "available", label: "Orun, Archivhüter" },
       { id: "rootgear-foundry", kind: "encounter", state: "available", label: "Rootgear-Kernwächter" },
+      { id: "cinder-vault-gate", kind: "portal", state: "available", label: "Tor zum Aschengewölbe" },
     ]);
     expect(snapshot.world.reaction.signalIds).toContain("hazard:clockwork_woods");
     expect(snapshot.terrain.tiles.every(tile => ["earth", "starpath", "starpath_crossing"].includes(tile.surface))).toBe(true);
@@ -136,6 +161,7 @@ describe("open-world protocol", () => {
       { id: "sunwatch-return", kind: "portal", state: "available", label: "Rückkehrstein Sonnenwacht" },
       { id: "orun-sunwatch", kind: "npc", state: "available", label: "Orun, Archivhüter" },
       { id: "sunwatch-commander", kind: "encounter", state: "available", label: "Sonnenwacht-Kommandant" },
+      { id: "cinder-vault-gate", kind: "portal", state: "available", label: "Tor zum Aschengewölbe" },
     ]);
     expect(snapshot.npcs.find(npc => npc.id === "orun")?.memory.quest[0]).toContain("Errichte den Vorposten");
     expect(snapshot.npcs.find(npc => npc.id === "lyra")?.memory.local[0]).toContain("Sonnenwacht");
