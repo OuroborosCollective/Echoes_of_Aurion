@@ -3,6 +3,7 @@
 * [Echoes of Aurion — Living World](README.md)
 * [Architektur — Aurion Single Authority](ARCHITECTURE_OWNERSHIP.md)
 * [Technische Dokumentation](docs/README.md)
+  * [Public Pattern — Stateless Determinism](docs/public-patterns/stateless-determinism-minimal-runtime.md)
   * [Spieler-Einstieg — Living World](docs/account-first-entry.md)
   * [Naturkollision und weltweite Bewegung](docs/world-nature-collision.md)
   * [Balancing](docs/balancing/README.md)
