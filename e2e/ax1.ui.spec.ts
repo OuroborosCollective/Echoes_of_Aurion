@@ -262,7 +262,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(new Set(animation.map((sample: any) => sample.kind === "glb" ? `glb:${sample.bonePose}:${Math.round(sample.clipTime * 1000)}` : `procedural:${JSON.stringify(sample.arm)}`)).size).toBeGreaterThan(1);
 
       const ownCount = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
-      await auto.click();
+      await auto.click({ force: true });
       await expect.poll(() => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length, { timeout: 8_000 }).toBeGreaterThan(ownCount);
       await hud.getByRole("button", { name: "Inventar", exact: true }).click();
       await expect(hud.getByTitle("Auto-Angriff", { exact: true })).toHaveAttribute("aria-pressed", "false");
