@@ -1,7 +1,19 @@
 import type WebSocket from "ws";
-import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
-import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
-import { AX1_BLADE_SKILL_SOURCE_REVISION, ax1BladeSkillById, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
+import {
+  ZONE_MAX_PRESENCES,
+  ZONE_PROTOCOL_VERSION,
+} from "@shared/zonePresenceContract";
+import {
+  ZONE_COMBAT_CONTRACT_VERSION,
+  ZONE_COMBAT_MAX_STAMINA,
+  type ConfirmedZoneCombatant,
+  type ConfirmedZoneCombatEvent,
+} from "@shared/zoneCombatContract";
+import {
+  AX1_BLADE_SKILL_SOURCE_REVISION,
+  ax1BladeSkillById,
+  type Ax1BladeSkillId,
+} from "@shared/ax1BladeSkillProtocol";
 import {
   AURION_ACTIVE_CAUSAL_TICK_SCHEMA,
   AURION_CAUSAL_TICK_SCHEMA_V1,
@@ -14,7 +26,11 @@ import {
   type AurionCausalTickReceipt,
   type AurionCausalTickReceiptUnsigned,
 } from "../shared/aurionCausalTickContract";
-import { type AurionZoneIntent, orderCanonicalZoneIntents, hashCanonicalIntents } from "../shared/aurionZoneIntentContract";
+import {
+  type AurionZoneIntent,
+  orderCanonicalZoneIntents,
+  hashCanonicalIntents,
+} from "../shared/aurionZoneIntentContract";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import {
   type CanonicalZoneState,
@@ -25,8 +41,15 @@ import {
   sortCanonicalZoneState,
   hashCanonicalZoneState,
 } from "./causality/zoneCanonicalState";
-import { computeRngRootHash, resolveAddressableRandomU32, type RngEventRecord } from "./determinism/aurionAddressableRandom";
-import { globalTickRecorder, AurionTickRecorder } from "./causality/tickRecorder";
+import {
+  computeRngRootHash,
+  resolveAddressableRandomU32,
+  type RngEventRecord,
+} from "./determinism/aurionAddressableRandom";
+import {
+  globalTickRecorder,
+  AurionTickRecorder,
+} from "./causality/tickRecorder";
 import { globalCausalPersistence } from "./causality/persistence";
 import { activeProvenance } from "./aurionProvenance";
 import {
@@ -47,11 +70,19 @@ import { ZoneResourceRuntime } from "./zoneResourceRuntime";
 import { worldNatureCollision } from "./worldNatureCollision";
 import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
 import { mobDistance } from "./wasdMobFsmProtocol";
-import { reduceCombatDelta, resolveCombatDelta, type CombatEntropy } from "./wasdCombatDeltaProtocol";
+import {
+  reduceCombatDelta,
+  resolveCombatDelta,
+  type CombatEntropy,
+} from "./wasdCombatDeltaProtocol";
 import { WASD_GAMEPLAY_SOURCE_REVISION } from "./wasdAREDeterminism";
 import { regenerateWasdStamina, WASD_MAX_STAMINA } from "./wasdStaminaProtocol";
 import { integrateWasdZoneMovement } from "./wasdZoneMovementProtocol";
-import { WASD_DEFAULT_ZONE_COMBAT_PROFILE, validWasdZoneCombatProfile, type WasdZoneCombatProfile } from "./wasdCombatProfileProtocol";
+import {
+  WASD_DEFAULT_ZONE_COMBAT_PROFILE,
+  validWasdZoneCombatProfile,
+  type WasdZoneCombatProfile,
+} from "./wasdCombatProfileProtocol";
 import { resolveReturnStoneRevival } from "./returnStoneRevival";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 
@@ -60,10 +91,14 @@ import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 globalTickRecorder.setPersistenceAdapter(globalCausalPersistence);
 
 export type ZoneCombatProfile = WasdZoneCombatProfile;
-export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile = WASD_DEFAULT_ZONE_COMBAT_PROFILE;
+export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile =
+  WASD_DEFAULT_ZONE_COMBAT_PROFILE;
 
 const WORLD_ID = GLOBAL_WORLD_ID;
-const WORLD_SEED_DIGEST = canonicalSha256({ worldId: WORLD_ID, seedContract: "aurion.world.seed.v1" });
+const WORLD_SEED_DIGEST = canonicalSha256({
+  worldId: WORLD_ID,
+  seedContract: "aurion.world.seed.v1",
+});
 
 type PresencePeer = {
   connectionId: string;
@@ -87,15 +122,36 @@ type PresencePeer = {
   presence: ZonePresence;
 };
 
-type AttackResult = "accepted" | "stale" | "missing" | "invalid_target" | "invalid_skill" | "cooldown" | "out_of_range" | "dead";
-type CombatResolution = { result: AttackResult; event?: ConfirmedZoneCombatEvent; rngEvents: RngEventRecord[] };
+type AttackResult =
+  | "accepted"
+  | "stale"
+  | "missing"
+  | "invalid_target"
+  | "invalid_skill"
+  | "cooldown"
+  | "out_of_range"
+  | "dead";
+type CombatResolution = {
+  result: AttackResult;
+  event?: ConfirmedZoneCombatEvent;
+  rngEvents: RngEventRecord[];
+};
 
-function serialize(payload: ZoneServerMessage) { return JSON.stringify(payload); }
-function compareBinary(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
+function serialize(payload: ZoneServerMessage) {
+  return JSON.stringify(payload);
+}
+function compareBinary(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 /** Aurion-owned runtime entry point using the conserved historical donor movement formula. */
-export function integrateZoneMovement(position: ZonePosition, input: ZoneMove["input"]): ZonePosition {
-  return integrateWasdZoneMovement(position, input, (from, desired) => worldNatureCollision.resolve(from, desired));
+export function integrateZoneMovement(
+  position: ZonePosition,
+  input: ZoneMove["input"]
+): ZonePosition {
+  return integrateWasdZoneMovement(position, input, (from, desired) =>
+    worldNatureCollision.resolve(from, desired)
+  );
 }
 
 /**
@@ -140,18 +196,33 @@ export class AuthoritativeMovementZone {
     | typeof AURION_CAUSAL_TICK_SCHEMA_V2
     | null = null;
 
-  constructor(readonly zoneId: ZoneId, private readonly evidenceRecorder: AurionTickRecorder = globalTickRecorder) {}
+  constructor(
+    readonly zoneId: ZoneId,
+    private readonly evidenceRecorder: AurionTickRecorder = globalTickRecorder
+  ) {}
 
-  enqueueIntent(intent: AurionZoneIntent): void { this.pendingIntents.push(intent); }
-  getPendingIntents(): readonly AurionZoneIntent[] { return this.pendingIntents; }
-  getLatestReceipt(): AurionCausalTickReceipt | null { return this.lastReceipt; }
-  getTickNumber(): number { return this.tickNumber; }
-  getCombatSequence(): number { return this.combatSequence; }
+  enqueueIntent(intent: AurionZoneIntent): void {
+    this.pendingIntents.push(intent);
+  }
+  getPendingIntents(): readonly AurionZoneIntent[] {
+    return this.pendingIntents;
+  }
+  getLatestReceipt(): AurionCausalTickReceipt | null {
+    return this.lastReceipt;
+  }
+  getTickNumber(): number {
+    return this.tickNumber;
+  }
+  getCombatSequence(): number {
+    return this.combatSequence;
+  }
 
   getCanonicalZoneState(): CanonicalZoneState {
     this.refreshPeerOrder();
 
-    const players = new Array<CanonicalPlayerState>(this.sortedPeersByEntityId.length);
+    const players = new Array<CanonicalPlayerState>(
+      this.sortedPeersByEntityId.length
+    );
     for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
       const peer = this.sortedPeersByEntityId[i];
       const skillCooldowns: Record<string, number> = {};
@@ -199,7 +270,9 @@ export class AuthoritativeMovementZone {
     }
 
     const resourceSnapshot = this.resourceRuntime.snapshot(this.tickNumber);
-    const resources = new Array<CanonicalResourceState>(resourceSnapshot.nodes.length);
+    const resources = new Array<CanonicalResourceState>(
+      resourceSnapshot.nodes.length
+    );
     for (let i = 0; i < resourceSnapshot.nodes.length; i++) {
       const node = resourceSnapshot.nodes[i];
       resources[i] = {
@@ -236,22 +309,34 @@ export class AuthoritativeMovementZone {
     return this.cachedQuestSummaries;
   }
 
-  restoreFromCanonicalState(state: CanonicalZoneState, previousReceiptHash?: string | null): void {
-    if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
-    if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
+  restoreFromCanonicalState(
+    state: CanonicalZoneState,
+    previousReceiptHash?: string | null
+  ): void {
+    if (state.zoneId !== this.zoneId)
+      throw new Error("AURION_REPLAY_ZONE_MISMATCH");
+    if (state.worldId !== WORLD_ID)
+      throw new Error("AURION_REPLAY_WORLD_MISMATCH");
     this.tickNumber = state.tick;
     this.combatSequence = state.combatSequence;
-    if (previousReceiptHash !== undefined) this.previousReceiptHash = previousReceiptHash;
+    if (previousReceiptHash !== undefined)
+      this.previousReceiptHash = previousReceiptHash;
     this.peers.clear();
     this.peersByEntityId.clear();
     this.pendingIntents = [];
     this.arrivalSequence = 0;
 
-    const dummySocket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} } as unknown as WebSocket;
+    const dummySocket = {
+      readyState: 1,
+      OPEN: 1,
+      send: () => {},
+      close: () => {},
+    } as unknown as WebSocket;
     for (const player of state.players) {
       const connectionId = `restored_conn_${player.userId}`;
       const cooldowns = new Map<Ax1BladeSkillId, number>();
-      for (const [skillId, tick] of Object.entries(player.skillCooldowns || {})) cooldowns.set(skillId as Ax1BladeSkillId, tick);
+      for (const [skillId, tick] of Object.entries(player.skillCooldowns || {}))
+        cooldowns.set(skillId as Ax1BladeSkillId, tick);
       const peer: PresencePeer = {
         connectionId,
         userId: player.userId,
@@ -268,7 +353,12 @@ export class AuthoritativeMovementZone {
         weaponTrack: player.weaponTrack as WasdZoneCombatProfile["weaponTrack"],
         skillCooldownUntilTick: cooldowns,
         lastCombatSequence: player.lastCombatSequence,
-        presence: { entityId: `player:${player.userId}`, userId: player.userId, position: { x: player.x, z: player.z }, lastAcceptedClientSeq: player.lastAcceptedClientSeq },
+        presence: {
+          entityId: `player:${player.userId}`,
+          userId: player.userId,
+          position: { x: player.x, z: player.z },
+          lastAcceptedClientSeq: player.lastAcceptedClientSeq,
+        },
       };
       this.peers.set(connectionId, peer);
       this.peersByEntityId.set(player.entityId, peer);
@@ -277,17 +367,25 @@ export class AuthoritativeMovementZone {
     for (const mob of state.mobs) this.mobRuntime.restoreCanonicalState(mob);
     this.resourceRuntime.restoreCanonicalStates(state.resources);
     this.questSummaries.clear();
-    for (const quest of state.questSummaries || []) this.questSummaries.set(`${quest.userId}:${quest.questId}`, { ...quest });
+    for (const quest of state.questSummaries || [])
+      this.questSummaries.set(`${quest.userId}:${quest.questId}`, { ...quest });
     this.questSummariesDirty = true;
   }
 
-  join(values: { userId: number; socket: WebSocket; combatProfile?: ZoneCombatProfile }): ZoneWelcome {
-    if (!Number.isSafeInteger(values.userId) || values.userId < 1) throw new Error("ZONE_USER_INVALID");
+  join(values: {
+    userId: number;
+    socket: WebSocket;
+    combatProfile?: ZoneCombatProfile;
+  }): ZoneWelcome {
+    if (!Number.isSafeInteger(values.userId) || values.userId < 1)
+      throw new Error("ZONE_USER_INVALID");
     const profile = values.combatProfile ?? DEFAULT_ZONE_COMBAT_PROFILE;
-    if (!validWasdZoneCombatProfile(profile)) throw new Error("ZONE_COMBAT_PROFILE_INVALID");
+    if (!validWasdZoneCombatProfile(profile))
+      throw new Error("ZONE_COMBAT_PROFILE_INVALID");
     const entityId = `player:${values.userId}`;
     const previous = this.peersByEntityId.get(entityId);
-    if (!previous && this.peers.size >= ZONE_MAX_PRESENCES) throw new Error("ZONE_CAPACITY_REACHED");
+    if (!previous && this.peers.size >= ZONE_MAX_PRESENCES)
+      throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
       this.peers.delete(previous.connectionId);
       this.peersByEntityId.delete(entityId);
@@ -310,7 +408,12 @@ export class AuthoritativeMovementZone {
       weaponTrack: profile.weaponTrack,
       skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
-      presence: { entityId, userId: values.userId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 },
+      presence: {
+        entityId,
+        userId: values.userId,
+        position: { x: 0, z: 0 },
+        lastAcceptedClientSeq: 0,
+      },
     };
     this.peers.set(connectionId, peer);
     this.peersByEntityId.set(entityId, peer);
@@ -359,13 +462,20 @@ export class AuthoritativeMovementZone {
     const position = this.peers.get(connectionId)?.position;
     return position ? { ...position } : undefined;
   }
-  mobSnapshot() { return this.mobRuntime.snapshot(); }
-  combatSnapshot() { return this.combatants(); }
-  resourceSnapshot() { return this.resourceRuntime.snapshot(this.tickNumber); }
+  mobSnapshot() {
+    return this.mobRuntime.snapshot();
+  }
+  combatSnapshot() {
+    return this.combatants();
+  }
+  resourceSnapshot() {
+    return this.resourceRuntime.snapshot(this.tickNumber);
+  }
 
   /** Development-only reset of the isolated authoritative fixture runtime. */
   resetDevelopmentFixture(): void {
-    if (process.env.NODE_ENV === "production") throw new Error("ZONE_FIXTURE_PRODUCTION_FORBIDDEN");
+    if (process.env.NODE_ENV === "production")
+      throw new Error("ZONE_FIXTURE_PRODUCTION_FORBIDDEN");
     this.peers.clear();
     this.peersByEntityId.clear();
     this.pendingIntents = [];
@@ -388,22 +498,38 @@ export class AuthoritativeMovementZone {
   }
 
   /** Development-only bounded encounter fixture selection over canonical mobs. */
-  seedDevelopmentEncounter(fixtureType: "starter_encounter" | "boss_encounter" | "npc_dialogue_fixture"): readonly string[] {
+  seedDevelopmentEncounter(
+    fixtureType: "starter_encounter" | "boss_encounter" | "npc_dialogue_fixture"
+  ): readonly string[] {
     return this.mobRuntime.seedDevelopmentEncounter(fixtureType);
   }
 
   private admitSequence(peer: PresencePeer, clientSeq: number): boolean {
-    if (!Number.isSafeInteger(clientSeq) || clientSeq <= peer.lastReceivedClientSeq) return false;
+    if (
+      !Number.isSafeInteger(clientSeq) ||
+      clientSeq <= peer.lastReceivedClientSeq
+    )
+      return false;
     peer.lastReceivedClientSeq = clientSeq;
     return true;
   }
 
-  submitMovement(connectionId: string, move: ZoneMove): "accepted" | "stale" | "missing" {
+  submitMovement(
+    connectionId: string,
+    move: ZoneMove
+  ): "accepted" | "stale" | "missing" {
     const peer = this.peers.get(connectionId);
     if (!peer) return "missing";
     if (!this.admitSequence(peer, move.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
-    this.pendingIntents.push({ type: "move", connectionId, entityId: `player:${peer.userId}`, clientSeq: move.clientSeq, arrivalSeq: ++this.arrivalSequence, input: { x: move.input.x, z: move.input.z } });
+    this.pendingIntents.push({
+      type: "move",
+      connectionId,
+      entityId: `player:${peer.userId}`,
+      clientSeq: move.clientSeq,
+      arrivalSeq: ++this.arrivalSequence,
+      input: { x: move.input.x, z: move.input.z },
+    });
     return "accepted";
   }
 
@@ -414,10 +540,21 @@ export class AuthoritativeMovementZone {
     if (peer.health <= 0) return "dead";
     const mob = this.mobRuntime.stateFor(attack.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
-    if (mobDistance(peer.position, mob.position) > AX1_PLAYER_BASIC_MELEE_RANGE_FIXED) return "out_of_range";
+    if (
+      mobDistance(peer.position, mob.position) >
+      AX1_PLAYER_BASIC_MELEE_RANGE_FIXED
+    )
+      return "out_of_range";
     if (!this.admitSequence(peer, attack.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
-    this.pendingIntents.push({ type: "attack", connectionId, entityId: `player:${peer.userId}`, clientSeq: attack.clientSeq, arrivalSeq: ++this.arrivalSequence, targetEntityId: attack.targetEntityId });
+    this.pendingIntents.push({
+      type: "attack",
+      connectionId,
+      entityId: `player:${peer.userId}`,
+      clientSeq: attack.clientSeq,
+      arrivalSeq: ++this.arrivalSequence,
+      targetEntityId: attack.targetEntityId,
+    });
     return "accepted";
   }
 
@@ -427,18 +564,38 @@ export class AuthoritativeMovementZone {
     if (skill.clientSeq <= peer.lastReceivedClientSeq) return "stale";
     if (peer.health <= 0) return "dead";
     const definition = ax1BladeSkillById(skill.skillId);
-    if (peer.weaponTrack !== "blade" || !definition || definition.skillId !== "k_strike" || definition.kind !== "melee") return "invalid_skill";
-    if (this.tickNumber < (peer.skillCooldownUntilTick.get(skill.skillId) ?? 0)) return "cooldown";
+    if (
+      peer.weaponTrack !== "blade" ||
+      !definition ||
+      definition.skillId !== "k_strike" ||
+      definition.kind !== "melee"
+    )
+      return "invalid_skill";
+    if (this.tickNumber < (peer.skillCooldownUntilTick.get(skill.skillId) ?? 0))
+      return "cooldown";
     const mob = this.mobRuntime.stateFor(skill.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
-    if (mobDistance(peer.position, mob.position) > definition.rangeFixed) return "out_of_range";
+    if (mobDistance(peer.position, mob.position) > definition.rangeFixed)
+      return "out_of_range";
     if (!this.admitSequence(peer, skill.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
-    this.pendingIntents.push({ type: "skill", connectionId, entityId: `player:${peer.userId}`, clientSeq: skill.clientSeq, arrivalSeq: ++this.arrivalSequence, skillId: skill.skillId, targetEntityId: skill.targetEntityId });
+    this.pendingIntents.push({
+      type: "skill",
+      connectionId,
+      entityId: `player:${peer.userId}`,
+      clientSeq: skill.clientSeq,
+      arrivalSeq: ++this.arrivalSequence,
+      skillId: skill.skillId,
+      targetEntityId: skill.targetEntityId,
+    });
     return "accepted";
   }
 
-  private combatEntropy(entityId: string, targetEntityId: string, sequence: number): { entropy: CombatEntropy; events: RngEventRecord[] } {
+  private combatEntropy(
+    entityId: string,
+    targetEntityId: string,
+    sequence: number
+  ): { entropy: CombatEntropy; events: RngEventRecord[] } {
     const systemId = "aurion.zone.combat";
     const eventId = `${this.zoneId}:${entityId}->${targetEntityId}:seq:${sequence}`;
     const address = (purpose: string, drawIndex: number) => ({
@@ -459,29 +616,86 @@ export class AuthoritativeMovementZone {
     return {
       entropy,
       events: [
-        { systemId, entityId, eventId, purpose: "combat.hit", drawIndex: 0, u32: entropy.hitU32 },
-        { systemId, entityId, eventId, purpose: "combat.crit", drawIndex: 1, u32: entropy.critU32 },
-        { systemId, entityId, eventId, purpose: "combat.damage", drawIndex: 2, u32: entropy.damageU32 },
+        {
+          systemId,
+          entityId,
+          eventId,
+          purpose: "combat.hit",
+          drawIndex: 0,
+          u32: entropy.hitU32,
+        },
+        {
+          systemId,
+          entityId,
+          eventId,
+          purpose: "combat.crit",
+          drawIndex: 1,
+          u32: entropy.critU32,
+        },
+        {
+          systemId,
+          entityId,
+          eventId,
+          purpose: "combat.damage",
+          drawIndex: 2,
+          u32: entropy.damageU32,
+        },
       ],
     };
   }
 
-  private resolvePlayerMelee(peer: PresencePeer, targetEntityId: string, skillId: Ax1BladeSkillId | null, rangeFixed: number, actionIndex: number): CombatResolution {
+  private resolvePlayerMelee(
+    peer: PresencePeer,
+    targetEntityId: string,
+    skillId: Ax1BladeSkillId | null,
+    rangeFixed: number,
+    actionIndex: number
+  ): CombatResolution {
     if (peer.health <= 0) return { result: "dead", rngEvents: [] };
     const mob = this.mobRuntime.stateFor(targetEntityId);
-    if (!mob || mob.health <= 0) return { result: "invalid_target", rngEvents: [] };
-    if (mobDistance(peer.position, mob.position) > rangeFixed) return { result: "out_of_range", rngEvents: [] };
+    if (!mob || mob.health <= 0)
+      return { result: "invalid_target", rngEvents: [] };
+    if (mobDistance(peer.position, mob.position) > rangeFixed)
+      return { result: "out_of_range", rngEvents: [] };
     const sequence = this.tickNumber * 1000 + actionIndex;
     this.combatSequence = Math.max(this.combatSequence, sequence);
-    const attacker = { id: `player:${peer.userId}`, stamina: peer.stamina, skills: { combat: { level: peer.combatLevel } } };
-    const defender = { id: mob.definition.entityId, health: mob.health, skills: { combat: { level: mob.definition.level } } };
-    const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, entropy: entropyBundle.entropy });
+    const attacker = {
+      id: `player:${peer.userId}`,
+      stamina: peer.stamina,
+      skills: { combat: { level: peer.combatLevel } },
+    };
+    const defender = {
+      id: mob.definition.entityId,
+      health: mob.health,
+      skills: { combat: { level: mob.definition.level } },
+    };
+    const entropyBundle = this.combatEntropy(
+      attacker.id,
+      defender.id,
+      sequence
+    );
+    const delta = resolveCombatDelta("melee", attacker, defender, {
+      tick: this.tickNumber,
+      sequence,
+      weaponBonus: peer.weaponBonus,
+      entropy: entropyBundle.entropy,
+    });
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
     peer.lastCombatSequence = sequence;
-    this.mobRuntime.applyCombatState(mob.definition.entityId, { health: patch.defender.health });
-    return { result: "accepted", event: this.combatEvent(delta, peer.stamina, patch.defender.health, skillId), rngEvents: entropyBundle.events };
+    this.mobRuntime.applyCombatState(mob.definition.entityId, {
+      health: patch.defender.health,
+    });
+    return {
+      result: "accepted",
+      event: this.combatEvent(
+        delta,
+        peer.stamina,
+        patch.defender.health,
+        skillId
+      ),
+      rngEvents: entropyBundle.events,
+    };
   }
 
   tick(): boolean {
@@ -503,7 +717,9 @@ export class AuthoritativeMovementZone {
     let previousStageStateHash = preStateHash;
     let stageOrdinal = 0;
     const captureAuthorityStage = (stageName: AurionCausalStageName): void => {
-      const canonicalStateHash = hashCanonicalZoneState(this.getCanonicalZoneState());
+      const canonicalStateHash = hashCanonicalZoneState(
+        this.getCanonicalZoneState()
+      );
       stageOrdinal += 1;
       const stage = computeCausalStageReceipt({
         stageName,
@@ -541,13 +757,21 @@ export class AuthoritativeMovementZone {
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {
       if (intent.type !== "move") continue;
-      const peer = this.peers.get(intent.connectionId) ?? this.peersByEntityId.get(intent.entityId);
-      if (!peer || peer.health <= 0 || intent.clientSeq <= peer.lastAcceptedClientSeq) continue;
+      const peer =
+        this.peers.get(intent.connectionId) ??
+        this.peersByEntityId.get(intent.entityId);
+      if (
+        !peer ||
+        peer.health <= 0 ||
+        intent.clientSeq <= peer.lastAcceptedClientSeq
+      )
+        continue;
       peer.input = { ...intent.input };
       peer.lastAcceptedClientSeq = intent.clientSeq;
     }
     for (const peer of this.sortedPeers) {
-      if ((peer.input.x === 0 && peer.input.z === 0) || peer.health <= 0) continue;
+      if ((peer.input.x === 0 && peer.input.z === 0) || peer.health <= 0)
+        continue;
       const next = integrateZoneMovement(peer.position, peer.input);
       if (next.x === peer.position.x && next.z === peer.position.z) continue;
       peer.position = next;
@@ -563,7 +787,13 @@ export class AuthoritativeMovementZone {
       peer.lastAcceptedClientSeq = intent.clientSeq;
 
       if (intent.type === "attack") {
-        const resolution = this.resolvePlayerMelee(peer, intent.targetEntityId, null, AX1_PLAYER_BASIC_MELEE_RANGE_FIXED, ++actionIndex);
+        const resolution = this.resolvePlayerMelee(
+          peer,
+          intent.targetEntityId,
+          null,
+          AX1_PLAYER_BASIC_MELEE_RANGE_FIXED,
+          ++actionIndex
+        );
         if (resolution.result === "accepted" && resolution.event) {
           changed = true;
           combatEvents.push(resolution.event);
@@ -573,10 +803,21 @@ export class AuthoritativeMovementZone {
         const definition = ax1BladeSkillById(intent.skillId as Ax1BladeSkillId);
         if (!definition || peer.weaponTrack !== "blade") continue;
         const skillId = intent.skillId as Ax1BladeSkillId;
-        if (this.tickNumber < (peer.skillCooldownUntilTick.get(skillId) ?? 0)) continue;
-        const resolution = this.resolvePlayerMelee(peer, intent.targetEntityId, skillId, definition.rangeFixed, ++actionIndex);
+        if (this.tickNumber < (peer.skillCooldownUntilTick.get(skillId) ?? 0))
+          continue;
+        const resolution = this.resolvePlayerMelee(
+          peer,
+          intent.targetEntityId,
+          skillId,
+          definition.rangeFixed,
+          ++actionIndex
+        );
         if (resolution.result === "accepted" && resolution.event) {
-          peer.skillCooldownUntilTick.set(skillId, this.tickNumber + Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS)));
+          peer.skillCooldownUntilTick.set(
+            skillId,
+            this.tickNumber +
+              Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
+          );
           changed = true;
           combatEvents.push(resolution.event);
           rngEvents.push(...resolution.rngEvents);
@@ -584,7 +825,12 @@ export class AuthoritativeMovementZone {
       } else if (intent.type === "quest_accept" && peer.health > 0) {
         const key = `${peer.userId}:${intent.questId}`;
         if (!this.questSummaries.has(key)) {
-          this.questSummaries.set(key, { userId: peer.userId, questId: intent.questId, status: "accepted", updatedAtTick: this.tickNumber });
+          this.questSummaries.set(key, {
+            userId: peer.userId,
+            questId: intent.questId,
+            status: "accepted",
+            updatedAtTick: this.tickNumber,
+          });
           this.questSummariesDirty = true;
           changed = true;
         }
@@ -592,7 +838,11 @@ export class AuthoritativeMovementZone {
         const key = `${peer.userId}:${intent.questId}`;
         const current = this.questSummaries.get(key);
         if (current?.status === "accepted") {
-          this.questSummaries.set(key, { ...current, status: "completed", updatedAtTick: this.tickNumber });
+          this.questSummaries.set(key, {
+            ...current,
+            status: "completed",
+            updatedAtTick: this.tickNumber,
+          });
           this.questSummariesDirty = true;
           changed = true;
         }
@@ -616,7 +866,10 @@ export class AuthoritativeMovementZone {
     for (const peer of this.sortedPeers) {
       if (peer.health <= 0) continue;
       const next = regenerateWasdStamina(peer.stamina);
-      if (next !== peer.stamina) { peer.stamina = next; changed = true; }
+      if (next !== peer.stamina) {
+        peer.stamina = next;
+        changed = true;
+      }
     }
     captureAuthorityStage("REGENERATION");
 
@@ -631,12 +884,14 @@ export class AuthoritativeMovementZone {
       combatSequence: this.combatSequence,
       revivedEntityIds,
     });
-    const receiptSchema = this.receiptSchemaOverride ?? AURION_ACTIVE_CAUSAL_TICK_SCHEMA;
+    const receiptSchema =
+      this.receiptSchemaOverride ?? AURION_ACTIVE_CAUSAL_TICK_SCHEMA;
     const commonReceipt = {
       worldId: WORLD_ID,
       zoneId: this.zoneId,
       tick: this.tickNumber,
-      sourceRevision: this.sourceRevisionOverride ?? activeProvenance.sourceRevision,
+      sourceRevision:
+        this.sourceRevisionOverride ?? activeProvenance.sourceRevision,
       rulesetVersion: AURION_ZONE_RULESET_VERSION,
       previousReceiptHash: this.previousReceiptHash,
       preStateHash,
@@ -647,7 +902,11 @@ export class AuthoritativeMovementZone {
     };
     const receiptUnsigned: AurionCausalTickReceiptUnsigned =
       receiptSchema === AURION_CAUSAL_TICK_SCHEMA_V2
-        ? { schema: AURION_CAUSAL_TICK_SCHEMA_V2, ...commonReceipt, stages: Object.freeze([...stageReceipts]) }
+        ? {
+            schema: AURION_CAUSAL_TICK_SCHEMA_V2,
+            ...commonReceipt,
+            stages: Object.freeze([...stageReceipts]),
+          }
         : { schema: AURION_CAUSAL_TICK_SCHEMA_V1, ...commonReceipt };
     const receipt: AurionCausalTickReceipt = {
       ...receiptUnsigned,
@@ -655,47 +914,102 @@ export class AuthoritativeMovementZone {
     } as AurionCausalTickReceipt;
     this.previousReceiptHash = receipt.receiptHash;
     this.lastReceipt = receipt;
-    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess);
+    if (!this.isReplay)
+      this.evidenceRecorder.enqueueTick(
+        receipt,
+        postState,
+        preState,
+        intentsToProcess
+      );
 
     // 09 projection/transport. Replay emits no socket or persistence side effects.
     if (!this.isReplay) {
       for (const event of combatEvents) this.broadcastCombat(event);
-      if (changed || resourcesChanged || mobsChanged || this.movedLastTick || this.inputAcknowledgementPending) this.broadcastSnapshot();
+      if (
+        changed ||
+        resourcesChanged ||
+        mobsChanged ||
+        this.movedLastTick ||
+        this.inputAcknowledgementPending
+      )
+        this.broadcastSnapshot();
     }
     this.movedLastTick = changed;
     this.inputAcknowledgementPending = false;
     return changed || resourcesChanged || mobsChanged;
   }
 
-  private resolveMobAttacks(actionIndex: number): { changed: boolean; events: ConfirmedZoneCombatEvent[]; rngEvents: RngEventRecord[] } {
+  private resolveMobAttacks(actionIndex: number): {
+    changed: boolean;
+    events: ConfirmedZoneCombatEvent[];
+    rngEvents: RngEventRecord[];
+  } {
     let changed = false;
     const events: ConfirmedZoneCombatEvent[] = [];
     const rngEvents: RngEventRecord[] = [];
     let localActionIndex = actionIndex;
     for (const mob of this.mobRuntime.orderedStates()) {
-      if (mob.state !== "combat" || mob.health <= 0 || !mob.targetEntityId || this.tickNumber < mob.nextAttackTick) continue;
+      if (
+        mob.state !== "combat" ||
+        mob.health <= 0 ||
+        !mob.targetEntityId ||
+        this.tickNumber < mob.nextAttackTick
+      )
+        continue;
       const peer = this.peersByEntityId.get(mob.targetEntityId);
       if (!peer || peer.health <= 0) continue;
-      if (mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed) continue;
-      const sequence = this.tickNumber * 1000 + (++localActionIndex);
+      if (
+        mobDistance(mob.position, peer.position) >
+        mob.definition.attackRangeFixed
+      )
+        continue;
+      const sequence = this.tickNumber * 1000 + ++localActionIndex;
       this.combatSequence = Math.max(this.combatSequence, sequence);
-      const attacker = { id: mob.definition.entityId, stamina: mob.stamina, skills: { combat: { level: mob.definition.level } } };
-      const defender = { id: `player:${peer.userId}`, health: peer.health, skills: { combat: { level: peer.combatLevel } } };
-      const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-      const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: 0, entropy: entropyBundle.entropy });
+      const attacker = {
+        id: mob.definition.entityId,
+        stamina: mob.stamina,
+        skills: { combat: { level: mob.definition.level } },
+      };
+      const defender = {
+        id: `player:${peer.userId}`,
+        health: peer.health,
+        skills: { combat: { level: peer.combatLevel } },
+      };
+      const entropyBundle = this.combatEntropy(
+        attacker.id,
+        defender.id,
+        sequence
+      );
+      const delta = resolveCombatDelta("melee", attacker, defender, {
+        tick: this.tickNumber,
+        sequence,
+        weaponBonus: 0,
+        entropy: entropyBundle.entropy,
+      });
       const patch = reduceCombatDelta(attacker, defender, delta);
-      this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, stamina: patch.attacker.stamina, nextAttackTick: this.tickNumber + mob.definition.attackCooldownTicks });
+      this.mobRuntime.applyCombatState(mob.definition.entityId, {
+        health: mob.health,
+        stamina: patch.attacker.stamina,
+        nextAttackTick: this.tickNumber + mob.definition.attackCooldownTicks,
+      });
       peer.health = patch.defender.health;
       peer.lastCombatSequence = sequence;
       if (peer.health === 0) peer.input = { x: 0, z: 0 };
-      events.push(this.combatEvent(delta, patch.attacker.stamina, peer.health, null));
+      events.push(
+        this.combatEvent(delta, patch.attacker.stamina, peer.health, null)
+      );
       rngEvents.push(...entropyBundle.events);
       changed = true;
     }
     return { changed, events, rngEvents };
   }
 
-  private combatEvent(delta: ReturnType<typeof resolveCombatDelta>, attackerStamina: number, defenderHealth: number, skillId: Ax1BladeSkillId | null): ConfirmedZoneCombatEvent {
+  private combatEvent(
+    delta: ReturnType<typeof resolveCombatDelta>,
+    attackerStamina: number,
+    defenderHealth: number,
+    skillId: Ax1BladeSkillId | null
+  ): ConfirmedZoneCombatEvent {
     return Object.freeze({
       type: "combat",
       contractVersion: ZONE_COMBAT_CONTRACT_VERSION,
@@ -718,14 +1032,35 @@ export class AuthoritativeMovementZone {
 
   private broadcastCombat(event: ConfirmedZoneCombatEvent): void {
     const serialized = serialize(event);
-    for (const peer of this.peers.values()) if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized);
+    for (const peer of this.peers.values())
+      if (peer.socket.readyState === peer.socket.OPEN)
+        peer.socket.send(serialized);
   }
 
   private refreshPeerOrder(): void {
     if (!this.sortedPeersDirty) return;
-    this.sortedPeers = Array.from(this.peers.values()).sort((a, b) => compareBinary(a.connectionId, b.connectionId));
-    this.sortedPeersByEntityId = Array.from(this.peers.values()).sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
-    this.sortedPresences = this.sortedPeersByEntityId.map(peer => peer.presence);
+    // ⚡ Bolt: Populate cached array explicitly to avoid dynamic allocation overhead from Array.from() in hot loop
+    this.sortedPeers.length = this.peers.size;
+    let i = 0;
+    for (const peer of this.peers.values()) this.sortedPeers[i++] = peer;
+    this.sortedPeers.sort((a, b) =>
+      compareBinary(a.connectionId, b.connectionId)
+    );
+
+    // ⚡ Bolt: Use direct array mutations over array spread mapping for performance
+    this.sortedPeersByEntityId.length = this.peers.size;
+    let j = 0;
+    for (const peer of this.peers.values())
+      this.sortedPeersByEntityId[j++] = peer;
+    this.sortedPeersByEntityId.sort((a, b) =>
+      compareBinary(`player:${a.userId}`, `player:${b.userId}`)
+    );
+
+    // ⚡ Bolt: Iterate pre-allocated arrays in O(N) over .map() dynamic instantiation overhead
+    this.sortedPresences.length = this.sortedPeersByEntityId.length;
+    for (let k = 0; k < this.sortedPeersByEntityId.length; k++) {
+      this.sortedPresences[k] = this.sortedPeersByEntityId[k].presence;
+    }
     this.sortedPeersDirty = false;
   }
 
@@ -746,16 +1081,41 @@ export class AuthoritativeMovementZone {
     let peerIndex = 0;
     const mobs = this.mobRuntime.orderedStates();
     let mobIndex = 0;
-    while (peerIndex < this.sortedPeersByEntityId.length || mobIndex < mobs.length) {
+    while (
+      peerIndex < this.sortedPeersByEntityId.length ||
+      mobIndex < mobs.length
+    ) {
       const peer = this.sortedPeersByEntityId[peerIndex];
       const mob = mobs[mobIndex];
       const peerId = peer ? `player:${peer.userId}` : null;
       const mobId = mob ? mob.definition.entityId : null;
       if (peerId && (!mobId || compareBinary(peerId, mobId) < 0)) {
-        out.push(Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence }));
+        out.push(
+          Object.freeze({
+            entityId: peerId,
+            health: peer.health,
+            maxHealth: peer.maxHealth,
+            stamina: peer.stamina,
+            maxStamina: ZONE_COMBAT_MAX_STAMINA,
+            alive: peer.health > 0,
+            combatLevel: peer.combatLevel,
+            lastCombatSequence: peer.lastCombatSequence,
+          })
+        );
         peerIndex += 1;
       } else if (mobId) {
-        out.push(Object.freeze({ entityId: mobId, health: mob.health, maxHealth: mob.maxHealth, stamina: mob.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: mob.health > 0, combatLevel: mob.definition.level, lastCombatSequence: 0 }));
+        out.push(
+          Object.freeze({
+            entityId: mobId,
+            health: mob.health,
+            maxHealth: mob.maxHealth,
+            stamina: mob.stamina,
+            maxStamina: ZONE_COMBAT_MAX_STAMINA,
+            alive: mob.health > 0,
+            combatLevel: mob.definition.level,
+            lastCombatSequence: 0,
+          })
+        );
         mobIndex += 1;
       }
     }
@@ -774,7 +1134,9 @@ export class AuthoritativeMovementZone {
       resources: this.resourceRuntime.snapshot(this.tickNumber),
     };
     const serialized = serialize(snapshot);
-    for (const peer of this.peers.values()) if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized);
+    for (const peer of this.peers.values())
+      if (peer.socket.readyState === peer.socket.OPEN)
+        peer.socket.send(serialized);
   }
 }
 
@@ -794,7 +1156,11 @@ export class ZoneRegistry {
 
   tick(): void {
     if (this.sortedZonesDirty) {
-      this.sortedZones = Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).map(([, zone]) => zone);
+      // ⚡ Bolt: Eliminate dynamic map generation and nested array creation per loop
+      this.sortedZones.length = this.zones.size;
+      let i = 0;
+      for (const zone of this.zones.values()) this.sortedZones[i++] = zone;
+      this.sortedZones.sort((a, b) => compareBinary(a.zoneId, b.zoneId));
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) zone.tick();

@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## 2026-10-04 - Eliminate dynamic array mapping in ZoneRegistry and refreshPeerOrder
+**Learning:** Found dynamic array allocations (Array.from().sort().map()) in server/zoneRuntime.ts refreshPeerOrder and ZoneRegistry tick causing unnecessary GC pressure.
+**Action:** Replaced dynamic allocations with pre-allocated cached arrays mutated in-place via for...of loops and direct sorting on object properties.
