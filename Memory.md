@@ -397,3 +397,23 @@ Learned: One canonical repository page plus Git Sync avoids GitHub/GitBook conte
 Open: Direct `gist.github.com` publication remains blocked by the unauthenticated browser session and missing Gist write action in the GitHub connector.
 Next safe step: Open the documentation PR, verify exact-head GitHub/readback evidence, and merge only on explicit merge instruction.
 
+
+
+### 2026-10-04 — PR #752 — docs: publish stateless determinism public reference
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=752 merge=ef702cce0c7cfae91c9ab18f4e7b3e918965a25f -->
+Task: Merge PR #752 into `main` — docs: publish stateless determinism public reference.
+Decisions: Documentation-only. No gameplay, persistence, runtime, schema or deployment behavior is changed.
+Touched surfaces:
+- `Memory.md`
+- `SUMMARY.md`
+- `docs/public-patterns/stateless-determinism-minimal-runtime.md`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/752
+- Merge commit: `ef702cce0c7cfae91c9ab18f4e7b3e918965a25f`
+- PR head: `fbec6d99e71aa1ba8a53beef29affdf26cd8ecb4`
+- Merged at: 2026-10-04T05:38:29Z
+- Post-merge workflow run: 37180480644
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
