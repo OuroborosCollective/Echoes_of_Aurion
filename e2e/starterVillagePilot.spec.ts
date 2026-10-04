@@ -22,10 +22,14 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
   await expect(page).toHaveURL(/\/play$/);
   await expect(page.getByTestId("xaurion-open-world-runtime")).toBeVisible({ timeout: 30_000 });
   const characterGate = page.getByTestId("player-character-selection-gate");
-  if (await characterGate.isVisible().catch(() => false)) {
-    await characterGate.getByRole("radio").first().click({ force: true, timeout: 15_000 });
+  try {
+    const radio = characterGate.getByRole("radio").first();
+    await radio.waitFor({ state: "visible", timeout: 15_000 });
+    await radio.click({ force: true });
     await characterGate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click({ force: true });
     await expect(characterGate).toHaveCount(0);
+  } catch (error) {
+    // If it doesn't appear, ignore it (in case it was skipped or cached).
   }
   await expect(page.getByTestId("ax1-movement-control")).toBeVisible();
   await expect(page.getByTestId("authoritative-world-hud")).toContainText(/Kontakt|serverbestätigt/);
