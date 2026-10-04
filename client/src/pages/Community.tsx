@@ -89,7 +89,7 @@ export default function Community() {
                 ? "Ladevorgang läuft..."
                 : !isAuthenticated
                   ? "Nur für angemeldete Explorer verfügbar"
-                  : undefined
+                  : "Signalraum öffnen"
             }
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
           >
@@ -103,6 +103,7 @@ export default function Community() {
             type="button"
             aria-haspopup="dialog"
             onClick={() => openCommunity("forum")}
+            title="Forum öffnen"
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
           >
             <FileText className="mb-3 size-5 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
@@ -115,6 +116,7 @@ export default function Community() {
             type="button"
             aria-haspopup="dialog"
             onClick={() => openCommunity("events")}
+            title="Events öffnen"
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
           >
             <CalendarDays className="mb-3 size-5 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
@@ -127,6 +129,7 @@ export default function Community() {
             type="button"
             aria-haspopup="dialog"
             onClick={() => openCommunity("assets")}
+            title="Asset-Katalog öffnen"
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
           >
             <Box className="mb-3 size-5 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
@@ -149,7 +152,7 @@ export default function Community() {
                 ? "Ladevorgang läuft..."
                 : !isAuthenticated
                   ? "Nur für angemeldete Explorer verfügbar"
-                  : undefined
+                  : "Gildenzugehörigkeit anzeigen"
             }
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
           >
