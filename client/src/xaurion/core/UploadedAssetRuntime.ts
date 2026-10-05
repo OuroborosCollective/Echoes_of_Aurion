@@ -94,24 +94,25 @@ export function returnStoneVisualPlacement(catalog: GlbRuntimeCatalog): Uploaded
 
 export function villageFountainCatalogAsset(catalog: GlbRuntimeCatalog): GlbCatalogEntry | null {
   const [lod1, lod2] = AURION_VILLAGE_FOUNTAIN_LODS;
-  return catalog.entries.find(entry =>
-    entry.assetId === lod1.assetId
-    && entry.sha256 === lod1.sha256
-    && entry.storageUrl === `/api/assets/glb/${lod1.sha256}.glb`
-    && entry.purpose === "world-environment"
-    && entry.assetType === "arena"
-    && entry.subcategory === "fountain"
-    && entry.targetKey === null
-    && entry.lods.length === 2
-    && entry.lods[0]?.level === 1
-    && entry.lods[0]?.assetId === lod1.assetId
-    && entry.lods[0]?.sha256 === lod1.sha256
-    && entry.lods[0]?.bytes === lod1.bytes
-    && entry.lods[1]?.level === 2
-    && entry.lods[1]?.assetId === lod2.assetId
-    && entry.lods[1]?.sha256 === lod2.sha256
-    && entry.lods[1]?.bytes === lod2.bytes
-  ) ?? null;
+  return catalog.entries.find(entry => {
+    const lods = entry.lods ?? [];
+    return entry.assetId === lod1.assetId
+      && entry.sha256 === lod1.sha256
+      && entry.storageUrl === `/api/assets/glb/${lod1.sha256}.glb`
+      && entry.purpose === "world-environment"
+      && entry.assetType === "arena"
+      && entry.subcategory === "fountain"
+      && entry.targetKey === null
+      && lods.length === 2
+      && lods[0]?.level === 1
+      && lods[0]?.assetId === lod1.assetId
+      && lods[0]?.sha256 === lod1.sha256
+      && lods[0]?.bytes === lod1.bytes
+      && lods[1]?.level === 2
+      && lods[1]?.assetId === lod2.assetId
+      && lods[1]?.sha256 === lod2.sha256
+      && lods[1]?.bytes === lod2.bytes;
+  }) ?? null;
 }
 
 export function villageFountainVisualPlacement(catalog: GlbRuntimeCatalog): UploadedWorldVisualPlacement | null {
