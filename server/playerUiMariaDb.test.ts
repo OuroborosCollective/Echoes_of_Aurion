@@ -7,6 +7,7 @@ import { aurionPlayerUiSettings } from "../drizzle/playerUiSchema";
 import { defaultHotbar } from "../shared/playerUiProtocol";
 import { craftItemForUser, createMarketListing, getDb, sellItemToSystem } from "./db";
 import { collectPlayerLoot, equipPlayerItem, readPlayerUi, savePlayerControls, unequipPlayerItem } from "./playerUiPersistence";
+import { inventoryItemShapeHash, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 
 const suite = process.env.AURION_UI_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const ids = [9330001, 9330002];
@@ -35,7 +36,8 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
     await db.insert(users).values(ids.map(id => ({ id, openId: `local:ui_database_fixture_${id}`, name: `UI fixture ${id}` })));
     await db.insert(playerProfiles).values(ids.map(userId => ({ userId })));
     await db.insert(itemInstances).values({ id: ref().id, ownerUserId: owner, lootReceiptId: "ui_fixture_drop", baseItemKey: "aurion_spear", quality: "normal", itemLevel: 1, affixesJson: "[]", status: "pending_pickup" });
-    await db.insert(aurionItemInstancesV2).values({ id: v2ref.id, ownerUserId: owner, lootReceiptId: "ui_fixture_drop_v2", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "rare", itemLevelExact: "10000000000000000001", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), status: "pending_pickup" });
+    const v2Shape = { definitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "rare", levelExact: "10000000000000000001", affixesJson: "[]", setId: null, itemPower: 9 };
+    await db.insert(aurionItemInstancesV2).values({ id: v2ref.id, ownerUserId: owner, lootReceiptId: "ui_fixture_drop_v2", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "rare", itemLevelExact: "10000000000000000001", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), mergeKey: inventoryMergeKey(v2Shape), provenanceHash: inventoryItemShapeHash(v2Shape), status: "pending_pickup" });
   });
   afterAll(async () => { if (pool) { if (isolated) await clean(); await pool.end(); } });
   it("persists optimistic-revision controls and rejects a competing stale save", async () => {
