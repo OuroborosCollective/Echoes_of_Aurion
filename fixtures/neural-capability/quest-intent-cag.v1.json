@@ -84,7 +84,7 @@
   "differentialCases": [
     {
       "caseId": "diff-legacy-turn-in",
-      "text": "Quest fertig",
+      "text": "fertig",
       "profile": {
         "languageProfileId": "benchmark-de",
         "dialectId": "observatory",
