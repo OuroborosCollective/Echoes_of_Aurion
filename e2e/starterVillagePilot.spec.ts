@@ -158,6 +158,8 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
   expect(stored.status(), "confirmed GLB byte route must be readable before renderer activation").toBe(200);
   expect((await stored.body()).length).toBeGreaterThan(0);
   await expect(page.getByTestId("glb-model-status")).toHaveText("active", { timeout: 45_000 });
+  await expect(page.getByTestId("renderer-evidence")).toHaveCount(1);
+  const rendererEvidenceRaw = await page.getByTestId("renderer-evidence").textContent();
 
   const movement = page.getByTestId("ax1-movement-control");
   await expect(movement).toBeVisible();
@@ -174,7 +176,6 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
   await expandedMenu.getByRole("button", { name: "NPC", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 
-  const rendererEvidenceRaw = await page.getByTestId("renderer-evidence").textContent();
   const screenshot = path.join(evidenceDir, `${viewport.name}-starter-pilot.png`);
   await mkdir(evidenceDir, { recursive: true });
   await page.screenshot({ path: screenshot, fullPage: true });
