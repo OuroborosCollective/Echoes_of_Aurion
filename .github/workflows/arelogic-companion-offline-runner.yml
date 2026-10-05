@@ -6,11 +6,13 @@ on:
       - "scripts/export-arelogic-companion-memory.mjs"
       - "scripts/export-arelogic-companion-memory.test.mjs"
       - ".github/workflows/arelogic-companion-offline-runner.yml"
-  workflow_run:
-    workflows:
-      - "Deploy Aurion Traefik runtime"
-    types:
-      - completed
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact trusted Aurion source revision that completed the production gate.
+        required: false
+        type: string
+        default: ""
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -31,7 +33,7 @@ jobs:
       - name: Check out exact Aurion revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -46,14 +48,14 @@ jobs:
 
   runtime-export:
     name: Export production companion memory to offline ARE evidence
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    if: inputs.source_sha != '' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: contract
     runs-on: [self-hosted, Linux, X64, aurion-static]
     timeout-minutes: 10
     env:
       SANITIZED_EXPORT_DIR: /var/lib/aurion-arelogic-export/current
       ARE_RLOGIC_REVISION: eb6497fb2598c3159cbc4a67bfd97ad6d9c98ce1
-      SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
 
     steps:
       - name: Guard repository and produce sanitized runtime export
