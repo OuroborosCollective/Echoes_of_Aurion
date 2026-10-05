@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Check out exact Aurion revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -51,6 +53,7 @@ jobs:
     env:
       SANITIZED_EXPORT_DIR: /var/lib/aurion-arelogic-export/current
       ARE_RLOGIC_REVISION: eb6497fb2598c3159cbc4a67bfd97ad6d9c98ce1
+      SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - name: Guard repository and produce sanitized runtime export
@@ -114,7 +117,7 @@ jobs:
       - name: Publish immutable offline evidence
         uses: actions/upload-artifact@v4
         with:
-          name: aurion-arelogic-companion-${{ github.sha }}-${{ github.run_id }}
+          name: aurion-arelogic-companion-${{ env.SOURCE_SHA }}-${{ github.run_id }}
           path: arelogic-export/
           if-no-files-found: error
           retention-days: 14
