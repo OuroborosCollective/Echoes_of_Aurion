@@ -7,6 +7,11 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "e2e/starterVillagePilot.spec.ts"
+      - "playwright.config.ts"
+      - "scripts/verify-starter-village-evidence.ts"
+      - "scripts/collect-starter-village-evidence.ts"
+      - "scripts/seal-starter-village-evidence.ts"
+      - "server/starterVillageEvidenceVerifier.test.ts"
       - "scripts/seed-starter-village-public-character.ts"
       - "assets/characters/aurion-player-standard-animated.glb"
       - "assets/environment/fountain/**"
@@ -23,6 +28,11 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "e2e/starterVillagePilot.spec.ts"
+      - "playwright.config.ts"
+      - "scripts/verify-starter-village-evidence.ts"
+      - "scripts/collect-starter-village-evidence.ts"
+      - "scripts/seal-starter-village-evidence.ts"
+      - "server/starterVillageEvidenceVerifier.test.ts"
       - "scripts/seed-starter-village-public-character.ts"
       - "assets/characters/aurion-player-standard-animated.glb"
       - "assets/environment/fountain/**"
@@ -62,6 +72,7 @@ jobs:
       AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       AURION_EVIDENCE_DIR: .aurion-evidence/starter-village-pilot
+      AURION_PLAYWRIGHT_OUTPUT_DIR: .playwright-output/starter-village-pilot
       JWT_SECRET: starter-village-ci-disposable-never-production
       VITE_APP_ID: starter-village-pilot
       AURION_GLB_STORAGE_DIR: /tmp/aurion-starter-village-glb
@@ -70,7 +81,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with: { run_install: false }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with: { node-version: 22, cache: pnpm }
@@ -79,14 +90,14 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
           pnpm install --frozen-lockfile
-          mkdir -p "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR" test-results
+          mkdir -p "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR" "$AURION_PLAYWRIGHT_OUTPUT_DIR" test-results
           chmod 755 "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR"
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
           pnpm check
           pnpm build
-      - name: Character catalog state and authority regressions
-        run: pnpm exec vitest run client/src/xaurion/components/PublicCharacterPicker.test.tsx server/glbSmartUpload.test.ts server/characterBinding.test.ts --no-file-parallelism --reporter=verbose
+      - name: Character catalog state, authority and evidence regressions
+        run: pnpm exec vitest run client/src/xaurion/components/PublicCharacterPicker.test.tsx server/glbSmartUpload.test.ts server/characterBinding.test.ts server/starterVillageEvidenceVerifier.test.ts --no-file-parallelism --reporter=verbose
       - name: Owner fountain GLB family and presentation regressions
         run: pnpm exec vitest run server/starterVillageFountainAsset.test.ts server/glbAssetClassifier.test.ts server/glbCatalogFamilies.test.ts client/src/xaurion/core/UploadedAssetRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Canonical 10 Hz Return Stone and northward movement regressions
@@ -126,6 +137,7 @@ jobs:
           mkdir -p "$AURION_EVIDENCE_DIR"
           printf '{"scope":"runtime-uid","uid":%s,"loopbackAllowed":true,"externalEgressAllowed":false,"runnerControlPlaneAffected":false}\n'             "$AURION_NET_UID" > "$AURION_EVIDENCE_DIR/network-isolation.json"
       - name: Start exact runtime and execute authenticated HTTP/tRPC journey
+        id: journey
         run: |
           set -euo pipefail
           NODE_BIN="$(command -v node)"
@@ -146,6 +158,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-before.json
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=journey pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
       - name: Restart application and independently read back quest and inventory
+        id: restart
         run: |
           set -euo pipefail
           RUNTIME_PID="$(cat /tmp/starter-pilot.pid)"
@@ -173,21 +186,25 @@ jobs:
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
       - name: Reproduce the pre-fix empty catalog contract without a blind radio wait
+        id: diagnostic
         run: |
           AURION_STARTER_VILLAGE_EMPTY_CATALOG_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "diagnostic: fresh isolated catalog" --reporter=list
       - name: Admit the canonical public player through the real GLB authority and read it back
+        id: public_character
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/seed-starter-village-public-character.ts | tee "$AURION_EVIDENCE_DIR/public-character-seed.json"
           test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+Boolean(x.assetId)+":"+Boolean(x.sha256))' "$AURION_EVIDENCE_DIR/public-character-seed.json")" = "player-public:true:true"
           chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
       - name: Admit the owner fountain LOD family through the real GLB authority and read it back
+        id: fountain
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/seed-starter-village-fountain.ts | tee "$AURION_EVIDENCE_DIR/fountain-seed.json"
           test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+x.subcategory+":"+x.lods.map(v=>v.level).join(","))' "$AURION_EVIDENCE_DIR/fountain-seed.json")" = "world-environment:fountain:1,2"
           chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
       - name: Browser-emulated viewport acceptance after canonical admission (not physical Android/GPU proof)
+        id: browser
         run: |
           AURION_STARTER_VILLAGE_BROWSER_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "confirmed pilot controls" --reporter=list
       - name: Cleanup runtime isolation
@@ -203,21 +220,34 @@ jobs:
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -d ::1/128 -j ACCEPT 2>/dev/null || true
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -j REJECT 2>/dev/null || true
           fi
-      - name: Seal revision-bound evidence manifest
+      - name: Collect redacted runtime and browser failure diagnostics
+        if: always()
+        run: pnpm exec tsx scripts/collect-starter-village-evidence.ts "$AURION_EVIDENCE_DIR" "$AURION_PLAYWRIGHT_OUTPUT_DIR" test-results "$AURION_RELEASE_SHA"
+
+      - name: Seal and fail-closed verify revision-bound evidence
         if: always()
         run: |
           set -euo pipefail
-          mkdir -p "$AURION_EVIDENCE_DIR"
-          printf '%s  %s\n' "$AURION_RELEASE_SHA" revision > "$AURION_EVIDENCE_DIR/REVISION"
-          find "$AURION_EVIDENCE_DIR" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$AURION_EVIDENCE_DIR/SHA256SUMS"
+          pnpm exec tsx scripts/seal-starter-village-evidence.ts "$AURION_EVIDENCE_DIR" "$AURION_RELEASE_SHA"             "${{ steps.journey.outcome }}" "${{ steps.restart.outcome }}" "${{ steps.diagnostic.outcome }}"             "${{ steps.public_character.outcome }}" "${{ steps.fountain.outcome }}" "${{ steps.browser.outcome }}"
+          pnpm exec tsx scripts/verify-starter-village-evidence.ts "$AURION_EVIDENCE_DIR" "$AURION_RELEASE_SHA"
           chmod -R a-w "$AURION_EVIDENCE_DIR"
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload exact starter-village evidence bundle
         if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: starter-village-pilot-${{ env.AURION_RELEASE_SHA }}
-          path: |
-            .aurion-evidence/starter-village-pilot
-            test-results/starter-pilot-*.log
-            test-results/starter-pilot-health-*.json
+          path: .aurion-evidence/starter-village-pilot
           if-no-files-found: error
           retention-days: 30
+
+      - name: Download published starter-village evidence bundle
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: starter-village-pilot-${{ env.AURION_RELEASE_SHA }}
+          path: .artifact-readback/starter-village-pilot
+
+      - name: Independently verify downloaded starter-village artifact
+        if: always()
+        run: pnpm exec tsx scripts/verify-starter-village-evidence.ts .artifact-readback/starter-village-pilot "$AURION_RELEASE_SHA"
