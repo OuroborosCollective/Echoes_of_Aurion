@@ -39,3 +39,13 @@ discounted-return training input.
 
 Failure of the runner, ARE-rLOGIC or any research result cannot alter Aurion
 gameplay state.
+
+
+## Empty production windows
+
+The production memory directory may legitimately be absent before the first
+server-side companion demonstration has been recorded. That state is not treated
+as a runner failure. The workflow emits a deterministic `no-data` export report,
+an empty demonstration JSONL file and a matching ARE ingest report, then publishes
+the evidence artifact normally. Once the directory exists, the same runner
+automatically switches to sanitized export/ingest without configuration changes.
