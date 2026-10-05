@@ -10,8 +10,6 @@ import { appendNpcMultiMemory, readNpcMultiMemoryForDecision, readPreviousNpcMul
 import { appendNpcSemanticGraphV2 } from "./wasdSemanticGraphV2Persistence";
 import type { NpcMemoryV4 } from "./wasdNpcCapsule";
 import { recordNpcDecisionLog } from "./aurion/npcDecisionLog";
-import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
-import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import { assertStarterVillageNpcResidence } from "./starterVillageNpcResidence";
 import {
   AURION_WASD_CONTENT_VERSION,
@@ -258,12 +256,6 @@ export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: 
       sourceReceiptId: id,
     }).catch((error) => {
       console.warn("[NpcDecisionLog] Failed to log NPC decision:", error);
-    });
-
-    // Trigger Living History Loop (Issue #323) — integrate civilization orchestration
-    // into the active NPC runtime cycle so NPC history is properly managed.
-    void orchestrateCivilizationLoop(GLOBAL_WORLD_ID, input.resolutionIndex, id).catch((error) => {
-      console.warn("[LivingHistoryLoop] Civilization orchestration failed:", error);
     });
 
     return Object.freeze({ ...readback, source: "created" as const, multiMemory:confirmedMemory.memory });
