@@ -215,6 +215,30 @@ describe("AIM-782 causal investigation graph", () => {
     })).toThrow("DEDUCTION_ACTOR_MISMATCH");
   });
 
+  it("rejects deduction arity with the declared typed error", () => {
+    const { receipts } = contradictedPair();
+    const projection = projectRumorClaims({ viewerId: "player-1", worldId: "world-1", atIndex: 40, receipts });
+    const graph = buildInvestigationGraph({ projection });
+    expect(() => validateDeductionIntent({
+      intent: {
+        actorId: "player-1",
+        selectedClaimIds: [projection.claims[0].claimId],
+        deductionType: "challenge",
+        sourceProjectionHash: projection.projectionHash,
+      },
+      graph,
+    })).toThrow("DEDUCTION_ARITY_INVALID");
+    expect(() => validateDeductionIntent({
+      intent: {
+        actorId: "player-1",
+        selectedClaimIds: Array(9).fill(projection.claims[0].claimId),
+        deductionType: "challenge",
+        sourceProjectionHash: projection.projectionHash,
+      },
+      graph,
+    })).toThrow("DEDUCTION_ARITY_INVALID");
+  });
+
   it("rejects references to hidden/private claims", () => {
     const { receipts } = contradictedPair();
     const projection = projectRumorClaims({ viewerId: "player-1", worldId: "world-1", atIndex: 40, receipts });
