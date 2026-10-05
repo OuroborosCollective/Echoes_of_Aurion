@@ -2,8 +2,8 @@
  * Guild Overview Dashboard — Admin view for the four-hub guild system.
  *
  * Displays guild influence, trade routes, and political mood across the
- * four Living History hubs. Data comes from the /healthz endpoint via the
- * tRPC `history.getGuildOverview` admin procedure.
+ * four Living History hubs. Guild truth comes from the canonical persisted
+ * NPC-guild readback exposed by the tRPC `history.getGuildOverview` procedure.
  */
 
 import { trpc } from "@/lib/trpc";
@@ -230,9 +230,9 @@ export default function GuildOverviewDashboard() {
     if (!overview.data?.available) return [];
     const npcLife = overview.data.npcLife as Record<string, unknown> | null;
     const npcGuilds = overview.data.npcGuilds as Record<string, unknown> | null;
-    if (!npcLife || !npcGuilds) return [];
+    if (!npcGuilds) return [];
 
-    const economicImpact = npcLife.economicImpact as { hubs?: HubEconomicSnapshot[] } | null;
+    const economicImpact = npcLife?.economicImpact as { hubs?: HubEconomicSnapshot[] } | null;
     const guilds = (npcGuilds.guilds as GuildState[] | undefined) ?? [];
     const hubSnapshots = economicImpact?.hubs ?? [];
 
@@ -264,9 +264,8 @@ export default function GuildOverviewDashboard() {
   const npcGuilds = overview.data.npcGuilds as Record<string, unknown> | null;
   const guildCount = (npcGuilds?.guildCount as number) ?? 0;
   const totalMembers = (npcGuilds?.totalMembers as number) ?? 0;
-  const cycle = (npcLife?.livingHistoryCycle as number) ?? null;
-  const confirmedNpcCount = (npcLife?.confirmedNpcCount as number) ?? 0;
-  const totalNpcCount = (npcLife?.totalNpcCount as number) ?? 4;
+  const cycle = (npcGuilds?.latestCycle as number) ?? null;
+  const receiptCount = (npcGuilds?.receiptCount as number) ?? 0;
   const economicImpact = npcLife?.economicImpact as Record<string, unknown> | null;
 
   return (
@@ -299,8 +298,8 @@ export default function GuildOverviewDashboard() {
           <CardContent className="pt-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] tracking-[.16em] text-cyan-100/55">AKTIVE NPCS</p>
-                <p className="mt-2 text-2xl font-semibold text-amber-100">{confirmedNpcCount}/{totalNpcCount}</p>
+                <p className="text-[10px] tracking-[.16em] text-cyan-100/55">RECEIPTS</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-100">{receiptCount}</p>
               </div>
               <Activity className="h-5 w-5 text-cyan-300" />
             </div>
@@ -329,7 +328,7 @@ export default function GuildOverviewDashboard() {
             <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-6">
               <div className="text-center">
                 <p className="text-[10px] tracking-[.14em] text-cyan-200/60">HANDEL</p>
-                <p className="mt-1 text-lg font-bold text-amber-100">{((economicImpact.totalTradeVolume as number) ?? 0 * 100).toFixed(0)}%</p>
+                <p className="mt-1 text-lg font-bold text-amber-100">{(((economicImpact.totalTradeVolume as number) ?? 0) * 100).toFixed(0)}%</p>
               </div>
               <div className="text-center">
                 <p className="text-[10px] tracking-[.14em] text-cyan-200/60">KNAPPHEIT</p>
