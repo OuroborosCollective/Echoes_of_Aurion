@@ -536,3 +536,28 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #761 — fix(issue-741): unblock Starterdorf pilot through canonical public character admission
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=761 merge=d02a3794d3d0bedf9e2a7529f71443ed59d3809e -->
+Task: Merge PR #761 into `main` — fix(issue-741): unblock Starterdorf pilot through canonical public character admission.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/starter-village-pilot.yml`
+- `client/src/xaurion/components/PublicCharacterPicker.test.tsx`
+- `client/src/xaurion/components/PublicCharacterPicker.tsx`
+- `e2e/aim292.npcMemory.spec.ts`
+- `e2e/starterVillagePilot.spec.ts`
+- `scripts/seed-starter-village-public-character.ts`
+- `server/glbSmartUpload.test.ts`
+- `server/starterVillagePilotHttp.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/761
+- Merge commit: `d02a3794d3d0bedf9e2a7529f71443ed59d3809e`
+- PR head: `b1f531f2b5f4240898a71b0e95f3cf95361eda92`
+- Merged at: 2026-10-05T02:02:52Z
+- Post-merge workflow run: 37253814083
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
