@@ -4,7 +4,7 @@ import {
   rememberNpcInformation,
   type NpcInformationSource,
 } from "./npcInformationEcologyProtocol";
-import { projectRumorClaims } from "./rumorProjectionProtocol";
+import { projectRumorClaims, rumorClaimProjectionSchema } from "./rumorProjectionProtocol";
 import {
   BELIEF_MAX_DELTA_BPS,
   beliefMappingSchema,
@@ -12,7 +12,6 @@ import {
   buildBeliefVector,
   corroborationFactorQ16,
   q16Mul,
-  rumorClaimProjectionSchema,
   applyBeliefToCandidates,
 } from "./rumorBeliefBridgeProtocol";
 import type { RumorClaimProjection } from "./rumorProjectionProtocol";
@@ -21,6 +20,7 @@ const source: NpcInformationSource = {
   evidenceClass: "verified",
   sourceKind: "npc_decision_receipt",
   sourceReceiptId: "npc_decision_101",
+  sourceReceiptHash: "sha256:" + "a".repeat(64),
   sourceRevision: "b".repeat(40),
   sourceSha256: "sha256:" + "c".repeat(64),
   sourceCausalRoot: "sha256:" + "d".repeat(64),
