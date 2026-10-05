@@ -794,3 +794,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #774 — feat(aceg): deterministic capability/equipment graph solver for issue #686
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=774 merge=ea431c7c464f67bc8f1f1e9490ee09edfd3dac69 -->
+Task: Merge PR #774 into `main` — feat(aceg): deterministic capability/equipment graph solver for issue #686.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `shared/aurionCapabilityEquipmentGraph.test.ts`
+- `shared/aurionCapabilityEquipmentGraph.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/774
+- Merge commit: `ea431c7c464f67bc8f1f1e9490ee09edfd3dac69`
+- PR head: `575045eab0e33cf04553dc2454b83ffbf24b51b0`
+- Merged at: 2026-10-05T08:36:28Z
+- Post-merge workflow run: 37284690031
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
