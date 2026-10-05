@@ -60,7 +60,7 @@ function distance(left: Position, right: Position): number {
   return Math.hypot(left.x - right.x, left.z - right.z);
 }
 
-async function runAuthoritativeZoneJourney(cookie: string, userId: number) {
+async function runAuthoritativeZoneJourney(cookie: string, userId: number, onNorthGate?: (position: Position) => Promise<void>) {
   const issued = await rpc<any>("gameplay.issueZoneTicket", cookie, {
     zoneId: "observatory_threshold",
     clientBuild: `starter-pilot-${revision.slice(0, 12)}`,
@@ -123,6 +123,17 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number) {
     await waitUntil(() => welcomed && selfPosition !== null && mobs.length > 0, "ZONE_WELCOME_NOT_CONFIRMED", 10_000);
     expect(selfEntityId).toBe(`player:${userId}`);
 
+    const gateStarted = Date.now();
+    while (!selfPosition || selfPosition.z > -72_000) {
+      if (Date.now() - gateStarted > 35_000) throw new Error("NORTH_GATE_NOT_REACHED");
+      sendMove(0, -1);
+      await sleep(100);
+    }
+    sendMove(0, 0);
+    await sleep(250);
+    const northGate = { ...selfPosition };
+    if (onNorthGate) await onNorthGate(northGate);
+
     const alive = mobs.filter(mob => mob.health > 0 && mob.state !== "dead" && !mob.isBoss);
     expect(alive.length).toBeGreaterThan(0);
     const target = [...alive].sort((left, right) =>
@@ -158,15 +169,6 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number) {
       );
     }
     expect(killed.gameplaySourceRevision).toMatch(/^[a-f0-9]{40}$/);
-
-    const gateStarted = Date.now();
-    while (!selfPosition || selfPosition.z > -72_000) {
-      if (Date.now() - gateStarted > 35_000) throw new Error("NORTH_GATE_NOT_REACHED");
-      sendMove(0, -1);
-      await sleep(100);
-    }
-    sendMove(0, 0);
-    const northGate = { ...selfPosition };
 
     expect(rejects.filter(code => code !== "COMBATANT_DEAD")).toEqual([]);
     return {
@@ -215,15 +217,34 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
 
     const available = (await rpc<any[]>("aurionQuest.available", cookie)).data;
     expect(available.length).toBeGreaterThan(0);
-    const template = [...available].sort((left, right) => String(left.templateId).localeCompare(String(right.templateId)))[0]!;
-    const offered = (await rpc<any>("aurionQuest.offer", cookie, { templateId: template.templateId })).data;
-    expect(offered.instance.state).toBe("offered");
-    const accepted = (await rpc<any>("aurionQuest.accept", cookie, { instanceId: offered.instance.id })).data;
-    expect(accepted.updatedInstance.state).toBe("active");
-    const questBefore = (await rpc<any>("aurionQuest.details", cookie, { instanceId: offered.instance.id }, "query")).data;
-    expect(questBefore.instance.state).toBe("active");
+    const template = available.find(value => value.templateId === "starter-wolves-6");
+    expect(template?.templateId).toBe("starter-wolves-6");
+    let offered: any;
+    let questBefore: any;
 
-    const route = await runAuthoritativeZoneJourney(cookie, registration.data.id);
+    const route = await runAuthoritativeZoneJourney(cookie, registration.data.id, async northGate => {
+      expect(northGate.z).toBeLessThanOrEqual(-72_000);
+      const interpreted = (await rpc<any>("gameplay.interpretNpcDialogue", cookie, {
+        npcId: "starter_village_north_gate_guard",
+        text: "Ich will helfen.",
+        idempotencyKey: `starter-pilot-dialogue-offer-${revision.slice(0, 16)}`,
+      })).data;
+      expect(interpreted.receiptId).toMatch(/^dlg_/);
+      const command = (await rpc<any>("gameplay.requestQuestActionFromDialogue", cookie, {
+        dialogueReceiptId: interpreted.receiptId,
+        actionKind: "offer_quest",
+        questKey: "starter-wolves-6",
+        idempotencyKey: `starter-pilot-command-offer-${revision.slice(0, 16)}`,
+      })).data;
+      expect(command.receipt.actionKind).toBe("offer_quest");
+
+      offered = (await rpc<any>("aurionQuest.offer", cookie, { templateId: template!.templateId })).data;
+      expect(offered.instance.state).toBe("offered");
+      const accepted = (await rpc<any>("aurionQuest.accept", cookie, { instanceId: offered.instance.id })).data;
+      expect(accepted.updatedInstance.state).toBe("active");
+      questBefore = (await rpc<any>("aurionQuest.details", cookie, { instanceId: offered.instance.id }, "query")).data;
+      expect(questBefore.instance.state).toBe("active");
+    });
     const inventory = (await rpc<any>("player.ui", cookie)).data;
     const questInstances = (await rpc<any[]>("aurionQuest.myInstances", cookie)).data;
     expect(questInstances.some(instance => instance.id === offered.instance.id && instance.state === "active")).toBe(true);
