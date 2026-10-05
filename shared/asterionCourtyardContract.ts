@@ -30,6 +30,6 @@ export const ASTERION_COURTYARD_LODS = Object.freeze([
     triangles: 1_818,
     textureSize: 512,
   }),
-] as const;
+] as const);
 
 export const ASTERION_COURTYARD_PRIMARY = ASTERION_COURTYARD_LODS[0];
