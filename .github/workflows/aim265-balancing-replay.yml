@@ -17,6 +17,10 @@ on:
       - 'server/aurionCagDesign*'
       - 'server/neuralCapabilityCagVerifier.ts'
       - 'server/neuralCapabilityCagVerifier.test.ts'
+      - 'server/neuralCapabilityDifferentialHarness.ts'
+      - 'server/neuralCapabilityPromotionGate.ts'
+      - 'server/neuralCapabilityPromotionGate.test.ts'
+      - 'fixtures/neural-capability/**'
       - 'shared/aurionCagDesignProtocol.ts'
       - 'shared/neuralCapabilityCagProtocol.ts'
       - 'scripts/balancing/aurion-cag-design-canary.ts'
@@ -45,6 +49,10 @@ on:
       - 'server/aurionCagDesign*'
       - 'server/neuralCapabilityCagVerifier.ts'
       - 'server/neuralCapabilityCagVerifier.test.ts'
+      - 'server/neuralCapabilityDifferentialHarness.ts'
+      - 'server/neuralCapabilityPromotionGate.ts'
+      - 'server/neuralCapabilityPromotionGate.test.ts'
+      - 'fixtures/neural-capability/**'
       - 'shared/aurionCagDesignProtocol.ts'
       - 'shared/neuralCapabilityCagProtocol.ts'
       - 'scripts/balancing/aurion-cag-design-canary.ts'
@@ -83,11 +91,11 @@ jobs:
           python scripts/balancing/verify-aim265.py /tmp/aurion-balancing-v2.json > /tmp/aurion-balancing-oracle.json
           diff -u docs/balancing/aim265-candidate.json /tmp/aurion-balancing-v2.json
           python -m unittest discover -s scripts/balancing -p 'test_*.py'
-          pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts server/wolframCag.test.ts server/wolframCagRuntimeReadback.test.ts server/aurionCagDesignOracle.test.ts server/neuralCapabilityCagVerifier.test.ts server/adminMcp.test.ts
+          pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts server/wolframCag.test.ts server/wolframCagRuntimeReadback.test.ts server/aurionCagDesignOracle.test.ts server/neuralCapabilityCagVerifier.test.ts server/neuralCapabilityPromotionGate.test.ts server/adminMcp.test.ts
       - name: Prove neural CAG verifier stays off the runtime import path
         run: |
           set -euo pipefail
-          unexpected="$(grep -R -n --include='*.ts' --include='*.tsx' 'neuralCapabilityCagVerifier' client server shared | grep -v '^server/neuralCapabilityCagVerifier.ts:' | grep -v '^server/neuralCapabilityCagVerifier.test.ts:' || true)"
+          unexpected="$(grep -R -n --include='*.ts' --include='*.tsx' -E 'neuralCapabilityCagVerifier|neuralCapabilityPromotionGate|neuralCapabilityDifferentialHarness' client server shared | grep -v '^server/neuralCapabilityCagVerifier.ts:' | grep -v '^server/neuralCapabilityCagVerifier.test.ts:' | grep -v '^server/neuralCapabilityPromotionGate.ts:' | grep -v '^server/neuralCapabilityPromotionGate.test.ts:' | grep -v '^server/neuralCapabilityDifferentialHarness.ts:' || true)"
           if [ -n "$unexpected" ]; then
             printf '%s\n' "$unexpected"
             exit 1
@@ -100,7 +108,7 @@ jobs:
           if [ -z "${WOLFRAM_CAG_API_KEY:-}" ]; then
             printf '%s\n' '{"protocol":"aurion.wolfram-cag-ci.v1","status":"SECRET_NOT_AVAILABLE_IN_CI","providerCallExecuted":false}' | tee /tmp/aurion-wolfram-cag-canary.json
             printf '%s\n' '{"protocol":"aurion.cag-design-ci.v1","status":"SECRET_NOT_AVAILABLE_IN_CI","providerCallExecuted":false}' | tee /tmp/aurion-cag-design-canary.json
-            printf '%s\n' '{"protocol":"aurion.neural-capability-cag-ci.v1","status":"SECRET_NOT_AVAILABLE_IN_CI","providerCallExecuted":false}' | tee /tmp/aurion-neural-capability-cag-canary.json
+            printf '%s\n' '{"protocol":"aurion.neural-capability-cag-ci.v2","status":"SECRET_NOT_AVAILABLE_IN_CI","providerCallExecuted":false,"promotionStatus":"BLOCKED"}' | tee /tmp/aurion-neural-capability-cag-canary.json
           else
             pnpm exec tsx scripts/balancing/wolfram-cag-canary.ts | tee /tmp/aurion-wolfram-cag-canary.json
             pnpm exec tsx scripts/balancing/aurion-cag-design-canary.ts | tee /tmp/aurion-cag-design-canary.json
