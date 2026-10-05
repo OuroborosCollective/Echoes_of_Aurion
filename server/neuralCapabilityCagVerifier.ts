@@ -112,6 +112,10 @@ function parseProbeResult(value: string, expectedBitCount: number): number {
   if (bitCount !== expectedBitCount) {
     throw new Error("NEURAL_CAPABILITY_CAG_RESULT_BIT_COUNT");
   }
+  const maxMask = (2 ** expectedBitCount) - 1;
+  if (mask > maxMask) {
+    throw new Error("NEURAL_CAPABILITY_CAG_RESULT_BOUNDS");
+  }
   return mask;
 }
 
@@ -164,11 +168,19 @@ export async function verifyNeuralCapabilityWithCag(
     }
   }
 
+  let evidence: WolframCagEvidence;
   try {
-    const evidence = await client.languageCompute({ code, timeConstraint: 10, maxChars: 512 });
+    evidence = await client.languageCompute({ code, timeConstraint: 10, maxChars: 512 });
+  } catch {
+    return finish("PROVIDER_FAILED", null, null, null);
+  }
+
+  try {
     const observedMask = parseProbeResult(evidence.result, NEURAL_CAPABILITY_INVARIANT_CODES.length);
     return finish(observedMask === localReport.mask ? "MATCH" : "FALSIFIED", evidence.responseSha256, observedMask, evidence);
   } catch {
-    return finish("PROVIDER_FAILED", null, null, null);
+    // Preserve provider evidence for forensic debugging even when its bounded
+    // response cannot be trusted as a valid mask.
+    return finish("PROVIDER_FAILED", evidence.responseSha256, null, evidence);
   }
 }
