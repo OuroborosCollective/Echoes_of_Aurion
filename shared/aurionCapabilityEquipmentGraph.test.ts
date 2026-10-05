@@ -167,7 +167,10 @@ describe("AIM-686 ACEG Capability & Equipment Graph", () => {
     // Pass 1: buff 60+25=85 >= 80 equips helm. Pass 2: 85+30=115 >= 90 equips
     // rig. Pass 3: medicine 50 and strength 100 equip blade.
     const passes = Object.fromEntries(
-      resolution.equipDecisions.map(decision => [decision.itemId, decision.ladderPass])
+      resolution.equipDecisions.map(decision => [
+        decision.itemId,
+        decision.ladderPass,
+      ])
     );
     expect(passes).toEqual({
       "item:nano-helm": 1,
@@ -274,7 +277,7 @@ describe("AIM-686 ACEG Capability & Equipment Graph", () => {
         catalog: [nanoHelm],
         ownedItems: [
           { itemId: "item:nano-helm", ownershipReceiptId: "receipt:own:dup" },
-          { itemId: "item:nano-helm", ownershipReceiptId: "receipt:own:dup2" },
+          { itemId: "item:nano-helm", ownershipReceiptId: "receipt:own:dup" },
         ],
         priorConfirmedEquip: [],
       })
