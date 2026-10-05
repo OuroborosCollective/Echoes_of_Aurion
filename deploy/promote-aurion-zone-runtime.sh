@@ -103,7 +103,7 @@ node --input-type=module -e '
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
+  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -176,6 +176,14 @@ cmp -s "${schema_apply_artifact}/deploy/verify-aurion-production-schema-apply-ar
 phase=promoter-self-install
 install -D -o root -g root -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
 cmp -s "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+
+# Install the fixed companion-memory sanitizer and its no-argument root wrapper.
+# Raw companion memory remains inside the Docker volume; only sanitized research
+# rows are exposed to the unprivileged Actions runner.
+install -D -o root -g root -m 0755 "${release}/scripts/export-arelogic-companion-memory.mjs" /usr/local/lib/echoes-of-aurion/export-arelogic-companion-memory.mjs
+install -D -o root -g root -m 0755 "${release}/deploy/aurion-arelogic-companion-export" /usr/local/sbin/aurion-arelogic-companion-export
+cmp -s "${release}/scripts/export-arelogic-companion-memory.mjs" /usr/local/lib/echoes-of-aurion/export-arelogic-companion-memory.mjs
+cmp -s "${release}/deploy/aurion-arelogic-companion-export" /usr/local/sbin/aurion-arelogic-companion-export
 # The self-hosted deploy user may read only this fixed root-owned promoter
 # through narrowly scoped, passwordless readback commands. No arbitrary root
 # command or caller-controlled path is granted.
@@ -184,6 +192,7 @@ Defaults:aurion-deploy !requiretty
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/sha256sum /usr/local/sbin/promote-aurion-zone-runtime
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/grep * /usr/local/sbin/promote-aurion-zone-runtime
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/cmp * /usr/local/sbin/promote-aurion-zone-runtime
+aurion-deploy ALL=(root) NOPASSWD: /usr/local/sbin/aurion-arelogic-companion-export
 SUDOERS
 chown root:root /etc/sudoers.d/aurion-zone-runtime-readback
 chmod 0440 /etc/sudoers.d/aurion-zone-runtime-readback
@@ -275,6 +284,8 @@ docker inspect --format '{{ index .Config.Labels "traefik.http.routers.aurion.ru
 docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$container_id" | grep -Fxq "$traefik_network"
 docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$container_id" | grep -Fxq "$database_network"
 [[ "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" == "$expected_sha" ]]
+docker volume inspect echoes-of-aurion-companion-memory >/dev/null
+docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/aurion/companion-memory"}}{{println .Name}}{{end}}{{end}}' "$container_id" | grep -Fxq echoes-of-aurion-companion-memory
 
 container_ready=0
 container_probe_status=0
