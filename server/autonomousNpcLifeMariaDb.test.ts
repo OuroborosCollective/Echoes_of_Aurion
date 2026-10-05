@@ -113,6 +113,29 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     const [state] = await pool.query<RowDataPacket[]>("SELECT lastResolutionIndex,memoryJson FROM aurionNpcStates WHERE npcId=?",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
     expect(state[0].lastResolutionIndex).toBe(2);
     expect(JSON.parse(state[0].memoryJson).version).toBe("aurion-npc-memory.v2");
+
+    const [history] = await pool.query<RowDataPacket[]>(
+      "SELECT eventType,sourceReceiptId,occurredSequence FROM aurionCivilizationHistoryEvents WHERE worldId=? ORDER BY occurredSequence",
+      ["echoes-of-aurion-global"],
+    );
+    const sequences = history.map(row => Number(row.occurredSequence));
+    expect(new Set(sequences).size).toBe(sequences.length);
+    expect(sequences).toEqual([...sequences].sort((left, right) => left - right));
+    for (let index = 1; index < sequences.length; index += 1) {
+      expect(sequences[index]).toBe(sequences[index - 1] + 1);
+    }
+    const byReceipt = new Map<string, RowDataPacket[]>();
+    for (const row of history) {
+      const key = String(row.sourceReceiptId);
+      byReceipt.set(key, [...(byReceipt.get(key) ?? []), row]);
+    }
+    for (const rows of byReceipt.values()) {
+      const advance = rows.find(row => row.eventType === "EPOCH_ADVANCE");
+      const economic = rows.find(row => row.eventType === "ECONOMIC_MARKET_DEVELOPMENT");
+      if (advance && economic) {
+        expect(Number(economic.occurredSequence)).toBe(Number(advance.occurredSequence) + 1);
+      }
+    }
   });
 
   it("serializes queued gateway observations and rejects cadence/order violations", async () => {
