@@ -19,7 +19,7 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
   async function clean() {
     if (!isolated) throw new Error("ISOLATED_UI_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS ui_abort_equip");
-    for (const [table, column] of [["aurionEquipmentSlots", "userId"], ["aurionPlayerUiSettings", "userId"], ["systemSaleReceipts", "sellerUserId"], ["marketListings", "sellerUserId"], ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"], ["playerProfiles", "userId"], ["users", "id"]]) await pool.query(`DELETE FROM \`${table}\` WHERE \`${column}\` IN (?)`, [ids]);
+    for (const [table, column] of [["aurionEquipmentSlots", "userId"], ["aurionPlayerUiSettings", "userId"], ["systemSaleReceipts", "sellerUserId"], ["marketListings", "sellerUserId"], ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"], ["aurionMasteryEvents", "userId"], ["playerProfiles", "userId"], ["users", "id"]]) await pool.query(`DELETE FROM \`${table}\` WHERE \`${column}\` IN (?)`, [ids]);
   }
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
@@ -74,6 +74,8 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
     const replaced = await readPlayerUi(owner);
     expect(replaced.equipment).toEqual([{ ...v2ref, slot: "main_hand" }]);
     expect(replaced.items.find(i => i.id === ref().id)!.status).toBe("owned");
+    const [acegSlot] = await (await getDb())!.select().from(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.userId, owner));
+    expect(acegSlot!.id).toMatch(/^aceg:[a-f0-9]{59}$/);
     await expect(unequipPlayerItem(owner, ref())).rejects.toThrow("EQUIPMENT_SLOT_STALE");
     await unequipPlayerItem(owner, v2ref);
     expect((await readPlayerUi(owner)).equipment).toEqual([]);
