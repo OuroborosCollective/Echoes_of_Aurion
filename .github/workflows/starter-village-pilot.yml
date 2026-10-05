@@ -53,7 +53,7 @@ jobs:
       DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_starter_pilot
       AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      AURION_EVIDENCE_DIR: test-results/starter-village-pilot
+      AURION_EVIDENCE_DIR: .aurion-evidence/starter-village-pilot
       JWT_SECRET: starter-village-ci-disposable-never-production
       VITE_APP_ID: starter-village-pilot
       AURION_GLB_STORAGE_DIR: /tmp/aurion-starter-village-glb
@@ -191,16 +191,16 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          mkdir -p test-results/starter-village-pilot
-          printf '%s  %s\n' "$AURION_RELEASE_SHA" revision > test-results/starter-village-pilot/REVISION
-          find test-results/starter-village-pilot -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-results/starter-village-pilot/SHA256SUMS
-          chmod -R a-w test-results/starter-village-pilot
+          mkdir -p "$AURION_EVIDENCE_DIR"
+          printf '%s  %s\n' "$AURION_RELEASE_SHA" revision > "$AURION_EVIDENCE_DIR/REVISION"
+          find "$AURION_EVIDENCE_DIR" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$AURION_EVIDENCE_DIR/SHA256SUMS"
+          chmod -R a-w "$AURION_EVIDENCE_DIR"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: starter-village-pilot-${{ env.AURION_RELEASE_SHA }}
           path: |
-            test-results/starter-village-pilot
+            .aurion-evidence/starter-village-pilot
             test-results/starter-pilot-*.log
             test-results/starter-pilot-health-*.json
           if-no-files-found: error
