@@ -327,6 +327,9 @@ jobs:
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -d ::1/128 -j ACCEPT 2>/dev/null || true
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -j REJECT 2>/dev/null || true
           fi
+      - name: Collect redacted runtime and browser diagnostics into evidence
+        if: always()
+        run: node scripts/collect-starter-village-diagnostics.mjs "$AURION_EVIDENCE_DIR" .playwright-results/starter-village-pilot test-results "$AURION_RELEASE_SHA"
       - name: Record explicit phase outcomes without synthesizing success
         if: always()
         run: |
