@@ -23,7 +23,7 @@ async function fixture(options: { omit?: string; empty?: string; wrongRevision?:
     "runtime-entry-before.json": JSON.stringify({ readable: true, bytes: 10 }),
     "server-before.log": "server-before-ok\n",
     "server-after.log": "server-after-ok\n",
-    "health-before.json": JSON.stringify({ ok: true }),
+    "health-before.json": JSON.stringify({ schema: "aurion.starter-village-health.v1", revision, ok: true }),
     [`journey-${revision}.json`]: JSON.stringify({ schema: "aurion.starter-village-pilot.journey.v2", sourceRevision: revision, ok: true }),
     [`restart-readback-${revision}.json`]: JSON.stringify({ schema: "aurion.starter-village-pilot.restart-readback.v2", sourceRevision: revision, ok: true }),
     "empty-catalog-diagnostic.json": JSON.stringify({ schema: "aurion.starter-village-browser-diagnostic.v1", revision, ok: true }),
