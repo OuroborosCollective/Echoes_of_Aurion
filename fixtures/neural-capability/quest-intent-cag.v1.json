@@ -72,15 +72,29 @@
       "validatorResult": "rejected"
     }
   ],
-  "differentials": [
+  "artifactManifest": {
+    "schemaVersion": 1,
+    "capabilityId": "quest-intent-interpreter",
+    "format": "aurion.neural-artifact.v1",
+    "artifactVersion": "717-cag-benchmark-v1",
+    "interpreterId": "fixture-local-interpreter",
+    "interpreterVersion": "1",
+    "runtimeNetwork": "forbidden"
+  },
+  "differentialCases": [
     {
-      "caseId": "diff-001",
-      "expected": {
-        "intent": "request_turn_in",
-        "questContextValid": true,
-        "validatorResult": "accepted"
+      "caseId": "diff-legacy-turn-in",
+      "text": "Quest fertig",
+      "profile": {
+        "languageProfileId": "benchmark-de",
+        "dialectId": "observatory",
+        "lexiconVersion": "v1",
+        "grammarVersion": "v1",
+        "comprehensionThreshold": 0.5
       },
-      "legacy": {
+      "trust": 1,
+      "threat": 0,
+      "expected": {
         "intent": "request_turn_in",
         "questContextValid": true,
         "validatorResult": "accepted"
@@ -92,13 +106,18 @@
       }
     },
     {
-      "caseId": "diff-002",
-      "expected": {
-        "intent": "reject",
-        "questContextValid": false,
-        "validatorResult": "rejected"
+      "caseId": "diff-legacy-reject",
+      "text": "xyzzy",
+      "profile": {
+        "languageProfileId": "benchmark-de",
+        "dialectId": "observatory",
+        "lexiconVersion": "v1",
+        "grammarVersion": "v1",
+        "comprehensionThreshold": 0.5
       },
-      "legacy": {
+      "trust": 0,
+      "threat": 0,
+      "expected": {
         "intent": "reject",
         "questContextValid": false,
         "validatorResult": "rejected"
@@ -109,14 +128,5 @@
         "validatorResult": "rejected"
       }
     }
-  ],
-  "artifactManifest": {
-    "schemaVersion": 1,
-    "capabilityId": "quest-intent-interpreter",
-    "format": "aurion.neural-artifact.v1",
-    "artifactVersion": "717-cag-benchmark-v1",
-    "interpreterId": "fixture-local-interpreter",
-    "interpreterVersion": "1",
-    "runtimeNetwork": "forbidden"
-  }
+  ]
 }
