@@ -34,7 +34,7 @@ const tags = [
   "0065_aurion_glb_asset_normalization",
   "0066_aurion_inventory_transaction_kernel",
   "0067_aurion_npc_decision_log",
-  "0068_aurion_item_manipulation_runtime", "0069_aurion_combat_victory_events",
+  "0068_aurion_item_manipulation_runtime", "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 
