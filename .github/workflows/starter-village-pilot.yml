@@ -10,6 +10,8 @@ on:
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
       - "scripts/verify-starter-village-evidence.test.mjs"
+      - "scripts/collect-starter-village-diagnostics.mjs"
+      - "scripts/collect-starter-village-diagnostics.test.mjs"
       - "scripts/seed-starter-village-public-character.ts"
       - "assets/characters/aurion-player-standard-animated.glb"
       - "assets/environment/fountain/**"
@@ -29,6 +31,8 @@ on:
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
       - "scripts/verify-starter-village-evidence.test.mjs"
+      - "scripts/collect-starter-village-diagnostics.mjs"
+      - "scripts/collect-starter-village-diagnostics.test.mjs"
       - "scripts/seed-starter-village-public-character.ts"
       - "assets/characters/aurion-player-standard-animated.glb"
       - "assets/environment/fountain/**"
@@ -90,7 +94,7 @@ jobs:
           mkdir -p "$AURION_EVIDENCE_DIR" "$AURION_PRIVATE_STATE_DIR" "$AURION_GLB_STORAGE_DIR" test-results .playwright-results/starter-village-pilot
           chmod 700 "$AURION_PRIVATE_STATE_DIR"
           chmod 755 "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR"
-          node --test scripts/verify-starter-village-evidence.test.mjs
+          node --test scripts/verify-starter-village-evidence.test.mjs scripts/collect-starter-village-diagnostics.test.mjs
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
           pnpm check
@@ -221,6 +225,9 @@ jobs:
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -d ::1/128 -j ACCEPT 2>/dev/null || true
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -j REJECT 2>/dev/null || true
           fi
+      - name: Collect redacted runtime and browser diagnostics into evidence
+        if: always()
+        run: node scripts/collect-starter-village-diagnostics.mjs "$AURION_EVIDENCE_DIR" .playwright-results/starter-village-pilot test-results "$AURION_RELEASE_SHA"
       - name: Record explicit phase outcomes without synthesizing success
         if: always()
         run: |
@@ -259,11 +266,7 @@ jobs:
         if: always()
         with:
           name: starter-village-pilot-${{ env.AURION_RELEASE_SHA }}
-          path: |
-            .aurion-evidence/starter-village-pilot
-            .playwright-results/starter-village-pilot
-            test-results/starter-pilot-*.log
-            test-results/starter-pilot-health-*.json
+          path: .aurion-evidence/starter-village-pilot
           if-no-files-found: error
           retention-days: 30
       - name: Independently download the published evidence bundle
