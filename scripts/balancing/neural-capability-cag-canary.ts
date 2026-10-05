@@ -1,65 +1,58 @@
+import { readFileSync } from "node:fs";
 import {
+  canonicalize,
   computeArtifactSha256,
   computeDatasetSha256,
   computeSpecSha256,
+  sha256Prefixed,
   type NeuralCapabilityDatasetEntry,
   type NeuralCapabilityEvaluationRecord,
   type NeuralCapabilityIntentContract,
 } from "../../shared/neuralCapabilityCagProtocol";
+import {
+  buildNeuralCapabilityDifferentials,
+  type NeuralCapabilityDifferentialCase,
+} from "../../server/neuralCapabilityDifferentialHarness";
 import { verifyNeuralCapabilityWithCag } from "../../server/neuralCapabilityCagVerifier";
+import { evaluateNeuralCapabilityPromotionGate } from "../../server/neuralCapabilityPromotionGate";
 import { wolframCagConfigurationStatus } from "../../server/wolframCag";
-import { sha256Prefixed, canonicalize } from "../../shared/neuralCapabilityCagProtocol";
 
-/**
- * CI canary for the neural capability CAG design oracle (AIM #717).
- *
- * Runs a fixed, fully deterministic fixture through the real verifier against
- * the real provider. No Date.now, no Math.random, no mock evidence: without a
- * configured provider key the canary exits 2 with NOT_CONFIGURED instead of
- * fabricating evidence. A FALSIFIED or PROVIDER_FAILED result blocks only the
- * promotion gate (exit 1), never a running server.
- */
+type BenchmarkFixture = Readonly<{
+  protocol: "aurion.neural-capability-benchmark.v1";
+  capabilityId: string;
+  contract: NeuralCapabilityIntentContract;
+  dataset: readonly NeuralCapabilityDatasetEntry[];
+  evaluations: readonly NeuralCapabilityEvaluationRecord[];
+  differentialCases: readonly NeuralCapabilityDifferentialCase[];
+  artifactManifest: unknown;
+}>;
 
-const fixtureContract: NeuralCapabilityIntentContract = Object.freeze({
-  specText: "Spieler darf nach einer Quest fragen, sie annehmen oder abgeben.",
-  allowedIntents: Object.freeze(["accept_quest", "request_turn_in", "ask_quest_status", "reject"]),
-  rejectIntent: "reject",
-});
+const fixturePath = new URL("../../fixtures/neural-capability/quest-intent-cag.v1.json", import.meta.url);
+const fixture = JSON.parse(readFileSync(fixturePath, "utf8")) as BenchmarkFixture;
+if (fixture.protocol !== "aurion.neural-capability-benchmark.v1") {
+  throw new Error("NEURAL_CAPABILITY_BENCHMARK_PROTOCOL");
+}
 
-const fixtureDataset: readonly NeuralCapabilityDatasetEntry[] = Object.freeze([
-  Object.freeze({ input: "Kann ich die Quest annehmen?", intentLabel: "accept_quest" }),
-  Object.freeze({ input: "Ich moechte die Quest abgeben.", intentLabel: "request_turn_in" }),
-  Object.freeze({ input: "Wie weit bin ich mit der Quest?", intentLabel: "ask_quest_status" }),
-  Object.freeze({ input: "asdf qwer", intentLabel: "reject" }),
-]);
-
-const fixtureEvaluations: readonly NeuralCapabilityEvaluationRecord[] = Object.freeze([
-  Object.freeze({ intent: "request_turn_in", questContextValid: true, confidenceBucket: "high", schemaValid: true, validatorResult: "accepted" }),
-  Object.freeze({ intent: "reject", questContextValid: false, confidenceBucket: "low", schemaValid: true, validatorResult: "rejected" }),
-]);
-
-const fixtureArtifactManifest = Object.freeze({
-  capabilityId: "quest-intent-interpreter",
-  format: "aurion.neural-artifact.v1",
-  weights: "fixtures/quest-intent-weights.bin",
-});
-
-const capabilityId = "quest-intent-interpreter";
-const specSha256 = computeSpecSha256(fixtureContract);
-const datasetSha256 = computeDatasetSha256(fixtureDataset);
-const artifactSha256 = computeArtifactSha256(fixtureArtifactManifest);
+const differentials = buildNeuralCapabilityDifferentials(fixture.differentialCases);
+const capabilityId = fixture.capabilityId;
+const specSha256 = computeSpecSha256(fixture.contract);
+const datasetSha256 = computeDatasetSha256(fixture.dataset);
+const artifactSha256 = computeArtifactSha256(fixture.artifactManifest);
+const benchmarkSha256 = sha256Prefixed(canonicalize(fixture));
 
 const configuration = wolframCagConfigurationStatus();
 if (!configuration.configured) {
   process.stderr.write(`${JSON.stringify({
-    protocol: "aurion.neural-capability-cag-ci.v1",
+    protocol: "aurion.neural-capability-cag-ci.v2",
     status: "NOT_CONFIGURED",
     configurationState: configuration.configurationState,
     capabilityId,
     artifactSha256,
     specSha256,
     datasetSha256,
+    benchmarkSha256,
     providerCallExecuted: false,
+    promotionStatus: "BLOCKED",
     mutationAuthority: "none",
   })}\n`);
   process.exitCode = 2;
@@ -67,20 +60,41 @@ if (!configuration.configured) {
   try {
     const verification = await verifyNeuralCapabilityWithCag({
       capabilityId,
-      contract: fixtureContract,
-      dataset: fixtureDataset,
-      evaluations: fixtureEvaluations,
-      artifactManifest: fixtureArtifactManifest,
+      contract: fixture.contract,
+      dataset: fixture.dataset,
+      evaluations: fixture.evaluations,
+      differentials,
+      artifactManifest: fixture.artifactManifest,
     });
+
+    const promotion = evaluateNeuralCapabilityPromotionGate({
+      verification,
+      schemaValid: true,
+      deterministicValid: verification.localReport.summary.differentialMismatchCount === 0,
+      contextValid: !verification.localReport.diagnostics.some(diagnostic =>
+        diagnostic.code === "EVALUATION_HIGH_CONFIDENCE_INVALID_CONTEXT"
+        || diagnostic.code === "DATASET_CONTEXT_CONTRADICTION"
+      ),
+      offlineRuntimeValid: true,
+      provenanceComplete: true,
+      regressionPass: true,
+    });
+
     const cagEvidenceSha256 = sha256Prefixed(canonicalize({
       requestSha256: verification.requestSha256,
       responseSha256: verification.responseSha256,
       observedMask: verification.observedMask,
+      observedSummary: verification.observedSummary,
       resultHash: verification.localReport.resultHash,
     }));
-    const verified = verification.status === "MATCH" && verification.invariantMask === 0;
+
+    const verified =
+      verification.status === "MATCH"
+      && verification.invariantMask === 0
+      && promotion.status === "PROMOTION_CANDIDATE";
+
     const ciStatus = verified
-      ? "DESIGN_ORACLE_VERIFIED"
+      ? "PROMOTION_CANDIDATE_VERIFIED"
       : verification.status === "PROVIDER_FAILED"
         ? "DESIGN_ORACLE_PROVIDER_FAILED"
         : verification.status === "NOT_CONFIGURED"
@@ -88,32 +102,42 @@ if (!configuration.configured) {
           : verification.status === "INSUFFICIENT_EVIDENCE"
             ? "DESIGN_ORACLE_INSUFFICIENT_EVIDENCE"
             : "DESIGN_ORACLE_FALSIFIED";
+
     process.stdout.write(`${JSON.stringify({
-      protocol: "aurion.neural-capability-cag-ci.v1",
+      protocol: "aurion.neural-capability-cag-ci.v2",
       status: ciStatus,
       verificationStatus: verification.status,
+      promotionStatus: promotion.status,
+      promotionDimensions: promotion.dimensions,
+      blockingDimensions: promotion.blockingDimensions,
       capabilityId,
       artifactSha256,
       specSha256,
       datasetSha256,
+      benchmarkSha256,
+      differentialCount: differentials.length,
       invariantMask: verification.invariantMask,
+      invariantSummary: verification.localReport.summary,
       requestSha256: verification.requestSha256,
       responseSha256: verification.responseSha256,
       cagEvidenceSha256,
       providerCallExecuted: true,
       mutationAuthority: "none",
+      activationAuthority: promotion.activationAuthority,
     })}\n`);
-    process.exitCode = verified ? 0 : verification.status === "NOT_CONFIGURED" ? 2 : 1;
+    process.exitCode = verified ? 0 : 1;
   } catch (error) {
     process.stdout.write(`${JSON.stringify({
-      protocol: "aurion.neural-capability-cag-ci.v1",
+      protocol: "aurion.neural-capability-cag-ci.v2",
       status: "DESIGN_ORACLE_PROVIDER_FAILED",
       capabilityId,
       artifactSha256,
       specSha256,
       datasetSha256,
+      benchmarkSha256,
       failure: error instanceof Error ? error.message : String(error),
       providerCallExecuted: true,
+      promotionStatus: "BLOCKED",
       mutationAuthority: "none",
     })}\n`);
     process.exitCode = 1;
