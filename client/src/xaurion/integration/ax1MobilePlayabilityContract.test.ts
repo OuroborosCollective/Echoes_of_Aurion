@@ -60,6 +60,10 @@ describe("Issue #686 mobile playability contract", () => {
     expect(undersized).toEqual([]);
     expect(tail).toContain("min-width:44px");
     expect(tail).toContain("min-height:44px");
+    expect(tail).toContain("@media (max-width:1024px)");
+    expect(tail).toContain(
+      ".xaurion-runtime .ax1-authority-shell .xaurion-game-hud button{\n    min-width:44px!important;\n    min-height:44px!important;"
+    );
   });
 
   it("tracks the dynamic mobile viewport height instead of static vh only", () => {
