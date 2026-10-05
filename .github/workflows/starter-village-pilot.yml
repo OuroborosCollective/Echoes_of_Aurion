@@ -7,6 +7,8 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "e2e/starterVillagePilot.spec.ts"
+      - "scripts/seed-starter-village-public-character.ts"
+      - "assets/characters/aurion-player-standard-animated.glb"
       - "server/db.ts"
       - "server/routers.ts"
       - "server/zone**"
@@ -17,6 +19,8 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "e2e/starterVillagePilot.spec.ts"
+      - "scripts/seed-starter-village-public-character.ts"
+      - "assets/characters/aurion-player-standard-animated.glb"
       - "server/db.ts"
       - "server/routers.ts"
       - "server/zone**"
@@ -52,6 +56,7 @@ jobs:
       AURION_EVIDENCE_DIR: test-results/starter-village-pilot
       JWT_SECRET: starter-village-ci-disposable-never-production
       VITE_APP_ID: starter-village-pilot
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-starter-village-glb
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -66,10 +71,14 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
           pnpm install --frozen-lockfile
+          mkdir -p "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR"
+          chmod 755 "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR"
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
           pnpm check
           pnpm build
+      - name: Character catalog state and authority regressions
+        run: pnpm exec vitest run client/src/xaurion/components/PublicCharacterPicker.test.tsx server/glbSmartUpload.test.ts server/characterBinding.test.ts --no-file-parallelism --reporter=verbose
       - name: Canonical 10 Hz Return Stone and northward movement regressions
         run: pnpm exec vitest run server/returnStoneZoneRuntime.test.ts server/zoneGatewayPresence.test.ts server/zoneRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Scope egress denial to Aurion runtime identity
@@ -153,8 +162,16 @@ jobs:
           test -s /tmp/starter-pilot.pid
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
-      - name: Browser-emulated viewport acceptance (not physical Android/GPU proof)
-        run: AURION_STARTER_VILLAGE_BROWSER_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --reporter=list
+      - name: Reproduce the pre-fix empty catalog contract without a blind radio wait
+        run: AURION_STARTER_VILLAGE_EMPTY_CATALOG_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "diagnostic: fresh isolated catalog" --reporter=list
+      - name: Admit the canonical public player through the real GLB authority and read it back
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/seed-starter-village-public-character.ts | tee "$AURION_EVIDENCE_DIR/public-character-seed.json"
+          test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+Boolean(x.assetId)+":"+Boolean(x.sha256))' "$AURION_EVIDENCE_DIR/public-character-seed.json")" = "player-public:true:true"
+          chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
+      - name: Browser-emulated viewport acceptance after canonical admission (not physical Android/GPU proof)
+        run: AURION_STARTER_VILLAGE_BROWSER_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "confirmed pilot controls" --reporter=list
       - name: Cleanup runtime isolation
         if: always()
         run: |
