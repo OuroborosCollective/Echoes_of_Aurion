@@ -721,3 +721,27 @@ Learned: Treating the Gist as a generated distribution artifact preserves one ca
 Open: Direct gist.github.com publication still requires an authenticated Gist-write capability; no publication is claimed.
 Next safe step: Open the PR, require exact-head repository and GitBook evidence, then merge and read back main.
 
+
+
+### 2026-10-05 — PR #771 — docs: make stateless determinism reference executable
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=771 merge=64e64321d55576560444f57ca390032694a9e082 -->
+Task: Merge PR #771 into `main` — docs: make stateless determinism reference executable.
+Decisions: Documentation/example-only. No gameplay, persistence, schema, deployment or production runtime behavior changes.
+Touched surfaces:
+- `.github/workflows/stateless-determinism-public-pattern.yml`
+- `Memory.md`
+- `docs/public-patterns/stateless-determinism-minimal-runtime.md`
+- `examples/stateless-determinism/demo.ts`
+- `examples/stateless-determinism/deterministic-step.test.ts`
+- `examples/stateless-determinism/deterministic-step.ts`
+- `scripts/export-stateless-determinism-gist.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/771
+- Merge commit: `64e64321d55576560444f57ca390032694a9e082`
+- PR head: `aa3e5167d5a1ba2629bd4248d90d029bdb31bc9e`
+- Merged at: 2026-10-05T06:20:46Z
+- Post-merge workflow run: 37271951252
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
