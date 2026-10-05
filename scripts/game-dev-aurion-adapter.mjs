@@ -18,10 +18,11 @@ async function readJson(relativePath) {
 }
 
 async function requireAurionInputs() {
-  const [catalog, returnStoneSource, fountainSource] = await Promise.all([
+  const [catalog, returnStoneSource, fountainSource, streetLampSource] = await Promise.all([
     readJson("shared/worldAssetCatalog.json"),
     readFile(path.join(root, "shared/aurionReturnStoneContract.ts"), "utf8"),
     readFile(path.join(root, "shared/aurionVillageFountainContract.ts"), "utf8"),
+    readFile(path.join(root, "shared/aurionVillageStreetLampContract.ts"), "utf8"),
   ]);
   if (typeof catalog.version !== "string" || !Array.isArray(catalog.assets) || catalog.assets.length === 0) {
     throw new Error("AURION_GDS_WORLD_ASSET_CATALOG_INVALID");
@@ -32,6 +33,7 @@ async function requireAurionInputs() {
     catalogAssetCount: catalog.assets.length,
     returnStoneContractHash: sha256(returnStoneSource),
     fountainContractHash: sha256(fountainSource),
+    streetLampContractHash: sha256(streetLampSource),
   });
 }
 
@@ -96,6 +98,21 @@ function buildStartingVillagePlan(contract) {
         presentationOnly: true,
         preserveCardinalRoadAxes: true
       },
+      streetLamps: [
+        { id: "street-lamp-north-inner", xMm: -6_000, zMm: 30_000, rotationQuarterTurns: 0 },
+        { id: "street-lamp-north-outer", xMm: 6_000, zMm: 60_000, rotationQuarterTurns: 2 },
+        { id: "street-lamp-east-inner", xMm: 30_000, zMm: 6_000, rotationQuarterTurns: 1 },
+        { id: "street-lamp-east-outer", xMm: 60_000, zMm: -6_000, rotationQuarterTurns: 3 },
+        { id: "street-lamp-south-inner", xMm: 6_000, zMm: -30_000, rotationQuarterTurns: 2 },
+        { id: "street-lamp-south-outer", xMm: -6_000, zMm: -60_000, rotationQuarterTurns: 0 },
+        { id: "street-lamp-west-inner", xMm: -30_000, zMm: -6_000, rotationQuarterTurns: 3 },
+        { id: "street-lamp-west-outer", xMm: -60_000, zMm: 6_000, rotationQuarterTurns: 1 }
+      ].map(lamp => ({
+        ...lamp,
+        assetRole: "approved-world-environment-street-prop",
+        presentationOnly: true,
+        emitsRuntimeLight: false
+      })),
       roads: {
         circular: { radiusMm: 48_000, widthMm: 10_000, segments: 64 },
         radial: gates.map(direction => ({

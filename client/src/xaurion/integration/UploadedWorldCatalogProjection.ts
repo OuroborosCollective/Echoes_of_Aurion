@@ -5,7 +5,7 @@ import type { WorldDesignReadback } from "@shared/aurionAuthoringContract";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
-import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
+import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, villageStreetLampVisualPlacements, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
 
 type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
 const MAX_RENDERED = 18;
@@ -78,6 +78,9 @@ export class UploadedWorldCatalogProjection {
     if (returnStone && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(returnStone);
     const fountain = villageFountainVisualPlacement(this.catalog);
     if (fountain && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(fountain);
+    if (Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) {
+      placements.push(...villageStreetLampVisualPlacements(this.catalog));
+    }
 
     for (const design of this.worldDesign?.designs ?? []) {
       for (const placement of design.placements) {
@@ -99,7 +102,15 @@ export class UploadedWorldCatalogProjection {
         }));
       }
     }
+    const dedicatedPriority = (placement: UploadedWorldVisualPlacement) =>
+      placement.id.startsWith("aurion.return-stone")
+      || placement.id.startsWith("aurion.village-fountain")
+      || placement.id.startsWith("aurion.village-street-lamp")
+        ? 0
+        : 1;
     placements.sort((left, right) => {
+      const priority = dedicatedPriority(left) - dedicatedPriority(right);
+      if (priority) return priority;
       const ld = Math.hypot(left.xMm / 1000 - position.x, left.zMm / 1000 - position.z);
       const rd = Math.hypot(right.xMm / 1000 - position.x, right.zMm / 1000 - position.z);
       return ld - rd || left.id.localeCompare(right.id);

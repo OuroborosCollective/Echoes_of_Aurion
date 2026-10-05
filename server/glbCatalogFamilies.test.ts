@@ -90,6 +90,22 @@ describe("groupGlbCatalogRows", () => {
     ]);
   });
 
+  it("groups the owner street-lamp LOD0-LOD3 family with LOD0 primary", () => {
+    const members = [0, 1, 2, 3].map(level => ({
+      ...row(level, sha(String(level + 1))),
+      displayName: `World Environment · street-prop · Aurion Village Street Lamp LOD${level}`,
+    }));
+    const catalog = groupGlbCatalogRows([members[3]!, members[1]!, members[0]!, members[2]!]);
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]).toMatchObject({
+      displayName: "World Environment · street-prop · Aurion Village Street Lamp",
+      purpose: "world-environment",
+      subcategory: "street-prop",
+      sha256: sha("1"),
+    });
+    expect(catalog[0]!.lods.map(lod => lod.level)).toEqual([0, 1, 2, 3]);
+  });
+
   it("groups the owner fountain LOD1/LOD2 pair without inventing a missing LOD0", () => {
     const lod1 = {
       ...row(1, sha("1")),

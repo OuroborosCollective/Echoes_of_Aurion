@@ -23,6 +23,7 @@ describe("Aurion Game Development Studio adapter", () => {
     expect(result.catalogAssetCount).toBeGreaterThan(0);
     expect(result.returnStoneContractHash).toMatch(/^[a-f0-9]{64}$/);
     expect(result.fountainContractHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.streetLampContractHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("builds a deterministic starting-village plan", () => {
@@ -41,6 +42,14 @@ describe("Aurion Game Development Studio adapter", () => {
       presentationOnly: true,
       preserveCardinalRoadAxes: true,
     });
+    expect(result.layout.streetLamps).toHaveLength(8);
+    expect(result.layout.streetLamps.every((lamp: { presentationOnly: boolean; emitsRuntimeLight: boolean }) =>
+      lamp.presentationOnly && lamp.emitsRuntimeLight === false
+    )).toBe(true);
+    expect(result.layout.streetLamps.map((lamp: { xMm: number; zMm: number }) => [lamp.xMm, lamp.zMm])).toEqual([
+      [-6_000, 30_000], [6_000, 60_000], [30_000, 6_000], [60_000, -6_000],
+      [6_000, -30_000], [-6_000, -60_000], [-30_000, -6_000], [-60_000, 6_000],
+    ]);
     expect(result.innerParcels).toHaveLength(4);
     expect(result.north.guard.quest.objective.count).toBe(6);
     expect(result.north.farmer.quest.objective.action).toBe("water");
