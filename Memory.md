@@ -813,3 +813,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #775 — fix(client): mobile playability hardening for issue #686
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=775 merge=5682303c30ec2bdc219fe7d682c320c564e4915c -->
+Task: Merge PR #775 into `main` — fix(client): mobile playability hardening for issue #686.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/xaurion/integration/ax1AuthorityHud.css`
+- `client/src/xaurion/integration/ax1MobilePlayabilityContract.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/775
+- Merge commit: `5682303c30ec2bdc219fe7d682c320c564e4915c`
+- PR head: `2e1b80cbdfe43489588a8b01b6802f94f3fa35d1`
+- Merged at: 2026-10-05T09:50:25Z
+- Post-merge workflow run: 37292676871
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
