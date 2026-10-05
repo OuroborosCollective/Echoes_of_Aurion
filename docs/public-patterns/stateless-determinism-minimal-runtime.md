@@ -44,6 +44,17 @@ if (verifiedDigest !== result.evidenceSha256) {
 
 The projection is deterministic for the same input, and the verification flow recomputes the SHA-256 digest from the canonical output.
 
+## Executable reference bundle
+
+The repository also carries an executable copy of this public pattern under `examples/stateless-determinism/`:
+
+- `deterministic-step.ts` — standalone implementation.
+- `deterministic-step.test.ts` — deterministic regression suite, including replay, overflow, proxy/accessor rejection and independent Web Crypto digest verification.
+- `demo.ts` — minimal independent digest demo.
+- `scripts/export-stateless-determinism-gist.mjs` — exports the canonical page and executable files into a new local directory plus a `gist-create.json` payload. It does **not** publish a Gist.
+
+The bundle is intentionally source-controlled beside the documentation so GitHub, GitBook and any later Gist distribution can all point back to one reviewable repository revision.
+
 ## Contract
 
 ### Accepted input
