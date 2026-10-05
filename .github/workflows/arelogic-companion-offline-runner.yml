@@ -46,7 +46,7 @@ jobs:
 
   runtime-export:
     name: Export production companion memory to offline ARE evidence
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: contract
     runs-on: [self-hosted, Linux, X64, aurion-static]
     timeout-minutes: 10
