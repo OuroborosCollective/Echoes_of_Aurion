@@ -226,7 +226,7 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
       expect(northGate.z).toBeLessThanOrEqual(-72_000);
       const interpreted = (await rpc<any>("gameplay.interpretNpcDialogue", cookie, {
         npcId: "starter_village_north_gate_guard",
-        text: "Ich will helfen.",
+        text: "Seid gegrüßt, ich brauche einen Auftrag.",
         idempotencyKey: `starter-pilot-dialogue-offer-${revision.slice(0, 16)}`,
       })).data;
       expect(interpreted.receiptId).toMatch(/^dialogue_/);
