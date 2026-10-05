@@ -7,6 +7,9 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "server/starterVillageReplayAssuranceMariaDb.test.ts"
+      - "server/_core/index.ts"
+      - "server/_core/gracefulCausalShutdown.ts"
+      - "server/_core/gracefulCausalShutdown.test.ts"
       - "scripts/diagnose-starter-replay-assurance.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
@@ -28,6 +31,9 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "server/starterVillageReplayAssuranceMariaDb.test.ts"
+      - "server/_core/index.ts"
+      - "server/_core/gracefulCausalShutdown.ts"
+      - "server/_core/gracefulCausalShutdown.test.ts"
       - "scripts/diagnose-starter-replay-assurance.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
@@ -105,6 +111,8 @@ jobs:
         run: pnpm exec vitest run server/starterVillageFountainAsset.test.ts server/glbAssetClassifier.test.ts server/glbCatalogFamilies.test.ts client/src/xaurion/core/UploadedAssetRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Canonical 10 Hz Return Stone and northward movement regressions
         run: pnpm exec vitest run server/returnStoneZoneRuntime.test.ts server/zoneGatewayPresence.test.ts server/zoneRuntime.test.ts --no-file-parallelism --reporter=verbose
+      - name: Graceful causal shutdown regression
+        run: pnpm exec vitest run server/_core/gracefulCausalShutdown.test.ts --no-file-parallelism --reporter=verbose
       - name: Scope egress denial to Aurion runtime identity
         id: network
         run: |
@@ -207,7 +215,7 @@ jobs:
           set -euo pipefail
           RUNTIME_PID="$(cat /tmp/starter-pilot.pid)"
           sudo kill "$RUNTIME_PID"
-          for attempt in $(seq 1 50); do
+          for attempt in $(seq 1 300); do
             if ! sudo kill -0 "$RUNTIME_PID" 2>/dev/null; then break; fi
             sleep 0.1
           done
