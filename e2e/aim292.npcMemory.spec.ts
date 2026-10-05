@@ -65,10 +65,18 @@ for(const profile of profiles){
     const actionPacket=actionBody.result.data.json;
     expect(actionPacket.userId).toBe(authenticatedUserId);
     const actionProjection=decodeOwnedNpcActions(actionPacket,authenticatedUserId).actions.find(entry=>entry.npcId==="ax1_merchant_observatory_threshold")!;
-    expect(actionProjection.actionReceiptId).toBe(displayedAction.actionReceiptId);
-    expect(actionProjection.readbackHash).toBe(displayedAction.readbackHash);
-    expect(actionProjection.resolutionIndex).toBe(displayedAction.resolutionIndex);
     expect(actionProjection.sourceRevision).toBe(pin.sourceRevision);
+    // The live world may advance after the cached React Query projection was
+    // rendered but before this direct API read. The API owns the latest action;
+    // the DOM may therefore show an older, still-confirmed receipt. Never allow
+    // regression, and require exact identity whenever both snapshots are from
+    // the same resolution. The displayed historical receipt is verified against
+    // MariaDB and its effect/memory/graph links below.
+    expect(actionProjection.resolutionIndex).toBeGreaterThanOrEqual(displayedAction.resolutionIndex);
+    if(actionProjection.resolutionIndex===displayedAction.resolutionIndex){
+      expect(actionProjection.actionReceiptId).toBe(displayedAction.actionReceiptId);
+      expect(actionProjection.readbackHash).toBe(displayedAction.readbackHash);
+    }
     const response=await page.request.get('/api/trpc/gameplay.npcMultiMemory?input='+encodeURIComponent(JSON.stringify({json:null})));
     expect(response.status()).toBe(200);const body=await response.json();const packet=body.result.data.json;
     expect(packet.userId).toBe(authenticatedUserId);
