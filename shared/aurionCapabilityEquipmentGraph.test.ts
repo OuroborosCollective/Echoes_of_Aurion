@@ -56,6 +56,24 @@ const medicBlade: AcegItemDefinition = {
   overEquipPenaltyPerPointBps: 25,
 };
 
+const reserveHelm: AcegItemDefinition = {
+  itemId: "item:a-reserve-helm",
+  slot: "head",
+  modifiers: [],
+  requirements: [],
+  overEquipPenaltyPerPointBps: 25,
+};
+
+function ladderChain(length: number): readonly AcegItemDefinition[] {
+  return Array.from({ length }, (_, index) => ({
+    itemId: `item:chain-${String(index + 1).padStart(2, "0")}`,
+    slot: `chain-slot-${index + 1}`,
+    modifiers: [{ capability: "chain", delta: 1 }],
+    requirements: [{ capability: "chain", minValue: index }],
+    overEquipPenaltyPerPointBps: 1,
+  }));
+}
+
 describe("AIM-686 ACEG Capability & Equipment Graph", () => {
   it("computes deterministic fixed-tick capabilities in canonical source order", () => {
     const capabilities = computeAcegCapabilities(
@@ -213,6 +231,132 @@ describe("AIM-686 ACEG Capability & Equipment Graph", () => {
     // Wolfram reference: 10000 - 20*25 = 9500 bps.
     expect(resolution.equipDecisions[0]!.effectivenessBps).toBe(9_500);
     expect(verifyAcegResolution(resolution)).toBe(true);
+  });
+
+  it("reserves prior-confirmed slots before considering new eligible items", () => {
+    const resolution = resolveAcegEquipment({
+      snapshot: snapshot(),
+      catalog: [reserveHelm, nanoHelm],
+      ownedItems: [
+        {
+          itemId: "item:a-reserve-helm",
+          ownershipReceiptId: "receipt:own:reserve",
+        },
+        { itemId: "item:nano-helm", ownershipReceiptId: "receipt:own:helm" },
+      ],
+      priorConfirmedEquip: [
+        {
+          itemId: "item:nano-helm",
+          confirmationReceiptId: "receipt:equip-confirmed:helm",
+        },
+      ],
+    });
+
+    expect(resolution.equipDecisions).toHaveLength(1);
+    expect(resolution.equipDecisions[0]).toMatchObject({
+      itemId: "item:nano-helm",
+      slot: "head",
+      ladderPass: 0,
+      retention: "over_equip_confirmed",
+      effectivenessBps: 9_500,
+      confirmationReceiptId: "receipt:equip-confirmed:helm",
+    });
+  });
+
+  it("fails closed on impossible prior-confirmed ownership and slot conflicts", () => {
+    expect(() =>
+      resolveAcegEquipment({
+        snapshot: snapshot(),
+        catalog: [nanoHelm],
+        ownedItems: [],
+        priorConfirmedEquip: [
+          {
+            itemId: "item:nano-helm",
+            confirmationReceiptId: "receipt:equip-confirmed:helm",
+          },
+        ],
+      })
+    ).toThrow("ACEG_CONFIRMED_ITEM_NOT_OWNED");
+
+    expect(() =>
+      resolveAcegEquipment({
+        snapshot: snapshot(),
+        catalog: [reserveHelm, nanoHelm],
+        ownedItems: [
+          {
+            itemId: "item:a-reserve-helm",
+            ownershipReceiptId: "receipt:own:reserve",
+          },
+          { itemId: "item:nano-helm", ownershipReceiptId: "receipt:own:helm" },
+        ],
+        priorConfirmedEquip: [
+          {
+            itemId: "item:a-reserve-helm",
+            confirmationReceiptId: "receipt:equip-confirmed:reserve",
+          },
+          {
+            itemId: "item:nano-helm",
+            confirmationReceiptId: "receipt:equip-confirmed:helm",
+          },
+        ],
+      })
+    ).toThrow("ACEG_CONFIRMED_SLOT_DUPLICATE");
+  });
+
+  it("accepts a complete 16-pass chain and rejects a required 17th pass", () => {
+    const sixteen = ladderChain(ACEG_MAX_LADDER_PASSES);
+    const ownedSixteen = sixteen.map(item => ({
+      itemId: item.itemId,
+      ownershipReceiptId: `receipt:own:${item.itemId}`,
+    }));
+    const resolution = resolveAcegEquipment({
+      snapshot: snapshot({ permanentStats: [] }),
+      catalog: sixteen,
+      ownedItems: ownedSixteen,
+      priorConfirmedEquip: [],
+    });
+    expect(resolution.equipDecisions).toHaveLength(ACEG_MAX_LADDER_PASSES);
+    expect(
+      Math.max(...resolution.equipDecisions.map(decision => decision.ladderPass))
+    ).toBe(ACEG_MAX_LADDER_PASSES);
+
+    const seventeen = ladderChain(ACEG_MAX_LADDER_PASSES + 1);
+    expect(() =>
+      resolveAcegEquipment({
+        snapshot: snapshot({ permanentStats: [] }),
+        catalog: seventeen,
+        ownedItems: seventeen.map(item => ({
+          itemId: item.itemId,
+          ownershipReceiptId: `receipt:own:${item.itemId}`,
+        })),
+        priorConfirmedEquip: [],
+      })
+    ).toThrow("ACEG_LADDER_BOUND_EXCEEDED");
+  });
+
+  it("fails closed on unsafe integer accumulation and duplicate owned identity", () => {
+    expect(() =>
+      computeAcegCapabilities(
+        snapshot({
+          permanentStats: [
+            { capability: "strength", delta: Number.MAX_SAFE_INTEGER },
+            { capability: "strength", delta: 1 },
+          ],
+        })
+      )
+    ).toThrow("ACEG_CAPABILITY_OVERFLOW");
+
+    expect(() =>
+      resolveAcegEquipment({
+        snapshot: snapshot(),
+        catalog: [nanoHelm],
+        ownedItems: [
+          { itemId: "item:nano-helm", ownershipReceiptId: "receipt:own:one" },
+          { itemId: "item:nano-helm", ownershipReceiptId: "receipt:own:two" },
+        ],
+        priorConfirmedEquip: [],
+      })
+    ).toThrow("ACEG_OWNED_ITEM_DUPLICATE");
   });
 
   it("is canonical-order invariant for shuffled inputs", () => {
