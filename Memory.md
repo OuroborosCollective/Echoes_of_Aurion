@@ -660,3 +660,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #768 — fix(evidence): redact Starterdorf diagnostics before artifact upload
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=768 merge=730ba65cc9838c0e3dfda71df2f5438fe5f8bd09 -->
+Task: Merge PR #768 into `main` — fix(evidence): redact Starterdorf diagnostics before artifact upload.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/starter-village-pilot.yml`
+- `scripts/collect-starter-village-diagnostics.mjs`
+- `scripts/collect-starter-village-diagnostics.test.mjs`
+- `scripts/verify-starter-village-evidence.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/768
+- Merge commit: `730ba65cc9838c0e3dfda71df2f5438fe5f8bd09`
+- PR head: `b54080104df15042ad1c9041c2b3c8e377cdb50f`
+- Merged at: 2026-10-05T04:16:11Z
+- Post-merge workflow run: 37262766371
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
