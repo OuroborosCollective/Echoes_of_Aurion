@@ -1039,3 +1039,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #787 — Let Aurion record native demonstrations for ARE-rLOGIC
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=787 merge=98c3c06023682586f28fcc5f8055434a0380274b -->
+Task: Merge PR #787 into `main` — Let Aurion record native demonstrations for ARE-rLOGIC.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/lib/nativeResearchRecording.test.ts`
+- `client/src/lib/nativeResearchRecording.ts`
+- `client/src/xaurion/integration/Ax1CompanionOverlay.tsx`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/787
+- Merge commit: `98c3c06023682586f28fcc5f8055434a0380274b`
+- PR head: `3a24416e7c948acbebe99b1cdfbada52db1d576b`
+- Merged at: 2026-10-05T18:46:52Z
+- Post-merge workflow run: 37358544098
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
