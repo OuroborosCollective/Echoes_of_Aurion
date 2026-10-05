@@ -6,6 +6,7 @@ import { getDb, issueZoneConnectionTicket } from "./db";
 import { consumeZoneTicketWithCombatProfile } from "./zoneCombatPersistence";
 import { ax1StarterItemId } from "./ax1StarterEquipmentPersistence";
 import { equipPlayerItem, unequipPlayerItem } from "./playerUiPersistence";
+import { inventoryItemShapeHash, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 import { AuthoritativeMovementZone } from "./zoneRuntime";
 import { globalTickRecorder } from "./causality/tickRecorder";
 
@@ -39,7 +40,8 @@ suite("real equipment to consumed zone ticket combat profile", () => {
     await db.insert(users).values({ id: userId, openId: `local:combat_equipment_${userId}` });
     await db.insert(playerProfiles).values({ userId, level: 1 });
     await db.insert(itemInstances).values({ id: legacy.id, ownerUserId: userId, lootReceiptId: "combat-equipment-legacy-loot", baseItemKey: "aurion_spear", quality: "normal", itemLevel: 1, affixesJson: "[]", status: "owned" });
-    await db.insert(aurionItemInstancesV2).values({ id: v2.id, ownerUserId: userId, lootReceiptId: "combat-equipment-v2-loot", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "normal", itemLevelExact: "1", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), status: "owned" });
+    const v2Shape = { definitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "normal", levelExact: "1", affixesJson: "[]", setId: null, itemPower: 9 };
+    await db.insert(aurionItemInstancesV2).values({ id: v2.id, ownerUserId: userId, lootReceiptId: "combat-equipment-v2-loot", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "normal", itemLevelExact: "1", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), mergeKey: inventoryMergeKey(v2Shape), provenanceHash: inventoryItemShapeHash(v2Shape), status: "owned" });
   });
   afterAll(async () => { if (pool) { await globalTickRecorder.flushPersistence(); await clean(); await pool.end(); } });
 
