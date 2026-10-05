@@ -12,6 +12,7 @@ const requiredSchemas = new Map([
   [`restart-readback-${revision}.json`, "aurion.starter-village-pilot.restart-readback.v2"],
   ["public-character-seed.json", "aurion.starter-village-public-character-seed.v1"],
   ["fountain-seed.json", "aurion.starter-village-fountain-seed.v1"],
+  ["assurance-before-journey.json", "aurion.starter-village-assurance-readback.v1"],
   ["assurance-after-restart.json", "aurion.starter-village-assurance-readback.v1"],
   [`replay-assurance-${revision}.json`, "aurion.starter-village-replay-assurance.v1"],
   ["browser-trace-phone.json", "aurion.starter-village-browser-trace.v1"],
@@ -91,11 +92,12 @@ function validateContent({ requireComplete }) {
     const { parsed } = parseJson("network-isolation.json");
     if (parsed.externalEgressAllowed !== false || parsed.loopbackAllowed !== true) throw new Error("NETWORK_EVIDENCE_INVALID");
   }
-  if (files.includes("assurance-after-restart.json")) {
-    const { parsed } = parseJson("assurance-after-restart.json");
+  for (const assuranceFile of ["assurance-before-journey.json", "assurance-after-restart.json"]) {
+    if (!files.includes(assuranceFile)) continue;
+    const { parsed } = parseJson(assuranceFile);
     if (parsed.replaySample?.status !== "MATCH" || parsed.replaySample?.summary !== "REPLAY_SAMPLE_MATCH")
-      throw new Error("RESTART_REPLAY_ASSURANCE_NOT_MATCH");
-    if (parsed.receiptChain?.status !== "MATCH") throw new Error("RESTART_RECEIPT_CHAIN_NOT_MATCH");
+      throw new Error(`REPLAY_ASSURANCE_NOT_MATCH:${assuranceFile}`);
+    if (parsed.receiptChain?.status !== "MATCH") throw new Error(`RECEIPT_CHAIN_NOT_MATCH:${assuranceFile}`);
   }
   const replayFile = `replay-assurance-${revision}.json`;
   if (files.includes(replayFile)) {
