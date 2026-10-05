@@ -665,6 +665,16 @@
  * no fullscreen touch overlay above the HUD (the authority shell stays
  * pointer-events:none and movement stays bound to the single canvas owner).
  */
+@media (max-width:1024px){
+  /* Tablet/phone touch contract: legacy selectors may still declare 30–42px
+   * widths/heights, so enforce the minimum at the final cascade without
+   * changing each control's intended layout width.
+   */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud button{
+    min-width:44px!important;
+    min-height:44px!important;
+  }
+}
 @media (max-width:720px){
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col{
     max-width:196px;
