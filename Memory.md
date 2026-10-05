@@ -536,3 +536,10 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — Issue #741 Starterdorf public-character gate
+Status: VERIFIED
+Change: Canonical `player-public` GLB admission now seeds the isolated Starterdorf pilot, preserves server-bound selection, and verifies four-viewport model/UI reachability without mocks or raw SQL.
+Insight: Browser evidence must separate storage/readback, renderer activation and live-projection freshness; cached confirmed UI may legally trail a newer confirmed API generation.
+Evidence: PR #761 head `b1f531f2b5f4240898a71b0e95f3cf95361eda92` passed all 13 workflow families, including Starter Village Pilot Evidence, Local Test Pack, Runtime Candidate/Container, AIM-240, AIM-291, AIM-292/293/294, AIM-259, AIM-262, AIM-290 and AIM-535.
