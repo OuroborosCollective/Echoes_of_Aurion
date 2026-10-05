@@ -279,4 +279,4 @@ jobs:
         if: success()
         run: |
           set -euo pipefail
-          node scripts/verify-starter-village-evidence.mjs verify ".artifact-readback/.aurion-evidence/starter-village-pilot" "$AURION_RELEASE_SHA"
+          node scripts/verify-starter-village-evidence.mjs verify ".artifact-readback" "$AURION_RELEASE_SHA"
