@@ -10,6 +10,7 @@ import {
 } from "../shared/aurionCapabilityEquipmentGraph";
 import type { ItemRecordVersion, PlayerUiReadback, UiItem } from "../shared/playerUiProtocol";
 import { aurionLootBaseCatalog } from "./aurionLootCatalog";
+import { aurionMasteryDisciplineIds, resolveMasteryReadmodel, type MasteryProgressionEvent } from "./aurionMasteryEthosProtocol";
 
 export const AURION_ACEG_EQUIPMENT_AUTHORITY_VERSION = "aurion.aceg.equipment-authority.v1" as const;
 export const AURION_ACEG_DEFAULT_OE_PENALTY_PER_POINT_BPS = 25;
@@ -34,6 +35,33 @@ export type AcegEquipmentProjection = Readonly<{
   resolution: AcegResolution;
   items: readonly UiItem[];
 }>;
+
+const professionCapabilities = new Set<string>(["woodworking", "smithing", "weaving", "alchemy", "rune_crafting", "shaping"]);
+
+export function acegSourcesFromMasteryEvents(
+  userId: number,
+  stateIndex: number,
+  events: readonly MasteryProgressionEvent[],
+): AcegEquipmentAuthoritySources {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("ACEG_OWNER_INVALID");
+  if (!Number.isSafeInteger(stateIndex) || stateIndex < 0) throw new Error("ACEG_STATE_INDEX_INVALID");
+  const skillRanks: AcegModifier[] = [];
+  const professionModifiers: AcegModifier[] = [];
+  for (const disciplineId of aurionMasteryDisciplineIds) {
+    const readmodel = resolveMasteryReadmodel({
+      playerId: String(userId),
+      disciplineId,
+      events: events.filter(event => event.disciplineId === disciplineId),
+    });
+    const modifier = acegCapabilityFromExact(disciplineId, readmodel.progression.levelExact);
+    (professionCapabilities.has(disciplineId) ? professionModifiers : skillRanks).push(modifier);
+  }
+  return Object.freeze({
+    stateIndex,
+    skillRanks: Object.freeze(skillRanks),
+    professionModifiers: Object.freeze(professionModifiers),
+  });
+}
 
 const identity = (value: Pick<UiItem, "id" | "version">): string => `${value.version}:${value.id}`;
 
@@ -256,7 +284,7 @@ export function resolveAcegEquipIntent(input: Readonly<{
     candidate: identity(input.candidate),
     slot: input.candidate.slot,
     ownershipReceiptId: input.candidate.receiptId,
-    expectedItem: input.expectedItem ? identity(input.expectedItem as UiItem) : null,
+    expectedItem: input.expectedItem ? `${input.expectedItem.version}:${input.expectedItem.id}` : null,
     inventoryRevisionExact: input.inventoryRevisionExact,
     inventoryStateHash: input.inventoryStateHash,
     sourceEvidenceHash: resolution.sourceEvidenceHash,
