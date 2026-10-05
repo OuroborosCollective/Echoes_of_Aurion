@@ -29,7 +29,6 @@
 import { z } from "zod";
 import { canonicalSha256 } from "./aurionCanonicalHash";
 import {
-  rumorProjectionSchema,
   verifyRumorProjection,
   type RumorClaimProjection,
   type RumorProjection,
@@ -94,7 +93,7 @@ export type DeductionType = z.infer<typeof deductionTypeSchema>;
 
 export const deductionIntentSchema = z.strictObject({
   actorId: identifier,
-  selectedClaimIds: z.array(identifier).min(DEDUCTION_MIN_CLAIMS).max(DEDUCTION_MAX_CLAIMS),
+  selectedClaimIds: z.array(identifier),
   deductionType: deductionTypeSchema,
   sourceProjectionHash: sha256,
 });
@@ -329,6 +328,9 @@ export function validateDeductionIntent(input: Readonly<{
     throw new Error("DEDUCTION_ACTOR_MISMATCH");
   }
   const selected = [...intent.selectedClaimIds].sort();
+  if (selected.length < DEDUCTION_MIN_CLAIMS || selected.length > DEDUCTION_MAX_CLAIMS) {
+    throw new Error("DEDUCTION_ARITY_INVALID");
+  }
   if (new Set(selected).size !== selected.length) {
     throw new Error("DEDUCTION_DUPLICATE_CLAIM");
   }
