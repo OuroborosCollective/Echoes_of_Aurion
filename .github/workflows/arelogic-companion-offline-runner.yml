@@ -1,0 +1,117 @@
+name: ARE-rLOGIC Companion Offline Runner
+
+on:
+  pull_request:
+    paths:
+      - "scripts/export-arelogic-companion-memory.mjs"
+      - "scripts/export-arelogic-companion-memory.test.mjs"
+      - ".github/workflows/arelogic-companion-offline-runner.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/export-arelogic-companion-memory.mjs"
+      - "scripts/export-arelogic-companion-memory.test.mjs"
+      - ".github/workflows/arelogic-companion-offline-runner.yml"
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arelogic-companion-offline-runner-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    name: Prove sanitized export contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact Aurion revision
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Export contract tests
+        run: node --test scripts/export-arelogic-companion-memory.test.mjs
+
+      - name: Diff whitespace
+        run: git diff --check
+
+  runtime-export:
+    name: Export production companion memory to offline ARE evidence
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: contract
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    timeout-minutes: 10
+    env:
+      COMPANION_MEMORY_DIR: /opt/aurion-zone-runtime/current/data/companion-memory
+      ARE_RLOGIC_REVISION: eb6497fb2598c3159cbc4a67bfd97ad6d9c98ce1
+
+    steps:
+      - name: Guard repository and runtime memory
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test -d "${COMPANION_MEMORY_DIR}"
+          test -r "${COMPANION_MEMORY_DIR}"
+
+      - name: Check out exact Aurion revision
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Export sanitized demonstrations
+        id: export
+        run: |
+          set -euo pipefail
+          rm -rf arelogic-export
+          mkdir -p arelogic-export
+          node scripts/export-arelogic-companion-memory.mjs             --input "${COMPANION_MEMORY_DIR}"             --output arelogic-export/companion-demonstrations.jsonl             --report arelogic-export/aurion-export-report.json
+          rows="$(node -e 'const r=require("./arelogic-export/aurion-export-report.json"); process.stdout.write(String(r.rows))')"
+          printf 'rows=%s\n' "$rows" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch pinned ARE-rLOGIC verifier
+        if: steps.export.outputs.rows != '0'
+        run: |
+          set -euo pipefail
+          rm -rf are-rlogic
+          git clone --filter=blob:none https://github.com/OuroborosCollective/ARE-rLOGIC-class.git are-rlogic
+          git -C are-rlogic checkout --detach "${ARE_RLOGIC_REVISION}"
+          test "$(git -C are-rlogic rev-parse HEAD)" = "${ARE_RLOGIC_REVISION}"
+
+      - name: Normalize through ARE-rLOGIC
+        if: steps.export.outputs.rows != '0'
+        run: |
+          set -euo pipefail
+          python3 are-rlogic/aurion_lab/companion_ingest.py             arelogic-export/companion-demonstrations.jsonl             arelogic-export/normalized-demonstrations.jsonl             arelogic-export/are-ingest-report.json
+
+      - name: Record empty observation window
+        if: steps.export.outputs.rows == '0'
+        run: |
+          printf '%s\n' '{"schema":"aurion.rl.companion_ingest_report.v1","status":"no-data","production_authority":false,"reward_semantics":"absent","rows":0}'             > arelogic-export/are-ingest-report.json
+
+      - name: Verify privacy boundary
+        run: |
+          set -euo pipefail
+          if grep -E '"(userId|account_id|sessionId|timestampEpoch|note|input_frame_base64)"[[:space:]]*:' arelogic-export/companion-demonstrations.jsonl arelogic-export/normalized-demonstrations.jsonl 2>/dev/null; then
+            echo "forbidden identity/frame/text field escaped sanitization" >&2
+            exit 1
+          fi
+
+      - name: Publish immutable offline evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-arelogic-companion-${{ github.sha }}-${{ github.run_id }}
+          path: arelogic-export/
+          if-no-files-found: error
+          retention-days: 14
