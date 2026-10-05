@@ -7,6 +7,7 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "server/starterVillageReplayAssuranceMariaDb.test.ts"
+      - "scripts/diagnose-starter-replay-assurance.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
@@ -27,6 +28,7 @@ on:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
       - "server/starterVillageReplayAssuranceMariaDb.test.ts"
+      - "scripts/diagnose-starter-replay-assurance.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
@@ -268,6 +270,10 @@ jobs:
             receiptChain,
           }, null, 2) + "\n");
           NODE
+
+      - name: Capture read-only first-divergence diagnostics from persisted replay bytes
+        if: always() && steps.journey.outcome == 'success'
+        run: pnpm exec tsx scripts/diagnose-starter-replay-assurance.ts
 
       - name: Prove persisted replay sample MATCH plus controlled divergence and missing-evidence fail-closed
         id: replay_assurance
