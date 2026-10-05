@@ -23,6 +23,10 @@ on:
       - "scripts/seed-starter-village-fountain.ts"
       - "server/starterVillageFountainAsset.test.ts"
       - "shared/aurionVillageFountainContract.ts"
+      - "assets/environment/street-lamp/**"
+      - "scripts/seed-starter-village-street-lamp.ts"
+      - "server/starterVillageStreetLampAsset.test.ts"
+      - "shared/aurionVillageStreetLampContract.ts"
       - "server/db.ts"
       - "server/routers.ts"
       - "server/zone**"
@@ -49,6 +53,10 @@ on:
       - "scripts/seed-starter-village-fountain.ts"
       - "server/starterVillageFountainAsset.test.ts"
       - "shared/aurionVillageFountainContract.ts"
+      - "assets/environment/street-lamp/**"
+      - "scripts/seed-starter-village-street-lamp.ts"
+      - "server/starterVillageStreetLampAsset.test.ts"
+      - "shared/aurionVillageStreetLampContract.ts"
       - "server/db.ts"
       - "server/routers.ts"
       - "server/zone**"
@@ -111,8 +119,8 @@ jobs:
           pnpm build
       - name: Character catalog state and authority regressions
         run: pnpm exec vitest run client/src/xaurion/components/PublicCharacterPicker.test.tsx server/glbSmartUpload.test.ts server/characterBinding.test.ts --no-file-parallelism --reporter=verbose
-      - name: Owner fountain GLB family and presentation regressions
-        run: pnpm exec vitest run server/starterVillageFountainAsset.test.ts server/glbAssetClassifier.test.ts server/glbCatalogFamilies.test.ts client/src/xaurion/core/UploadedAssetRuntime.test.ts --no-file-parallelism --reporter=verbose
+      - name: Owner fountain and street-lamp GLB family presentation regressions
+        run: pnpm exec vitest run server/starterVillageFountainAsset.test.ts server/starterVillageStreetLampAsset.test.ts server/glbAssetClassifier.test.ts server/glbCatalogFamilies.test.ts client/src/xaurion/core/UploadedAssetRuntime.test.ts server/gameDevelopmentStudioAurionAdapter.test.ts --no-file-parallelism --reporter=verbose
       - name: Canonical 10 Hz Return Stone and northward movement regressions
         run: pnpm exec vitest run server/returnStoneZoneRuntime.test.ts server/zoneGatewayPresence.test.ts server/zoneRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Graceful causal shutdown regression
@@ -309,6 +317,13 @@ jobs:
           pnpm exec tsx scripts/seed-starter-village-fountain.ts | tee "$AURION_EVIDENCE_DIR/fountain-seed.json"
           test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+x.subcategory+":"+x.lods.map(v=>v.level).join(","))' "$AURION_EVIDENCE_DIR/fountain-seed.json")" = "world-environment:fountain:1,2"
           chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
+      - name: Admit the owner street-lamp LOD family through the real GLB authority and read it back
+        id: street_lamp_seed
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/seed-starter-village-street-lamp.ts | tee "$AURION_EVIDENCE_DIR/street-lamp-seed.json"
+          test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+x.subcategory+":"+x.lods.map(v=>v.level).join(","))' "$AURION_EVIDENCE_DIR/street-lamp-seed.json")" = "world-environment:street-prop:0,1,2,3"
+          chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
       - name: Browser-emulated viewport acceptance after canonical admission (not physical Android/GPU proof)
         id: browser
         run: |
@@ -347,6 +362,7 @@ jobs:
               "emptyCatalogDiagnostic": "${{ steps.empty_catalog.outcome }}",
               "publicCharacterAdmission": "${{ steps.character_seed.outcome }}",
               "fountainAdmission": "${{ steps.fountain_seed.outcome }}",
+              "streetLampAdmission": "${{ steps.street_lamp_seed.outcome }}",
               "browserAcceptance": "${{ steps.browser.outcome }}"
             }
           }
