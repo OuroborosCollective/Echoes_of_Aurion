@@ -949,3 +949,23 @@ Evidence: First merged production run `37345437077` reached the self-hosted `aur
 Learned: Absence of the append-only companion directory is valid before the first server-side demonstration and must be represented as explicit no-data evidence, not conflated with runner breakage.
 Open: Re-run after merge and inspect the uploaded no-data or first real demonstration artifact.
 Next safe step: Merge after the export contract check is green; verify the automatic main-push runner and artifact readback.
+
+
+### 2026-10-05 — PR #780 — Treat absent companion memory as verified ARE-rLOGIC no-data
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=780 merge=e993aa719c2d8c693450fe8e9f3ed5405337d32a -->
+Task: Merge PR #780 into `main` — Treat absent companion memory as verified ARE-rLOGIC no-data.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/arelogic-companion-offline-runner.yml`
+- `Memory.md`
+- `docs/integration/ARELOGIC_COMPANION_OFFLINE_RUNNER.md`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/780
+- Merge commit: `e993aa719c2d8c693450fe8e9f3ed5405337d32a`
+- PR head: `c8dafb4629573e7c4cbb0997349b8ab329ccd018`
+- Merged at: 2026-10-05T17:05:08Z
+- Post-merge workflow run: 37345770040
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
