@@ -561,3 +561,34 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #762 — feat(fountain): integrate owner starter-village fountain LOD family
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=762 merge=8c9dd111d5c7b691dbc0bc01edd102a6f29145b8 -->
+Task: Merge PR #762 into `main` — feat(fountain): integrate owner starter-village fountain LOD family.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/starter-village-pilot.yml`
+- `assets/environment/fountain/Aurion_Village_Fountain_LOD1.glb`
+- `assets/environment/fountain/Aurion_Village_Fountain_LOD2.glb`
+- `assets/environment/fountain/README.md`
+- `client/src/xaurion/core/UploadedAssetRuntime.test.ts`
+- `client/src/xaurion/core/UploadedAssetRuntime.ts`
+- `client/src/xaurion/integration/UploadedWorldCatalogProjection.ts`
+- `scripts/game-dev-aurion-adapter.mjs`
+- `scripts/seed-starter-village-fountain.ts`
+- `server/gameDevelopmentStudioAurionAdapter.test.ts`
+- `server/glbAssetClassifier.test.ts`
+- `server/glbCatalogFamilies.test.ts`
+- `server/starterVillageFountainAsset.test.ts`
+- `shared/aurionVillageFountainContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/762
+- Merge commit: `8c9dd111d5c7b691dbc0bc01edd102a6f29145b8`
+- PR head: `1e04c477eb8e009a2a7f363504339e1718af4e53`
+- Merged at: 2026-10-05T03:13:25Z
+- Post-merge workflow run: 37258565316
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
