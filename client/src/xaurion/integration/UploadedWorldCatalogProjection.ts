@@ -5,7 +5,7 @@ import type { WorldDesignReadback } from "@shared/aurionAuthoringContract";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
-import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
+import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
 
 type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
 const MAX_RENDERED = 18;
@@ -76,6 +76,8 @@ export class UploadedWorldCatalogProjection {
     }
     const returnStone = returnStoneVisualPlacement(this.catalog);
     if (returnStone && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(returnStone);
+    const fountain = villageFountainVisualPlacement(this.catalog);
+    if (fountain && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(fountain);
 
     for (const design of this.worldDesign?.designs ?? []) {
       for (const placement of design.placements) {

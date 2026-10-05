@@ -18,9 +18,10 @@ async function readJson(relativePath) {
 }
 
 async function requireAurionInputs() {
-  const [catalog, returnStoneSource] = await Promise.all([
+  const [catalog, returnStoneSource, fountainSource] = await Promise.all([
     readJson("shared/worldAssetCatalog.json"),
     readFile(path.join(root, "shared/aurionReturnStoneContract.ts"), "utf8"),
+    readFile(path.join(root, "shared/aurionVillageFountainContract.ts"), "utf8"),
   ]);
   if (typeof catalog.version !== "string" || !Array.isArray(catalog.assets) || catalog.assets.length === 0) {
     throw new Error("AURION_GDS_WORLD_ASSET_CATALOG_INVALID");
@@ -30,6 +31,7 @@ async function requireAurionInputs() {
     catalogHash: sha256(JSON.stringify(catalog)),
     catalogAssetCount: catalog.assets.length,
     returnStoneContractHash: sha256(returnStoneSource),
+    fountainContractHash: sha256(fountainSource),
   });
 }
 
@@ -85,6 +87,14 @@ function buildStartingVillagePlan(contract) {
         zMm: 0,
         preserveExistingSpawn: true,
         preserveExistingCenterTeleporter: true
+      },
+      plazaFountain: {
+        id: "aurion-village-fountain",
+        xMm: 12_000,
+        zMm: 12_000,
+        assetRole: "approved-world-environment-fountain",
+        presentationOnly: true,
+        preserveCardinalRoadAxes: true
       },
       roads: {
         circular: { radiusMm: 48_000, widthMm: 10_000, segments: 64 },

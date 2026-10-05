@@ -6,6 +6,11 @@ import {
   AURION_RETURN_STONE_POSITION,
   AURION_RETURN_STONE_SOURCE_SHA256,
 } from "@shared/aurionReturnStoneContract";
+import {
+  AURION_VILLAGE_FOUNTAIN_CONTRACT_VERSION,
+  AURION_VILLAGE_FOUNTAIN_LODS,
+  AURION_VILLAGE_FOUNTAIN_POSITION,
+} from "@shared/aurionVillageFountainContract";
 
 function fnv1a(value: string): number {
   let hash = 2166136261;
@@ -87,6 +92,41 @@ export function returnStoneVisualPlacement(catalog: GlbRuntimeCatalog): Uploaded
   });
 }
 
+export function villageFountainCatalogAsset(catalog: GlbRuntimeCatalog): GlbCatalogEntry | null {
+  const [lod1, lod2] = AURION_VILLAGE_FOUNTAIN_LODS;
+  return catalog.entries.find(entry => {
+    const lods = entry.lods ?? [];
+    return entry.assetId === lod1.assetId
+      && entry.sha256 === lod1.sha256
+      && entry.storageUrl === `/api/assets/glb/${lod1.sha256}.glb`
+      && entry.purpose === "world-environment"
+      && entry.assetType === "arena"
+      && entry.subcategory === "fountain"
+      && entry.targetKey === null
+      && lods.length === 2
+      && lods[0]?.level === 1
+      && lods[0]?.assetId === lod1.assetId
+      && lods[0]?.sha256 === lod1.sha256
+      && lods[0]?.bytes === lod1.bytes
+      && lods[1]?.level === 2
+      && lods[1]?.assetId === lod2.assetId
+      && lods[1]?.sha256 === lod2.sha256
+      && lods[1]?.bytes === lod2.bytes;
+  }) ?? null;
+}
+
+export function villageFountainVisualPlacement(catalog: GlbRuntimeCatalog): UploadedWorldVisualPlacement | null {
+  const asset = villageFountainCatalogAsset(catalog);
+  if (!asset) return null;
+  return Object.freeze({
+    id: `${AURION_VILLAGE_FOUNTAIN_CONTRACT_VERSION}:${catalog.revision.slice(0, 12)}:${asset.assetId}`,
+    asset,
+    xMm: AURION_VILLAGE_FOUNTAIN_POSITION.x,
+    zMm: AURION_VILLAGE_FOUNTAIN_POSITION.z,
+    rotationQuarterTurns: 0,
+  });
+}
+
 /**
  * Presentation-only deterministic placements for admin-approved uploaded world GLBs.
  * The central road/spawn cross stays clear and no collision, interaction, teleport,
@@ -103,7 +143,8 @@ export function uploadedWorldVisualsForChunk(
     .filter(entry => entry.purpose === purpose
       && entry.assetType === "arena"
       && entry.targetKey === null
-      && entry.sha256 !== AURION_RETURN_STONE_SOURCE_SHA256)
+      && entry.sha256 !== AURION_RETURN_STONE_SOURCE_SHA256
+      && !AURION_VILLAGE_FOUNTAIN_LODS.some(lod => lod.sha256 === entry.sha256))
     .slice()
     .sort(byIdentity);
   if (!assets.length) return Object.freeze([]);

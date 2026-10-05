@@ -90,6 +90,26 @@ describe("groupGlbCatalogRows", () => {
     ]);
   });
 
+  it("groups the owner fountain LOD1/LOD2 pair without inventing a missing LOD0", () => {
+    const lod1 = {
+      ...row(1, sha("1")),
+      displayName: "World Environment · fountain · Aurion Village Fountain LOD1",
+    };
+    const lod2 = {
+      ...row(2, sha("2")),
+      displayName: "World Environment · fountain · Aurion Village Fountain LOD2",
+    };
+    const catalog = groupGlbCatalogRows([lod2, lod1]);
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]).toMatchObject({
+      displayName: "World Environment · fountain · Aurion Village Fountain",
+      purpose: "world-environment",
+      subcategory: "fountain",
+      sha256: sha("1"),
+    });
+    expect(catalog[0]!.lods.map(lod => lod.level)).toEqual([1, 2]);
+  });
+
   it("keeps ordinary single models independent and backward compatible", () => {
     const catalog = groupGlbCatalogRows([
       { ...row(0, sha("e")), displayName: "World Nature · tree · Lone Oak" },

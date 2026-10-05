@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { GlbCatalogEntry, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { AURION_RETURN_STONE_ASSET_ID, AURION_RETURN_STONE_POSITION, AURION_RETURN_STONE_SOURCE_SHA256 } from "@shared/aurionReturnStoneContract";
-import { publicPlayerCharacterCatalog, returnStoneCatalogAsset, returnStoneVisualPlacement, selectEquipmentCatalogAsset, uploadedWorldVisualsForChunk } from "./UploadedAssetRuntime";
+import { AURION_VILLAGE_FOUNTAIN_LODS, AURION_VILLAGE_FOUNTAIN_POSITION } from "@shared/aurionVillageFountainContract";
+import { publicPlayerCharacterCatalog, returnStoneCatalogAsset, returnStoneVisualPlacement, selectEquipmentCatalogAsset, uploadedWorldVisualsForChunk, villageFountainCatalogAsset, villageFountainVisualPlacement } from "./UploadedAssetRuntime";
 
 const sha = (digit: string) => digit.repeat(64);
 function entry(values: Partial<GlbCatalogEntry> & Pick<GlbCatalogEntry, "assetId" | "purpose" | "assetType">): GlbCatalogEntry {
@@ -19,6 +20,26 @@ function entry(values: Partial<GlbCatalogEntry> & Pick<GlbCatalogEntry, "assetId
 }
 function catalog(entries: GlbCatalogEntry[], revision = sha("f")): GlbRuntimeCatalog {
   return { version: "aurion.glb-import.v1", revision, entries };
+}
+
+function fountainEntry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
+  const [lod1, lod2] = AURION_VILLAGE_FOUNTAIN_LODS;
+  return {
+    assetId: lod1.assetId,
+    sha256: lod1.sha256,
+    displayName: "World Environment · fountain · Aurion Village Fountain",
+    assetType: "arena",
+    storageUrl: `/api/assets/glb/${lod1.sha256}.glb`,
+    targetKey: null,
+    purpose: "world-environment",
+    subcategory: "fountain",
+    equipmentSlot: null,
+    lods: [
+      { level: 1, assetId: lod1.assetId, sha256: lod1.sha256, bytes: lod1.bytes, storageUrl: `/api/assets/glb/${lod1.sha256}.glb`, targetKey: null },
+      { level: 2, assetId: lod2.assetId, sha256: lod2.sha256, bytes: lod2.bytes, storageUrl: `/api/assets/glb/${lod2.sha256}.glb`, targetKey: null },
+    ],
+    ...overrides,
+  } as unknown as GlbCatalogEntry;
 }
 
 function returnStoneEntry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
@@ -78,10 +99,25 @@ describe("uploaded GLB runtime selection", () => {
     expect(returnStoneCatalogAsset(catalog([returnStoneEntry({ subcategory: "fountain" })]))).toBeNull();
   });
 
+  it("binds the owner fountain only when the complete two-stage family matches immutable hashes", () => {
+    const approved = fountainEntry();
+    const source = catalog([approved]);
+    expect(villageFountainCatalogAsset(source)).toEqual(approved);
+    expect(villageFountainVisualPlacement(source)).toMatchObject({
+      asset: approved,
+      xMm: AURION_VILLAGE_FOUNTAIN_POSITION.x,
+      zMm: AURION_VILLAGE_FOUNTAIN_POSITION.z,
+      rotationQuarterTurns: 0,
+    });
+    expect(villageFountainCatalogAsset(catalog([fountainEntry({ sha256: sha("9") })]))).toBeNull();
+    expect(villageFountainCatalogAsset(catalog([fountainEntry({ subcategory: "street-prop" })]))).toBeNull();
+    expect(villageFountainCatalogAsset(catalog([fountainEntry({ lods: [approved.lods![0]!] })]))).toBeNull();
+  });
+
   it("keeps uploaded world visuals deterministic, purpose-separated and away from the central cross", () => {
     const source = catalog([
       entry({ assetId: "glb_house", purpose: "world-environment", assetType: "arena" }),
-      entry({ assetId: "glb_fountain", purpose: "world-environment", assetType: "arena" }),
+      fountainEntry(),
       returnStoneEntry(),
       entry({ assetId: "glb_tree", purpose: "world-nature", assetType: "arena" }),
       entry({ assetId: "glb_rock", purpose: "world-nature", assetType: "arena" }),
@@ -92,6 +128,7 @@ describe("uploaded GLB runtime selection", () => {
     expect(settlement.length).toBeGreaterThan(0);
     expect(settlement.every(value => value.asset.purpose === "world-environment")).toBe(true);
     expect(settlement.every(value => value.asset.sha256 !== AURION_RETURN_STONE_SOURCE_SHA256)).toBe(true);
+    expect(settlement.every(value => value.asset.sha256 !== AURION_VILLAGE_FOUNTAIN_LODS[0].sha256)).toBe(true);
     expect(settlement.every(value => Math.abs(value.xMm) >= 24_000 || Math.abs(value.zMm) >= 24_000)).toBe(true);
 
     const nature = uploadedWorldVisualsForChunk(source, { x: 2, z: 2 });
