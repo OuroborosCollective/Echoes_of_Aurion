@@ -53,3 +53,4 @@
 * [AIM-600 — Deterministic Structure Placement](aim-600-deterministic-structure-placement.md)
 * [Emergent Life Core](emergent-life-core.md)
 * [Deterministic World Generation & CAG](deterministic-world-generation-and-cag.md)
+* [Causal Rumor & Investigation Gameplay](causal-rumor-and-investigation-gameplay.md)
