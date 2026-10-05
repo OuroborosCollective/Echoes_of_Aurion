@@ -13,10 +13,11 @@ import {
 import {
   getActiveCivilization,
   findCivilizationHistoryEventsBySourceReceipt,
+  listCivilizationHistoryEvents,
+  recordCivilizationAdvance,
   recordCivilizationCollapse,
-  recordCivilizationHistoryEvent,
-  recordSettlementRebirthCandidate,
-  upsertActiveCivilization,
+  recordInitialCivilizationSeed,
+  recordSettlementRebirthTransition,
   listVisibleRuins,
 } from "../aurionCivilizationHistoryPersistence.js";
 import type { EconomicCycleImpact } from "./economicEventAggregator.js";
@@ -105,7 +106,7 @@ export async function orchestrateCivilizationLoop(
   const activeCiv = await getActiveCivilization(worldId);
 
   if (activeCiv) {
-    const occurredSequence = Math.max(activeCiv.lastResolutionIndex + 1, worldEpoch);
+    const occurredSequence = activeCiv.lastResolutionIndex + 1;
     // Phase A & B: Historical Contracts & Epoch Progression
     const qualification = resolveCollapseQualification({
       civilizationId: activeCiv.civilizationId,
@@ -124,10 +125,10 @@ export async function orchestrateCivilizationLoop(
         civilizationId: activeCiv.civilizationId,
         worldId,
         locationIdentity: "world_heart",
-        worldEpoch,
+        worldEpoch: activeCiv.worldEpoch,
         collapseReceiptHash: qualification.receiptHash,
         rulesetVersion: AURION_CIVILIZATION_RULESET_VERSION,
-        generationSeed: `seed-${activeCiv.civilizationId}-${worldEpoch}`,
+        generationSeed: `seed-${activeCiv.civilizationId}-${activeCiv.worldEpoch}`,
       });
 
       await recordCivilizationCollapse({
@@ -136,7 +137,7 @@ export async function orchestrateCivilizationLoop(
         collapseEventId: hash(["collapse", activeCiv.civilizationId, sourceReceiptId]),
         sourceReceiptId,
         sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
-        worldEpoch,
+        worldEpoch: activeCiv.worldEpoch,
         locationIdentity: ruinTransformation.locationIdentity,
         historyDigest: ruinTransformation.historyDigest,
         rulesetVersion: ruinTransformation.rulesetVersion,
@@ -169,9 +170,7 @@ export async function orchestrateCivilizationLoop(
         lastResolutionIndex: occurredSequence,
       };
 
-      await upsertActiveCivilization(nextCiv);
-
-      await recordCivilizationHistoryEvent({
+      const transitionEvent = {
         eventId: hash(["advance", activeCiv.civilizationId, sourceReceiptId]),
         civilizationId: activeCiv.civilizationId,
         worldId,
@@ -181,39 +180,40 @@ export async function orchestrateCivilizationLoop(
         sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
         eventPayloadJson: JSON.stringify(nextCiv),
         occurredSequence,
-      });
+      };
+      const economicEvent = deltas.economicEventRecorded && economicImpact ? {
+        eventId: hash(["economic", activeCiv.civilizationId, sourceReceiptId, economicImpact.impactHash.slice(0, 16)]),
+        civilizationId: activeCiv.civilizationId,
+        worldId,
+        worldEpoch: nextCiv.worldEpoch,
+        eventType: "ECONOMIC_MARKET_DEVELOPMENT",
+        sourceReceiptId,
+        sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
+        eventPayloadJson: JSON.stringify({
+          cycle: economicImpact.cycle,
+          impactHash: economicImpact.impactHash,
+          totalTradeVolume: economicImpact.totalTradeVolume,
+          totalScarcityPressure: economicImpact.totalScarcityPressure,
+          totalHazardPressure: economicImpact.totalHazardPressure,
+          totalEconomyPressure: economicImpact.totalEconomyPressure,
+          totalPoliticsPressure: economicImpact.totalPoliticsPressure,
+          totalCaravanActivity: economicImpact.totalCaravanActivity,
+          hubSnapshots: economicImpact.hubs,
+          appliedDeltas: {
+            population: deltas.populationDelta,
+            stability: deltas.stabilityDelta,
+            hazard: deltas.hazardDelta,
+            scarcity: deltas.scarcityDelta,
+          },
+        }),
+        occurredSequence,
+      } : null;
 
-      // Record a dedicated economic event when economic impact was provided,
-      // so market development is traceable in civilization history.
-      if (deltas.economicEventRecorded && economicImpact) {
-        await recordCivilizationHistoryEvent({
-          eventId: hash(["economic", activeCiv.civilizationId, sourceReceiptId, economicImpact.impactHash.slice(0, 16)]),
-          civilizationId: activeCiv.civilizationId,
-          worldId,
-          worldEpoch: nextCiv.worldEpoch,
-          eventType: "ECONOMIC_MARKET_DEVELOPMENT",
-          sourceReceiptId,
-          sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
-          eventPayloadJson: JSON.stringify({
-            cycle: economicImpact.cycle,
-            impactHash: economicImpact.impactHash,
-            totalTradeVolume: economicImpact.totalTradeVolume,
-            totalScarcityPressure: economicImpact.totalScarcityPressure,
-            totalHazardPressure: economicImpact.totalHazardPressure,
-            totalEconomyPressure: economicImpact.totalEconomyPressure,
-            totalPoliticsPressure: economicImpact.totalPoliticsPressure,
-            totalCaravanActivity: economicImpact.totalCaravanActivity,
-            hubSnapshots: economicImpact.hubs,
-            appliedDeltas: {
-              population: deltas.populationDelta,
-              stability: deltas.stabilityDelta,
-              hazard: deltas.hazardDelta,
-              scarcity: deltas.scarcityDelta,
-            },
-          }),
-          occurredSequence,
-        });
-      }
+      await recordCivilizationAdvance({
+        state: nextCiv,
+        transitionEvent,
+        economicEvent,
+      });
 
       return { action: "ADVANCED" as const, civilizationId: activeCiv.civilizationId };
     }
@@ -234,9 +234,10 @@ export async function orchestrateCivilizationLoop(
         receiptHash: hash(["ruin-record", ruin.ruinId]),
       }));
 
+      const rebirthBaseEpoch = Math.max(1, ...ruinTransformations.map(ruin => ruin.worldEpoch));
       const epochAdvance = advanceCivilizationEpoch({
         worldId,
-        currentEpoch: Math.max(1, worldEpoch),
+        currentEpoch: rebirthBaseEpoch,
         transitionReason: "settlement_rebirth",
         ruinTransformations,
         receiptId: sourceReceiptId,
@@ -247,25 +248,31 @@ export async function orchestrateCivilizationLoop(
         if (!candidate.ruinId) throw new Error("CIVILIZATION_REBIRTH_RUIN_REQUIRED");
         const candidateRuin = ruinTransformations.find(ruin => ruin.ruinId === candidate.ruinId);
         if (!candidateRuin) throw new Error("CIVILIZATION_REBIRTH_SOURCE_REQUIRED");
-        await recordSettlementRebirthCandidate({
-          candidateId: candidate.candidateId,
-          worldId,
-          locationIdentity: candidate.locationIdentity,
-          ruinId: candidate.ruinId,
-          eligibilityReceipt: epochAdvance.receiptHash,
-          candidateSeedDigest: candidate.candidateSeedDigest,
-          state: "ELIGIBLE",
-        });
-        await recordCivilizationHistoryEvent({
-          eventId: candidate.candidateId,
-          civilizationId: candidateRuin.sourceCivilizationId,
-          worldId,
-          worldEpoch: epochAdvance.toEpoch,
-          eventType: "REBIRTH_CANDIDATE_CREATED",
-          sourceReceiptId,
-          sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
-          eventPayloadJson: JSON.stringify(candidate),
-          occurredSequence: Math.max(0, worldEpoch),
+        const priorHistory = await listCivilizationHistoryEvents(worldId, 200);
+        const occurredSequence = priorHistory
+          .filter(event => event.civilizationId === candidateRuin.sourceCivilizationId)
+          .reduce((maximum, event) => Math.max(maximum, event.occurredSequence), -1) + 1;
+        await recordSettlementRebirthTransition({
+          candidate: {
+            candidateId: candidate.candidateId,
+            worldId,
+            locationIdentity: candidate.locationIdentity,
+            ruinId: candidate.ruinId,
+            eligibilityReceipt: epochAdvance.receiptHash,
+            candidateSeedDigest: candidate.candidateSeedDigest,
+            state: "ELIGIBLE",
+          },
+          event: {
+            eventId: candidate.candidateId,
+            civilizationId: candidateRuin.sourceCivilizationId,
+            worldId,
+            worldEpoch: epochAdvance.toEpoch,
+            eventType: "REBIRTH_CANDIDATE_CREATED",
+            sourceReceiptId,
+            sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
+            eventPayloadJson: JSON.stringify(candidate),
+            occurredSequence,
+          },
         });
         return { action: "REBIRTH_CANDIDATE_CREATED" as const, candidateId: candidate.candidateId };
       }
@@ -280,19 +287,21 @@ export async function orchestrateCivilizationLoop(
         stability: 1.0,
         hazardIndex: 0.0,
         scarcitySeverity: 0.0,
-        lastResolutionIndex: Math.max(0, worldEpoch),
+        lastResolutionIndex: 0,
       };
-      await upsertActiveCivilization(initialCiv);
-      await recordCivilizationHistoryEvent({
-        eventId: hash(["seed", initialCivId, sourceReceiptId]),
-        civilizationId: initialCivId,
-        worldId,
-        worldEpoch: 1,
-        eventType: "INITIAL_CIV_SEEDED",
-        sourceReceiptId,
-        sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
-        eventPayloadJson: JSON.stringify(initialCiv),
-        occurredSequence: initialCiv.lastResolutionIndex,
+      await recordInitialCivilizationSeed({
+        state: initialCiv,
+        event: {
+          eventId: hash(["seed", initialCivId, sourceReceiptId]),
+          civilizationId: initialCivId,
+          worldId,
+          worldEpoch: 1,
+          eventType: "INITIAL_CIV_SEEDED",
+          sourceReceiptId,
+          sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
+          eventPayloadJson: JSON.stringify(initialCiv),
+          occurredSequence: 0,
+        },
       });
       return { action: "INITIAL_CIV_SEEDED" as const, civilizationId: initialCivId };
     }
