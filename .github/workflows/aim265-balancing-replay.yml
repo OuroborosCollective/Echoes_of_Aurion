@@ -15,8 +15,12 @@ on:
       - 'server/guildBankProtocol.ts'
       - 'server/wolframCag*'
       - 'server/aurionCagDesign*'
+      - 'server/neuralCapabilityCagVerifier.ts'
+      - 'server/neuralCapabilityCagVerifier.test.ts'
       - 'shared/aurionCagDesignProtocol.ts'
+      - 'shared/neuralCapabilityCagProtocol.ts'
       - 'scripts/balancing/aurion-cag-design-canary.ts'
+      - 'scripts/balancing/neural-capability-cag-canary.ts'
       - 'server/adminMcp*'
       - 'server/_core/index.ts'
       - 'server/aim265*'
@@ -39,8 +43,12 @@ on:
       - 'server/guildBankProtocol.ts'
       - 'server/wolframCag*'
       - 'server/aurionCagDesign*'
+      - 'server/neuralCapabilityCagVerifier.ts'
+      - 'server/neuralCapabilityCagVerifier.test.ts'
       - 'shared/aurionCagDesignProtocol.ts'
+      - 'shared/neuralCapabilityCagProtocol.ts'
       - 'scripts/balancing/aurion-cag-design-canary.ts'
+      - 'scripts/balancing/neural-capability-cag-canary.ts'
       - 'server/adminMcp*'
       - 'server/_core/index.ts'
       - 'server/aim265*'
@@ -75,8 +83,8 @@ jobs:
           python scripts/balancing/verify-aim265.py /tmp/aurion-balancing-v2.json > /tmp/aurion-balancing-oracle.json
           diff -u docs/balancing/aim265-candidate.json /tmp/aurion-balancing-v2.json
           python -m unittest discover -s scripts/balancing -p 'test_*.py'
-          pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts server/wolframCag.test.ts server/wolframCagRuntimeReadback.test.ts server/aurionCagDesignOracle.test.ts server/adminMcp.test.ts
-      - name: Run real Wolfram CAG canary when CI has the provisioned key
+          pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts server/wolframCag.test.ts server/wolframCagRuntimeReadback.test.ts server/aurionCagDesignOracle.test.ts server/neuralCapabilityCagVerifier.test.ts server/adminMcp.test.ts
+      - name: Run real Wolfram CAG canaries when CI has the provisioned key
         env:
           WOLFRAM_CAG_API_KEY: ${{ secrets.WOLFRAM_CAG_API_KEY }}
         run: |
@@ -84,9 +92,11 @@ jobs:
           if [ -z "${WOLFRAM_CAG_API_KEY:-}" ]; then
             printf '%s\n' '{"protocol":"aurion.wolfram-cag-ci.v1","status":"SECRET_NOT_AVAILABLE_IN_CI","providerCallExecuted":false}' | tee /tmp/aurion-wolfram-cag-canary.json
             printf '%s\n' '{"protocol":"aurion.cag-design-ci.v1","status":"SECRET_NOT_AVAILABLE_IN_CI","providerCallExecuted":false}' | tee /tmp/aurion-cag-design-canary.json
+            printf '%s\n' '{"protocol":"aurion.neural-capability-cag-ci.v1","status":"SECRET_NOT_AVAILABLE_IN_CI","providerCallExecuted":false}' | tee /tmp/aurion-neural-capability-cag-canary.json
           else
             pnpm exec tsx scripts/balancing/wolfram-cag-canary.ts | tee /tmp/aurion-wolfram-cag-canary.json
             pnpm exec tsx scripts/balancing/aurion-cag-design-canary.ts | tee /tmp/aurion-cag-design-canary.json
+            pnpm exec tsx scripts/balancing/neural-capability-cag-canary.ts | tee /tmp/aurion-neural-capability-cag-canary.json
           fi
       - uses: actions/upload-artifact@v4
         with:
@@ -96,5 +106,6 @@ jobs:
             /tmp/aurion-balancing-oracle.json
             /tmp/aurion-wolfram-cag-canary.json
             /tmp/aurion-cag-design-canary.json
+            /tmp/aurion-neural-capability-cag-canary.json
           if-no-files-found: error
           retention-days: 14
