@@ -762,3 +762,35 @@ Evidence: Candidate `5ebdd73d59496787453d5d38ca4a4df3f877ef94`; AIM265 `37276023
 Änderung: Membership join/leave wird receipt-gebunden replaybar, Restart-/Shutdown-Evidence und redacted Diagnostics sind exact-head versiegelt.
 Erkenntnis: Transport-Readback darf sofort reagieren, aber kausale Historie beginnt am zuletzt committed Canonical State; Fixtures und Checkpoints müssen deshalb vor Membership-Intents verankert sein.
 Evidence: Candidate `37112741937aac2f8c0c3449e284ca9dbbc44b56`; Starter Village `37280103341`, Local `37280103310`, Chaos `37280103273`, Runtime Candidate `37280103380`, Container Proof `37280103309`, AIM-292 `37280103336`, AIM-259 `37280103364` — alle success.
+
+
+### 2026-10-05 — PR #769 — fix(issue-743): seal Starterdorf replay assurance across restart
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=769 merge=67adf983cd38b046548580aacc4d08aebae8573a -->
+Task: Merge PR #769 into `main` — fix(issue-743): seal Starterdorf replay assurance across restart.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/starter-village-pilot.yml`
+- `Memory.md`
+- `scripts/causal-chaos/harness.ts`
+- `scripts/diagnose-starter-replay-assurance.ts`
+- `scripts/verify-starter-village-evidence.mjs`
+- `scripts/verify-starter-village-evidence.test.mjs`
+- `server/_core/gracefulCausalShutdown.test.ts`
+- `server/_core/gracefulCausalShutdown.ts`
+- `server/_core/index.ts`
+- `server/causality/causalReceiptV2.test.ts`
+- `server/causality/headlessCausalOracle.test.ts`
+- `server/starterVillageReplayAssuranceMariaDb.test.ts`
+- `server/zoneMembershipCausality.test.ts`
+- `server/zoneRuntime.ts`
+- `shared/aurionZoneIntentContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/769
+- Merge commit: `67adf983cd38b046548580aacc4d08aebae8573a`
+- PR head: `3d94c7d3ecf963d83965d289dddd35e04a811d05`
+- Merged at: 2026-10-05T08:05:18Z
+- Post-merge workflow run: 37281464963
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
