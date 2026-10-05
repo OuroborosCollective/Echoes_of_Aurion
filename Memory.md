@@ -856,3 +856,54 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #777 — Implement Living History Loop, concurrent NPC runtime, and guild/economy systems
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=777 merge=79bca0aec28c6e85b8bed7fa5e69d84b64a580d8 -->
+Task: Merge PR #777 into `main` — Implement Living History Loop, concurrent NPC runtime, and guild/economy systems.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-production-schema-readback.yml`
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `.github/workflows/aurion-schema-reconciliation-proof.yml`
+- `client/src/components/GuildOverviewDashboard.tsx`
+- `client/src/pages/Operations.tsx`
+- `client/src/xaurion/integration/ax1FullCutover.test.tsx`
+- `config/aurion-migration-wave-manifest.json`
+- `deploy/aurion-production-schema-apply-core`
+- `deploy/verify-aurion-production-schema-apply-artifact.mjs`
+- `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`
+- `drizzle/0071_aurion_npc_guild_authority.sql`
+- `drizzle/meta/_journal.json`
+- `drizzle/schema.ts`
+- `e2e/aim292.npcMemory.spec.ts`
+- `e2e/starterVillagePilot.spec.ts`
+- `scripts/aurionProductionSchemaReconciliation.ts`
+- `scripts/build-aurion-production-apply-artifact.mjs`
+- `scripts/build-aurion-production-reconcile-artifact.mjs`
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `server/aurion/civilizationService.ts`
+- `server/aurion/economicEventAggregator.ts`
+- `server/aurion/livingHistoryLoop.ts`
+- `server/aurion/npcConcurrentLifecycleRuntime.ts`
+- `server/aurion/npcGuildProtocol.ts`
+- `server/aurion/npcGuildRuntime.ts`
+- `server/aurion/npcGuildStore.ts`
+- `server/aurionCivilizationHistoryPersistence.ts`
+- `server/aurionProductionSchemaReconcileDockerRunner.test.ts`
+- `server/autonomousNpcLifeMariaDb.test.ts`
+- `server/autonomousNpcLifeRuntime.ts`
+- `server/blocker3Compliance.test.ts`
+- `server/civilizationHistoryRouter.ts`
+- `server/wasdAurionRuntime.ts`
+- `shared/npcGuildContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/777
+- Merge commit: `79bca0aec28c6e85b8bed7fa5e69d84b64a580d8`
+- PR head: `58ebcc6e90c69a0089b24ce187b71bcaf4a8b006`
+- Merged at: 2026-10-05T15:44:14Z
+- Post-merge workflow run: 37335230894
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
