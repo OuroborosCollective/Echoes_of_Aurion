@@ -52,7 +52,7 @@ jobs:
     timeout-minutes: 10
     env:
       COMPANION_MEMORY_DIR: /opt/aurion-zone-runtime/current/data/companion-memory
-      ARE_RLOGIC_REVISION: 8c05fb1c4ec12ab3f3f5a8a472a6a644209deac7
+      ARE_RLOGIC_REVISION: eb6497fb2598c3159cbc4a67bfd97ad6d9c98ce1
 
     steps:
       - name: Guard repository and runtime memory
