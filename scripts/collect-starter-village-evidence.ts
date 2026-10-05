@@ -7,6 +7,8 @@ function redact(text: string) {
   return text
     .replace(/authorization\s*:\s*[^\r\n]+/gi, "authorization: [redacted]")
     .replace(/cookie\s*:\s*[^\r\n]+/gi, "cookie: [redacted]")
+    .replace(/set-cookie\s*:\s*[^\r\n]+/gi, "set-cookie: [redacted]")
+    .replace(/(["']?(?:authorization|cookie|set-cookie|password)["']?\s*:\s*)["'][^"']*["']/gi, '$1"[redacted]"')
     .replace(/database_?url\s*=\s*[^\s]+/gi, "DATABASE_URL=[redacted]")
     .replace(/jwt_?secret\s*=\s*[^\s]+/gi, "JWT_SECRET=[redacted]");
 }
@@ -39,6 +41,10 @@ async function sanitizeTrace(source: string, destination: string) {
     execFileSync("unzip", ["-qq", source, "-d", temp]);
     await rm(path.join(temp, "resources"), { recursive: true, force: true });
     for (const file of await walk(temp)) {
+      if (path.basename(file).includes("network")) {
+        await rm(file, { force: true });
+        continue;
+      }
       const bytes = await readFile(file);
       if (bytes.includes(0)) continue;
       await writeFile(file, redact(bytes.toString("utf8")));
