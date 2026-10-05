@@ -15,4 +15,4 @@ The owner source files carried the same three embedded 2048² textures in every 
 
 This asset family is presentation-only. It grants no collision, interaction, quest, loot, persistence, lighting authority, or simulation authority.
 
-Binary handoff: upload the four files above into this directory on branch `feat/starter-village-street-lamp-lods`. The runtime/seed/evidence wiring is added only after exact hash readback.
+Repository handoff verified on branch `feat/starter-village-street-lamp-lods`: all four physical GLBs are present and their Git blob identities match the uploaded bytes. The runtime integration binds the family only through the exact SHA-256 contract above and fails closed on any mismatch.
