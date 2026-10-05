@@ -292,9 +292,11 @@ export function buildNeuralCapabilityCagBoundedInput(
   }
 
   const normalizedSpec = normalizePhrase(contract.specText);
-  const specAliasGroups = Object.freeze(contract.allowedIntents.map(intent =>
-    Object.freeze((contract.specIntentAliases?.[intent] ?? []).map(normalizePhrase).filter(Boolean)),
-  ));
+  const specAliasGroups = Object.freeze(contract.allowedIntents
+    .filter(intent => intent !== contract.rejectIntent)
+    .map(intent =>
+      Object.freeze((contract.specIntentAliases?.[intent] ?? []).map(normalizePhrase).filter(Boolean)),
+    ));
 
   const exactDatasetRows = Object.freeze(dataset.map(entry => {
     const exactKey = canonicalize({
@@ -373,7 +375,7 @@ export function evaluateNeuralCapabilityInvariants(
 
   const normalizedSpec = normalizePhrase(contract.specText);
   let specMissingCount = 0;
-  for (const intent of contract.allowedIntents) {
+  for (const intent of contract.allowedIntents.filter(intent => intent !== contract.rejectIntent)) {
     const aliases = (contract.specIntentAliases?.[intent] ?? []).map(normalizePhrase).filter(Boolean);
     if (aliases.length === 0) {
       mask |= NEURAL_CAPABILITY_INVARIANT.CONTRACT_SPEC_GROUNDING_MISSING;
