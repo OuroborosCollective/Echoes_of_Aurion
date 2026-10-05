@@ -6,6 +6,7 @@ on:
       - "examples/stateless-determinism/**"
       - "scripts/export-stateless-determinism-gist.mjs"
       - "docs/public-patterns/stateless-determinism-minimal-runtime.md"
+      - "Memory.md"
       - ".github/workflows/stateless-determinism-public-pattern.yml"
   workflow_dispatch:
 
