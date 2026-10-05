@@ -6,6 +6,11 @@ on:
     paths:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
+      - "server/starterVillageReplayAssuranceMariaDb.test.ts"
+      - "server/_core/index.ts"
+      - "server/_core/gracefulCausalShutdown.ts"
+      - "server/_core/gracefulCausalShutdown.test.ts"
+      - "scripts/diagnose-starter-replay-assurance.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
@@ -27,6 +32,11 @@ on:
     paths:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
+      - "server/starterVillageReplayAssuranceMariaDb.test.ts"
+      - "server/_core/index.ts"
+      - "server/_core/gracefulCausalShutdown.ts"
+      - "server/_core/gracefulCausalShutdown.test.ts"
+      - "scripts/diagnose-starter-replay-assurance.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
@@ -105,6 +115,8 @@ jobs:
         run: pnpm exec vitest run server/starterVillageFountainAsset.test.ts server/glbAssetClassifier.test.ts server/glbCatalogFamilies.test.ts client/src/xaurion/core/UploadedAssetRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Canonical 10 Hz Return Stone and northward movement regressions
         run: pnpm exec vitest run server/returnStoneZoneRuntime.test.ts server/zoneGatewayPresence.test.ts server/zoneRuntime.test.ts --no-file-parallelism --reporter=verbose
+      - name: Graceful causal shutdown regression
+        run: pnpm exec vitest run server/_core/gracefulCausalShutdown.test.ts --no-file-parallelism --reporter=verbose
       - name: Scope egress denial to Aurion runtime identity
         id: network
         run: |
@@ -159,7 +171,47 @@ jobs:
           done
           test -s /tmp/starter-pilot.pid
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
-          curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-before.json
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:3000/healthz > test-results/starter-pilot-health-before.json
+            if node - test-results/starter-pilot-health-before.json "$AURION_RELEASE_SHA" <<'NODE'
+          const fs = require("node:fs");
+          const [input, revision] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replay = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const chain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          process.exit(body.revision === revision && replay?.status === "MATCH" && replay?.summary === "REPLAY_SAMPLE_MATCH" && chain?.status === "MATCH" ? 0 : 1);
+          NODE
+            then
+              break
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              echo "pre-journey assurance did not reach replay/receipt MATCH" >&2
+              cat test-results/starter-pilot-health-before.json >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          node - "$AURION_EVIDENCE_DIR/assurance-before-journey.json" "$AURION_RELEASE_SHA" test-results/starter-pilot-health-before.json <<'NODE'
+          const fs = require("node:fs");
+          const [out, revision, input] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replaySample = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const receiptChain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          if (body.revision !== revision) throw new Error("STARTER_ASSURANCE_REVISION_MISMATCH");
+          if (replaySample?.status !== "MATCH" || replaySample?.summary !== "REPLAY_SAMPLE_MATCH") throw new Error("STARTER_REPLAY_SAMPLE_NOT_MATCH_BEFORE");
+          if (receiptChain?.status !== "MATCH") throw new Error("STARTER_RECEIPT_CHAIN_NOT_MATCH_BEFORE");
+          fs.writeFileSync(out, JSON.stringify({
+            schema: "aurion.starter-village-assurance-readback.v1",
+            revision,
+            phase: "before-journey",
+            assuranceStatus: body.causalAssurance?.status ?? null,
+            snapshotHash: body.causalAssurance?.snapshotHash ?? null,
+            replaySample,
+            receiptChain,
+          }, null, 2) + "\n");
+          NODE
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=journey pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
       - name: Restart application and independently read back quest and inventory
         id: restart
@@ -167,7 +219,7 @@ jobs:
           set -euo pipefail
           RUNTIME_PID="$(cat /tmp/starter-pilot.pid)"
           sudo kill "$RUNTIME_PID"
-          for attempt in $(seq 1 50); do
+          for attempt in $(seq 1 300); do
             if ! sudo kill -0 "$RUNTIME_PID" 2>/dev/null; then break; fi
             sleep 0.1
           done
@@ -189,6 +241,56 @@ jobs:
           test -s /tmp/starter-pilot.pid
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:3000/healthz > test-results/starter-pilot-health-after.json
+            if node - test-results/starter-pilot-health-after.json "$AURION_RELEASE_SHA" <<'NODE'
+          const fs = require("node:fs");
+          const [input, revision] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replay = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const chain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          process.exit(body.revision === revision && replay?.status === "MATCH" && replay?.summary === "REPLAY_SAMPLE_MATCH" && chain?.status === "MATCH" ? 0 : 1);
+          NODE
+            then
+              break
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              echo "post-restart assurance did not reach replay/receipt MATCH" >&2
+              cat test-results/starter-pilot-health-after.json >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          node - "$AURION_EVIDENCE_DIR/assurance-after-restart.json" "$AURION_RELEASE_SHA" test-results/starter-pilot-health-after.json <<'NODE'
+          const fs = require("node:fs");
+          const [out, revision, input] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replaySample = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const receiptChain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          if (body.revision !== revision) throw new Error("STARTER_ASSURANCE_REVISION_MISMATCH");
+          if (replaySample?.status !== "MATCH" || replaySample?.summary !== "REPLAY_SAMPLE_MATCH") throw new Error("STARTER_REPLAY_SAMPLE_NOT_MATCH_AFTER");
+          if (receiptChain?.status !== "MATCH") throw new Error("STARTER_RECEIPT_CHAIN_NOT_MATCH_AFTER");
+          fs.writeFileSync(out, JSON.stringify({
+            schema: "aurion.starter-village-assurance-readback.v1",
+            revision,
+            phase: "after-restart",
+            assuranceStatus: body.causalAssurance?.status ?? null,
+            snapshotHash: body.causalAssurance?.snapshotHash ?? null,
+            replaySample,
+            receiptChain,
+          }, null, 2) + "\n");
+          NODE
+
+      - name: Capture read-only first-divergence diagnostics from persisted replay bytes
+        if: always() && steps.journey.outcome == 'success'
+        run: pnpm exec tsx scripts/diagnose-starter-replay-assurance.ts
+
+      - name: Prove persisted replay sample MATCH plus controlled divergence and missing-evidence fail-closed
+        id: replay_assurance
+        run: |
+          AURION_STARTER_REPLAY_ASSURANCE_E2E=1 pnpm exec vitest run server/starterVillageReplayAssuranceMariaDb.test.ts --no-file-parallelism --reporter=verbose
       - name: Reproduce the pre-fix empty catalog contract without a blind radio wait
         id: empty_catalog
         run: |
@@ -241,6 +343,7 @@ jobs:
               "network": "${{ steps.network.outcome }}",
               "journey": "${{ steps.journey.outcome }}",
               "restartReadback": "${{ steps.restart.outcome }}",
+              "replayAssurance": "${{ steps.replay_assurance.outcome }}",
               "emptyCatalogDiagnostic": "${{ steps.empty_catalog.outcome }}",
               "publicCharacterAdmission": "${{ steps.character_seed.outcome }}",
               "fountainAdmission": "${{ steps.fountain_seed.outcome }}",
@@ -266,7 +369,11 @@ jobs:
         if: always()
         with:
           name: starter-village-pilot-${{ env.AURION_RELEASE_SHA }}
-          path: .aurion-evidence/starter-village-pilot
+          path: |
+            .aurion-evidence/starter-village-pilot
+            .playwright-results/starter-village-pilot
+            test-results/starter-pilot-*.log
+            test-results/starter-pilot-health-*.json
           if-no-files-found: error
           retention-days: 30
       - name: Independently download the published evidence bundle
@@ -279,4 +386,4 @@ jobs:
         if: success()
         run: |
           set -euo pipefail
-          node scripts/verify-starter-village-evidence.mjs verify ".artifact-readback" "$AURION_RELEASE_SHA"
+          node scripts/verify-starter-village-evidence.mjs verify ".artifact-readback/.aurion-evidence/starter-village-pilot" "$AURION_RELEASE_SHA"

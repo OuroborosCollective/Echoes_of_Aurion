@@ -45,3 +45,34 @@ test("rejects revision drift, empty json, checksum drift and secret material", (
     assert.notEqual(run("verify", dir, revision).status, 0);
   }
 });
+
+
+test("rejects contradicted replay assurance evidence instead of downgrading it", () => {
+  const dir = tmp();
+  json(dir, "assurance-after-restart.json", {
+    schema: "aurion.starter-village-assurance-readback.v1",
+    revision,
+    replaySample: { status: "CONTRADICTED", summary: "REPLAY_SAMPLE_DIVERGENCE" },
+    receiptChain: { status: "MATCH" },
+  });
+  const result = run("seal", dir, revision, "PARTIAL");
+  assert.notEqual(result.status, 0);
+});
+
+test("rejects replay diagnostic evidence that fails to localize divergence or missing-input uncertainty", () => {
+  const dir = tmp();
+  json(dir, `replay-assurance-${revision}.json`, {
+    schema: "aurion.starter-village-replay-assurance.v1",
+    revision,
+    latestTick: 42,
+    liveMatch: { status: "MATCH" },
+    controlledDivergence: {
+      status: "FIRST_DIVERGENCE",
+      firstDivergence: { tick: 42, stage: "POST_STATE" },
+    },
+    missingEvidence: { status: "MATCH" },
+    readonlyCounts: { before: { receipts: 4 }, after: { receipts: 4 } },
+  });
+  const result = run("seal", dir, revision, "PARTIAL");
+  assert.notEqual(result.status, 0);
+});

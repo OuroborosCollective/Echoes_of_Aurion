@@ -752,12 +752,39 @@ Status: VERIFIED candidate
 Erkenntnis: CAG darf Promotion nur evidenzbasiert blockieren/freigeben, niemals Artifact-Aktivierung oder Gameplay-Authority übernehmen.
 Evidence: Candidate `5ebdd73d59496787453d5d38ca4a4df3f877ef94`; AIM265 `37276023307` (77/77, real `PROMOTION_CANDIDATE_VERIFIED`, artifact 11330137582), Local `37276023243`, Runtime Candidate `37276023365`, Container Proof `37276023244`, AIM-292 `37276023367`, AIM-535 `37276023396` — alle success.
 
-### 2026-10-05 — Issue #686 ACEG capability/equipment graph solver (draft)
-Status: PARTIAL — deterministic contract slice verified locally; exact-head CI pending
-Task: Implement the ACEG core of Issue #686 on the existing shared-contract canon path: deterministic capability graph, laddering, separated equip-eligibility and over-equip effectiveness resolvers, OE retention after buff expiry.
-Decisions: Aurion remains sole gameplay/equipment/receipt authority; solver is pure and shared (`aurion.capability-equipment-graph.v1`), no wall-clock, no client RNG, integer bps math only; buffs/implants count only in the confirmed fixed-tick state, expired buffs are ignored, unconfirmed buffs fail closed; laddering is bounded (`ACEG_MAX_LADDER_PASSES = 16`), monotonic (equip only, cycle-safe) and canonical-order invariant; every resolution is receipt/hash-bound via canonical sha256 (`verifyAcegResolution`).
-Touched surfaces: `shared/aurionCapabilityEquipmentGraph.ts`, `shared/aurionCapabilityEquipmentGraph.test.ts`, `Memory.md`.
-Evidence: Local deterministic harness on the exact branch file content (esbuild bundle, node v20): all ACEG checks passed — canonical capability aggregation (125 strength), expired/unconfirmed buff handling, eligibility vs. OE effectiveness (exact 9500/10000 bps references), three-pass laddering (helm→rig→blade), OE retention with prior confirmation receipt, canonical-order invariance of hash and result, fail-closed duplicates/unknown items/hash drift. Exact-head GitHub CI (vitest, `pnpm check`, Local Test Pack, Runtime Candidate) still required before ready-for-review.
-Learned: Eligibility and over-equip effectiveness must stay separate resolvers so a confirmed equip can persist per OE rule while its effectiveness degrades deterministically instead of unequipping.
-Open: Server/persistence binding of ACEG decisions to the inventory transaction kernel (PR #718 line), mobile playability hardening (touch targets, safe-area, single movement owner, Playwright phone/landscape evidence) is explicitly not part of this slice; exact-head CI pending.
-Next safe step: Run exact-head CI on the draft PR, then wire ACEG resolution into the confirmed equip path with receipt persistence before any ready-for-review claim.
+### 2026-10-05 — PR #769 Starterdorf replay assurance closure
+Änderung: Membership join/leave wird receipt-gebunden replaybar, Restart-/Shutdown-Evidence und redacted Diagnostics sind exact-head versiegelt.
+Erkenntnis: Transport-Readback darf sofort reagieren, aber kausale Historie beginnt am zuletzt committed Canonical State; Fixtures und Checkpoints müssen deshalb vor Membership-Intents verankert sein.
+Evidence: Candidate `37112741937aac2f8c0c3449e284ca9dbbc44b56`; Starter Village `37280103341`, Local `37280103310`, Chaos `37280103273`, Runtime Candidate `37280103380`, Container Proof `37280103309`, AIM-292 `37280103336`, AIM-259 `37280103364` — alle success.
+
+
+### 2026-10-05 — PR #769 — fix(issue-743): seal Starterdorf replay assurance across restart
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=769 merge=67adf983cd38b046548580aacc4d08aebae8573a -->
+Task: Merge PR #769 into `main` — fix(issue-743): seal Starterdorf replay assurance across restart.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/starter-village-pilot.yml`
+- `Memory.md`
+- `scripts/causal-chaos/harness.ts`
+- `scripts/diagnose-starter-replay-assurance.ts`
+- `scripts/verify-starter-village-evidence.mjs`
+- `scripts/verify-starter-village-evidence.test.mjs`
+- `server/_core/gracefulCausalShutdown.test.ts`
+- `server/_core/gracefulCausalShutdown.ts`
+- `server/_core/index.ts`
+- `server/causality/causalReceiptV2.test.ts`
+- `server/causality/headlessCausalOracle.test.ts`
+- `server/starterVillageReplayAssuranceMariaDb.test.ts`
+- `server/zoneMembershipCausality.test.ts`
+- `server/zoneRuntime.ts`
+- `shared/aurionZoneIntentContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/769
+- Merge commit: `67adf983cd38b046548580aacc4d08aebae8573a`
+- PR head: `3d94c7d3ecf963d83965d289dddd35e04a811d05`
+- Merged at: 2026-10-05T08:05:18Z
+- Post-merge workflow run: 37281464963
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
