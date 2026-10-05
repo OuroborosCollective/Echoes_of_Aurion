@@ -244,6 +244,9 @@ export async function orchestrateCivilizationLoop(
 
       if (epochAdvance.rebirthCandidates.length > 0) {
         const candidate = epochAdvance.rebirthCandidates[0]!;
+        if (!candidate.ruinId) throw new Error("CIVILIZATION_REBIRTH_RUIN_REQUIRED");
+        const candidateRuin = ruinTransformations.find(ruin => ruin.ruinId === candidate.ruinId);
+        if (!candidateRuin) throw new Error("CIVILIZATION_REBIRTH_SOURCE_REQUIRED");
         await recordSettlementRebirthCandidate({
           candidateId: candidate.candidateId,
           worldId,
@@ -255,7 +258,7 @@ export async function orchestrateCivilizationLoop(
         });
         await recordCivilizationHistoryEvent({
           eventId: candidate.candidateId,
-          civilizationId: candidate.sourceCivilizationId,
+          civilizationId: candidateRuin.sourceCivilizationId,
           worldId,
           worldEpoch: epochAdvance.toEpoch,
           eventType: "REBIRTH_CANDIDATE_CREATED",
