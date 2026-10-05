@@ -439,3 +439,100 @@ Evidence: #754 exact head passed Aurion PR Runtime Candidate, Runtime Container 
 Learned: File-level cherry-pick avoids bot metadata and unrelated learning files.
 Open: No gameplay-authority or production-deployment claim.
 Next safe step: Complete zero-open-PR cleanup.
+
+
+### 2026-10-05 — PR #759 — merge: consolidate verified Starterdorf gameplay chain onto current main
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=759 merge=313f62aaa551c17ba09a5d01eed7075f980dc56d -->
+Task: Merge PR #759 into `main` — merge: consolidate verified Starterdorf gameplay chain onto current main.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/agent-memory-supabase-sync.yml`
+- `.github/workflows/aim259-group-instances.yml`
+- `.github/workflows/aurion-journal-watermark-regression.yml`
+- `.github/workflows/aurion-local-test-pack.yml`
+- `.github/workflows/aurion-pr-runtime-container-proof.yml`
+- `.github/workflows/aurion-production-schema-readback.yml`
+- `.github/workflows/aurion-root-reconciliation-artifact-proof.yml`
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `.github/workflows/aurion-schema-reconciliation-proof.yml`
+- `Memory.md`
+- `client/src/components/CausalBackupNotifier.test.tsx`
+- `client/src/components/CausalBackupNotifier.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.test.tsx`
+- `client/src/xaurion/integration/WorldAssetProjection.test.ts`
+- `client/src/xaurion/integration/WorldAssetProjection.ts`
+- `config/aurion-migration-wave-manifest.json`
+- `deploy/aurion-production-schema-apply-core`
+- `deploy/verify-aurion-production-schema-apply-artifact.mjs`
+- `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`
+- `drizzle/0069_aurion_combat_victory_events.sql`
+- `drizzle/meta/_journal.json`
+- `drizzle/schema.ts`
+- `e2e/aim291.assetShipping.spec.ts`
+- `e2e/ax1.ui.spec.ts`
+- `scripts/aurionProductionSchemaReconciliation.ts`
+- `scripts/build-aurion-production-apply-artifact.mjs`
+- `scripts/build-aurion-production-reconcile-artifact.mjs`
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `scripts/run-isolated-combat-mariadb-tests.mjs`
+- `server/aurionCombatVictoryPersistence.ts`
+- `server/aurionProductionSchemaReconcileDockerRunner.test.ts`
+- `server/aurionProductionSchemaReconciliation.test.ts`
+- `server/aurionStarterVillageContract.test.ts`
+- `server/aurionStarterVillageContract.ts`
+- `server/blocker3Compliance.test.ts`
+- `server/causality/archivePacketsMariaDb.test.ts`
+- `server/causality/archivePacking.test.ts`
+- `server/causality/archivePacking.ts`
+- `server/causality/archivingService.ts`
+- `server/causality/causalReceiptV2Persistence.test.ts`
+- `server/causality/combatOutboxAtomicMariaDb.test.ts`
+- `server/causality/persistence.ts`
+- `server/causality/tickRecorder.ts`
+- `server/causality/worldCausalRootService.test.ts`
+- `server/causality/worldGenerationParityHarness.test.ts`
+- `server/causality/worldGenerationParityMariaDb.test.ts`
+- `server/causality/zoneCanonicalState.ts`
+- `server/combatQuestProjectionMariaDb.test.ts`
+- `server/db.ts`
+- `server/questCompiler/adminService.ts`
+- `server/questCompiler/causalAnchor.ts`
+- `server/questCompiler/causalClosureMariaDb.test.ts`
+- `server/questCompiler/eventBindingMatcher.ts`
+- `server/questCompiler/pilotCombatCompletionEvidence.ts`
+- `server/questCompiler/pilotQuestAdminService.test.ts`
+- `server/questCompiler/pilotQuestTemplate.test.ts`
+- `server/questCompiler/pilotQuestTemplate.ts`
+- `server/questCompiler/roleResolver.ts`
+- `server/questNpcAuthority.test.ts`
+- `server/questNpcAuthority.ts`
+- `server/routers.ts`
+- `server/routes/aurionQuestRouter.ts`
+- `server/starterVillageNpcResidence.test.ts`
+- `server/starterVillageNpcResidence.ts`
+- `server/wasdAurionDialogueQuestIntentProtocol.test.ts`
+- `server/wasdAurionDialogueQuestIntentProtocol.ts`
+- `server/wasdAurionRuntime.ts`
+- `server/wasdCombatDeltaProtocol.ts`
+- `server/wasdCombatProfileProtocol.ts`
+- `server/worldAssetProtocol.test.ts`
+- `server/zoneCombatContinuity.test.ts`
+- `server/zoneCombatContinuityMariaDb.test.ts`
+- `server/zoneCombatEquipmentMariaDb.test.ts`
+- `server/zoneCombatPersistence.ts`
+- `server/zoneRuntime.ts`
+- `shared/aurionCausalTickContract.ts`
+- `shared/aurionQuestCanonicalHash.ts`
+- `shared/aurionQuestContract.ts`
+- `shared/aurionStarterVillageContract.ts`
+- `shared/worldAssetProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/759
+- Merge commit: `313f62aaa551c17ba09a5d01eed7075f980dc56d`
+- PR head: `ff870eac3c9eb5fd59a7159e6b49d05134437138`
+- Merged at: 2026-10-05T00:18:24Z
+- Post-merge workflow run: 37247004094
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
