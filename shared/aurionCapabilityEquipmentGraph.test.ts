@@ -197,7 +197,10 @@ describe("AIM-686 ACEG Capability & Equipment Graph", () => {
     });
     expect(
       resolution.equipDecisions.every(
-        decision => decision.retention === "eligible"
+        decision =>
+          decision.retention === "eligible" &&
+          decision.confirmationReceiptId === null &&
+          decision.ownershipReceiptId.startsWith("receipt:own:")
       )
     ).toBe(true);
     expect(resolution.capabilities.medicine).toBe(50);
@@ -259,6 +262,7 @@ describe("AIM-686 ACEG Capability & Equipment Graph", () => {
       ladderPass: 0,
       retention: "over_equip_confirmed",
       effectivenessBps: 9_500,
+      ownershipReceiptId: "receipt:own:helm",
       confirmationReceiptId: "receipt:equip-confirmed:helm",
     });
   });
