@@ -428,3 +428,14 @@ Evidence: PR #736 exact head has 33 successful completed workflows and no non-su
 Learned: The safe integration unit is the latest fully verified cumulative head, not separately merging overlapping ancestor PRs.
 Open: #738 reward and #740 visible-guidance extensions remain excluded because their exact-head gates are red.
 Next safe step: Close superseded ancestors and keep failed extensions unmerged until independently green.
+
+
+### 2026-10-05 — PR 754 clean dashboard UX cherry-pick
+Status: VERIFIED repository integration
+Task: Preserve the proven System Status Dashboard loading/focus UX without carrying Jules metadata.
+Decisions: Cherry-pick only `client/src/components/SystemStatusDashboard.tsx` from PR #754 exact head `c089de305b7a4e879cbc1b76591700f275d00abb`; main matched the PR base blob exactly.
+Touched surfaces: System Status Dashboard presentation only.
+Evidence: #754 exact head passed Aurion PR Runtime Candidate, Runtime Container Proof and Aurion Local Test Pack; product blob `f0d0ce582e8404852687521103536e88539df585`.
+Learned: File-level cherry-pick avoids bot metadata and unrelated learning files.
+Open: No gameplay-authority or production-deployment claim.
+Next safe step: Complete zero-open-PR cleanup.
