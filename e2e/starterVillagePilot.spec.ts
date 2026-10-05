@@ -178,7 +178,10 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
 
   const screenshot = path.join(evidenceDir, `${viewport.name}-starter-pilot.png`);
   await mkdir(evidenceDir, { recursive: true });
-  await page.screenshot({ path: screenshot, fullPage: true });
+  // Capture the asserted viewport, not an unbounded full-page raster. The evidence
+  // contract proves controls/readbacks at this exact viewport; fullPage can stall
+  // Chromium on WebGL canvases after all assertions have already passed.
+  await page.screenshot({ path: screenshot, fullPage: false, animations: "disabled" });
   await writeEvidenceFile(`browser-trace-${viewport.name}.json`, {
     schema: "aurion.starter-village-browser-trace.v1",
     revision: sourceSha,
