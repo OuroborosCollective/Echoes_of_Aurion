@@ -9,8 +9,9 @@ import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
 const enabled = process.env.AURION_STARTER_VILLAGE_HTTP_E2E === "1";
 const suite = enabled ? describe : describe.skip;
 const phase = process.env.AURION_STARTER_VILLAGE_PHASE ?? "journey";
-const evidenceDirectory = process.env.AURION_EVIDENCE_DIR ?? "test-results/starter-village-pilot";
-const sessionFile = path.join(evidenceDirectory, "session.json");
+const evidenceDirectory = process.env.AURION_EVIDENCE_DIR ?? ".aurion-evidence/starter-village-pilot";
+const privateStateDirectory = process.env.AURION_PRIVATE_STATE_DIR ?? ".aurion-private/starter-village-pilot";
+const sessionFile = path.join(privateStateDirectory, "session.json");
 const revision = process.env.AURION_TEST_SOURCE_SHA ?? "";
 const endpoint = "http://127.0.0.1:3000/api/trpc/";
 
@@ -211,6 +212,7 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
     expect(database.hostname).toBe("127.0.0.1");
     expect(database.pathname).toBe("/aurion_starter_pilot");
     await mkdir(evidenceDirectory, { recursive: true });
+    await mkdir(privateStateDirectory, { recursive: true });
 
     let cookie = "";
     const handle = `starter_${revision.slice(0, 10)}`;
