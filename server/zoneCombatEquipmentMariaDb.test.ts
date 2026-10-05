@@ -6,6 +6,7 @@ import { getDb, issueZoneConnectionTicket } from "./db";
 import { consumeZoneTicketWithCombatProfile } from "./zoneCombatPersistence";
 import { ax1StarterItemId } from "./ax1StarterEquipmentPersistence";
 import { equipPlayerItem, unequipPlayerItem } from "./playerUiPersistence";
+import { inventoryItemShapeHash, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 import { AuthoritativeMovementZone } from "./zoneRuntime";
 import { globalTickRecorder } from "./causality/tickRecorder";
 
@@ -22,7 +23,7 @@ suite("real equipment to consumed zone ticket combat profile", () => {
       ["zoneConnectionTickets", "userId"], ["aurionEquipmentSlots", "userId"],
       ["aurionAx1StarterEquipmentStates", "userId"], ["aurionAx1StarterEquipmentReceipts", "userId"],
       ["aurionPlayerUiSettings", "userId"], ["weaponLoadouts", "userId"],
-      ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"],
+      ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"], ["aurionMasteryEvents", "userId"],
       ["playerProfiles", "userId"], ["users", "id"],
     ]) await pool.query(`DELETE FROM \`${table}\` WHERE \`${column}\`=?`, [userId]);
     await pool.query("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", ["observatory_threshold"]);
@@ -39,7 +40,8 @@ suite("real equipment to consumed zone ticket combat profile", () => {
     await db.insert(users).values({ id: userId, openId: `local:combat_equipment_${userId}` });
     await db.insert(playerProfiles).values({ userId, level: 1 });
     await db.insert(itemInstances).values({ id: legacy.id, ownerUserId: userId, lootReceiptId: "combat-equipment-legacy-loot", baseItemKey: "aurion_spear", quality: "normal", itemLevel: 1, affixesJson: "[]", status: "owned" });
-    await db.insert(aurionItemInstancesV2).values({ id: v2.id, ownerUserId: userId, lootReceiptId: "combat-equipment-v2-loot", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "normal", itemLevelExact: "1", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), status: "owned" });
+    const v2Shape = { definitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "normal", levelExact: "1", affixesJson: "[]", setId: null, itemPower: 9 };
+    await db.insert(aurionItemInstancesV2).values({ id: v2.id, ownerUserId: userId, lootReceiptId: "combat-equipment-v2-loot", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "normal", itemLevelExact: "1", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), mergeKey: inventoryMergeKey(v2Shape), provenanceHash: inventoryItemShapeHash(v2Shape), status: "owned" });
   });
   afterAll(async () => { if (pool) { await globalTickRecorder.flushPersistence(); await clean(); await pool.end(); } });
 
@@ -79,9 +81,11 @@ suite("real equipment to consumed zone ticket combat profile", () => {
     await equipPlayerItem(userId, legacy, null);
     expect(await consume()).toMatchObject({ weaponEquipped: true, weaponBonus: 0 });
     await equipPlayerItem(userId, v2, legacy);
-    expect(await consume()).toMatchObject({ weaponEquipped: true, weaponBonus: 0 });
+    expect(await consume()).toMatchObject({ weaponEquipped: true, weaponBonus: 9 });
     const [slotRows] = await pool.query("SELECT itemId,itemRecordVersion FROM aurionEquipmentSlots WHERE userId=? AND slot='main_hand'", [userId]);
     expect(slotRows).toEqual([expect.objectContaining({ itemId: v2.id, itemRecordVersion: "aurion_v2" })]);
+    const [confirmationRows] = await pool.query("SELECT id FROM aurionEquipmentSlots WHERE userId=? AND slot='main_hand'", [userId]);
+    expect(confirmationRows).toEqual([expect.objectContaining({ id: expect.stringMatching(/^aceg:[a-f0-9]{59}$/) })]);
     await unequipPlayerItem(userId, v2);
     expect(await consume()).toMatchObject({ weaponEquipped: false, weaponBonus: 0 });
     await equipPlayerItem(userId, starter, null);

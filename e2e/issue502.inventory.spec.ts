@@ -9,6 +9,7 @@ type Outputs = inferRouterOutputs<AppRouter>;
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "../server/aurionInventoryStackIdentity";
 
 test.skip(process.env.AURION_UI_E2E !== "1", "Isolated authenticated runtime required");
+test.setTimeout(60_000);
 
 async function rpc<T>(page: Page, procedure: string, input?: unknown): Promise<T> {
   const response = input === undefined

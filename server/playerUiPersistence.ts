@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { aurionAx1StarterEquipmentReceipts, aurionAx1StarterEquipmentStates } from "../drizzle/ax1StarterEquipmentSchema";
-import { aurionEquipmentSlots, aurionItemInstancesV2, itemInstances, playerProfiles } from "../drizzle/schema";
+import { aurionEquipmentSlots, aurionItemInstancesV2, aurionMasteryEvents, itemInstances, playerProfiles } from "../drizzle/schema";
 import { aurionPlayerUiSettings } from "../drizzle/playerUiSchema";
 import { PLAYER_UI_VERSION, controlSettingsSchema, defaultHotbar, playerUiReadbackSchema, uiItemSchema, type ControlSettings, type UiItem } from "../shared/playerUiProtocol";
 import {
@@ -19,6 +19,16 @@ import {
   ax1StarterItemId,
 } from "./ax1StarterEquipmentPersistence";
 import { aurionLootBaseCatalog } from "./aurionLootCatalog";
+import { aurionInventoryStateHash } from "./aurionInventoryTransactionProtocol";
+import { readCanonicalInventoryState } from "./aurionInventoryBackendAdapter";
+import {
+  acegSourcesFromMasteryEvents,
+  acegStateIndexFromRevision,
+  resolveAcegEquipIntent,
+  resolveCurrentAcegEquipment,
+  starterAcegConfirmationId,
+  type AcegEquipmentConfirmation,
+} from "./aurionAcegEquipmentAuthority";
 import { getDb } from "./db";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -89,6 +99,54 @@ export async function readPlayerUi(userId: number) {
   const db = await getDb(); if (!db) throw new Error("DATABASE_UNAVAILABLE");
   return db.transaction(tx => readUi(tx, userId));
 }
+
+async function readAcegSources(tx: UiTransaction, userId: number, inventoryRevisionExact: string) {
+  const rows = await tx.select({
+    idempotencyKey: aurionMasteryEvents.idempotencyKey,
+    sourceReceiptId: aurionMasteryEvents.sourceReceiptId,
+    disciplineId: aurionMasteryEvents.disciplineId,
+    source: aurionMasteryEvents.source,
+    amountExact: aurionMasteryEvents.amountExact,
+    resolutionIndex: aurionMasteryEvents.resolutionIndex,
+    ruleSetVersion: aurionMasteryEvents.ruleSetVersion,
+    contentVersion: aurionMasteryEvents.contentVersion,
+  }).from(aurionMasteryEvents).where(eq(aurionMasteryEvents.userId, userId)).limit(4097);
+  if (rows.length > 4096) throw new Error("ACEG_MASTERY_CHECKPOINT_REQUIRED");
+  return acegSourcesFromMasteryEvents(
+    userId,
+    acegStateIndexFromRevision(inventoryRevisionExact),
+    rows as Parameters<typeof acegSourcesFromMasteryEvents>[2],
+  );
+}
+
+async function readAcegConfirmations(tx: UiTransaction, userId: number, ui: Awaited<ReturnType<typeof readUi>>): Promise<readonly AcegEquipmentConfirmation[]> {
+  const rows = await tx.select().from(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.userId, userId));
+  const confirmations: AcegEquipmentConfirmation[] = rows.map(row => ({
+    id: row.itemId,
+    version: row.itemRecordVersion,
+    slot: row.slot,
+    confirmationReceiptId: row.id,
+  }));
+  const starter = ui.items.find(item => item.version === AX1_STARTER_ITEM_RECORD_VERSION && item.status === "equipped");
+  if (starter) confirmations.push({
+    id: starter.id,
+    version: starter.version,
+    slot: starter.slot!,
+    confirmationReceiptId: starterAcegConfirmationId(userId, starter),
+  });
+  return Object.freeze(confirmations);
+}
+
+export async function readPlayerAcegEquipment(userId: number) {
+  const db = await getDb(); if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  return db.transaction(async tx => {
+    const profile = await lockPlayer(tx, userId);
+    const ui = await readUi(tx, userId);
+    const sources = await readAcegSources(tx, userId, profile.inventoryRevisionExact || "0");
+    const confirmations = await readAcegConfirmations(tx, userId, ui);
+    return resolveCurrentAcegEquipment({ userId, sources, ui, confirmations });
+  });
+}
 async function lockPlayer(tx: UiTransaction, userId: number) {
   const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, userId)).for("update"))[0];
   if (!profile) throw new Error("PLAYER_PROFILE_REQUIRED");
@@ -150,7 +208,7 @@ export async function collectPlayerLoot(userId: number, ref: ItemRef) {
 export async function equipPlayerItem(userId: number, ref: ItemRef, expectedItem: ItemRef | null) {
   const db = await getDb(); if (!db) throw new Error("DATABASE_UNAVAILABLE");
   return db.transaction(async tx => {
-    await lockPlayer(tx, userId);
+    const profile = await lockPlayer(tx, userId);
     const item = await ownedItem(tx, userId, ref);
     if (!item.slot || item.status === "pending_pickup") throw new Error("COLLECTED_EQUIPMENT_REQUIRED");
     const prior = (await tx.select().from(aurionEquipmentSlots).where(and(eq(aurionEquipmentSlots.userId, userId), eq(aurionEquipmentSlots.slot, item.slot))).for("update"))[0];
@@ -160,6 +218,25 @@ export async function equipPlayerItem(userId: number, ref: ItemRef, expectedItem
     const current = prior ? { id: prior.itemId, version: prior.itemRecordVersion as ItemRef["version"] } : equippedStarter ? { id: equippedStarter.id, version: equippedStarter.version } : null;
     if (current?.id === item.id && current.version === item.version) return readUi(tx, userId);
     if ((current?.id ?? null) !== (expectedItem?.id ?? null) || (current?.version ?? null) !== (expectedItem?.version ?? null)) throw new Error("EQUIPMENT_SLOT_STALE");
+
+    // ACEG is an admission decision inside the existing equipment transaction.
+    // It consumes only confirmed mastery + canonical inventory evidence; UI input
+    // contributes item identity and the optimistic expected slot, never capability truth.
+    const beforeUi = await readUi(tx, userId);
+    const sources = await readAcegSources(tx, userId, profile.inventoryRevisionExact || "0");
+    const confirmations = await readAcegConfirmations(tx, userId, beforeUi);
+    const inventory = await readCanonicalInventoryState(tx, userId, profile.inventoryRevisionExact || "0");
+    const aceg = resolveAcegEquipIntent({
+      userId,
+      sources,
+      ui: beforeUi,
+      confirmations,
+      candidate: item,
+      expectedItem,
+      inventoryRevisionExact: inventory.revisionExact,
+      inventoryStateHash: aurionInventoryStateHash(inventory),
+    });
+
     if (prior) {
       const previous = await ownedItem(tx, userId, { id: prior.itemId, version: prior.itemRecordVersion });
       if (previous.status !== "equipped" || previous.slot !== item.slot) throw new Error("EQUIPMENT_SLOT_CORRUPT");
@@ -170,8 +247,9 @@ export async function equipPlayerItem(userId: number, ref: ItemRef, expectedItem
     if (item.version === AX1_STARTER_ITEM_RECORD_VERSION) {
       if (prior) await tx.delete(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.id, prior.id));
     } else {
-      const row = { id: `equipment:${userId}:${item.slot}`, userId, slot: item.slot, itemId: item.id, itemRecordVersion: item.version };
-      await tx.insert(aurionEquipmentSlots).values(row).onDuplicateKeyUpdate({ set: { itemId: item.id, itemRecordVersion: item.version } });
+      if (prior) await tx.delete(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.id, prior.id));
+      const row = { id: aceg.confirmationReceiptId, userId, slot: item.slot, itemId: item.id, itemRecordVersion: item.version };
+      await tx.insert(aurionEquipmentSlots).values(row);
     }
     return readUi(tx, userId);
   });
