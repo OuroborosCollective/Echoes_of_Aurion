@@ -54,6 +54,8 @@ export type AutonomousNpcLifeReadback = Readonly<{
   npcInteractions: readonly NpcInteractionSignal[];
   /** Deterministic hash of NPC interactions from the last cycle. */
   interactionsHash: string | null;
+  /** Aggregated economic impact from the last Living History Loop cycle. */
+  economicImpact: import("./aurion/economicEventAggregator.js").EconomicCycleImpact | null;
   /** NPC guild runtime readback — guilds founded, members, elections, trade policy. */
   npcGuilds: NpcGuildRuntimeReadback | null;
 }>;
@@ -124,6 +126,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     npcEntries: Object.freeze([]),
     npcInteractions: Object.freeze([]),
     interactionsHash: null,
+    economicImpact: null,
     npcGuilds: null,
   });
 
@@ -245,6 +248,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         npcEntries: loopResult.entries,
         npcInteractions: loopResult.interactions,
         interactionsHash: loopResult.interactionsHash,
+        economicImpact: loopResult.economicImpact,
         npcGuilds: guildRuntime.readback(),
       });
     } catch (error) {
@@ -257,6 +261,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         npcEntries: Object.freeze([]),
         npcInteractions: Object.freeze([]),
         interactionsHash: null,
+        economicImpact: null,
         npcGuilds: null,
       });
       throw error;

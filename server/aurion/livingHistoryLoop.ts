@@ -31,6 +31,10 @@ import {
   hashNpcInteractions,
   type NpcInteractionSignal,
 } from "./npcConcurrentLifecycleRuntime.js";
+import {
+  aggregateEconomicImpact,
+  type EconomicCycleImpact,
+} from "./economicEventAggregator.js";
 
 export const LIVING_HISTORY_LOOP_VERSION = "aurion-living-history-loop.v1" as const;
 export const LIVING_HISTORY_LOOP_INTERVAL_TICKS = 600;
@@ -82,6 +86,8 @@ export type LivingHistoryLoopResult = Readonly<{
   interactions: readonly NpcInteractionSignal[];
   /** Deterministic hash of all NPC interaction signals for this cycle. */
   interactionsHash: string | null;
+  /** Aggregated economic impact from world signals and NPC interactions. */
+  economicImpact: EconomicCycleImpact | null;
 }>;
 
 /** Pending world signals accumulated from NPC actions, waiting for the REACT phase. */
@@ -377,18 +383,23 @@ export async function executeLivingHistoryCycle(
   const interactions = deriveNpcInteractions(npcActionResults);
   const interactionsHash = hashNpcInteractions(interactions);
 
+  // Aggregate economic impact from world signals and NPC interactions.
+  const economicImpact = aggregateEconomicImpact(cycle, pendingSignals, interactions);
+
   // Hash the aggregated world signals for this cycle.
   const signalsHash = createHash("sha256")
     .update(pendingSignals.map((s) => s.signal.id).sort().join("\u001f"))
     .digest("hex");
 
-  // RECORD phase: trigger civilization loop with the last action receipt.
+  // RECORD phase: trigger civilization loop with economic impact so markets
+  // develop dynamically based on real NPC trade, scarcity, and hazard.
   if (lastReceiptId) {
     try {
       const civResult = await orchestrateCivilizationLoop(
         GLOBAL_WORLD_ID,
         cycle,
         lastReceiptId,
+        economicImpact,
       );
       civilizationAction = civResult?.action ?? null;
     } catch (error) {
@@ -407,5 +418,6 @@ export async function executeLivingHistoryCycle(
     failureCode: null,
     interactions,
     interactionsHash,
+    economicImpact,
   });
 }

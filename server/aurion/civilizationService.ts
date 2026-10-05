@@ -18,11 +18,68 @@ import {
   upsertActiveCivilization,
   listVisibleRuins,
 } from "../aurionCivilizationHistoryPersistence.js";
+import type { EconomicCycleImpact } from "./economicEventAggregator.js";
 
 const hash = (parts: readonly string[]) =>
   createHash("sha256").update(parts.join("\u001f"), "utf8").digest("hex");
 
-export async function orchestrateCivilizationLoop(worldId: string, worldEpoch: number, sourceReceiptId: string) {
+const clampUnit = (value: number) => Math.max(0, Math.min(1, Math.round(value * 10_000) / 10_000));
+
+/**
+ * Derive dynamic civilization metric deltas from aggregated economic impact.
+ * Markets develop based on real NPC economic activity:
+ *   - Trade volume drives population growth (trade attracts settlers).
+ *   - Economy pressure raises stability (prosperity stabilizes).
+ *   - Scarcity pressure raises scarcitySeverity (shortages worsen).
+ *   - Hazard pressure raises hazardIndex (danger increases).
+ *   - Political instability erodes stability.
+ *   - Caravan activity reduces scarcity (cross-hub supply routes).
+ */
+function deriveEconomicDeltas(impact: EconomicCycleImpact | null) {
+  if (!impact) {
+    return {
+      populationDelta: 5,
+      stabilityDelta: 0.05,
+      hazardDelta: -0.02,
+      scarcityDelta: -0.02,
+      economicEventRecorded: false,
+    };
+  }
+
+  // Population grows with trade volume, shrinks with hazard and scarcity.
+  const tradeGrowth = Math.round(impact.totalTradeVolume * 20);
+  const hazardLoss = Math.round(impact.totalHazardPressure * 15);
+  const scarcityLoss = Math.round(impact.totalScarcityPressure * 10);
+  const populationDelta = Math.max(-20, Math.min(30, 5 + tradeGrowth - hazardLoss - scarcityLoss));
+
+  // Stability rises with positive economy pressure, falls with politics and volatility.
+  const economyBoost = impact.totalEconomyPressure * 0.08;
+  const politicsErosion = impact.totalPoliticsPressure * 0.06;
+  const scarcityErosion = impact.totalScarcityPressure * 0.04;
+  const stabilityDelta = clampUnit(economyBoost - politicsErosion - scarcityErosion) - 0.02;
+
+  // Hazard index rises with hazard pressure, decays naturally.
+  const hazardDelta = clampUnit(impact.totalHazardPressure * 0.12) - 0.02;
+
+  // Scarcity rises with scarcity pressure, reduced by caravan activity (supply routes).
+  const caravanRelief = clampUnit(impact.totalCaravanActivity * 0.03);
+  const scarcityDelta = clampUnit(impact.totalScarcityPressure * 0.1) - 0.02 - caravanRelief;
+
+  return {
+    populationDelta,
+    stabilityDelta,
+    hazardDelta,
+    scarcityDelta,
+    economicEventRecorded: true,
+  };
+}
+
+export async function orchestrateCivilizationLoop(
+  worldId: string,
+  worldEpoch: number,
+  sourceReceiptId: string,
+  economicImpact?: EconomicCycleImpact | null,
+) {
   const activeCiv = await getActiveCivilization(worldId);
 
   if (activeCiv) {
@@ -74,14 +131,18 @@ export async function orchestrateCivilizationLoop(worldId: string, worldEpoch: n
         receiptId: sourceReceiptId,
       });
 
+      // Derive dynamic deltas from aggregated economic impact — markets
+      // develop based on real NPC trade, scarcity, hazard and politics.
+      const deltas = deriveEconomicDeltas(economicImpact ?? null);
+
       const nextCiv = {
         civilizationId: activeCiv.civilizationId,
         worldId,
         worldEpoch: epochAdvance.toEpoch,
-        population: Math.max(10, activeCiv.population + 5),
-        stability: Math.min(1.0, activeCiv.stability + 0.05),
-        hazardIndex: Math.max(0.0, activeCiv.hazardIndex - 0.02),
-        scarcitySeverity: Math.max(0.0, activeCiv.scarcitySeverity - 0.02),
+        population: Math.max(10, activeCiv.population + deltas.populationDelta),
+        stability: clampUnit(activeCiv.stability + deltas.stabilityDelta),
+        hazardIndex: clampUnit(activeCiv.hazardIndex + deltas.hazardDelta),
+        scarcitySeverity: clampUnit(activeCiv.scarcitySeverity + deltas.scarcityDelta),
         lastResolutionIndex: worldEpoch,
       };
 
@@ -98,6 +159,38 @@ export async function orchestrateCivilizationLoop(worldId: string, worldEpoch: n
         eventPayloadJson: JSON.stringify(nextCiv),
         occurredSequence: worldEpoch,
       });
+
+      // Record a dedicated economic event when economic impact was provided,
+      // so market development is traceable in civilization history.
+      if (deltas.economicEventRecorded && economicImpact) {
+        await recordCivilizationHistoryEvent({
+          eventId: hash(["economic", activeCiv.civilizationId, String(worldEpoch), economicImpact.impactHash.slice(0, 16)]),
+          civilizationId: activeCiv.civilizationId,
+          worldId,
+          worldEpoch: nextCiv.worldEpoch,
+          eventType: "ECONOMIC_MARKET_DEVELOPMENT",
+          sourceReceiptId,
+          sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
+          eventPayloadJson: JSON.stringify({
+            cycle: economicImpact.cycle,
+            impactHash: economicImpact.impactHash,
+            totalTradeVolume: economicImpact.totalTradeVolume,
+            totalScarcityPressure: economicImpact.totalScarcityPressure,
+            totalHazardPressure: economicImpact.totalHazardPressure,
+            totalEconomyPressure: economicImpact.totalEconomyPressure,
+            totalPoliticsPressure: economicImpact.totalPoliticsPressure,
+            totalCaravanActivity: economicImpact.totalCaravanActivity,
+            hubSnapshots: economicImpact.hubs,
+            appliedDeltas: {
+              population: deltas.populationDelta,
+              stability: deltas.stabilityDelta,
+              hazard: deltas.hazardDelta,
+              scarcity: deltas.scarcityDelta,
+            },
+          }),
+          occurredSequence: worldEpoch,
+        });
+      }
 
       return { action: "ADVANCED" as const, civilizationId: activeCiv.civilizationId };
     }
