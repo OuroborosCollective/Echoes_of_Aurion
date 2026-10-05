@@ -18,6 +18,7 @@ const requiredSchemas = new Map([
   ["browser-trace-landscape.json", "aurion.starter-village-browser-trace.v1"],
 ]);
 const requiredFiles = [
+  "phase-status.json",
   "network-isolation.json",
   "runtime-entry-before.json",
   ...requiredSchemas.keys(),
@@ -72,6 +73,17 @@ function validateContent({ requireComplete }) {
     const sourceRevision = parsed.sourceRevision ?? parsed.revision;
     if (sourceRevision !== revision) throw new Error(`REVISION_MISMATCH:${relative}`);
     if (parsed.rawSessionMaterialIncluded === true) throw new Error(`RAW_SESSION_MATERIAL_FORBIDDEN:${relative}`);
+  }
+  if (files.includes("phase-status.json")) {
+    const { parsed } = parseJson("phase-status.json");
+    if (parsed.schema !== "aurion.starter-village-phase-status.v1" || parsed.revision !== revision) throw new Error("PHASE_STATUS_CONTRACT_MISMATCH");
+    const phases = parsed.phases;
+    if (!phases || typeof phases !== "object" || Array.isArray(phases)) throw new Error("PHASE_STATUS_INVALID");
+    if (requireComplete) {
+      for (const [name, outcome] of Object.entries(phases)) {
+        if (outcome !== "success") throw new Error(`PHASE_NOT_SUCCESS:${name}:${String(outcome)}`);
+      }
+    }
   }
   if (files.includes("network-isolation.json")) {
     const { parsed } = parseJson("network-isolation.json");
