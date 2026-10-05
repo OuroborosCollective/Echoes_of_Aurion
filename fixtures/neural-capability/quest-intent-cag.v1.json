@@ -1,0 +1,122 @@
+{
+  "protocol": "aurion.neural-capability-benchmark.v1",
+  "capabilityId": "quest-intent-interpreter",
+  "contract": {
+    "specText": "Spieler darf nach einer Quest fragen, sie annehmen oder abgeben.",
+    "allowedIntents": [
+      "accept_quest",
+      "request_turn_in",
+      "ask_quest_status",
+      "reject"
+    ],
+    "rejectIntent": "reject",
+    "specIntentAliases": {
+      "accept_quest": [
+        "annehmen"
+      ],
+      "request_turn_in": [
+        "abgeben"
+      ],
+      "ask_quest_status": [
+        "nach einer quest fragen"
+      ]
+    }
+  },
+  "dataset": [
+    {
+      "id": "quest-001",
+      "input": "Kann ich die Quest annehmen?",
+      "intentLabel": "accept_quest",
+      "context": "lyra:astral_call",
+      "contextKey": "lyra:astral_call",
+      "contextValid": true
+    },
+    {
+      "id": "quest-002",
+      "input": "Ich moechte die Quest abgeben.",
+      "intentLabel": "request_turn_in",
+      "context": "lyra:astral_call",
+      "contextKey": "lyra:astral_call",
+      "contextValid": true
+    },
+    {
+      "id": "quest-003",
+      "input": "Wie weit bin ich mit der Quest?",
+      "intentLabel": "ask_quest_status",
+      "context": "lyra:astral_call",
+      "contextKey": "lyra:astral_call",
+      "contextValid": true
+    },
+    {
+      "id": "quest-004",
+      "input": "asdf qwer",
+      "intentLabel": "reject",
+      "context": "none",
+      "contextKey": "none",
+      "contextValid": false
+    }
+  ],
+  "evaluations": [
+    {
+      "intent": "request_turn_in",
+      "questContextValid": true,
+      "confidenceBucket": "high",
+      "schemaValid": true,
+      "validatorResult": "accepted"
+    },
+    {
+      "intent": "reject",
+      "questContextValid": false,
+      "confidenceBucket": "low",
+      "schemaValid": true,
+      "validatorResult": "rejected"
+    }
+  ],
+  "differentials": [
+    {
+      "caseId": "diff-001",
+      "expected": {
+        "intent": "request_turn_in",
+        "questContextValid": true,
+        "validatorResult": "accepted"
+      },
+      "legacy": {
+        "intent": "request_turn_in",
+        "questContextValid": true,
+        "validatorResult": "accepted"
+      },
+      "neural": {
+        "intent": "request_turn_in",
+        "questContextValid": true,
+        "validatorResult": "accepted"
+      }
+    },
+    {
+      "caseId": "diff-002",
+      "expected": {
+        "intent": "reject",
+        "questContextValid": false,
+        "validatorResult": "rejected"
+      },
+      "legacy": {
+        "intent": "reject",
+        "questContextValid": false,
+        "validatorResult": "rejected"
+      },
+      "neural": {
+        "intent": "reject",
+        "questContextValid": false,
+        "validatorResult": "rejected"
+      }
+    }
+  ],
+  "artifactManifest": {
+    "schemaVersion": 1,
+    "capabilityId": "quest-intent-interpreter",
+    "format": "aurion.neural-artifact.v1",
+    "artifactVersion": "717-cag-benchmark-v1",
+    "interpreterId": "fixture-local-interpreter",
+    "interpreterVersion": "1",
+    "runtimeNetwork": "forbidden"
+  }
+}
