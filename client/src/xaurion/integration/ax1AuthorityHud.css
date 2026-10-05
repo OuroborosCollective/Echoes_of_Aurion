@@ -128,10 +128,10 @@
 .xaurion-runtime .ax1-authority-shell .ax1-objective-tracker{
   max-height:min(42vh,380px);
 }
-.xaurion-runtime .ax1-authority-shell .ax1-objective-tracker .pulse-highlight{
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker .pulse-highlight{
   animation:ax1-objective-pulse 700ms ease-out;
 }
-.xaurion-runtime .ax1-authority-shell .ax1-objective-tracker .shake-highlight{
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker .shake-highlight{
   animation:ax1-objective-arrival 520ms ease-out;
 }
 .xaurion-runtime .ax1-authority-shell .ax1-combat-cluster{
@@ -655,5 +655,117 @@
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-lane{
     left:136px;
     right:max(8px,env(safe-area-inset-right));
+  }
+}
+
+/* 2026-10-05 Issue #686 mobile playability hardening — appended as final cascade.
+ * Presentation-only; no authority, readback or gameplay decisions are defined here.
+ * Invariants: interactive touch targets >=44 CSS px at phone/tablet breakpoints,
+ * safe-area insets on every HUD edge, dynamic viewport height (dvh) tracking,
+ * no fullscreen touch overlay above the HUD (the authority shell stays
+ * pointer-events:none and movement stays bound to the single canvas owner).
+ */
+@media (max-width:1024px){
+  /* Tablet/phone touch contract: legacy selectors may still declare 30–42px
+   * widths/heights, so enforce the minimum at the final cascade without
+   * changing each control's intended layout width.
+   */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud button{
+    min-width:44px!important;
+    min-height:44px!important;
+  }
+}
+@media (max-width:720px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col{
+    max-width:196px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav{
+    grid-template-columns:repeat(4,44px);
+    max-width:196px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav button{
+    width:44px;
+    min-width:44px;
+    height:44px;
+    min-height:44px;
+  }
+  .xaurion-runtime .ax1-authority-shell .aurion-authority-hud__menu{
+    grid-template-columns:repeat(4,44px);
+  }
+  .xaurion-runtime .ax1-authority-shell .aurion-authority-hud__menu>button,
+  .xaurion-runtime .ax1-authority-shell .ax1-secondary-menu>button{
+    width:44px;
+    height:44px;
+    min-width:44px;
+    min-height:44px;
+  }
+  .xaurion-runtime .ax1-authority-shell .ax1-secondary-menu{
+    grid-template-columns:repeat(3,44px);
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-utility-actions button{
+    width:44px;
+    min-width:44px;
+    height:44px;
+    min-height:44px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone > button{
+    flex-basis:44px;
+    width:44px;
+    min-width:44px;
+    height:44px;
+    min-height:44px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone > button:first-child{
+    flex-basis:48px;
+    width:48px;
+    min-width:48px;
+    height:48px;
+    min-height:48px;
+  }
+  .xaurion-runtime .ax1-authority-shell .aurion-authority-hud__actions{
+    grid-template-columns:repeat(4,44px);
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-metrics{
+    right:max(8px,env(safe-area-inset-right));
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    top:108px;
+    right:max(8px,env(safe-area-inset-right));
+    max-height:min(42dvh,320px);
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker[data-collapsed="true"]{
+    pointer-events:none;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker[data-collapsed="true"] > div:first-child{
+    pointer-events:auto;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-command-deck{
+    max-height:58dvh;
+  }
+}
+@media (max-width:420px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-left-col{
+    width:max(120px,calc(100vw - 212px));
+    max-width:max(120px,calc(100vw - 212px));
+  }
+}
+@media (max-height:500px) and (orientation:landscape){
+  .xaurion-runtime .ax1-authority-shell .aurion-authority-hud__actions button{
+    width:44px;
+    height:44px;
+    min-width:44px;
+    min-height:44px;
+  }
+  .xaurion-runtime .ax1-authority-shell .aurion-authority-hud__actions .ax1-action-primary{
+    width:48px;
+    height:48px;
+    min-width:48px;
+    min-height:48px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-metrics{
+    right:max(8px,env(safe-area-inset-right));
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-command-deck{
+    max-height:78dvh;
   }
 }
