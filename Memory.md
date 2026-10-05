@@ -832,3 +832,27 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #776 — feat(aceg): bind equipment authority to inventory persistence
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=776 merge=18b4e788fb4451490e3fef70a7874f04b70205ec -->
+Task: Merge PR #776 into `main` — feat(aceg): bind equipment authority to inventory persistence.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `e2e/issue502.inventory.spec.ts`
+- `server/aurionAcegEquipmentAuthority.test.ts`
+- `server/aurionAcegEquipmentAuthority.ts`
+- `server/playerUiMariaDb.test.ts`
+- `server/playerUiPersistence.ts`
+- `server/zoneCombatEquipmentMariaDb.test.ts`
+- `server/zoneCombatPersistence.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/776
+- Merge commit: `18b4e788fb4451490e3fef70a7874f04b70205ec`
+- PR head: `6bf37cead02bbaae5659a89566aacf020ad742ba`
+- Merged at: 2026-10-05T10:40:12Z
+- Post-merge workflow run: 37298050163
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
