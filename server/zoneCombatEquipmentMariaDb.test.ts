@@ -22,7 +22,7 @@ suite("real equipment to consumed zone ticket combat profile", () => {
       ["zoneConnectionTickets", "userId"], ["aurionEquipmentSlots", "userId"],
       ["aurionAx1StarterEquipmentStates", "userId"], ["aurionAx1StarterEquipmentReceipts", "userId"],
       ["aurionPlayerUiSettings", "userId"], ["weaponLoadouts", "userId"],
-      ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"],
+      ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"], ["aurionMasteryEvents", "userId"],
       ["playerProfiles", "userId"], ["users", "id"],
     ]) await pool.query(`DELETE FROM \`${table}\` WHERE \`${column}\`=?`, [userId]);
     await pool.query("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", ["observatory_threshold"]);
@@ -79,9 +79,11 @@ suite("real equipment to consumed zone ticket combat profile", () => {
     await equipPlayerItem(userId, legacy, null);
     expect(await consume()).toMatchObject({ weaponEquipped: true, weaponBonus: 0 });
     await equipPlayerItem(userId, v2, legacy);
-    expect(await consume()).toMatchObject({ weaponEquipped: true, weaponBonus: 0 });
+    expect(await consume()).toMatchObject({ weaponEquipped: true, weaponBonus: 9 });
     const [slotRows] = await pool.query("SELECT itemId,itemRecordVersion FROM aurionEquipmentSlots WHERE userId=? AND slot='main_hand'", [userId]);
     expect(slotRows).toEqual([expect.objectContaining({ itemId: v2.id, itemRecordVersion: "aurion_v2" })]);
+    const [confirmationRows] = await pool.query("SELECT id FROM aurionEquipmentSlots WHERE userId=? AND slot='main_hand'", [userId]);
+    expect(confirmationRows).toEqual([expect.objectContaining({ id: expect.stringMatching(/^aceg:[a-f0-9]{59}$/) })]);
     await unequipPlayerItem(userId, v2);
     expect(await consume()).toMatchObject({ weaponEquipped: false, weaponBonus: 0 });
     await equipPlayerItem(userId, starter, null);
