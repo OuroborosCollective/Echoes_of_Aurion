@@ -1322,3 +1322,12 @@ jobs:
             aurion-production-assurance.json
           if-no-files-found: error
           retention-days: 30
+
+  arelogic-companion-evidence:
+    name: Export verified companion demonstrations to ARE-rLOGIC
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [final-production-gate]
+    uses: ./.github/workflows/arelogic-companion-offline-runner.yml
+    with:
+      source_sha: ${{ github.sha }}
+
