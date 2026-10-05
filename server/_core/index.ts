@@ -93,6 +93,7 @@ async function startServer(){
     gameDevelopmentStudio,
     wolframCag,
     npcLife: autonomousNpcLife.readback(),
+    npcGuilds: autonomousNpcLife.guildRuntime.readback(),
     causalAssurance: globalAssuranceService.latest()
   });
   app.get("/healthz", (_req, res) => res.status(200).json(healthPayload()));

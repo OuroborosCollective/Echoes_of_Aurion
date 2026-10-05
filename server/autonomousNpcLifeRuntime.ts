@@ -14,6 +14,7 @@ import {
   type LivingHistoryLoopResult,
 } from "./aurion/livingHistoryLoop";
 import type { NpcInteractionSignal } from "./aurion/npcConcurrentLifecycleRuntime.js";
+import { createNpcGuildRuntime, type NpcGuildRuntime, type NpcGuildRuntimeReadback } from "./aurion/npcGuildRuntime.js";
 
 export const AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS = LIVING_HISTORY_LOOP_INTERVAL_TICKS;
 export const AUTONOMOUS_NPC_LIFE_HOME_REGION = "observatory_threshold" as const;
@@ -53,6 +54,8 @@ export type AutonomousNpcLifeReadback = Readonly<{
   npcInteractions: readonly NpcInteractionSignal[];
   /** Deterministic hash of NPC interactions from the last cycle. */
   interactionsHash: string | null;
+  /** NPC guild runtime readback — guilds founded, members, elections, trade policy. */
+  npcGuilds: NpcGuildRuntimeReadback | null;
 }>;
 
 export type AutonomousNpcLifeRuntime = Readonly<{
@@ -63,6 +66,8 @@ export type AutonomousNpcLifeRuntime = Readonly<{
   readback(): AutonomousNpcLifeReadback;
   /** Read the last Living History Loop cycle result. */
   lastCycleResult(): LivingHistoryLoopResult | null;
+  /** The NPC guild runtime. */
+  guildRuntime: NpcGuildRuntime;
 }>;
 
 function failureCode(error: unknown): string {
@@ -90,6 +95,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
   let chain: Promise<void> = Promise.resolve();
   let cycleCount = 0;
   let lastCycle: LivingHistoryLoopResult | null = null;
+  const guildRuntime = createNpcGuildRuntime({ enabled });
   let state: AutonomousNpcLifeReadback = frozenReadback({
     enabled,
     status: enabled ? "idle" : "disabled",
@@ -118,6 +124,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     npcEntries: Object.freeze([]),
     npcInteractions: Object.freeze([]),
     interactionsHash: null,
+    npcGuilds: null,
   });
 
   const resolveOnce = async ({ tick }: { tick: number }): Promise<void> => {
@@ -192,6 +199,24 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
 
       const confirmedCount = loopResult.entries.filter((e) => e.status === "confirmed").length;
 
+      // Execute the NPC guild cycle — NPCs evaluate guild opportunities
+      // (found, join, elect leader, set trade policy) based on their needs.
+      const npcNeedsMap = new Map<string, Readonly<{
+        safety: number; resources: number; belonging: number;
+        status: number; wealth: number; power: number;
+      }>>();
+      for (const hubId of LIVING_HISTORY_HUBS) {
+        const npcId = `ax1_merchant_${hubId}`;
+        try {
+          const npcState = await readConfirmedNpcState(npcId);
+          if (npcState && "decision" in npcState && npcState.decision?.needs) {
+            npcNeedsMap.set(npcId, npcState.decision.needs);
+          }
+        } catch { /* NPC state not available — guild cycle uses defaults */ }
+      }
+      await guildRuntime.executeCycle(cycle, npcNeedsMap);
+      guildRuntime.advanceCycle();
+
       state = frozenReadback({
         enabled,
         status,
@@ -220,6 +245,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         npcEntries: loopResult.entries,
         npcInteractions: loopResult.interactions,
         interactionsHash: loopResult.interactionsHash,
+        npcGuilds: guildRuntime.readback(),
       });
     } catch (error) {
       state = frozenReadback({
@@ -231,6 +257,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         npcEntries: Object.freeze([]),
         npcInteractions: Object.freeze([]),
         interactionsHash: null,
+        npcGuilds: null,
       });
       throw error;
     }
@@ -253,5 +280,6 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     resolveOnce,
     readback: () => state,
     lastCycleResult: () => lastCycle,
+    guildRuntime,
   });
 }
