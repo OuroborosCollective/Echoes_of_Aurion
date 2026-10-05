@@ -1005,3 +1005,37 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #793 — feat(starter-village): integrate owner street-lamp LOD family
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=793 merge=1c782bbceb7b951c186460aa3139e04e3ddb29c6 -->
+Task: Merge PR #793 into `main` — feat(starter-village): integrate owner street-lamp LOD family.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/starter-village-pilot.yml`
+- `assets/environment/street-lamp/Aurion_Street_Lamp_LOD0.glb`
+- `assets/environment/street-lamp/Aurion_Street_Lamp_LOD1.glb`
+- `assets/environment/street-lamp/Aurion_Street_Lamp_LOD2.glb`
+- `assets/environment/street-lamp/Aurion_Street_Lamp_LOD3.glb`
+- `assets/environment/street-lamp/README.md`
+- `client/src/xaurion/core/UploadedAssetRuntime.test.ts`
+- `client/src/xaurion/core/UploadedAssetRuntime.ts`
+- `client/src/xaurion/integration/UploadedWorldCatalogProjection.ts`
+- `scripts/game-dev-aurion-adapter.mjs`
+- `scripts/seed-starter-village-street-lamp.ts`
+- `server/gameDevelopmentStudioAurionAdapter.test.ts`
+- `server/glbAssetClassifier.test.ts`
+- `server/glbAssetClassifier.ts`
+- `server/glbCatalogFamilies.test.ts`
+- `server/starterVillageStreetLampAsset.test.ts`
+- `shared/aurionVillageStreetLampContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/793
+- Merge commit: `1c782bbceb7b951c186460aa3139e04e3ddb29c6`
+- PR head: `157b55e95c002b4352a1002902e6fac80f629595`
+- Merged at: 2026-10-05T18:43:20Z
+- Post-merge workflow run: 37358088407
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
