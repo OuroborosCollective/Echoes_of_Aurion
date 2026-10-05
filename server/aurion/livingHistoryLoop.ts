@@ -22,7 +22,6 @@ import { resolveAndRecordAx1LivingWorld } from "../ax1LivingWorldRuntime";
 import { readConfirmedMerchantActionSource } from "../npcActionGatewayPersistence";
 import { readConfirmedNpcState } from "../wasdAurionRuntime";
 import { readConfirmedNpcMultiMemory } from "../npcMultiMemoryPersistence";
-import { projectNpcMemoryV4 } from "../wasdNpcCapsule";
 import { GLOBAL_WORLD_SEED, GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { orchestrateCivilizationLoop } from "./civilizationService";
 import type { WorldSignal, WorldReaction } from "../wasdAurionProtocol";
@@ -70,6 +69,8 @@ export type LivingHistoryNpcEntry = Readonly<{
   decisionHash: string | null;
   worldReactionHash: string | null;
   actionReceiptId: string | null;
+  effectReadbackHash: string | null;
+  receiptSource: "created" | "persisted" | null;
   failureCode: string | null;
 }>;
 
@@ -222,6 +223,8 @@ async function executeSingleNpcLifecycle(
         decisionHash: null,
         worldReactionHash: null,
         actionReceiptId: null,
+        effectReadbackHash: null,
+        receiptSource: null,
         failureCode: "NPC_ACTION_SOURCE_DECISION_REQUIRED",
       }),
       signals: Object.freeze([]),
@@ -230,64 +233,80 @@ async function executeSingleNpcLifecycle(
     });
   }
 
+  const resolutionIndex = source.resolutionIndex + 1;
   const result = await resolveAndRecordAx1LivingWorld({
     worldSeed: GLOBAL_WORLD_SEED,
     sourceDecisionReceiptId: source.receiptId,
     regionId: hubId,
   });
+  if (!("lifeState" in result.npc)) throw new Error("NPC_LIFE_V3_RECEIPT_REQUIRED");
 
-  const resolutionIndex = source.resolutionIndex + 1;
   const confirmed = await readConfirmedNpcState(npcId);
-
-  let action: string | null = null;
-  let goal: string | null = null;
-  let longTermGoal: string | null = null;
-  let decisionHash: string | null = null;
-  let worldReactionHash: string | null = null;
-
-  if (confirmed && "lifeState" in confirmed) {
-    action = result.resolution.action;
-    goal = confirmed.decision.goal;
-    longTermGoal = confirmed.lifeState.longTermGoal;
-    decisionHash = confirmed.decision.decisionHash;
-    worldReactionHash = result.world.deterministicHash;
+  if (!confirmed || !("lifeState" in confirmed)) throw new Error("NPC_LIFE_RECEIPT_READBACK_REQUIRED");
+  if (
+    confirmed.decision.resolutionIndex !== resolutionIndex ||
+    confirmed.decision.decisionHash !== result.npc.decision.decisionHash
+  ) throw new Error("NPC_LIFE_RECEIPT_READBACK_MISMATCH");
+  if (
+    confirmed.lifeState.stateHash !== result.npc.lifeState.stateHash ||
+    confirmed.lifeState.currentGoal !== confirmed.decision.goal
+  ) throw new Error("NPC_LIFE_STATE_READBACK_MISMATCH");
+  const currentHubId = confirmed.lifeState.economy?.currentHubId;
+  if (!currentHubId || currentHubId !== result.resolution.npc.currentHubId) {
+    throw new Error("NPC_LIFE_ECONOMY_READBACK_MISMATCH");
   }
+  const memory = await readConfirmedNpcMultiMemory(npcId);
+  if (
+    !memory ||
+    !result.npc.multiMemory ||
+    memory.lastResolutionIndex !== resolutionIndex ||
+    memory.memoryHash !== result.npc.multiMemory.memoryHash
+  ) throw new Error("NPC_LIFE_MULTI_MEMORY_READBACK_MISMATCH");
 
-  // Collect world signals from this NPC's action.
-  const economySignal: WorldSignal = {
-    id: `whl:${cycle}:${hubId}:economy`,
-    kind: "economy",
-    regionId: hubId,
-    magnitude: result.resolution.stabilityDelta / 100,
-    sourceReceiptId: result.actionReceiptId,
-    resolutionIndex,
-  };
-  signals.push({ signal: economySignal, sourceNpcId: npcId, sourceHubId: hubId });
+  const action = result.resolution.action;
+  const worldReactionHash = result.world.deterministicHash;
 
-  // Caravan ambush generates a hazard signal.
+  signals.push({
+    signal: {
+      id: `whl:${cycle}:${hubId}:economy`,
+      kind: "economy",
+      regionId: hubId,
+      magnitude: result.resolution.stabilityDelta / 100,
+      sourceReceiptId: result.actionReceiptId,
+      resolutionIndex,
+    },
+    sourceNpcId: npcId,
+    sourceHubId: hubId,
+  });
+
   if (result.resolution.caravan.ambushed) {
-    const hazardSignal: WorldSignal = {
-      id: `whl:${cycle}:${hubId}:hazard`,
-      kind: "hazard",
-      regionId: hubId,
-      magnitude: 0.5,
-      sourceReceiptId: result.actionReceiptId,
-      resolutionIndex,
-    };
-    signals.push({ signal: hazardSignal, sourceNpcId: npcId, sourceHubId: hubId });
+    signals.push({
+      signal: {
+        id: `whl:${cycle}:${hubId}:hazard`,
+        kind: "hazard",
+        regionId: hubId,
+        magnitude: 0.5,
+        sourceReceiptId: result.actionReceiptId,
+        resolutionIndex,
+      },
+      sourceNpcId: npcId,
+      sourceHubId: hubId,
+    });
   }
 
-  // Political instability from negative stability delta.
   if (result.resolution.stabilityDelta < 0) {
-    const politicsSignal: WorldSignal = {
-      id: `whl:${cycle}:${hubId}:politics`,
-      kind: "politics",
-      regionId: hubId,
-      magnitude: result.resolution.stabilityDelta / 50,
-      sourceReceiptId: result.actionReceiptId,
-      resolutionIndex,
-    };
-    signals.push({ signal: politicsSignal, sourceNpcId: npcId, sourceHubId: hubId });
+    signals.push({
+      signal: {
+        id: `whl:${cycle}:${hubId}:politics`,
+        kind: "politics",
+        regionId: hubId,
+        magnitude: result.resolution.stabilityDelta / 50,
+        sourceReceiptId: result.actionReceiptId,
+        resolutionIndex,
+      },
+      sourceNpcId: npcId,
+      sourceHubId: hubId,
+    });
   }
 
   return Object.freeze({
@@ -296,12 +315,14 @@ async function executeSingleNpcLifecycle(
       npcId,
       status: "confirmed",
       action,
-      goal,
-      longTermGoal,
+      goal: confirmed.decision.goal,
+      longTermGoal: confirmed.lifeState.longTermGoal,
       resolutionIndex,
-      decisionHash,
+      decisionHash: confirmed.decision.decisionHash,
       worldReactionHash,
       actionReceiptId: result.actionReceiptId,
+      effectReadbackHash: result.effectReadbackHash,
+      receiptSource: result.status === "committed" ? "created" : "persisted",
       failureCode: null,
     }),
     signals: Object.freeze(signals),
@@ -373,6 +394,8 @@ export async function executeLivingHistoryCycle(
         decisionHash: null,
         worldReactionHash: null,
         actionReceiptId: null,
+        effectReadbackHash: null,
+        receiptSource: null,
         failureCode: code,
       }));
       npcActionResults.push({ npcId, hubId, action: null, cycle });
