@@ -162,11 +162,16 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
   const movement = page.getByTestId("ax1-movement-control");
   await expect(movement).toBeVisible();
   const hud = page.getByTestId("authoritative-world-hud");
-  await expect(hud).toContainText(/Kontakt|serverbestätigt/);
+  await expect(hud).toContainText(/Kontakt|Serverbestätigt/);
   await page.keyboard.press("j");
-  await expect(page.getByRole("dialog")).toBeVisible();
+  const questDialog = page.getByRole("dialog");
+  await expect(questDialog).toBeVisible();
   await page.keyboard.press("j");
-  await page.getByRole("button", { name: "NPC", exact: true }).click();
+  await expect(questDialog).toBeHidden();
+  await hud.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
+  const expandedMenu = page.getByRole("dialog", { name: "Weitere Menüs" });
+  await expect(expandedMenu).toBeVisible();
+  await expandedMenu.getByRole("button", { name: "NPC", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 
   const rendererEvidenceRaw = await page.getByTestId("renderer-evidence").textContent();
