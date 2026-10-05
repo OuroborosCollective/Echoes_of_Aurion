@@ -5,7 +5,7 @@ import path from "node:path";
 const runEmptyDiagnostic = process.env.AURION_STARTER_VILLAGE_EMPTY_CATALOG_E2E === "1";
 const runJourney = process.env.AURION_STARTER_VILLAGE_BROWSER_E2E === "1";
 const sourceSha = process.env.AURION_TEST_SOURCE_SHA ?? "unknown";
-const evidenceDir = process.env.AURION_EVIDENCE_DIR ?? "test-results/starter-village-pilot";
+const evidenceDir = process.env.AURION_EVIDENCE_DIR ?? ".aurion-evidence/starter-village-pilot";
 
 const viewports = [
   { name: "phone", width: 390, height: 844 },
