@@ -16,11 +16,14 @@ const requiredSchemas = new Map([
   ["browser-trace-tablet.json", "aurion.starter-village-browser-trace.v1"],
   ["browser-trace-desktop.json", "aurion.starter-village-browser-trace.v1"],
   ["browser-trace-landscape.json", "aurion.starter-village-browser-trace.v1"],
+  ["health-before.json", "aurion.starter-village-health.v1"],
 ]);
 const requiredFiles = [
   "phase-status.json",
   "network-isolation.json",
   "runtime-entry-before.json",
+  "server-before.log",
+  "server-after.log",
   ...requiredSchemas.keys(),
   "phone-starter-pilot.png",
   "tablet-starter-pilot.png",
@@ -53,7 +56,7 @@ function assertNoSecrets(files) {
     const file = path.join(evidenceDir, relative);
     const st = fs.statSync(file);
     if (st.size === 0) throw new Error(`EMPTY_EVIDENCE_FILE:${relative}`);
-    if (/\.(json|txt|log|md)$/i.test(relative)) {
+    if (/\.(json|txt|log|md|trace|stacks)$/i.test(relative)) {
       const raw = fs.readFileSync(file, "utf8");
       if (forbiddenContent.test(raw)) throw new Error(`SENSITIVE_EVIDENCE_CONTENT:${relative}`);
     }
