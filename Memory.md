@@ -1059,3 +1059,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #779 — ⚡ Bolt: [Optimize Set Retrieval]
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=779 merge=73b61047e71e19c6b4a084c359afdecb25b04bea -->
+Task: Merge PR #779 into `main` — ⚡ Bolt: [Optimize Set Retrieval].
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.Jules/bolt.md`
+- `server/_core/sdk.ts`
+- `server/aim265SpatialCalculation.test.ts`
+- `server/glbAssetClassifier.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/779
+- Merge commit: `73b61047e71e19c6b4a084c359afdecb25b04bea`
+- PR head: `55ab13aee5f65a05d479848d970df2e4edfc1df1`
+- Merged at: 2026-10-05T18:48:29Z
+- Post-merge workflow run: 37358744493
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
