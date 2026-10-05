@@ -1,5 +1,3 @@
-import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
-import { resolveAndRecordAx1LivingWorld } from "./ax1LivingWorldRuntime";
 import { readConfirmedNpcState } from "./wasdAurionRuntime";
 import { readConfirmedMerchantActionSource } from "./npcActionGatewayPersistence";
 import { readConfirmedNpcMultiMemory } from "./npcMultiMemoryPersistence";
@@ -176,6 +174,9 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
             worldRegionId = primaryEntry.hubId;
             worldReactionHash = primaryEntry.worldReactionHash;
             actionReceiptId = primaryEntry.actionReceiptId;
+            effectReadbackHash = primaryEntry.effectReadbackHash;
+            npcReceiptSource = primaryEntry.receiptSource;
+            worldReceiptSource = primaryEntry.receiptSource;
             lastResolutionIndex = primaryEntry.resolutionIndex;
 
             const memory = await readConfirmedNpcMultiMemory(primaryNpcId);
@@ -208,17 +209,21 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         safety: number; resources: number; belonging: number;
         status: number; wealth: number; power: number;
       }>>();
+      const npcSources = new Map<string, Readonly<{ receiptId: string; resolutionIndex: number }>>();
       for (const hubId of LIVING_HISTORY_HUBS) {
         const npcId = `ax1_merchant_${hubId}`;
         try {
-          const npcState = await readConfirmedNpcState(npcId);
+          const [npcState, source] = await Promise.all([
+            readConfirmedNpcState(npcId),
+            readConfirmedMerchantActionSource(npcId),
+          ]);
           if (npcState && "decision" in npcState && npcState.decision?.needs) {
             npcNeedsMap.set(npcId, npcState.decision.needs);
           }
-        } catch { /* NPC state not available — guild cycle uses defaults */ }
+          if (source) npcSources.set(npcId, source);
+        } catch { /* unavailable NPCs cannot mutate guild truth in this cycle */ }
       }
-      await guildRuntime.executeCycle(cycle, npcNeedsMap);
-      guildRuntime.advanceCycle();
+      await guildRuntime.executeCycle(cycle, npcNeedsMap, npcSources);
 
       state = frozenReadback({
         enabled,
