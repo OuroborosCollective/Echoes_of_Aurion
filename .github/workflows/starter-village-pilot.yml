@@ -9,6 +9,14 @@ on:
       - "e2e/starterVillagePilot.spec.ts"
       - "scripts/seed-starter-village-public-character.ts"
       - "assets/characters/aurion-player-standard-animated.glb"
+      - "assets/environment/fountain/**"
+      - "scripts/seed-starter-village-fountain.ts"
+      - "server/starterVillageFountainAsset.test.ts"
+      - "shared/aurionVillageFountainContract.ts"
+      - "assets/environment/fountain/**"
+      - "scripts/seed-starter-village-fountain.ts"
+      - "server/starterVillageFountainAsset.test.ts"
+      - "shared/aurionVillageFountainContract.ts"
       - "server/db.ts"
       - "server/routers.ts"
       - "server/zone**"
@@ -79,6 +87,8 @@ jobs:
           pnpm build
       - name: Character catalog state and authority regressions
         run: pnpm exec vitest run client/src/xaurion/components/PublicCharacterPicker.test.tsx server/glbSmartUpload.test.ts server/characterBinding.test.ts --no-file-parallelism --reporter=verbose
+      - name: Owner fountain GLB family and presentation regressions
+        run: pnpm exec vitest run server/starterVillageFountainAsset.test.ts server/glbAssetClassifier.test.ts server/glbCatalogFamilies.test.ts client/src/xaurion/core/UploadedAssetRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Canonical 10 Hz Return Stone and northward movement regressions
         run: pnpm exec vitest run server/returnStoneZoneRuntime.test.ts server/zoneGatewayPresence.test.ts server/zoneRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Scope egress denial to Aurion runtime identity
@@ -170,6 +180,12 @@ jobs:
           set -euo pipefail
           pnpm exec tsx scripts/seed-starter-village-public-character.ts | tee "$AURION_EVIDENCE_DIR/public-character-seed.json"
           test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+Boolean(x.assetId)+":"+Boolean(x.sha256))' "$AURION_EVIDENCE_DIR/public-character-seed.json")" = "player-public:true:true"
+          chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
+      - name: Admit the owner fountain LOD family through the real GLB authority and read it back
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/seed-starter-village-fountain.ts | tee "$AURION_EVIDENCE_DIR/fountain-seed.json"
+          test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+x.subcategory+":"+x.lods.map(v=>v.level).join(","))' "$AURION_EVIDENCE_DIR/fountain-seed.json")" = "world-environment:fountain:1,2"
           chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
       - name: Browser-emulated viewport acceptance after canonical admission (not physical Android/GPU proof)
         run: |
