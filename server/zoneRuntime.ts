@@ -387,7 +387,7 @@ export class AuthoritativeMovementZone {
       userId: peer.userId,
     });
     this.peers.delete(connectionId);
-    this.peersByEntityId.delete(entityId);
+    this.peersByEntityId.delete(`player:${peer.userId}`);
     this.sortedPeersDirty = true;
     if (!this.isReplay) this.broadcastSnapshot();
   }
