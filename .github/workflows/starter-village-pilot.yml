@@ -164,7 +164,7 @@ jobs:
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
       - name: Reproduce the pre-fix empty catalog contract without a blind radio wait
         run: |
-          AURION_STARTER_VILLAGE_EMPTY_CATALOG_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "diagnostic: fresh isolated catalog" --reporter=list --trace=on --output="$AURION_EVIDENCE_DIR/playwright-empty"
+          AURION_STARTER_VILLAGE_EMPTY_CATALOG_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "diagnostic: fresh isolated catalog" --reporter=list
       - name: Admit the canonical public player through the real GLB authority and read it back
         run: |
           set -euo pipefail
@@ -173,7 +173,7 @@ jobs:
           chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
       - name: Browser-emulated viewport acceptance after canonical admission (not physical Android/GPU proof)
         run: |
-          AURION_STARTER_VILLAGE_BROWSER_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "confirmed pilot controls" --reporter=list --trace=on --output="$AURION_EVIDENCE_DIR/playwright-acceptance"
+          AURION_STARTER_VILLAGE_BROWSER_E2E=1 pnpm exec playwright test e2e/starterVillagePilot.spec.ts --grep "confirmed pilot controls" --reporter=list
       - name: Cleanup runtime isolation
         if: always()
         run: |
