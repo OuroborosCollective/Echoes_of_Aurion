@@ -157,7 +157,27 @@ jobs:
           done
           test -s /tmp/starter-pilot.pid
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
-          curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-before.json
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:3000/healthz > test-results/starter-pilot-health-before.json
+            if node - test-results/starter-pilot-health-before.json "$AURION_RELEASE_SHA" <<'NODE'
+          const fs = require("node:fs");
+          const [input, revision] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replay = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const chain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          process.exit(body.revision === revision && replay?.status === "MATCH" && replay?.summary === "REPLAY_SAMPLE_MATCH" && chain?.status === "MATCH" ? 0 : 1);
+          NODE
+            then
+              break
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              echo "pre-journey assurance did not reach replay/receipt MATCH" >&2
+              cat test-results/starter-pilot-health-before.json >&2
+              exit 1
+            fi
+            sleep 1
+          done
           node - "$AURION_EVIDENCE_DIR/assurance-before-journey.json" "$AURION_RELEASE_SHA" test-results/starter-pilot-health-before.json <<'NODE'
           const fs = require("node:fs");
           const [out, revision, input] = process.argv.slice(2);
@@ -207,7 +227,27 @@ jobs:
           test -s /tmp/starter-pilot.pid
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
-          curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-after.json
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:3000/healthz > test-results/starter-pilot-health-after.json
+            if node - test-results/starter-pilot-health-after.json "$AURION_RELEASE_SHA" <<'NODE'
+          const fs = require("node:fs");
+          const [input, revision] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replay = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const chain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          process.exit(body.revision === revision && replay?.status === "MATCH" && replay?.summary === "REPLAY_SAMPLE_MATCH" && chain?.status === "MATCH" ? 0 : 1);
+          NODE
+            then
+              break
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              echo "post-restart assurance did not reach replay/receipt MATCH" >&2
+              cat test-results/starter-pilot-health-after.json >&2
+              exit 1
+            fi
+            sleep 1
+          done
           node - "$AURION_EVIDENCE_DIR/assurance-after-restart.json" "$AURION_RELEASE_SHA" test-results/starter-pilot-health-after.json <<'NODE'
           const fs = require("node:fs");
           const [out, revision, input] = process.argv.slice(2);
