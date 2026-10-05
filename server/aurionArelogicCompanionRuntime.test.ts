@@ -43,8 +43,15 @@ describe("ARE-rLOGIC companion production bridge", () => {
     expect(exporter).toContain('note: "omitted"');
     expect(exporter).toContain('captured_frame: "not_present_in_server_memory"');
     expect(runner).toContain("ARE_RLOGIC_REVISION: eb6497fb2598c3159cbc4a67bfd97ad6d9c98ce1");
-    expect(runner).toContain("github.event_name == 'workflow_run'");
-    expect(runner).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(runner).toContain("workflow_call:");
+    expect(runner).toContain("inputs.source_sha != ''");
+    expect(runner).not.toContain("workflow_run:");
+  });
+
+  it("calls ARE-rLOGIC only after the trusted final production gate", () => {
+    const deployWorkflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
+    expect(deployWorkflow).toContain("needs: [final-production-gate]");
+    expect(deployWorkflow).toContain("uses: ./.github/workflows/arelogic-companion-offline-runner.yml");
   });
 
   it("seals the sanitizer and helper into the immutable runtime artifact", () => {
