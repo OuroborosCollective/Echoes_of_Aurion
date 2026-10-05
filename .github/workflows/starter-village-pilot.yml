@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
+      - "server/starterVillageReplayAssuranceMariaDb.test.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
@@ -25,6 +26,7 @@ on:
     paths:
       - ".github/workflows/starter-village-pilot.yml"
       - "server/starterVillagePilotHttp.test.ts"
+      - "server/starterVillageReplayAssuranceMariaDb.test.ts"
       - "e2e/starterVillagePilot.spec.ts"
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
@@ -156,6 +158,26 @@ jobs:
           test -s /tmp/starter-pilot.pid
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
           curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-before.json
+          node - "$AURION_EVIDENCE_DIR/assurance-before-journey.json" "$AURION_RELEASE_SHA" test-results/starter-pilot-health-before.json <<'NODE'
+          const fs = require("node:fs");
+          const [out, revision, input] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replaySample = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const receiptChain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          if (body.revision !== revision) throw new Error("STARTER_ASSURANCE_REVISION_MISMATCH");
+          if (replaySample?.status !== "MATCH" || replaySample?.summary !== "REPLAY_SAMPLE_MATCH") throw new Error("STARTER_REPLAY_SAMPLE_NOT_MATCH_BEFORE");
+          if (receiptChain?.status !== "MATCH") throw new Error("STARTER_RECEIPT_CHAIN_NOT_MATCH_BEFORE");
+          fs.writeFileSync(out, JSON.stringify({
+            schema: "aurion.starter-village-assurance-readback.v1",
+            revision,
+            phase: "before-journey",
+            assuranceStatus: body.causalAssurance?.status ?? null,
+            snapshotHash: body.causalAssurance?.snapshotHash ?? null,
+            replaySample,
+            receiptChain,
+          }, null, 2) + "\n");
+          NODE
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=journey pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
       - name: Restart application and independently read back quest and inventory
         id: restart
@@ -185,6 +207,32 @@ jobs:
           test -s /tmp/starter-pilot.pid
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
+          curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-after.json
+          node - "$AURION_EVIDENCE_DIR/assurance-after-restart.json" "$AURION_RELEASE_SHA" test-results/starter-pilot-health-after.json <<'NODE'
+          const fs = require("node:fs");
+          const [out, revision, input] = process.argv.slice(2);
+          const body = JSON.parse(fs.readFileSync(input, "utf8"));
+          const observations = body.causalAssurance?.observations ?? [];
+          const replaySample = observations.find(item => item.key === "REPLAY_SAMPLE");
+          const receiptChain = observations.find(item => item.key === "RECEIPT_CHAIN");
+          if (body.revision !== revision) throw new Error("STARTER_ASSURANCE_REVISION_MISMATCH");
+          if (replaySample?.status !== "MATCH" || replaySample?.summary !== "REPLAY_SAMPLE_MATCH") throw new Error("STARTER_REPLAY_SAMPLE_NOT_MATCH_AFTER");
+          if (receiptChain?.status !== "MATCH") throw new Error("STARTER_RECEIPT_CHAIN_NOT_MATCH_AFTER");
+          fs.writeFileSync(out, JSON.stringify({
+            schema: "aurion.starter-village-assurance-readback.v1",
+            revision,
+            phase: "after-restart",
+            assuranceStatus: body.causalAssurance?.status ?? null,
+            snapshotHash: body.causalAssurance?.snapshotHash ?? null,
+            replaySample,
+            receiptChain,
+          }, null, 2) + "\n");
+          NODE
+
+      - name: Prove persisted replay sample MATCH plus controlled divergence and missing-evidence fail-closed
+        id: replay_assurance
+        run: |
+          AURION_STARTER_REPLAY_ASSURANCE_E2E=1 pnpm exec vitest run server/starterVillageReplayAssuranceMariaDb.test.ts --no-file-parallelism --reporter=verbose
       - name: Reproduce the pre-fix empty catalog contract without a blind radio wait
         id: empty_catalog
         run: |
@@ -234,6 +282,7 @@ jobs:
               "network": "${{ steps.network.outcome }}",
               "journey": "${{ steps.journey.outcome }}",
               "restartReadback": "${{ steps.restart.outcome }}",
+              "replayAssurance": "${{ steps.replay_assurance.outcome }}",
               "emptyCatalogDiagnostic": "${{ steps.empty_catalog.outcome }}",
               "publicCharacterAdmission": "${{ steps.character_seed.outcome }}",
               "fountainAdmission": "${{ steps.fountain_seed.outcome }}",
