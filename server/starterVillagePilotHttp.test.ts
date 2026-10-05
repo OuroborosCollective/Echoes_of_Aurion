@@ -229,7 +229,7 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
         text: "Ich will helfen.",
         idempotencyKey: `starter-pilot-dialogue-offer-${revision.slice(0, 16)}`,
       })).data;
-      expect(interpreted.receiptId).toMatch(/^dlg_/);
+      expect(interpreted.receiptId).toMatch(/^dialogue_/);
       const command = (await rpc<any>("gameplay.requestQuestActionFromDialogue", cookie, {
         dialogueReceiptId: interpreted.receiptId,
         actionKind: "offer_quest",
