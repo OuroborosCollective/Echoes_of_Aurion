@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  outputDir: process.env.AURION_PLAYWRIGHT_OUTPUT_DIR ?? "test-results",
   timeout: 30_000,
   fullyParallel: false,
   reporter: "list",
