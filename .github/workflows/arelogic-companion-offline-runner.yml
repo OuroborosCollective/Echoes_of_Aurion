@@ -6,13 +6,11 @@ on:
       - "scripts/export-arelogic-companion-memory.mjs"
       - "scripts/export-arelogic-companion-memory.test.mjs"
       - ".github/workflows/arelogic-companion-offline-runner.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "scripts/export-arelogic-companion-memory.mjs"
-      - "scripts/export-arelogic-companion-memory.test.mjs"
-      - ".github/workflows/arelogic-companion-offline-runner.yml"
+  workflow_run:
+    workflows:
+      - "Deploy Aurion Traefik runtime"
+    types:
+      - completed
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -46,25 +44,23 @@ jobs:
 
   runtime-export:
     name: Export production companion memory to offline ARE evidence
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     needs: contract
     runs-on: [self-hosted, Linux, X64, aurion-static]
     timeout-minutes: 10
     env:
-      COMPANION_MEMORY_DIR: /opt/aurion-zone-runtime/current/data/companion-memory
+      SANITIZED_EXPORT_DIR: /var/lib/aurion-arelogic-export/current
       ARE_RLOGIC_REVISION: eb6497fb2598c3159cbc4a67bfd97ad6d9c98ce1
 
     steps:
-      - name: Guard repository and probe runtime memory
-        id: memory
+      - name: Guard repository and produce sanitized runtime export
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
-          if test -d "${COMPANION_MEMORY_DIR}" && test -r "${COMPANION_MEMORY_DIR}"; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
+          sudo -n /usr/local/sbin/aurion-arelogic-companion-export
+          test -d "${SANITIZED_EXPORT_DIR}"
+          test -r "${SANITIZED_EXPORT_DIR}/companion-demonstrations.jsonl"
+          test -r "${SANITIZED_EXPORT_DIR}/aurion-export-report.json"
 
       - name: Check out exact Aurion revision
         uses: actions/checkout@v4
@@ -74,18 +70,14 @@ jobs:
         with:
           node-version: 22
 
-      - name: Export sanitized demonstrations
+      - name: Copy sanitized demonstrations
         id: export
         run: |
           set -euo pipefail
           rm -rf arelogic-export
           mkdir -p arelogic-export
-          if test "${{ steps.memory.outputs.present }}" = "true"; then
-            node scripts/export-arelogic-companion-memory.mjs               --input "${COMPANION_MEMORY_DIR}"               --output arelogic-export/companion-demonstrations.jsonl               --report arelogic-export/aurion-export-report.json
-          else
-            : > arelogic-export/companion-demonstrations.jsonl
-            printf '%s\n' '{"schema":"aurion.arelogic.companion-export.v1","status":"no-data","reason":"companion-memory-directory-absent","rows":0,"episodes":0,"production_authority":false,"reward_semantics":"absent"}'               > arelogic-export/aurion-export-report.json
-          fi
+          cp "${SANITIZED_EXPORT_DIR}/companion-demonstrations.jsonl" arelogic-export/companion-demonstrations.jsonl
+          cp "${SANITIZED_EXPORT_DIR}/aurion-export-report.json" arelogic-export/aurion-export-report.json
           rows="$(node -e 'const r=require("./arelogic-export/aurion-export-report.json"); process.stdout.write(String(r.rows))')"
           printf 'rows=%s\n' "$rows" >> "$GITHUB_OUTPUT"
 
