@@ -102,7 +102,15 @@ export class UploadedWorldCatalogProjection {
         }));
       }
     }
+    const dedicatedPriority = (placement: UploadedWorldVisualPlacement) =>
+      placement.id.startsWith("aurion.return-stone")
+      || placement.id.startsWith("aurion.village-fountain")
+      || placement.id.startsWith("aurion.village-street-lamp")
+        ? 0
+        : 1;
     placements.sort((left, right) => {
+      const priority = dedicatedPriority(left) - dedicatedPriority(right);
+      if (priority) return priority;
       const ld = Math.hypot(left.xMm / 1000 - position.x, left.zMm / 1000 - position.z);
       const rd = Math.hypot(right.xMm / 1000 - position.x, right.zMm / 1000 - position.z);
       return ld - rd || left.id.localeCompare(right.id);
