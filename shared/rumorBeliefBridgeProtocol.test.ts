@@ -4,7 +4,7 @@ import {
   rememberNpcInformation,
   type NpcInformationSource,
 } from "./npcInformationEcologyProtocol";
-import { projectRumorClaims } from "./rumorProjectionProtocol";
+import { projectRumorClaims, rumorClaimProjectionSchema } from "./rumorProjectionProtocol";
 import {
   BELIEF_MAX_DELTA_BPS,
   beliefMappingSchema,
@@ -12,7 +12,6 @@ import {
   buildBeliefVector,
   corroborationFactorQ16,
   q16Mul,
-  rumorClaimProjectionSchema,
   applyBeliefToCandidates,
 } from "./rumorBeliefBridgeProtocol";
 import type { RumorClaimProjection } from "./rumorProjectionProtocol";
@@ -21,6 +20,7 @@ const source: NpcInformationSource = {
   evidenceClass: "verified",
   sourceKind: "npc_decision_receipt",
   sourceReceiptId: "npc_decision_101",
+  sourceReceiptHash: "sha256:" + "a".repeat(64),
   sourceRevision: "b".repeat(40),
   sourceSha256: "sha256:" + "c".repeat(64),
   sourceCausalRoot: "sha256:" + "d".repeat(64),
@@ -59,13 +59,13 @@ describe("AIM-783 deterministic rumor-to-behavior bridge", () => {
     expect(q16Mul(32_768, 32_768)).toBe(16_384);
     expect(() => q16Mul(65_537, 1)).toThrow("BELIEF_Q16_OPERAND_INVALID");
 
-    // DIRECT + full trust + full freshness + neutral relations = full belief.
-    expect(beliefWeightQ16({ claim: claimFixture(), sourceTrustBps: 10_000 })).toBe(65_536);
-    // COMMUNICATED evidence discounts deterministically.
+    // DIRECT + full trust + full freshness still carries the neutral 0.5 relation prior.
+    expect(beliefWeightQ16({ claim: claimFixture(), sourceTrustBps: 10_000 })).toBe(32_768);
+    // COMMUNICATED evidence discounts deterministically on top of the same prior.
     expect(beliefWeightQ16({
       claim: claimFixture({ evidenceClass: "COMMUNICATED" }),
       sourceTrustBps: 10_000,
-    })).toBe(49_152);
+    })).toBe(24_576);
   });
 
   it("discounts belief through the versioned corroboration factor", () => {
@@ -164,8 +164,9 @@ describe("AIM-783 deterministic rumor-to-behavior bridge", () => {
       beliefs,
       mappings: [mapping],
     });
-    // Max single belief (DIRECT/full trust = 65536) -> delta == maxDeltaBps exactly once.
-    expect(candidates[0].riskBps).toBe(2_000 + 2_500);
+    // Neutral relation prior keeps the strongest DIRECT/full-trust belief at 0.5,
+    // so the bounded mapping applies half of maxDeltaBps exactly once.
+    expect(candidates[0].riskBps).toBe(2_000 + 1_250);
     expect(receipt.candidateSetHashBefore).not.toBe(receipt.candidateSetHashAfter);
     // Input candidate object is never mutated.
     expect(candidate.riskBps).toBe(2_000);
@@ -198,8 +199,9 @@ describe("AIM-783 deterministic rumor-to-behavior bridge", () => {
       sourceTrustBpsByWitness: { "npc-merchant": 8_000 },
     });
     expect(vector.entries.length).toBe(1);
-    // freshnessQ16 at 20 of [10, 40): floor(65536 * 20 / 30) = 43690.
-    const expected = q16Mul(q16Mul(q16Mul(65_536, 52_428), 43_690), 32_768);
+    // The latest confirmed receipt is the remembered receipt at index 11, so
+    // freshnessQ16 at 20 of [11, 40) is floor(65536 * 20 / 29) = 45197.
+    const expected = q16Mul(q16Mul(q16Mul(65_536, 52_428), 45_197), 32_768);
     expect(vector.entries[0].beliefQ16).toBe(expected);
     // Logical expiry removes the influence entirely.
     const expired = projectRumorClaims({
