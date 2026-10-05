@@ -1,4 +1,5 @@
 import {
+  AurionCombatVictoryEvidenceSchema,
   QuestObjectiveRequirementSchema,
   type QuestObjectiveRequirement,
 } from "../../shared/aurionQuestContract";
@@ -11,10 +12,20 @@ import {
 export function matchesQuestObjectiveEvent(
   objective: QuestObjectiveRequirement,
   evidence: unknown,
+  playerUserId?: number,
 ): boolean {
   const parsedObjective = QuestObjectiveRequirementSchema.parse(objective);
   const binding = parsedObjective.eventBinding;
   if (!binding) return false;
+
+  if (binding.source === "combat") {
+    if (binding.event !== "victory" || binding.matchField !== "opponentSpecies" || !binding.matchValue) return false;
+    const parsed = AurionCombatVictoryEvidenceSchema.safeParse(evidence);
+    return parsed.success
+      && playerUserId !== undefined
+      && parsed.data.playerUserId === playerUserId
+      && parsed.data.opponentSpecies === binding.matchValue;
+  }
 
   if (
     binding.source !== "encounter"
@@ -40,8 +51,9 @@ export function matchesQuestObjectiveEvent(
 export function assertQuestObjectiveEventMatch(
   objective: QuestObjectiveRequirement,
   evidence: unknown,
+  playerUserId?: number,
 ): asserts evidence is EncounterCompletionEvidence {
-  if (!matchesQuestObjectiveEvent(objective, evidence)) {
+  if (!matchesQuestObjectiveEvent(objective, evidence, playerUserId)) {
     throw new Error("QUEST_OBJECTIVE_EVENT_UNPROVABLE");
   }
 }

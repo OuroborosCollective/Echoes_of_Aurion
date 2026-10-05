@@ -31,6 +31,20 @@ function chain(zoneId: string, fromTick = 10, toTick = 12, salt = ""): AurionZon
 }
 
 describe("worldCausalRootService contract", () => {
+  it.each([
+    { sourceRevision: "b".repeat(40) },
+    { rulesetVersion: "aurion.zone.rules.v999" },
+  ])("rejects mixed initial receipt history without dropping its older prefix: %o", mutation => {
+    const history = chain("observatory_threshold", 1, 3);
+    history[0] = { ...history[0], ...mutation };
+    expect(() => computeZoneEpochRoot(history)).toThrow("ZONE_RECEIPT_IDENTITY_MISMATCH");
+  });
+
+  it("rejects a gap in retained initial history", () => {
+    const history = chain("observatory_threshold", 1, 3);
+    expect(() => computeZoneEpochRoot([history[0], history[2]])).toThrow("ZONE_RECEIPT_CHAIN_INVALID");
+  });
+
   it("coalesces concurrent immutable-epoch replays and expires the bounded proof cache", async () => {
     let now = 100;
     const cache = new VerifiedEpochReplayCache(2, 1_000, () => now);

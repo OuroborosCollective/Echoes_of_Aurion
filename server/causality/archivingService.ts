@@ -10,7 +10,11 @@ export type CausalBackupReceipt = Readonly<{
   checkpointId: string | null;
   checkpointTick: number | null;
   checkpointHash: string | null;
+  /** Terminal packet identity; archiveIds identifies the entire verified prefix. */
   archiveId: string | null;
+  archiveIds?: readonly string[];
+  startTick?: number;
+  endTick?: number;
   archivedCount: number;
   status: "ARCHIVED" | "UNPROVABLE" | "NOTHING_TO_ARCHIVE" | "ERROR";
   reason?: string;
@@ -66,7 +70,8 @@ export class AurionCausalArchivingService {
       if (!checkpoint) return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: null, checkpointTick: null, checkpointHash: null, archiveId: null, archivedCount: 0, status: "UNPROVABLE", reason: "NO_RECONCILED_CHECKPOINT" });
       const archived = await globalCausalPersistence.archiveOldReceipts(zoneId, checkpoint.tick + 1);
       if (!archived) return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: checkpoint.id, checkpointTick: checkpoint.tick, checkpointHash: checkpoint.snapshotHash, archiveId: null, archivedCount: 0, status: "NOTHING_TO_ARCHIVE" });
-      return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: true, zoneId, checkpointId: checkpoint.id, checkpointTick: checkpoint.tick, checkpointHash: checkpoint.snapshotHash, archiveId: archived.archiveId, archivedCount: archived.archivedCount, status: "ARCHIVED" });
+      if (archived.startTick !== 1 || archived.endTick < checkpoint.tick) throw new Error("CAUSAL_ARCHIVE_CHECKPOINT_NOT_COVERED");
+      return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: true, zoneId, checkpointId: checkpoint.id, checkpointTick: checkpoint.tick, checkpointHash: checkpoint.snapshotHash, archiveId: archived.archiveId, archiveIds: archived.archiveIds, startTick: archived.startTick, endTick: archived.endTick, archivedCount: archived.archivedCount, status: "ARCHIVED" });
     } catch (error) {
       return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: null, checkpointTick: null, checkpointHash: null, archiveId: null, archivedCount: 0, status: "ERROR", reason: error instanceof Error ? error.message : String(error) });
     }

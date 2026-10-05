@@ -24,7 +24,11 @@ async function decodeModel(loader:GLTFLoader,bytes:ArrayBuffer,signal:AbortSigna
  try{return await Promise.race([pending,new Promise<never>((_,reject)=>{abort=()=>reject(signal.reason);signal.addEventListener("abort",abort,{once:true});})]);}
  finally{retired=true;if(abort)signal.removeEventListener("abort",abort);}
 }
-/** View-only projection of the authenticated, versioned server placement plan. */
+/**
+ * View-only projection of the authenticated, versioned server placement plan.
+ * This also renders the starter village exactly as returned by Aurion; it must
+ * not reconstruct, randomize or close that layout on the client.
+ */
 export class WorldAssetProjection {
  readonly root=new THREE.Group();
  private readonly cache=new Map<string,Cached>();
@@ -47,7 +51,8 @@ export class WorldAssetProjection {
   if(typeof x!=="number"||!Number.isFinite(x)||typeof z!=="number"||!Number.isFinite(z))return;
   // The first asset read is causally bound to a server-confirmed zone position,
   // not to whether a particular renderer backend has already produced a frame.
-  this.update(1,{x,z},this.renderer?.domElement.clientWidth||this.viewportWidth);
+  // Zone snapshots carry canonical millimetres; update/camera positions use metres.
+  this.update(1,{x:x/1000,z:z/1000},this.renderer?.domElement.clientWidth||this.viewportWidth);
  };
  constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer){
   this.root.name="aurion-optimized-world-assets";scene.add(this.root);
