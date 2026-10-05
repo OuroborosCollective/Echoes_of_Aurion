@@ -121,10 +121,19 @@ describe("verifyNeuralCapabilityWithCag", () => {
     expect(verification.cagEvidence).toBeNull();
   });
 
-  it("returns PROVIDER_FAILED on a malformed bounded response", async () => {
+  it("returns PROVIDER_FAILED on a malformed bounded response and preserves provider evidence", async () => {
     const verification = await verifyNeuralCapabilityWithCag(cleanInput, { client: fixedClient("not-a-bounded-result") });
     expect(verification.status).toBe("PROVIDER_FAILED");
     expect(verification.observedMask).toBeNull();
+    expect(verification.responseSha256).not.toBeNull();
+    expect(verification.cagEvidence?.result).toBe("not-a-bounded-result");
+  });
+
+  it("returns PROVIDER_FAILED when the provider mask exceeds the declared bit-vector bounds", async () => {
+    const verification = await verifyNeuralCapabilityWithCag(cleanInput, { client: fixedClient("{512,9}") });
+    expect(verification.status).toBe("PROVIDER_FAILED");
+    expect(verification.observedMask).toBeNull();
+    expect(verification.cagEvidence?.result).toBe("{512,9}");
   });
 
   it("fails closed on an artifact hash mismatch before any provider call", async () => {
