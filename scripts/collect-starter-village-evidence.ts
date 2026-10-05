@@ -53,13 +53,24 @@ export async function collectStarterVillageEvidence(args: {
   evidenceDir: string;
   playwrightDir: string;
   testResultsDir: string;
+  revision: string;
 }) {
-  const { evidenceDir, playwrightDir, testResultsDir } = args;
+  const { evidenceDir, playwrightDir, testResultsDir, revision } = args;
   const failureDir = path.join(evidenceDir, "failure-artifacts");
   await mkdir(failureDir, { recursive: true });
 
   await copyRedacted(path.join(testResultsDir, "starter-pilot-server-before.log"), path.join(evidenceDir, "server-before.log"));
   await copyRedacted(path.join(testResultsDir, "starter-pilot-server-after.log"), path.join(evidenceDir, "server-after.log"));
+  try {
+    const health = JSON.parse(await readFile(path.join(testResultsDir, "starter-pilot-health-before.json"), "utf8"));
+    await writeFile(path.join(evidenceDir, "health-before.json"), JSON.stringify({
+      schema: "aurion.starter-village-health.v1",
+      revision,
+      health,
+    }, null, 2) + "\n");
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") throw error;
+  }
 
   let traceIndex = 0;
   let screenshotIndex = 0;
@@ -76,7 +87,7 @@ export async function collectStarterVillageEvidence(args: {
 }
 
 if (process.argv[1]?.endsWith("collect-starter-village-evidence.ts")) {
-  const [evidenceDir, playwrightDir, testResultsDir] = process.argv.slice(2);
-  if (!evidenceDir || !playwrightDir || !testResultsDir) throw new Error("EVIDENCE_COLLECT_ARGS_REQUIRED");
-  console.log(JSON.stringify(await collectStarterVillageEvidence({ evidenceDir, playwrightDir, testResultsDir })));
+  const [evidenceDir, playwrightDir, testResultsDir, revision] = process.argv.slice(2);
+  if (!evidenceDir || !playwrightDir || !testResultsDir || !revision) throw new Error("EVIDENCE_COLLECT_ARGS_REQUIRED");
+  console.log(JSON.stringify(await collectStarterVillageEvidence({ evidenceDir, playwrightDir, testResultsDir, revision })));
 }
