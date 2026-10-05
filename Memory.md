@@ -619,3 +619,21 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #765 — ci(asterion): pin pnpm setup action
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=765 merge=0d64c35f4d2af08c0ad1c2b0dc093441aa248850 -->
+Task: Merge PR #765 into `main` — ci(asterion): pin pnpm setup action.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/asterion-courtyard-evidence.yml`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/765
+- Merge commit: `0d64c35f4d2af08c0ad1c2b0dc093441aa248850`
+- PR head: `14282ac78eaa6e002292750851859c1fc824b721`
+- Merged at: 2026-10-05T03:31:18Z
+- Post-merge workflow run: 37259769863
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
