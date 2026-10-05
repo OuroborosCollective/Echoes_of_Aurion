@@ -90,6 +90,22 @@ describe("groupGlbCatalogRows", () => {
     ]);
   });
 
+  it("groups the three-stage Asterion auto arena family with LOD0 primary", () => {
+    const a = { ...row(0, sha("a")), displayName: "Asterion Courtyard LOD0", assetType: "arena" as const, targetKey: "asterion_courtyard" };
+    const b = { ...row(1, sha("b")), displayName: "Asterion Courtyard LOD1", assetType: "arena" as const, targetKey: null };
+    const c = { ...row(2, sha("c")), displayName: "Asterion Courtyard LOD2", assetType: "arena" as const, targetKey: null };
+    const catalog = groupGlbCatalogRows([c, a, b]);
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]).toMatchObject({
+      displayName: "Asterion Courtyard",
+      purpose: "auto",
+      assetType: "arena",
+      sha256: sha("a"),
+      targetKey: "asterion_courtyard",
+    });
+    expect(catalog[0]!.lods.map(lod => [lod.level, lod.sha256])).toEqual([[0, sha("a")], [1, sha("b")], [2, sha("c")]]);
+  });
+
   it("keeps ordinary single models independent and backward compatible", () => {
     const catalog = groupGlbCatalogRows([
       { ...row(0, sha("e")), displayName: "World Nature · tree · Lone Oak" },
