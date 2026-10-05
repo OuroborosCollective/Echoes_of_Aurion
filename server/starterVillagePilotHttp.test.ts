@@ -123,16 +123,16 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number, onNor
     await waitUntil(() => welcomed && selfPosition !== null && mobs.length > 0, "ZONE_WELCOME_NOT_CONFIRMED", 10_000);
     expect(selfEntityId).toBe(`player:${userId}`);
 
-    const gateStarted = Date.now();
-    while (!selfPosition || selfPosition.z > -72_000) {
-      if (Date.now() - gateStarted > 35_000) throw new Error("NORTH_GATE_NOT_REACHED");
+    const guardStarted = Date.now();
+    while (!selfPosition || selfPosition.z > -30_000) {
+      if (Date.now() - guardStarted > 25_000) throw new Error("NORTH_GATE_GUARD_NOT_REACHED");
       sendMove(0, -1);
       await sleep(100);
     }
     sendMove(0, 0);
     await sleep(250);
-    const northGate = { ...selfPosition };
-    if (onNorthGate) await onNorthGate(northGate);
+    const guardPosition = { ...selfPosition };
+    if (onNorthGate) await onNorthGate(guardPosition);
 
     const alive = mobs.filter(mob => mob.health > 0 && mob.state !== "dead" && !mob.isBoss);
     expect(alive.length).toBeGreaterThan(0);
@@ -169,6 +169,15 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number, onNor
       );
     }
     expect(killed.gameplaySourceRevision).toMatch(/^[a-f0-9]{40}$/);
+
+    const gateStarted = Date.now();
+    while (!selfPosition || selfPosition.z > -72_000) {
+      if (Date.now() - gateStarted > 35_000) throw new Error("NORTH_ROUTE_NOT_REACHED");
+      sendMove(0, -1);
+      await sleep(100);
+    }
+    sendMove(0, 0);
+    const northGate = { ...selfPosition };
 
     expect(rejects.filter(code => code !== "COMBATANT_DEAD")).toEqual([]);
     return {
@@ -223,7 +232,7 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
     let questBefore: any;
 
     const route = await runAuthoritativeZoneJourney(cookie, registration.data.id, async northGate => {
-      expect(northGate.z).toBeLessThanOrEqual(-72_000);
+      expect(northGate.z).toBeGreaterThanOrEqual(-34_000);\n      expect(northGate.z).toBeLessThanOrEqual(-30_000);
       const interpreted = (await rpc<any>("gameplay.interpretNpcDialogue", cookie, {
         npcId: "starter_village_north_gate_guard",
         text: "Seid gegrüßt, ich brauche einen Auftrag.",
