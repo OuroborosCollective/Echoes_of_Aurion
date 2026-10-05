@@ -205,6 +205,7 @@ describe("AIM-686 ACEG Capability & Equipment Graph", () => {
     ).toBe(true);
     expect(resolution.capabilities.medicine).toBe(50);
     expect(resolution.capabilities.strength).toBe(105);
+    expect(resolution.sourceEvidenceHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(resolution.resolutionHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(verifyAcegResolution(resolution)).toBe(true);
   });
@@ -265,6 +266,43 @@ describe("AIM-686 ACEG Capability & Equipment Graph", () => {
       ownershipReceiptId: "receipt:own:helm",
       confirmationReceiptId: "receipt:equip-confirmed:helm",
     });
+  });
+
+  it("binds receipt identity into the source and resolution hashes", () => {
+    const first = resolveAcegEquipment({
+      snapshot: snapshot({
+        implants: [
+          {
+            implantId: "implant:arm",
+            modifiers: [{ capability: "strength", delta: 10 }],
+            installReceiptId: "receipt:implant:first",
+          },
+        ],
+      }),
+      catalog: [],
+      ownedItems: [],
+      priorConfirmedEquip: [],
+    });
+    const second = resolveAcegEquipment({
+      snapshot: snapshot({
+        implants: [
+          {
+            implantId: "implant:arm",
+            modifiers: [{ capability: "strength", delta: 10 }],
+            installReceiptId: "receipt:implant:second",
+          },
+        ],
+      }),
+      catalog: [],
+      ownedItems: [],
+      priorConfirmedEquip: [],
+    });
+
+    expect(second.capabilities).toEqual(first.capabilities);
+    expect(second.sourceEvidenceHash).not.toBe(first.sourceEvidenceHash);
+    expect(second.resolutionHash).not.toBe(first.resolutionHash);
+    expect(verifyAcegResolution(first)).toBe(true);
+    expect(verifyAcegResolution(second)).toBe(true);
   });
 
   it("fails closed on impossible prior-confirmed ownership and slot conflicts", () => {
