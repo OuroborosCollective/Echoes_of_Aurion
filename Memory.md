@@ -688,3 +688,25 @@ Status: VERIFIED candidate
 Change: Added bounded deterministic visual Recipe/IR and optional evidence-only Wolfram/CAG analysis; fixed tied-affix canonicalization with slot/id/groupId ordering and explicit INCONCLUSIVE provider output.
 Learned: Presentation analysis stays identity-neutral only when canonical ordering is total and unavailable/unparseable provider evidence can never collapse to MATCH.
 Evidence: Candidate head f63b5ce87440b8acab5d83fda98748f6efbfa9d0; Aurion Local Test Pack 37266404421, Runtime Container Proof 37266404321, Runtime Candidate 37266404435, AIM-292 37266404338, AIM-535 37266404335 — all success.
+
+
+### 2026-10-05 — PR #770 — feat(visual): harden CAG intelligence boundary for issue #527
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=770 merge=0adc5f101e58a891cad9685525495bec68196730 -->
+Task: Merge PR #770 into `main` — feat(visual): harden CAG intelligence boundary for issue #527.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `server/visualCagIntelligenceBoundary.test.ts`
+- `server/visualCagIntelligenceBoundary.ts`
+- `shared/visualConstructionProtocol.ts`
+- `visual-cag-intelligence-boundary.md`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/770
+- Merge commit: `0adc5f101e58a891cad9685525495bec68196730`
+- PR head: `784aff24be0dbfc38ef204d7d70add09c5f03a3d`
+- Merged at: 2026-10-05T05:22:41Z
+- Post-merge workflow run: 37267513798
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
