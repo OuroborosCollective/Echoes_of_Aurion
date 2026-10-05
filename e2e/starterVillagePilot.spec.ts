@@ -154,10 +154,10 @@ for (const viewport of viewports) test(`${viewport.name}: confirmed pilot contro
   });
   await expect(characterGate).toHaveCount(0);
 
-  await expect(page.getByTestId("glb-model-status")).toHaveText("active", { timeout: 45_000 });
   const stored = await page.request.get(seed.storageUrl);
-  expect(stored.status()).toBe(200);
+  expect(stored.status(), "confirmed GLB byte route must be readable before renderer activation").toBe(200);
   expect((await stored.body()).length).toBeGreaterThan(0);
+  await expect(page.getByTestId("glb-model-status")).toHaveText("active", { timeout: 45_000 });
 
   const movement = page.getByTestId("ax1-movement-control");
   await expect(movement).toBeVisible();
