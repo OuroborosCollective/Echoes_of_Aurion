@@ -47,7 +47,7 @@ try {
   if (!/^\/api\/assets\/glb\/[a-f0-9]{64}\.glb$/.test(admitted.storageUrl))
     throw new Error("STARTER_PILOT_PUBLIC_STORAGE_ROUTE_INVALID");
 
-  process.stdout.write(JSON.stringify({
+  console.log(JSON.stringify({
     schema: "aurion.starter-village-public-character-seed.v1",
     sourceRevision: process.env.AURION_RELEASE_SHA ?? null,
     catalogRevision: after.revision,
@@ -57,7 +57,12 @@ try {
     displayName: admitted.displayName,
     purpose: admitted.purpose,
     animationContract: ["Idle", "Walk", "Attack"],
-  }) + "\n");
+  }));
 } finally {
   await store.close();
 }
+
+// getDb owns a process-wide pool without a shutdown API. The canonical GLB
+// admission and independent catalog readback are complete before this isolated
+// CI initializer exits.
+process.exit(0);
