@@ -97,7 +97,8 @@ export type AcegEquipDecision = Readonly<{
   ladderPass: number;
   retention: "eligible" | "over_equip_confirmed";
   effectivenessBps: number;
-  confirmationReceiptId: string;
+  ownershipReceiptId: string;
+  confirmationReceiptId: string | null;
 }>;
 
 export type AcegResolution = Readonly<{
@@ -356,9 +357,11 @@ export function resolveAcegEquipment(input: AcegResolutionInput): AcegResolution
     })
     .sort((left, right) => textCompare(left.itemId, right.itemId));
   const ownedItemIds = new Set<string>();
+  const ownershipReceiptByItem = new Map<string, string>();
   for (const entry of owned) {
     if (ownedItemIds.has(entry.itemId)) fail("ACEG_OWNED_ITEM_DUPLICATE");
     ownedItemIds.add(entry.itemId);
+    ownershipReceiptByItem.set(entry.itemId, entry.ownershipReceiptId);
   }
 
   const priorConfirmed = new Map<string, string>();
@@ -397,6 +400,7 @@ export function resolveAcegEquipment(input: AcegResolutionInput): AcegResolution
         ladderPass: 0,
         retention: eligibility.eligible ? "eligible" : "over_equip_confirmed",
         effectivenessBps: effectiveness.effectivenessBps,
+        ownershipReceiptId: ownershipReceiptByItem.get(itemId)!,
         confirmationReceiptId,
       })
     );
@@ -434,7 +438,8 @@ export function resolveAcegEquipment(input: AcegResolutionInput): AcegResolution
           ladderPass: nextPass,
           retention: "eligible",
           effectivenessBps: effectiveness.effectivenessBps,
-          confirmationReceiptId: entry.ownershipReceiptId,
+          ownershipReceiptId: entry.ownershipReceiptId,
+          confirmationReceiptId: null,
         })
       );
       occupiedSlots.add(item.slot);
