@@ -26,6 +26,11 @@ import { projectNpcMemoryV4 } from "../wasdNpcCapsule";
 import { GLOBAL_WORLD_SEED, GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { orchestrateCivilizationLoop } from "./civilizationService";
 import type { WorldSignal, WorldReaction } from "../wasdAurionProtocol";
+import {
+  deriveNpcInteractions,
+  hashNpcInteractions,
+  type NpcInteractionSignal,
+} from "./npcConcurrentLifecycleRuntime.js";
 
 export const LIVING_HISTORY_LOOP_VERSION = "aurion-living-history-loop.v1" as const;
 export const LIVING_HISTORY_LOOP_INTERVAL_TICKS = 600;
@@ -73,6 +78,10 @@ export type LivingHistoryLoopResult = Readonly<{
   worldReactionHash: string | null;
   civilizationAction: string | null;
   failureCode: string | null;
+  /** NPC-to-NPC interaction signals derived from concurrent NPC actions. */
+  interactions: readonly NpcInteractionSignal[];
+  /** Deterministic hash of all NPC interaction signals for this cycle. */
+  interactionsHash: string | null;
 }>;
 
 /** Pending world signals accumulated from NPC actions, waiting for the REACT phase. */
@@ -172,16 +181,140 @@ export function deriveNeedEventsFromWorldReaction(
   return Object.freeze(events);
 }
 
+/** Result of executing a single NPC's lifecycle concurrently. */
+type NpcExecutionResult = Readonly<{
+  entry: LivingHistoryNpcEntry;
+  signals: readonly PendingSignal[];
+  actionReceiptId: string | null;
+  action: string | null;
+}>;
+
+/**
+ * Execute one NPC's lifecycle (OBSERVE → DECIDE → ACT) independently.
+ * This function is designed to run concurrently for all NPCs — no NPC waits
+ * for another to finish. Each NPC reads its own state, makes its own decision,
+ * and executes its own action in parallel.
+ */
+async function executeSingleNpcLifecycle(
+  hubId: LivingHistoryHubId,
+  cycle: number,
+): Promise<NpcExecutionResult> {
+  const npcId = npcIdForHub(hubId);
+  const signals: PendingSignal[] = [];
+
+  const source = await readConfirmedMerchantActionSource(npcId);
+  if (!source) {
+    return Object.freeze({
+      entry: Object.freeze({
+        hubId,
+        npcId,
+        status: "skipped",
+        action: null,
+        goal: null,
+        longTermGoal: null,
+        resolutionIndex: null,
+        decisionHash: null,
+        worldReactionHash: null,
+        actionReceiptId: null,
+        failureCode: "NPC_ACTION_SOURCE_DECISION_REQUIRED",
+      }),
+      signals: Object.freeze([]),
+      actionReceiptId: null,
+      action: null,
+    });
+  }
+
+  const result = await resolveAndRecordAx1LivingWorld({
+    worldSeed: GLOBAL_WORLD_SEED,
+    sourceDecisionReceiptId: source.receiptId,
+    regionId: hubId,
+  });
+
+  const resolutionIndex = source.resolutionIndex + 1;
+  const confirmed = await readConfirmedNpcState(npcId);
+
+  let action: string | null = null;
+  let goal: string | null = null;
+  let longTermGoal: string | null = null;
+  let decisionHash: string | null = null;
+  let worldReactionHash: string | null = null;
+
+  if (confirmed && "lifeState" in confirmed) {
+    action = result.resolution.action;
+    goal = confirmed.decision.goal;
+    longTermGoal = confirmed.lifeState.longTermGoal;
+    decisionHash = confirmed.decision.decisionHash;
+    worldReactionHash = result.world.deterministicHash;
+  }
+
+  // Collect world signals from this NPC's action.
+  const economySignal: WorldSignal = {
+    id: `whl:${cycle}:${hubId}:economy`,
+    kind: "economy",
+    regionId: hubId,
+    magnitude: result.resolution.stabilityDelta / 100,
+    sourceReceiptId: result.actionReceiptId,
+    resolutionIndex,
+  };
+  signals.push({ signal: economySignal, sourceNpcId: npcId, sourceHubId: hubId });
+
+  // Caravan ambush generates a hazard signal.
+  if (result.resolution.caravan.ambushed) {
+    const hazardSignal: WorldSignal = {
+      id: `whl:${cycle}:${hubId}:hazard`,
+      kind: "hazard",
+      regionId: hubId,
+      magnitude: 0.5,
+      sourceReceiptId: result.actionReceiptId,
+      resolutionIndex,
+    };
+    signals.push({ signal: hazardSignal, sourceNpcId: npcId, sourceHubId: hubId });
+  }
+
+  // Political instability from negative stability delta.
+  if (result.resolution.stabilityDelta < 0) {
+    const politicsSignal: WorldSignal = {
+      id: `whl:${cycle}:${hubId}:politics`,
+      kind: "politics",
+      regionId: hubId,
+      magnitude: result.resolution.stabilityDelta / 50,
+      sourceReceiptId: result.actionReceiptId,
+      resolutionIndex,
+    };
+    signals.push({ signal: politicsSignal, sourceNpcId: npcId, sourceHubId: hubId });
+  }
+
+  return Object.freeze({
+    entry: Object.freeze({
+      hubId,
+      npcId,
+      status: "confirmed",
+      action,
+      goal,
+      longTermGoal,
+      resolutionIndex,
+      decisionHash,
+      worldReactionHash,
+      actionReceiptId: result.actionReceiptId,
+      failureCode: null,
+    }),
+    signals: Object.freeze(signals),
+    actionReceiptId: result.actionReceiptId,
+    action,
+  });
+}
+
 /**
  * Execute one full Living History Loop cycle for all merchant NPCs.
  *
- * The cycle processes NPCs in canonical hub order. Each NPC acts based on its
- * current state; the action produces world signals. After all NPCs have
- * acted, the aggregated signals are hashed to form the world reaction
- * fingerprint for this cycle. The civilization loop is triggered with the
- * final receipt.
+ * All NPCs execute their lifecycles **concurrently** — each NPC independently
+ * goes through OBSERVE → DECIDE → ACT in parallel. No NPC waits for another.
+ * After all NPCs have acted, the REACT phase aggregates their world signals
+ * and derives NPC-to-NPC interaction signals from their collective actions.
+ * The civilization loop is triggered with the final receipt.
  *
- * Returns a structured result describing what happened for each NPC.
+ * Returns a structured result describing what happened for each NPC and the
+ * interactions between them.
  */
 export async function executeLivingHistoryCycle(
   tick: number,
@@ -190,108 +323,39 @@ export async function executeLivingHistoryCycle(
   if (!Number.isSafeInteger(tick) || tick < 1) throw new Error("LIVING_HISTORY_TICK_INVALID");
   if (!Number.isSafeInteger(cycle) || cycle < 0) throw new Error("LIVING_HISTORY_CYCLE_INVALID");
 
+  // ACT phase: execute all NPC lifecycles concurrently via Promise.allSettled.
+  const settled = await Promise.allSettled(
+    LIVING_HISTORY_HUBS.map((hubId) => executeSingleNpcLifecycle(hubId, cycle)),
+  );
+
   const entries: LivingHistoryNpcEntry[] = [];
   const pendingSignals: PendingSignal[] = [];
+  const npcActionResults: Array<Readonly<{
+    npcId: string;
+    hubId: LivingHistoryHubId;
+    action: string | null;
+    cycle: number;
+  }>> = [];
   let civilizationAction: string | null = null;
   let lastReceiptId: string | null = null;
 
-  for (const hubId of LIVING_HISTORY_HUBS) {
-    const npcId = npcIdForHub(hubId);
-    try {
-      const source = await readConfirmedMerchantActionSource(npcId);
-      if (!source) {
-        entries.push(Object.freeze({
-          hubId,
-          npcId,
-          status: "skipped",
-          action: null,
-          goal: null,
-          longTermGoal: null,
-          resolutionIndex: null,
-          decisionHash: null,
-          worldReactionHash: null,
-          actionReceiptId: null,
-          failureCode: "NPC_ACTION_SOURCE_DECISION_REQUIRED",
-        }));
-        continue;
-      }
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i];
+    const hubId = LIVING_HISTORY_HUBS[i];
 
-      const result = await resolveAndRecordAx1LivingWorld({
-        worldSeed: GLOBAL_WORLD_SEED,
-        sourceDecisionReceiptId: source.receiptId,
-        regionId: hubId,
-      });
-
-      const resolutionIndex = source.resolutionIndex + 1;
-      const confirmed = await readConfirmedNpcState(npcId);
-
-      let action: string | null = null;
-      let goal: string | null = null;
-      let longTermGoal: string | null = null;
-      let decisionHash: string | null = null;
-      let worldReactionHash: string | null = null;
-
-      if (confirmed && "lifeState" in confirmed) {
-        action = result.resolution.action;
-        goal = confirmed.decision.goal;
-        longTermGoal = confirmed.lifeState.longTermGoal;
-        decisionHash = confirmed.decision.decisionHash;
-        worldReactionHash = result.world.deterministicHash;
-      }
-
-      // Collect world signals from this NPC's action.
-      const economySignal: WorldSignal = {
-        id: `whl:${cycle}:${hubId}:economy`,
-        kind: "economy",
-        regionId: hubId,
-        magnitude: result.resolution.stabilityDelta / 100,
-        sourceReceiptId: result.actionReceiptId,
-        resolutionIndex,
-      };
-      pendingSignals.push({ signal: economySignal, sourceNpcId: npcId, sourceHubId: hubId });
-
-      // Caravan ambush generates a hazard signal.
-      if (result.resolution.caravan.ambushed) {
-        const hazardSignal: WorldSignal = {
-          id: `whl:${cycle}:${hubId}:hazard`,
-          kind: "hazard",
-          regionId: hubId,
-          magnitude: 0.5,
-          sourceReceiptId: result.actionReceiptId,
-          resolutionIndex,
-        };
-        pendingSignals.push({ signal: hazardSignal, sourceNpcId: npcId, sourceHubId: hubId });
-      }
-
-      // Political instability from negative stability delta.
-      if (result.resolution.stabilityDelta < 0) {
-        const politicsSignal: WorldSignal = {
-          id: `whl:${cycle}:${hubId}:politics`,
-          kind: "politics",
-          regionId: hubId,
-          magnitude: result.resolution.stabilityDelta / 50,
-          sourceReceiptId: result.actionReceiptId,
-          resolutionIndex,
-        };
-        pendingSignals.push({ signal: politicsSignal, sourceNpcId: npcId, sourceHubId: hubId });
-      }
-
-      lastReceiptId = result.actionReceiptId;
-
-      entries.push(Object.freeze({
+    if (result.status === "fulfilled") {
+      entries.push(result.value.entry);
+      pendingSignals.push(...result.value.signals);
+      if (result.value.actionReceiptId) lastReceiptId = result.value.actionReceiptId;
+      npcActionResults.push({
+        npcId: result.value.entry.npcId,
         hubId,
-        npcId,
-        status: "confirmed",
-        action,
-        goal,
-        longTermGoal,
-        resolutionIndex,
-        decisionHash,
-        worldReactionHash,
-        actionReceiptId: result.actionReceiptId,
-        failureCode: null,
-      }));
-    } catch (error) {
+        action: result.value.action,
+        cycle,
+      });
+    } else {
+      const npcId = npcIdForHub(hubId);
+      const code = failureCode(result.reason);
       entries.push(Object.freeze({
         hubId,
         npcId,
@@ -303,12 +367,17 @@ export async function executeLivingHistoryCycle(
         decisionHash: null,
         worldReactionHash: null,
         actionReceiptId: null,
-        failureCode: failureCode(error),
+        failureCode: code,
       }));
+      npcActionResults.push({ npcId, hubId, action: null, cycle });
     }
   }
 
-  // REACT phase: hash the aggregated world signals for this cycle.
+  // REACT phase: derive NPC-to-NPC interaction signals from concurrent actions.
+  const interactions = deriveNpcInteractions(npcActionResults);
+  const interactionsHash = hashNpcInteractions(interactions);
+
+  // Hash the aggregated world signals for this cycle.
   const signalsHash = createHash("sha256")
     .update(pendingSignals.map((s) => s.signal.id).sort().join("\u001f"))
     .digest("hex");
@@ -336,5 +405,7 @@ export async function executeLivingHistoryCycle(
     worldReactionHash: signalsHash,
     civilizationAction,
     failureCode: null,
+    interactions,
+    interactionsHash,
   });
 }

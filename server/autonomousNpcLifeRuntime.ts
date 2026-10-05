@@ -10,8 +10,10 @@ import {
   LIVING_HISTORY_LOOP_INTERVAL_TICKS,
   LIVING_HISTORY_HUBS,
   type LivingHistoryHubId,
+  type LivingHistoryNpcEntry,
   type LivingHistoryLoopResult,
 } from "./aurion/livingHistoryLoop";
+import type { NpcInteractionSignal } from "./aurion/npcConcurrentLifecycleRuntime.js";
 
 export const AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS = LIVING_HISTORY_LOOP_INTERVAL_TICKS;
 export const AUTONOMOUS_NPC_LIFE_HOME_REGION = "observatory_threshold" as const;
@@ -45,6 +47,12 @@ export type AutonomousNpcLifeReadback = Readonly<{
   confirmedNpcCount: number | null;
   /** Total NPCs in the loop (always 4 for the four hubs). */
   totalNpcCount: number;
+  /** Per-NPC lifecycle entries from the last concurrent cycle. */
+  npcEntries: readonly LivingHistoryNpcEntry[];
+  /** NPC-to-NPC interaction signals from the last concurrent cycle. */
+  npcInteractions: readonly NpcInteractionSignal[];
+  /** Deterministic hash of NPC interactions from the last cycle. */
+  interactionsHash: string | null;
 }>;
 
 export type AutonomousNpcLifeRuntime = Readonly<{
@@ -107,6 +115,9 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     livingHistoryCycle: null,
     confirmedNpcCount: null,
     totalNpcCount: LIVING_HISTORY_HUBS.length,
+    npcEntries: Object.freeze([]),
+    npcInteractions: Object.freeze([]),
+    interactionsHash: null,
   });
 
   const resolveOnce = async ({ tick }: { tick: number }): Promise<void> => {
@@ -206,9 +217,21 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         livingHistoryCycle: cycle,
         confirmedNpcCount: confirmedCount,
         totalNpcCount: LIVING_HISTORY_HUBS.length,
+        npcEntries: loopResult.entries,
+        npcInteractions: loopResult.interactions,
+        interactionsHash: loopResult.interactionsHash,
       });
     } catch (error) {
-      state = frozenReadback({ ...state, enabled, status: "degraded", lastGatewayTick: tick, failureCode: failureCode(error) });
+      state = frozenReadback({
+        ...state,
+        enabled,
+        status: "degraded",
+        lastGatewayTick: tick,
+        failureCode: failureCode(error),
+        npcEntries: Object.freeze([]),
+        npcInteractions: Object.freeze([]),
+        interactionsHash: null,
+      });
       throw error;
     }
   };
