@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# aurion-arelogic-companion-export-protocol: 1
+set -euo pipefail
+unset NODE_OPTIONS
+
+volume_name=echoes-of-aurion-companion-memory
+exporter=/usr/local/lib/echoes-of-aurion/export-arelogic-companion-memory.mjs
+target_base=/var/lib/aurion-arelogic-export
+target="${target_base}/current"
+tmp="${target_base}/.next"
+
+[[ "$(id -u)" -eq 0 ]]
+[[ -f "$exporter" ]]
+[[ ! -L "$exporter" ]]
+[[ "$(stat -c '%U:%G:%a' "$exporter")" = "root:root:755" ]]
+
+install -d -o root -g aurion-deploy -m 0750 "$target_base"
+rm -rf "$tmp"
+install -d -o root -g aurion-deploy -m 0750 "$tmp"
+
+if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
+  : > "$tmp/companion-demonstrations.jsonl"
+  printf '%s\n' '{"schema":"aurion.arelogic.companion-export.v1","status":"no-data","reason":"companion-memory-volume-absent","rows":0,"episodes":0,"production_authority":false,"reward_semantics":"absent"}' > "$tmp/aurion-export-report.json"
+else
+  mountpoint="$(docker volume inspect --format '{{.Mountpoint}}' "$volume_name")"
+  [[ "$mountpoint" == /var/lib/docker/volumes/*/_data ]]
+  if find "$mountpoint" -type f -name '*.jsonl' -print -quit | grep -q .; then
+    /usr/bin/node "$exporter" \
+      --input "$mountpoint" \
+      --output "$tmp/companion-demonstrations.jsonl" \
+      --report "$tmp/aurion-export-report.json"
+  else
+    : > "$tmp/companion-demonstrations.jsonl"
+    printf '%s\n' '{"schema":"aurion.arelogic.companion-export.v1","status":"no-data","reason":"companion-memory-empty","rows":0,"episodes":0,"production_authority":false,"reward_semantics":"absent"}' > "$tmp/aurion-export-report.json"
+  fi
+fi
+
+chown root:aurion-deploy "$tmp/companion-demonstrations.jsonl" "$tmp/aurion-export-report.json"
+chmod 0640 "$tmp/companion-demonstrations.jsonl" "$tmp/aurion-export-report.json"
+rm -rf "$target"
+mv "$tmp" "$target"
+printf '%s\n' '{"status":"ok","boundary":"sanitized-companion-export-only"}'
