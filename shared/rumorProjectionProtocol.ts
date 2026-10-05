@@ -280,7 +280,9 @@ function classifyDisclosure(
 
 function resolveVisibility(input: Readonly<{
   disclosureClass: RumorDisclosureClass;
-  status: RumorClaimProjection["status"];
+  // Full #487 lifecycle union: expired facts are filtered before this call,
+  // so every remaining status (including the claim-schema subset) is valid.
+  status: NpcInformationReceipt["status"];
   audience: ReadonlySet<string>;
   viewerId: string;
   viewerTrustBpsByActor: Readonly<Record<string, number>>;
@@ -311,6 +313,12 @@ function projectClaim(
   atIndex: number,
 ): RumorClaimProjection {
   const latest = group.latest;
+  // Expired facts are filtered from the live set before projection; fail
+  // closed if one ever reaches this point instead of leaking it (also
+  // narrows the #487 status union for the claim schema).
+  if (latest.status === "expired") {
+    throw new Error("RUMOR_PROJECTION_EXPIRED_CLAIM");
+  }
   const lineageOrdered = [...group.lineage].sort((a, b) =>
     a.logicalIndex - b.logicalIndex || a.id.localeCompare(b.id)
   );
