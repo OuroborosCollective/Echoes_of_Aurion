@@ -794,3 +794,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-05 — Issue #686 mobile playability hardening (draft)
+Status: PARTIAL — repository contract evidence; exact-head CI pending
+Task: Make /play usable on phone and tablet in portrait and landscape without a fullscreen touch overlay over the HUD, keep exactly one movement owner, enforce touch targets >= 44 CSS px, respect safe-area insets and dynamic viewport height, and keep HUD surfaces non-blocking.
+Decisions: Presentation-only change; Aurion remains the sole gameplay/world/character/inventory/equipment/persistence/receipt authority and the UI remains input-intent/projection only. Hardening is appended as the final CSS cascade block (after the 2026-09-28 / AIM-584 block) so later rules win; no inline style or component logic change. Movement ownership stays with the existing single MobileMovementController/VirtualJoystick pair and is frozen by a static contract test instead of new runtime code.
+Touched surfaces: `client/src/xaurion/integration/ax1AuthorityHud.css`, `client/src/xaurion/integration/ax1MobilePlayabilityContract.test.ts`, `Memory.md`.
+Evidence: Branch `feat/686-mobile-playability-hardening`; CSS hardening commit `424fac65` (44px/48px touch targets, `env(safe-area-inset-*)`, `dvh` heights, non-blocking shell); contract test commit `4d8163a3` with 6 vitest assertions: no fullscreen pointer-capturing overlay, hardening block remains the final cascade, no sub-44px button/nav sizing in the tail, dynamic viewport units present, safe-area insets present, exactly one `ax1-movement-control` owner and exactly one `<MobileMovementController` mount across `client/src`.
+Learned: The existing movement-owner topology was already compliant, so the durable fix is a frozen contract plus CSS minima; the real regression risk is any later rule appended after the final cascade, which the contract test now rejects.
+Open: Exact-head CI runs pending; browser checks are viewport emulation, not physical Android/GPU evidence.
+Next safe step: Open the draft PR, require green checks on the exact head, merge only on explicit instruction and verify automated post-merge memory readback.
