@@ -111,6 +111,22 @@ export async function listCivilizationHistoryEvents(worldId: string, limit = 50)
     .limit(limit);
 }
 
+export async function findCivilizationHistoryEventsBySourceReceipt(
+  worldId: string,
+  sourceReceiptId: string,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db
+    .select()
+    .from(aurionCivilizationHistoryEvents)
+    .where(and(
+      eq(aurionCivilizationHistoryEvents.worldId, worldId),
+      eq(aurionCivilizationHistoryEvents.sourceReceiptId, sourceReceiptId),
+    ))
+    .orderBy(desc(aurionCivilizationHistoryEvents.occurredSequence));
+}
+
 export const ruinOriginInputSchema = z
   .object({
     ruinId: id,
