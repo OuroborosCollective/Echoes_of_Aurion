@@ -22,6 +22,7 @@ describe("Aurion Game Development Studio adapter", () => {
     expect(result.adapterId).toBe("aurion");
     expect(result.catalogAssetCount).toBeGreaterThan(0);
     expect(result.returnStoneContractHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.fountainContractHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("builds a deterministic starting-village plan", () => {
@@ -33,6 +34,13 @@ describe("Aurion Game Development Studio adapter", () => {
       .toEqual(["north", "east", "south", "west"]);
     expect(result.layout.cityWall.gates.every((gate: { count: number }) => gate.count === 1)).toBe(true);
     expect(result.layout.roads.radial).toHaveLength(4);
+    expect(result.layout.plazaFountain).toMatchObject({
+      id: "aurion-village-fountain",
+      xMm: 12_000,
+      zMm: 12_000,
+      presentationOnly: true,
+      preserveCardinalRoadAxes: true,
+    });
     expect(result.innerParcels).toHaveLength(4);
     expect(result.north.guard.quest.objective.count).toBe(6);
     expect(result.north.farmer.quest.objective.action).toBe("water");
