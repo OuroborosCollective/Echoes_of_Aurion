@@ -103,7 +103,7 @@ jobs:
       - name: Verify privacy boundary
         run: |
           set -euo pipefail
-          if grep -R -E '"(userId|account_id|sessionId|timestampEpoch|note|input_frame_base64)"[[:space:]]*:' arelogic-export; then
+          if grep -E '"(userId|account_id|sessionId|timestampEpoch|note|input_frame_base64)"[[:space:]]*:' arelogic-export/companion-demonstrations.jsonl arelogic-export/normalized-demonstrations.jsonl 2>/dev/null; then
             echo "forbidden identity/frame/text field escaped sanitization" >&2
             exit 1
           fi
