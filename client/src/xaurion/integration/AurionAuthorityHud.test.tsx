@@ -43,6 +43,13 @@ describe("server-backed Aurion HUD", () => {
     fixtures.mutate.mockResolvedValue({});
   });
 
+  it("sends basic attack F from the pointer/touch button independently of hotbar slot one", () => {
+    fixtures.ui.data = { ...uiState, settings: { ...uiState.settings, hotbar: ["2", "1", "3", "4", "5"] } };
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Angriff [R]" }));
+    expect(fixtures.onAction).toHaveBeenCalledWith("F");
+  });
+
   it("shows no fabricated gold, hit points or class before a confirmed readback", () => {
     mount();
     expect(screen.getByRole("region", { name: "Serverbestätigter Charakter" }).getAttribute("data-state")).toBe("waiting");

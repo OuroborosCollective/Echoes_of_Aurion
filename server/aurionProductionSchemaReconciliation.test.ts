@@ -69,6 +69,20 @@ describe("Aurion production schema reconciliation", () => {
       .toThrow("unsupported TRIGGER");
   });
 
+  it("matches MariaDB's numeric confirmed constraint and rejects a weakened one", async () => {
+    const migration = await parse("0069_aurion_combat_victory_events");
+    const table = migration.tables.find(table => table.name === "aurionCombatVictoryEvents")!;
+    const observed = observedFromExpected(table);
+    observed.checks = table.checks!.map(check => check.name.endsWith("confirmed_ck")
+      ? { ...check, expression: "(`confirmed` = 1)" } : check);
+    expect(compareTableContract(table, observed)).toEqual([]);
+    observed.checks = observed.checks.map(check => check.name.endsWith("confirmed_ck")
+      ? { ...check, expression: "(`confirmed` >= 0)" } : check);
+    expect(compareTableContract(table, observed)).toContain(
+      "aurionCombatVictoryEvents:check_expression:aurionCombatVictoryEvents_confirmed_ck",
+    );
+  });
+
   it("compares CHECK boolean structure without discarding grouping or string literals", () => {
     const normalize = (value: string) => canonicalCheckExpression(value, "items");
     expect(normalize("((`items`.`kind` = 'craft' AND `a` IS NULL) OR (`kind` = 'loot' AND `b` IS NOT NULL))")).toBe(normalize("`kind` = 'craft' and `a` is null or `kind` = 'loot' and `b` is not null"));

@@ -29,6 +29,23 @@ const acceptedQuestRequest = {
 };
 
 describe("Wasd → Aurion dialogue quest intent protocol", () => {
+  it("recognizes the contracted north-gate guard but never accepts an arbitrary client NPC id", () => {
+    const guardQuest: readonly DialogueQuestReadModel[] = [{
+      key: "astral_call",
+      giver: "Nordtorwache",
+      state: "available",
+      readyToTurnIn: false,
+    }];
+    expect(resolveDialogueQuestIntent({ npcId: "starter_village_north_gate_guard", interpretation: acceptedQuestRequest, quests: guardQuest })).toMatchObject({
+      state: "offer_available_quest",
+      npcId: "starter_village_north_gate_guard",
+    });
+    expect(resolveDialogueQuestIntent({ npcId: "client_supplied_guard", interpretation: acceptedQuestRequest, quests: guardQuest })).toEqual({
+      state: "no_action",
+      reason: "interpretation_not_accepted",
+    });
+  });
+
   it("offers only the already available quest of the addressed Aurion quest giver", () => {
     const input = {
       npcId: "lyra",

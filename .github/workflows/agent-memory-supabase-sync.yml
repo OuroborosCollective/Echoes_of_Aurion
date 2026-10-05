@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: agent-memory-supabase-sync-main
+  group: agent-memory-supabase-sync-${{ github.event.pull_request.number || 'main' }}
   cancel-in-progress: false
 
 permissions:
