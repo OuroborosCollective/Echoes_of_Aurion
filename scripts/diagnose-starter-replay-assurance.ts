@@ -61,3 +61,4 @@ await mkdir(evidenceDir, { recursive: true });
 const file = path.join(evidenceDir, `replay-diagnostic-${revision}.json`);
 await writeFile(file, JSON.stringify(evidence, null, 2) + "\n", { flag: "wx" });
 console.log(JSON.stringify(evidence));
+process.exit(0);
