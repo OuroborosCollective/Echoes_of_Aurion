@@ -55,12 +55,16 @@ jobs:
       ARE_RLOGIC_REVISION: eb6497fb2598c3159cbc4a67bfd97ad6d9c98ce1
 
     steps:
-      - name: Guard repository and runtime memory
+      - name: Guard repository and probe runtime memory
+        id: memory
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
-          test -d "${COMPANION_MEMORY_DIR}"
-          test -r "${COMPANION_MEMORY_DIR}"
+          if test -d "${COMPANION_MEMORY_DIR}" && test -r "${COMPANION_MEMORY_DIR}"; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check out exact Aurion revision
         uses: actions/checkout@v4
@@ -76,7 +80,12 @@ jobs:
           set -euo pipefail
           rm -rf arelogic-export
           mkdir -p arelogic-export
-          node scripts/export-arelogic-companion-memory.mjs             --input "${COMPANION_MEMORY_DIR}"             --output arelogic-export/companion-demonstrations.jsonl             --report arelogic-export/aurion-export-report.json
+          if test "${{ steps.memory.outputs.present }}" = "true"; then
+            node scripts/export-arelogic-companion-memory.mjs               --input "${COMPANION_MEMORY_DIR}"               --output arelogic-export/companion-demonstrations.jsonl               --report arelogic-export/aurion-export-report.json
+          else
+            : > arelogic-export/companion-demonstrations.jsonl
+            printf '%s\n' '{"schema":"aurion.arelogic.companion-export.v1","status":"no-data","reason":"companion-memory-directory-absent","rows":0,"episodes":0,"production_authority":false,"reward_semantics":"absent"}'               > arelogic-export/aurion-export-report.json
+          fi
           rows="$(node -e 'const r=require("./arelogic-export/aurion-export-report.json"); process.stdout.write(String(r.rows))')"
           printf 'rows=%s\n' "$rows" >> "$GITHUB_OUTPUT"
 
@@ -103,7 +112,9 @@ jobs:
       - name: Verify privacy boundary
         run: |
           set -euo pipefail
-          if grep -E '"(userId|account_id|sessionId|timestampEpoch|note|input_frame_base64)"[[:space:]]*:' arelogic-export/companion-demonstrations.jsonl arelogic-export/normalized-demonstrations.jsonl 2>/dev/null; then
+          shopt -s nullglob
+          files=(arelogic-export/*.jsonl)
+          if (("${#files[@]}" > 0)) && grep -E '"(userId|account_id|sessionId|timestampEpoch|note|input_frame_base64)"[[:space:]]*:' "${files[@]}"; then
             echo "forbidden identity/frame/text field escaped sanitization" >&2
             exit 1
           fi
