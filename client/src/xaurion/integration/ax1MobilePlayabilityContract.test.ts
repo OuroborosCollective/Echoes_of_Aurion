@@ -66,6 +66,19 @@ describe("Issue #686 mobile playability contract", () => {
     );
   });
 
+  it("keeps the objective tracker below the two-row quick-nav hit area on phones", () => {
+    const tail = css.slice(css.indexOf(HARDENING_MARKER));
+    expect(tail).toMatch(
+      /\.ax1-objective-tracker\{[^}]*top:108px;[^}]*right:max\(8px,env\(safe-area-inset-right\)\);/s
+    );
+    expect(tail).toMatch(
+      /\.ax1-objective-tracker\[data-collapsed="true"\]\{[^}]*pointer-events:none;/s
+    );
+    expect(tail).toMatch(
+      /\.ax1-objective-tracker\[data-collapsed="true"\] > div:first-child\{[^}]*pointer-events:auto;/s
+    );
+  });
+
   it("tracks the dynamic mobile viewport height instead of static vh only", () => {
     const tail = css.slice(css.indexOf(HARDENING_MARKER));
     expect(tail).toContain("dvh");
@@ -94,13 +107,16 @@ describe("Issue #686 mobile playability contract", () => {
     expect(controller).not.toContain("position:fixed");
     expect(controller).not.toContain("inset:0");
     const clientSources = listSources(path.join(repoRoot, "client/src"));
-    const joystickOwners = clientSources.filter(file =>
+    const productionSources = clientSources.filter(
+      file => !/\.test\.(?:ts|tsx)$/.test(file)
+    );
+    const joystickOwners = productionSources.filter(file =>
       readFileSync(file, "utf8").includes('data-testid="ax1-movement-control"')
     );
     expect(
       joystickOwners.map(file => path.relative(repoRoot, file)).sort()
     ).toEqual(["client/src/xaurion/components/VirtualJoystick.tsx"]);
-    const controllerMounts = clientSources.filter(
+    const controllerMounts = productionSources.filter(
       file =>
         !file.endsWith("MobileMovementController.tsx") &&
         !file.endsWith("MobileMovementController.test.tsx") &&
