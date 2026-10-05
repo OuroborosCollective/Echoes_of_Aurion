@@ -9,6 +9,8 @@ import {
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
 import { publicProcedure, adminProcedure, router } from "./_core/trpc";
 
+const HUB_IDS = ["observatory_threshold", "windhollow", "emberfall", "cinder_vault"] as const;
+
 export const civilizationHistoryRouter = router({
   getActiveCivilization: publicProcedure
     .input(z.object({ worldId: z.string() }))
@@ -41,5 +43,28 @@ export const civilizationHistoryRouter = router({
         .update(`manual_trigger_${input.worldId}_${input.epoch}`)
         .digest("hex");
       return orchestrateCivilizationLoop(input.worldId, input.epoch, sourceReceiptId);
+    }),
+
+  /**
+   * Returns the NPC guild and economic overview for the admin dashboard.
+   * Fetches the /healthz endpoint which already aggregates npcLife and
+   * npcGuilds readback from the autonomous NPC life runtime.
+   */
+  getGuildOverview: adminProcedure
+    .query(async () => {
+      try {
+        const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/healthz`);
+        if (!response.ok) return { available: false as const, reason: "HEALTHZ_UNAVAILABLE" };
+        const health = await response.json() as Record<string, unknown>;
+        const npcLife = health.npcLife as Record<string, unknown> | undefined;
+        const npcGuilds = health.npcGuilds as Record<string, unknown> | undefined;
+        return {
+          available: true as const,
+          npcLife: npcLife ?? null,
+          npcGuilds: npcGuilds ?? null,
+        };
+      } catch {
+        return { available: false as const, reason: "HEALTHZ_FETCH_FAILED" };
+      }
     }),
 });

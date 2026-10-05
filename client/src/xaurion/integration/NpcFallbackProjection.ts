@@ -9,6 +9,7 @@ import { actorLodBand, actorUsesSkinnedVisual, emptyActorLodCounts, shouldUpdate
 import { glbManager } from "../core/GLBModelManager";
 import { assetTier, type AssetTier } from "@shared/glbPresentationBudget";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
+import { selectStaticNpcGlb, type StaticNpcGlbSelection } from "../core/staticNpcGlbFallback";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
 import { EquipmentCatalogProjection } from "./EquipmentCatalogProjection";
@@ -22,6 +23,8 @@ type ProjectedNpc = {
   proceduralMeshes: readonly THREE.Object3D[];
   accumulatedAnimationDelta: number;
   lod: ActorLodBand;
+  /** Whether this NPC's model came from the static fallback pool. */
+  staticFallback: boolean;
 };
 
 const NPC_VERY_FAR_PROXY_CAPACITY = 256;
@@ -146,16 +149,29 @@ export class NpcFallbackProjection {
     const failure = this.failures.get(npc.id);
     if (failure && failure.attempts >= 6) return;
     const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier, failure?.attempts ?? 0);
+
+    // If the runtime catalog has no NPC fallback, try the static Wasd GLB
+    // catalog so every NPC gets a proper 3D model instead of a geometric shape.
+    let staticSelection: StaticNpcGlbSelection | null = null;
     if (!selection) {
-      if (this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "NO_COMPATIBLE_FALLBACK", tier, attempts: failure?.attempts ?? 0 }));
-      else this.failures.set(npc.id, Object.freeze({ reason: "GLB_CATALOG_UNAVAILABLE", tier, attempts: failure?.attempts ?? 0 }));
-      // Never resurrect the primitive body merely because a visual asset is loading.
-      const proceduralMissing = findProceduralNpcVisual(this.engine.scene, npc);
-      proceduralMissing?.body.forEach(mesh => { mesh.visible = false; });
-      return;
+      staticSelection = selectStaticNpcGlb(npc.id);
+      if (!staticSelection) {
+        if (this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "NO_COMPATIBLE_FALLBACK", tier, attempts: failure?.attempts ?? 0 }));
+        else this.failures.set(npc.id, Object.freeze({ reason: "GLB_CATALOG_UNAVAILABLE", tier, attempts: failure?.attempts ?? 0 }));
+        // Never resurrect the primitive body merely because a visual asset is loading.
+        const proceduralMissing = findProceduralNpcVisual(this.engine.scene, npc);
+        proceduralMissing?.body.forEach(mesh => { mesh.visible = false; });
+        return;
+      }
     }
+
+    const resolvedSha256 = selection?.entry.sha256 ?? staticSelection!.sha256;
+    const resolvedStorageUrl = selection?.entry.storageUrl ?? staticSelection!.storageUrl;
+    const resolvedAssetId = selection?.entry.assetId ?? staticSelection!.assetId;
+    const isStaticFallback = !selection && staticSelection !== null;
+
     const existing = this.projected.get(npc.id);
-    if (existing?.sha256 === selection.entry.sha256) return;
+    if (existing?.sha256 === resolvedSha256) return;
     const procedural = findProceduralNpcVisual(this.engine.scene, npc);
     if (!procedural) return;
 
@@ -167,18 +183,31 @@ export class NpcFallbackProjection {
     this.pending.add(npc.id);
     let unowned: THREE.Group | undefined;
     try {
-      const loaded = await glbManager.loadModel(selection.entry.storageUrl);
+      const loaded = await glbManager.loadModel(resolvedStorageUrl);
       unowned = loaded.scene;
       if (this.disposed) return;
-      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier, failure?.attempts ?? 0);
-      if (!currentSelection || currentSelection.entry.sha256 !== selection.entry.sha256) return;
+      // Re-check whether the selection is still valid after async load.
+      if (isStaticFallback) {
+        const currentStatic = selectStaticNpcGlb(npc.id);
+        if (!currentStatic || currentStatic.sha256 !== resolvedSha256) return;
+      } else {
+        const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier, failure?.attempts ?? 0);
+        if (!currentSelection || currentSelection.entry.sha256 !== resolvedSha256) return;
+      }
       const currentVisual = findProceduralNpcVisual(this.engine.scene, npc);
       if (!currentVisual) return;
 
       this.restoreNpc(npc.id);
       const actor = new AnimatedGlbActor(loaded.scene, loaded.animations, 2);
       actor.group.name = `aurion-npc-fallback:${npc.id}`;
-      actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, variantKey: selection.variantKey, lod: selection.lod, source: "catalog" });
+      actor.group.userData.npcFallback = Object.freeze({
+        npcId: npc.id,
+        assetId: resolvedAssetId,
+        sha256: resolvedSha256,
+        variantKey: selection?.variantKey ?? null,
+        lod: selection?.lod ?? null,
+        source: isStaticFallback ? "static-fallback" : "catalog",
+      });
       currentVisual.group.add(actor.group);
       const band = actorLodBand(this.distanceToCamera(npc));
       // LOD3/very-far still uses the approved GLB family. Never substitute a
@@ -187,12 +216,13 @@ export class NpcFallbackProjection {
       currentVisual.body.forEach(mesh => { mesh.visible = false; });
       this.failures.delete(npc.id);
       this.projected.set(npc.id, {
-        sha256: selection.entry.sha256,
-        assetId: selection.entry.assetId,
+        sha256: resolvedSha256,
+        assetId: resolvedAssetId,
         actor,
         proceduralMeshes: Object.freeze(currentVisual.body.slice()),
         accumulatedAnimationDelta: 0,
         lod: band,
+        staticFallback: isStaticFallback,
       });
       unowned = undefined;
     } catch (error) {
