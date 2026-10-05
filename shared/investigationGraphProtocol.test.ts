@@ -18,6 +18,7 @@ const source: NpcInformationSource = {
   evidenceClass: "verified",
   sourceKind: "npc_decision_receipt",
   sourceReceiptId: "npc_decision_101",
+  sourceReceiptHash: "sha256:" + "a".repeat(64),
   sourceRevision: "b".repeat(40),
   sourceSha256: "sha256:" + "c".repeat(64),
   sourceCausalRoot: "sha256:" + "d".repeat(64),
