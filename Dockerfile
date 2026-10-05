@@ -50,8 +50,8 @@ RUN test -n "$AURION_RELEASE_SHA" \
  && /opt/game-dev/node_modules/.bin/game-dev --version | grep -Fq "1.0.2" \
  && node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('/app/dist/.aurion-runtime-build.json','utf8')); if (manifest.revision !== process.argv[1]) { process.exit(1); } const receipt=JSON.parse(fs.readFileSync('/opt/game-dev/runtime-receipt.json','utf8')); if(receipt.recordType!=='aurion_game_development_studio_runtime'||receipt.ok!==true||receipt.version!=='1.0.2'||receipt.sourceRevision!==process.argv[2]||receipt.providerCalls!==false){process.exit(2)}" "$AURION_RELEASE_SHA" "$AURION_GAME_DEV_SOURCE_REVISION"
 
-RUN mkdir -p /var/lib/aurion/glb /var/lib/aurion/game-dev-workspace \
- && chown -R node:node /var/lib/aurion/glb /var/lib/aurion/game-dev-workspace /opt/game-dev
+RUN mkdir -p /var/lib/aurion/glb /var/lib/aurion/game-dev-workspace /var/lib/aurion/companion-memory \
+ && chown -R node:node /var/lib/aurion/glb /var/lib/aurion/game-dev-workspace /var/lib/aurion/companion-memory /opt/game-dev
 USER node
 EXPOSE 3000
 
