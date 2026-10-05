@@ -107,6 +107,7 @@ export type AcegResolution = Readonly<{
   tickIndex: number;
   capabilities: Readonly<Record<string, number>>;
   equipDecisions: readonly AcegEquipDecision[];
+  sourceEvidenceHash: string;
   resolutionHash: string;
 }>;
 
@@ -243,6 +244,18 @@ export function computeAcegCapabilities(
   const capabilities: Record<string, number> = {};
   for (const key of [...totals.keys()].sort()) capabilities[key] = totals.get(key)!;
   return Object.freeze(capabilities);
+}
+
+function canonicalRequirements(
+  requirements: readonly AcegRequirement[]
+): readonly AcegRequirement[] {
+  return Object.freeze(
+    [...requirements].sort(
+      (left, right) =>
+        textCompare(left.capability, right.capability) ||
+        (left.minValue < right.minValue ? -1 : left.minValue > right.minValue ? 1 : 0)
+    )
+  );
 }
 
 function collectDeficits(
@@ -463,12 +476,63 @@ export function resolveAcegEquipment(input: AcegResolutionInput): AcegResolution
       textCompare(left.itemId, right.itemId)
     )
   );
+  const sourceEvidenceHash = browserCanonicalSha256({
+    domain: "aurion.capability-equipment-graph.source-evidence.v1",
+    protocol: AURION_ACEG_PROTOCOL,
+    entityId: snapshot.entityId,
+    tickIndex: snapshot.tickIndex,
+    permanentStats: sortModifiers(
+      snapshot.permanentStats,
+      "ACEG_PERMANENT_INVALID"
+    ),
+    skillRanks: sortModifiers(snapshot.skillRanks, "ACEG_SKILL_INVALID"),
+    professionModifiers: sortModifiers(
+      snapshot.professionModifiers,
+      "ACEG_PROFESSION_INVALID"
+    ),
+    implants: [...snapshot.implants]
+      .sort((left, right) => textCompare(left.implantId, right.implantId))
+      .map(implant => ({
+        implantId: implant.implantId,
+        installReceiptId: implant.installReceiptId,
+        modifiers: sortModifiers(
+          implant.modifiers,
+          "ACEG_IMPLANT_MODIFIER_INVALID"
+        ),
+      })),
+    activeBuffs: [...snapshot.buffs]
+      .filter(buff => buff.expiresAtTick > snapshot.tickIndex)
+      .sort((left, right) => textCompare(left.buffId, right.buffId))
+      .map(buff => ({
+        buffId: buff.buffId,
+        expiresAtTick: buff.expiresAtTick,
+        confirmationReceiptId: buff.confirmationReceiptId,
+        modifiers: sortModifiers(buff.modifiers, "ACEG_BUFF_MODIFIER_INVALID"),
+      })),
+    catalog: [...catalog.values()]
+      .sort((left, right) => textCompare(left.itemId, right.itemId))
+      .map(item => ({
+        itemId: item.itemId,
+        slot: item.slot,
+        modifiers: sortModifiers(item.modifiers, "ACEG_ITEM_MODIFIER_INVALID"),
+        requirements: canonicalRequirements(item.requirements),
+        overEquipPenaltyPerPointBps: item.overEquipPenaltyPerPointBps,
+      })),
+    ownedItems: owned,
+    priorConfirmedEquip: [...priorConfirmed.entries()]
+      .sort(([left], [right]) => textCompare(left, right))
+      .map(([itemId, confirmationReceiptId]) => ({
+        itemId,
+        confirmationReceiptId,
+      })),
+  });
   const unsigned = {
     protocol: AURION_ACEG_PROTOCOL,
     entityId: snapshot.entityId,
     tickIndex: snapshot.tickIndex,
     capabilities,
     equipDecisions,
+    sourceEvidenceHash,
   };
   return Object.freeze({
     ...unsigned,
@@ -484,6 +548,7 @@ export function verifyAcegResolution(resolution: AcegResolution): boolean {
     if (resolution.protocol !== AURION_ACEG_PROTOCOL) return false;
     const { resolutionHash, ...unsigned } = resolution;
     return (
+      SHA256.test(resolution.sourceEvidenceHash) &&
       SHA256.test(resolutionHash) &&
       resolutionHash ===
         browserCanonicalSha256({
