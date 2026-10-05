@@ -19,8 +19,14 @@ type Manifest = {
 };
 
 const PHASE_FILES: Record<keyof Manifest["phases"], (revision: string) => string[]> = {
-  journey: revision => [`journey-${revision}.json`],
-  restart: revision => [`restart-readback-${revision}.json`],
+  journey: revision => [
+    `journey-${revision}.json`,
+    "network-isolation.json",
+    "runtime-entry-before.json",
+    "server-before.log",
+    "health-before.json",
+  ],
+  restart: revision => [`restart-readback-${revision}.json`, "server-after.log"],
   diagnostic: () => ["empty-catalog-diagnostic.json", "empty-catalog-diagnostic.png"],
   publicCharacter: () => ["public-character-seed.json"],
   fountain: () => ["fountain-seed.json"],
@@ -32,15 +38,7 @@ const PHASE_FILES: Record<keyof Manifest["phases"], (revision: string) => string
   ],
 };
 
-const ALWAYS_FILES = [
-  "REVISION",
-  "manifest.json",
-  "network-isolation.json",
-  "runtime-entry-before.json",
-  "server-before.log",
-  "server-after.log",
-  "health-before.json",
-] as const;
+const ALWAYS_FILES = ["REVISION", "manifest.json"] as const;
 
 function digest(bytes: Buffer | string) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -113,6 +111,10 @@ export async function verifyStarterVillageEvidence(root: string, revision: strin
   }
   if (manifest.phases.browser === "failure" && manifest.failureArtifacts.length === 0)
     throw new Error("EVIDENCE_BROWSER_FAILURE_ARTIFACT_REQUIRED");
+  for (const file of manifest.failureArtifacts) {
+    if (!files.includes(file)) throw new Error(`EVIDENCE_FAILURE_ARTIFACT_MISSING:${file}`);
+    if ((await stat(path.join(root, file))).size === 0) throw new Error(`EVIDENCE_FAILURE_ARTIFACT_EMPTY:${file}`);
+  }
 
   for (const file of required) {
     if (!files.includes(file)) throw new Error(`EVIDENCE_REQUIRED_FILE_MISSING:${file}`);
