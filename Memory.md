@@ -1080,3 +1080,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #788 — feat(rumor): player-facing causal rumor projection — issue #781
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=788 merge=a798b9cd8389cfafa0773c2d3de351841772d180 -->
+Task: Merge PR #788 into `main` — feat(rumor): player-facing causal rumor projection — issue #781.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `shared/rumorProjectionProtocol.test.ts`
+- `shared/rumorProjectionProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/788
+- Merge commit: `a798b9cd8389cfafa0773c2d3de351841772d180`
+- PR head: `e7610e4b5f27359e01f9acc191513b3f11916885`
+- Merged at: 2026-10-05T21:35:12Z
+- Post-merge workflow run: 37376820891
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
