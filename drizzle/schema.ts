@@ -712,6 +712,72 @@ export const aurionNpcDecisionReceipts = mysqlTable("aurionNpcDecisionReceipts",
   index("aurionNpcDecisionReceipts_region_created_idx").on(table.regionId, table.createdAt),
 ]);
 
+/** Canonical persisted state for autonomous NPC-founded guilds. */
+export const aurionNpcGuildStates = mysqlTable("aurionNpcGuildStates", {
+  guildId: varchar("guildId", { length: 64 }).primaryKey(),
+  name: varchar("name", { length: 64 }).notNull().unique(),
+  hubId: varchar("hubId", { length: 96 }).notNull(),
+  leaderNpcId: varchar("leaderNpcId", { length: 96 }).notNull(),
+  tradePolicy: mysqlEnum("tradePolicy", ["free_trade", "protectionist", "caravan_focused", "self_sufficient"]).default("free_trade").notNull(),
+  treasuryCopper: int("treasuryCopper").default(0).notNull(),
+  foundedCycle: int("foundedCycle").notNull(),
+  lastElectionCycle: int("lastElectionCycle").notNull(),
+  revision: int("revision").notNull(),
+  stateHash: varchar("stateHash", { length: 64 }).notNull(),
+  stateJson: mediumtext("stateJson").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("aurionNpcGuildStates_hub_idx").on(table.hubId),
+  check("aurionNpcGuildStates_revision_ck", sql`${table.revision} >= 1`),
+]);
+
+/** Exactly one active guild membership projection per NPC. */
+export const aurionNpcGuildMemberships = mysqlTable("aurionNpcGuildMemberships", {
+  membershipId: varchar("membershipId", { length: 64 }).primaryKey(),
+  guildId: varchar("guildId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull().unique(),
+  hubId: varchar("hubId", { length: 96 }).notNull(),
+  role: mysqlEnum("role", ["leader", "merchant", "trader", "prospector"]).notNull(),
+  joinedCycle: int("joinedCycle").notNull(),
+  status: mysqlEnum("status", ["active", "left"]).default("active").notNull(),
+  lastReceiptId: varchar("lastReceiptId", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("aurionNpcGuildMemberships_guild_status_idx").on(table.guildId, table.status),
+]);
+
+/** Append-only causal receipts for autonomous NPC guild mutations. */
+export const aurionNpcGuildReceipts = mysqlTable("aurionNpcGuildReceipts", {
+  receiptId: varchar("receiptId", { length: 64 }).primaryKey(),
+  guildId: varchar("guildId", { length: 64 }).notNull(),
+  actorNpcId: varchar("actorNpcId", { length: 96 }).notNull(),
+  operation: mysqlEnum("operation", ["found_guild", "elect_leader", "join_guild", "leave_guild", "set_trade_policy", "set_diplomacy"]).notNull(),
+  cycle: int("cycle").notNull(),
+  sourceDecisionReceiptId: varchar("sourceDecisionReceiptId", { length: 64 }).notNull(),
+  sourceResolutionIndex: int("sourceResolutionIndex").notNull(),
+  expectedRevision: int("expectedRevision").notNull(),
+  resultingRevision: int("resultingRevision").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  confirmationHash: varchar("confirmationHash", { length: 64 }).notNull(),
+  requestHash: varchar("requestHash", { length: 64 }).notNull(),
+  resultHash: varchar("resultHash", { length: 64 }).notNull(),
+  stateHash: varchar("stateHash", { length: 64 }).notNull(),
+  resultJson: mediumtext("resultJson").notNull(),
+  receiptJson: mediumtext("receiptJson").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcGuildReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionNpcGuildReceipts_guild_revision_uq").on(table.guildId, table.resultingRevision),
+  index("aurionNpcGuildReceipts_actor_cycle_idx").on(table.actorNpcId, table.cycle),
+]);
+
+
 /** Append-only NPC decision log from the native Aurion resolveNpcLife system, for impact analysis. */
 export const aurionNpcDecisionLog = mysqlTable("aurionNpcDecisionLog", {
   id: varchar("id", { length: 96 }).primaryKey(),
