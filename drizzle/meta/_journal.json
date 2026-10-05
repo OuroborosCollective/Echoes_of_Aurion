@@ -491,6 +491,13 @@
       "when": 1790991000000,
       "tag": "0069_aurion_combat_victory_events",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1791209100000,
+      "tag": "0071_aurion_npc_guild_authority",
+      "breakpoints": true
     }
   ]
 }

@@ -40,7 +40,7 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
 
   async function cleanup() {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
-    for (const table of ["aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts","aurionNpcActionEpochSourceReceipts","aurionNpcActionConsentReceipts","aurionNpcActionLeases","aurionSemanticGraphIndexV2","aurionSemanticGraphProvenanceV2","aurionSemanticGraphEdgesV2","aurionSemanticGraphNodesV2","aurionSemanticGraphReceiptsV2",
+    for (const table of ["aurionNpcGuildReceipts","aurionNpcGuildMemberships","aurionNpcGuildStates","aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts","aurionNpcActionEpochSourceReceipts","aurionNpcActionConsentReceipts","aurionNpcActionLeases","aurionSemanticGraphIndexV2","aurionSemanticGraphProvenanceV2","aurionSemanticGraphEdgesV2","aurionSemanticGraphNodesV2","aurionSemanticGraphReceiptsV2",
       "aurionSemanticRetrievalIndex","aurionSemanticProvenance","aurionSemanticNodes","aurionSemanticMemoryReceipts","aurionNpcMemoryReceiptsV4"]) {
       await pool.query(`TRUNCATE TABLE ${table}`);
     }
@@ -78,6 +78,11 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     expect(first.decisionHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.lifeStateHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.worldReactionHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.effectReadbackHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.npcGuilds?.guildCount).toBe(1);
+    expect(first.npcGuilds?.totalMembers).toBe(1);
+    expect(first.npcGuilds?.guilds[0]?.leaderNpcId).toBe(AUTONOMOUS_NPC_LIFE_NPC_ID);
+    expect(first.npcGuilds?.guilds[0]?.stateHash).toMatch(/^[a-f0-9]{64}$/);
 
     const restartedRuntime = createAutonomousNpcLifeRuntime({ enabled: true });
     await restartedRuntime.resolveOnce({ tick: 600 });
@@ -87,6 +92,18 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     expect(second.decisionHash).not.toBe(first.decisionHash);
     expect(typeof second.worldRegionId).toBe("string");
     expect(hubs).toContain(second.worldRegionId as (typeof hubs)[number]);
+    expect(second.effectReadbackHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(second.npcGuilds?.guildCount).toBe(1);
+    expect(second.npcGuilds?.totalMembers).toBe(1);
+
+    const [guildStates] = await pool.query<RowDataPacket[]>("SELECT guildId,leaderNpcId,revision,stateHash FROM aurionNpcGuildStates");
+    expect(guildStates).toHaveLength(1);
+    expect(guildStates[0].leaderNpcId).toBe(AUTONOMOUS_NPC_LIFE_NPC_ID);
+    expect(guildStates[0].stateHash).toMatch(/^[a-f0-9]{64}$/);
+    const [guildReceipts] = await pool.query<RowDataPacket[]>("SELECT sourceDecisionReceiptId,sourceResolutionIndex,confirmationHash FROM aurionNpcGuildReceipts ORDER BY createdAt");
+    expect(guildReceipts.length).toBeGreaterThanOrEqual(1);
+    expect(guildReceipts[0].sourceResolutionIndex).toBe(1);
+    expect(guildReceipts[0].confirmationHash).toMatch(/^[a-f0-9]{64}$/);
 
     const [receipts] = await pool.query<RowDataPacket[]>("SELECT resolutionIndex,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? ORDER BY resolutionIndex",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
     expect(receipts).toHaveLength(3);
@@ -96,6 +113,29 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     const [state] = await pool.query<RowDataPacket[]>("SELECT lastResolutionIndex,memoryJson FROM aurionNpcStates WHERE npcId=?",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
     expect(state[0].lastResolutionIndex).toBe(2);
     expect(JSON.parse(state[0].memoryJson).version).toBe("aurion-npc-memory.v2");
+
+    const [history] = await pool.query<RowDataPacket[]>(
+      "SELECT eventType,sourceReceiptId,occurredSequence FROM aurionCivilizationHistoryEvents WHERE worldId=? ORDER BY occurredSequence",
+      ["echoes-of-aurion-global"],
+    );
+    const sequences = history.map(row => Number(row.occurredSequence));
+    expect(new Set(sequences).size).toBe(sequences.length);
+    expect(sequences).toEqual([...sequences].sort((left, right) => left - right));
+    for (let index = 1; index < sequences.length; index += 1) {
+      expect(sequences[index]).toBe(sequences[index - 1] + 1);
+    }
+    const byReceipt = new Map<string, RowDataPacket[]>();
+    for (const row of history) {
+      const key = String(row.sourceReceiptId);
+      byReceipt.set(key, [...(byReceipt.get(key) ?? []), row]);
+    }
+    for (const rows of byReceipt.values()) {
+      const advance = rows.find(row => row.eventType === "EPOCH_ADVANCE");
+      const economic = rows.find(row => row.eventType === "ECONOMIC_MARKET_DEVELOPMENT");
+      if (advance && economic) {
+        expect(Number(economic.occurredSequence)).toBe(Number(advance.occurredSequence) + 1);
+      }
+    }
   });
 
   it("serializes queued gateway observations and rejects cadence/order violations", async () => {

@@ -7,7 +7,10 @@ import {
   getActiveCivilization,
 } from "./aurionCivilizationHistoryPersistence";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
+import { readNpcGuildOverview } from "./aurion/npcGuildStore";
 import { publicProcedure, adminProcedure, router } from "./_core/trpc";
+
+const HUB_IDS = ["observatory_threshold", "windhollow", "emberfall", "cinder_vault"] as const;
 
 export const civilizationHistoryRouter = router({
   getActiveCivilization: publicProcedure
@@ -42,4 +45,20 @@ export const civilizationHistoryRouter = router({
         .digest("hex");
       return orchestrateCivilizationLoop(input.worldId, input.epoch, sourceReceiptId);
     }),
+
+  /** Confirmed NPC-guild projection read directly from canonical MariaDB truth. */
+  getGuildOverview: adminProcedure.query(async () => {
+    try {
+      return {
+        available: true as const,
+        npcLife: null,
+        npcGuilds: await readNpcGuildOverview(),
+      };
+    } catch (error) {
+      return {
+        available: false as const,
+        reason: error instanceof Error ? error.message : "NPC_GUILD_READBACK_FAILED",
+      };
+    }
+  }),
 });
