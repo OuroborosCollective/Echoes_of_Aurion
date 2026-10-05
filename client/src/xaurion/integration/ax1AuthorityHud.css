@@ -729,8 +729,15 @@
     right:max(8px,env(safe-area-inset-right));
   }
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    top:108px;
     right:max(8px,env(safe-area-inset-right));
     max-height:min(42dvh,320px);
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker[data-collapsed="true"]{
+    pointer-events:none;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker[data-collapsed="true"] > div:first-child{
+    pointer-events:auto;
   }
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-command-deck{
     max-height:58dvh;
