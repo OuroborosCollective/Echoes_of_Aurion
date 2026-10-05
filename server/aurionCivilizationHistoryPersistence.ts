@@ -401,18 +401,19 @@ export async function recordCivilizationAdvance(input: Readonly<{
   const state = activeCivilizationInputSchema.parse(input.state);
   const transition = normalizeCivilizationHistoryEvent(input.transitionEvent);
   const economic = input.economicEvent ? normalizeCivilizationHistoryEvent(input.economicEvent) : null;
+  const finalSequence = economic?.occurredSequence ?? transition.occurredSequence;
   if (
     transition.eventType !== "EPOCH_ADVANCE" ||
     transition.civilizationId !== state.civilizationId ||
     transition.worldId !== state.worldId ||
-    transition.occurredSequence !== state.lastResolutionIndex
+    finalSequence !== state.lastResolutionIndex
   ) throw new Error("CIVILIZATION_ADVANCE_EVENT_BINDING_INVALID");
   if (economic && (
     economic.eventType !== "ECONOMIC_MARKET_DEVELOPMENT" ||
     economic.civilizationId !== state.civilizationId ||
     economic.worldId !== state.worldId ||
     economic.sourceReceiptId !== transition.sourceReceiptId ||
-    economic.occurredSequence !== state.lastResolutionIndex
+    economic.occurredSequence !== transition.occurredSequence + 1
   )) throw new Error("CIVILIZATION_ECONOMIC_EVENT_BINDING_INVALID");
 
   const db = await getDb();
@@ -449,7 +450,8 @@ export async function recordCivilizationAdvance(input: Readonly<{
     }
 
     if (!current || current.civilizationId !== state.civilizationId) throw new Error("CIVILIZATION_ACTIVE_STATE_REQUIRED");
-    if (state.lastResolutionIndex !== current.lastResolutionIndex + 1) throw new Error("CIVILIZATION_ADVANCE_REVISION_CONFLICT");
+    if (transition.occurredSequence !== current.lastResolutionIndex + 1) throw new Error("CIVILIZATION_ADVANCE_REVISION_CONFLICT");
+    if (state.lastResolutionIndex !== current.lastResolutionIndex + (economic ? 2 : 1)) throw new Error("CIVILIZATION_ADVANCE_FINAL_SEQUENCE_CONFLICT");
 
     await tx.update(aurionActiveCivilizations).set({
       worldEpoch: state.worldEpoch,
