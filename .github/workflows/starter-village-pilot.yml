@@ -15,6 +15,8 @@ on:
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
       - "scripts/verify-starter-village-evidence.test.mjs"
+      - "scripts/collect-starter-village-diagnostics.mjs"
+      - "scripts/collect-starter-village-diagnostics.test.mjs"
       - "scripts/seed-starter-village-public-character.ts"
       - "assets/characters/aurion-player-standard-animated.glb"
       - "assets/environment/fountain/**"
@@ -39,6 +41,8 @@ on:
       - "playwright.starter-village.config.ts"
       - "scripts/verify-starter-village-evidence.mjs"
       - "scripts/verify-starter-village-evidence.test.mjs"
+      - "scripts/collect-starter-village-diagnostics.mjs"
+      - "scripts/collect-starter-village-diagnostics.test.mjs"
       - "scripts/seed-starter-village-public-character.ts"
       - "assets/characters/aurion-player-standard-animated.glb"
       - "assets/environment/fountain/**"
@@ -100,7 +104,7 @@ jobs:
           mkdir -p "$AURION_EVIDENCE_DIR" "$AURION_PRIVATE_STATE_DIR" "$AURION_GLB_STORAGE_DIR" test-results .playwright-results/starter-village-pilot
           chmod 700 "$AURION_PRIVATE_STATE_DIR"
           chmod 755 "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR"
-          node --test scripts/verify-starter-village-evidence.test.mjs
+          node --test scripts/verify-starter-village-evidence.test.mjs scripts/collect-starter-village-diagnostics.test.mjs
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
           pnpm check
