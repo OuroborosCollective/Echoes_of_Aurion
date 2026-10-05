@@ -7,6 +7,7 @@ import {
   getActiveCivilization,
 } from "./aurionCivilizationHistoryPersistence";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
+import { readNpcGuildOverview } from "./aurion/npcGuildStore";
 import { publicProcedure, adminProcedure, router } from "./_core/trpc";
 
 const HUB_IDS = ["observatory_threshold", "windhollow", "emberfall", "cinder_vault"] as const;
@@ -45,26 +46,19 @@ export const civilizationHistoryRouter = router({
       return orchestrateCivilizationLoop(input.worldId, input.epoch, sourceReceiptId);
     }),
 
-  /**
-   * Returns the NPC guild and economic overview for the admin dashboard.
-   * Fetches the /healthz endpoint which already aggregates npcLife and
-   * npcGuilds readback from the autonomous NPC life runtime.
-   */
-  getGuildOverview: adminProcedure
-    .query(async () => {
-      try {
-        const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/healthz`);
-        if (!response.ok) return { available: false as const, reason: "HEALTHZ_UNAVAILABLE" };
-        const health = await response.json() as Record<string, unknown>;
-        const npcLife = health.npcLife as Record<string, unknown> | undefined;
-        const npcGuilds = health.npcGuilds as Record<string, unknown> | undefined;
-        return {
-          available: true as const,
-          npcLife: npcLife ?? null,
-          npcGuilds: npcGuilds ?? null,
-        };
-      } catch {
-        return { available: false as const, reason: "HEALTHZ_FETCH_FAILED" };
-      }
-    }),
+  /** Confirmed NPC-guild projection read directly from canonical MariaDB truth. */
+  getGuildOverview: adminProcedure.query(async () => {
+    try {
+      return {
+        available: true as const,
+        npcLife: null,
+        npcGuilds: await readNpcGuildOverview(),
+      };
+    } catch (error) {
+      return {
+        available: false as const,
+        reason: error instanceof Error ? error.message : "NPC_GUILD_READBACK_FAILED",
+      };
+    }
+  }),
 });
