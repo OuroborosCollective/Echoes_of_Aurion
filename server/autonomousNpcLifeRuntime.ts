@@ -5,8 +5,15 @@ import { readConfirmedMerchantActionSource } from "./npcActionGatewayPersistence
 import { readConfirmedNpcMultiMemory } from "./npcMultiMemoryPersistence";
 import { projectNpcMemoryV4 } from "./wasdNpcCapsule";
 import { isConfiguredDatabaseUrl } from "./db";
+import {
+  executeLivingHistoryCycle,
+  LIVING_HISTORY_LOOP_INTERVAL_TICKS,
+  LIVING_HISTORY_HUBS,
+  type LivingHistoryHubId,
+  type LivingHistoryLoopResult,
+} from "./aurion/livingHistoryLoop";
 
-export const AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS = 600;
+export const AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS = LIVING_HISTORY_LOOP_INTERVAL_TICKS;
 export const AUTONOMOUS_NPC_LIFE_HOME_REGION = "observatory_threshold" as const;
 export const AUTONOMOUS_NPC_LIFE_NPC_ID = `ax1_merchant_${AUTONOMOUS_NPC_LIFE_HOME_REGION}` as const;
 
@@ -32,6 +39,12 @@ export type AutonomousNpcLifeReadback = Readonly<{
   worldReceiptSource: "created" | "persisted" | null;
   multiMemory: ReturnType<typeof projectNpcMemoryV4> | null;
   failureCode: string | null;
+  /** Living History Loop cycle counter. */
+  livingHistoryCycle: number | null;
+  /** Number of NPCs that confirmed actions in the last cycle. */
+  confirmedNpcCount: number | null;
+  /** Total NPCs in the loop (always 4 for the four hubs). */
+  totalNpcCount: number;
 }>;
 
 export type AutonomousNpcLifeRuntime = Readonly<{
@@ -40,12 +53,14 @@ export type AutonomousNpcLifeRuntime = Readonly<{
   observe(values: { tick: number }): Promise<void>;
   resolveOnce(values: { tick: number }): Promise<void>;
   readback(): AutonomousNpcLifeReadback;
+  /** Read the last Living History Loop cycle result. */
+  lastCycleResult(): LivingHistoryLoopResult | null;
 }>;
 
 function failureCode(error: unknown): string {
   const message = error instanceof Error ? error.message : "UNKNOWN";
-  const normalized = message.toUpperCase().replace(/[^A-Z0-9_]+/g,"_").replace(/^_+|_+$/g,"");
-  return normalized.slice(0,96) || "UNKNOWN";
+  const normalized = message.toUpperCase().replace(/[^A-Z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+  return normalized.slice(0, 96) || "UNKNOWN";
 }
 
 function frozenReadback(value: AutonomousNpcLifeReadback): AutonomousNpcLifeReadback {
@@ -55,13 +70,18 @@ function frozenReadback(value: AutonomousNpcLifeReadback): AutonomousNpcLifeRead
 /**
  * Autonomous NPC life is paced by the authoritative zone tick, not Date.now().
  * Persistence continuity is recovered from the last verified NPC receipt after restart.
- * Only one confirmed merchant is activated in this first production slice because the
- * authoritative websocket currently exposes one live zone (`observatory_threshold`).
+ *
+ * The Living History Loop (Issue #323) now orchestrates all four merchant NPCs
+ * across the four hubs. Each NPC autonomously evaluates needs, selects goals,
+ * forms plans, and executes actions. World signals from NPC actions feed back
+ * into the next cycle, making the world dynamically reactive.
  */
 export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boolean }> = {}): AutonomousNpcLifeRuntime {
   const enabled = options.enabled ?? isConfiguredDatabaseUrl(process.env.DATABASE_URL);
   let lastQueuedGatewayTick = 0;
   let chain: Promise<void> = Promise.resolve();
+  let cycleCount = 0;
+  let lastCycle: LivingHistoryLoopResult | null = null;
   let state: AutonomousNpcLifeReadback = frozenReadback({
     enabled,
     status: enabled ? "idle" : "disabled",
@@ -84,51 +104,108 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     worldReceiptSource: null,
     multiMemory: null,
     failureCode: null,
+    livingHistoryCycle: null,
+    confirmedNpcCount: null,
+    totalNpcCount: LIVING_HISTORY_HUBS.length,
   });
 
   const resolveOnce = async ({ tick }: { tick: number }): Promise<void> => {
     if (!enabled) return;
     if (!Number.isSafeInteger(tick) || tick < 1) throw new Error("NPC_LIFE_GATEWAY_TICK_INVALID");
     try {
-      const source = await readConfirmedMerchantActionSource(AUTONOMOUS_NPC_LIFE_NPC_ID);
-      if (!source) throw new Error("NPC_ACTION_SOURCE_DECISION_REQUIRED");
-      const resolutionIndex = source.resolutionIndex + 1;
-      const result = await resolveAndRecordAx1LivingWorld({
-        worldSeed: GLOBAL_WORLD_SEED,
-        sourceDecisionReceiptId: source.receiptId,
-        regionId: AUTONOMOUS_NPC_LIFE_HOME_REGION,
-      });
-      if (!("lifeState" in result.npc)) throw new Error("NPC_LIFE_V3_RECEIPT_REQUIRED");
-      const confirmed = await readConfirmedNpcState(AUTONOMOUS_NPC_LIFE_NPC_ID);
-      if (!confirmed || !("lifeState" in confirmed)) throw new Error("NPC_LIFE_RECEIPT_READBACK_REQUIRED");
-      if (confirmed.decision.resolutionIndex !== resolutionIndex || confirmed.decision.decisionHash !== result.npc.decision.decisionHash) throw new Error("NPC_LIFE_RECEIPT_READBACK_MISMATCH");
-      if (confirmed.lifeState.stateHash !== result.npc.lifeState.stateHash || confirmed.lifeState.currentGoal !== confirmed.decision.goal) throw new Error("NPC_LIFE_STATE_READBACK_MISMATCH");
-      const currentHubId = confirmed.lifeState.economy?.currentHubId;
-      if (!currentHubId || currentHubId !== result.resolution.npc.currentHubId) throw new Error("NPC_LIFE_ECONOMY_READBACK_MISMATCH");
-      const memory = await readConfirmedNpcMultiMemory(AUTONOMOUS_NPC_LIFE_NPC_ID);
-      if (!memory || !result.npc.multiMemory || memory.lastResolutionIndex !== resolutionIndex || memory.memoryHash !== result.npc.multiMemory.memoryHash) throw new Error("NPC_LIFE_MULTI_MEMORY_READBACK_MISMATCH");
+      cycleCount += 1;
+      const cycle = cycleCount;
+
+      // Execute the Living History Loop for all merchant NPCs.
+      const loopResult = await executeLivingHistoryCycle(tick, cycle);
+      lastCycle = loopResult;
+
+      // Read back the primary NPC (observatory_threshold) for the readback state.
+      const primaryNpcId = AUTONOMOUS_NPC_LIFE_NPC_ID;
+      const primaryEntry = loopResult.entries.find((e) => e.npcId === primaryNpcId);
+
+      let confirmed: Awaited<ReturnType<typeof readConfirmedNpcState>> = null;
+      let action: string | null = null;
+      let goal: string | null = null;
+      let longTermGoal: string | null = null;
+      let decisionHash: string | null = null;
+      let lifeStateHash: string | null = null;
+      let currentHubId: string | null = null;
+      let worldRegionId: string | null = null;
+      let worldReactionHash: string | null = null;
+      let actionReceiptId: string | null = null;
+      let effectReadbackHash: string | null = null;
+      let npcReceiptSource: "created" | "persisted" | null = null;
+      let worldReceiptSource: "created" | "persisted" | null = null;
+      let multiMemory: ReturnType<typeof projectNpcMemoryV4> | null = null;
+      let lastResolutionIndex: number | null = null;
+      let status: "idle" | "confirmed" | "degraded" = "idle";
+      let failure: string | null = null;
+
+      if (primaryEntry?.status === "confirmed") {
+        try {
+          confirmed = await readConfirmedNpcState(primaryNpcId);
+          if (confirmed && "lifeState" in confirmed) {
+            action = primaryEntry.action;
+            goal = confirmed.decision.goal;
+            longTermGoal = confirmed.lifeState.longTermGoal;
+            decisionHash = confirmed.decision.decisionHash;
+            lifeStateHash = confirmed.lifeState.stateHash;
+            currentHubId = confirmed.lifeState.economy?.currentHubId ?? null;
+            worldRegionId = primaryEntry.hubId;
+            worldReactionHash = primaryEntry.worldReactionHash;
+            actionReceiptId = primaryEntry.actionReceiptId;
+            lastResolutionIndex = primaryEntry.resolutionIndex;
+
+            const memory = await readConfirmedNpcMultiMemory(primaryNpcId);
+            if (memory) {
+              multiMemory = projectNpcMemoryV4(memory);
+            }
+
+            status = "confirmed";
+          } else {
+            status = "degraded";
+            failure = "NPC_LIFE_RECEIPT_READBACK_REQUIRED";
+          }
+        } catch (readbackError) {
+          status = "degraded";
+          failure = failureCode(readbackError);
+        }
+      } else if (primaryEntry?.status === "degraded") {
+        status = "degraded";
+        failure = primaryEntry.failureCode;
+      } else if (primaryEntry?.status === "skipped") {
+        status = "idle";
+        failure = primaryEntry.failureCode;
+      }
+
+      const confirmedCount = loopResult.entries.filter((e) => e.status === "confirmed").length;
+
       state = frozenReadback({
         enabled,
-        status: "confirmed",
-        npcId: AUTONOMOUS_NPC_LIFE_NPC_ID,
+        status,
+        npcId: primaryNpcId,
         homeRegionId: AUTONOMOUS_NPC_LIFE_HOME_REGION,
         intervalTicks: AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS,
         lastGatewayTick: tick,
-        lastResolutionIndex: resolutionIndex,
+        lastResolutionIndex,
         currentHubId,
-        worldRegionId: result.world.regionId,
-        action: result.resolution.action,
-        goal: confirmed.decision.goal,
-        longTermGoal: confirmed.lifeState.longTermGoal,
-        decisionHash: confirmed.decision.decisionHash,
-        lifeStateHash: confirmed.lifeState.stateHash,
-        worldReactionHash: result.world.deterministicHash,
-        actionReceiptId: result.actionReceiptId,
-        effectReadbackHash: result.effectReadbackHash,
-        npcReceiptSource: result.status === "committed" ? "created" : "persisted",
-        worldReceiptSource: result.status === "committed" ? "created" : "persisted",
-        multiMemory: projectNpcMemoryV4(memory),
-        failureCode: null,
+        worldRegionId,
+        action,
+        goal,
+        longTermGoal,
+        decisionHash,
+        lifeStateHash,
+        worldReactionHash,
+        actionReceiptId,
+        effectReadbackHash,
+        npcReceiptSource,
+        worldReceiptSource,
+        multiMemory,
+        failureCode: failure,
+        livingHistoryCycle: cycle,
+        confirmedNpcCount: confirmedCount,
+        totalNpcCount: LIVING_HISTORY_HUBS.length,
       });
     } catch (error) {
       state = frozenReadback({ ...state, enabled, status: "degraded", lastGatewayTick: tick, failureCode: failureCode(error) });
@@ -152,5 +229,6 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     observe,
     resolveOnce,
     readback: () => state,
+    lastCycleResult: () => lastCycle,
   });
 }
