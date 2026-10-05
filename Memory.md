@@ -979,3 +979,29 @@ Evidence: exact candidate head `4d4dfd5ded35236a445e8551f3b57ec81e77a2cc`; ARE-r
 Learned: capture and server append already existed; the missing production link was durable volume storage plus a privileged sanitization boundary and a trusted post-production-gate invocation.
 Open: A non-empty production ARE artifact requires a real authenticated player to activate Companion Learn/Record and perform at least one demonstrated action.
 Next safe step: Merge, verify main production deployment and the called ARE-rLOGIC export, then read back the first real non-empty artifact when a demonstration exists.
+
+
+### 2026-10-05 — PR #786 — Persist companion learning and feed ARE-rLOGIC automatically
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=786 merge=8016702d43b38f4fe2d9a7a10e369d19b66a7649 -->
+Task: Merge PR #786 into `main` — Persist companion learning and feed ARE-rLOGIC automatically.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/arelogic-companion-offline-runner.yml`
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `Dockerfile`
+- `Memory.md`
+- `deploy/aurion-arelogic-companion-export`
+- `deploy/promote-aurion-zone-runtime.sh`
+- `docker-compose.traefik.yml`
+- `scripts/build-aurion-traefik-runtime-artifact.mjs`
+- `server/aurionArelogicCompanionRuntime.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/786
+- Merge commit: `8016702d43b38f4fe2d9a7a10e369d19b66a7649`
+- PR head: `83a9f17cac04939eff3446e2bb312bc67ab98ac2`
+- Merged at: 2026-10-05T17:42:38Z
+- Post-merge workflow run: 37350457660
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
