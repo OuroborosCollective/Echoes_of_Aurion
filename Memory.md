@@ -637,3 +637,26 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #766 — fix(issue-742): fail closed on incomplete Starterdorf evidence
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=766 merge=ada0c230b46010c5d7a07c55007c3beddf7814b4 -->
+Task: Merge PR #766 into `main` — fix(issue-742): fail closed on incomplete Starterdorf evidence.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/starter-village-pilot.yml`
+- `e2e/starterVillagePilot.spec.ts`
+- `playwright.starter-village.config.ts`
+- `scripts/verify-starter-village-evidence.mjs`
+- `scripts/verify-starter-village-evidence.test.mjs`
+- `server/starterVillagePilotHttp.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/766
+- Merge commit: `ada0c230b46010c5d7a07c55007c3beddf7814b4`
+- PR head: `5f5fa591c432f2d56bebd6129dfe734f80bf1adb`
+- Merged at: 2026-10-05T03:55:33Z
+- Post-merge workflow run: 37261351961
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
