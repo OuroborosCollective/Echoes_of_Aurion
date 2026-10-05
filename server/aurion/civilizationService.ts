@@ -158,6 +158,10 @@ export async function orchestrateCivilizationLoop(
       // Derive dynamic deltas from aggregated economic impact — markets
       // develop based on real NPC trade, scarcity, hazard and politics.
       const deltas = deriveEconomicDeltas(economicImpact ?? null);
+      const economicEventRequired = deltas.economicEventRecorded && economicImpact !== null && economicImpact !== undefined;
+      const transitionSequence = occurredSequence;
+      const economicSequence = transitionSequence + 1;
+      const finalSequence = economicEventRequired ? economicSequence : transitionSequence;
 
       const nextCiv = {
         civilizationId: activeCiv.civilizationId,
@@ -167,7 +171,7 @@ export async function orchestrateCivilizationLoop(
         stability: clampUnit(activeCiv.stability + deltas.stabilityDelta),
         hazardIndex: clampUnit(activeCiv.hazardIndex + deltas.hazardDelta),
         scarcitySeverity: clampUnit(activeCiv.scarcitySeverity + deltas.scarcityDelta),
-        lastResolutionIndex: occurredSequence,
+        lastResolutionIndex: finalSequence,
       };
 
       const transitionEvent = {
@@ -179,9 +183,9 @@ export async function orchestrateCivilizationLoop(
         sourceReceiptId,
         sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
         eventPayloadJson: JSON.stringify(nextCiv),
-        occurredSequence,
+        occurredSequence: transitionSequence,
       };
-      const economicEvent = deltas.economicEventRecorded && economicImpact ? {
+      const economicEvent = economicEventRequired && economicImpact ? {
         eventId: hash(["economic", activeCiv.civilizationId, sourceReceiptId, economicImpact.impactHash.slice(0, 16)]),
         civilizationId: activeCiv.civilizationId,
         worldId,
@@ -206,7 +210,7 @@ export async function orchestrateCivilizationLoop(
             scarcity: deltas.scarcityDelta,
           },
         }),
-        occurredSequence,
+        occurredSequence: economicSequence,
       } : null;
 
       await recordCivilizationAdvance({
