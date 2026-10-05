@@ -84,6 +84,14 @@ jobs:
           diff -u docs/balancing/aim265-candidate.json /tmp/aurion-balancing-v2.json
           python -m unittest discover -s scripts/balancing -p 'test_*.py'
           pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts server/wolframCag.test.ts server/wolframCagRuntimeReadback.test.ts server/aurionCagDesignOracle.test.ts server/neuralCapabilityCagVerifier.test.ts server/adminMcp.test.ts
+      - name: Prove neural CAG verifier stays off the runtime import path
+        run: |
+          set -euo pipefail
+          unexpected="$(grep -R -n --include='*.ts' --include='*.tsx' 'neuralCapabilityCagVerifier' client server shared | grep -v '^server/neuralCapabilityCagVerifier.ts:' | grep -v '^server/neuralCapabilityCagVerifier.test.ts:' || true)"
+          if [ -n "$unexpected" ]; then
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
       - name: Run real Wolfram CAG canaries when CI has the provisioned key
         env:
           WOLFRAM_CAG_API_KEY: ${{ secrets.WOLFRAM_CAG_API_KEY }}
