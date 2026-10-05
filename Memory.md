@@ -417,3 +417,14 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — Open-PR consolidation: verified Starterdorf gameplay chain
+Status: VERIFIED repository integration
+Task: Consolidate the verified cumulative Starterdorf chain through canonical village layout, quest-NPC authority and durable Clockwork-Stalker combat/hand-in evidence while preserving newer main documentation/evidence.
+Decisions: Integrate exact tested PR #736 head `0641bdfb8d70d8daebe038006800ef85e950406b` as the cumulative owner; retain current-main GitBook/public-reference and Starter Village Pilot evidence files; supersede earlier #734/#735 rather than duplicating them.
+Touched surfaces: Starter-village world/NPC contracts, quest/combat persistence and migrations, zone runtime, CI/evidence lanes; current-main documentation/evidence overlays preserved.
+Evidence: PR #736 exact head has 33 completed successful GitHub workflows with no non-success run, including Aurion Local Test Pack, Runtime Candidate/Container Proof, MariaDB/schema gates and Game Development Studio Smoke; current main parent `65dcb303be7922f42522d690f7a6c9de3f409c83`.
+Learned: The safe integration unit is the latest fully verified cumulative head, not separately merging overlapping ancestor PRs.
+Open: Reward extension #738 and visible-guidance #740 remain outside this verified integration because their exact-head gates are red.
+Next safe step: Close superseded ancestors and keep failed extensions unmerged until independently green.

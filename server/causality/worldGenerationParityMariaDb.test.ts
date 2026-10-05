@@ -1,3 +1,4 @@
+import { AURION_ZONE_RULESET_VERSION } from "../../shared/aurionCausalTickContract";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createPool, type Pool } from "mysql2/promise";
 import { eq } from "drizzle-orm";
@@ -78,7 +79,7 @@ function runtimeIdentity(): WorldGenerationRuntimeIdentity {
     runtimeRevision: RELEASE,
     runtimeImageDigest: IMAGE,
     causalTickSchema: AURION_CAUSAL_TICK_SCHEMA_V2,
-    rulesetVersion: "aurion.zone.rules.v2",
+    rulesetVersion: AURION_ZONE_RULESET_VERSION,
   };
 }
 

@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { weaponLoadouts } from "../drizzle/schema";
+import { and, eq } from "drizzle-orm";
+import { aurionEquipmentSlots, weaponLoadouts } from "../drizzle/schema";
 import { ax1PlayerBaseMaxHealth, ax1StarterWeaponBonus } from "./ax1CombatProjection";
 import { ensureAx1StarterEquipment } from "./ax1StarterEquipmentPersistence";
 import { consumeZoneConnectionTicket, getDb, getOrCreatePlayerProfile } from "./db";
@@ -20,11 +20,15 @@ export async function consumeZoneTicketWithCombatProfile(values:{ticket:string;z
   if(!loadout)throw new Error("ZONE_WEAPON_LOADOUT_UNAVAILABLE");
   const starter=await ensureAx1StarterEquipment(ticket.userId);
   const starterEquipped=starter.status==="equipped";
+  const mainHand=(await db.select({ itemId: aurionEquipmentSlots.itemId }).from(aurionEquipmentSlots).where(and(
+    eq(aurionEquipmentSlots.userId,ticket.userId), eq(aurionEquipmentSlots.slot,"main_hand"),
+  )).limit(1))[0];
   const selectedClass=profile.selectedClass;
   return Object.freeze({...ticket,combatProfile:Object.freeze({
     combatLevel:profile.level,
     maxHealth:ax1PlayerBaseMaxHealth(selectedClass,starterEquipped),
     weaponBonus:starterEquipped?ax1StarterWeaponBonus(loadout.weaponTrack):0,
     weaponTrack:loadout.weaponTrack,
+    weaponEquipped:starterEquipped || Boolean(mainHand),
   })});
 }

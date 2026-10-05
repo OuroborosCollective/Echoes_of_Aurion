@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import {
   aurionCausalTickReceipts,
   aurionGlobalStateProofs,
@@ -18,13 +18,11 @@ import { getDb } from "../db";
 import { worldCausalRootService } from "../causality/worldCausalRootService";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { readEncounterCompletionEvidence } from "../encounterCompletionEvidence";
-import type { AurionZoneIntent, AurionQuestHandInIntent } from "../../shared/aurionZoneIntentContract";
+import { hashCanonicalIntents, type AurionZoneIntent, type AurionQuestHandInIntent } from "../../shared/aurionZoneIntentContract";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
-const MAX_PROOF_EPOCHS = 64;
-const MAX_RECEIPTS_PER_RANGE = 16_384;
-const RANGE_PAGE_SIZE = 256;
+const PROOF_PAGE_SIZE = 64;
 
 function sourceMatches(instance: QuestInstance, plan: QuestPlan, source: QuestCompleteSource): void {
   const checks: Array<[string, unknown, unknown]> = [
@@ -109,7 +107,26 @@ function intentMatchesStored(row: typeof aurionCausalTickReceipts.$inferSelect, 
   } catch {
     throw new Error("QUEST_CAUSAL_INTENT_EVIDENCE_CORRUPT");
   }
-  return intents.some(intent => intent.type === "quest_hand_in" && sameHandIn(intent as AurionQuestHandInIntent, command, source, questId));
+  if (hashCanonicalIntents(intents) !== row.inputHash) throw new Error("QUEST_CAUSAL_INTENT_HASH_MISMATCH");
+  const matches = intents.filter(intent => intent.type === "quest_hand_in" && sameHandIn(intent as AurionQuestHandInIntent, command, source, questId));
+  if (matches.length > 1) throw new Error("QUEST_CAUSAL_ANCHOR_MULTIPLE_MATCHES");
+  return matches.length === 1;
+}
+
+/** Reuse the immutable hand-in after a process restart or a failed closure commit. */
+export async function readDurableQuestHandIn(worldId: string, command: QuestDomainCommand, source: QuestCompleteSource, questId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("QUEST_CAUSAL_DATABASE_UNAVAILABLE");
+  const rows = await db.select().from(aurionCausalTickReceipts).where(and(
+    eq(aurionCausalTickReceipts.worldId, worldId),
+    sql`JSON_CONTAINS(${aurionCausalTickReceipts.inputJson}, JSON_OBJECT('commandId', ${command.commandId})) = 1`,
+  )).limit(2);
+  if (rows.length > 1) throw new Error("QUEST_CAUSAL_ANCHOR_MULTIPLE_MATCHES");
+  if (!rows.length) return null;
+  if (!intentMatchesStored(rows[0], command, source, questId)) throw new Error("QUEST_CAUSAL_HAND_IN_IDENTITY_MISMATCH");
+  const receipt = decodeReceipt(rows[0]);
+  if (receipt.sourceRevision !== source.sourceRevision) throw new Error("QUEST_CAUSAL_HAND_IN_REVISION_MISMATCH");
+  return receipt;
 }
 
 async function findRealCausalReceipt(
@@ -118,55 +135,34 @@ async function findRealCausalReceipt(
   source: QuestCompleteSource,
   command: QuestDomainCommand,
   questId: string,
-): Promise<{ receipt: AurionCausalTickReceipt; epoch: number; sourceWorldRoot: string } > {
-  const proofs = await db.select({ epoch: aurionGlobalStateProofs.epoch })
-    .from(aurionGlobalStateProofs)
-    .where(and(
-      eq(aurionGlobalStateProofs.worldId, worldId),
-      eq(aurionGlobalStateProofs.status, "VERIFIED"),
-    ))
-    .orderBy(desc(aurionGlobalStateProofs.epoch))
-    .limit(MAX_PROOF_EPOCHS + 1);
-  if (proofs.length > MAX_PROOF_EPOCHS) throw new Error("QUEST_CAUSAL_ANCHOR_EPOCH_LIMIT_EXCEEDED");
-
-  const matches: Array<{ receipt: AurionCausalTickReceipt; epoch: number; sourceWorldRoot: string }> = [];
-  for (const proof of proofs) {
-    const persisted = await worldCausalRootService.read(worldId, proof.epoch);
-    if (!persisted || persisted.status !== "VERIFIED" || !persisted.root) continue;
-    if (persisted.root.sourceRevision !== source.sourceRevision) continue;
-    const replay = await worldCausalRootService.replay(worldId, proof.epoch);
-    if (replay.status === "FIRST_DIVERGENCE") throw new Error("QUEST_CAUSAL_WORLD_ROOT_FIRST_DIVERGENCE");
-    if (replay.status !== "MATCH" || replay.worldRootHash !== persisted.root.worldRootHash) continue;
-
-    for (const zoneRoot of persisted.root.zoneRoots) {
-      let cursor = zoneRoot.fromTick;
-      let scanned = 0;
-      while (cursor <= zoneRoot.toTick) {
-        const end = Math.min(zoneRoot.toTick, cursor + RANGE_PAGE_SIZE - 1);
-        const rows = await db.select().from(aurionCausalTickReceipts).where(and(
-          eq(aurionCausalTickReceipts.worldId, worldId),
-          eq(aurionCausalTickReceipts.zoneId, zoneRoot.zoneId),
-          gte(aurionCausalTickReceipts.tick, cursor),
-          lte(aurionCausalTickReceipts.tick, end),
-          eq(aurionCausalTickReceipts.revision, source.sourceRevision),
-          eq(aurionCausalTickReceipts.rulesetVersion, persisted.root.rulesetVersion),
-        )).orderBy(asc(aurionCausalTickReceipts.tick));
-        scanned += rows.length;
-        if (scanned > MAX_RECEIPTS_PER_RANGE) throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_SCAN_LIMIT");
-        for (const row of rows) {
-          if (!intentMatchesStored(row, command, source, questId)) continue;
-          if (row.tick < zoneRoot.fromTick || row.tick > zoneRoot.toTick) continue;
-          matches.push({ receipt: decodeReceipt(row), epoch: proof.epoch, sourceWorldRoot: persisted.root.worldRootHash });
-          if (matches.length > 1) throw new Error("QUEST_CAUSAL_ANCHOR_MULTIPLE_MATCHES");
-        }
-        cursor = end + 1;
+): Promise<{ receipt: AurionCausalTickReceipt; epoch: number; sourceWorldRoot: string }> {
+  const receipt = await readDurableQuestHandIn(worldId, command, source, questId);
+  if (!receipt) throw new Error("QUEST_CAUSAL_ANCHOR_UNPROVABLE");
+  // Page through history; a world's lifetime is not limited to 64 epochs.
+  // Receipt identity is checked independently above, including duplicate ticks.
+  let beforeEpoch: number | undefined;
+  for (;;) {
+    const proofs = await db.select({ epoch: aurionGlobalStateProofs.epoch })
+      .from(aurionGlobalStateProofs).where(and(
+        eq(aurionGlobalStateProofs.worldId, worldId),
+        eq(aurionGlobalStateProofs.status, "VERIFIED"),
+        beforeEpoch === undefined ? undefined : lt(aurionGlobalStateProofs.epoch, beforeEpoch),
+      )).orderBy(desc(aurionGlobalStateProofs.epoch)).limit(PROOF_PAGE_SIZE);
+    for (const proof of proofs) {
+      const persisted = await worldCausalRootService.read(worldId, proof.epoch);
+      if (!persisted || persisted.status !== "VERIFIED" || !persisted.root) continue;
+      if (persisted.root.sourceRevision !== source.sourceRevision || persisted.root.rulesetVersion !== receipt.rulesetVersion) continue;
+      if (!persisted.root.zoneRoots.some(zone => zone.zoneId === receipt.zoneId && receipt.tick >= zone.fromTick && receipt.tick <= zone.toTick)) continue;
+      const replay = await worldCausalRootService.replay(worldId, proof.epoch);
+      if (replay.status === "FIRST_DIVERGENCE") throw new Error("QUEST_CAUSAL_WORLD_ROOT_FIRST_DIVERGENCE");
+      if (replay.status === "MATCH" && replay.worldRootHash === persisted.root.worldRootHash) {
+        return { receipt, epoch: proof.epoch, sourceWorldRoot: persisted.root.worldRootHash };
       }
     }
+    if (proofs.length < PROOF_PAGE_SIZE) break;
+    beforeEpoch = proofs[proofs.length - 1].epoch;
   }
-
-  const match = matches[0];
-  if (!match) throw new Error("QUEST_CAUSAL_ANCHOR_UNPROVABLE");
-  return match;
+  throw new Error("QUEST_CAUSAL_WORLD_PROOF_PENDING");
 }
 
 export async function resolveQuestCausalAnchor(input: {
@@ -185,6 +181,11 @@ export async function resolveQuestCausalAnchor(input: {
     const sessionId = input.command.sourceEvidenceId.slice("evt_encounter_complete_".length);
     const evidence = await readEncounterCompletionEvidence(input.instance.playerUserId, sessionId);
     if (evidence.eventId !== input.command.sourceEvidenceId || evidence.evidenceHash !== input.command.sourceEvidenceDigest) {
+      throw new Error("QUEST_CAUSAL_SOURCE_EVIDENCE_IDENTITY_MISMATCH");
+    }
+  } else if (input.command.sourceEvidenceId === `evt_combat_quest_complete_${input.instance.id}`) {
+    const evidence = await (await import("./pilotCombatCompletionEvidence")).readPilotCombatCompletionEvidence(input.instance);
+    if (evidence.id !== input.command.sourceEvidenceId || evidence.digest !== input.command.sourceEvidenceDigest) {
       throw new Error("QUEST_CAUSAL_SOURCE_EVIDENCE_IDENTITY_MISMATCH");
     }
   } else {

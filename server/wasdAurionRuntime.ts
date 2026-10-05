@@ -12,6 +12,7 @@ import type { NpcMemoryV4 } from "./wasdNpcCapsule";
 import { recordNpcDecisionLog } from "./aurion/npcDecisionLog";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
+import { assertStarterVillageNpcResidence } from "./starterVillageNpcResidence";
 import {
   AURION_WASD_CONTENT_VERSION,
   AURION_WASD_RULESET_VERSION,
@@ -189,6 +190,7 @@ export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: 
       })()
     : raw;
   const input = normalizeNpcRequest(enriched);
+  assertStarterVillageNpcResidence(input.npcId, input.regionId);
   const v3RequestHash = npcRequestHash(input,NPC_LIFE_RECEIPT_VERSION);
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
