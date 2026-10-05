@@ -153,6 +153,12 @@ Status: VERIFIED repository merge
 Task: Merge PR #726 into `main` — feat: complete AIM-535 atomic crafting and item manipulation.
 Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
 Touched surfaces:
+- `.github/workflows/aim535-item-manipulation-runtime.yml`
+- `.github/workflows/aurion-journal-watermark-regression.yml`
+- `.github/workflows/aurion-production-schema-readback.yml`
+- `.github/workflows/aurion-root-reconciliation-artifact-proof.yml`
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `.github/workflows/aurion-schema-reconciliation-proof.yml`
 - `Memory.md`
 - `architecture/donor-ledger.json`
 - `client/src/xaurion/components/Ax1InventoryModal.tsx`
