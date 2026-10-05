@@ -232,7 +232,8 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
     let questBefore: any;
 
     const route = await runAuthoritativeZoneJourney(cookie, registration.data.id, async northGate => {
-      expect(northGate.z).toBeGreaterThanOrEqual(-34_000);\n      expect(northGate.z).toBeLessThanOrEqual(-30_000);
+      expect(northGate.z).toBeGreaterThanOrEqual(-34_000);
+      expect(northGate.z).toBeLessThanOrEqual(-30_000);
       const interpreted = (await rpc<any>("gameplay.interpretNpcDialogue", cookie, {
         npcId: "starter_village_north_gate_guard",
         text: "Seid gegrüßt, ich brauche einen Auftrag.",
