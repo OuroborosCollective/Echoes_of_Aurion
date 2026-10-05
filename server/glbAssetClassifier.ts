@@ -109,7 +109,7 @@ function detectUniqueEquipmentSlot(names: readonly string[]): GlbEquipmentSlot |
     const searchable = name.toLowerCase().replace(/[_-]+/g, " ");
     for (const [slot, keywords] of EQUIPMENT_SLOT_RULES) if (hasKeyword(searchable, keywords)) matched.add(slot);
   }
-  return matched.size === 1 ? [...matched][0]! : null;
+  return matched.size === 1 ? matched.values().next().value! : null;
 }
 
 function detectLod(names: readonly string[]): number | null {

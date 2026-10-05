@@ -32,7 +32,7 @@ describe("AIM-265 exact spatial calculations", () => {
       }
     }
     const reached = new Set<string>();
-    const queue = [[...roadCells][0]!];
+    const queue = [roadCells.values().next().value!];
     for (let index = 0; index < queue.length; index++) {
       const key = queue[index]!;
       if (reached.has(key)) continue;
