@@ -184,23 +184,37 @@ export function buildNpcGuildMutationPlan(input: Readonly<{
  */
 export function buildNpcGuildReceipt(input: Readonly<{
   plan: NpcGuildMutationPlan;
+  cycle: number;
+  sourceDecisionReceiptId: string;
+  sourceResolutionIndex: number;
   resultingRevision: number;
   result: Readonly<Record<string, unknown>>;
 }>): NpcGuildReceipt {
   if (!digestPattern.test(input.plan.confirmationHash) || npcGuildHash(input.plan.payload) !== input.plan.payloadHash) {
     throw new Error("npc guild plan digest mismatch");
   }
+  assertWhole(input.cycle, "cycle", 0);
+  assertId(input.sourceDecisionReceiptId, "sourceDecisionReceiptId");
+  assertWhole(input.sourceResolutionIndex, "sourceResolutionIndex", 0);
   assertWhole(input.resultingRevision, "resultingRevision", 0);
   if (input.resultingRevision !== input.plan.expectedRevision + 1) {
     throw new Error("npc guild revision must advance exactly once");
   }
-  const requestHash = npcGuildHash(input.plan);
+  const requestHash = npcGuildHash({
+    plan: input.plan,
+    cycle: input.cycle,
+    sourceDecisionReceiptId: input.sourceDecisionReceiptId,
+    sourceResolutionIndex: input.sourceResolutionIndex,
+  });
   const resultHash = npcGuildHash(input.result);
   return Object.freeze({
     receiptId: `ngr_${npcGuildHash([requestHash, resultHash, input.resultingRevision]).slice(0, 48)}`,
     guildId: input.plan.guildId,
     actorNpcId: input.plan.actorNpcId,
     operation: input.plan.operation,
+    cycle: input.cycle,
+    sourceDecisionReceiptId: input.sourceDecisionReceiptId,
+    sourceResolutionIndex: input.sourceResolutionIndex,
     expectedRevision: input.plan.expectedRevision,
     resultingRevision: input.resultingRevision,
     idempotencyKey: input.plan.idempotencyKey,
