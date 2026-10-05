@@ -917,3 +917,25 @@ Evidence: Independent Node/Python sandbox proved 4/4 exporter tests, byte-stable
 Learned: The existing CompanionMemoryStore is already the correct truth-adjacent source because it stores bounded observation/action vectors locally and does not replicate captured frames; the safe integration is a one-way artifact lane, not a runtime dependency.
 Open: Production self-hosted runner must prove read access to the active companion-memory directory and produce the first real non-fixture artifact after merge.
 Next safe step: Merge after candidate CI is green, then dispatch the workflow once and inspect the first production export artifact before considering any downstream automated learning.
+
+
+### 2026-10-05 — PR #778 — Connect Aurion companion memory to automated ARE-rLOGIC offline runner
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=778 merge=3875217b1a02f329bbbfa3e17ffa6ee42fb1711b -->
+Task: Merge PR #778 into `main` — Connect Aurion companion memory to automated ARE-rLOGIC offline runner.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/arelogic-companion-offline-runner.yml`
+- `Memory.md`
+- `docs/integration/ARELOGIC_COMPANION_OFFLINE_RUNNER.md`
+- `scripts/export-arelogic-companion-memory.mjs`
+- `scripts/export-arelogic-companion-memory.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/778
+- Merge commit: `3875217b1a02f329bbbfa3e17ffa6ee42fb1711b`
+- PR head: `91aadaf556f286f71a578285c0a76f0318a2bca5`
+- Merged at: 2026-10-05T17:02:31Z
+- Post-merge workflow run: 37345437134
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
