@@ -102,6 +102,7 @@ jobs:
       - name: Canonical 10 Hz Return Stone and northward movement regressions
         run: pnpm exec vitest run server/returnStoneZoneRuntime.test.ts server/zoneGatewayPresence.test.ts server/zoneRuntime.test.ts --no-file-parallelism --reporter=verbose
       - name: Scope egress denial to Aurion runtime identity
+        id: network
         run: |
           set -euo pipefail
           if ! id -u aurion-netproof >/dev/null 2>&1; then
@@ -136,6 +137,7 @@ jobs:
           mkdir -p "$AURION_EVIDENCE_DIR"
           printf '{"scope":"runtime-uid","uid":%s,"loopbackAllowed":true,"externalEgressAllowed":false,"runnerControlPlaneAffected":false}\n'             "$AURION_NET_UID" > "$AURION_EVIDENCE_DIR/network-isolation.json"
       - name: Start exact runtime and execute authenticated HTTP/tRPC journey
+        id: journey
         run: |
           set -euo pipefail
           NODE_BIN="$(command -v node)"
@@ -156,6 +158,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:3000/healthz | tee test-results/starter-pilot-health-before.json
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=journey pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
       - name: Restart application and independently read back quest and inventory
+        id: restart
         run: |
           set -euo pipefail
           RUNTIME_PID="$(cat /tmp/starter-pilot.pid)"
@@ -183,21 +186,25 @@ jobs:
           for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:3000/healthz && break || sleep 1; done
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=readback pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
       - name: Reproduce the pre-fix empty catalog contract without a blind radio wait
+        id: empty_catalog
         run: |
           AURION_STARTER_VILLAGE_EMPTY_CATALOG_E2E=1 pnpm exec playwright test --config=playwright.starter-village.config.ts e2e/starterVillagePilot.spec.ts --grep "diagnostic: fresh isolated catalog" --reporter=list
       - name: Admit the canonical public player through the real GLB authority and read it back
+        id: character_seed
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/seed-starter-village-public-character.ts | tee "$AURION_EVIDENCE_DIR/public-character-seed.json"
           test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+Boolean(x.assetId)+":"+Boolean(x.sha256))' "$AURION_EVIDENCE_DIR/public-character-seed.json")" = "player-public:true:true"
           chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
       - name: Admit the owner fountain LOD family through the real GLB authority and read it back
+        id: fountain_seed
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/seed-starter-village-fountain.ts | tee "$AURION_EVIDENCE_DIR/fountain-seed.json"
           test "$(node -e 'const fs=require("node:fs");const p=process.argv[1];const x=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(x.purpose+":"+x.subcategory+":"+x.lods.map(v=>v.level).join(","))' "$AURION_EVIDENCE_DIR/fountain-seed.json")" = "world-environment:fountain:1,2"
           chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
       - name: Browser-emulated viewport acceptance after canonical admission (not physical Android/GPU proof)
+        id: browser
         run: |
           AURION_STARTER_VILLAGE_BROWSER_E2E=1 pnpm exec playwright test --config=playwright.starter-village.config.ts e2e/starterVillagePilot.spec.ts --grep "confirmed pilot controls" --reporter=list
           echo "AURION_EVIDENCE_COMPLETE=1" >> "$GITHUB_ENV"
@@ -214,6 +221,26 @@ jobs:
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -d ::1/128 -j ACCEPT 2>/dev/null || true
             sudo ip6tables -D OUTPUT -m owner --uid-owner "$AURION_NET_UID" -j REJECT 2>/dev/null || true
           fi
+      - name: Record explicit phase outcomes without synthesizing success
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$AURION_EVIDENCE_DIR"
+          cat > "$AURION_EVIDENCE_DIR/phase-status.json" <<'JSON'
+          {
+            "schema": "aurion.starter-village-phase-status.v1",
+            "revision": "${{ env.AURION_RELEASE_SHA }}",
+            "phases": {
+              "network": "${{ steps.network.outcome }}",
+              "journey": "${{ steps.journey.outcome }}",
+              "restartReadback": "${{ steps.restart.outcome }}",
+              "emptyCatalogDiagnostic": "${{ steps.empty_catalog.outcome }}",
+              "publicCharacterAdmission": "${{ steps.character_seed.outcome }}",
+              "fountainAdmission": "${{ steps.fountain_seed.outcome }}",
+              "browserAcceptance": "${{ steps.browser.outcome }}"
+            }
+          }
+          JSON
       - name: Seal revision-bound evidence manifest
         if: always()
         run: |
