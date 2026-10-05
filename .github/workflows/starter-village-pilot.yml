@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
           pnpm install --frozen-lockfile
-          mkdir -p "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR"
+          mkdir -p "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR" test-results
           chmod 755 "$AURION_EVIDENCE_DIR" "$AURION_GLB_STORAGE_DIR"
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
