@@ -73,7 +73,9 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
     } finally { setBusy(false); }
   };
 
-  const catalogState = error ? "failed" : !catalog ? "loading" : catalog.selected ? "selected" : catalog.entries.length === 0 ? "empty" : "ready";\n\n  return <section className="rounded-2xl border border-cyan-300/20 bg-black/20 p-5" data-testid="public-character-picker" data-catalog-state={catalogState}>
+  const catalogState = error ? "failed" : !catalog ? "loading" : catalog.selected ? "selected" : catalog.entries.length === 0 ? "empty" : "ready";
+
+  return <section className="rounded-2xl border border-cyan-300/20 bg-black/20 p-5" data-testid="public-character-picker" data-catalog-state={catalogState}>
     <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 size-5 text-cyan-300"/><div><h3 className="font-semibold">Öffentliches Spielermodell</h3><p className="mt-1 text-xs text-slate-400">Diese Auswahl ist einmalig und wird serverseitig gebunden. Andere aktuell verbundene Spieler dürfen anschließend nur dieses öffentliche Darstellungsmodell sehen; Werte, Klasse, Inventar und Kampf bleiben unverändert.</p></div></div>
     {!catalog && !error && <p data-testid="public-character-catalog-loading" className="mt-4 flex items-center gap-2 text-sm text-slate-400"><LoaderCircle className="size-4 animate-spin"/>Charaktermodelle werden geladen…</p>}
     {error && <p role="alert" data-testid="public-character-catalog-failed" className="mt-4 rounded-xl border border-red-300/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}
