@@ -31,7 +31,9 @@ import { globalSnapshotReconciliationService } from "../causality/snapshotReconc
 import { globalCausalArchivingService } from "../causality/archivingService";
 import { globalStateReconciliationService } from "../causality/globalStateReconciliationService";
 import { globalAssuranceService } from "../causality/assuranceService";
+import { globalTickRecorder } from "../causality/tickRecorder";
 import { createOtelHttpMiddleware } from "../observability/otelBoundary";
+import { drainAurionRuntimeForShutdown } from "./gracefulCausalShutdown";
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
@@ -96,8 +98,36 @@ async function startServer(){
   app.get("/healthz", (_req, res) => res.status(200).json(healthPayload()));
   app.get("/api/health", (_req, res) => res.status(200).json(healthPayload()));
   registerGameDevelopmentStudioRuntime(app,gameDevelopmentStudio);registerGlbSmartUpload(app);registerGlbZipUpload(app);registerGlbAssetRoutes(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
-  registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
+  const zoneGateway=registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
   app.use("/api/trpc",createExpressMiddleware({router:appRouter,createContext}));if(process.env.NODE_ENV==="development")await setupVite(app,server);else serveStatic(app);
-  const rawPort=process.env.PORT,preferredPort=(rawPort&&rawPort!=="8080")?parseInt(rawPort,10):3000,strictPort=process.env.STRICT_PORT==="true"||rawPort==="8080",port=strictPort?preferredPort:await findAvailablePort(preferredPort),host=process.env.HOST||"0.0.0.0";if(port!==preferredPort)console.log(`Port ${preferredPort} is busy, using port ${port} instead`);server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
+  const rawPort=process.env.PORT,preferredPort=(rawPort&&rawPort!=="8080")?parseInt(rawPort,10):3000,strictPort=process.env.STRICT_PORT==="true"||rawPort==="8080",port=strictPort?preferredPort:await findAvailablePort(preferredPort),host=process.env.HOST||"0.0.0.0";if(port!==preferredPort)console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+  let shuttingDown=false;
+  const shutdown=async(signal:"SIGTERM"|"SIGINT")=>{
+    if(shuttingDown)return;
+    shuttingDown=true;
+    console.info(`[Aurion] graceful shutdown requested: ${signal}`);
+    try{
+      await drainAurionRuntimeForShutdown({
+        closeZoneGateway:()=>zoneGateway.close(),
+        stopObservers:[
+          ()=>globalAssuranceService.stop(),
+          ()=>globalReadbackService.stop(),
+          ()=>globalSnapshotReconciliationService.stop(),
+          ()=>globalCausalArchivingService.stop(),
+          ()=>globalStateReconciliationService.stop(),
+        ],
+        flushCausalPersistence:()=>globalTickRecorder.flushPersistence(),
+        closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
+      });
+      console.info("[Aurion] graceful causal shutdown complete");
+      process.exit(0);
+    }catch(error){
+      console.error("[Aurion] graceful causal shutdown failed",error);
+      process.exit(1);
+    }
+  };
+  process.once("SIGTERM",()=>{void shutdown("SIGTERM");});
+  process.once("SIGINT",()=>{void shutdown("SIGINT");});
+  server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
 startServer().catch(error=>{console.error(error);process.exitCode=1;});
