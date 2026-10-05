@@ -1,6 +1,6 @@
 import { browserCanonicalSha256 } from "./aurionBrowserHash";
 
-export const AURION_ACEG_PROTOCOL = "aurion.capability-equipment-graph.v1";
+export const AURION_ACEG_PROTOCOL = "aurion.capability-equipment-graph.v1" as const;
 export const ACEG_MAX_LADDER_PASSES = 16;
 export const ACEG_OVER_EQUIP_FLOOR_BPS = 1_000;
 export const ACEG_FULL_EFFECTIVENESS_BPS = 10_000;
@@ -119,14 +119,38 @@ function nonEmpty(value: string, code: string): string {
 }
 
 function int(value: number, code: string): number {
-  if (!Number.isInteger(value)) fail(code);
+  if (!Number.isSafeInteger(value)) fail(code);
   return value;
 }
 
+function safeBigIntResult(value: bigint, code: string): number {
+  if (
+    value > BigInt(Number.MAX_SAFE_INTEGER) ||
+    value < BigInt(Number.MIN_SAFE_INTEGER)
+  )
+    fail(code);
+  return Number(value);
+}
+
+function safeAdd(left: number, right: number, code: string): number {
+  return safeBigIntResult(BigInt(left) + BigInt(right), code);
+}
+
+function safeSubtract(left: number, right: number, code: string): number {
+  return safeBigIntResult(BigInt(left) - BigInt(right), code);
+}
+
+function safeMultiply(left: number, right: number, code: string): number {
+  return safeBigIntResult(BigInt(left) * BigInt(right), code);
+}
+
 function tick(value: number): number {
-  if (!Number.isInteger(value) || value < 0) fail("ACEG_TICK_INVALID");
+  if (!Number.isSafeInteger(value) || value < 0) fail("ACEG_TICK_INVALID");
   return value;
 }
+
+const textCompare = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
 
 function modifier(mod: AcegModifier, code: string): AcegModifier {
   nonEmpty(mod.capability, code);
@@ -140,12 +164,10 @@ function sortModifiers(
 ): readonly AcegModifier[] {
   return [...modifiers]
     .map(mod => modifier(mod, code))
-    .sort((left, right) =>
-      left.capability === right.capability
-        ? left.delta - right.delta
-        : left.capability < right.capability
-          ? -1
-          : 1
+    .sort(
+      (left, right) =>
+        textCompare(left.capability, right.capability) ||
+        (left.delta < right.delta ? -1 : left.delta > right.delta ? 1 : 0)
     );
 }
 
@@ -154,7 +176,14 @@ function apply(
   modifiers: readonly AcegModifier[]
 ): void {
   for (const mod of modifiers)
-    totals.set(mod.capability, (totals.get(mod.capability) ?? 0) + mod.delta);
+    totals.set(
+      mod.capability,
+      safeAdd(
+        totals.get(mod.capability) ?? 0,
+        mod.delta,
+        "ACEG_CAPABILITY_OVERFLOW"
+      )
+    );
 }
 
 function assertItemDefinition(item: AcegItemDefinition): void {
@@ -163,11 +192,14 @@ function assertItemDefinition(item: AcegItemDefinition): void {
   sortModifiers(item.modifiers, "ACEG_ITEM_MODIFIER_INVALID");
   for (const requirement of item.requirements) {
     nonEmpty(requirement.capability, "ACEG_REQUIREMENT_INVALID");
-    if (!Number.isInteger(requirement.minValue) || requirement.minValue < 0)
+    if (
+      !Number.isSafeInteger(requirement.minValue) ||
+      requirement.minValue < 0
+    )
       fail("ACEG_REQUIREMENT_INVALID");
   }
   if (
-    !Number.isInteger(item.overEquipPenaltyPerPointBps) ||
+    !Number.isSafeInteger(item.overEquipPenaltyPerPointBps) ||
     item.overEquipPenaltyPerPointBps < 0 ||
     item.overEquipPenaltyPerPointBps > ACEG_FULL_EFFECTIVENESS_BPS
   )
@@ -188,7 +220,7 @@ export function computeAcegCapabilities(
     sortModifiers(snapshot.professionModifiers, "ACEG_PROFESSION_INVALID")
   );
   const implants = [...snapshot.implants].sort((left, right) =>
-    left.implantId < right.implantId ? -1 : 1
+    textCompare(left.implantId, right.implantId)
   );
   for (const implant of implants) {
     nonEmpty(implant.implantId, "ACEG_IMPLANT_INVALID");
@@ -196,7 +228,7 @@ export function computeAcegCapabilities(
     apply(totals, sortModifiers(implant.modifiers, "ACEG_IMPLANT_MODIFIER_INVALID"));
   }
   const buffs = [...snapshot.buffs].sort((left, right) =>
-    left.buffId < right.buffId ? -1 : 1
+    textCompare(left.buffId, right.buffId)
   );
   for (const buff of buffs) {
     nonEmpty(buff.buffId, "ACEG_BUFF_INVALID");
@@ -219,15 +251,24 @@ function collectDeficits(
   const deficits = item.requirements
     .map(requirement => {
       const actual = capabilities[requirement.capability] ?? 0;
+      if (!Number.isSafeInteger(actual)) fail("ACEG_CAPABILITY_VALUE_INVALID");
+      const missing =
+        actual >= requirement.minValue
+          ? 0
+          : safeSubtract(
+              requirement.minValue,
+              actual,
+              "ACEG_CAPABILITY_OVERFLOW"
+            );
       return Object.freeze({
         capability: requirement.capability,
         required: requirement.minValue,
         actual,
-        missing: Math.max(0, requirement.minValue - actual),
+        missing,
       });
     })
     .filter(deficit => deficit.missing > 0)
-    .sort((left, right) => (left.capability < right.capability ? -1 : 1));
+    .sort((left, right) => textCompare(left.capability, right.capability));
   return Object.freeze(deficits);
 }
 
@@ -250,14 +291,26 @@ export function resolveAcegOverEquipEffectiveness(
 ): AcegOverEquipEffectiveness {
   assertItemDefinition(item);
   const deficits = collectDeficits(item, capabilities);
-  const missingTotal = deficits.reduce((sum, deficit) => sum + deficit.missing, 0);
+  const missingTotal = deficits.reduce(
+    (sum, deficit) =>
+      safeAdd(sum, deficit.missing, "ACEG_OVER_EQUIP_MISSING_OVERFLOW"),
+    0
+  );
+  const penaltyBps = safeMultiply(
+    missingTotal,
+    item.overEquipPenaltyPerPointBps,
+    "ACEG_OVER_EQUIP_PENALTY_OVERFLOW"
+  );
   const effectivenessBps =
     missingTotal === 0
       ? ACEG_FULL_EFFECTIVENESS_BPS
       : Math.max(
           ACEG_OVER_EQUIP_FLOOR_BPS,
-          ACEG_FULL_EFFECTIVENESS_BPS -
-            missingTotal * item.overEquipPenaltyPerPointBps
+          safeSubtract(
+            ACEG_FULL_EFFECTIVENESS_BPS,
+            penaltyBps,
+            "ACEG_OVER_EQUIP_EFFECTIVENESS_OVERFLOW"
+          )
         );
   return Object.freeze({
     itemId: item.itemId,
@@ -301,30 +354,63 @@ export function resolveAcegEquipment(input: AcegResolutionInput): AcegResolution
       receipts.add(entry.ownershipReceiptId);
       return entry;
     })
-    .sort((left, right) => (left.itemId < right.itemId ? -1 : 1));
+    .sort((left, right) => textCompare(left.itemId, right.itemId));
+  const ownedItemIds = new Set<string>();
+  for (const entry of owned) {
+    if (ownedItemIds.has(entry.itemId)) fail("ACEG_OWNED_ITEM_DUPLICATE");
+    ownedItemIds.add(entry.itemId);
+  }
+
   const priorConfirmed = new Map<string, string>();
+  const priorConfirmedSlots = new Set<string>();
   for (const entry of input.priorConfirmedEquip) {
+    nonEmpty(entry.itemId, "ACEG_CONFIRMED_ITEM_INVALID");
     nonEmpty(entry.confirmationReceiptId, "ACEG_CONFIRMATION_RECEIPT_INVALID");
-    if (!catalog.has(entry.itemId)) fail("ACEG_CONFIRMED_ITEM_UNKNOWN");
-    if (priorConfirmed.has(entry.itemId)) fail("ACEG_RECEIPT_DUPLICATE");
+    const item = catalog.get(entry.itemId);
+    if (!item) fail("ACEG_CONFIRMED_ITEM_UNKNOWN");
+    if (!ownedItemIds.has(entry.itemId)) fail("ACEG_CONFIRMED_ITEM_NOT_OWNED");
+    if (priorConfirmed.has(entry.itemId)) fail("ACEG_CONFIRMED_ITEM_DUPLICATE");
+    if (priorConfirmedSlots.has(item.slot)) fail("ACEG_CONFIRMED_SLOT_DUPLICATE");
     if (receipts.has(entry.confirmationReceiptId)) fail("ACEG_RECEIPT_DUPLICATE");
     receipts.add(entry.confirmationReceiptId);
     priorConfirmed.set(entry.itemId, entry.confirmationReceiptId);
+    priorConfirmedSlots.add(item.slot);
   }
 
   const baseCapabilities = computeAcegCapabilities(snapshot);
   const equipped = new Map<string, AcegEquipDecision>();
   const occupiedSlots = new Set<string>();
+  for (const [itemId, confirmationReceiptId] of [...priorConfirmed.entries()].sort(
+    ([left], [right]) => textCompare(left, right)
+  )) {
+    const item = catalog.get(itemId)!;
+    const eligibility = resolveAcegEquipEligibility(item, baseCapabilities);
+    const effectiveness = resolveAcegOverEquipEffectiveness(
+      item,
+      baseCapabilities
+    );
+    equipped.set(
+      itemId,
+      Object.freeze({
+        itemId,
+        slot: item.slot,
+        ladderPass: 0,
+        retention: eligibility.eligible ? "eligible" : "over_equip_confirmed",
+        effectivenessBps: effectiveness.effectivenessBps,
+        confirmationReceiptId,
+      })
+    );
+    occupiedSlots.add(item.slot);
+  }
   let ladderPass = 0;
 
   // Bounded, cycle-safe laddering: equipment/implants may satisfy further
   // requirements step by step; each pass is monotonic (equip only, no unequip).
   for (;;) {
-    ladderPass += 1;
-    if (ladderPass > ACEG_MAX_LADDER_PASSES) fail("ACEG_LADDER_BOUND_EXCEEDED");
+    const nextPass = ladderPass + 1;
     const totals = new Map<string, number>(Object.entries(baseCapabilities));
     for (const decision of [...equipped.values()].sort((left, right) =>
-      left.itemId < right.itemId ? -1 : 1
+      textCompare(left.itemId, right.itemId)
     ))
       apply(totals, catalog.get(decision.itemId)!.modifiers);
     const effective: Record<string, number> = {};
@@ -335,36 +421,32 @@ export function resolveAcegEquipment(input: AcegResolutionInput): AcegResolution
       if (equipped.has(entry.itemId)) continue;
       const item = catalog.get(entry.itemId)!;
       if (occupiedSlots.has(item.slot)) continue;
-      const priorReceipt = priorConfirmed.get(entry.itemId);
       const eligibility = resolveAcegEquipEligibility(item, effective);
-      if (!eligibility.eligible && !priorReceipt) continue;
-      // OE-Regel: ein bereits bestaetigtes Equip bleibt nach Buff-Ablauf
-      // gemaess Over-Equip-Regel erhalten.
-      const retention: AcegEquipDecision["retention"] = eligibility.eligible
-        ? "eligible"
-        : "over_equip_confirmed";
+      if (!eligibility.eligible) continue;
+      if (nextPass > ACEG_MAX_LADDER_PASSES)
+        fail("ACEG_LADDER_BOUND_EXCEEDED");
       const effectiveness = resolveAcegOverEquipEffectiveness(item, effective);
       equipped.set(
         entry.itemId,
         Object.freeze({
           itemId: entry.itemId,
           slot: item.slot,
-          ladderPass,
-          retention,
+          ladderPass: nextPass,
+          retention: "eligible",
           effectivenessBps: effectiveness.effectivenessBps,
-          confirmationReceiptId:
-            priorReceipt ?? entry.ownershipReceiptId,
+          confirmationReceiptId: entry.ownershipReceiptId,
         })
       );
       occupiedSlots.add(item.slot);
       progressed = true;
     }
     if (!progressed) break;
+    ladderPass = nextPass;
   }
 
   const finalTotals = new Map<string, number>(Object.entries(baseCapabilities));
   for (const decision of [...equipped.values()].sort((left, right) =>
-    left.itemId < right.itemId ? -1 : 1
+    textCompare(left.itemId, right.itemId)
   ))
     apply(finalTotals, catalog.get(decision.itemId)!.modifiers);
   const capabilities: Record<string, number> = {};
@@ -373,7 +455,7 @@ export function resolveAcegEquipment(input: AcegResolutionInput): AcegResolution
 
   const equipDecisions = Object.freeze(
     [...equipped.values()].sort((left, right) =>
-      left.itemId < right.itemId ? -1 : 1
+      textCompare(left.itemId, right.itemId)
     )
   );
   const unsigned = {
