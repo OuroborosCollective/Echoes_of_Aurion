@@ -78,13 +78,23 @@ function containsSensitiveKey(value: unknown): boolean {
 
 function containsSensitiveText(text: string) {
   const lower = text.toLowerCase();
-  return [
+  const markers = [
     "authorization" + ":",
     "cookie" + ":",
+    "set-" + "cookie" + ":",
     "jwt_" + "secret",
     "api_" + "key",
     "database_" + "url=",
-  ].some(marker => lower.includes(marker));
+  ];
+  return markers.some(marker => {
+    let offset = lower.indexOf(marker);
+    while (offset >= 0) {
+      const tail = lower.slice(offset + marker.length, offset + marker.length + 96);
+      if (!tail.includes("[redacted]")) return true;
+      offset = lower.indexOf(marker, offset + marker.length);
+    }
+    return false;
+  });
 }
 
 export async function verifyStarterVillageEvidence(root: string, revision: string, requireHashes = true) {
