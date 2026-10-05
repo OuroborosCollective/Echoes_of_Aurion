@@ -79,9 +79,18 @@ if (!configuration.configured) {
       resultHash: verification.localReport.resultHash,
     }));
     const verified = verification.status === "MATCH" && verification.invariantMask === 0;
+    const ciStatus = verified
+      ? "DESIGN_ORACLE_VERIFIED"
+      : verification.status === "PROVIDER_FAILED"
+        ? "DESIGN_ORACLE_PROVIDER_FAILED"
+        : verification.status === "NOT_CONFIGURED"
+          ? "NOT_CONFIGURED"
+          : verification.status === "INSUFFICIENT_EVIDENCE"
+            ? "DESIGN_ORACLE_INSUFFICIENT_EVIDENCE"
+            : "DESIGN_ORACLE_FALSIFIED";
     process.stdout.write(`${JSON.stringify({
       protocol: "aurion.neural-capability-cag-ci.v1",
-      status: verified ? "DESIGN_ORACLE_VERIFIED" : "DESIGN_ORACLE_FALSIFIED",
+      status: ciStatus,
       verificationStatus: verification.status,
       capabilityId,
       artifactSha256,
@@ -94,7 +103,7 @@ if (!configuration.configured) {
       providerCallExecuted: true,
       mutationAuthority: "none",
     })}\n`);
-    process.exitCode = verified ? 0 : 1;
+    process.exitCode = verified ? 0 : verification.status === "NOT_CONFIGURED" ? 2 : 1;
   } catch (error) {
     process.stdout.write(`${JSON.stringify({
       protocol: "aurion.neural-capability-cag-ci.v1",
