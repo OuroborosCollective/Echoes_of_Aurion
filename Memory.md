@@ -592,3 +592,30 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-05 — PR #764 — feat(asterion): integrate owner courtyard LOD0/1/2 family
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=764 merge=98fa6d214386e02757fdadb1b647481a90c3edd8 -->
+Task: Merge PR #764 into `main` — feat(asterion): integrate owner courtyard LOD0/1/2 family.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/asterion-courtyard-evidence.yml`
+- `assets/environment/asterion-courtyard/Asterion_Courtyard_LOD0.glb`
+- `assets/environment/asterion-courtyard/Asterion_Courtyard_LOD1.glb`
+- `assets/environment/asterion-courtyard/Asterion_Courtyard_LOD2.glb`
+- `assets/environment/asterion-courtyard/README.md`
+- `scripts/seed-asterion-courtyard.ts`
+- `server/asterionCourtyardAsset.test.ts`
+- `server/glbAssetClassifier.test.ts`
+- `server/glbCatalogFamilies.test.ts`
+- `shared/asterionCourtyardContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/764
+- Merge commit: `98fa6d214386e02757fdadb1b647481a90c3edd8`
+- PR head: `be2958abd386b8f629907e501de2940dd827acbd`
+- Merged at: 2026-10-05T03:27:37Z
+- Post-merge workflow run: 37259528534
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
