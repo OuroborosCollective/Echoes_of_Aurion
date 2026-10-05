@@ -107,6 +107,9 @@ export type NpcGuildReceipt = Readonly<{
   guildId: string;
   actorNpcId: string;
   operation: NpcGuildOperation;
+  cycle: number;
+  sourceDecisionReceiptId: string;
+  sourceResolutionIndex: number;
   expectedRevision: number;
   resultingRevision: number;
   idempotencyKey: string;
