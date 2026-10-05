@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { GlbCatalogEntry, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { AURION_RETURN_STONE_ASSET_ID, AURION_RETURN_STONE_POSITION, AURION_RETURN_STONE_SOURCE_SHA256 } from "@shared/aurionReturnStoneContract";
 import { AURION_VILLAGE_FOUNTAIN_LODS, AURION_VILLAGE_FOUNTAIN_POSITION } from "@shared/aurionVillageFountainContract";
-import { publicPlayerCharacterCatalog, returnStoneCatalogAsset, returnStoneVisualPlacement, selectEquipmentCatalogAsset, uploadedWorldVisualsForChunk, villageFountainCatalogAsset, villageFountainVisualPlacement } from "./UploadedAssetRuntime";
+import { AURION_VILLAGE_STREET_LAMP_LODS, AURION_VILLAGE_STREET_LAMP_PLACEMENTS } from "@shared/aurionVillageStreetLampContract";
+import { publicPlayerCharacterCatalog, returnStoneCatalogAsset, returnStoneVisualPlacement, selectEquipmentCatalogAsset, uploadedWorldVisualsForChunk, villageFountainCatalogAsset, villageFountainVisualPlacement, villageStreetLampCatalogAsset, villageStreetLampVisualPlacements } from "./UploadedAssetRuntime";
 
 const sha = (digit: string) => digit.repeat(64);
 function entry(values: Partial<GlbCatalogEntry> & Pick<GlbCatalogEntry, "assetId" | "purpose" | "assetType">): GlbCatalogEntry {
@@ -38,6 +39,30 @@ function fountainEntry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntr
       { level: 1, assetId: lod1.assetId, sha256: lod1.sha256, bytes: lod1.bytes, storageUrl: `/api/assets/glb/${lod1.sha256}.glb`, targetKey: null },
       { level: 2, assetId: lod2.assetId, sha256: lod2.sha256, bytes: lod2.bytes, storageUrl: `/api/assets/glb/${lod2.sha256}.glb`, targetKey: null },
     ],
+    ...overrides,
+  } as unknown as GlbCatalogEntry;
+}
+
+function streetLampEntry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
+  const [lod0, lod1, lod2, lod3] = AURION_VILLAGE_STREET_LAMP_LODS;
+  return {
+    assetId: lod0.assetId,
+    sha256: lod0.sha256,
+    displayName: "World Environment · street-prop · Aurion Village Street Lamp",
+    assetType: "arena",
+    storageUrl: `/api/assets/glb/${lod0.sha256}.glb`,
+    targetKey: null,
+    purpose: "world-environment",
+    subcategory: "street-prop",
+    equipmentSlot: null,
+    lods: [lod0, lod1, lod2, lod3].map(lod => ({
+      level: lod.level,
+      assetId: lod.assetId,
+      sha256: lod.sha256,
+      bytes: lod.bytes,
+      storageUrl: `/api/assets/glb/${lod.sha256}.glb`,
+      targetKey: null,
+    })),
     ...overrides,
   } as unknown as GlbCatalogEntry;
 }
@@ -114,10 +139,26 @@ describe("uploaded GLB runtime selection", () => {
     expect(villageFountainCatalogAsset(catalog([fountainEntry({ lods: [approved.lods![0]!] })]))).toBeNull();
   });
 
+  it("binds the owner street lamp only when the complete four-stage family matches immutable hashes", () => {
+    const approved = streetLampEntry();
+    const source = catalog([approved]);
+    expect(villageStreetLampCatalogAsset(source)).toEqual(approved);
+    const placements = villageStreetLampVisualPlacements(source);
+    expect(placements).toHaveLength(AURION_VILLAGE_STREET_LAMP_PLACEMENTS.length);
+    expect(placements.map(value => [value.xMm, value.zMm, value.rotationQuarterTurns])).toEqual(
+      AURION_VILLAGE_STREET_LAMP_PLACEMENTS.map(value => [value.x, value.z, value.rotationQuarterTurns]),
+    );
+    expect(placements.every(value => value.asset === approved)).toBe(true);
+    expect(villageStreetLampCatalogAsset(catalog([streetLampEntry({ sha256: sha("9") })]))).toBeNull();
+    expect(villageStreetLampCatalogAsset(catalog([streetLampEntry({ subcategory: "fountain" })]))).toBeNull();
+    expect(villageStreetLampCatalogAsset(catalog([streetLampEntry({ lods: approved.lods!.slice(0, 3) })]))).toBeNull();
+  });
+
   it("keeps uploaded world visuals deterministic, purpose-separated and away from the central cross", () => {
     const source = catalog([
       entry({ assetId: "glb_house", purpose: "world-environment", assetType: "arena" }),
       fountainEntry(),
+      streetLampEntry(),
       returnStoneEntry(),
       entry({ assetId: "glb_tree", purpose: "world-nature", assetType: "arena" }),
       entry({ assetId: "glb_rock", purpose: "world-nature", assetType: "arena" }),
@@ -129,6 +170,7 @@ describe("uploaded GLB runtime selection", () => {
     expect(settlement.every(value => value.asset.purpose === "world-environment")).toBe(true);
     expect(settlement.every(value => value.asset.sha256 !== AURION_RETURN_STONE_SOURCE_SHA256)).toBe(true);
     expect(settlement.every(value => value.asset.sha256 !== AURION_VILLAGE_FOUNTAIN_LODS[0].sha256)).toBe(true);
+    expect(settlement.every(value => value.asset.sha256 !== AURION_VILLAGE_STREET_LAMP_LODS[0].sha256)).toBe(true);
     expect(settlement.every(value => Math.abs(value.xMm) >= 24_000 || Math.abs(value.zMm) >= 24_000)).toBe(true);
 
     const nature = uploadedWorldVisualsForChunk(source, { x: 2, z: 2 });
