@@ -78,6 +78,9 @@ describe("GLB asset classifier", () => {
     expect(classifyGlbBase64(generic, "Aurion_Return_Stone_Teleporter.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "teleporter" });
     expect(classifyGlbBase64(generic, "Aurion_Village_Fountain_LOD1.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "fountain", lod: 1 });
     expect(classifyGlbBase64(generic, "Aurion_Village_Fountain_LOD2.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "fountain", lod: 2 });
+    expect(classifyGlbBase64(generic, "Asterion_Courtyard_LOD0.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "environment", lod: 0 });
+    expect(classifyGlbBase64(generic, "Asterion_Courtyard_LOD1.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "environment", lod: 1 });
+    expect(classifyGlbBase64(generic, "Asterion_Courtyard_LOD2.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "environment", lod: 2 });
   });
 
   it("fails closed when a GLB cannot be classified safely", () => {

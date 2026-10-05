@@ -1,0 +1,108 @@
+name: Asterion Courtyard LOD Evidence
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - ".github/workflows/asterion-courtyard-evidence.yml"
+      - "assets/environment/asterion-courtyard/**"
+      - "shared/asterionCourtyardContract.ts"
+      - "server/asterionCourtyardAsset.test.ts"
+      - "server/glbAssetClassifier.ts"
+      - "server/glbAssetClassifier.test.ts"
+      - "server/glbCatalogFamilies.ts"
+      - "server/glbCatalogFamilies.test.ts"
+      - "server/glbImportPlan.ts"
+      - "server/glbImportStore.ts"
+      - "scripts/seed-asterion-courtyard.ts"
+  pull_request:
+    paths:
+      - ".github/workflows/asterion-courtyard-evidence.yml"
+      - "assets/environment/asterion-courtyard/**"
+      - "shared/asterionCourtyardContract.ts"
+      - "server/asterionCourtyardAsset.test.ts"
+      - "server/glbAssetClassifier.ts"
+      - "server/glbAssetClassifier.test.ts"
+      - "server/glbCatalogFamilies.ts"
+      - "server/glbCatalogFamilies.test.ts"
+      - "server/glbImportPlan.ts"
+      - "server/glbImportStore.ts"
+      - "scripts/seed-asterion-courtyard.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asterion-courtyard-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  exact-courtyard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_asterion_courtyard
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_asterion_courtyard
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-asterion-courtyard-glb
+      AURION_EVIDENCE_DIR: .aurion-evidence/asterion-courtyard
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.AURION_RELEASE_SHA }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with: { run_install: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: 22, cache: pnpm }
+      - name: Freeze revision, install and migrate isolated MariaDB
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          pnpm install --frozen-lockfile
+          mkdir -p "$AURION_GLB_STORAGE_DIR" "$AURION_EVIDENCE_DIR"
+          chmod 755 "$AURION_GLB_STORAGE_DIR" "$AURION_EVIDENCE_DIR"
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Verify exact owner courtyard GLBs, logical LOD family and classifier
+        run: pnpm exec vitest run server/asterionCourtyardAsset.test.ts server/glbAssetClassifier.test.ts server/glbCatalogFamilies.test.ts --no-file-parallelism --reporter=verbose
+      - name: Typecheck and build exact head
+        run: |
+          pnpm check
+          pnpm build
+      - name: Admit LOD0/1/2 and prove canonical Asterion assignment/readback
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/seed-asterion-courtyard.ts | tee "$AURION_EVIDENCE_DIR/courtyard-seed.json"
+          test "$(node -e 'const fs=require("node:fs");const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(x.targetKey+":"+x.family.lods.map(v=>v.level).join(",")+":"+Boolean(x.active.assetId))' "$AURION_EVIDENCE_DIR/courtyard-seed.json")" = "asterion_courtyard:0,1,2:true"
+          chmod -R a+rX "$AURION_GLB_STORAGE_DIR"
+          for sha in             dc4199201ce72b403d63570e8112b28cb037938fdbadc68d47c8782d0f952e2d             b02c76c803de5facee861042965ef534ab3efade3b3cec5f359f1e82d692cb65             a8d05c60d38f34adccb06bb9606fd70700f6ce198d07cf8716f8390c02b16775
+          do
+            test -s "$AURION_GLB_STORAGE_DIR/$sha.glb"
+            test "$(sha256sum "$AURION_GLB_STORAGE_DIR/$sha.glb" | cut -d' ' -f1)" = "$sha"
+          done
+      - name: Seal revision-bound evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$AURION_EVIDENCE_DIR"
+          printf '%s  %s\n' "$AURION_RELEASE_SHA" revision > "$AURION_EVIDENCE_DIR/REVISION"
+          find "$AURION_EVIDENCE_DIR" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$AURION_EVIDENCE_DIR/SHA256SUMS"
+          chmod -R a-w "$AURION_EVIDENCE_DIR"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: asterion-courtyard-${{ env.AURION_RELEASE_SHA }}
+          path: .aurion-evidence/asterion-courtyard
+          if-no-files-found: error
+          retention-days: 30
