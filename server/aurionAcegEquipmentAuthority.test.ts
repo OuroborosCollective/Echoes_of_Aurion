@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { PlayerUiReadback, UiItem } from "../shared/playerUiProtocol";
+import { PLAYER_UI_VERSION, type PlayerUiReadback, type UiItem } from "../shared/playerUiProtocol";
 import {
   acegItemDefinition,
+  acegSourcesFromMasteryEvents,
   resolveAcegEquipIntent,
   resolveCurrentAcegEquipment,
   scaleAcegEquipmentStat,
@@ -26,7 +27,7 @@ function item(overrides: Partial<UiItem> = {}): UiItem {
 }
 function ui(items: readonly UiItem[], equipment: PlayerUiReadback["equipment"] = []): PlayerUiReadback {
   return {
-    version: "aurion.player-ui.v1",
+    version: PLAYER_UI_VERSION,
     userId: 7,
     settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"], movementMode: "joystick" },
     items: [...items],
@@ -36,6 +37,12 @@ function ui(items: readonly UiItem[], equipment: PlayerUiReadback["equipment"] =
 const none = { stateIndex: 12, skillRanks: [], professionModifiers: [] } as const;
 
 describe("ACEG equipment authority adapter", () => {
+  it("projects canonical rank-one mastery baselines without player-level gates", () => {
+    const sources = acegSourcesFromMasteryEvents(7, 0, []);
+    expect(sources.skillRanks).toContainEqual({ capability: "blade_mastery", delta: 1 });
+    expect(sources.professionModifiers).toContainEqual({ capability: "smithing", delta: 1 });
+  });
+
   it("uses capability gates rather than player or item level", () => {
     const candidate = item();
     expect(acegItemDefinition(candidate).requirements).toEqual([{ capability: "blade_mastery", minValue: 1 }]);
