@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2026-10-06 - Exact Action Cues and Tactile Feedback Negation
+**Learning:** Icon-only and contextually distinct buttons (like in Community and Home panels) need explicit `title` attributes to serve as accessible tooltips and exact action cues for sighted users. Additionally, when using tactile feedback classes like `motion-safe:hover:-translate-y-0.5` and `motion-safe:active:scale-95`, the disabled state must explicitly negate them (e.g., `disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100`) to prevent unintended physical interactions when the element is visually disabled.
+**Action:** When creating or modifying interactive buttons, always ensure a descriptive `title` is provided, especially for icon-heavy designs, and append explicit disabled-state negations for any applied transition transforms.

@@ -168,6 +168,7 @@ export default function Home() {
               {isAuthenticated ? (
                 <button
                   type="button"
+                  title="Spiel betreten"
                   onClick={() => {
                     setLaunchMessage("");
                     window.dispatchEvent(new Event(AX1_PLAY_REQUEST_EVENT));
@@ -180,11 +181,12 @@ export default function Home() {
               ) : (
                 <button
                   type="button"
+                  title={loading ? "Ladevorgang läuft..." : "Konto anlegen oder anmelden"}
                   aria-haspopup="dialog"
                   disabled={loading}
                   aria-busy={loading}
                   onClick={openAccountAccess}
-                  className="group min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 shadow-lg shadow-amber-950/20 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+                  className="group min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 shadow-lg shadow-amber-950/20 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
                 >
                   <ShieldCheck className="mr-2 inline size-4" />
                   {loading ? "WIRD GELADEN..." : "KONTO ANLEGEN / ANMELDEN"}
