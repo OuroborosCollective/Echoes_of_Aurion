@@ -204,8 +204,20 @@ export default function AurionOpenWorldRuntime() {
   }, [requestAuthoritativeAction]);
 
   useEffect(() => {
-    const onLoad = (event: Event) => {
+    const retireZoneTransport = () => {
+      zoneConnectedRef.current = false;
       zoneReconnectAttemptsRef.current = 0;
+      zoneClientRef.current?.close();
+      zoneClientRef.current = null;
+      motionRef.current?.stop();
+      setZoneStatus("idle");
+    };
+    const onLoad = (event: Event) => {
+      // Re-entry must never inherit a half-closing websocket or stale retry state
+      // from the previous /play generation. Retire transport synchronously before
+      // activating the new world generation; the new generation then issues a
+      // fresh one-time zone ticket.
+      retireZoneTransport();
       setZoneRetryEpoch(0);
       recoveryAttempts.current = 0;
       recoveryCause.current = null;
@@ -218,6 +230,9 @@ export default function AurionOpenWorldRuntime() {
     };
     const onReturn = () => {
       soundSynth.stopAmbient();
+      retireZoneTransport();
+      setReadyGeneration(null);
+      setRendererEvidence(null);
       setActivation(null);
     };
     const onCelebrate = () => {
