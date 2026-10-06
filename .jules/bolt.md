@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2026-10-06 - Array.from Optimization
+**Learning:** Using Array.from with map.values() and set.values() introduces O(N) array allocation overhead, which is particularly impactful in high-frequency game loops. Calling .find on the Array.from result should be replaced by a for...of loop over map.values(). For Maps with known keys, use map.get(key) directly.
+**Action:** Identify and replace Array.from usages in performance critical areas, replacing array conversions with direct Map lookups (e.g. Map.get()) or for...of iteration.
