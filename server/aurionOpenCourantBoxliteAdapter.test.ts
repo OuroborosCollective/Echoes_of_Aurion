@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   BASELINE_IMPACT_MATERIALS,
+  BOXLITE_BASE_IMAGE,
   BOXLITE_VERSION,
   IMPACT_BAKE_SCENARIOS,
+  OPENCOURANT_PACKAGE_HASH,
   buildImpactBakeJob,
   buildImpactBakeReceipt,
 } from "../shared/aurionImpactBakeProtocol";
 import { buildBoxliteImpactInvocation } from "./aurionOpenCourantBoxliteAdapter";
 
-const REV = "479e9b4f8ab2a38bb6105083e4fc9c63d83d9c3e";
+const REV = "e2f542f8495c8d9f2e7d03de2dda22794360b4de";
 const HASH_A = "sha256:" + "a".repeat(64);
 const HASH_B = "sha256:" + "b".repeat(64);
 
@@ -23,6 +25,7 @@ function baseJob() {
     starterDeckHash: HASH_A,
     engineDeckPath: "fixtures/cart_0001.rad",
     engineDeckHash: HASH_B,
+    solverPackagePath: ".cache/OpenCourant_linux64.zip",
     material: BASELINE_IMPACT_MATERIALS.IRON,
     cpus: 4,
     memoryMiB: 8192,
@@ -47,31 +50,30 @@ describe("OpenCourant BoxLite WORLD_IMPACT lane", () => {
       .toThrow("IMPACT_BAKE_DECK_PAIR_MISMATCH");
   });
 
-  it("builds a pinned BoxLite invocation without making the solver gameplay authority", () => {
+  it("binds the official solver package and BoxLite runtime", () => {
     const job = buildImpactBakeJob(baseJob());
     const invocation = buildBoxliteImpactInvocation(job);
-    expect(invocation.executable).toBe("python3");
+    expect(job.solverPackageHash).toBe(OPENCOURANT_PACKAGE_HASH);
+    expect(job.boxliteImage).toBe(BOXLITE_BASE_IMAGE);
     expect(invocation.environment.OPENCOURANT_COMMIT).toBe("33e685176cccf0c539a3ce07aa2096985a284e2a");
     expect(invocation.environment.BOXLITE_VERSION).toBe(BOXLITE_VERSION);
-    expect(invocation.args).toContain("--starter-deck");
-    expect(invocation.args).toContain("--engine-deck");
-    expect(invocation.args).not.toContain("--network");
+    expect(invocation.args).toContain("--solver-package");
     expect(invocation.invocationHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
-  it("rejects arbitrary mutable solver images", () => {
+  it("rejects arbitrary mutable BoxLite base images", () => {
     expect(() => buildImpactBakeJob({
       ...baseJob(),
-      solverImage: "ghcr.io/opencourant/opencourant:latest",
-    })).toThrow("IMPACT_BAKE_SOLVER_IMAGE_UNPINNED");
+      boxliteImage: "ubuntu:latest",
+    })).toThrow("IMPACT_BAKE_BOXLITE_IMAGE_UNPINNED");
   });
 
-  it("accepts an immutable GHCR digest for production evidence", () => {
+  it("accepts an immutable BoxLite base digest for production evidence", () => {
     const job = buildImpactBakeJob({
       ...baseJob(),
-      solverImage: "ghcr.io/opencourant/opencourant@sha256:" + "c".repeat(64),
+      boxliteImage: "ghcr.io/boxlite-ai/boxlite-agent-base@sha256:" + "c".repeat(64),
     });
-    expect(job.solverImage).toMatch(/@sha256:/);
+    expect(job.boxliteImage).toMatch(/@sha256:/);
   });
 
   it("hashes reduced runtime deformation evidence canonically", () => {
@@ -82,8 +84,9 @@ describe("OpenCourant BoxLite WORLD_IMPACT lane", () => {
       logicalTick: 9,
       starterDeckHash: HASH_A,
       engineDeckHash: HASH_B,
-      solverImage: "ghcr.io/opencourant/opencourant:latest-20261006",
+      solverPackageHash: OPENCOURANT_PACKAGE_HASH,
       solverCommit: "33e685176cccf0c539a3ce07aa2096985a284e2a" as const,
+      boxliteImage: "ghcr.io/boxlite-ai/boxlite-agent-base@sha256:" + "c".repeat(64),
       boxliteVersion: BOXLITE_VERSION,
       resultArchiveHash: "sha256:" + "d".repeat(64),
       vtkHash: "sha256:" + "e".repeat(64),
