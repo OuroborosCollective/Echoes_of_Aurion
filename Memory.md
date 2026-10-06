@@ -1168,3 +1168,38 @@ Decisions: Render one presentation-only bootstrap frame; synchronously retire st
 Evidence: PR #798 exact head `8a62e8dcd4f8c9581587057ee55731a47b2602f1`; Runtime Candidate, Container Proof, Local Test Pack, Starter Village, AIM-259 re-entry, Renderer/Recovery, visual, GLB, asset shipping, NPC-memory and density gates all green.
 Learned: The visible stall had two coupled lifecycle causes: renderer evidence waited on a snapshot, while rapid re-entry could inherit a half-retired zone transport.
 Next safe step: Merge #798 and deploy/read back the exact production revision.
+
+
+### 2026-10-06 — PR #798 — fix(play): unblock renderer evidence before first zone snapshot
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=798 merge=25dcf2a8fdbd32b18899a6b7414511de32bb80a5 -->
+Task: Merge PR #798 into `main` — fix(play): unblock renderer evidence before first zone snapshot.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-pr-runtime-candidate.yml`
+- `Memory.md`
+- `architecture/donor-ledger.json`
+- `client/src/xaurion/components/Ax1InvestigationJournalModal.test.tsx`
+- `client/src/xaurion/components/Ax1InvestigationJournalModal.tsx`
+- `client/src/xaurion/core/MMOEngine.ts`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.tsx`
+- `docs/architecture/AURION_CAUSAL_RUMOR_EVIDENCE_GATE.v1.md`
+- `e2e/starterVillagePilot.spec.ts`
+- `server/causalRumorInvestigationEvidence.test.ts`
+- `server/rumorBeliefBridgePlanner.test.ts`
+- `shared/investigationGraphProtocol.test.ts`
+- `shared/investigationGraphProtocol.ts`
+- `shared/investigationJournalProtocol.test.ts`
+- `shared/investigationJournalProtocol.ts`
+- `shared/rumorBeliefBridgeProtocol.test.ts`
+- `shared/rumorBeliefBridgeProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/798
+- Merge commit: `25dcf2a8fdbd32b18899a6b7414511de32bb80a5`
+- PR head: `8a62e8dcd4f8c9581587057ee55731a47b2602f1`
+- Merged at: 2026-10-06T02:30:45Z
+- Post-merge workflow run: 37404493346
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
