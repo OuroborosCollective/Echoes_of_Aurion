@@ -439,7 +439,7 @@ export default function Home() {
             <span className="text-slate-300">Echoes of Aurion</span> ·
             persistentes 3D-MMORPG · Living World
           </p>
-          <nav className="flex flex-wrap gap-x-5 gap-y-3">
+          <nav aria-label="Fußzeilennavigation" className="flex flex-wrap gap-x-5 gap-y-3">
             <Link href="/community" className="hover:text-slate-200">
               Community
             </Link>
