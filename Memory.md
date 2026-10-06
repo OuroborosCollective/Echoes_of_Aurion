@@ -1209,3 +1209,24 @@ Status: VERIFIED candidate
 Change: Production schema readback now runs after a successful promotion even when the canonical apply lane fails; the final gate remains fail-closed.
 Learned: Skipping readback on apply failure hid the migration-level drift evidence required for a safe repair.
 Evidence: PR #799 exact head `6d1d835c0d73acc136c0f657185cb0d2968f6f55`; deploy contract, runtime candidate/container, local pack, schema bootstrap/apply proofs and NPC/runtime regressions green.
+
+
+### 2026-10-06 — PR #799 — fix(deploy): preserve production schema drift readback after apply failure
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=799 merge=e2f542f8495c8d9f2e7d03de2dda22794360b4de -->
+Task: Merge PR #799 into `main` — fix(deploy): preserve production schema drift readback after apply failure.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `Memory.md`
+- `server/aurionTraefikRuntimeDeployment.test.ts`
+- `server/aurionZoneRuntimeSchemaBootstrap.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/799
+- Merge commit: `e2f542f8495c8d9f2e7d03de2dda22794360b4de`
+- PR head: `671a22a280f1b485c3951daa9890badd40be0d04`
+- Merged at: 2026-10-06T21:47:16Z
+- Post-merge workflow run: 37536319574
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the emitted revision-bound readback to identify the drifted migration, repair the canonical schema boundary, then rerun the production lane.
