@@ -1341,6 +1341,22 @@ export class MMOEngine {
     this.virtualRight = right;
   }
 
+  /**
+   * Render exactly one presentation-only frame without advancing simulation.
+   * This is used to prove renderer viability before the first authoritative
+   * zone snapshot arrives. It must not create movement/gameplay/world truth.
+   */
+  public renderPresentationFrame(): void {
+    if (this.disposed) return;
+    try {
+      this.handleResize();
+      this.renderer.render(this.scene, this.camera);
+      this.onFrameRendered?.();
+    } catch (error) {
+      this.failRuntime(error);
+    }
+  }
+
   public start() {
     if (this.disposed) return;
     try {
