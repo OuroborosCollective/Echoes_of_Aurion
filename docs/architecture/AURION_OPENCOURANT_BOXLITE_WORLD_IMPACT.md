@@ -16,26 +16,33 @@ Aurion remains the sole gameplay/world authority. OpenCourant is an offline nume
 
 `SimulationWorkItem.phase = WORLD_IMPACT` selects work. Every job binds the source revision, logical tick, material profile and the matched Radioss Starter/Engine deck pair (`*_0000.rad` + `*_0001.rad`) by SHA-256 before execution.
 
-`scripts/run-opencourant-boxlite.py` launches OpenCourant inside a BoxLite micro-VM, copies both decks in, executes the container's supported `starter` and `engine` entry points, requires a normal Engine termination, and copies solver files back out. No solver result directly mutates gameplay state.
+`scripts/run-opencourant-boxlite.py` launches a BoxLite micro-VM, copies the exact OpenCourant stable release package and both decks into the VM, executes the release's `starter_linux64_gf` and `engine_linux64_gf`, requires `NORMAL TERMINATION`, and copies only the job workspace back out. No solver result directly mutates gameplay state.
 
 Only a validated `ImpactBakeReceipt` may cross back into Aurion. Reduced deformation samples are deterministic runtime projections keyed by the receipt and can always be regenerated from solver evidence.
 
-## Reproducibility and licensing
+## Reproducibility
 
 The integration records:
 - OpenCourant release commit `33e685176cccf0c539a3ce07aa2096985a284e2a`
-- discovery tag `ghcr.io/opencourant/opencourant:latest-20261006`
+- OpenCourant Linux package `OpenCourant_linux64.zip`
+- package SHA-256 `905bd73b4daf5c7762c18a50d4dc5db4c06b496811e6e0ab27c583d04578bd66`
 - BoxLite `0.10.5`
+- reviewed BoxLite base `ghcr.io/boxlite-ai/boxlite-agent-base:v0.1.0`
 
-The dated OpenCourant tag is not treated as immutable evidence. Production jobs may pass only that reviewed release tag or the preferred immutable `ghcr.io/opencourant/opencourant@sha256:...` form. The runtime-proof workflow resolves the release tag to its registry digest before launching the smoke model.
+The runtime proof resolves the BoxLite base tag to an immutable registry digest before execution. Production jobs may pass only that reviewed base tag or the corresponding immutable digest form.
 
-OpenCourant remains a separate AGPLv3 process/image; no OpenCourant source is copied into Aurion. The runtime smoke test downloads the upstream CC BY-NC QA decks at the exact OpenCourant release commit only for execution evidence and does not commit those decks to this repository.
+OpenCourant's own OCI image is intentionally not the BoxLite rootfs. BoxLite 0.10.5 reproduces the owner-unreadable `/etc/shadow` xattr failure family tracked upstream as boxlite-ai/boxlite#1692 when preparing that image. Aurion does not weaken file permissions or patch BoxLite. Instead it transports the official, hash-verified OpenCourant release package into a supported BoxLite base image.
+
+## Licensing
+
+OpenCourant remains an external AGPLv3 solver package; no OpenCourant source is copied into Aurion. The runtime smoke test downloads the upstream release package and CC BY-NC MiniQA decks only for execution evidence and does not commit them to this repository.
 
 ## Runtime prerequisites
 
 - Python 3.10+
 - `boxlite==0.10.5`
 - Linux host with readable/writable `/dev/kvm`
-- enough CPU/RAM for the chosen FEM deck
+- exact OpenCourant release package matching the recorded SHA-256
+- enough CPU/RAM for the selected FEM deck
 
-The runner fails closed on missing environment, unmatched deck pair, hash mismatch, KVM/BoxLite failure, timeout, non-zero solver exit, or missing OpenCourant normal termination.
+The runner fails closed on missing environment, unmatched deck pair, package/deck hash mismatch, KVM/BoxLite failure, timeout, non-zero solver exit, or missing OpenCourant normal termination.
