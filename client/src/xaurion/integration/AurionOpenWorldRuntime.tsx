@@ -415,6 +415,10 @@ export default function AurionOpenWorldRuntime() {
         if (npcEvidenceRef.current) npcEvidenceRef.current.dataset.presentation = JSON.stringify(serviceNpcRef.current?.evidence() ?? null);
         setNearbySmith(Boolean(serviceNpcRef.current?.isNearby(engine.player.position)));
       };
+      // Prove the initialized renderer with one real presentation-only frame.
+      // The simulation loop still starts exclusively after an authoritative
+      // zone snapshot, preserving server movement/gameplay authority.
+      engine.renderPresentationFrame();
       window.addEventListener("aurion:authoritative-action", onConfirmedAction);
       setReadyGeneration(generation);
     } catch (error) {
