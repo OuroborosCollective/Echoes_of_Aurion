@@ -222,7 +222,7 @@ describe("open world session ownership", () => {
     expect(fixture.connections[0].close).toHaveBeenCalled();
     expect(fixture.engines).toHaveLength(2);
     expect(fixture.tickets).toHaveLength(2);
-    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ worldSeed: "refreshed-world", epoch: 7, recoveryAttempt: 1, status: "awaiting_snapshot" });
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ worldSeed: "refreshed-world", epoch: 7, recoveryAttempt: 1, status: "rendering" });
     act(() => oldSnapshot({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 2, tick: 95, presences: [{ entityId: "player:1", userId: 1, position: { x: 0, z: -32300 }, lastAcceptedClientSeq: 1 }], mobs: [], combatants: [], resources: confirmedResources }));
     expect(fixture.engines[1].start).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -231,7 +231,7 @@ describe("open world session ownership", () => {
     expect(fixture.engines[1].start).toHaveBeenCalledOnce();
     await act(async () => fixture.engines[1].onRuntimeError?.(new Error("WEBGPU_DEVICE_LOST")));
     expect(fixture.engines).toHaveLength(3);
-    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ recoveryAttempt: 2, status: "awaiting_snapshot" });
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ recoveryAttempt: 2, status: "rendering" });
     await act(async () => fixture.engines[2].onRuntimeError?.(new Error("WEBGL_CONTEXT_LOST")));
     expect(fixture.engines).toHaveLength(3);
     expect(fixture.engines[2].stop).toHaveBeenCalled();
