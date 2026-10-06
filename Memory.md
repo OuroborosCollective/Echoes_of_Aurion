@@ -1153,3 +1153,10 @@ Evidence: PR #791 merged as `6c795a49ad1a509ed0ef8919c48882b1fd95c137`; exact-he
 Learned: WebGL screenshot capture can outlive a 30 s test budget after assertions pass; bounded timeout headroom preserves the evidence contract without changing runtime authority.
 Open: Continue ordered stack with #792, then the /play bootstrap fix.
 Next safe step: Merge #792 only after its exact-head gates stay green.
+
+### 2026-10-06 — PR #792 causal rumor evidence gate
+Status: VERIFIED candidate
+Task: Integrate the causal rumor/investigation end-to-end evidence gate after #791.
+Evidence: Exact head `03ca9ca810c8196c3bf3b772202a536aa6bd5d94`; Runtime Candidate, Container Proof, Local Test Pack, Starter Village Pilot, AIM-535 and AIM-292 all green.
+Learned: The umbrella gate adds evidence/documentation only; shared belief files are byte-identical to the already merged #790 lane.
+Next safe step: Merge #792, then rebase and verify the /play renderer-bootstrap fix before release.
