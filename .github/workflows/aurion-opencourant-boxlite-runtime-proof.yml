@@ -1,0 +1,135 @@
+name: Aurion OpenCourant BoxLite runtime proof
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
+      - "scripts/run-opencourant-boxlite.py"
+      - "server/aurionOpenCourantBoxliteAdapter.ts"
+      - "server/aurionOpenCourantBoxliteAdapter.test.ts"
+      - "shared/aurionImpactBakeProtocol.ts"
+      - "docs/architecture/AURION_OPENCOURANT_BOXLITE_WORLD_IMPACT.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
+      - "scripts/run-opencourant-boxlite.py"
+      - "server/aurionOpenCourantBoxliteAdapter.ts"
+      - "shared/aurionImpactBakeProtocol.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boxlite-opencourant-runtime:
+    name: BoxLite KVM + OpenCourant runtime smoke
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      OPENCOURANT_RELEASE_COMMIT: 33e685176cccf0c539a3ce07aa2096985a284e2a
+      OPENCOURANT_RELEASE_TAG: latest-20261006
+      BOXLITE_VERSION: 0.10.5
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Require real KVM access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+          python3 -c "open('/dev/kvm','rb').close(); print('KVM_READBACK_OK')"
+
+      - name: Install pinned BoxLite
+        shell: bash
+        run: |
+          set -euo pipefail
+          VENV="${RUNNER_TEMP}/aurion-boxlite-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python3 -m venv "${VENV}"
+          "${VENV}/bin/pip" install --disable-pip-version-check "boxlite==${BOXLITE_VERSION}"
+          "${VENV}/bin/python" -c "import boxlite; print('BOXLITE_IMPORT_OK')"
+          echo "BOXLITE_PYTHON=${VENV}/bin/python" >> "${GITHUB_ENV}"
+
+      - name: Resolve OpenCourant tag to immutable GHCR digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(curl -fsSL 'https://ghcr.io/token?scope=repository:opencourant/opencourant:pull' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+          DIGEST="$(curl -fsSI \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json' \
+            "https://ghcr.io/v2/opencourant/opencourant/manifests/${OPENCOURANT_RELEASE_TAG}" \
+            | tr -d '\r' \
+            | awk 'tolower($1)=="docker-content-digest:" {print $2}' \
+            | tail -n 1)"
+          echo "${DIGEST}" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          echo "OPENCOURANT_PROOF_IMAGE=ghcr.io/opencourant/opencourant@${DIGEST}" >> "${GITHUB_ENV}"
+          echo "OPENCOURANT_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+
+      - name: Fetch exact upstream MiniQA deck pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=".tmp/opencourant-smoke"
+          mkdir -p "${ROOT}"
+          BASE="https://raw.githubusercontent.com/OpenCourant/OpenCourant/${OPENCOURANT_RELEASE_COMMIT}/qa-tests/miniqa/ACCELEROMETRES/data"
+          curl -fsSL "${BASE}/ACCELERO_0000.rad" -o "${ROOT}/ACCELERO_0000.rad"
+          curl -fsSL "${BASE}/ACCELERO_0001.rad" -o "${ROOT}/ACCELERO_0001.rad"
+          STARTER_HASH="sha256:$(sha256sum "${ROOT}/ACCELERO_0000.rad" | awk '{print $1}')"
+          ENGINE_HASH="sha256:$(sha256sum "${ROOT}/ACCELERO_0001.rad" | awk '{print $1}')"
+          echo "AURION_STARTER_DECK_HASH=${STARTER_HASH}" >> "${GITHUB_ENV}"
+          echo "AURION_ENGINE_DECK_HASH=${ENGINE_HASH}" >> "${GITHUB_ENV}"
+
+      - name: Execute OpenCourant inside BoxLite micro-VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AURION_IMPACT_WORK_ID="ci.opencourant.smoke"
+          export AURION_SOURCE_REVISION="${SOURCE_SHA}"
+          export AURION_LOGICAL_TICK="0"
+          export AURION_SCENARIO="MATERIAL_CALIBRATION"
+          export OPENCOURANT_IMAGE="${OPENCOURANT_PROOF_IMAGE}"
+          export OPENCOURANT_COMMIT="${OPENCOURANT_RELEASE_COMMIT}"
+          export BOXLITE_CPUS="2"
+          export BOXLITE_MEMORY_MIB="4096"
+          "${BOXLITE_PYTHON}" scripts/run-opencourant-boxlite.py \
+            --starter-deck .tmp/opencourant-smoke/ACCELERO_0000.rad \
+            --engine-deck .tmp/opencourant-smoke/ACCELERO_0001.rad \
+            --output .aurion-impact-results/ci.opencourant.smoke
+
+      - name: Read back solver evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s .aurion-impact-results/ci.opencourant.smoke/runtime-evidence.json
+          grep -R -q "NORMAL TERMINATION" .aurion-impact-results/ci.opencourant.smoke/solver-work
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path(".aurion-impact-results/ci.opencourant.smoke/runtime-evidence.json")
+          data = json.loads(path.read_text())
+          assert data["protocol"] == "aurion.world-impact-bake.runtime-evidence.v1"
+          assert data["solverImage"].startswith("ghcr.io/opencourant/opencourant@sha256:")
+          assert data["solverCommit"] == "33e685176cccf0c539a3ce07aa2096985a284e2a"
+          assert data["boxliteVersion"] == "0.10.5"
+          assert data["sourceRevision"] == os.environ["SOURCE_SHA"]
+          print(json.dumps(data, sort_keys=True))
+          PY
+
+      - name: Upload bounded runtime evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-opencourant-boxlite-${{ github.sha }}
+          path: .aurion-impact-results/ci.opencourant.smoke
+          if-no-files-found: error
+          retention-days: 7
