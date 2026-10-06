@@ -1100,6 +1100,7 @@ jobs:
 
   production-schema-readback:
     name: Require production schema readback receipt
+    if: always() && needs.promote-zone-runtime.result == 'success'
     needs: [promote-zone-runtime, apply-reviewed-schema-plan]
     uses: ./.github/workflows/aurion-production-schema-readback.yml
     with:
