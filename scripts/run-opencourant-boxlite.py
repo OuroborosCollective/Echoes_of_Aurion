@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run one OpenCourant bake inside a BoxLite micro-VM.
 
-The host supplies the Radioss Starter/Engine deck pair. BoxLite executes the
-pinned OpenCourant OCI image and only copied-back files may become Aurion
-evidence. The solver never mutates gameplay state.
+BoxLite owns the isolation boundary. The exact OpenCourant release package and
+the matched Starter/Engine deck pair are copied into the VM after SHA-256
+verification. Only copied-back job outputs may become Aurion evidence.
 """
 import argparse
 import asyncio
@@ -18,8 +18,8 @@ import boxlite
 REQUIRED = (
     "AURION_IMPACT_WORK_ID", "AURION_SOURCE_REVISION", "AURION_LOGICAL_TICK",
     "AURION_STARTER_DECK_HASH", "AURION_ENGINE_DECK_HASH", "AURION_SCENARIO",
-    "OPENCOURANT_IMAGE", "OPENCOURANT_COMMIT", "BOXLITE_VERSION",
-    "BOXLITE_CPUS", "BOXLITE_MEMORY_MIB",
+    "OPENCOURANT_PACKAGE_HASH", "OPENCOURANT_COMMIT", "BOXLITE_IMAGE",
+    "BOXLITE_VERSION", "BOXLITE_CPUS", "BOXLITE_MEMORY_MIB",
 )
 
 
@@ -48,6 +48,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--starter-deck", required=True)
     parser.add_argument("--engine-deck", required=True)
+    parser.add_argument("--solver-package", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -57,18 +58,22 @@ async def main() -> None:
 
     starter = Path(args.starter_deck).resolve()
     engine = Path(args.engine_deck).resolve()
+    package = Path(args.solver_package).resolve()
     validate_deck_pair(starter, engine)
+    if not package.is_file() or package.suffix.lower() != ".zip":
+        raise SystemExit("solver package must be an existing .zip file")
+    if sha256_file(package) != os.environ["OPENCOURANT_PACKAGE_HASH"]:
+        raise SystemExit("OpenCourant package hash mismatch")
 
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     cpus = int(os.environ["BOXLITE_CPUS"])
     memory = int(os.environ["BOXLITE_MEMORY_MIB"])
-    image = os.environ["OPENCOURANT_IMAGE"]
 
     runtime = boxlite.Boxlite.default()
     security = boxlite.SecurityOptions.maximum()
     box = await runtime.create(boxlite.BoxOptions(
-        image=image,
+        image=os.environ["BOXLITE_IMAGE"],
         cpus=cpus,
         memory_mib=memory,
         working_dir="/work",
@@ -76,13 +81,28 @@ async def main() -> None:
         auto_remove=True,
     ))
     try:
-        await box.copy_in(str(starter), "/work/" + starter.name)
-        await box.copy_in(str(engine), "/work/" + engine.name)
+        prep = await box.exec("sh", ["-lc", "set -eu; mkdir -p /work/job /opt/opencourant"])
+        prep_result = await prep.wait()
+        if prep_result.exit_code != 0:
+            raise SystemExit("BoxLite workspace preparation failed")
+
+        await box.copy_in(str(package), "/work/OpenCourant_linux64.zip")
+        await box.copy_in(str(starter), "/work/job/" + starter.name)
+        await box.copy_in(str(engine), "/work/job/" + engine.name)
+
         command = (
-            "set -eu; cd /work; "
-            f"export OMP_NUM_THREADS={cpus}; "
-            f"starter -i {shlex.quote(starter.name)} -np 1 > starter.out 2>&1; "
-            f"engine -i {shlex.quote(engine.name)} > engine.out 2>&1; "
+            "set -eu; "
+            "python3 -m zipfile -e /work/OpenCourant_linux64.zip /opt/opencourant; "
+            "STARTER=$(find /opt/opencourant -type f -name starter_linux64_gf | head -1); "
+            "ENGINE=$(find /opt/opencourant -type f -name engine_linux64_gf | head -1); "
+            "test -n \"$STARTER\"; test -n \"$ENGINE\"; "
+            "chmod u+x \"$STARTER\" \"$ENGINE\"; "
+            "ROOT=$(dirname \"$(dirname \"$STARTER\")\"); "
+            "export RAD_CFG_PATH=\"$ROOT/hm_cfg_files\"; "
+            "export LD_LIBRARY_PATH=\"$ROOT/extlib/hm_reader/linux64:$ROOT/extlib/h3d/lib/linux64:${LD_LIBRARY_PATH:-}\"; "
+            f"export OMP_NUM_THREADS={cpus}; cd /work/job; "
+            f"\"$STARTER\" -i {shlex.quote(starter.name)} -np 1 > starter.out 2>&1; "
+            f"\"$ENGINE\" -i {shlex.quote(engine.name)} > engine.out 2>&1; "
             "grep -q 'NORMAL TERMINATION' engine.out"
         )
         execution = await box.exec("sh", ["-lc", command])
@@ -93,7 +113,7 @@ async def main() -> None:
             raise
         if result.exit_code != 0:
             raise SystemExit(f"OpenCourant failed with exit code {result.exit_code}")
-        await box.copy_out("/work", str(output / "solver-work"))
+        await box.copy_out("/work/job", str(output / "solver-work"))
     finally:
         await box.stop()
 
@@ -105,8 +125,9 @@ async def main() -> None:
         "logicalTick": int(os.environ["AURION_LOGICAL_TICK"]),
         "starterDeckHash": os.environ["AURION_STARTER_DECK_HASH"],
         "engineDeckHash": os.environ["AURION_ENGINE_DECK_HASH"],
-        "solverImage": image,
+        "solverPackageHash": os.environ["OPENCOURANT_PACKAGE_HASH"],
         "solverCommit": os.environ["OPENCOURANT_COMMIT"],
+        "boxliteImage": os.environ["BOXLITE_IMAGE"],
         "boxliteVersion": os.environ["BOXLITE_VERSION"],
     }
     (output / "runtime-evidence.json").write_text(
