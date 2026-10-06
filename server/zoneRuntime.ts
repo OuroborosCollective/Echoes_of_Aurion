@@ -68,6 +68,7 @@ const WORLD_SEED_DIGEST = canonicalSha256({ worldId: WORLD_ID, seedContract: "au
 type PresencePeer = {
   connectionId: string;
   userId: number;
+  entityId: string;
   socket: WebSocket;
   /** Last movement vector actually accepted by an authoritative tick. */
   input: ZoneMove["input"];
@@ -109,6 +110,7 @@ function createPresencePeer(values: {
   return {
     connectionId: values.connectionId,
     userId: values.userId,
+    entityId,
     socket: values.socket,
     input: { x: 0, z: 0 },
     lastAcceptedClientSeq: 0,
@@ -296,6 +298,7 @@ export class AuthoritativeMovementZone {
       const peer: PresencePeer = {
         connectionId,
         userId: player.userId,
+        entityId: player.entityId,
         socket: dummySocket,
         input: { x: player.inputX, z: player.inputZ },
         lastAcceptedClientSeq: player.lastAcceptedClientSeq,
@@ -836,9 +839,29 @@ export class AuthoritativeMovementZone {
 
   private refreshPeerOrder(): void {
     if (!this.sortedPeersDirty) return;
-    this.sortedPeers = Array.from(this.peers.values()).sort((a, b) => compareBinary(a.connectionId, b.connectionId));
-    this.sortedPeersByEntityId = Array.from(this.peers.values()).sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
-    this.sortedPresences = this.sortedPeersByEntityId.map(peer => peer.presence);
+
+    // ⚡ Bolt: Removed Array.from() allocations. Directly size and populate cached array.
+    this.sortedPeers.length = this.peers.size;
+    let idx = 0;
+    for (const peer of this.peers.values()) {
+      this.sortedPeers[idx++] = peer;
+    }
+
+    this.sortedPeersByEntityId.length = this.sortedPeers.length;
+    for (let i = 0; i < this.sortedPeers.length; i++) {
+      this.sortedPeersByEntityId[i] = this.sortedPeers[i]!;
+    }
+
+    this.sortedPeers.sort((a, b) => compareBinary(a.connectionId, b.connectionId));
+    // ⚡ Bolt: Sorted using pre-calculated entityId instead of evaluating player:${peer.userId} string on each compare
+    this.sortedPeersByEntityId.sort((a, b) => compareBinary(a.entityId, b.entityId));
+
+    // ⚡ Bolt: Removed .map() dynamic allocation.
+    this.sortedPresences.length = this.sortedPeersByEntityId.length;
+    for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
+      this.sortedPresences[i] = this.sortedPeersByEntityId[i]!.presence;
+    }
+
     this.sortedPeersDirty = false;
   }
 
@@ -907,7 +930,13 @@ export class ZoneRegistry {
 
   tick(): void {
     if (this.sortedZonesDirty) {
-      this.sortedZones = Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).map(([, zone]) => zone);
+      // ⚡ Bolt: Removed Array.from() allocations and chaining to reduce GC. Directly size and populate cached array.
+      this.sortedZones.length = this.zones.size;
+      let idx = 0;
+      for (const zone of this.zones.values()) {
+        this.sortedZones[idx++] = zone;
+      }
+      this.sortedZones.sort((a, b) => compareBinary(a.zoneId, b.zoneId));
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) zone.tick();

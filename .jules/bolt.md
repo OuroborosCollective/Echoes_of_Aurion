@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## 2026-10-06 - Dynamic String Formatting during Sort in tick loop
+**Learning:** Evaluated that when sorting `PresencePeer` objects by entity ID in high frequency ticks, sorting operations perform $O(N \log N)$ executions of `compareBinary(\`player:${a.userId}\`, \`player:${b.userId}\`)`. Dynamic inline string formatting `player:${userId}` repeatedly created new short-lived strings contributing heavily to garbage collection jitter and slowing down array sort.
+**Action:** Always eagerly generate and cache derived string identifiers (`entityId`) on root entity interfaces (like `PresencePeer`) upon creation instead of lazy generation during iteration loops and array sorting predicates.
