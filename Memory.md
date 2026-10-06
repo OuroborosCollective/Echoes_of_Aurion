@@ -1119,3 +1119,26 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-06 — PR #790 — feat(belief): rumor-to-behavior bridge — issue #783
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=790 merge=80a040c51dfef2d04f6bebe21f0d510a32779455 -->
+Task: Merge PR #790 into `main` — feat(belief): rumor-to-behavior bridge — issue #783.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-pr-runtime-candidate.yml`
+- `server/rumorBeliefBridgePlanner.test.ts`
+- `shared/rumorBeliefBridgeProtocol.test.ts`
+- `shared/rumorBeliefBridgeProtocol.ts`
+- `shared/rumorProjectionProtocol.test.ts`
+- `shared/rumorProjectionProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/790
+- Merge commit: `80a040c51dfef2d04f6bebe21f0d510a32779455`
+- PR head: `cddba064c829e650c30e4cb5408153638be4b31d`
+- Merged at: 2026-10-06T00:59:04Z
+- Post-merge workflow run: 37396833885
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
