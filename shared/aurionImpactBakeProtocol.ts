@@ -3,8 +3,10 @@ import { canonicalSha256 } from "./aurionCanonicalHash";
 export const AURION_IMPACT_BAKE_PROTOCOL = "aurion.world-impact-bake.v1" as const;
 export const OPENCOURANT_RELEASE_COMMIT = "33e685176cccf0c539a3ce07aa2096985a284e2a" as const;
 export const OPENCOURANT_RELEASE_TAG = "latest-20261006" as const;
-export const OPENCOURANT_IMAGE = "ghcr.io/opencourant/opencourant:latest-20261006" as const;
+export const OPENCOURANT_PACKAGE_NAME = "OpenCourant_linux64.zip" as const;
+export const OPENCOURANT_PACKAGE_HASH = "sha256:905bd73b4daf5c7762c18a50d4dc5db4c06b496811e6e0ab27c583d04578bd66" as const;
 export const BOXLITE_VERSION = "0.10.5" as const;
+export const BOXLITE_BASE_IMAGE = "ghcr.io/boxlite-ai/boxlite-agent-base:v0.1.0" as const;
 
 export const IMPACT_BAKE_SCENARIOS = [
   "VEHICLE_CRASH",
@@ -23,6 +25,7 @@ export type ImpactMaterialFamily = (typeof IMPACT_MATERIAL_FAMILIES)[number];
 const HASH = /^sha256:[a-f0-9]{64}$/;
 const REVISION = /^[a-f0-9]{40}$/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const BOXLITE_DIGEST = /^ghcr\.io\/boxlite-ai\/boxlite-agent-base@sha256:[a-f0-9]{64}$/;
 
 export type ImpactMaterialProfile = Readonly<{
   family: ImpactMaterialFamily;
@@ -51,9 +54,11 @@ export type ImpactBakeJob = Readonly<{
   starterDeckHash: string;
   engineDeckPath: string;
   engineDeckHash: string;
+  solverPackagePath: string;
+  solverPackageHash: typeof OPENCOURANT_PACKAGE_HASH;
   material: ImpactMaterialProfile;
-  solverImage: string;
   solverCommit: typeof OPENCOURANT_RELEASE_COMMIT;
+  boxliteImage: string;
   boxliteVersion: typeof BOXLITE_VERSION;
   cpus: number;
   memoryMiB: number;
@@ -74,8 +79,9 @@ export type ImpactBakeReceipt = Readonly<{
   logicalTick: number;
   starterDeckHash: string;
   engineDeckHash: string;
-  solverImage: string;
+  solverPackageHash: typeof OPENCOURANT_PACKAGE_HASH;
   solverCommit: typeof OPENCOURANT_RELEASE_COMMIT;
+  boxliteImage: string;
   boxliteVersion: typeof BOXLITE_VERSION;
   resultArchiveHash: string;
   vtkHash: string | null;
@@ -96,32 +102,34 @@ function assertId(value: string, code: string): void {
 function assertDeckPair(starterDeckPath: string, engineDeckPath: string): void {
   if (!starterDeckPath.endsWith("_0000.rad")) throw new Error("IMPACT_BAKE_STARTER_DECK_INVALID");
   if (!engineDeckPath.endsWith("_0001.rad")) throw new Error("IMPACT_BAKE_ENGINE_DECK_INVALID");
-  const starterRoot = starterDeckPath.slice(0, -"_0000.rad".length);
-  const engineRoot = engineDeckPath.slice(0, -"_0001.rad".length);
-  if (starterRoot !== engineRoot) throw new Error("IMPACT_BAKE_DECK_PAIR_MISMATCH");
+  if (starterDeckPath.slice(0, -"_0000.rad".length) !== engineDeckPath.slice(0, -"_0001.rad".length)) {
+    throw new Error("IMPACT_BAKE_DECK_PAIR_MISMATCH");
+  }
 }
 
-export function buildImpactBakeJob(input: Omit<ImpactBakeJob, "protocol" | "solverImage" | "solverCommit" | "boxliteVersion"> & { solverImage?: string }): ImpactBakeJob {
+export function buildImpactBakeJob(input: Omit<ImpactBakeJob, "protocol" | "solverPackageHash" | "solverCommit" | "boxliteVersion" | "boxliteImage"> & { boxliteImage?: string }): ImpactBakeJob {
   assertId(input.workId, "IMPACT_BAKE_WORK_ID_INVALID");
   assertId(input.entityId, "IMPACT_BAKE_ENTITY_ID_INVALID");
   if (!REVISION.test(input.sourceRevision)) throw new Error("IMPACT_BAKE_REVISION_INVALID");
   if (!Number.isSafeInteger(input.logicalTick) || input.logicalTick < 0) throw new Error("IMPACT_BAKE_TICK_INVALID");
   assertDeckPair(input.starterDeckPath, input.engineDeckPath);
+  if (!input.solverPackagePath.endsWith(".zip")) throw new Error("IMPACT_BAKE_SOLVER_PACKAGE_INVALID");
   assertHash(input.starterDeckHash, "IMPACT_BAKE_STARTER_HASH_INVALID");
   assertHash(input.engineDeckHash, "IMPACT_BAKE_ENGINE_HASH_INVALID");
   assertPositiveInt(input.cpus, "IMPACT_BAKE_CPUS_INVALID");
   assertPositiveInt(input.memoryMiB, "IMPACT_BAKE_MEMORY_INVALID");
   if (!IMPACT_BAKE_SCENARIOS.includes(input.scenario)) throw new Error("IMPACT_BAKE_SCENARIO_INVALID");
   validateMaterial(input.material);
-  const solverImage = input.solverImage ?? OPENCOURANT_IMAGE;
-  if (solverImage !== OPENCOURANT_IMAGE && !/^ghcr\.io\/opencourant\/opencourant@sha256:[a-f0-9]{64}$/.test(solverImage)) {
-    throw new Error("IMPACT_BAKE_SOLVER_IMAGE_UNPINNED");
+  const boxliteImage = input.boxliteImage ?? BOXLITE_BASE_IMAGE;
+  if (boxliteImage !== BOXLITE_BASE_IMAGE && !BOXLITE_DIGEST.test(boxliteImage)) {
+    throw new Error("IMPACT_BAKE_BOXLITE_IMAGE_UNPINNED");
   }
   return Object.freeze({
     ...input,
     protocol: AURION_IMPACT_BAKE_PROTOCOL,
-    solverImage,
+    solverPackageHash: OPENCOURANT_PACKAGE_HASH,
     solverCommit: OPENCOURANT_RELEASE_COMMIT,
+    boxliteImage,
     boxliteVersion: BOXLITE_VERSION,
   });
 }
@@ -141,6 +149,7 @@ export function buildImpactBakeReceipt(input: Omit<ImpactBakeReceipt, "protocol"
   if (!REVISION.test(input.sourceRevision)) throw new Error("IMPACT_BAKE_REVISION_INVALID");
   assertHash(input.starterDeckHash, "IMPACT_BAKE_STARTER_HASH_INVALID");
   assertHash(input.engineDeckHash, "IMPACT_BAKE_ENGINE_HASH_INVALID");
+  if (input.solverPackageHash !== OPENCOURANT_PACKAGE_HASH) throw new Error("IMPACT_BAKE_SOLVER_PACKAGE_HASH_INVALID");
   assertHash(input.resultArchiveHash, "IMPACT_BAKE_RESULT_HASH_INVALID");
   if (input.vtkHash !== null) assertHash(input.vtkHash, "IMPACT_BAKE_VTK_HASH_INVALID");
   if (input.csvHash !== null) assertHash(input.csvHash, "IMPACT_BAKE_CSV_HASH_INVALID");
