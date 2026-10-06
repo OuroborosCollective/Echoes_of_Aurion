@@ -30,7 +30,9 @@ jobs:
     env:
       OPENCOURANT_RELEASE_COMMIT: 33e685176cccf0c539a3ce07aa2096985a284e2a
       OPENCOURANT_RELEASE_TAG: latest-20261006
+      OPENCOURANT_PACKAGE_HASH: sha256:905bd73b4daf5c7762c18a50d4dc5db4c06b496811e6e0ab27c583d04578bd66
       BOXLITE_VERSION: 0.10.5
+      BOXLITE_BASE_TAG: v0.1.0
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
@@ -59,37 +61,40 @@ jobs:
           "${VENV}/bin/python" -c "import boxlite; print('BOXLITE_IMPORT_OK')"
           echo "BOXLITE_PYTHON=${VENV}/bin/python" >> "${GITHUB_ENV}"
 
-      - name: Resolve OpenCourant tag to immutable GHCR digest
+      - name: Resolve BoxLite base to immutable GHCR digest
         shell: bash
         run: |
           set -euo pipefail
-          TOKEN="$(curl -fsSL 'https://ghcr.io/token?scope=repository:opencourant/opencourant:pull' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+          TOKEN="$(curl -fsSL 'https://ghcr.io/token?scope=repository:boxlite-ai/boxlite-agent-base:pull' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
           DIGEST="$(curl -fsSI \
             -H "Authorization: Bearer ${TOKEN}" \
-            -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json' \
-            "https://ghcr.io/v2/opencourant/opencourant/manifests/${OPENCOURANT_RELEASE_TAG}" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json' \
+            "https://ghcr.io/v2/boxlite-ai/boxlite-agent-base/manifests/${BOXLITE_BASE_TAG}" \
             | tr -d '\r' \
             | awk 'tolower($1)=="docker-content-digest:" {print $2}' \
             | tail -n 1)"
           echo "${DIGEST}" | grep -Eq '^sha256:[a-f0-9]{64}$'
-          echo "OPENCOURANT_PROOF_IMAGE=ghcr.io/opencourant/opencourant@${DIGEST}" >> "${GITHUB_ENV}"
-          echo "OPENCOURANT_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+          echo "BOXLITE_PROOF_IMAGE=ghcr.io/boxlite-ai/boxlite-agent-base@${DIGEST}" >> "${GITHUB_ENV}"
 
-      - name: Fetch exact upstream MiniQA deck pair
+      - name: Fetch exact OpenCourant package and MiniQA deck pair
         shell: bash
         run: |
           set -euo pipefail
-          ROOT=".tmp/opencourant-smoke"
+          ROOT="${GITHUB_WORKSPACE}/.tmp/opencourant-smoke"
           mkdir -p "${ROOT}"
+          PACKAGE="${ROOT}/OpenCourant_linux64.zip"
+          curl -fsSL -L \
+            "https://github.com/OpenCourant/OpenCourant/releases/download/${OPENCOURANT_RELEASE_TAG}/OpenCourant_linux64.zip" \
+            -o "${PACKAGE}"
+          test "sha256:$(sha256sum "${PACKAGE}" | awk '{print $1}')" = "${OPENCOURANT_PACKAGE_HASH}"
           BASE="https://raw.githubusercontent.com/OpenCourant/OpenCourant/${OPENCOURANT_RELEASE_COMMIT}/qa-tests/miniqa/ACCELEROMETRES/data"
           curl -fsSL "${BASE}/ACCELERO_0000.rad" -o "${ROOT}/ACCELERO_0000.rad"
           curl -fsSL "${BASE}/ACCELERO_0001.rad" -o "${ROOT}/ACCELERO_0001.rad"
-          STARTER_HASH="sha256:$(sha256sum "${ROOT}/ACCELERO_0000.rad" | awk '{print $1}')"
-          ENGINE_HASH="sha256:$(sha256sum "${ROOT}/ACCELERO_0001.rad" | awk '{print $1}')"
-          echo "AURION_STARTER_DECK_HASH=${STARTER_HASH}" >> "${GITHUB_ENV}"
-          echo "AURION_ENGINE_DECK_HASH=${ENGINE_HASH}" >> "${GITHUB_ENV}"
+          echo "OPENCOURANT_PACKAGE_PATH=${PACKAGE}" >> "${GITHUB_ENV}"
+          echo "AURION_STARTER_DECK_HASH=sha256:$(sha256sum "${ROOT}/ACCELERO_0000.rad" | awk '{print $1}')" >> "${GITHUB_ENV}"
+          echo "AURION_ENGINE_DECK_HASH=sha256:$(sha256sum "${ROOT}/ACCELERO_0001.rad" | awk '{print $1}')" >> "${GITHUB_ENV}"
 
-      - name: Execute OpenCourant inside BoxLite micro-VM
+      - name: Execute verified OpenCourant package inside BoxLite micro-VM
         shell: bash
         run: |
           set -euo pipefail
@@ -97,13 +102,14 @@ jobs:
           export AURION_SOURCE_REVISION="${SOURCE_SHA}"
           export AURION_LOGICAL_TICK="0"
           export AURION_SCENARIO="MATERIAL_CALIBRATION"
-          export OPENCOURANT_IMAGE="${OPENCOURANT_PROOF_IMAGE}"
           export OPENCOURANT_COMMIT="${OPENCOURANT_RELEASE_COMMIT}"
+          export BOXLITE_IMAGE="${BOXLITE_PROOF_IMAGE}"
           export BOXLITE_CPUS="2"
           export BOXLITE_MEMORY_MIB="4096"
           "${BOXLITE_PYTHON}" scripts/run-opencourant-boxlite.py \
             --starter-deck .tmp/opencourant-smoke/ACCELERO_0000.rad \
             --engine-deck .tmp/opencourant-smoke/ACCELERO_0001.rad \
+            --solver-package "${OPENCOURANT_PACKAGE_PATH}" \
             --output .aurion-impact-results/ci.opencourant.smoke
 
       - name: Read back solver evidence
@@ -119,7 +125,8 @@ jobs:
           path = Path(".aurion-impact-results/ci.opencourant.smoke/runtime-evidence.json")
           data = json.loads(path.read_text())
           assert data["protocol"] == "aurion.world-impact-bake.runtime-evidence.v1"
-          assert data["solverImage"].startswith("ghcr.io/opencourant/opencourant@sha256:")
+          assert data["boxliteImage"].startswith("ghcr.io/boxlite-ai/boxlite-agent-base@sha256:")
+          assert data["solverPackageHash"] == "sha256:905bd73b4daf5c7762c18a50d4dc5db4c06b496811e6e0ab27c583d04578bd66"
           assert data["solverCommit"] == "33e685176cccf0c539a3ce07aa2096985a284e2a"
           assert data["boxliteVersion"] == "0.10.5"
           assert data["sourceRevision"] == os.environ["SOURCE_SHA"]
