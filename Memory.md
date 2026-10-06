@@ -1160,3 +1160,11 @@ Task: Integrate the causal rumor/investigation end-to-end evidence gate after #7
 Evidence: Exact head `03ca9ca810c8196c3bf3b772202a536aa6bd5d94`; Runtime Candidate, Container Proof, Local Test Pack, Starter Village Pilot, AIM-535 and AIM-292 all green.
 Learned: The umbrella gate adds evidence/documentation only; shared belief files are byte-identical to the already merged #790 lane.
 Next safe step: Merge #792, then rebase and verify the /play renderer-bootstrap fix before release.
+
+### 2026-10-06 — /play renderer bootstrap and re-entry transport fix
+Status: VERIFIED candidate
+Task: Remove the /play 1/4 evidence stall without starting simulation before authoritative zone truth.
+Decisions: Render one presentation-only bootstrap frame; synchronously retire stale zone websocket/retry state on return and re-entry; keep MMOEngine.start() bound to the first confirmed zone snapshot.
+Evidence: PR #798 exact head `8a62e8dcd4f8c9581587057ee55731a47b2602f1`; Runtime Candidate, Container Proof, Local Test Pack, Starter Village, AIM-259 re-entry, Renderer/Recovery, visual, GLB, asset shipping, NPC-memory and density gates all green.
+Learned: The visible stall had two coupled lifecycle causes: renderer evidence waited on a snapshot, while rapid re-entry could inherit a half-retired zone transport.
+Next safe step: Merge #798 and deploy/read back the exact production revision.
