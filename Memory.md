@@ -1099,3 +1099,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-06 — PR #789 — feat(investigation): causal investigation graph — issue #782
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=789 merge=88fb5de67a15bbfd98ccd978308556d5a8ef74bd -->
+Task: Merge PR #789 into `main` — feat(investigation): causal investigation graph — issue #782.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-pr-runtime-candidate.yml`
+- `shared/investigationGraphProtocol.test.ts`
+- `shared/investigationGraphProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/789
+- Merge commit: `88fb5de67a15bbfd98ccd978308556d5a8ef74bd`
+- PR head: `bcdff427a3b379ba96ed61b45f20d97f118e1d61`
+- Merged at: 2026-10-06T00:58:40Z
+- Post-merge workflow run: 37396798568
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
