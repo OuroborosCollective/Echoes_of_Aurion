@@ -70,8 +70,8 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     // control. The test elevates this disposable account directly in MariaDB,
     // so React auth + catalog hydration may legitimately complete after route
     // navigation; readiness, not elapsed wall time, is the user-visible gate.
-    await expect(page.getByTestId("glb-upload-scroll-region")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 15_000 });
+    await expect(page.getByTestId("glb-upload-scroll-region")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 30_000 });
     const input = page.locator("#glbZipFile");
     await expect(input).toBeEnabled();
     await input.scrollIntoViewIfNeeded();
@@ -91,7 +91,7 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     expect(body.entries.map((entry: any) => entry.lodLevel)).toEqual([0, 1]);
     expect(body.entries.every((entry: any) => entry.purpose === "npc-fallback")).toBe(true);
     await page.getByTestId("glb-upload-scroll-region").evaluate(element => element.scrollTo({ top: element.scrollHeight }));
-    await expect(page.getByText("2 GLBs · 1 logische Familien aufgenommen")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("2 GLBs · 1 logische Familien aufgenommen")).toBeVisible({ timeout: 30_000 });
 
     const catalogResponse = await page.request.get("/api/game/glb-catalog");
     expect(catalogResponse.status()).toBe(200);

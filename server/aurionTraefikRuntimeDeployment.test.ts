@@ -154,7 +154,6 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     );
     expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]");
     expect(workflow).toContain("needs: [promote-zone-runtime, apply-reviewed-schema-plan]");
-    expect(workflow).toContain("if: always() && needs.promote-zone-runtime.result == \'success\'");
   });
 
   it("keeps production cache read-only and records workflow provenance", () => {

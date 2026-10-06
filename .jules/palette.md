@@ -24,7 +24,3 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
-
-## 2024-10-05 - Navigation Accessibility
-**Learning:** When a page has multiple `<nav>` elements (like main header and footer), screen readers need a way to differentiate them. Using `aria-label` (e.g., 'Hauptnavigation' vs. 'Fußzeilennavigation') provides this distinction.
-**Action:** Always provide distinct `aria-label` attributes on `<nav>` elements if more than one exists on a single page.

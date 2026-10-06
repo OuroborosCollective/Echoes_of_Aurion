@@ -204,20 +204,8 @@ export default function AurionOpenWorldRuntime() {
   }, [requestAuthoritativeAction]);
 
   useEffect(() => {
-    const retireZoneTransport = () => {
-      zoneConnectedRef.current = false;
-      zoneReconnectAttemptsRef.current = 0;
-      zoneClientRef.current?.close();
-      zoneClientRef.current = null;
-      motionRef.current?.stop();
-      setZoneStatus("idle");
-    };
     const onLoad = (event: Event) => {
-      // Re-entry must never inherit a half-closing websocket or stale retry state
-      // from the previous /play generation. Retire transport synchronously before
-      // activating the new world generation; the new generation then issues a
-      // fresh one-time zone ticket.
-      retireZoneTransport();
+      zoneReconnectAttemptsRef.current = 0;
       setZoneRetryEpoch(0);
       recoveryAttempts.current = 0;
       recoveryCause.current = null;
@@ -230,9 +218,6 @@ export default function AurionOpenWorldRuntime() {
     };
     const onReturn = () => {
       soundSynth.stopAmbient();
-      retireZoneTransport();
-      setReadyGeneration(null);
-      setRendererEvidence(null);
       setActivation(null);
     };
     const onCelebrate = () => {
@@ -430,10 +415,6 @@ export default function AurionOpenWorldRuntime() {
         if (npcEvidenceRef.current) npcEvidenceRef.current.dataset.presentation = JSON.stringify(serviceNpcRef.current?.evidence() ?? null);
         setNearbySmith(Boolean(serviceNpcRef.current?.isNearby(engine.player.position)));
       };
-      // Prove the initialized renderer with one real presentation-only frame.
-      // The simulation loop still starts exclusively after an authoritative
-      // zone snapshot, preserving server movement/gameplay authority.
-      engine.renderPresentationFrame();
       window.addEventListener("aurion:authoritative-action", onConfirmedAction);
       setReadyGeneration(generation);
     } catch (error) {

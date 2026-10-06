@@ -102,7 +102,6 @@ test("diagnostic: fresh isolated catalog reproduces the pre-fix empty character 
 });
 
 for (const viewport of viewports) test(`${viewport.name}: confirmed pilot controls and readbacks remain reachable`, async ({ page }, testInfo) => {
-  testInfo.setTimeout(60_000);
   test.skip(!runJourney, "Requires the isolated authenticated starter-village runtime after canonical asset admission");
   await page.setViewportSize(viewport);
   const pageErrors: string[] = [];

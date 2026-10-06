@@ -18,17 +18,12 @@ const confirmedResources = {
 
 const fixture = vi.hoisted(() => {
   const selectedUrl = `/api/assets/glb/${"a".repeat(64)}.glb`;
-  const makeEngine = () => {
-    const engine = {
-      player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
-      landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(), releaseControlInput: vi.fn(),
-      start: vi.fn(), stop: vi.fn(), observePlayerEquipment: () => vi.fn(),
-      onRuntimeError: undefined as ((error: unknown) => void) | undefined,
-      onFrameRendered: undefined as (() => void) | undefined,
-      renderPresentationFrame: vi.fn(() => engine.onFrameRendered?.()),
-    };
-    return engine;
-  };
+  const makeEngine = () => ({
+    player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
+    landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(), releaseControlInput: vi.fn(),
+    start: vi.fn(), stop: vi.fn(), observePlayerEquipment: () => vi.fn(),
+    onRuntimeError: undefined as ((error: unknown) => void) | undefined,
+  });
   type ZoneStatus = "connecting" | "connected" | "closed" | "rejected";
   return {
     selectedUrl,
@@ -123,15 +118,6 @@ describe("open world session ownership", () => {
     expect(fixture.tickets).toHaveLength(1);
   });
 
-  it("renders one presentation-only bootstrap frame before the first authoritative zone snapshot", async () => {
-    render(<AurionOpenWorldRuntime />); await enter();
-    expect(fixture.engines).toHaveLength(1);
-    expect(fixture.engines[0].renderPresentationFrame).toHaveBeenCalledOnce();
-    expect(fixture.engines[0].start).not.toHaveBeenCalled();
-    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ status: "rendering" });
-    expect(fixture.tickets).toHaveLength(1);
-  });
-
   it("forwards confirmed active-runtime positions to the shared stream and retires the callback on return", async () => {
     const received: unknown[] = [];
     const listener = (event: Event) => received.push((event as CustomEvent).detail);
@@ -222,7 +208,7 @@ describe("open world session ownership", () => {
     expect(fixture.connections[0].close).toHaveBeenCalled();
     expect(fixture.engines).toHaveLength(2);
     expect(fixture.tickets).toHaveLength(2);
-    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ worldSeed: "refreshed-world", epoch: 7, recoveryAttempt: 1, status: "rendering" });
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ worldSeed: "refreshed-world", epoch: 7, recoveryAttempt: 1, status: "awaiting_snapshot" });
     act(() => oldSnapshot({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 2, tick: 95, presences: [{ entityId: "player:1", userId: 1, position: { x: 0, z: -32300 }, lastAcceptedClientSeq: 1 }], mobs: [], combatants: [], resources: confirmedResources }));
     expect(fixture.engines[1].start).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -231,7 +217,7 @@ describe("open world session ownership", () => {
     expect(fixture.engines[1].start).toHaveBeenCalledOnce();
     await act(async () => fixture.engines[1].onRuntimeError?.(new Error("WEBGPU_DEVICE_LOST")));
     expect(fixture.engines).toHaveLength(3);
-    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ recoveryAttempt: 2, status: "rendering" });
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ recoveryAttempt: 2, status: "awaiting_snapshot" });
     await act(async () => fixture.engines[2].onRuntimeError?.(new Error("WEBGL_CONTEXT_LOST")));
     expect(fixture.engines).toHaveLength(3);
     expect(fixture.engines[2].stop).toHaveBeenCalled();

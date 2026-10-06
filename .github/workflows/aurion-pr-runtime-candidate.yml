@@ -69,8 +69,6 @@ jobs:
           git diff --check
 
       - name: Read back approved live return-stone asset
-        id: return_stone_live
-        continue-on-error: true
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 10 --max-time 300 \
@@ -103,26 +101,6 @@ jobs:
           test "$(wc -c < return-stone-live.glb | tr -d ' ')" = "${RETURN_STONE_BYTES}"
           printf '%s  %s\n' "${RETURN_STONE_SHA256}" return-stone-live.glb | sha256sum --strict -c -
 
-
-      - name: Determine whether live return-stone proof is merge-gating
-        id: return_stone_scope
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          changed="$(git diff --name-only "${BASE_SHA}" "${EXPECTED_HEAD}")"
-          printf '%s\n' "${changed}"
-          required=false
-          while IFS= read -r path; do
-            case "${path}" in
-              shared/aurionReturnStoneContract.ts|server/glb*.ts|shared/glb*.ts|client/src/xaurion/core/UploadedAssetRuntime.ts|client/src/xaurion/integration/UploadedWorldCatalogProjection.ts)
-                required=true
-                break
-                ;;
-            esac
-          done <<< "${changed}"
-          printf 'required=%s\n' "${required}" >> "${GITHUB_OUTPUT}"
-
       - name: Verify world-generation evidence gate contracts
         run: |
           set -euo pipefail
@@ -137,8 +115,6 @@ jobs:
           git diff --check
 
       - name: Build and boot exact immutable candidate container
-        env:
-          RETURN_STONE_LIVE_READBACK: ${{ steps.return_stone_live.outcome }}
         run: |
           set -euo pipefail
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
@@ -233,7 +209,6 @@ jobs:
             revision: process.env.EXPECTED_HEAD,
             immutableImageId: process.env.IMAGE_ID,
             health,
-            returnStoneLiveReadback: process.env.RETURN_STONE_LIVE_READBACK ?? 'unknown',
             productionPromoted: false,
           };
           if (receipt.health.revision !== receipt.revision) throw new Error('CANDIDATE_HEALTH_REVISION_MISMATCH');
@@ -256,9 +231,3 @@ jobs:
             dist-traefik-runtime/checksums.sha256
           if-no-files-found: error
           retention-days: 30
-
-      - name: Enforce relevant live return-stone proof
-        if: steps.return_stone_scope.outputs.required == 'true' && steps.return_stone_live.outcome != 'success'
-        run: |
-          echo "RETURN_STONE_LIVE_PROOF_REQUIRED_BUT_UNAVAILABLE" >&2
-          exit 1

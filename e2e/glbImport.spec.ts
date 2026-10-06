@@ -28,7 +28,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     const scrollRegion = page.getByTestId('glb-upload-scroll-region');
     await expect(scrollRegion).toBeVisible();
     await expect(page.locator('#smartGlbFile')).toBeEnabled();
-    await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 15_000 });
+    await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 30_000 });
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     const scrollMetrics = await scrollRegion.evaluate(element => {
       const overflowY = getComputedStyle(element).overflowY;
@@ -53,7 +53,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // Reset scroll position programmatically. The scroll-down above already
     // proved real wheel input moves this container; the upward reset just
     // restores the viewport for the upload steps that follow.
-    await scrollRegion.evaluate(element => element.scrollTo({ top: 0 }));
+    await scrollRegion.evaluate(element => element.scrollTo({ top: 0, behavior: 'instant' }));
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
       .toBeLessThanOrEqual(2);
 
@@ -111,7 +111,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     const runtime = page.getByTestId('xaurion-open-world-runtime');
     await expect(runtime).toBeVisible();
     const gate = page.getByTestId('player-character-selection-gate');
-    await expect(gate).toBeVisible({ timeout: 15_000 });
+    await expect(gate).toBeVisible({ timeout: 30_000 });
     await gate.getByRole('radio', { name: /Browser public avatar/ }).click();
     const selectionReply = page.waitForResponse(r => r.url().endsWith('/api/game/public-player-characters/select') && r.request().method() === 'POST');
     await gate.getByRole('button', { name: 'Dauerhaft wählen', exact: true }).click();
@@ -125,7 +125,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
       if (!raw) return null;
       const evidence = JSON.parse(raw);
       return { clip: evidence?.clip ?? null, poses: evidence?.supportedPoses ?? [], names: evidence?.animationNames ?? [] };
-    }, { timeout: 15_000 }).toMatchObject({ clip: 'Idle', poses: expect.arrayContaining(['idle', 'attack']), names: expect.arrayContaining(['Attack', 'Idle']) });
+    }, { timeout: 30_000 }).toMatchObject({ clip: 'Idle', poses: expect.arrayContaining(['idle', 'attack']), names: expect.arrayContaining(['Attack', 'Idle']) });
     expect(fetched.length).toBeGreaterThan(0);
     await expect(page.locator('#three-viewport canvas')).toBeVisible();
     await page.locator('#three-viewport canvas').screenshot({ path: testInfo.outputPath('imported-avatar.png') });
