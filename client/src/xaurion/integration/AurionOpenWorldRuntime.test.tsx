@@ -18,12 +18,17 @@ const confirmedResources = {
 
 const fixture = vi.hoisted(() => {
   const selectedUrl = `/api/assets/glb/${"a".repeat(64)}.glb`;
-  const makeEngine = () => ({
-    player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
-    landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(), releaseControlInput: vi.fn(),
-    start: vi.fn(), stop: vi.fn(), observePlayerEquipment: () => vi.fn(),
-    onRuntimeError: undefined as ((error: unknown) => void) | undefined,
-  });
+  const makeEngine = () => {
+    const engine = {
+      player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
+      landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(), releaseControlInput: vi.fn(),
+      start: vi.fn(), stop: vi.fn(), observePlayerEquipment: () => vi.fn(),
+      onRuntimeError: undefined as ((error: unknown) => void) | undefined,
+      onFrameRendered: undefined as (() => void) | undefined,
+      renderPresentationFrame: vi.fn(() => engine.onFrameRendered?.()),
+    };
+    return engine;
+  };
   type ZoneStatus = "connecting" | "connected" | "closed" | "rejected";
   return {
     selectedUrl,
@@ -115,6 +120,15 @@ describe("open world session ownership", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Standardfigur wählen" })); });
     expect(fixture.engines).toHaveLength(1);
     expect(fixture.engines[0].player.equipGlbModel).toHaveBeenCalledWith(fixture.selectedUrl);
+    expect(fixture.tickets).toHaveLength(1);
+  });
+
+  it("renders one presentation-only bootstrap frame before the first authoritative zone snapshot", async () => {
+    render(<AurionOpenWorldRuntime />); await enter();
+    expect(fixture.engines).toHaveLength(1);
+    expect(fixture.engines[0].renderPresentationFrame).toHaveBeenCalledOnce();
+    expect(fixture.engines[0].start).not.toHaveBeenCalled();
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ status: "rendering" });
     expect(fixture.tickets).toHaveLength(1);
   });
 
