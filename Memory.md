@@ -1142,3 +1142,14 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-06 — PR #791 investigation journal merge correction
+Status: VERIFIED repository merge
+Task: Record the completed #791 investigation-journal integration that the post-merge recorder skipped.
+Decisions: Keep the journal read-only and server-confirmed; the browser evidence timeout was fixed by bounded 60 s viewport headroom without weakening assertions.
+Touched surfaces: investigation journal protocol/UI/tests and starter-village browser evidence timeout.
+Evidence: PR #791 merged as `6c795a49ad1a509ed0ef8919c48882b1fd95c137`; exact-head Runtime Candidate, Container Proof, Local Test Pack, Starter Village Pilot, Renderer/Recovery, visual, group-instance, GLB and NPC-memory gates all passed.
+Learned: WebGL screenshot capture can outlive a 30 s test budget after assertions pass; bounded timeout headroom preserves the evidence contract without changing runtime authority.
+Open: Continue ordered stack with #792, then the /play bootstrap fix.
+Next safe step: Merge #792 only after its exact-head gates stay green.
