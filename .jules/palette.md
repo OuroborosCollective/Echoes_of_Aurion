@@ -24,3 +24,7 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+
+## 2024-05-18 - Causal Studio Dashboard Form A11y and UX
+**Learning:** Icon-only buttons (like the diagnostic export button) require a `title` tooltip for sighted users navigating via mouse in addition to `aria-label` for screen readers. Unlinked `<Label>` and `<Input>` tags (without `htmlFor` and `id`) cause accessibility failures. High-frequency dashboards like Causal Studio should leverage disabled/loading button states explicitly to prevent redundant user submissions when querying slow backends.
+**Action:** Consistently pair `aria-label` with `title` for icon-only inputs. Always link forms using `htmlFor`/`id` matching, and leverage `<Loader2 />` from `lucide-react` with disabled visual properties for asynchronous verifications.

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, Check, Database, Download, FileCode2, History, Search } from "lucide-react";
+import { AlertCircle, Check, Database, Download, FileCode2, History, Loader2, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
@@ -84,7 +84,7 @@ export default function CausalStudioDashboard() {
               <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-xs">
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="font-semibold text-cyan-300">Runtime Identity</h4>
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={exportDiagnostics} aria-label="Export diagnostic JSON">
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={exportDiagnostics} aria-label="Export diagnostic JSON" title="Export diagnostic JSON">
                     <Download className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -98,15 +98,16 @@ export default function CausalStudioDashboard() {
               <section className="space-y-3 rounded-xl border border-cyan-200/10 bg-cyan-400/[.03] p-4">
                 <h4 className="text-sm font-semibold text-cyan-300">Tick Explorer</h4>
                 <div>
-                  <Label className="text-xs">Zone</Label>
-                  <Input value={zoneId} onChange={event => setZoneId(event.target.value)} className="mt-1 h-8 text-xs" />
+                  <Label htmlFor="zoneId-input" className="text-xs">Zone</Label>
+                  <Input id="zoneId-input" value={zoneId} onChange={event => setZoneId(event.target.value)} className="mt-1 h-8 text-xs" />
                 </div>
                 <div>
-                  <Label className="text-xs">Tick</Label>
-                  <Input type="number" min={0} value={tickNumber} onChange={event => setTickNumber(Math.max(0, Number.parseInt(event.target.value, 10) || 0))} className="mt-1 h-8 text-xs" />
+                  <Label htmlFor="tick-input" className="text-xs">Tick</Label>
+                  <Input id="tick-input" type="number" min={0} value={tickNumber} onChange={event => setTickNumber(Math.max(0, Number.parseInt(event.target.value, 10) || 0))} className="mt-1 h-8 text-xs" />
                 </div>
-                <Button className="h-8 w-full text-xs" onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}>
-                  Verify Tick
+                <Button disabled={replayQuery.isFetching} className="h-8 w-full text-xs" onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}>
+                  {replayQuery.isFetching && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  {replayQuery.isFetching ? "Verifying..." : "Verify Tick"}
                 </Button>
               </section>
             </div>
@@ -148,7 +149,7 @@ export default function CausalStudioDashboard() {
               <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-200"><Database className="h-4 w-4" /> Checkpoints</h4>
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-2 top-2 h-4 w-4 text-slate-500" />
-                <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="tick, id or snapshot hash" className="h-8 pl-8 text-xs" />
+                <Input aria-label="Search checkpoints" value={search} onChange={event => setSearch(event.target.value)} placeholder="tick, id or snapshot hash" className="h-8 pl-8 text-xs" />
               </div>
             </div>
             <div className="max-h-72 overflow-auto rounded border border-white/5">
