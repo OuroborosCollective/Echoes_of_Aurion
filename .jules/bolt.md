@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## 2024-05-18 - Avoid O(N) array allocation overhead for Map lookups
+**Learning:** Using `Array.from(map.values()).find(...)` incurs O(N) array allocation overhead and linear search time to retrieve an item.
+**Action:** When the target key is known, use a direct lookup with `map.get(targetKey)` to replace O(N) linear search and array allocation overhead with O(1) performance.
