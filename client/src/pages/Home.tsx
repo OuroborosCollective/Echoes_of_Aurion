@@ -16,7 +16,7 @@ import {
 } from "@/xaurion/integration/Ax1PlayNavigationBridge";
 import "./homeCinematic.css";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues" | null;
 
 function openAccountAccess(): void {
   window.dispatchEvent(new Event("aurion:open-local-auth"));
@@ -168,6 +168,7 @@ export default function Home() {
               {isAuthenticated ? (
                 <button
                   type="button"
+                  title="Spiel betreten"
                   onClick={() => {
                     setLaunchMessage("");
                     window.dispatchEvent(new Event(AX1_PLAY_REQUEST_EVENT));
@@ -183,6 +184,7 @@ export default function Home() {
                   aria-haspopup="dialog"
                   disabled={loading}
                   aria-busy={loading}
+                  title={loading ? "Ladevorgang läuft..." : "Konto anlegen oder anmelden"}
                   onClick={openAccountAccess}
                   className="group min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 shadow-lg shadow-amber-950/20 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
                 >
@@ -354,6 +356,7 @@ export default function Home() {
           <button
             type="button"
             aria-haspopup="dialog"
+            title="Asset-Katalog öffnen"
             onClick={() => openCommunity("assets")}
             className="min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
           >
@@ -407,6 +410,7 @@ export default function Home() {
             {isAuthenticated ? (
               <button
                 type="button"
+                title="In die Welt"
                 onClick={() =>
                   window.dispatchEvent(new Event(AX1_PLAY_REQUEST_EVENT))
                 }
@@ -421,7 +425,7 @@ export default function Home() {
                 aria-haspopup="dialog"
                 disabled={loading}
                 aria-busy={loading}
-                title={loading ? "Ladevorgang läuft..." : undefined}
+                title={loading ? "Ladevorgang läuft..." : "Zugang erstellen"}
                 onClick={openAccountAccess}
                 className="min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
               >

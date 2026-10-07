@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2024-05-18 - Landing Page UI Accessibility (Title Attributes)
+**Learning:** Adding explicit `title` attributes (even for buttons with text, or icons acting as primary indicators) helps users with tooltips when hovering, especially on icon-heavy UI and conditionally-disabled buttons on the landing page and community overlay. Fallback defaults were missing on disabled elements.
+**Action:** Always include a `title` attribute for explicit tooltip support on interactive elements alongside ARIA labels. Conditionally adapt text when loading/disabled for full context.
