@@ -51,7 +51,23 @@ async function launchAx1AndOpenGroups(page: Page) {
     if (await connected.isVisible().catch(() => false)) return "connected";
     if (await publicAvatar.isVisible().catch(() => false)) return "select";
     return "waiting";
-  }, { timeout: 45_000, intervals: [50, 100, 250, 500] }).not.toBe("waiting");
+  }, { timeout: 45_000, intervals: [50, 100, 250, 500] }).not.toBe("waiting").catch(async error => {
+    const evidence = await page.evaluate(() => {
+      const raw = document.querySelector('[data-testid="renderer-evidence"]')?.textContent;
+      const renderer = raw ? JSON.parse(raw) : null;
+      return {
+        pathname: location.pathname,
+        selectionGate: Boolean(document.querySelector('[data-testid="player-character-selection-gate"]')),
+        connected: document.querySelector('.xaurion-connection-dot')?.getAttribute('data-connected'),
+        modelStatus: document.querySelector('[data-testid="glb-model-status"]')?.textContent,
+        renderer: renderer ? {generation:renderer.generation,status:renderer.status,recoveryCause:renderer.recoveryCause} : null,
+        issueCodes: (document.querySelector('.xaurion-runtime__error')?.textContent ?? '').match(/AUR-[A-Z0-9]+/g),
+        canvasCount: document.querySelectorAll('#three-viewport canvas').length,
+      };
+    });
+    console.error("AURION_REENTRY_FAILURE", JSON.stringify(evidence));
+    throw error;
+  });
 
   if (await publicAvatar.isVisible().catch(() => false)) {
     await publicAvatar.click();

@@ -1,20 +1,90 @@
-name: Read group failure evidence
+name: Diagnose group reentry
 on:
   push:
     branches: [diagnostics/review-draft-group-readback]
 permissions:
   contents: read
-  actions: read
+concurrency:
+  group: aim259-group-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  readback:
+  real-group-instance:
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-group-test
+          MARIADB_DATABASE: aurion_group_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-group-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-group-test@127.0.0.1:3306/aurion_group_test
+      AURION_GROUP_E2E: "1"
+      AURION_UI_E2E: "1"
+      AURION_E2E_ISOLATED: "1"
+      AURION_COLLISION_E2E: "1"
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-group-browser-assets
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-group-ci-signing-key-never-production
+      VITE_APP_ID: aurion-group-isolated-regression
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          artifact-ids: '11551075779'
-          run-id: '37776042842'
-          github-token: ${{ github.token }}
-          path: evidence
-      - name: Read retained browser failure context
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify source, types and pure queue rules
         run: |
-          find evidence -name error-context.md -type f -print -exec cat {} \;
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          pnpm check
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+          pnpm vitest run client/src/xaurion/core/RuntimeFrameLoop.test.ts server/aurionProductionReadbackChain.test.ts server/worldNatureCollision.test.ts server/zoneRuntime.test.ts server/zoneProtocol.test.ts server/zonePresenceLifecycle.test.ts server/zoneGatewayPresence.test.ts server/worldPresenceProtocol.test.ts server/worldChunkActionProtocol.test.ts client/src/lib/zoneMovement.test.ts client/src/xaurion/integration/ConfirmedPlayerMotion.test.ts client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx server/aim259GroupRules.test.ts server/aim259GroupCompletionMastery.test.ts server/playerUiProtocol.test.ts server/worldAssetProtocol.test.ts server/amplitudeAnalytics.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
+      - name: Apply full schema and test concurrent real database operations
+        run: |
+          pnpm exec drizzle-kit migrate
+          pnpm vitest run server/aim259GroupMariaDb.test.ts server/playerUiMariaDb.test.ts server/worldNatureCollisionMariaDb.test.ts
+          pnpm vitest run server/aim259GroupCompletionMariaDb.test.ts
+          AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
+      - name: Seed confirmed AIM-293 source and action for isolated runtime health
+        run: |
+          mkdir -p test-results
+          pnpm exec tsx scripts/seed-aim293-browser-evidence.ts | tee test-results/aim293-group-runtime-seed.json
+      - name: Build the exact runtime and install browser
+        run: |
+          pnpm build:runtime-artifact
+          pnpm exec playwright install --with-deps chromium
+      - name: Persist the initial world through the canonical resolver
+        run: node --import tsx scripts/prepare-aurion-group-runtime-proof.ts
+      - name: Start the built isolated runtime
+        run: |
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production pnpm start > /tmp/aim259-runtime.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aim259-runtime.log
+          exit 1
+      - name: Real groups and AX1 inventory, healer, controls and combat on phone/tablet/desktop
+        run: pnpm exec playwright test --config playwright.aurion-groups.config.ts
+      - name: Verify autonomous NPC life health against confirmed receipts
+        run: pnpm exec tsx scripts/verify-autonomous-npc-life-runtime.mjs
+      - name: Upload revision-bound evidence and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aim259-group-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-groups-report/
+            dist/.aurion-runtime-build.json
+          if-no-files-found: error
+          retention-days: 14
