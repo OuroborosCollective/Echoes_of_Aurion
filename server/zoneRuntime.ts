@@ -838,7 +838,6 @@ export class AuthoritativeMovementZone {
     if (!this.sortedPeersDirty) return;
     this.sortedPeers.length = this.peers.size;
     this.sortedPeersByEntityId.length = this.peers.size;
-    this.sortedPresences.length = this.peers.size;
     let index = 0;
     for (const peer of this.peers.values()) {
       this.sortedPeers[index] = peer;
@@ -847,9 +846,9 @@ export class AuthoritativeMovementZone {
     }
     this.sortedPeers.sort((a, b) => compareBinary(a.connectionId, b.connectionId));
     this.sortedPeersByEntityId.sort((a, b) => compareBinary(a.presence.entityId, b.presence.entityId));
-    for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
-      this.sortedPresences[i] = this.sortedPeersByEntityId[i]!.presence;
-    }
+    // Welcomes retain this list across the gateway's async presence lease.
+    // Keep membership snapshots separate when the internal cache changes.
+    this.sortedPresences = this.sortedPeersByEntityId.map(peer => peer.presence);
     this.sortedPeersDirty = false;
   }
 
