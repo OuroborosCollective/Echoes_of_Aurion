@@ -540,7 +540,12 @@ export class QuestPersistenceEngine {
 
   public async getReceiptByIdempotencyKey(idempotencyKey: string): Promise<QuestReceipt | undefined> {
     const db = await getDb();
-    if (!db) return Array.from(this.receipts.values()).find(receipt => receipt.idempotencyKey === idempotencyKey);
+    if (!db) {
+      for (const receipt of this.receipts.values()) {
+        if (receipt.idempotencyKey === idempotencyKey) return receipt;
+      }
+      return undefined;
+    }
     const row = (await db.select().from(aurionQuestReceipts)
       .where(eq(aurionQuestReceipts.idempotencyKey, idempotencyKey)).limit(1))[0];
     if (!row) return undefined;

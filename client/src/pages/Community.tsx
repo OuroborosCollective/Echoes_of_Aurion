@@ -89,7 +89,7 @@ export default function Community() {
                 ? "Ladevorgang läuft..."
                 : !isAuthenticated
                   ? "Nur für angemeldete Explorer verfügbar"
-                  : undefined
+                  : "Signalraum öffnen"
             }
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
           >
@@ -102,6 +102,7 @@ export default function Community() {
           <button
             type="button"
             aria-haspopup="dialog"
+            title="Forum öffnen"
             onClick={() => openCommunity("forum")}
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
           >
@@ -114,6 +115,7 @@ export default function Community() {
           <button
             type="button"
             aria-haspopup="dialog"
+            title="Events öffnen"
             onClick={() => openCommunity("events")}
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
           >
@@ -126,6 +128,7 @@ export default function Community() {
           <button
             type="button"
             aria-haspopup="dialog"
+            title="Asset-Katalog öffnen"
             onClick={() => openCommunity("assets")}
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
           >
@@ -149,7 +152,7 @@ export default function Community() {
                 ? "Ladevorgang läuft..."
                 : !isAuthenticated
                   ? "Nur für angemeldete Explorer verfügbar"
-                  : undefined
+                  : "Gildenübersicht öffnen"
             }
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
           >

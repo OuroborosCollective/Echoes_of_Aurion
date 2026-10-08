@@ -16,6 +16,28 @@ function createIsolatedTestZone(): AuthoritativeMovementZone {
 }
 
 describe("WASD authoritative zone movement", () => {
+  it("keeps binary entity ordering after cached membership grows, shrinks, reconnects and restores", () => {
+    const zone = createIsolatedTestZone();
+    const socket = () => ({ readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() });
+    const observer = socket();
+    const two = zone.join({ userId: 2, socket: observer as unknown as WebSocket });
+    const ten = zone.join({ userId: 10, socket: socket() as unknown as WebSocket });
+    zone.join({ userId: 1, socket: socket() as unknown as WebSocket });
+    const latestIds = () => JSON.parse(observer.send.mock.calls.at(-1)![0]).presences.map((p: { entityId: string }) => p.entityId);
+    expect(latestIds()).toEqual(["player:1", "player:10", "player:2"]);
+    zone.leave(ten.connectionId);
+    expect(latestIds()).toEqual(["player:1", "player:2"]);
+    const reconnect = zone.join({ userId: 1, socket: socket() as unknown as WebSocket });
+    expect(reconnect.presences.map(p => p.entityId)).toEqual(["player:1", "player:2"]);
+    zone.tick();
+    const state = zone.getCanonicalZoneState();
+    zone.leave(two.connectionId);
+    zone.leave(reconnect.connectionId);
+    expect(zone.getCanonicalZoneState().players).toHaveLength(0);
+    zone.restoreFromCanonicalState(state);
+    expect(zone.getCanonicalZoneState()).toEqual(state);
+  });
+
   it("keeps every balanced mob collision sweep within the WASD 340 mm per-axis contract", () => {
     expect(WASD_MOB_COLLISION_SUBSTEP_MAX_MM).toBe(340);
     for(const distance of [425,450,550,750]){
