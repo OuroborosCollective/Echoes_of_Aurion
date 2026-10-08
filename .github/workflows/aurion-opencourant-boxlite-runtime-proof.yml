@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
       - "scripts/run-opencourant-boxlite.py"
+      - "scripts/opencourant-*"
       - "server/aurionOpenCourantBoxliteAdapter.ts"
       - "server/aurionOpenCourantBoxliteAdapter.test.ts"
       - "shared/aurionImpactBakeProtocol.ts"
@@ -14,6 +15,7 @@ on:
     paths:
       - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
       - "scripts/run-opencourant-boxlite.py"
+      - "scripts/opencourant-*"
       - "server/aurionOpenCourantBoxliteAdapter.ts"
       - "shared/aurionImpactBakeProtocol.ts"
   workflow_dispatch:
@@ -93,11 +95,17 @@ jobs:
         run: |
           set -euo pipefail
           # BoxLite 0.10.5 prefers PATH bwrap. Ubuntu's distribution binary has
-          # the matching AppArmor userns profile; never disable host restrictions.
+          # a targeted AppArmor userns profile on Ubuntu 24.04; never disable restrictions.
           sudo apt-get update
           sudo apt-get install -y bubblewrap
           command -v bwrap
           bwrap --version
+          if ! bwrap --unshare-user --ro-bind / / -- true; then
+            sudo journalctl -k --since '-5 minutes' --no-pager | tail -30
+            test "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" = "1"
+            sudo install -m 0644 scripts/opencourant-bwrap.apparmor /etc/apparmor.d/bwrap-userns-restrict
+            sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+          fi
           bwrap --unshare-user --ro-bind / / -- true
           echo BWRAP_USERNS_READBACK_OK
 
