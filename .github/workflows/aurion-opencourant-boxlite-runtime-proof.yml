@@ -223,3 +223,36 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+
+  solver-evidence-readback:
+    name: Independent OpenCourant artifact readback
+    needs: boxlite-opencourant-runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: aurion-opencourant-boxlite-${{ env.SOURCE_SHA }}
+          path: .tmp/opencourant-independent-readback
+      - name: Verify downloaded solver files and exact provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+          python3 scripts/opencourant_evidence.py .tmp/opencourant-independent-readback --source-revision "${SOURCE_SHA}"
+          python3 - <<'PYTHON'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('.tmp/opencourant-independent-readback/runtime-evidence.json').read_text())
+          assert data['solverCommit'] == '33e685176cccf0c539a3ce07aa2096985a284e2a'
+          assert data['solverPackageHash'] == 'sha256:9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081'
+          assert data['boxliteVersion'] == '0.10.5'
+          assert data['boxliteImage'].startswith('ghcr.io/boxlite-ai/boxlite-agent-base@sha256:')
+          print('INDEPENDENT_SOLVER_ARTIFACT_READBACK_OK')
+          PYTHON
