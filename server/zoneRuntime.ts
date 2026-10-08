@@ -836,18 +836,8 @@ export class AuthoritativeMovementZone {
 
   private refreshPeerOrder(): void {
     if (!this.sortedPeersDirty) return;
-    this.sortedPeers.length = this.peers.size;
-    this.sortedPeersByEntityId.length = this.peers.size;
-    let index = 0;
-    for (const peer of this.peers.values()) {
-      this.sortedPeers[index] = peer;
-      this.sortedPeersByEntityId[index] = peer;
-      index++;
-    }
-    this.sortedPeers.sort((a, b) => compareBinary(a.connectionId, b.connectionId));
-    this.sortedPeersByEntityId.sort((a, b) => compareBinary(a.presence.entityId, b.presence.entityId));
-    // Welcomes retain this list across the gateway's async presence lease.
-    // Keep membership snapshots separate when the internal cache changes.
+    this.sortedPeers = Array.from(this.peers.values()).sort((a, b) => compareBinary(a.connectionId, b.connectionId));
+    this.sortedPeersByEntityId = Array.from(this.peers.values()).sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
     this.sortedPresences = this.sortedPeersByEntityId.map(peer => peer.presence);
     this.sortedPeersDirty = false;
   }
@@ -917,12 +907,7 @@ export class ZoneRegistry {
 
   tick(): void {
     if (this.sortedZonesDirty) {
-      this.sortedZones.length = this.zones.size;
-      let index = 0;
-      for (const zone of this.zones.values()) {
-        this.sortedZones[index++] = zone;
-      }
-      this.sortedZones.sort((left, right) => compareBinary(left.zoneId, right.zoneId));
+      this.sortedZones = Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).map(([, zone]) => zone);
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) zone.tick();

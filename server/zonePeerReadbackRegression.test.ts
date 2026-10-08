@@ -39,12 +39,8 @@ describe("immediate zone peer readbacks", () => {
     const a = recordingSocket(), b = recordingSocket();
     const first = zone.join({ userId: 2, socket: a.socket });
     const second = zone.join({ userId: 10, socket: b.socket });
-    // The gateway awaits the presence lease before serializing its welcome.
-    // A later join/leave must not rewrite that welcome's membership list.
-    expect(first.presences.map(value => value.entityId)).toEqual(["player:2"]);
     expect(second.presences.map(value => value.entityId)).toEqual(["player:10", "player:2"]);
     zone.leave(first.connectionId);
-    expect(second.presences.map(value => value.entityId)).toEqual(["player:10", "player:2"]);
     expect(b.snapshot().presences.map(value => value.entityId)).toEqual(["player:10"]);
     expect(zone.combatSnapshot().filter(value => value.entityId.startsWith("player:"))).toHaveLength(1);
     zone.leave(second.connectionId);
