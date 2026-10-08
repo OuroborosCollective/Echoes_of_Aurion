@@ -14,6 +14,7 @@ import shlex
 from pathlib import Path
 
 import boxlite
+from opencourant_evidence import inventory, verify
 
 REQUIRED = (
     "AURION_IMPACT_WORK_ID", "AURION_SOURCE_REVISION", "AURION_LOGICAL_TICK",
@@ -111,9 +112,9 @@ async def main() -> None:
         except asyncio.TimeoutError:
             await execution.kill()
             raise
+        await box.copy_out("/work/job", str(output / "solver-work"))
         if result.exit_code != 0:
             raise SystemExit(f"OpenCourant failed with exit code {result.exit_code}")
-        await box.copy_out("/work/job", str(output / "solver-work"))
     finally:
         await box.stop()
 
@@ -129,11 +130,15 @@ async def main() -> None:
         "solverCommit": os.environ["OPENCOURANT_COMMIT"],
         "boxliteImage": os.environ["BOXLITE_IMAGE"],
         "boxliteVersion": os.environ["BOXLITE_VERSION"],
+        "securityPreset": "maximum",
+        "solverArtifacts": inventory(output / "solver-work"),
     }
     (output / "runtime-evidence.json").write_text(
         json.dumps(manifest, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
+
+    verify(output, os.environ["AURION_SOURCE_REVISION"])
 
 
 if __name__ == "__main__":

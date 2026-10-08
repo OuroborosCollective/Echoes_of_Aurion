@@ -5,7 +5,7 @@ on:
     paths:
       - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
       - "scripts/run-opencourant-boxlite.py"
-      - "scripts/opencourant-*"
+      - "scripts/opencourant*"
       - "server/aurionOpenCourantBoxliteAdapter.ts"
       - "server/aurionOpenCourantBoxliteAdapter.test.ts"
       - "shared/aurionImpactBakeProtocol.ts"
@@ -15,7 +15,7 @@ on:
     paths:
       - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
       - "scripts/run-opencourant-boxlite.py"
-      - "scripts/opencourant-*"
+      - "scripts/opencourant*"
       - "server/aurionOpenCourantBoxliteAdapter.ts"
       - "shared/aurionImpactBakeProtocol.ts"
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
     env:
       OPENCOURANT_RELEASE_COMMIT: 33e685176cccf0c539a3ce07aa2096985a284e2a
       OPENCOURANT_RELEASE_TAG: latest-20261006
-      OPENCOURANT_PACKAGE_HASH: sha256:905bd73b4daf5c7762c18a50d4dc5db4c06b496811e6e0ab27c583d04578bd66
+      OPENCOURANT_PACKAGE_HASH: sha256:9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081
       BOXLITE_VERSION: 0.10.5
       BOXLITE_BASE_TAG: v0.1.0
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -43,6 +43,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+
+      - name: Test evidence rejection and security boundary contracts
+        run: |
+          python3 -m unittest discover -s scripts -p opencourant_evidence_test.py -v
+          node --test scripts/opencourant-host-boundary.test.mjs
 
       - name: Require real KVM access
         shell: bash
@@ -134,7 +139,9 @@ jobs:
           curl -fsSL -L \
             "https://github.com/OpenCourant/OpenCourant/releases/download/${OPENCOURANT_RELEASE_TAG}/OpenCourant_linux64.zip" \
             -o "${PACKAGE}"
-          test "sha256:$(sha256sum "${PACKAGE}" | awk '{print $1}')" = "${OPENCOURANT_PACKAGE_HASH}"
+          ACTUAL_PACKAGE_HASH="sha256:$(sha256sum "${PACKAGE}" | awk '{print $1}')"
+          echo "OPENCOURANT_PACKAGE_READBACK=${ACTUAL_PACKAGE_HASH}"
+          test "${ACTUAL_PACKAGE_HASH}" = "${OPENCOURANT_PACKAGE_HASH}"
           BASE="https://raw.githubusercontent.com/OpenCourant/OpenCourant/${OPENCOURANT_RELEASE_COMMIT}/qa-tests/miniqa/ACCELEROMETRES/data"
           curl -fsSL "${BASE}/ACCELERO_0000.rad" -o "${ROOT}/ACCELERO_0000.rad"
           curl -fsSL "${BASE}/ACCELERO_0001.rad" -o "${ROOT}/ACCELERO_0001.rad"
@@ -174,17 +181,45 @@ jobs:
           data = json.loads(path.read_text())
           assert data["protocol"] == "aurion.world-impact-bake.runtime-evidence.v1"
           assert data["boxliteImage"].startswith("ghcr.io/boxlite-ai/boxlite-agent-base@sha256:")
-          assert data["solverPackageHash"] == "sha256:905bd73b4daf5c7762c18a50d4dc5db4c06b496811e6e0ab27c583d04578bd66"
+          assert data["solverPackageHash"] == "sha256:9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081"
           assert data["solverCommit"] == "33e685176cccf0c539a3ce07aa2096985a284e2a"
           assert data["boxliteVersion"] == "0.10.5"
           assert data["sourceRevision"] == os.environ["SOURCE_SHA"]
           print(json.dumps(data, sort_keys=True))
           PY
+          python3 scripts/opencourant_evidence.py .aurion-impact-results/ci.opencourant.smoke --source-revision "${SOURCE_SHA}"
+
+      - name: Preserve bounded operator diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/opencourant-diagnostics
+          for log in "${HOME}"/.boxlite/logs/boxlite.log*; do
+            if test -f "${log}"; then
+              tail -200 "${log}" | tee ".tmp/opencourant-diagnostics/$(basename "${log}")"
+            fi
+          done
+          if test -d .aurion-impact-results/ci.opencourant.smoke/solver-work; then
+            find .aurion-impact-results/ci.opencourant.smoke/solver-work -type f -printf '%P %s bytes\n'
+            tail -60 .aurion-impact-results/ci.opencourant.smoke/solver-work/engine.out
+          fi
+
+      - name: Upload operator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-opencourant-diagnostics-${{ env.SOURCE_SHA }}
+          path: .tmp/opencourant-diagnostics
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload bounded runtime evidence
         uses: actions/upload-artifact@v4
         with:
-          name: aurion-opencourant-boxlite-${{ github.sha }}
+          name: aurion-opencourant-boxlite-${{ env.SOURCE_SHA }}
           path: .aurion-impact-results/ci.opencourant.smoke
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7

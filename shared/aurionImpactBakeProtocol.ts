@@ -4,7 +4,7 @@ export const AURION_IMPACT_BAKE_PROTOCOL = "aurion.world-impact-bake.v1" as cons
 export const OPENCOURANT_RELEASE_COMMIT = "33e685176cccf0c539a3ce07aa2096985a284e2a" as const;
 export const OPENCOURANT_RELEASE_TAG = "latest-20261006" as const;
 export const OPENCOURANT_PACKAGE_NAME = "OpenCourant_linux64.zip" as const;
-export const OPENCOURANT_PACKAGE_HASH = "sha256:905bd73b4daf5c7762c18a50d4dc5db4c06b496811e6e0ab27c583d04578bd66" as const;
+export const OPENCOURANT_PACKAGE_HASH = "sha256:9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081" as const;
 export const BOXLITE_VERSION = "0.10.5" as const;
 export const BOXLITE_BASE_IMAGE = "ghcr.io/boxlite-ai/boxlite-agent-base:v0.1.0" as const;
 
