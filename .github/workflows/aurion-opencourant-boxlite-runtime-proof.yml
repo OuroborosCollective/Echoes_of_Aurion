@@ -1,0 +1,258 @@
+name: Aurion OpenCourant BoxLite runtime proof
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
+      - "scripts/run-opencourant-boxlite.py"
+      - "scripts/opencourant*"
+      - "server/aurionOpenCourantBoxliteAdapter.ts"
+      - "server/aurionOpenCourantBoxliteAdapter.test.ts"
+      - "shared/aurionImpactBakeProtocol.ts"
+      - "docs/architecture/AURION_OPENCOURANT_BOXLITE_WORLD_IMPACT.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aurion-opencourant-boxlite-runtime-proof.yml"
+      - "scripts/run-opencourant-boxlite.py"
+      - "scripts/opencourant*"
+      - "server/aurionOpenCourantBoxliteAdapter.ts"
+      - "shared/aurionImpactBakeProtocol.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boxlite-opencourant-runtime:
+    name: BoxLite KVM + OpenCourant runtime smoke
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      OPENCOURANT_RELEASE_COMMIT: 33e685176cccf0c539a3ce07aa2096985a284e2a
+      OPENCOURANT_RELEASE_TAG: latest-20261006
+      OPENCOURANT_PACKAGE_HASH: sha256:9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081
+      BOXLITE_VERSION: 0.10.5
+      BOXLITE_BASE_TAG: v0.1.0
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Test evidence rejection and security boundary contracts
+        run: |
+          python3 -m unittest discover -s scripts -p opencourant_evidence_test.py -v
+          node --test scripts/opencourant-host-boundary.test.mjs
+
+      - name: Require real KVM access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+          python3 -c "open('/dev/kvm','rb').close(); print('KVM_READBACK_OK')"
+
+      - name: Install pinned BoxLite
+        shell: bash
+        run: |
+          set -euo pipefail
+          VENV="${RUNNER_TEMP}/aurion-boxlite-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python3 -m venv "${VENV}"
+          "${VENV}/bin/pip" install --disable-pip-version-check "boxlite==${BOXLITE_VERSION}"
+          "${VENV}/bin/python" -c "import boxlite; print('BOXLITE_IMPORT_OK')"
+          echo "BOXLITE_PYTHON=${VENV}/bin/python" >> "${GITHUB_ENV}"
+
+      - name: Diagnose host namespace boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+          for key in kernel/apparmor_restrict_unprivileged_userns kernel/unprivileged_userns_clone user/max_user_namespaces; do
+            if test -f "/proc/sys/${key}"; then
+              echo "${key}=$(cat "/proc/sys/${key}")"
+            fi
+          done
+          "${BOXLITE_PYTHON}" - <<'PYTHON'
+          import boxlite
+          import pathlib
+          import shutil
+          import subprocess
+          root = pathlib.Path(boxlite.__file__).parent
+          paths = list(root.rglob("bwrap"))
+          if shutil.which("bwrap"):
+              paths.insert(0, pathlib.Path(shutil.which("bwrap")))
+          for path in paths:
+              probe = subprocess.run([str(path), "--unshare-user", "--ro-bind", "/", "/", "--", "true"], capture_output=True, text=True)
+              print(f"BWRAP_PROBE path={path} exit={probe.returncode} stderr={probe.stderr.strip()}", flush=True)
+          print(f"BWRAP_CANDIDATES={len(paths)}", flush=True)
+          PYTHON
+          sudo journalctl -k --since '-5 minutes' --no-pager | tail -80
+
+      - name: Install distribution Bubblewrap and require namespace isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # BoxLite 0.10.5 prefers PATH bwrap. Ubuntu's distribution binary has
+          # a targeted AppArmor userns profile on Ubuntu 24.04; never disable restrictions.
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          command -v bwrap
+          bwrap --version
+          if ! bwrap --unshare-user --ro-bind / / -- true; then
+            sudo journalctl -k --since '-5 minutes' --no-pager | tail -30
+            test "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" = "1"
+            sudo install -m 0644 scripts/opencourant-bwrap.apparmor /etc/apparmor.d/bwrap-userns-restrict
+            sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+          fi
+          bwrap --unshare-user --ro-bind / / -- true
+          echo BWRAP_USERNS_READBACK_OK
+
+      - name: Resolve BoxLite base to immutable GHCR digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(curl -fsSL 'https://ghcr.io/token?scope=repository:boxlite-ai/boxlite-agent-base:pull' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+          DIGEST="$(curl -fsSI \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json' \
+            "https://ghcr.io/v2/boxlite-ai/boxlite-agent-base/manifests/${BOXLITE_BASE_TAG}" \
+            | tr -d '\r' \
+            | awk 'tolower($1)=="docker-content-digest:" {print $2}' \
+            | tail -n 1)"
+          echo "${DIGEST}" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          echo "BOXLITE_PROOF_IMAGE=ghcr.io/boxlite-ai/boxlite-agent-base@${DIGEST}" >> "${GITHUB_ENV}"
+
+      - name: Fetch exact OpenCourant package and MiniQA deck pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${GITHUB_WORKSPACE}/.tmp/opencourant-smoke"
+          mkdir -p "${ROOT}"
+          PACKAGE="${ROOT}/OpenCourant_linux64.zip"
+          curl -fsSL -L \
+            "https://github.com/OpenCourant/OpenCourant/releases/download/${OPENCOURANT_RELEASE_TAG}/OpenCourant_linux64.zip" \
+            -o "${PACKAGE}"
+          ACTUAL_PACKAGE_HASH="sha256:$(sha256sum "${PACKAGE}" | awk '{print $1}')"
+          echo "OPENCOURANT_PACKAGE_READBACK=${ACTUAL_PACKAGE_HASH}"
+          test "${ACTUAL_PACKAGE_HASH}" = "${OPENCOURANT_PACKAGE_HASH}"
+          BASE="https://raw.githubusercontent.com/OpenCourant/OpenCourant/${OPENCOURANT_RELEASE_COMMIT}/qa-tests/miniqa/ACCELEROMETRES/data"
+          curl -fsSL "${BASE}/ACCELERO_0000.rad" -o "${ROOT}/ACCELERO_0000.rad"
+          curl -fsSL "${BASE}/ACCELERO_0001.rad" -o "${ROOT}/ACCELERO_0001.rad"
+          echo "OPENCOURANT_PACKAGE_PATH=${PACKAGE}" >> "${GITHUB_ENV}"
+          echo "AURION_STARTER_DECK_HASH=sha256:$(sha256sum "${ROOT}/ACCELERO_0000.rad" | awk '{print $1}')" >> "${GITHUB_ENV}"
+          echo "AURION_ENGINE_DECK_HASH=sha256:$(sha256sum "${ROOT}/ACCELERO_0001.rad" | awk '{print $1}')" >> "${GITHUB_ENV}"
+
+      - name: Execute verified OpenCourant package inside BoxLite micro-VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AURION_IMPACT_WORK_ID="ci.opencourant.smoke"
+          export AURION_SOURCE_REVISION="${SOURCE_SHA}"
+          export AURION_LOGICAL_TICK="0"
+          export AURION_SCENARIO="MATERIAL_CALIBRATION"
+          export OPENCOURANT_COMMIT="${OPENCOURANT_RELEASE_COMMIT}"
+          export BOXLITE_IMAGE="${BOXLITE_PROOF_IMAGE}"
+          export BOXLITE_CPUS="2"
+          export BOXLITE_MEMORY_MIB="4096"
+          "${BOXLITE_PYTHON}" scripts/run-opencourant-boxlite.py \
+            --starter-deck .tmp/opencourant-smoke/ACCELERO_0000.rad \
+            --engine-deck .tmp/opencourant-smoke/ACCELERO_0001.rad \
+            --solver-package "${OPENCOURANT_PACKAGE_PATH}" \
+            --output .aurion-impact-results/ci.opencourant.smoke
+
+      - name: Read back solver evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s .aurion-impact-results/ci.opencourant.smoke/runtime-evidence.json
+          grep -R -q "NORMAL TERMINATION" .aurion-impact-results/ci.opencourant.smoke/solver-work
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path(".aurion-impact-results/ci.opencourant.smoke/runtime-evidence.json")
+          data = json.loads(path.read_text())
+          assert data["protocol"] == "aurion.world-impact-bake.runtime-evidence.v1"
+          assert data["boxliteImage"].startswith("ghcr.io/boxlite-ai/boxlite-agent-base@sha256:")
+          assert data["solverPackageHash"] == "sha256:9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081"
+          assert data["solverCommit"] == "33e685176cccf0c539a3ce07aa2096985a284e2a"
+          assert data["boxliteVersion"] == "0.10.5"
+          assert data["sourceRevision"] == os.environ["SOURCE_SHA"]
+          print(json.dumps(data, sort_keys=True))
+          PY
+          python3 scripts/opencourant_evidence.py .aurion-impact-results/ci.opencourant.smoke --source-revision "${SOURCE_SHA}"
+
+      - name: Preserve bounded operator diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/opencourant-diagnostics
+          for log in "${HOME}"/.boxlite/logs/boxlite.log*; do
+            if test -f "${log}"; then
+              tail -200 "${log}" | tee ".tmp/opencourant-diagnostics/$(basename "${log}")"
+            fi
+          done
+          if test -d .aurion-impact-results/ci.opencourant.smoke/solver-work; then
+            find .aurion-impact-results/ci.opencourant.smoke/solver-work -type f -printf '%P %s bytes\n'
+            tail -60 .aurion-impact-results/ci.opencourant.smoke/solver-work/engine.out
+          fi
+
+      - name: Upload operator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-opencourant-diagnostics-${{ env.SOURCE_SHA }}
+          path: .tmp/opencourant-diagnostics
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload bounded runtime evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-opencourant-boxlite-${{ env.SOURCE_SHA }}
+          path: .aurion-impact-results/ci.opencourant.smoke
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  solver-evidence-readback:
+    name: Independent OpenCourant artifact readback
+    needs: boxlite-opencourant-runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: aurion-opencourant-boxlite-${{ env.SOURCE_SHA }}
+          path: .tmp/opencourant-independent-readback
+      - name: Verify downloaded solver files and exact provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+          python3 scripts/opencourant_evidence.py .tmp/opencourant-independent-readback --source-revision "${SOURCE_SHA}"
+          python3 - <<'PYTHON'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('.tmp/opencourant-independent-readback/runtime-evidence.json').read_text())
+          assert data['solverCommit'] == '33e685176cccf0c539a3ce07aa2096985a284e2a'
+          assert data['solverPackageHash'] == 'sha256:9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081'
+          assert data['boxliteVersion'] == '0.10.5'
+          assert data['boxliteImage'].startswith('ghcr.io/boxlite-ai/boxlite-agent-base@sha256:')
+          print('INDEPENDENT_SOLVER_ARTIFACT_READBACK_OK')
+          PYTHON
