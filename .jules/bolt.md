@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## $(date +%Y-%m-%d) - Optimize sequence watermark Map allocation in zone tick
+**Learning:** In `server/zoneRuntime.ts`, `this.sortedPeers.map(...)` was creating an intermediate array of tuple arrays on every single game tick to initialize the `actionSequenceWatermarks` Map. While micro-optimizations on cold paths (guarded by dirty flags like `sortedPeersDirty`) should be avoided, operations running unconditionally on every tick form the true hot path and cause significant garbage collection overhead.
+**Action:** Replace high-frequency array mapping and Map instantiations from iterables with a direct `for...of` loop over cached array arrays to manually populate instantiated Maps or primitive objects in O(N) time with minimal allocation overhead.
