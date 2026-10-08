@@ -39,6 +39,7 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Require real KVM access
@@ -60,6 +61,45 @@ jobs:
           "${VENV}/bin/pip" install --disable-pip-version-check "boxlite==${BOXLITE_VERSION}"
           "${VENV}/bin/python" -c "import boxlite; print('BOXLITE_IMPORT_OK')"
           echo "BOXLITE_PYTHON=${VENV}/bin/python" >> "${GITHUB_ENV}"
+
+      - name: Diagnose host namespace boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+          for key in kernel/apparmor_restrict_unprivileged_userns kernel/unprivileged_userns_clone user/max_user_namespaces; do
+            if test -f "/proc/sys/${key}"; then
+              echo "${key}=$(cat "/proc/sys/${key}")"
+            fi
+          done
+          "${BOXLITE_PYTHON}" - <<'PYTHON'
+          import boxlite
+          import pathlib
+          import shutil
+          import subprocess
+          root = pathlib.Path(boxlite.__file__).parent
+          paths = list(root.rglob("bwrap"))
+          if shutil.which("bwrap"):
+              paths.insert(0, pathlib.Path(shutil.which("bwrap")))
+          for path in paths:
+              probe = subprocess.run([str(path), "--unshare-user", "--ro-bind", "/", "/", "--", "true"], capture_output=True, text=True)
+              print(f"BWRAP_PROBE path={path} exit={probe.returncode} stderr={probe.stderr.strip()}", flush=True)
+          print(f"BWRAP_CANDIDATES={len(paths)}", flush=True)
+          PYTHON
+          sudo journalctl -k --since '-5 minutes' --no-pager | tail -80
+
+      - name: Install distribution Bubblewrap and require namespace isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # BoxLite 0.10.5 prefers PATH bwrap. Ubuntu's distribution binary has
+          # the matching AppArmor userns profile; never disable host restrictions.
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          command -v bwrap
+          bwrap --version
+          bwrap --unshare-user --ro-bind / / -- true
+          echo BWRAP_USERNS_READBACK_OK
 
       - name: Resolve BoxLite base to immutable GHCR digest
         shell: bash
