@@ -67,6 +67,8 @@ async def main() -> None:
         raise SystemExit("OpenCourant package hash mismatch")
 
     output = Path(args.output).resolve()
+    if output.exists() and any(output.iterdir()):
+        raise SystemExit("output directory must be empty; stale evidence is forbidden")
     output.mkdir(parents=True, exist_ok=True)
     cpus = int(os.environ["BOXLITE_CPUS"])
     memory = int(os.environ["BOXLITE_MEMORY_MIB"])
@@ -77,31 +79,31 @@ async def main() -> None:
         image=os.environ["BOXLITE_IMAGE"],
         cpus=cpus,
         memory_mib=memory,
-        working_dir="/work",
+        working_dir="/workspace",
         advanced=boxlite.AdvancedBoxOptions(security=security),
         auto_remove=True,
     ))
     try:
-        prep = await box.exec("sh", ["-lc", "set -eu; mkdir -p /work/job /opt/opencourant"])
+        prep = await box.exec("sh", ["-lc", "set -eu; test \"$(id -u)\" -ne 0; test -w /workspace; mkdir -p /workspace/job /workspace/opencourant"])
         prep_result = await prep.wait()
         if prep_result.exit_code != 0:
             raise SystemExit("BoxLite workspace preparation failed")
 
-        await box.copy_in(str(package), "/work/OpenCourant_linux64.zip")
-        await box.copy_in(str(starter), "/work/job/" + starter.name)
-        await box.copy_in(str(engine), "/work/job/" + engine.name)
+        await box.copy_in(str(package), "/workspace/OpenCourant_linux64.zip")
+        await box.copy_in(str(starter), "/workspace/job/" + starter.name)
+        await box.copy_in(str(engine), "/workspace/job/" + engine.name)
 
         command = (
             "set -eu; "
-            "python3 -m zipfile -e /work/OpenCourant_linux64.zip /opt/opencourant; "
-            "STARTER=$(find /opt/opencourant -type f -name starter_linux64_gf | head -1); "
-            "ENGINE=$(find /opt/opencourant -type f -name engine_linux64_gf | head -1); "
+            "python3 -m zipfile -e /workspace/OpenCourant_linux64.zip /workspace/opencourant; "
+            "STARTER=$(find /workspace/opencourant -type f -name starter_linux64_gf | head -1); "
+            "ENGINE=$(find /workspace/opencourant -type f -name engine_linux64_gf | head -1); "
             "test -n \"$STARTER\"; test -n \"$ENGINE\"; "
             "chmod u+x \"$STARTER\" \"$ENGINE\"; "
             "ROOT=$(dirname \"$(dirname \"$STARTER\")\"); "
             "export RAD_CFG_PATH=\"$ROOT/hm_cfg_files\"; "
             "export LD_LIBRARY_PATH=\"$ROOT/extlib/hm_reader/linux64:$ROOT/extlib/h3d/lib/linux64:${LD_LIBRARY_PATH:-}\"; "
-            f"export OMP_NUM_THREADS={cpus}; cd /work/job; "
+            f"export OMP_NUM_THREADS={cpus}; cd /workspace/job; "
             f"\"$STARTER\" -i {shlex.quote(starter.name)} -np 1 > starter.out 2>&1; "
             f"\"$ENGINE\" -i {shlex.quote(engine.name)} > engine.out 2>&1; "
             "grep -q 'NORMAL TERMINATION' engine.out"
@@ -112,7 +114,7 @@ async def main() -> None:
         except asyncio.TimeoutError:
             await execution.kill()
             raise
-        await box.copy_out("/work/job", str(output / "solver-work"))
+        await box.copy_out("/workspace/job", str(output / "solver-work"))
         if result.exit_code != 0:
             raise SystemExit(f"OpenCourant failed with exit code {result.exit_code}")
     finally:

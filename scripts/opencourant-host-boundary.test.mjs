@@ -25,3 +25,10 @@ test('successful evidence follows copied-back output validation', () => {
   assert.match(workflow, /python3 scripts\/opencourant_evidence.py .*--source-revision/);
   assert.match(workflow, /include-hidden-files: true/);
 });
+
+test('base-image workspace remains writable by the unprivileged image user', () => {
+  assert.match(runner, /working_dir="\/workspace"/);
+  assert.doesNotMatch(runner, /\/opt\/opencourant|working_dir="\/work"|sudo/);
+  assert.match(runner, /id -u/);
+  assert.match(runner, /stale evidence is forbidden/);
+});
