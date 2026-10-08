@@ -24,3 +24,7 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+
+## 2024-10-08 - Selectable Grid & Filter ARIA State
+**Learning:** Selectable elements that toggle visual state (like gallery grid items and filter toggles) need explicit `aria-pressed` properties alongside tactile feedback (`motion-safe:hover:-translate-y-0.5`) and clear focus states (`focus-visible:ring-2`) for keyboard accessibility.
+**Action:** When creating or modifying selectable toggle filters or item grids, always apply `aria-pressed` synchronized with the selection state, and pair it with focus-visible outlines.
