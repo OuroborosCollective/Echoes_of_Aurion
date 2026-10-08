@@ -1,0 +1,20 @@
+name: Read group failure evidence
+on:
+  push:
+    branches: [diagnostics/review-draft-group-readback]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readback:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11551075779'
+          run-id: '37776042842'
+          github-token: ${{ github.token }}
+          path: evidence
+      - name: Read retained browser failure context
+        run: |
+          find evidence -name error-context.md -type f -print -exec cat {} \;
