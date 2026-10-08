@@ -1237,3 +1237,31 @@ Change: Provision targeted Bubblewrap AppArmor userns profile, retain maximum is
 Learned: KVM access does not prove userns availability; Ubuntu 24.04 AppArmor denied setpcap/uid_map until the targeted profile loaded. The base image's user/workdir and BoxLite include_parent default are separate initialization/readback contracts. Mutable upstream release assets require fresh provenance plus an unchanged fail-closed hash gate.
 Evidence: Original run 37537409608; AppArmor denial and successful namespace reprobe in 37771213837; GH release 405359625 / asset 617491847 and downloaded package SHA-256 9d67531de156dd9beba05fbfe710dcdc2bcecbdf3dc3a12642cf85dcece80081 match source commit 33e685176cccf0c539a3ce07aa2096985a284e2a. Run 37772144731 at d9282437bf4ed71e66049866bd0343d637ba1152 passed 12 regression tests, real KVM/BoxLite 0.10.5 Starter+Engine execution, NORMAL TERMINATION and file/deck hash readback; 15 solver files plus runtime-evidence.json uploaded as artifact 11548517313 (ZIP SHA-256 b1222e551e30670b72f7e71c43823cbefae2eca209b6ecf27608018145f6674f).
 Next safe step: Require all final-head regression/runtime gates and fresh-runner archive readback green, then merge with an expected-head lease and verify GitHub merge/main readback. This records isolated numerical proof, not live gameplay integration.
+
+
+### 2026-10-08 — PR #802 — feat(physics): BoxLite-isolated OpenCourant WORLD_IMPACT baking
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=802 merge=83c4a7dc7466f5f9361f1d8261a5239903c8fe2e -->
+Task: Merge PR #802 into `main` — feat(physics): BoxLite-isolated OpenCourant WORLD_IMPACT baking.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-opencourant-boxlite-runtime-proof.yml`
+- `Memory.md`
+- `docs/architecture/AURION_OPENCOURANT_BOXLITE_WORLD_IMPACT.md`
+- `scripts/opencourant-bwrap.apparmor`
+- `scripts/opencourant-host-boundary.test.mjs`
+- `scripts/opencourant_evidence.py`
+- `scripts/opencourant_evidence_test.py`
+- `scripts/run-opencourant-boxlite.py`
+- `server/aurionOpenCourantBoxliteAdapter.test.ts`
+- `server/aurionOpenCourantBoxliteAdapter.ts`
+- `shared/aurionImpactBakeProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/802
+- Merge commit: `83c4a7dc7466f5f9361f1d8261a5239903c8fe2e`
+- PR head: `1f3bb201a72c2581ac5f1d8bf0e0d211481360ea`
+- Merged at: 2026-10-08T11:58:22Z
+- Post-merge workflow run: 37773617788
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
