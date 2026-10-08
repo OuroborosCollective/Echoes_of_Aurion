@@ -212,7 +212,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["starfall_resonance", "completed", false],
       ["clockwork_core", "completed", false],
       ["sunwatch_vanguard", "completed", false],
-      ["eclipse_ascension", "completed", false],
+      ["eclipse_ascension", "ready_to_turn_in", true],
     ]);
     expect((await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "eclipse_ascension", giver: "Lyra" })).profile).toMatchObject({ totalXp: 3302, victories: 7 });
 
