@@ -581,7 +581,7 @@ export class MMOEngine {
   }
 
   public spawnTerritoryGuards(chunkKey: string, count: number, ownerName: string) {
-    const chunk = Array.from(this.landscape.chunkManager.chunks.values()).find(c => c.chunkKey === chunkKey);
+    const chunk = this.landscape.chunkManager.chunks.get(chunkKey);
     if (!chunk) return;
 
     for (let i = 0; i < count; i++) {

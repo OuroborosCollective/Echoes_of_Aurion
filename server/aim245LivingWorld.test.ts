@@ -30,7 +30,14 @@ describe("AIM-245/AIM-263 living world migration", () => {
   });
 
   it("moves the NPC to the destination only after a confirmed non-ambushed caravan", () => {
-    const candidate = Array.from({ length: 200 }, (_, resolutionIndex) => resolveLivingWorldTick({ worldSeed: "movement", resolutionIndex, market, npc, polityStability: 100, preferredGoal: "expand_influence" })).find(result => result.action === "caravan" && !result.caravan.ambushed);
+    let candidate;
+    for (let resolutionIndex = 0; resolutionIndex < 200; resolutionIndex++) {
+      const result = resolveLivingWorldTick({ worldSeed: "movement", resolutionIndex, market, npc, polityStability: 100, preferredGoal: "expand_influence" });
+      if (result.action === "caravan" && !result.caravan.ambushed) {
+        candidate = result;
+        break;
+      }
+    }
     expect(candidate).toBeTruthy();
     expect(candidate!.caravan.destination).not.toBeNull();
     expect(candidate!.npc.currentHubId).toBe(candidate!.caravan.destination);

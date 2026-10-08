@@ -15,6 +15,8 @@ describe("Home", () => {
     expect(document.querySelector("canvas")).toBeNull();
     expect(screen.getByRole("button", { name: "Asset-Katalog" })).toBeTruthy();
     expect(screen.getByText("NPCs mit eigenem Leben")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Hauptnavigation" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Fußzeilennavigation" })).toBeTruthy();
   });
 
   it("opens only the account authentication contract from the account CTA", async () => {
