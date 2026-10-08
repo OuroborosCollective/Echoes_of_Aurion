@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2024-05-15 - Community Quick Access
+**Learning:** Grouping related community functions (like Chat, Forum, Assets) directly on the landing page improves discoverability and user engagement, compared to hiding them behind a single generic button or inside an overlay navigation alone.
+**Action:** Always provide direct, contextual entry points to key community features from main structural pages, using consistent visual design (inline-flex icons with margin) to match the surrounding aesthetic.

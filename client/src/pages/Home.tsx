@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import {
   BookOpen,
+  Box,
   Compass,
+  FileText,
   MessageCircle,
   ShieldCheck,
   Sparkles,
@@ -356,10 +358,33 @@ export default function Home() {
           <button
             type="button"
             aria-haspopup="dialog"
+            disabled={loading}
+            aria-busy={loading}
+            title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Signalraum öffnen"}
+            onClick={() => openCommunity("chat")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
+          >
+            <MessageCircle className="mr-2 size-4 text-cyan-300" />
+            Signalraum
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            title="Forum öffnen"
+            onClick={() => openCommunity("forum")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+          >
+            <FileText className="mr-2 size-4 text-cyan-300" />
+            Forum
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
             title="Asset-Katalog öffnen"
             onClick={() => openCommunity("assets")}
-            className="min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
           >
+            <Box className="mr-2 size-4 text-cyan-300" />
             Asset-Katalog
           </button>
         </div>
