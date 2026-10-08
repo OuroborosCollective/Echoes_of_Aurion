@@ -177,9 +177,13 @@ export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZone
 }
 
 function npcAutonomy(input: { npcId: "lyra" | "orun"; reaction: WorldReaction; resolutionIndex: number; dialectId: string; baseNeeds: Readonly<Record<NpcNeedKey, number>> }) {
+  const events = [];
+  for (const need in input.reaction.npcNeedDeltas) {
+    events.push({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need: need as NpcNeedKey, delta: (input.reaction.npcNeedDeltas as any)[need], sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex });
+  }
   const needs = resolveNpcNeeds({
     current: input.baseNeeds,
-    events: (Object.entries(input.reaction.npcNeedDeltas) as [NpcNeedKey, number][]).map(([need, delta]) => ({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need, delta, sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex })),
+    events,
   });
   const decision = decideNpcGoal({ npcId: input.npcId, needs, observationIds: input.reaction.signalIds, resolutionIndex: input.resolutionIndex });
   return { needs, goal: decision.goal, decisionHash: decision.decisionHash, dialectId: input.dialectId, comprehensionThreshold: 0.6 };
@@ -227,7 +231,7 @@ function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, reso
     if (epochSector.polity.state === "warfront") signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:war`, kind: "war", regionId: zoneId, magnitude: epochSector.polity.conflictPressure, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
   }
   if (input.activeQuest) signals.push({ id: `quest:${input.activeQuest}`, kind: "resonance", regionId: zoneId, magnitude: 0.3, sourceReceiptId: `quest-state:${input.activeQuest}`, resolutionIndex });
-  if (input.completed.length > 0) signals.push({ id: `progress:${input.completed.length}`, kind: "player_event", regionId: zoneId, magnitude: Math.min(1, input.completed.length * 0.2), sourceReceiptId: `quest-completed:${input.completed.slice().sort().join(",")}`, resolutionIndex });
+  if (input.completed.length > 0) signals.push({ id: `progress:${input.completed.length}`, kind: "player_event", regionId: zoneId, magnitude: Math.min(1, input.completed.length * 0.2), sourceReceiptId: `quest-completed:${input.completed.join(",")}`, resolutionIndex });
   if (zoneId === "emberfall" || zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion") signals.push({ id: `hazard:${zoneId}`, kind: "hazard", regionId: zoneId, magnitude: zoneId === "sunwatch_bastion" ? 0.9 : zoneId === "clockwork_woods" ? 0.85 : zoneId === "starfall_crater" ? 0.8 : zoneId === "cinder_vault" ? 0.7 : 0.35, sourceReceiptId: `zone:${zoneId}`, resolutionIndex });
   return signals;
 }

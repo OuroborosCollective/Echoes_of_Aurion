@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-10-08 - Avoid slice().sort().join() and Object.entries().map() in Open World Generation
+**Learning:** Calling Object.entries().map() and .slice().sort().join() on every open world snapshot generation introduces unnecessary intermediate array allocations and O(N log N) sorting overhead, degrading performance during high-frequency world updates.
+**Action:** Replace Object.entries().map() with direct for...in loops and omit .slice().sort() when array order is naturally stable and deterministic.
