@@ -21,6 +21,7 @@ test('real namespace probe and exact-head guard precede solver execution', () =>
   assert.doesNotMatch(workflow.slice(probe, solver), /continue-on-error|\|\| true/);
 });
 test('successful evidence follows copied-back output validation', () => {
+  assert.match(runner, /CopyOptions\(include_parent=False\)/);
   assert.ok(runner.indexOf('await box.copy_out') < runner.indexOf('"solverArtifacts": inventory'));
   assert.match(workflow, /python3 scripts\/opencourant_evidence.py .*--source-revision/);
   assert.match(workflow, /include-hidden-files: true/);

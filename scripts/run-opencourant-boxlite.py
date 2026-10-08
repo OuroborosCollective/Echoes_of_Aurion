@@ -114,7 +114,8 @@ async def main() -> None:
         except asyncio.TimeoutError:
             await execution.kill()
             raise
-        await box.copy_out("/workspace/job", str(output / "solver-work"))
+        await box.copy_out("/workspace/job", str(output / "solver-work"),
+                           boxlite.CopyOptions(include_parent=False))
         if result.exit_code != 0:
             raise SystemExit(f"OpenCourant failed with exit code {result.exit_code}")
     finally:
