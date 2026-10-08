@@ -1274,3 +1274,30 @@ Evidence: Reviewed every changed file of all nine open drafts. Local Vitest: 6 f
 Next safe step: Require final-head regression, runtime candidate/container and affected browser/DB workflows; merge with an expected-head lease, close superseded PRs, then independently verify main, post-merge memory readback and zero open PRs.
 Follow-up evidence: The added welcome-membership regression failed on the proposed shared presence array (player:10 leaked into player:2's earlier welcome). Keep outward membership lists separate across the gateway's awaited presence lease while reusing internal peer/zone arrays. After this correction, 8 targeted files / 44 tests passed, including the actual WebSocket gateway presence test.
 Final scope decision: Reject #800/#812 zone-array changes from this integration. Exact candidate c8cbea178fa673e9eaacf21d3a697fd4d7595c47 failed group reentry in all three attempts of run 37776042842; the same failure existed in original #800 run 37536707421. Diagnostic run 37778221618 passed with identical application code but does not substitute for the candidate gate. Restore zone implementation and its tests exactly to main; retain only independently validated lookup/receipt/test-search and UI improvements. No existing assertions, thresholds or workflows are changed. Preserve rejected source branches and failure evidence for separate investigation.
+
+
+### 2026-10-08 — PR #814 — Consolidate validated draft improvements: lookups and accessible controls
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=814 merge=2240a76a4e5ea4388b858a72a4e5d39d1b5b8972 -->
+Task: Merge PR #814 into `main` — Consolidate validated draft improvements: lookups and accessible controls.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/components/CausalStudioDashboard.test.tsx`
+- `client/src/components/CausalStudioDashboard.tsx`
+- `client/src/pages/Community.tsx`
+- `client/src/pages/Home.test.tsx`
+- `client/src/pages/Home.tsx`
+- `client/src/xaurion/core/MMOEngine.ts`
+- `server/aim245LivingWorld.test.ts`
+- `server/questCompiler/persistence.test.ts`
+- `server/questCompiler/persistence.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/814
+- Merge commit: `2240a76a4e5ea4388b858a72a4e5d39d1b5b8972`
+- PR head: `bd0e9b23353aef86e39fad7ffb8d64aa20afa0c9`
+- Merged at: 2026-10-08T15:32:22Z
+- Post-merge workflow run: 37801600470
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
