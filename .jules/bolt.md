@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-11-20 - Replace chained array operations with for...of loops for high-frequency path data reduction
+**Learning:** Chained array operations like `Array.from(map.values()).filter(...).reduce(...)` create intermediate array allocations that add significant overhead and garbage collection pressure in high-frequency game loop code paths (such as calculating buff multipliers or crafting counts).
+**Action:** Replace these chained array operations with single-pass `for...of` loops over `map.values()` to accumulate the results directly without allocating intermediate arrays.

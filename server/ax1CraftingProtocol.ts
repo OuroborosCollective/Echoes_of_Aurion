@@ -121,7 +121,8 @@ export function resolveAx1CraftingPlan(values: {
 
   const inputs = canonicalizeAx1CraftingInputs(values.inputs);
   const expected = expectedMaterialCounts(recipe);
-  const expectedTotal = Array.from(expected.values()).reduce((sum, quantity) => sum + quantity, 0);
+  let expectedTotal = 0;
+  for (const quantity of expected.values()) expectedTotal += quantity;
   if (inputs.length !== expectedTotal) throw new Error("AX1_CRAFTING_MATERIAL_COUNT_MISMATCH");
 
   const actual = new Map<string, number>();
