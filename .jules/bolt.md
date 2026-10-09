@@ -31,7 +31,3 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
-
-## 2024-05-14 - Optimize Array Allocations in High-Frequency Zone Loops
-**Learning:** In high-frequency game loops like `zoneRuntime.tick()` and `refreshPeerOrder()`, converting Maps to sorted arrays using `Array.from(map.values()).sort()` causes excessive garbage collection pressure by allocating new arrays on every tick.
-**Action:** Eliminate GC overhead in hot paths by reusing cached arrays. Resize the cached array (`cachedArray.length = map.size`), populate it in-place using an indexed `for...of` loop over the map values, and call `.sort()` directly on the array.
