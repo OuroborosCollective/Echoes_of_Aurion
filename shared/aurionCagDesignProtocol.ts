@@ -244,7 +244,7 @@ function canonicalSurfaceMatrix(chunk: BaseWorldChunk): readonly (readonly numbe
     const key = `${tile.x}:${tile.z}`;
     if (byCoordinate.has(key)) throw new Error("terrain tile coordinate must be unique");
     const mapped = SURFACE_MAPPING[tile.surface];
-    if (mapped === undefined) throw new Error(`unmapped surface: ${tile.surface}`);
+    if (!Number.isSafeInteger(mapped)) throw new Error(`unmapped surface: ${tile.surface}`);
     byCoordinate.set(key, mapped);
   }
   return Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, z) =>

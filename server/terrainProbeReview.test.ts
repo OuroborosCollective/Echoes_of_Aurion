@@ -34,7 +34,7 @@ describe("reviewed terrain design probes", () => {
     const invalid = [
       { ...chunk, tiles: chunk.tiles.slice(1) },
       { ...chunk, tiles: chunk.tiles.map((tile, index) => index === 1 ? chunk.tiles[0] : tile) },
-      { ...chunk, tiles: chunk.tiles.map((tile, index) => index === 0 ? { ...tile, surface: "unknown" } : tile) },
+      { ...chunk, tiles: chunk.tiles.map((tile, index) => index === 0 ? { ...tile, surface: "__proto__" } : tile) },
     ] as BaseWorldChunk[];
     for (const bad of invalid) {
       expect(() => buildTerrainTexturizationCagProbe(bad)).toThrow();
