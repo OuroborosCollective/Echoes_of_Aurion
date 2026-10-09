@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-05-15 - Optimize ZoneMobRuntime Tick
+**Learning:** High-frequency game loops (like server ticks for mobs) shouldn't perform Map lookups (`this.states.get(entityId)`) for every entity on every tick when iterating over keys, as this adds unnecessary overhead.
+**Action:** Use parallel cached arrays containing the pre-looked up objects (`this.cachedOrderedStates`), kept synchronized via an `entityIdToIndex` map, and iterate strictly using direct array access to eliminate Map lookup overhead.
