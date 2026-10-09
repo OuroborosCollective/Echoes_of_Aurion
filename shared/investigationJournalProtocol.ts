@@ -1,11 +1,11 @@
 /**
- * Aurion Investigation Journal & Rumor Board — shared AX1 readmodel contract.
+ * Aurion Investigation Journal & Rumor Board — shared Aurion readmodel contract.
  *
  * Issue #784: Exposes the causal rumor/investigation state to players as a
  * journal/board without making the client authoritative.
  *
  *   server-confirmed rumor/readmodel
- *     -> AX1 projection
+ *     -> Aurion client projection
  *     -> journal / board / map hints
  *
  * Client may group claims, show source class and confidence bands, show

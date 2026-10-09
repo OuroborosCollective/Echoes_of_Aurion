@@ -685,13 +685,6 @@
       "role": "SUPPORT"
     },
     {
-      "path": "client/src/xaurion/components/Ax1InvestigationJournalModal.tsx",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
-      "role": "SUPPORT",
-      "note": "Aurion-native investigation journal and rumor board projection over confirmed #487/#781-#784 slices; no donor runtime authority."
-    },
-    {
       "path": "client/src/xaurion/components/Ax1Modal.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
