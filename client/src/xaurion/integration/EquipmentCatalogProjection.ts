@@ -9,7 +9,7 @@ import {
 import type { GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
-import { equipmentAnchorAliases, equipmentLocalScale } from "../core/EquipmentAttachmentSizing";
+import { equipmentAnchorAliases, equipmentLocalScale, equipmentAttachmentOffset, resolveEquipmentVisualAnchor } from "../core/EquipmentAttachmentSizing";
 import { extractCanonicalAvatarProfile } from "../core/CanonicalAvatarProfile";
 import { fitEquipmentGroup } from "../core/EquipmentFitCompiler";
 import { compileEquipmentSkinning } from "../core/EquipmentSkinningCompiler";
@@ -58,12 +58,7 @@ export class EquipmentCatalogProjection {
   }
 
   private anchor(slot: GlbEquipmentSlot): THREE.Object3D | null {
-    const aliases = new Set(equipmentAnchorAliases[slot]);
-    let found: THREE.Object3D | null = null;
-    this.engine.player.glbAvatarGroup.traverse(node => {
-      if (!found && node.name && aliases.has(normalize(node.name))) found = node;
-    });
-    return found;
+    return resolveEquipmentVisualAnchor(slot, this.engine.player.glbAvatarGroup);
   }
 
   private removeHolder(slot: GlbEquipmentSlot): void {
@@ -93,9 +88,10 @@ export class EquipmentCatalogProjection {
     const scale = equipmentLocalScale(slot, maxDimension, avatarHeightMeters, anchorWorldScale);
     if (scale === null) return false;
 
-    const center = bounds.getCenter(new THREE.Vector3());
+    const offset = equipmentAttachmentOffset(slot, visual, bounds, scale);
+    if (offset === null) return false;
     visual.scale.setScalar(scale);
-    visual.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+    visual.position.copy(offset);
     visual.traverse(node => {
       if (!(node as THREE.Mesh).isMesh) return;
       const mesh = node as THREE.Mesh;
