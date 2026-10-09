@@ -195,7 +195,7 @@ node --input-type=module -e '
   import fs from "node:fs";
   const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
   if(r.sourceRevision!==process.argv[2]||r.databaseCredentialReturned!==false||!["APPLY_SUCCEEDED","ALREADY_APPLIED"].includes(r.overallState)) process.exit(2);
-  if(r.postflight?.summary?.migrationCount!==50||r.postflight.summary.matchCount!==50||r.postflight.summary.absentCount!==0||r.postflight.summary.driftCount!==0) process.exit(3);
+  if(r.postflight?.summary?.migrationCount!==51||r.postflight.summary.matchCount!==51||r.postflight.summary.absentCount!==0||r.postflight.summary.driftCount!==0) process.exit(3);
   if(r.backup?.created!==true||r.recovery?.executed!==true||r.recovery?.matched!==true||!/^([a-f0-9]{64})$/.test(r.backup.sha256)) process.exit(4);
 ' "$schema_receipt" "$expected_sha"
 schema_readback="$(mktemp)"
@@ -206,7 +206,7 @@ fi
 node --input-type=module -e '
   import fs from "node:fs";
   const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-  if(r.sourceRevision!==process.argv[2]||r.readOnly!==true||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary?.matchCount!==50||r.summary?.absentCount!==0||r.summary?.driftCount!==0) process.exit(2);
+  if(r.sourceRevision!==process.argv[2]||r.readOnly!==true||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary?.matchCount!==51||r.summary?.absentCount!==0||r.summary?.driftCount!==0) process.exit(2);
 ' "$schema_readback" "$expected_sha"
 rm -f "$schema_readback"
 
