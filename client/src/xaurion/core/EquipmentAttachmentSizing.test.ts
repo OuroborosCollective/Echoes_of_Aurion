@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { AnimatedGlbActor, animationClipHasMotion } from "./AnimatedGlbActor";
-import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale, equipmentTargetHeightFraction } from "./EquipmentAttachmentSizing";
+import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale, equipmentTargetHeightFraction, resolveEquipmentVisualAnchor } from "./EquipmentAttachmentSizing";
 
 describe("Aurion standard player equipment sizing", () => {
   it("keeps helmet and armor sizing relative to the normalized avatar instead of source GLB units", () => {
@@ -31,6 +31,28 @@ describe("Aurion standard player equipment sizing", () => {
     expect(equipmentAnchorAliases.weapon).toContain("rightwrist");
     expect(equipmentAnchorAliases.weapon).toContain("ccbaserhand");
     expect(equipmentAnchorAliases.shield).toContain("mixamoriglefthand");
+  });
+
+  it("redirects a source-authored upper-arm mainhand slot to the true animated hand", () => {
+    const rig = new THREE.Group();
+    const upperarm = new THREE.Bone(); upperarm.name = "upperarm_r";
+    const lowerarm = new THREE.Bone(); lowerarm.name = "lowerarm_r";
+    const hand = new THREE.Bone(); hand.name = "hand_r";
+    const misplaced = new THREE.Object3D(); misplaced.name = "Slot_MainHand";
+    rig.add(upperarm); upperarm.add(lowerarm, misplaced); lowerarm.add(hand);
+    expect(resolveEquipmentVisualAnchor("weapon", rig)).toBe(hand);
+    const authored = new THREE.Object3D(); authored.name = "AurionSlotMainHand";
+    hand.add(authored);
+    expect(resolveEquipmentVisualAnchor("weapon", rig)).toBe(authored);
+    authored.removeFromParent();
+    expect(resolveEquipmentVisualAnchor("weapon", rig)).toBe(hand);
+  });
+
+  it("keeps valid legacy sockets when no identifiable hand bone exists", () => {
+    const model = new THREE.Group();
+    const legacy = new THREE.Object3D(); legacy.name = "Slot_MainHand";
+    model.add(legacy);
+    expect(resolveEquipmentVisualAnchor("weapon", model)).toBe(legacy);
   });
 
   it("uses an authored attachment origin before the legacy bounds center", () => {
