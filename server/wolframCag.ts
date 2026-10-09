@@ -144,7 +144,11 @@ export function createWolframCagClient(options: Readonly<{
     const url = new URL(endpoint, WOLFRAM_CAG_ORIGIN);
     let body: string | undefined;
     if (method === "GET") {
-      for (const [key, value] of Object.entries(request)) url.searchParams.set(key, String(value));
+      for (const key in request) {
+        if (Object.prototype.hasOwnProperty.call(request, key)) {
+          url.searchParams.set(key, String(request[key]));
+        }
+      }
     } else {
       body = JSON.stringify(request);
     }
