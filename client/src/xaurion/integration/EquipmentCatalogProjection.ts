@@ -9,7 +9,7 @@ import {
 import type { GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
-import { equipmentAnchorAliases, equipmentLocalScale, equipmentAttachmentOffset, resolveEquipmentVisualAnchor } from "../core/EquipmentAttachmentSizing";
+import { equipmentLocalScale, equipmentAttachmentOffset, resolveEquipmentVisualAnchor } from "../core/EquipmentAttachmentSizing";
 import { extractCanonicalAvatarProfile } from "../core/CanonicalAvatarProfile";
 import { fitEquipmentGroup } from "../core/EquipmentFitCompiler";
 import { compileEquipmentSkinning } from "../core/EquipmentSkinningCompiler";
@@ -21,7 +21,6 @@ import { AurionVisualClock } from "../core/VisualItemMaterialCompiler";
 export const EQUIPMENT_VISUAL_EVIDENCE_EVENT = "aurion:xaurion-equipment-visual-evidence" as const;
 
 type CompatAttachment = Readonly<{ identity: string; sha256: string; holder: THREE.Group }>;
-const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 const bindingIdentity = (binding: ConfirmedEquipmentVisual) => `${binding.version}:${binding.definition}:${binding.receiptId}:${binding.itemId}`;
 
 /**
