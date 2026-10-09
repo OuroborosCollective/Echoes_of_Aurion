@@ -1350,3 +1350,11 @@ Decisions: Aurion owns all runtime and persistence truth. Preserve OIDC and exac
 Evidence: Root/MariaDB proof [37904103355](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/37904103355) at `343df87dfd0f24dcbc25eab00ab407a882cb48cf` passed sparse repair, preserved ledger data and unknown-drift rejection. The same revision passed runtime candidate/container, schema reconciliation and item-manipulation proof lanes. Follow-up contract tests and TypeScript checks pass locally; final-head CI remains the merge gate.
 Learned: Memory must finish before release dispatch. A successful container healthcheck cannot replace a real zone welcome, advancing NPC resolution or MariaDB guild readback.
 Open: Trusted protocol-3 promoter installation, authorized functional-probe session and a fresh production drift plan are prerequisites. No production repair, OOM resolution or visual recovery is claimed.
+
+### 2026-10-09 — PR #831 — Close release and column-observation gaps
+Status: VERIFIED local regression; exact-head CI and real MariaDB proof remain the merge gate.
+<!-- integration-memory: pr=831 -->
+Task: Bind release dispatch to the Memory-checked SHA and include defaults/EXTRA in every live column observation.
+Evidence: TypeScript and 49 focused tests pass, including executable rejection of changed/missing dispatch revisions. The isolated database lane checks wrong defaults and ON UPDATE at partial and complete schemas, with unchanged journal rows after rejection.
+Learned: A branch name alone does not bind dispatch to an observed commit; schema readers must inspect the same complete column contract.
+Open: Production repair and functional recovery remain unverified; preserve the protocol-3 installation and authenticated-probe prerequisites.
