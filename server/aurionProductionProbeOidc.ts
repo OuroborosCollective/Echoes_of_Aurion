@@ -1,3 +1,4 @@
+import { operationalDate } from "../shared/operationalClock";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 import { parseAurionProbeRunIdentity, AURION_PROBE_REPOSITORY, AURION_PROBE_WORKFLOW, AURION_PROBE_REF, AURION_PROBE_ENVIRONMENT, AURION_PROBE_OIDC_AUDIENCE } from "./aurionProductionProbeApprovalContract";
 
@@ -20,7 +21,7 @@ export function githubProbeIdentity(payload: JWTPayload) {
 }
 
 /** Dependency injection is confined to tests; HTTP callers cannot select keys or issuer. */
-export async function verifyGithubProbeOidc(token: string, key: JWTVerifyGetKey = keys, now = new Date()) {
+export async function verifyGithubProbeOidc(token: string, key: JWTVerifyGetKey = keys, now = operationalDate()) {
   if (token.length < 100 || token.length > 16384) throw new Error("PROBE_OIDC_INVALID");
   try {
     const { payload } = await jwtVerify(token, key, { issuer, audience: AURION_PROBE_OIDC_AUDIENCE,

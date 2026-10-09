@@ -146,6 +146,13 @@ Learned: Post-merge automation must receive the same syntax and contract coverag
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
+### 2026-10-09 — PR #834 — Revision-bound one-shot production probes
+Status: PARTIAL; isolated database/HTTP evidence verified, production authorization/readback blocked.
+Task: Add existing-admin Ops confirmation with password reauthentication, GitHub OIDC verification, durable atomic per-scope consumption and migration 0072; remove exported browser sessions from both probe consumers without weakening release/schema gates.
+Evidence: At `aca6916a365bdd28b318e28ed789c83daab949cf`, [37940219342](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/37940219342) passed 30 tests against real isolated MariaDB/HTTP, including twelve competing consumers, replay, role, expiry, revocation, Origin/CSRF and signature rejection. Root reconciliation artifact proof [37940218962](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/37940218962) passed. Local final candidate passed TypeScript, 72/72 migration validation and 2064 regression tests (227 skipped); exact final-head CI remains a gate.
+Learned: Read-only observations cannot prove an actual player join; preserve the functional gate as UNVERIFIED instead of granting mutation authority or reporting synthetic success.
+Open: Live `/healthz` still identifies `9b84e8093f731d72a66f339461cdaed462bc4ace` with missing `aurionNpcGuildStates`; the approval API is not deployed. Controlled API/schema bootstrap, real GitHub-OIDC-to-production proof and an explicitly bounded functional-join design remain prerequisites. OIDC-only admins currently lack password step-up. No production repair, successful production probe or merge is claimed.
+
 
 ### 2026-10-02 — PR #726 — feat: complete AIM-535 atomic crafting and item manipulation
 Status: VERIFIED repository merge
