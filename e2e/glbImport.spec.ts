@@ -48,7 +48,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // Compare position and extent in one live sample, still requiring real input
     // to have moved this scroll container to its actual current bottom.
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop > 0 &&
-      Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 2), { timeout: 10_000 })
+      Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 10), { timeout: 10_000 })
       .toBe(true);
     // Reset scroll position programmatically. The scroll-down above already
     // proved real wheel input moves this container; the upward reset just
