@@ -3,7 +3,7 @@ import { extractCanonicalAvatarProfile } from "./CanonicalAvatarProfile";
 import type { CanonicalAvatarProfile } from "@shared/aurionCanonicalAvatarContract";
 import * as THREE from "three";
 import type { GlbEquipmentSlot } from "@shared/glbImportContract";
-import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale, resolveEquipmentVisualAnchor } from "./EquipmentAttachmentSizing";
+import { equipmentAttachmentOffset, equipmentLocalScale, resolveEquipmentVisualAnchor } from "./EquipmentAttachmentSizing";
 
 export type GlbPose = "idle" | "walk" | "run" | "attack" | "jump" | "death" | "interact";
 const clipNames: Record<GlbPose, readonly string[]> = {
