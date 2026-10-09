@@ -24,6 +24,24 @@ describe("open-world protocol", () => {
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true }))).toBe("sunwatch_bastion");
   });
 
+  it("keeps completed-quest receipt identity independent of persistence row order", () => {
+    const input = snapshotInput({ level: 6, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true });
+    const forward = buildOpenWorldSnapshot(input);
+    const reverse = buildOpenWorldSnapshot({ ...input, completed: [...input.completed].reverse() });
+    expect(reverse).toEqual(forward);
+    expect(input.completed).toEqual(["astral_call", "archive_of_echoes", "ember_key"]);
+  });
+
+  it("projects the Eclipse quest through the existing canonical progression and dungeon gate", () => {
+    const input = snapshotInput({ level: 6, completed: ["sunwatch_vanguard"], activeQuest: "eclipse_ascension", canEnterDungeon: true });
+    expect(buildOpenWorldSnapshot(input)).toMatchObject({ zoneId: "eclipse_spire", zoneTier: 6,
+      primaryEncounter: { encounterKey: "eclipse_spire" } });
+    expect(buildOpenWorldSnapshot(input).pointsOfInterest).toContainEqual(
+      { id: "cinder-vault-gate", kind: "portal", state: "available", label: "Tor zum Aschengewölbe" });
+    expect(zoneForOpenWorldProgress({ ...input, activeQuest: null })).toBe("eclipse_spire");
+    expect(zoneForOpenWorldProgress({ ...input, activeQuest: "clockwork_core" })).toBe("clockwork_woods");
+  });
+
   it("keeps the dungeon gate visible across the confirmed Ember Key transition", () => {
     const before = snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
     const locked = buildOpenWorldSnapshot(before);
@@ -99,7 +117,7 @@ describe("open-world protocol", () => {
     expect(lyra?.autonomy.goal).toBe("expand_influence");
     expect(lyra?.autonomy.decisionHash).toHaveLength(64);
     expect(snapshot.polity).toMatchObject({ polityId: "asterion_compact", governmentType: "council" });
-    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "clockwork_woods", "emberfall", "observatory_threshold", "starfall_crater", "sunwatch_bastion", "windhollow"]);
+    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "clockwork_woods", "eclipse_spire", "emberfall", "observatory_threshold", "starfall_crater", "sunwatch_bastion", "windhollow"]);
     expect(JSON.stringify(snapshot)).not.toContain("private key");
   });
 

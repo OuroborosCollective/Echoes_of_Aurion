@@ -348,9 +348,12 @@ export class QuestPersistenceEngine {
   public async listInstances(filter?: { playerUserId?: number; state?: string }): Promise<QuestInstance[]> {
     const db = await getDb();
     if (!db) {
-      let list = Array.from(this.instances.values());
-      if (filter?.playerUserId !== undefined) list = list.filter(i => i.playerUserId === filter.playerUserId);
-      if (filter?.state !== undefined) list = list.filter(i => i.state === filter.state);
+      const list: QuestInstance[] = [];
+      for (const i of this.instances.values()) {
+        if (filter?.playerUserId !== undefined && i.playerUserId !== filter.playerUserId) continue;
+        if (filter?.state !== undefined && i.state !== filter.state) continue;
+        list.push(i);
+      }
       return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }
     let rows = await db.select().from(aurionQuestInstances).orderBy(desc(aurionQuestInstances.createdAt));
@@ -567,7 +570,13 @@ export class QuestPersistenceEngine {
 
   public async getReceiptsForInstance(instanceId: string): Promise<QuestReceipt[]> {
     const db = await getDb();
-    if (!db) return Array.from(this.receipts.values()).filter(r => r.instanceId === instanceId).sort((a,b)=>a.eventSequence-b.eventSequence);
+    if (!db) {
+      const list: QuestReceipt[] = [];
+      for (const r of this.receipts.values()) {
+        if (r.instanceId === instanceId) list.push(r);
+      }
+      return list.sort((a, b) => a.eventSequence - b.eventSequence);
+    }
     const rows = await db.select().from(aurionQuestReceipts).where(eq(aurionQuestReceipts.instanceId, instanceId)).orderBy(aurionQuestReceipts.eventSequence);
     return rows.map(row => QuestReceiptSchema.parse({
       id: row.id,

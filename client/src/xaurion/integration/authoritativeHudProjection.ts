@@ -34,7 +34,7 @@ const playerResponseSchema = playerReadbackSchema.extend({
   .pipe(playerReadbackSchema);
 
 export const questReadbackSchema = z.object({ quests: z.array(z.object({
-  key: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard"]), giver: z.enum(["Lyra", "Orun"]), title: z.string(), objective: z.string(),
+  key: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard", "eclipse_ascension"]), giver: z.enum(["Lyra", "Orun"]), title: z.string(), objective: z.string(),
   requiredLevel: natural.positive(), state: z.enum(["locked", "available", "active", "completed"]), readyToTurnIn: z.boolean(),
 })), keys: z.array(z.string()) });
 export const worldReadbackSchema = z.object({ globalWorld: z.object({ worldSeed: z.string().min(1), epoch: natural, deterministicHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/) }) });
@@ -52,3 +52,21 @@ export function projectPlayerReadback(query: Parameters<typeof projectReadback>[
   return projectReadback(playerResponseSchema.refine(value => value.profile.userId === userId && value.inventory.every(item => item.ownerUserId === userId)), query);
 }
 export const readbackLabels = { waiting: "Wird geladen", live: "Serverbestätigt", empty: "Keine Einträge", stale: "Veraltet · Aktualisierung ausstehend", error: "Daten nicht verfügbar" } as const;
+
+export const aurionWorldHudSchema = worldReadbackSchema.extend({
+  revision: z.literal(1),
+  zoneId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion", "eclipse_spire"]),
+  displayName: z.string().min(1).max(160),
+  primaryEncounter: z.object({
+    id: z.string().min(1).max(160),
+    label: z.string().min(1).max(160),
+    encounterKey: z.string().min(1).max(160),
+    narrative: z.string().min(1).max(600),
+  }).nullable(),
+  pointsOfInterest: z.array(z.object({
+    id: z.string().min(1).max(160),
+    kind: z.enum(["portal", "npc", "encounter", "landmark"]),
+    state: z.enum(["locked", "available", "completed"]),
+    label: z.string().min(1).max(160),
+  })).max(64),
+});

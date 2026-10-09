@@ -11,7 +11,7 @@ import {
   WORLD_CHUNK_COORDINATE_LIMIT,
   generateBaseWorldChunk,
 } from "../shared/worldChunkProtocol";
-import { buildWorldChunkTerrainCagProbe } from "../shared/aurionCagDesignProtocol";
+import { buildWorldChunkTerrainCagProbe, buildWorldChunkTerrainContinuityCagProbe } from "../shared/aurionCagDesignProtocol";
 import {
   assertCagRulesetPromotionAllowed,
   verifyAurionCagDesignProbe,
@@ -128,6 +128,18 @@ describe("AIM-599 deterministic terrain pipeline", () => {
     );
     expect(base.biome).toBe(terrain.biome);
     expect(base.deterministicHash).toMatch(/^fnv1a-[a-f0-9]{8}$/);
+  });
+
+
+  it("emits valid CAG terrain continuity probe", () => {
+    const chunk = generateBaseWorldChunk(input(42, -17));
+    const probe = buildWorldChunkTerrainContinuityCagProbe(chunk);
+    expect(probe.kind).toBe("terrain_continuity");
+    expect(probe.code).toMatch(/^h=\{\{/);
+    expect(probe.code).toMatch(/s=\{\{/);
+    expect(probe.code).toContain("var=Round[Variance[Flatten[h]]]");
+    expect(probe.code).toContain("trans=Count[sdx,x_/;x!=0]+Count[sdz,x_/;x!=0]");
+    expect(probe.expectedExact).toMatch(/^\{[0-9]+,[0-9]+\}$/);
   });
 
   it("emits bounded CAG input/result hashes and blocks promotion on divergence", async () => {

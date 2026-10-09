@@ -5,8 +5,8 @@ import { LEGACY_CANONICAL_QUEST_TEMPLATES } from "./legacyQuestTemplate";
 describe("AIM-298 legacy QuestKey canonical adapter", () => {
   it("represents every established QuestKey losslessly in the canonical contract", () => {
     const bridges = listLegacyQuestBridges();
-    expect(bridges).toHaveLength(6);
-    expect(LEGACY_CANONICAL_QUEST_TEMPLATES).toHaveLength(6);
+    expect(bridges).toHaveLength(7);
+    expect(LEGACY_CANONICAL_QUEST_TEMPLATES).toHaveLength(7);
 
     for (const bridge of bridges) {
       const template = LEGACY_CANONICAL_QUEST_TEMPLATES.find(candidate => candidate.templateId === `tpl_legacy_${bridge.key}`);

@@ -1,4 +1,4 @@
-import { isBaseChunkRoadTile, WORLD_CHUNK_GRID_SIZE, type BaseWorldChunk } from "./worldChunkProtocol";
+import { isBaseChunkRoadTile, WORLD_CHUNK_GRID_SIZE, type BaseWorldChunk, type ChunkSurface } from "./worldChunkProtocol";
 
 /**
  * Pure deterministic design/oracle helpers for Echoes of Aurion.
@@ -53,7 +53,7 @@ export function cagOracleXpForNextLevelExact(levelExact: string): string {
 }
 
 export type AurionCagProbe = Readonly<{
-  kind: "progression" | "terrain_invariants" | "model_scale";
+  kind: "progression" | "terrain_invariants" | "model_scale" | "terrain_texturization" | "terrain_continuity";
   code: string;
   expectedExact: string;
   truthNotice: string;
@@ -138,10 +138,9 @@ export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCag
   const rows = matrix.map(row => `{${row.join(",")}}`).join(",");
   const code = [
     `m={${rows}}`,
-    "flat=Flatten[m]",
-    "dx=Flatten[Abs[Map[Differences,m]]]",
-    "dz=Flatten[Abs[Differences[m]]]",
-    "{Min[flat],Max[flat],Max[Join[dx,dz]]}",
+    "dx=Abs[Differences[Transpose[m]]]",
+    "dz=Abs[Differences[m]]",
+    "{Min[m],Max[m],Max[dx,dz]}",
   ].join(";");
   return Object.freeze({
     kind: "terrain_invariants",
@@ -151,6 +150,179 @@ export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCag
   });
 }
 
+
+export type AurionTerrainTexturizationSummary = Readonly<{
+  totalTiles: number;
+  grassTiles: number;
+  riverbankTiles: number;
+  stoneTiles: number;
+  forestFloorTiles: number;
+  ashTiles: number;
+  ruinPathTiles: number;
+}>;
+
+export function summarizeWorldChunkTexturization(chunk: BaseWorldChunk): AurionTerrainTexturizationSummary {
+  canonicalSurfaceMatrix(chunk);
+  let grass = 0, riverbank = 0, stone = 0, forestFloor = 0, ash = 0, ruinPath = 0;
+  for (const tile of chunk.tiles) {
+    if (tile.surface === "grass") grass++;
+    else if (tile.surface === "riverbank") riverbank++;
+    else if (tile.surface === "stone") stone++;
+    else if (tile.surface === "forest_floor") forestFloor++;
+    else if (tile.surface === "ash") ash++;
+    else if (tile.surface === "ruin_path") ruinPath++;
+  }
+  return Object.freeze({
+    totalTiles: chunk.tiles.length,
+    grassTiles: grass,
+    riverbankTiles: riverbank,
+    stoneTiles: stone,
+    forestFloorTiles: forestFloor,
+    ashTiles: ash,
+    ruinPathTiles: ruinPath,
+  });
+}
+
+/**
+ * Recomputes and verifies the deterministic texture/material distribution of an authoritative chunk.
+ * CAG evaluates surface material counts without mutating world data.
+ */
+export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
+  const summary = summarizeWorldChunkTexturization(chunk);
+  const surfaces = chunk.tiles.map(t => {
+    switch(t.surface) {
+        case "grass": return 1;
+        case "riverbank": return 2;
+        case "stone": return 3;
+        case "forest_floor": return 4;
+        case "ash": return 5;
+        case "ruin_path": return 6;
+        default: throw new Error(`unmapped surface: ${t.surface}`);
+    }
+  }).join(",");
+  const code = [
+    `surfaces={${surfaces}}`,
+    `{Length[surfaces], Count[surfaces, 1], Count[surfaces, 2], Count[surfaces, 3], Count[surfaces, 4], Count[surfaces, 5], Count[surfaces, 6]}`
+  ].join(";");
+
+  return Object.freeze({
+    kind: "terrain_texturization",
+    code,
+    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.forestFloorTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
+    truthNotice: "CAG verifies texturization distribution of a canonical Aurion chunk; it does not assign textures or modify world state.",
+  });
+}
+
+
+
+const SURFACE_MAPPING: Record<ChunkSurface, number> = {
+  grass: 1,
+  forest_floor: 2,
+  riverbank: 3,
+  stone: 4,
+  ash: 5,
+  ruin_path: 6,
+};
+
+export type AurionTerrainContinuitySummary = Readonly<{
+  varianceMm2: number;
+  surfaceTransitions: number;
+}>;
+
+function canonicalSurfaceMatrix(chunk: BaseWorldChunk): readonly (readonly number[])[] {
+  if (chunk.tiles.length !== WORLD_CHUNK_GRID_SIZE * WORLD_CHUNK_GRID_SIZE) {
+    throw new Error("terrain tile count does not match the canonical world chunk grid");
+  }
+  const byCoordinate = new Map<string, number>();
+  for (const tile of chunk.tiles) {
+    if (!Number.isSafeInteger(tile.x) || !Number.isSafeInteger(tile.z) || !Number.isSafeInteger(tile.heightMm)) {
+      throw new Error("terrain tile must use integer coordinates and millimeter heights");
+    }
+    if (tile.x < 0 || tile.x >= WORLD_CHUNK_GRID_SIZE || tile.z < 0 || tile.z >= WORLD_CHUNK_GRID_SIZE) {
+      throw new Error("terrain tile coordinate is outside the canonical chunk grid");
+    }
+    const key = `${tile.x}:${tile.z}`;
+    if (byCoordinate.has(key)) throw new Error("terrain tile coordinate must be unique");
+    const mapped = SURFACE_MAPPING[tile.surface];
+    if (mapped === undefined) throw new Error(`unmapped surface: ${tile.surface}`);
+    byCoordinate.set(key, mapped);
+  }
+  return Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, z) =>
+    Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, x) => {
+      const value = byCoordinate.get(`${x}:${z}`);
+      if (value === undefined) throw new Error("terrain grid is incomplete");
+      return value;
+    })),
+  ));
+}
+
+export function summarizeWorldChunkTerrainContinuity(chunk: BaseWorldChunk): AurionTerrainContinuitySummary {
+  const heightMatrix = canonicalTerrainMatrix(chunk);
+  const surfaceMatrix = canonicalSurfaceMatrix(chunk);
+  const heights = heightMatrix.flat();
+
+  // Exact sample variance, rounded to nearest integer with ties to even, as in Wolfram Round.
+  // Integer arithmetic also avoids cancellation for large, safe-integer heights.
+  const count = BigInt(heights.length);
+  const sum = heights.reduce((total, height) => total + BigInt(height), 0n);
+  const squares = heights.reduce((total, height) => total + BigInt(height) ** 2n, 0n);
+  const numerator = count * squares - sum * sum;
+  const denominator = count * (count - 1n);
+  const quotient = numerator / denominator;
+  const doubledRemainder = 2n * (numerator % denominator);
+  const rounded = quotient + (doubledRemainder > denominator ||
+    (doubledRemainder === denominator && quotient % 2n === 1n) ? 1n : 0n);
+  const varianceMm2 = Number(rounded);
+  if (!Number.isSafeInteger(varianceMm2)) throw new Error("terrain variance exceeds safe integer range");
+
+  // Transitions
+  let surfaceTransitions = 0;
+  for (let z = 0; z < WORLD_CHUNK_GRID_SIZE; z += 1) {
+    for (let x = 0; x < WORLD_CHUNK_GRID_SIZE; x += 1) {
+      const current = surfaceMatrix[z]![x]!;
+      if (x + 1 < WORLD_CHUNK_GRID_SIZE && current !== surfaceMatrix[z]![x + 1]!) {
+        surfaceTransitions += 1;
+      }
+      if (z + 1 < WORLD_CHUNK_GRID_SIZE && current !== surfaceMatrix[z + 1]![x]!) {
+        surfaceTransitions += 1;
+      }
+    }
+  }
+
+  return Object.freeze({
+    varianceMm2,
+    surfaceTransitions,
+  });
+}
+
+/**
+ * Recomputes geometry variance and material continuity from the already-authoritative Aurion chunk.
+ */
+export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
+  const heightMatrix = canonicalTerrainMatrix(chunk);
+  const surfaceMatrix = canonicalSurfaceMatrix(chunk);
+  const summary = summarizeWorldChunkTerrainContinuity(chunk);
+
+  const hRows = heightMatrix.map(row => `{${row.join(",")}}`).join(",");
+  const sRows = surfaceMatrix.map(row => `{${row.join(",")}}`).join(",");
+
+  const code = [
+    `h={${hRows}}`,
+    `s={${sRows}}`,
+    "var=Round[Variance[Flatten[h]]]",
+    "sdx=Flatten[Map[Differences,s]]",
+    "sdz=Flatten[Differences[s]]",
+    "trans=Count[sdx,x_/;x!=0]+Count[sdz,x_/;x!=0]",
+    "{var,trans}"
+  ].join(";");
+
+  return Object.freeze({
+    kind: "terrain_continuity",
+    code,
+    expectedExact: `{${summary.varianceMm2},${summary.surfaceTransitions}}`,
+    truthNotice: "CAG independently computes terrain variance and material continuity constraints; it does not generate texturization.",
+  });
+}
 export type ModelBounds = Readonly<{
   min: readonly [number, number, number];
   max: readonly [number, number, number];

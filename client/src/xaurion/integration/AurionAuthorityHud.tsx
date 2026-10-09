@@ -16,7 +16,7 @@ import { NpcDecisionPanel } from "./NpcDecisionPanel";
 import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionGroupFinder } from "./AurionGroupFinder";
 import { AuthoredQuestJournal } from "@/components/AuthoredQuestJournal";
-import { projectPlayerReadback, projectReadback, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
+import { projectPlayerReadback, projectReadback, readbackLabels, aurionWorldHudSchema } from "./authoritativeHudProjection";
 import { ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import { CONFIRMED_COMBAT_PRESENTATION_EVENT, reduceConfirmedCombatMetrics, validConfirmedCombatPresentation, type ConfirmedCombatPresentationEvent } from "./combatPresentation";
@@ -27,23 +27,7 @@ const explorerView = { name: "Explorer", icon: "✦", color: "#fbbf24" } as cons
 const roleLabels = { tank: "Tank", healer: "Heiler", dps: "Schaden" } as const;
 const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c: "character", k: "disciplines", m: "map", j: "quests", q: "quests", g: "guild" };
 const community = (panel: "chat" | "market" | "guild") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
-const ax1WorldHudSchema = worldReadbackSchema.extend({
-  revision: z.literal(1),
-  zoneId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]),
-  displayName: z.string().min(1).max(160),
-  primaryEncounter: z.object({
-    id: z.string().min(1).max(160),
-    label: z.string().min(1).max(160),
-    encounterKey: z.string().min(1).max(160),
-    narrative: z.string().min(1).max(600),
-  }).nullable(),
-  pointsOfInterest: z.array(z.object({
-    id: z.string().min(1).max(160),
-    kind: z.enum(["portal", "npc", "encounter", "landmark"]),
-    state: z.enum(["locked", "available", "completed"]),
-    label: z.string().min(1).max(160),
-  })).max(64),
-});
+
 
 export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction, onInteract, onTouchMoveDestination }: {
   userId: number;
@@ -76,7 +60,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const manipulate = trpc.crafting.manipulate.useMutation();
   const craftingQuery = trpc.crafting.read.useQuery(undefined, { ...options, enabled: panel === "crafting" });
   const player = projectPlayerReadback(playerQuery, userId);
-  const world = projectReadback(ax1WorldHudSchema, worldQuery);
+  const world = projectReadback(aurionWorldHudSchema, worldQuery);
   const ui = projectReadback(playerUiReadbackSchema.refine(value => value.userId === userId), uiQuery);
   const group = projectReadback(groupReadmodelSchema.refine(value => value.player.userId === userId), groupQuery);
   const saveControls = trpc.player.saveControls.useMutation();
