@@ -35,3 +35,7 @@
 ## 2026-10-08 - Avoid sorting for max/min
 **Learning:** Using chained array methods like `.filter().slice().sort()[0]` incurs O(N log N) overhead and excessive GC.
 **Action:** Use a linear `for...of` scan to find max/min elements in O(N) without array allocations.
+
+## 2026-10-09 - Optimize Wolfram CAG array methods
+**Learning:** In Wolfram Language, using `Flatten` and `Join` to find the global `Min` and `Max` of a matrix and its differences creates unnecessary intermediate allocations on the provider.
+**Action:** Pass matrices directly to `Min` and `Max` (which natively flatten arguments), and use `Differences[Transpose[m]]` instead of `Map[Differences, m]` to reduce expression size and overhead.
