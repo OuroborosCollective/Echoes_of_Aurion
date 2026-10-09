@@ -26,6 +26,8 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
       name: column.name,
       columnType: column.sqlType === "int" ? "int(11)" : column.sqlType,
       nullable: column.nullable,
+      defaultSql: column.defaultSql ?? null,
+      extra: column.extra ?? "",
     })),
     indexes: table.indexes.map(index => ({
       name: index.name.startsWith("inline_unique:") ? index.name.slice("inline_unique:".length) : index.name,
@@ -36,6 +38,20 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
 }
 
 describe("Aurion production schema reconciliation", () => {
+  it("rejects wrong defaults and update attributes in an otherwise valid schema prefix", async () => {
+    const contracts = await readProductionSchemaContracts(process.cwd());
+    const observed = new Map<string, ObservedTable>();
+    for (const migration of contracts) for (const table of migration.tables) observed.set(table.name, observedFromExpected(table));
+    const table = observed.get("itemInstances")!;
+    for (const [change, reason] of [
+      [{ defaultSql: "'2001-01-01 00:00:00'" }, "default:createdAt"],
+      [{ extra: "on update current_timestamp()" }, "extra:createdAt"],
+    ] as const) {
+      observed.set(table.name, { ...table, columns: table.columns.map(column => column.name === "createdAt" ? { ...column, ...change } : column) });
+      expect(classifyMigrationContracts(contracts, observed).some(migration => migration.drift.includes(`itemInstances:${reason}`))).toBe(true);
+    }
+  });
+
   it("covers every journaled migration through the canonical wave manifest", async () => {
     const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8"));
     const manifest = JSON.parse(await readFile("config/aurion-migration-wave-manifest.json", "utf8"));

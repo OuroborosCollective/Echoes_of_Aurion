@@ -26,6 +26,11 @@ on:
       - "deploy/aurion-revision-alignment-controller.timer"
       - "deploy/aurion-revision-alignment-controller.env.template"
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main revision whose Memory snapshot has been synchronized and read back.
+        required: true
+        type: string
 
 concurrency:
   # A push and a trusted manual dispatch for main must never promote in
@@ -66,12 +71,18 @@ jobs:
 
     steps:
       - name: Guard repository scope
+        env:
+          EXPECTED_RELEASE_SHA: ${{ inputs.expected_sha }}
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
           case "${GITHUB_EVENT_NAME}" in
             push|workflow_dispatch)
               test "${GITHUB_REF_NAME}" = "main"
+              if [[ ! "$EXPECTED_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || [[ "$EXPECTED_RELEASE_SHA" != "$GITHUB_SHA" ]]; then
+                echo 'RELEASE_DISPATCH_REVISION_MISMATCH' >&2
+                exit 70
+              fi
               ;;
             pull_request)
               ;;

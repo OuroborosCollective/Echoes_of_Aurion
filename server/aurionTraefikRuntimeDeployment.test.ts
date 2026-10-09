@@ -20,6 +20,23 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
   const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
 
+  it("rejects a release dispatch that resolves to a different main revision", () => {
+    const guard = workflow.match(/- name: Guard repository scope\n[\s\S]*?        run: \|\n([\s\S]*?)\n      - name:/)?.[1];
+    expect(guard).toBeDefined();
+    expect(workflow).toContain("EXPECTED_RELEASE_SHA: ${{ inputs.expected_sha }}");
+    expect(read(".github/workflows/post-merge-memory.yml")).toContain('-f expected_sha="$expected_sha"');
+    const script = guard!.replaceAll("${{ github.repository }}", "OuroborosCollective/Echoes_of_Aurion");
+    for (const expected of ["a".repeat(40), "b".repeat(40), "", "main"]) {
+      const result = spawnSync("bash", ["-c", script], { encoding: "utf8", env: {
+        ...process.env, GITHUB_REPOSITORY: "OuroborosCollective/Echoes_of_Aurion",
+        GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REF_NAME: "main",
+        GITHUB_SHA: "a".repeat(40), EXPECTED_RELEASE_SHA: expected,
+      } });
+      expect(result.status).toBe(expected === "a".repeat(40) ? 0 : 70);
+      if (result.status !== 0) expect(result.stderr).toContain("RELEASE_DISPATCH_REVISION_MISMATCH");
+    }
+  });
+
   it("keeps embedded Node verifier sources complete and syntactically valid", () => {
     expect(workflow).not.toContain("[...]");
 

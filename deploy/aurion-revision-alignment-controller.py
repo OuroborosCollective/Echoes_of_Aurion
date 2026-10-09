@@ -242,7 +242,7 @@ def dispatch_release(expected: str, observed: dict, previous_run: dict | None, r
         )
 
     workflow = urllib.parse.quote(WORKFLOW, safe="")
-    github(f"/repos/{REPOSITORY}/actions/workflows/{workflow}/dispatches", method="POST", body={"ref": BRANCH})
+    github(f"/repos/{REPOSITORY}/actions/workflows/{workflow}/dispatches", method="POST", body={"ref": BRANCH, "inputs": {"expected_sha": expected}})
     state.update(
         {
             "attempts": state["attempts"] + 1,
