@@ -24,3 +24,7 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+
+## 2026-10-09 - Landing Page Community Button Extension
+**Learning:** When modifying React components, explicitly verify the scope and availability of variables (e.g., `loading`, `isAuthenticated`) and the exact location of DOM elements via `grep` or `sed` before assuming they exist in a specific file. Avoid referencing elements in execution plans that are not definitively proven to be in the target file context.
+**Action:** Use precise `grep -rn` commands to verify element locations and file contexts prior to submitting plans.
