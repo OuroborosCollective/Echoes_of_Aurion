@@ -103,54 +103,80 @@ export function reduceConfirmedCombatMetrics(values: readonly ConfirmedCombatPre
     dpsSeries: Object.freeze([]),
   });
 
-  const outgoing = canonical.filter(event => event.direction === "outgoing");
-  const incoming = canonical.filter(event => event.direction === "incoming");
   const firstTick = canonical[0]!.tick;
   const lastTick = canonical[canonical.length - 1]!.tick;
   const tickSpan = Math.max(1, lastTick - firstTick + 1);
   const combatDurationSec = tickSpan * ZONE_TICK_MS / 1000;
-  const totalDamage = outgoing.reduce((sum, event) => sum + event.damage, 0);
-  const totalDamageTaken = incoming.reduce((sum, event) => sum + event.damage, 0);
-  const outgoingHits = outgoing.filter(event => event.hit);
-  const criticalHits = outgoingHits.filter(event => event.crit).length;
+
+  let totalDamage = 0;
+  let totalDamageTaken = 0;
+  let outgoingHitsCount = 0;
+  let criticalHitsCount = 0;
+
   const perTickDamage = new Map<number, number>();
-  for (const event of outgoing) perTickDamage.set(event.tick, (perTickDamage.get(event.tick) ?? 0) + event.damage);
-  const peakDps = Math.max(0, ...[...perTickDamage.values()].map(damage => Math.round(damage * ZONE_TICK_HZ)));
-  const logs = Object.freeze([...canonical].reverse().slice(0, 40).map(event => Object.freeze({
-    id: `${event.sequence}:${event.direction}`,
-    tick: event.tick,
-    text: event.direction === "outgoing"
-      ? `${event.crit ? "CRIT " : ""}${event.skillId ?? "Basic Attack"}${event.killed ? " · Gegner besiegt" : ""}`
-      : "Eingehender Treffer",
-    value: event.damage,
-    direction: event.direction,
-    crit: event.crit,
-  })));
   const perSecond = new Map<number, { dps: number; dtps: number }>();
-  for (const event of outgoing) {
+
+  for (let i = 0; i < canonical.length; i++) {
+    const event = canonical[i]!;
     const second = Math.floor((event.tick - firstTick) * ZONE_TICK_MS / 1000);
-    const bucket = perSecond.get(second) ?? { dps: 0, dtps: 0 };
-    bucket.dps += event.damage;
-    perSecond.set(second, bucket);
+    let bucket = perSecond.get(second);
+    if (!bucket) {
+      bucket = { dps: 0, dtps: 0 };
+      perSecond.set(second, bucket);
+    }
+
+    if (event.direction === "outgoing") {
+      totalDamage += event.damage;
+      bucket.dps += event.damage;
+      perTickDamage.set(event.tick, (perTickDamage.get(event.tick) ?? 0) + event.damage);
+      if (event.hit) {
+        outgoingHitsCount++;
+        if (event.crit) criticalHitsCount++;
+      }
+    } else {
+      totalDamageTaken += event.damage;
+      bucket.dtps += event.damage;
+    }
   }
-  for (const event of incoming) {
-    const second = Math.floor((event.tick - firstTick) * ZONE_TICK_MS / 1000);
-    const bucket = perSecond.get(second) ?? { dps: 0, dtps: 0 };
-    bucket.dtps += event.damage;
-    perSecond.set(second, bucket);
+
+  let peakDps = 0;
+  for (const damage of perTickDamage.values()) {
+    const dps = Math.round(damage * ZONE_TICK_HZ);
+    if (dps > peakDps) peakDps = dps;
   }
+
+  const logsCount = Math.min(40, canonical.length);
+  const logs = new Array(logsCount);
+  for (let i = 0; i < logsCount; i++) {
+    const event = canonical[canonical.length - 1 - i]!;
+    logs[i] = Object.freeze({
+      id: `${event.sequence}:${event.direction}`,
+      tick: event.tick,
+      text: event.direction === "outgoing"
+        ? `${event.crit ? "CRIT " : ""}${event.skillId ?? "Basic Attack"}${event.killed ? " · Gegner besiegt" : ""}`
+        : "Eingehender Treffer",
+      value: event.damage,
+      direction: event.direction,
+      crit: event.crit,
+    });
+  }
+  Object.freeze(logs);
+
   const lastSecond = Math.floor((lastTick - firstTick) * ZONE_TICK_MS / 1000);
-  const dpsSeries = Object.freeze(Array.from({ length: lastSecond + 1 }, (_, second) => {
-    const bucket = perSecond.get(second);
-    return Object.freeze({ second, dps: bucket?.dps ?? 0, dtps: bucket?.dtps ?? 0 });
-  }));
+  const dpsSeries = new Array(lastSecond + 1);
+  for (let i = 0; i <= lastSecond; i++) {
+    const bucket = perSecond.get(i);
+    dpsSeries[i] = Object.freeze({ second: i, dps: bucket?.dps ?? 0, dtps: bucket?.dtps ?? 0 });
+  }
+  Object.freeze(dpsSeries);
+
   return Object.freeze({
     totalDamage,
     totalDamageTaken,
     currentDps: Math.round(totalDamage / combatDurationSec),
     peakDps,
     currentDtps: Math.round(totalDamageTaken / combatDurationSec),
-    critRate: outgoingHits.length === 0 ? 0 : Math.round(criticalHits / outgoingHits.length * 100),
+    critRate: outgoingHitsCount === 0 ? 0 : Math.round(criticalHitsCount / outgoingHitsCount * 100),
     combatDurationSec: Number(combatDurationSec.toFixed(1)),
     eventCount: canonical.length,
     firstTick,
