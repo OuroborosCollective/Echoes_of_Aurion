@@ -24,11 +24,13 @@ jobs:
           MARIADB_DATABASE: aurion_probe_test
         ports: ['3306:3306']
         options: >-
-          --health-cmd='mariadb-admin ping -h 127.0.0.1 -paurion-disposable-probe-test --silent'
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-probe-test --silent"
           --health-interval=5s --health-timeout=3s --health-retries=30
     env:
       DATABASE_URL: mysql://root:aurion-disposable-probe-test@127.0.0.1:3306/aurion_probe_test
       AURION_PROBE_E2E: '1'
+      JWT_SECRET: aurion-disposable-probe-signing-key-never-production
+      VITE_APP_ID: aurion-isolated-probe-test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -43,4 +45,4 @@ jobs:
       - run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
       - run: pnpm check
       - name: Real MariaDB races, replay, revocation, roles and local signed-JWT contracts
-        run: pnpm exec vitest run server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts
+        run: pnpm exec vitest run server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts server/aurionProductionProbeHttpMariaDb.test.ts
