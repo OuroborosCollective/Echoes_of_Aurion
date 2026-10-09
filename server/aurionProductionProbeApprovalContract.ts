@@ -111,6 +111,9 @@ export function requireMatchingAurionProbeApproval(
   ) throw new Error("PROBE_APPROVAL_INVALID");
   if (approval.consumedAtMs !== null) throw new Error("PROBE_APPROVAL_ALREADY_CONSUMED");
 
+  if (typeof approval.approvedAtMs !== "number" || typeof approval.expiresAtMs !== "number") {
+    throw new Error("PROBE_APPROVAL_EXPIRED_OR_INVALID");
+  }
   const approvedAtMs = validEpochMilliseconds(approval.approvedAtMs);
   const expiresAtMs = validEpochMilliseconds(approval.expiresAtMs);
   if (
