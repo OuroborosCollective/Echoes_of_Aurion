@@ -46,11 +46,11 @@ describe("bounded Aurion schema repair plan", () => {
     expect(a.operations).toEqual([]);
     expect(a.journalInsertions).toEqual([]);
   });
-  it("reconstructs missing non-contiguous 0067/0069/0071 only from their pinned canonical SQL", () => {
+  it("reconstructs missing non-contiguous 0067/0069/0071/0072 only from their pinned canonical SQL", () => {
     const p = plan(missingTables());
     expect(p.blockers).toEqual([]);
     expect(p.decision).toBe("ADDITIVE_REPAIR_READY");
-    expect(p.operations.filter(o => o.kind === "CREATE_TABLE")).toHaveLength(5);
+    expect(p.operations.filter(o => o.kind === "CREATE_TABLE")).toHaveLength(6);
     expect(p.journalInsertions.map(e => e.tag)).toEqual(REPAIR_POLICY.absent);
     for (const op of p.operations) {
       expect(op.sql).toBe(sources[op.tag].split("--> statement-breakpoint").map(x => x.trim()).filter(Boolean)[op.statementIndex]);

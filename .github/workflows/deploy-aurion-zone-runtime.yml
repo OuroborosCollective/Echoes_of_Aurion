@@ -583,6 +583,7 @@ jobs:
       contents: read
       actions: read
       attestations: read
+      id-token: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -598,17 +599,17 @@ jobs:
             --source-digest "$GITHUB_SHA" --source-ref refs/heads/main \
             --predicate-type https://arelogic.space/attestations/aurion-release-artifact/v1 \
             --deny-self-hosted-runners
-      - name: Require an authorized functional probe session before mutation
-        env:
-          AURION_READBACK_SESSION: ${{ secrets.AURION_READBACK_SESSION }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require owner-approved one-shot OIDC preflight before mutation
         run: |
           node --input-type=module <<'NODE'
-          const session=process.env.AURION_READBACK_SESSION??"";
-          if(!/^[A-Za-z0-9._~-]{20,8192}$/.test(session)) throw new Error("AUTHENTICATED_PROBE_SESSION_REQUIRED");
-          const r=await fetch("https://arelogic.space/api/trpc/auth.me",{headers:{cookie:`app_session_id=${session}`},redirect:"error",signal:AbortSignal.timeout(15000)});
-          const body=r.ok?await r.json():null;
-          if(body?.result?.data?.json?.role!=="admin") throw new Error("AUTHORIZED_PROBE_SESSION_REQUIRED");
-          console.log("Authorized functional probe session verified; credentials omitted.");
+          import { executeProductionProbe } from './scripts/aurion-production-probe-client.mjs';
+          const receipt = await executeProductionProbe('aurion.probe.admin-readback');
+          if (receipt.status !== 'AUTHORIZED') throw new Error('PROBE_PREFLIGHT_NOT_AUTHORIZED');
+          console.log(JSON.stringify({ approvalId: receipt.approvalId, revision: receipt.revision, runId: receipt.runId, runAttempt: receipt.runAttempt, scope: receipt.scope, credentialReturned: false }));
           NODE
 
   prepare-schema-tools:
@@ -1124,6 +1125,9 @@ jobs:
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1138,7 +1142,6 @@ jobs:
       - name: Execute authenticated gameplay and independent NPC readbacks
         env:
           AURION_EXPECTED_SHA: ${{ github.sha }}
-          AURION_READBACK_SESSION: ${{ secrets.AURION_READBACK_SESSION }}
         run: pnpm exec tsx scripts/verify-aurion-production-gameplay.ts
       - name: Preserve sanitized functional receipt
         if: always()

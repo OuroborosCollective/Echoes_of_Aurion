@@ -84,6 +84,7 @@ on:
       - "drizzle/0069_aurion_combat_victory_events.sql"
       - "drizzle/0070_aurion_quest_inventory_rewards.sql"
       - "drizzle/0071_aurion_npc_guild_authority.sql"
+      - "drizzle/0072_aurion_production_probe_approvals.sql"
       - "config/aurion-migration-wave-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"

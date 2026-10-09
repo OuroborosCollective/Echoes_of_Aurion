@@ -498,6 +498,13 @@
       "when": 1791209100000,
       "tag": "0071_aurion_npc_guild_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791550800000,
+      "tag": "0072_aurion_production_probe_approvals",
+      "breakpoints": true
     }
   ]
 }

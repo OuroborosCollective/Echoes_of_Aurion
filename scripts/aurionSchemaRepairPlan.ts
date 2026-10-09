@@ -5,7 +5,7 @@ import {
 } from "./aurionProductionSchemaReconciliation";
 
 export const REPAIR_POLICY = {
-  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority"],
+  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals"],
   drift: ["0025_aurion_loot_mastery_ethos", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0033_aurion_ax1_ui_controls", "0066_aurion_inventory_transaction_kernel", "0068_aurion_item_manipulation_runtime"],
 } as const;
 export const REPAIR_MAX_AGE_MS = 15 * 60 * 1000;
@@ -59,7 +59,7 @@ export function buildSchemaRepairPlan(input: {
   const affected = observation.migrations.filter(m => m.state !== "PRESENT_SCHEMA_MATCH");
   for (const m of affected) {
     // Prefix-based legacy readback can label a missing non-contiguous table
-    // DRIFT. Keep the nine-tag boundary; classify the actual structure below.
+    // DRIFT. Keep the explicit revision-bound migration boundary; classify the actual structure below.
     if (!["ABSENT_APPLY_REQUIRED", "PRESENT_SCHEMA_DRIFT"].includes(m.state)
       || !([...REPAIR_POLICY.absent, ...REPAIR_POLICY.drift] as readonly string[]).includes(m.tag)) blockers.push(`UNEXPECTED_MIGRATION_STATE:${m.tag}:${m.state}`);
   }

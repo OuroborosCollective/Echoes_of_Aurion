@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { requireGameplayHealth, requireNpcAdvance, requireZoneWelcome } from "../scripts/verify-aurion-production-gameplay";
+import { requireGameplayHealth, requireNpcAdvance, requireZoneWelcome, requireFunctionalProbeReceipt } from "../scripts/verify-aurion-production-gameplay";
 import { ZONE_PROTOCOL_VERSION } from "../shared/zonePresenceContract";
 import { assuranceKeys, sealAssuranceSnapshot } from "../shared/aurionAssuranceContract";
 import { verifySnapshot } from "../scripts/aurion-production-assurance.mjs";
@@ -10,6 +10,9 @@ describe("production gameplay readback rejects superficial health", () => {
   it("rejects healthy HTTP/container identity with the wrong release or degraded NPCs", () => {
     expect(() => requireGameplayHealth({ ...health, revision: "b".repeat(40) }, revision)).toThrow("GAMEPLAY_REVISION_MISMATCH");
     expect(() => requireGameplayHealth({ ...health, npcLife: { enabled: true, status: "degraded" } }, revision)).toThrow("NPC_LIFE_DEGRADED");
+  });
+  it("never upgrades a read-only observation into successful functional production proof", () => {
+    expect(() => requireFunctionalProbeReceipt({ healthBefore: health, health, worldJoin: "UNVERIFIED", zoneHandshake: "UNVERIFIED" }, revision)).toThrow("READ_ONLY_PROBE_WORLD_JOIN_UNVERIFIED");
   });
   it("requires an authoritative welcome containing the joining player", () => {
     const welcome = { type: "welcome", zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION, tick: 1, snapshotSeq: 1, selfEntityId: "player:1", presences: [] };
