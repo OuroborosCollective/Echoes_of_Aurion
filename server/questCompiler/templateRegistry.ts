@@ -158,9 +158,11 @@ export class QuestTemplateRegistry {
   }
 
   public getActiveTemplates(): QuestTemplateVersion[] {
-    return Array.from(this.templates.values())
-      .filter(t => t.active && !t.quarantined)
-      .sort((a, b) => `${a.templateId}:v${a.version}`.localeCompare(`${b.templateId}:v${b.version}`));
+    const list: QuestTemplateVersion[] = [];
+    for (const t of this.templates.values()) {
+      if (t.active && !t.quarantined) list.push(t);
+    }
+    return list.sort((a, b) => `${a.templateId}:v${a.version}`.localeCompare(`${b.templateId}:v${b.version}`));
   }
 
   public getTemplate(templateId: string, version: number): QuestTemplateVersion | undefined {
