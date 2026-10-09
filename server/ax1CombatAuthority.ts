@@ -253,22 +253,27 @@ export class BuffDebuffSystem {
   multiplier(stat: Buff["stat"], tick: number): number {
     if (!Number.isSafeInteger(tick) || tick < 0) throw new Error("invalid buff tick");
     const capEvidenceHash = canonicalSha256({ domain: "aurion.combat-buff.cap.v1", rulesetVersion: AURION_COMBAT_BUFF_RULESET_VERSION, stat });
-    const modifiers: AurionModifier[] = [
-      ...Array.from(this.buffs.values()).filter(buff => buff.stat === stat).map(buff => ({
-        modifierId: `combat-buff:${buff.id}`,
-        source: { kind: "effect" as const, id: `combat-buff:${buff.id}`, revision: AURION_COMBAT_BUFF_RULESET_VERSION, evidenceHash: canonicalSha256({ domain: "aurion.combat-buff.source.v1", rulesetVersion: AURION_COMBAT_BUFF_RULESET_VERSION, buff }) },
-        stat: buff.stat,
-        operation: "add" as const,
-        amount: buff.magnitudeBps,
-        priority: 0,
-        stackingGroup: "combat-buffs",
-        stacking: "sum" as const,
-        startsAtTick: buff.startsAtTick,
-        expiresAtTick: buff.expiresAtTick,
-      })),
+    const modifiers: AurionModifier[] = [];
+    for (const buff of this.buffs.values()) {
+      if (buff.stat === stat) {
+        modifiers.push({
+          modifierId: `combat-buff:${buff.id}`,
+          source: { kind: "effect" as const, id: `combat-buff:${buff.id}`, revision: AURION_COMBAT_BUFF_RULESET_VERSION, evidenceHash: canonicalSha256({ domain: "aurion.combat-buff.source.v1", rulesetVersion: AURION_COMBAT_BUFF_RULESET_VERSION, buff }) },
+          stat: buff.stat,
+          operation: "add" as const,
+          amount: buff.magnitudeBps,
+          priority: 0,
+          stackingGroup: "combat-buffs",
+          stacking: "sum" as const,
+          startsAtTick: buff.startsAtTick,
+          expiresAtTick: buff.expiresAtTick,
+        });
+      }
+    }
+    modifiers.push(
       { modifierId: `combat-buff-cap-min:${stat}`, source: { kind: "rule", id: "combat-buff-cap", revision: AURION_COMBAT_BUFF_RULESET_VERSION, evidenceHash: capEvidenceHash }, stat, operation: "min", amount: 1_000, priority: 10_000, stackingGroup: "combat-buff-cap", stacking: "highest" },
       { modifierId: `combat-buff-cap-max:${stat}`, source: { kind: "rule", id: "combat-buff-cap", revision: AURION_COMBAT_BUFF_RULESET_VERSION, evidenceHash: capEvidenceHash }, stat, operation: "max", amount: 30_000, priority: 10_000, stackingGroup: "combat-buff-cap", stacking: "lowest" },
-    ];
+    );
     return resolveAurionDerivedStats({ baseStats: { [stat]: 10_000 }, modifiers, logicalTick: tick }).stats[stat]! / 10_000;
   }
 }
