@@ -101,3 +101,36 @@ export function equipmentLocalScale(
   if (!Number.isFinite(localScale) || localScale <= 0) return null;
   return Math.min(1000, Math.max(0.001, localScale));
 }
+
+/** A legacy authored 'main hand' socket on an upper-arm bone is not a grip.
+ * Prefer a real hand bone if the named socket does not descend from it.
+ * All changes are projection-only, never gameplay equipment authority.
+ */
+export function resolveEquipmentVisualAnchor(slot: GlbEquipmentSlot, root: THREE.Object3D): THREE.Object3D | null {
+  const aliases = equipmentAnchorAliases[slot];
+  const matches = new Map<string, THREE.Object3D>();
+  root.traverse(node => {
+    if (!node.name) return;
+    const key = normalizeNodeName(node.name);
+    if (key && !matches.has(key)) matches.set(key, node);
+  });
+  if (slot === "weapon" || slot === "shield") {
+    const handAliases = slot === "weapon"
+      ? ["handr", "righthand", "mixamorigrighthand", "bip001rhand", "bip01rhand", "biprhand", "ccbaserhand", "jbiprhand"]
+      : ["handl", "lefthand", "mixamoriglefthand", "bip001lhand", "bip01lhand", "biplhand", "ccbaselhand", "jbiphandl"];
+    const hand = handAliases.map(alias => matches.get(alias)).find(Boolean);
+    if (hand) {
+      for (const alias of aliases) {
+        const node = matches.get(alias);
+        if (!node) continue;
+        let parent: THREE.Object3D | null = node;
+        while (parent) {
+          if (parent === hand) return node;
+          parent = parent.parent;
+        }
+      }
+      return hand;
+    }
+  }
+  return aliases.map(alias => matches.get(alias)).find(Boolean) ?? null;
+}
