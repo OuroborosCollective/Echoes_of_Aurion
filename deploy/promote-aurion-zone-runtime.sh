@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# aurion-traefik-promoter-protocol: 2
+# aurion-traefik-promoter-protocol: 3
 set -euo pipefail
 unset NODE_OPTIONS
 
-if [[ $# -ne 3 ]]; then
-  echo "usage: promote-aurion-zone-runtime <artifact-dir> <expected-sha40> <release-id>" >&2
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+  echo "usage: promote-aurion-zone-runtime <artifact-dir> <expected-sha40> <release-id> [--prepare-schema]" >&2
   exit 64
 fi
+mode="${4:-promote}"
+[[ "$mode" == "promote" || "$mode" == "--prepare-schema" ]] || exit 64
 
 artifact_dir="$1"
 expected_sha="$2"
@@ -176,6 +178,37 @@ cmp -s "${schema_apply_artifact}/deploy/verify-aurion-production-schema-apply-ar
 phase=promoter-self-install
 install -D -o root -g root -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
 cmp -s "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+
+# Preparation installs only the checksum-bound tools. It must return before
+# building an application image, touching services, or changing containers.
+if [[ "$mode" == "--prepare-schema" ]]; then
+  printf '{"recordType":"aurion_schema_tools_prepared","revision":"%s","runtimeMutationPerformed":false}\n' "$expected_sha"
+  exit 0
+fi
+
+# Defense in depth for every caller, including manual invocations: application
+# image construction/promotion is gated by a completed root apply receipt AND
+# a new read-only schema process. A health-200 response is not this gate.
+phase=require-completed-schema-apply
+schema_receipt=/var/lib/echoes-of-aurion/schema-apply/latest.json
+node --input-type=module -e '
+  import fs from "node:fs";
+  const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+  if(r.sourceRevision!==process.argv[2]||r.databaseCredentialReturned!==false||!["APPLY_SUCCEEDED","ALREADY_APPLIED"].includes(r.overallState)) process.exit(2);
+  if(r.postflight?.summary?.migrationCount!==50||r.postflight.summary.matchCount!==50||r.postflight.summary.absentCount!==0||r.postflight.summary.driftCount!==0) process.exit(3);
+  if(r.backup?.created!==true||r.recovery?.executed!==true||r.recovery?.matched!==true||!/^([a-f0-9]{64})$/.test(r.backup.sha256)) process.exit(4);
+' "$schema_receipt" "$expected_sha"
+schema_readback="$(mktemp)"
+if ! /usr/local/sbin/aurion-production-schema-reconcile "$expected_sha" >"$schema_readback"; then
+  rm -f "$schema_readback"
+  exit 70
+fi
+node --input-type=module -e '
+  import fs from "node:fs";
+  const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+  if(r.sourceRevision!==process.argv[2]||r.readOnly!==true||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary?.matchCount!==50||r.summary?.absentCount!==0||r.summary?.driftCount!==0) process.exit(2);
+' "$schema_readback" "$expected_sha"
+rm -f "$schema_readback"
 
 # Install the fixed companion-memory sanitizer and its no-argument root wrapper.
 # Raw companion memory remains inside the Docker volume; only sanitized research

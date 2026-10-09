@@ -41,9 +41,11 @@ const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multi
 const requiredFiles = [
   "deploy/verify-aurion-installed-schema-tool",
   "bin/apply.cjs",
+  "bin/repair.cjs",
   "bin/mysql-client-config.cjs",
   "bin/reconcile.cjs",
   "drizzle/meta/_journal.json",
+  "drizzle/meta/repair-history.json",
   ...contractTags.map(tag => `drizzle/${tag}.sql`),
   "deploy/aurion-production-schema-apply",
   "deploy/aurion-production-schema-apply-core",
@@ -172,6 +174,13 @@ async function main() {
   if (journal?.version !== "7" || journal.dialect !== "mysql" || !Array.isArray(journal.entries)) fail();
   if (!sameEntries(journal.entries.map(entry => entry?.tag), tags)) fail();
   if (journal.entries.some((entry, index) => !Number.isSafeInteger(entry?.when) || entry.when <= 0 || (index > 0 && entry.when <= journal.entries[index - 1].when))) fail();
+  const history = JSON.parse(await readFile(path.join(artifact, "drizzle/meta/repair-history.json"), "utf8"));
+  if (!Array.isArray(history) || history.length !== tags.length + 21 || new Set(history.map(e => e.tag)).size !== history.length || new Set(history.map(e => e.hash)).size !== history.length) fail();
+  if (history.some((e, i) => !/^\d{4}_[a-z0-9_]+$/.test(e.tag) || !/^[a-f0-9]{64}$/.test(e.hash) || !Number.isSafeInteger(e.when) || e.when <= 0 || (i > 0 && e.when <= history[i-1].when))) fail();
+  for (const [index, entry] of journal.entries.entries()) {
+    const identity = history[index + 21];
+    if (identity.tag !== entry.tag || identity.when !== entry.when || identity.hash !== await sha256(path.join(artifact, `drizzle/${entry.tag}.sql`))) fail();
+  }
 }
 
 main().catch(() => fail());

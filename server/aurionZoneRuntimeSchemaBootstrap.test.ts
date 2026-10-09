@@ -26,8 +26,8 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     expect(workflow).toContain("uses: ./.github/workflows/aurion-root-reconciliation-artifact-proof.yml");
     expect(workflow).toContain("production-schema-readback:");
     expect(workflow).toContain("uses: ./.github/workflows/aurion-production-schema-readback.yml");
-    expect(workflow).toContain("needs: [promote-zone-runtime, apply-reviewed-schema-plan]");
-    expect(workflow).toContain("if: always() && needs.promote-zone-runtime.result == \'success\'");
+    expect(workflow).toContain("needs: [prepare-schema-tools, apply-reviewed-schema-plan]");
+    expect(workflow).toContain("if: always() && needs.prepare-schema-tools.result == \'success\'");
     expect(workflow).toContain("expected_sha: ${{ github.sha }}");
     expect(workflow).toContain("upstream_run_id: ${{ github.run_id }}");
   });
@@ -36,7 +36,10 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     const invocations = workflow.match(
       /sudo \/usr\/local\/sbin\/promote-aurion-zone-runtime/g,
     );
-    expect(invocations?.length).toBe(2);
+    expect(invocations?.length).toBe(3);
+    expect(workflow).toContain("SCHEMA_PREPARE_CAPABILITY_REQUIRED");
+    expect(workflow).toContain("needs: [verify-and-build, apply-reviewed-schema-plan, production-schema-readback]");
+    expect(promoter.indexOf('if [[ "$mode" == "--prepare-schema" ]]')).toBeLessThan(promoter.indexOf("docker build --pull=false"));
     expect(workflow).not.toContain("sudo bash deploy/install-aurion-production-schema-reconcile");
     expect(workflow).not.toContain("drizzle-kit migrate");
   });

@@ -1,19 +1,7 @@
 name: Deploy Aurion Traefik runtime
 
 on:
-  push:
-    branches: [main]
-    # Documentation and local visual-tooling changes are non-runtime surfaces.
-    # Mixed commits still deploy because paths-ignore applies only when every
-    # changed path matches one of these patterns.
-    paths-ignore:
-      - "docs/**"
-      - "SUMMARY.md"
-      - "Memory.md"
-      - ".game-dev/**"
-      - ".gitignore"
-      - ".github/workflows/game-development-studio-smoke.yml"
-      - "scripts/install-game-development-studio.mjs"
+  # Main releases are dispatched after the single Memory entry and mirror readback.
   pull_request:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
@@ -42,7 +30,7 @@ on:
 concurrency:
   # A push and a trusted manual dispatch for main must never promote in
   # parallel. Pull-request refs remain isolated from the production queue.
-  group: deploy-aurion-zone-runtime-${{ github.ref }}
+  group: ${{ github.ref == 'refs/heads/main' && 'aurion-production-release-main' || format('deploy-aurion-zone-runtime-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -574,10 +562,34 @@ jobs:
     with:
       use_uploaded_artifact: true
 
+  prepare-schema-tools:
+    name: Prepare immutable schema tools without runtime promotion
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: schema-prepare-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+      - name: Require schema preparation capability before any root invocation
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if ! sudo grep -Fqx '# aurion-traefik-promoter-protocol: 3' /usr/local/sbin/promote-aurion-zone-runtime; then
+            echo 'SCHEMA_PREPARE_CAPABILITY_REQUIRED: install the reviewed v3 promoter before releasing; runtime untouched.' >&2
+            exit 70
+          fi
+          sudo /usr/local/sbin/promote-aurion-zone-runtime "${GITHUB_WORKSPACE}/schema-prepare-artifact" "$EXPECTED_SHA" "${EXPECTED_SHA}-${GITHUB_RUN_ID}" --prepare-schema
+
   promote-zone-runtime:
     name: Promote verified Aurion Traefik runtime
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
+    needs: [verify-and-build, apply-reviewed-schema-plan, production-schema-readback]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
     permissions:
@@ -1076,7 +1088,7 @@ jobs:
   apply-reviewed-schema-plan:
     name: Apply reviewed canonical migration plan through the existing OIDC workflow
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]
+    needs: [migration-ledger, prepare-schema-tools]
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
@@ -1100,8 +1112,8 @@ jobs:
 
   production-schema-readback:
     name: Require production schema readback receipt
-    if: always() && needs.promote-zone-runtime.result == 'success'
-    needs: [promote-zone-runtime, apply-reviewed-schema-plan]
+    if: always() && needs.prepare-schema-tools.result == 'success'
+    needs: [prepare-schema-tools, apply-reviewed-schema-plan]
     uses: ./.github/workflows/aurion-production-schema-readback.yml
     with:
       expected_sha: ${{ github.sha }}

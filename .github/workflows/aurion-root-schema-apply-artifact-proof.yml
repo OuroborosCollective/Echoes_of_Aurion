@@ -13,6 +13,10 @@ on:
       - ".github/workflows/aurion-root-schema-apply-artifact-proof.yml"
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - "scripts/apply-aurion-production-schema.ts"
+      - "scripts/repair-aurion-production-schema.ts"
+      - "scripts/aurionSchemaRepair*.ts"
+      - "scripts/schema-repair-proof-fixture.mjs"
+      - "server/aurionSchemaRepairPlan.test.ts"
       - "scripts/aurionProductionDatabaseClientConfig.ts"
       - "scripts/build-aurion-production-apply-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
@@ -325,8 +329,51 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("retry-receipt.json","utf8"));
-          if(r.overallState!=="ALREADY_APPLIED"||r.backup?.created!==false||r.recovery?.executed!==false||r.apply?.state!=="ALREADY_APPLIED") throw new Error("retry was not a safe no-op");
+          if(r.overallState!=="ALREADY_APPLIED"||r.backup?.created!==true||r.recovery?.executed!==true||r.recovery?.matched!==true||r.apply?.state!=="ALREADY_APPLIED") throw new Error("retry was not a safe no-op");
           NODE
+
+      - name: Prove sparse additive repair, isolated rehearsal, preserved data and unknown-drift rejection
+        run: |
+          set -euo pipefail
+          fixture() {
+            docker run --rm --network "$AURION_APPLY_TEST_NETWORK" \
+              --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+              --workdir /workspace --env CI=true \
+              --env DATABASE_URL="mysql://root:${AURION_APPLY_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_APPLY_TEST_DATABASE}" \
+              node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
+              node scripts/schema-repair-proof-fixture.mjs "$1"
+          }
+          fixture prepare-additive
+          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > repair-receipt.json
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("repair-receipt.json","utf8"));
+          assert.equal(r.overallState,"APPLY_SUCCEEDED");
+          assert.equal(r.backup.created,true);
+          assert.equal(r.recovery.matched,true);
+          assert.match(r.apply.repairPlanSha256,/^[a-f0-9]{64}$/);
+          assert.match(r.apply.rehearsalSha256,/^[a-f0-9]{64}$/);
+          assert.ok(r.apply.operations.some(o=>o.tag==="0068_aurion_item_manipulation_runtime"&&o.kind==="ADD_COLUMN"));
+          assert.ok(r.apply.operations.every(o=>o.result==="APPLIED"&&o.startedAt&&o.endedAt&&o.backupSha256===r.backup.sha256));
+          assert.deepEqual(r.postflight.summary,{migrationCount:50,matchCount:50,absentCount:0,driftCount:0});
+          NODE
+          fixture verify-repaired
+          fixture prepare-unknown
+          set +e
+          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > blocked-repair-receipt.json
+          status=$?
+          set -e
+          test "$status" -ne 0
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("blocked-repair-receipt.json","utf8"));
+          assert.equal(r.overallState,"APPLY_FAILED");
+          assert.equal(r.failureStage,"REPAIR_PLAN_BLOCKED");
+          assert.equal(r.backup.created,false);
+          NODE
+          fixture verify-blocked
 
       - name: Prove the fixed runner rejects caller-supplied code paths
         run: |

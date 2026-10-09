@@ -68,6 +68,7 @@ await mkdir(deploy, { recursive: true });
 for (const [source, target] of [
   ["reconcile-aurion-production-schema.ts", "reconcile.cjs"],
   ["apply-aurion-production-schema.ts", "apply.cjs"],
+  ["repair-aurion-production-schema.ts", "repair.cjs"],
   ["aurionProductionDatabaseClientConfig.ts", "mysql-client-config.cjs"],
 ]) {
   await execFileAsync(path.join(root, "node_modules", ".bin", "esbuild"), [path.join(root, "scripts", source), "--bundle", "--platform=node", "--target=node22", "--format=cjs", `--outfile=${path.join(bin, target)}`]);
@@ -77,9 +78,11 @@ if (fullJournal?.version !== "7" || fullJournal.dialect !== "mysql" || !Array.is
 const entries = fullJournal.entries.filter(entry => tags.includes(entry?.tag));
 if (entries.length !== tags.length || entries.some((entry, index) => entry.tag !== tags[index] || !Number.isSafeInteger(entry.when) || (index > 0 && entry.when <= entries[index - 1].when))) throw new Error("Late Aurion Drizzle journal entries are incomplete or out of order");
 await writeFile(path.join(meta, "_journal.json"), `${JSON.stringify({ version: "7", dialect: "mysql", entries }, null, 2)}\n`, { mode: 0o644 });
+const repairHistory = await Promise.all(fullJournal.entries.map(async entry => ({ tag: entry.tag, when: entry.when, hash: await sha256(path.join(root, "drizzle", `${entry.tag}.sql`)) })));
+await writeFile(path.join(meta, "repair-history.json"), `${JSON.stringify(repairHistory, null, 2)}\n`, { mode: 0o644 });
 for (const tag of contractTags) await copyFile(path.join(root, "drizzle", `${tag}.sql`), path.join(drizzle, `${tag}.sql`));
 for (const filename of deployFiles) await copyFile(path.join(root, "deploy", filename), path.join(deploy, filename));
-const relativeFiles = ["bin/apply.cjs", "bin/mysql-client-config.cjs", "bin/reconcile.cjs", "drizzle/meta/_journal.json", ...contractTags.map(tag => `drizzle/${tag}.sql`), ...deployFiles.map(filename => `deploy/${filename}`)].sort();
+const relativeFiles = ["bin/apply.cjs", "bin/repair.cjs", "bin/mysql-client-config.cjs", "bin/reconcile.cjs", "drizzle/meta/_journal.json", "drizzle/meta/repair-history.json", ...contractTags.map(tag => `drizzle/${tag}.sql`), ...deployFiles.map(filename => `deploy/${filename}`)].sort();
 const files = {};
 for (const relative of relativeFiles) {
   const absolute = path.join(out, relative);
