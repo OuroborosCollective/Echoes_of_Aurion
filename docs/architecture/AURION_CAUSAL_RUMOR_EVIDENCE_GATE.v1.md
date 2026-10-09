@@ -13,8 +13,7 @@ This document fixes the dependency order, the shared invariants and the end-to-e
   -> #781 player-facing rumor projection        (shared/rumorProjectionProtocol.ts)
   -> #782 investigation graph + deductions      (shared/investigationGraphProtocol.ts)
   -> #783 rumor-to-behavior bridge              (shared/rumorBeliefBridgeProtocol.ts)   [parallel lane]
-  -> #784 journal / rumor board AX1 projection  (shared/investigationJournalProtocol.ts +
-                                                 client/src/xaurion/components/Ax1InvestigationJournalModal.tsx)
+  -> #784 journal / rumor board Aurion readmodel (shared/investigationJournalProtocol.ts)
   -> existing #595 quest/opportunity + typed action gateway (unchanged)
 ```
 
@@ -23,7 +22,7 @@ This document fixes the dependency order, the shared invariants and the end-to-e
 1. World truth precedes claims; claims may be false or uncertain and never mutate truth.
 2. Player/NPC belief is separate from canonical fact (`claim truth status != actor belief strength`).
 3. Only existing typed gameplay gateways create consequences; deductions and journals are investigation/presentation state.
-4. Server is authoritative; AX1/UI renders server-confirmed readmodels only.
+4. Server is authoritative; the Aurion UI renders server-confirmed readmodels only.
 5. Fixed-point (BPS/Q16) and logical-index arithmetic for all replay-critical state; no wall-clock, no unseeded randomness.
 6. No runtime LLM; Wolfram/game-theory and research sources are offline falsification/design inputs only.
 7. Same confirmed input graph + ruleset version ⇒ same hashes at every stage (projection, graph, journal, belief vector, decision).
