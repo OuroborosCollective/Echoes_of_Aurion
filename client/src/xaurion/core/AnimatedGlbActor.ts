@@ -3,7 +3,7 @@ import { extractCanonicalAvatarProfile } from "./CanonicalAvatarProfile";
 import type { CanonicalAvatarProfile } from "@shared/aurionCanonicalAvatarContract";
 import * as THREE from "three";
 import type { GlbEquipmentSlot } from "@shared/glbImportContract";
-import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale } from "./EquipmentAttachmentSizing";
+import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale, resolveEquipmentVisualAnchor } from "./EquipmentAttachmentSizing";
 
 export type GlbPose = "idle" | "walk" | "run" | "attack" | "jump" | "death" | "interact";
 const clipNames: Record<GlbPose, readonly string[]> = {
@@ -182,11 +182,7 @@ export class AnimatedGlbActor {
   }
 
   private attachmentAnchor(slot: GlbEquipmentSlot): THREE.Object3D | null {
-    for (const alias of equipmentAnchorAliases[slot]) {
-      const node = this.nodesByName.get(alias);
-      if (node) return node;
-    }
-    return null;
+    return resolveEquipmentVisualAnchor(slot, this.model);
   }
 
   detachEquipment(slot: GlbEquipmentSlot): void {
