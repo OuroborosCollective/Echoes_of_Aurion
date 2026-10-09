@@ -24,6 +24,14 @@ describe("open-world protocol", () => {
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true }))).toBe("sunwatch_bastion");
   });
 
+  it("keeps completed-quest receipt identity independent of persistence row order", () => {
+    const input = snapshotInput({ level: 6, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true });
+    const forward = buildOpenWorldSnapshot(input);
+    const reverse = buildOpenWorldSnapshot({ ...input, completed: [...input.completed].reverse() });
+    expect(reverse).toEqual(forward);
+    expect(input.completed).toEqual(["astral_call", "archive_of_echoes", "ember_key"]);
+  });
+
   it("keeps the dungeon gate visible across the confirmed Ember Key transition", () => {
     const before = snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
     const locked = buildOpenWorldSnapshot(before);

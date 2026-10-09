@@ -162,6 +162,9 @@ jobs:
         run: pnpm exec playwright test --config playwright.aurion-groups.config.ts
       - name: Verify autonomous NPC life health against confirmed receipts
         run: pnpm exec tsx scripts/verify-autonomous-npc-life-runtime.mjs
+      - name: Preserve runtime failure diagnostics
+        if: failure()
+        run: cp /tmp/aim259-runtime.log test-results/aim259-runtime.log
       - name: Upload revision-bound evidence and screenshots
         if: always()
         uses: actions/upload-artifact@v4

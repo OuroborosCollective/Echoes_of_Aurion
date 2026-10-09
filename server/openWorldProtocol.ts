@@ -177,9 +177,15 @@ export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZone
 }
 
 function npcAutonomy(input: { npcId: "lyra" | "orun"; reaction: WorldReaction; resolutionIndex: number; dialectId: string; baseNeeds: Readonly<Record<NpcNeedKey, number>> }) {
+  // Own keys only; preserve canonical receipt ordering below.
+  const events = [];
+  for (const need of Object.keys(input.reaction.npcNeedDeltas) as NpcNeedKey[]) {
+    const delta = input.reaction.npcNeedDeltas[need];
+    events.push({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need, delta, sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex });
+  }
   const needs = resolveNpcNeeds({
     current: input.baseNeeds,
-    events: (Object.entries(input.reaction.npcNeedDeltas) as [NpcNeedKey, number][]).map(([need, delta]) => ({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need, delta, sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex })),
+    events,
   });
   const decision = decideNpcGoal({ npcId: input.npcId, needs, observationIds: input.reaction.signalIds, resolutionIndex: input.resolutionIndex });
   return { needs, goal: decision.goal, decisionHash: decision.decisionHash, dialectId: input.dialectId, comprehensionThreshold: 0.6 };
