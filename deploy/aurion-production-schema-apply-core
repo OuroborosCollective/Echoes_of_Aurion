@@ -472,7 +472,7 @@ if [[ "$preflight_mode" == "repair" ]]; then
   APPLY_EXPECTED_SHA="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" APPLY_BACKUP_SHA256="$backup_sha256" node --input-type=module -e '
     import fs from "node:fs";
     const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8")),r=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
-    if(r.sourceRevision!==process.env.APPLY_EXPECTED_SHA||r.planSha256!==process.env.APPLY_PLAN_SHA256||r.repairPlanSha256!==p.repairPlanSha256||r.backupSha256!==process.env.APPLY_BACKUP_SHA256||r.executionMode!=="rehearse"||r.state!=="APPLY_SUCCEEDED"||r.postflight?.matchCount!==50||r.postflight?.absentCount!==0||r.postflight?.driftCount!==0) process.exit(2);
+    if(r.sourceRevision!==process.env.APPLY_EXPECTED_SHA||r.planSha256!==process.env.APPLY_PLAN_SHA256||r.repairPlanSha256!==p.repairPlanSha256||r.backupSha256!==process.env.APPLY_BACKUP_SHA256||r.executionMode!=="rehearse"||r.state!=="APPLY_SUCCEEDED"||r.postflight?.matchCount!==51||r.postflight?.absentCount!==0||r.postflight?.driftCount!==0) process.exit(2);
   ' "$repair_plan" "$repair_rehearsal" || { phase=REPAIR_REHEARSAL_READBACK_INVALID; exit 70; }
   repair_rehearsal_sha256="$(sha256sum "$repair_rehearsal" | awk '{print $1}')"
 fi
@@ -483,7 +483,7 @@ apply_raw="$(mktemp "${state_dir}/.apply.XXXXXX")"
 set +e
 if [[ "$preflight_mode" == "complete" ]]; then
   APPLY_SOURCE_REVISION="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
-    console.log(JSON.stringify({recordType:"aurion_production_schema_apply_execution",schemaVersion:1,sourceRevision:process.env.APPLY_SOURCE_REVISION,planSha256:process.env.APPLY_PLAN_SHA256,mode:"apply",databaseCredentialReturned:false,state:"ALREADY_APPLIED",appliedMigrationTags:[],postflight:{migrationCount:50,matchCount:50,absentCount:0,driftCount:0}}));
+    console.log(JSON.stringify({recordType:"aurion_production_schema_apply_execution",schemaVersion:1,sourceRevision:process.env.APPLY_SOURCE_REVISION,planSha256:process.env.APPLY_PLAN_SHA256,mode:"apply",databaseCredentialReturned:false,state:"ALREADY_APPLIED",appliedMigrationTags:[],postflight:{migrationCount:51,matchCount:51,absentCount:0,driftCount:0}}));
   ' >"$apply_raw"
   apply_status=$?
 elif [[ "$preflight_mode" == "repair" ]]; then

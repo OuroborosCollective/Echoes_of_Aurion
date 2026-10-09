@@ -369,7 +369,7 @@ jobs:
           assert.match(r.apply.rehearsalSha256,/^[a-f0-9]{64}$/);
           assert.ok(r.apply.operations.some(o=>o.tag==="0068_aurion_item_manipulation_runtime"&&o.kind==="ADD_COLUMN"));
           assert.ok(r.apply.operations.every(o=>o.result==="APPLIED"&&o.startedAt&&o.endedAt&&o.backupSha256===r.backup.sha256));
-          assert.deepEqual(r.postflight.summary,{migrationCount:50,matchCount:50,absentCount:0,driftCount:0});
+          assert.deepEqual(r.postflight.summary,{migrationCount:51,matchCount:51,absentCount:0,driftCount:0});
           NODE
           fixture verify-repaired
           fixture prepare-unknown
