@@ -9,7 +9,8 @@ const keys = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks`), { timeout
 export function githubProbeIdentity(payload: JWTPayload) {
   if (payload.repository_id !== "1313103794" || payload.repository_owner_id !== "266194342"
     || payload.repository !== AURION_PROBE_REPOSITORY
-    || payload.sub !== `repo:${AURION_PROBE_REPOSITORY}:environment:${AURION_PROBE_ENVIRONMENT}`
+    // Use the same immutable owner/repository subject as the existing root OIDC gate.
+    || payload.sub !== `repo:OuroborosCollective@266194342/Echoes_of_Aurion@1313103794:environment:${AURION_PROBE_ENVIRONMENT}`
     || payload.environment !== AURION_PROBE_ENVIRONMENT || payload.event_name !== "workflow_dispatch"
     || payload.ref !== AURION_PROBE_REF || payload.ref_type !== "branch"
     || payload.workflow_ref !== `${AURION_PROBE_REPOSITORY}/${AURION_PROBE_WORKFLOW}@${AURION_PROBE_REF}`
