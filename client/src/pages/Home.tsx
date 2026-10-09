@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import {
   BookOpen,
   Box,
+  CalendarDays,
   Compass,
   FileText,
   MessageCircle,
@@ -18,7 +19,7 @@ import {
 } from "@/xaurion/integration/Ax1PlayNavigationBridge";
 import "./homeCinematic.css";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild";
 
 function openAccountAccess(): void {
   window.dispatchEvent(new Event("aurion:open-local-auth"));
@@ -358,6 +359,16 @@ export default function Home() {
           <button
             type="button"
             aria-haspopup="dialog"
+            title="Events öffnen"
+            onClick={() => openCommunity("events")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+          >
+            <CalendarDays className="mr-2 size-4 text-cyan-300" />
+            Events
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
             disabled={loading}
             aria-busy={loading}
             title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Signalraum öffnen"}
@@ -386,6 +397,18 @@ export default function Home() {
           >
             <Box className="mr-2 size-4 text-cyan-300" />
             Asset-Katalog
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            disabled={loading || !isAuthenticated}
+            aria-busy={loading}
+            title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Gildenübersicht öffnen"}
+            onClick={() => openCommunity("guild")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
+          >
+            <UsersRound className="mr-2 size-4 text-cyan-300" />
+            Gildenzugehörigkeit
           </button>
         </div>
       </section>
