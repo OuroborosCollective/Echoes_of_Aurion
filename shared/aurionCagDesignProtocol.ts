@@ -1,4 +1,4 @@
-import { isBaseChunkRoadTile, WORLD_CHUNK_GRID_SIZE, type BaseWorldChunk } from "./worldChunkProtocol";
+import { isBaseChunkRoadTile, WORLD_CHUNK_GRID_SIZE, type BaseWorldChunk, type ChunkSurface } from "./worldChunkProtocol";
 
 /**
  * Pure deterministic design/oracle helpers for Echoes of Aurion.
@@ -151,6 +151,109 @@ export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCag
   });
 }
 
+
+
+const SURFACE_MAPPING: Record<ChunkSurface, number> = {
+  grass: 1,
+  forest_floor: 2,
+  riverbank: 3,
+  stone: 4,
+  ash: 5,
+  ruin_path: 6,
+};
+
+export type AurionTerrainContinuitySummary = Readonly<{
+  varianceMm2: number;
+  surfaceTransitions: number;
+}>;
+
+function canonicalSurfaceMatrix(chunk: BaseWorldChunk): readonly (readonly number[])[] {
+  if (chunk.tiles.length !== WORLD_CHUNK_GRID_SIZE * WORLD_CHUNK_GRID_SIZE) {
+    throw new Error("terrain tile count does not match the canonical world chunk grid");
+  }
+  const byCoordinate = new Map<string, number>();
+  for (const tile of chunk.tiles) {
+    if (!Number.isSafeInteger(tile.x) || !Number.isSafeInteger(tile.z) || !Number.isSafeInteger(tile.heightMm)) {
+      throw new Error("terrain tile must use integer coordinates and millimeter heights");
+    }
+    if (tile.x < 0 || tile.x >= WORLD_CHUNK_GRID_SIZE || tile.z < 0 || tile.z >= WORLD_CHUNK_GRID_SIZE) {
+      throw new Error("terrain tile coordinate is outside the canonical chunk grid");
+    }
+    const key = `${tile.x}:${tile.z}`;
+    if (byCoordinate.has(key)) throw new Error("terrain tile coordinate must be unique");
+    const mapped = SURFACE_MAPPING[tile.surface];
+    if (mapped === undefined) throw new Error(`unmapped surface: ${tile.surface}`);
+    byCoordinate.set(key, mapped);
+  }
+  return Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, z) =>
+    Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, x) => {
+      const value = byCoordinate.get(`${x}:${z}`);
+      if (value === undefined) throw new Error("terrain grid is incomplete");
+      return value;
+    })),
+  ));
+}
+
+export function summarizeWorldChunkTerrainContinuity(chunk: BaseWorldChunk): AurionTerrainContinuitySummary {
+  const heightMatrix = canonicalTerrainMatrix(chunk);
+  const surfaceMatrix = canonicalSurfaceMatrix(chunk);
+  const heights = heightMatrix.flat();
+
+  // Variance
+  const mean = heights.reduce((sum, h) => sum + h, 0) / heights.length;
+  // Use population variance to match Wolfram's typical expectation for exact sets,
+  // but Wolfram's Variance[] uses sample variance (N-1).
+  const sumSqDiff = heights.reduce((sum, h) => sum + (h - mean) ** 2, 0);
+  const varianceMm2 = Math.round(sumSqDiff / (heights.length - 1));
+
+  // Transitions
+  let surfaceTransitions = 0;
+  for (let z = 0; z < WORLD_CHUNK_GRID_SIZE; z += 1) {
+    for (let x = 0; x < WORLD_CHUNK_GRID_SIZE; x += 1) {
+      const current = surfaceMatrix[z]![x]!;
+      if (x + 1 < WORLD_CHUNK_GRID_SIZE && current !== surfaceMatrix[z]![x + 1]!) {
+        surfaceTransitions += 1;
+      }
+      if (z + 1 < WORLD_CHUNK_GRID_SIZE && current !== surfaceMatrix[z + 1]![x]!) {
+        surfaceTransitions += 1;
+      }
+    }
+  }
+
+  return Object.freeze({
+    varianceMm2,
+    surfaceTransitions,
+  });
+}
+
+/**
+ * Recomputes geometry variance and material continuity from the already-authoritative Aurion chunk.
+ */
+export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
+  const heightMatrix = canonicalTerrainMatrix(chunk);
+  const surfaceMatrix = canonicalSurfaceMatrix(chunk);
+  const summary = summarizeWorldChunkTerrainContinuity(chunk);
+
+  const hRows = heightMatrix.map(row => `{${row.join(",")}}`).join(",");
+  const sRows = surfaceMatrix.map(row => `{${row.join(",")}}`).join(",");
+
+  const code = [
+    `h={${hRows}}`,
+    `s={${sRows}}`,
+    "var=Round[Variance[Flatten[h]]]",
+    "sdx=Flatten[Map[Differences,s]]",
+    "sdz=Flatten[Differences[s]]",
+    "trans=Count[sdx,x_/;x!=0]+Count[sdz,x_/;x!=0]",
+    "{var,trans}"
+  ].join(";");
+
+  return Object.freeze({
+    kind: "terrain_invariants",
+    code,
+    expectedExact: `{${summary.varianceMm2},${summary.surfaceTransitions}}`,
+    truthNotice: "CAG independently computes terrain variance and material continuity constraints; it does not generate texturization.",
+  });
+}
 export type ModelBounds = Readonly<{
   min: readonly [number, number, number];
   max: readonly [number, number, number];

@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2023-10-09 - CAG Probe for Terrain Texture Variance
+**Learning:** Wolfram CAG can be effectively utilized to establish analytical bounding functions over already determined data without mutating authoritative truth. Geometric constraints like texture continuity or stretching can be translated into `Variance` and transition counting algorithms.
+**Action:** When asked to augment optimization or verification with Wolfram CAG, create a non-mutating Oracle/Probe function that constructs strict, minimal expressions over a canonical deterministic data subset, test them by evaluating expression outputs, and ensure `truthNotice` correctly bounds the output.
