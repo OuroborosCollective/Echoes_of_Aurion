@@ -35,6 +35,7 @@ describe("Aurion revision alignment controller contract", () => {
     expect(controllerScript).toContain('raise ControllerError("stale_main", "main revision changed before workflow dispatch")');
     expect(controllerScript).toContain('if main_sha() != expected:');
     expect(controllerScript).toContain('raise ControllerError("stale_main", "main revision changed during workflow dispatch")');
+    expect(controllerScript).toContain('"inputs": {"expected_sha": expected}');
   });
 
   it("produces ALIGNED state only on exact runtime revision and completed successful release", () => {

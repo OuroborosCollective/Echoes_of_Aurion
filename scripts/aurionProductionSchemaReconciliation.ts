@@ -518,8 +518,8 @@ export function compareTableContract(expected: ExpectedTable, observed: Observed
       drift.push(`${expected.name}:type:${name}:expected=${normalizeType(column.sqlType)}:observed=${normalizeType(actual.columnType)}`);
     }
     if (column.nullable !== actual.nullable) drift.push(`${expected.name}:nullability:${name}`);
-    // Older evidence fixtures do not contain these fields. Live repair reads
-    // both explicitly; unknown expressions/extra attributes remain unequal.
+    // Older evidence fixtures do not contain these fields. Every live schema
+    // observer reads both; unknown expressions/extra attributes remain unequal.
     if (actual.defaultSql !== undefined && normalizeColumnDefault(column.defaultSql, column.sqlType) !== normalizeColumnDefault(actual.defaultSql, column.sqlType)) drift.push(`${expected.name}:default:${name}`);
     if (actual.extra !== undefined && (column.extra ?? "").toLowerCase() !== actual.extra.toLowerCase()) drift.push(`${expected.name}:extra:${name}`);
   }

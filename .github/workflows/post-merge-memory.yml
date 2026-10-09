@@ -119,4 +119,4 @@ jobs:
           fi
           expected_sha="$(git rev-parse HEAD)"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$expected_sha"
-          gh workflow run deploy-aurion-zone-runtime.yml --ref main
+          gh workflow run deploy-aurion-zone-runtime.yml --ref main -f expected_sha="$expected_sha"

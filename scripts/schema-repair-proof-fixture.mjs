@@ -15,7 +15,39 @@ assert.equal(target.username, "root");
 const db = await mysql.createConnection(target.href);
 const mode = process.argv[2];
 try {
-  if (mode === "prepare-additive") {
+  if (mode === "reject-column-contract-drift") {
+    const root = path.resolve("dist-production-apply");
+    const env = { ...process.env, AURION_SCHEMA_APPLY_ROOT: root,
+      AURION_RECONCILIATION_ROOT: root, AURION_SCHEMA_APPLY_SOURCE_SHA: process.env.GITHUB_SHA,
+      AURION_RECONCILIATION_SOURCE_SHA: process.env.GITHUB_SHA,
+      AURION_SCHEMA_APPLY_PLAN_SHA256: process.env.AURION_APPLY_TEST_PLAN };
+    const run = name => spawnSync(process.execPath, [`${root}/bin/${name}.cjs`], { env, encoding: "utf8" });
+    const baseline = run("reconcile");
+    assert.equal(baseline.status, 0, baseline.stdout);
+    assert.equal(JSON.parse(baseline.stdout).summary.driftCount, 0);
+    const [journalBefore] = await db.query("SELECT * FROM __drizzle_migrations ORDER BY id");
+    const [tablesBefore] = await db.query("SHOW TABLES");
+    for (const [definition, reason] of [
+      ["timestamp NOT NULL DEFAULT '2001-01-01 00:00:00'", "default:createdAt"],
+      ["timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP", "extra:createdAt"],
+    ]) {
+      await db.query(`ALTER TABLE itemInstances MODIFY COLUMN createdAt ${definition}`);
+      try {
+        const readback = run("reconcile");
+        assert.equal(readback.status, 3, readback.stdout);
+        assert.ok(JSON.parse(readback.stdout).migrations.some(m => m.drift.includes(`itemInstances:${reason}`)));
+        const apply = run("apply");
+        assert.notEqual(apply.status, 0);
+        assert.equal(JSON.parse(apply.stdout).failureStage, "PREFLIGHT_SCHEMA");
+        assert.equal(JSON.parse(apply.stdout).errorClass, "SCHEMA_NOT_APPLYABLE");
+        assert.deepEqual((await db.query("SELECT * FROM __drizzle_migrations ORDER BY id"))[0], journalBefore);
+        assert.deepEqual((await db.query("SHOW TABLES"))[0], tablesBefore);
+      } finally {
+        await db.query("ALTER TABLE itemInstances MODIFY COLUMN createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP");
+      }
+    }
+    assert.equal(run("reconcile").status, 0);
+  } else if (mode === "prepare-additive") {
     const history = JSON.parse(fs.readFileSync("dist-production-apply/drizzle/meta/repair-history.json", "utf8"));
     for (const tag of ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority"]) {
       const sql = fs.readFileSync(`drizzle/${tag}.sql`, "utf8");

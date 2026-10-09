@@ -52,6 +52,8 @@ type ColumnRow = RowDataPacket & {
   COLUMN_NAME: string;
   COLUMN_TYPE: string;
   IS_NULLABLE: "YES" | "NO";
+  COLUMN_DEFAULT: string | null;
+  EXTRA: string;
 };
 
 type IndexRow = RowDataPacket & {
@@ -149,7 +151,7 @@ async function expectedMigrations(): Promise<ExpectedMigration[]> {
 async function observeMigrations(connection: Connection, expected: readonly ExpectedMigration[]): Promise<MigrationClassification[]> {
   const expectedTableNames = Array.from(new Set(expected.flatMap(migration => migration.tables.map(table => table.name)))).sort();
   const [columnRows] = await connection.query<ColumnRow[]>(
-    `SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE FROM information_schema.columns WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders(expectedTableNames.length)}) ORDER BY TABLE_NAME,ORDINAL_POSITION`,
+    `SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT,EXTRA FROM information_schema.columns WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders(expectedTableNames.length)}) ORDER BY TABLE_NAME,ORDINAL_POSITION`,
     expectedTableNames,
   );
   const [indexRows] = await connection.query<IndexRow[]>(
@@ -167,7 +169,7 @@ async function observeMigrations(connection: Connection, expected: readonly Expe
   for (const tableName of tableNamesPresent) {
     const columns = columnRows
       .filter(row => row.TABLE_NAME === tableName)
-      .map(row => ({ name: row.COLUMN_NAME, columnType: row.COLUMN_TYPE, nullable: row.IS_NULLABLE === "YES" }));
+      .map(row => ({ name: row.COLUMN_NAME, columnType: row.COLUMN_TYPE, nullable: row.IS_NULLABLE === "YES", defaultSql: row.COLUMN_DEFAULT, extra: row.EXTRA }));
     const indexGroups = new Map<string, { unique: boolean; columns: Array<{ sequence: number; name: string }> }>();
     for (const row of indexRows.filter(index => index.TABLE_NAME === tableName)) {
       const existing = indexGroups.get(row.INDEX_NAME) ?? { unique: row.NON_UNIQUE === 0, columns: [] };
