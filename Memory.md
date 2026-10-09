@@ -1358,3 +1358,25 @@ Task: Bind release dispatch to the Memory-checked SHA and include defaults/EXTRA
 Evidence: TypeScript and 49 focused tests pass, including executable rejection of changed/missing dispatch revisions. The isolated database lane checks wrong defaults and ON UPDATE at partial and complete schemas, with unchanged journal rows after rejection.
 Learned: A branch name alone does not bind dispatch to an observed commit; schema readers must inspect the same complete column contract.
 Open: Production repair and functional recovery remain unverified; preserve the protocol-3 installation and authenticated-probe prerequisites.
+
+
+### 2026-10-09 — PR #832 — fix(aurion): restore pre-stack journal UI state
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=832 merge=62a0285366b670c414f18781679b08e6041c7511 -->
+Task: Merge PR #832 into `main` — fix(aurion): restore pre-stack journal UI state.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `architecture/donor-ledger.json`
+- `client/src/xaurion/components/Ax1InvestigationJournalModal.test.tsx`
+- `client/src/xaurion/components/Ax1InvestigationJournalModal.tsx`
+- `docs/architecture/AURION_CAUSAL_RUMOR_EVIDENCE_GATE.v1.md`
+- `shared/investigationJournalProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/832
+- Merge commit: `62a0285366b670c414f18781679b08e6041c7511`
+- PR head: `51e77ae54b6f04a5036c7afdc6289d059f62feb9`
+- Merged at: 2026-10-09T09:59:21Z
+- Post-merge workflow run: 37914782293
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
