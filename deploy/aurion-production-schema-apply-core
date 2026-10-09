@@ -140,7 +140,10 @@ on_exit() {
   if [[ "$status" -ne 0 && "$receipt_emitted" -ne 1 ]]; then
     emit_failure "$status"
   fi
-  if [[ -n "$apply_raw" ]]; then
+  # Preserve partial execution evidence for operator review on failure. DDL
+  # cannot be rolled back as a transaction; discarding this log would hide
+  # which canonical statements ran before the failure. The directory is 0700.
+  if [[ "$status" -eq 0 && -n "$apply_raw" ]]; then
     rm -f -- "$apply_raw"
   fi
   exit "$status"

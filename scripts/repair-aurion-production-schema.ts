@@ -61,7 +61,13 @@ async function main() {
     stage = "POSTFLIGHT_JOURNAL";
     // Journal entries are appended only after the full structural readback.
     // Existing records, hashes and timestamps are never rewritten or removed.
-    for (const entry of plan.journalInsertions) await connection.query("INSERT INTO `__drizzle_migrations` (`hash`,`created_at`) VALUES (?,?)", [entry.hash, entry.when]);
+    for (const entry of plan.journalInsertions) {
+      const receipt: Record<string, unknown> = { tag: entry.tag, sqlSha256: entry.hash, kind: "JOURNAL_APPEND", startedAt: new Date().toISOString(), backupSha256, result: "PENDING" };
+      executed.push(receipt);
+      try { await connection.query("INSERT INTO `__drizzle_migrations` (`hash`,`created_at`) VALUES (?,?)", [entry.hash, entry.when]); receipt.result = "APPLIED"; }
+      catch { receipt.result = "FAILED"; receipt.errorClass = "JOURNAL_CONFLICT"; throw new Error("JOURNAL_CONFLICT"); }
+      finally { receipt.endedAt = new Date().toISOString(); }
+    }
     const finalObservation = await readRepairObservation(connection, contracts, sourceRevision);
     const verified = buildSchemaRepairPlan({ sourceRevision, ledgerPlanSha256, nowMs: Date.now(), observation: finalObservation, contracts, sources, journal });
     if (verified.decision !== "ALREADY_MATCHED") throw new Error("REPAIR_POSTFLIGHT_MISMATCH");
