@@ -39,7 +39,7 @@ function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolv
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
 // Cache allowed origins to avoid repeating string split/map/filter operations on every HTTP request
 const CONFIGURED_ORIGINS = (process.env.AURION_ALLOWED_ORIGINS??"https://arelogic.space").split(",").map(value=>value.trim()).filter(Boolean);
-function allowedCorsOrigin(origin:string|undefined):string|null{if(!origin)return null;if(CONFIGURED_ORIGINS.includes(origin))return origin;try{const parsed=new URL(origin);if(parsed.protocol==="https:"&&(parsed.hostname.endsWith(".itch.io")||parsed.hostname.endsWith(".itch.zone")))return origin;}catch{return null;}return null;}
+function allowedCorsOrigin(origin:string|undefined):string|null{if(!origin)return null;if(CONFIGURED_ORIGINS.includes(origin))return origin;return null;}
 
 async function startServer(){
   if (process.env.DATABASE_URL && !isConfiguredDatabaseUrl(process.env.DATABASE_URL)) {
