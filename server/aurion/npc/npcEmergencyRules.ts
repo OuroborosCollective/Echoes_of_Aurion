@@ -125,10 +125,15 @@ export function rankRaidTargets(
     if (score < RAID_MIN_NEGATIVITY_BPS) continue;
 
     // Determine the worst category for this target
-    const worstCategory = records
-      .slice()
-      .sort((a, b) => categoryWeights[b.category] - categoryWeights[a.category] || b.severityBps - a.severityBps)[0]
-      ?.category ?? "general_hostility";
+    let worstRecord = records[0];
+    for (let i = 1; i < records.length; i++) {
+      const b = records[i]!;
+      const a = worstRecord!;
+      if (categoryWeights[b.category] > categoryWeights[a.category] || (categoryWeights[b.category] === categoryWeights[a.category] && b.severityBps > a.severityBps)) {
+        worstRecord = b;
+      }
+    }
+    const worstCategory = worstRecord?.category ?? "general_hostility";
 
     targets.push({
       targetId,
@@ -165,6 +170,7 @@ export type EmergencyAction =
   | "request_guild_aid"
   | "ration_supplies"
   | "raid_prioritised_target"
+  | "barricade_hub"
   | "flee_emergency";
 
 export type RaidTarget = Readonly<{
@@ -339,8 +345,15 @@ export function evaluateEmergencyResponse(input: Readonly<{
       );
     }
 
-    // No viable raid targets — flee if war pressure is extreme
+    // No viable raid targets — flee or barricade if war pressure is extreme
     if (env.warPressure > 0.7) {
+      if (p.prudenceBps > 6000) {
+        return makeDirective(
+          input.npcId, "critical", "barricade_hub",
+          `barricade: no raid targets, war pressure ${(env.warPressure * 100).toFixed(0)}%, high prudence`,
+          env.hubId, null, 1.0, urgencyBps, EMERGENCY_COOLDOWN_TICKS,
+        );
+      }
       return makeDirective(
         input.npcId, "critical", "flee_emergency",
         `flee: no raid targets, war pressure ${(env.warPressure * 100).toFixed(0)}%`,

@@ -65,7 +65,14 @@ describe("deterministic NPC GLB fallback selection", () => {
     const low = entry("glb_buns_lod1", "b", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Female Buns LOD1`);
     const variants = npcFallbackVariants(catalog([low, other, high]));
     expect(variants).toHaveLength(2);
-    const identity = Array.from({ length: 100 }, (_, index) => `npc:${index}`).find(candidate => selectNpcGlb(catalog([low, other, high]), candidate)?.variantKey === "universal female buns")!;
+    let identity = "npc:0";
+    for (let index = 0; index < 100; index++) {
+      const candidate = `npc:${index}`;
+      if (selectNpcGlb(catalog([low, other, high]), candidate)?.variantKey === "universal female buns") {
+        identity = candidate;
+        break;
+      }
+    }
     expect(selectNpcGlb(catalog([low, other, high]), identity, null, 0)?.entry.assetId).toBe("glb_buns_lod0");
     expect(selectNpcGlb(catalog([low, other, high]), identity, null, 1)?.entry.assetId).toBe("glb_buns_lod1");
   });
