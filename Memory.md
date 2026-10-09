@@ -1301,3 +1301,42 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-09 — PR #825 — Consolidate reviewed PRs: preserve Aurion authority, receipts and validation
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=825 merge=9b84e8093f731d72a66f339461cdaed462bc4ace -->
+Task: Merge PR #825 into `main` — Consolidate reviewed PRs: preserve Aurion authority, receipts and validation.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aim259-group-instances.yml`
+- `client/src/components/AchievementsGallery.test.tsx`
+- `client/src/components/AchievementsGallery.tsx`
+- `client/src/pages/Home.test.tsx`
+- `client/src/pages/Home.tsx`
+- `docs/balancing/aim265-candidate.json`
+- `playwright.aurion-groups.config.ts`
+- `scripts/balancing/aurion-cag-design-canary.ts`
+- `server/_core/corsOrigin.ts`
+- `server/_core/index.ts`
+- `server/aurion/npc/npcLifeProtocol.ts`
+- `server/aurionCagDesignOracle.test.ts`
+- `server/corsOrigin.test.ts`
+- `server/deterministicTerrainPipeline.test.ts`
+- `server/npcLifeProtocol.test.ts`
+- `server/openWorldProtocol.test.ts`
+- `server/openWorldProtocol.ts`
+- `server/questCompiler/persistence.ts`
+- `server/questCompiler/templateRegistry.ts`
+- `server/questCompiler/worldFacts.ts`
+- `server/terrainProbeReview.test.ts`
+- `shared/aurionCagDesignProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/825
+- Merge commit: `9b84e8093f731d72a66f339461cdaed462bc4ace`
+- PR head: `463d0cd3d597606c2614c1630485b9f4ce71a6e6`
+- Merged at: 2026-10-09T06:12:40Z
+- Post-merge workflow run: 37892359934
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
