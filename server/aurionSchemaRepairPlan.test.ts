@@ -91,4 +91,14 @@ describe("bounded Aurion schema repair plan", () => {
     expect(() => plan(full(), nowMs - 1)).toThrow("REPAIR_READBACK_STALE");
     expect(() => plan({ ...full(), sourceRevision: "c".repeat(40) })).toThrow("REPAIR_READBACK_IDENTITY_MISMATCH");
   });
+  it("does not certify incorrect defaults or unknown generated/extra column behavior", () => {
+    const o = full();
+    o.observedTables = o.observedTables.map(t => t.name !== "aurionItemInstancesV2" ? t : { ...t,
+      columns: t.columns.map(c => c.name !== "socketCount" ? c : { ...c, defaultSql: "5", extra: "STORED GENERATED" }),
+    });
+    const p = plan(classify(o));
+    expect(p.decision).toBe("BLOCKED_OPERATOR_REVIEW");
+    expect(p.blockers.some(b => b.includes(":default:socketCount"))).toBe(true);
+    expect(p.blockers.some(b => b.includes(":extra:socketCount"))).toBe(true);
+  });
 });

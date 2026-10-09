@@ -283,11 +283,13 @@ function parseCreateTable(name: string, body: string): ExpectedTable {
     if (columnMatch) {
       const definition = columnMatch[2].trim();
       const constraintText = maskQuotedSqlLiterals(definition);
+      const defaultToken = /\bDEFAULT\b/i.exec(constraintText);
+      const defaultDefinition = defaultToken ? definition.slice(defaultToken.index + defaultToken[0].length).trimStart() : "";
       columns.push({
         name: columnMatch[1],
         sqlType: takeSqlType(definition),
         nullable: !/\bNOT\s+NULL\b/i.test(constraintText),
-        defaultSql: definition.match(/\bDEFAULT\s+('(?:''|\\.|[^'])*'|\(now\(\)\)|current_timestamp(?:\(\))?|[^\s,;]+)/i)?.[1] ?? null,
+        defaultSql: defaultDefinition.match(/^('(?:''|\\.|[^'])*'|\(now\(\)\)|current_timestamp(?:\(\))?|[^\s,;]+)/i)?.[1] ?? null,
         extra: [ /\bAUTO_INCREMENT\b/i.test(constraintText) ? "auto_increment" : "",
           /\bON\s+UPDATE\s+CURRENT_TIMESTAMP/i.test(constraintText) ? "on update current_timestamp()" : "" ].filter(Boolean).join(" "),
       });

@@ -340,6 +340,11 @@ validate_preflight() {
 
 phase=FRESH_READ_ONLY_PREFLIGHT
 install -d -o root -g root -m 0700 "$state_dir"
+# Serialize the entire backup/recovery/apply attempt, including independently
+# dispatched runs. The database advisory lock still protects each writer.
+umask 077
+exec 9>"${state_dir}/apply.lock"
+flock -n 9 || { phase=SCHEMA_APPLY_ALREADY_RUNNING; exit 75; }
 preflight_raw="$(mktemp "${state_dir}/.preflight.XXXXXX")"
 set +e
 run_reconcile "$preflight_raw"

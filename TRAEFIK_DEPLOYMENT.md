@@ -4,9 +4,7 @@ description: Prüfbare Traefik-Konfiguration für den kontrollierten Aurion-Cont
 
 # Traefik Deployment
 
-Diese Vorlage ersetzt die bestehende Nginx-Produktionsbereitstellung **nicht automatisch**. Sie bereitet Aurion für einen Docker-basierten Hostinger-VPS vor, auf dem Traefik bereits TLS, Routing und das externe Docker-Netzwerk verwaltet.
-
-> Die Konfiguration stellt keinen Dienst bereit, ändert keine DNS-Einträge und migriert keine Datenbank. Sie ist zunächst ein revisionsgebundenes Artefakt zur Prüfung auf dem VPS.
+Aurion wird über revisionsgebundene Release-Artefakte und den kontrollierten GitHub-Workflow bereitgestellt. Traefik übernimmt TLS und Routing. Vor einer Runtime-Promotion müssen die unten beschriebenen Schema-, Backup-, Restore- und Attestationsprüfungen erfolgreich sein.
 
 ## Bereitgestellte Artefakte
 
@@ -55,7 +53,7 @@ docker compose --env-file .env.traefik -f docker-compose.traefik.yml config
 
 Die erste Ausgabe muss das existierende externe Areloria-Netzwerk bestätigen; Traefik selbst läuft auf diesem VPS im Host-Netzwerk und wird nicht als Mitglied eines Docker-Bridge-Netzwerks geführt. Die zweite Ausgabe muss insbesondere diese Werte zeigen: Router `aurion`, `websecure`, den korrekten Zertifikatsresolver, `Host(arelogic.space)` und `loadbalancer.server.port=3000`.
 
-Erst nach Freigabe der gerenderten Compose-Konfiguration und nach Bestätigung, dass `arelogic.space` auf die VPS-IP zeigt, kann ein verantwortlicher Betreiber den Build und Start durchführen. Vor einer Umschaltung sind die bestehende Nginx-Konfiguration, das aktuelle Release und die DNS-Zone zu sichern.
+Build und Start auf Produktion erfolgen über den gated Release-Workflow. Die lesende Compose-Prüfung ersetzt weder dessen Schema-Gates noch die revisionsgebundenen Recovery-Nachweise.
 
 ## Proxy- und Anwendungssicherheit
 
@@ -63,6 +61,32 @@ Aurion bindet im Container an `0.0.0.0:3000`, veröffentlicht diesen Port aber n
 
 `STRICT_PORT=true` verhindert im Container den lokalen Entwicklungs-Fallback auf 3001–3019. Ein Portkonflikt wird damit sichtbar, statt Traefik unbemerkt auf einen falschen Port zu routen.
 
-## Noch nicht autorisierte Aktionen
+## Revisionsgebundene Schema-Reparatur
 
-Diese Vorbereitung führt **keinen** VPS-Zugriff, keine DNS-/TLS-Änderung, keine Datenbankmigration, kein Compose-Start und keinen Wechsel von Nginx zu Traefik aus. Der Draft-PR bleibt bis zu einer expliziten Mergefreigabe offen.
+Der Produktionsworkflow führt die Schema-Prüfung und gegebenenfalls Reparatur vor dem Bau beziehungsweise Neustart des Anwendungscontainers auf dem VPS aus. Aurion bleibt die einzige Laufzeit- und Persistenzautorität. Historische Migrationstags werden nicht umbenannt oder als eigenständige Dienste aktiviert.
+
+1. Der Memory-Recorder synchronisiert den einzelnen Integrationseintrag und dispatcht anschließend den Release-Workflow. Beide nutzen die gemeinsame Concurrency-Gruppe `aurion-production-release-main`. Reine Dokumentationsänderungen lösen keinen Runtime-Release aus. Ein bereits vorhandener, vollständiger Eintrag mit `<!-- integration-memory: pr=<Nummer> -->` verhindert einen zweiten Eintrag.
+2. Der Workflow bindet den kanonischen Ledger-Plan an den exakten Commit. Eine unabhängige Hosted-Runner-Prüfung verifiziert die Artefaktattestation. `SCHEMA_DISPATCH_STALE_MAIN` bleibt ein Abbruchgrund; der Guard darf nicht umgangen werden.
+3. Der Root-Promoter mit Protokoll 3 installiert über `--prepare-schema` nur die geprüften Schema-Artefakte. Der Anwendungscontainer wird dabei nicht gebaut oder verändert.
+4. Der Root-Apply erzeugt einen frischen Readback. Bei Drift erstellt `repair-aurion-production-schema.ts` einen zusätzlichen Reparaturplan mit eigenem Hash, Struktur-/Journal-Fingerprint und 15 Minuten Gültigkeit. Dieser ersetzt den kanonischen Ledger-Hash nicht.
+5. Vor jedem Apply entstehen ein logischer Dump und ein Restore in einer isolierten MariaDB ohne Produktionsnetzwerk. Additive Reparaturen werden zuerst an diesem Restore ausgeführt. Der echte Apply regeneriert den Plan unter Datenbanksperre und verlangt identische Ausgangsstruktur, Journalhistorie und SQL-Hashes. Ein Host-Lock serialisiert den gesamten Versuch.
+6. Ein neuer Read-only-Prozess muss alle 50 Migrationen als passend bestätigen. Auch ein bereits passendes Schema benötigt einen neuen Backup-/Restore-Nachweis vor der Runtime-Promotion.
+7. Nach der Promotion prüft eine authentifizierte Sitzung einen echten Zone-Ticket-Handshake, Welcome und Folgesnapshot, fortschreitende NPC-Auflösungen sowie den Gilden-Readback aus MariaDB. Causal Assurance wird neu gelesen und ihr tatsächlicher Status protokolliert. Die grafische Darstellung bleibt eine eigene Prüfung; ein erfolgreicher Netzwerk-Readback bestätigt kein Bild.
+
+### Reparaturgrenze
+
+Die explizit zugelassene Menge umfasst `0067`, `0069`, `0071` sowie `0025`, `0030`, `0031`, `0033`, `0066`, `0068`. Der Plan wählt ausschließlich passende `CREATE TABLE`, `ADD COLUMN`, `ADD INDEX` und `ADD CHECK`-Anweisungen aus den revisionsgebundenen Originalmigrationen. Insbesondere werden `craftingReceiptId` und die NPC-Gildentabellen nicht ausgelassen.
+
+Vorhandene Spalten, Defaults, zusätzliche Spaltenattribute, Indizes, Checks und Trigger müssen zum Vertrag passen. Unbekannte Strukturen, widersprüchliche Constraints, Fremdschlüssel oder Präfixindizes außerhalb des unterstützten Vertrags stoppen den gesamten Plan. Eine fehlende, bereits journalisierte Tabelle wird wegen möglichem Datenverlust nicht automatisch neu erstellt. Bestehende Journaleinträge werden niemals überschrieben oder gelöscht; eindeutig fehlende freigegebene Einträge können nach vollständigem Strukturabgleich ergänzt werden.
+
+Ein blockierter Plan wird rootgeschützt im Schema-Apply-Zustandsverzeichnis aufbewahrt. Der Operator muss den konkreten Konflikt prüfen. Es gibt weder einen automatischen `DROP`-/`MODIFY`-Pfad noch Docker-Cleanup oder eine automatische Wiederherstellung über die laufende Produktionsdatenbank.
+
+### Einmalige Voraussetzungen und Betrieb
+
+Der bisherige Promoter mit Protokoll 2 kann Schema-Vorbereitung nicht getrennt ausführen. `SCHEMA_PREPARE_CAPABILITY_REQUIRED` verlangt daher eine vertrauenswürdige Root-Installation des geprüften Protokoll-3-Promoters. Der alte Promotionseinstieg darf dafür nicht als Abkürzung aufgerufen werden: Er könnte den Spielcontainer vor den neuen Gates verändern. Danach installiert der neue Vorbereitungspfad die jeweils revisionsgebundenen Schema-Werkzeuge selbst.
+
+Das GitHub-Environment `production` benötigt `AURION_READBACK_SESSION`: eine gültige Sitzung eines vorhandenen autorisierten Prüfkontos, dessen Admin-Recht für den bestehenden Gilden-Readback benötigt wird. Der Workflow verifiziert dieses Recht vor Schema-Vorbereitung und Mutation. Er erzeugt keine Accounts, Rollen oder Ersatz-Tokens. Sitzungen und OIDC-JWTs gehören ausschließlich in die vorgesehenen geheimen Laufzeitkanäle.
+
+OIDC autorisiert weiterhin ausschließlich den eng gebundenen Root-Apply. Ein HTTP 401 beim Alignment-Controller betrifft dessen separate GitHub-API-Authentifizierung und wird durch das Apply-OIDC nicht repariert. Container-Heap-OOM und Darstellung müssen nach erfolgreicher Schema-Reparatur separat anhand neuer Runtime-Evidenz geprüft werden.
+
+Der Workflow `aurion-root-schema-apply-artifact-proof.yml` prüft den echten Root-Core mit isolierter MariaDB, Dump/Restore, partieller Reparatur, Daten-Erhalt, manipulierten/veralteten Plänen und blockierter unbekannter Drift. Diese Tests belegen die Implementierung, nicht die Ausführung auf Produktion.

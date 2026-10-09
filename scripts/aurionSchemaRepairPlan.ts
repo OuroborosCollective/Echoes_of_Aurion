@@ -22,7 +22,7 @@ export type RepairOperation = {
 };
 export function canonicalJson(value: unknown): string {
   const canonical = (item: unknown): unknown => Array.isArray(item) ? item.map(canonical)
-    : item && typeof item === "object" ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)).map(([key, v]) => [key, canonical(v)])) : item;
+    : item && typeof item === "object" ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, v]) => [key, canonical(v)])) : item;
   return JSON.stringify(canonical(value));
 }
 export function repairHash(value: unknown): string {
@@ -86,6 +86,7 @@ export function buildSchemaRepairPlan(input: {
     if (!identity || Number(row.createdAt) !== identity.when || recorded.has(row.hash)) blockers.push("JOURNAL_IDENTITY_CONFLICT");
     recorded.add(row.hash);
   }
+  for (const entry of journal) if (!(lateAurionMigrationTags as readonly string[]).includes(entry.tag) && !recorded.has(entry.hash)) blockers.push(`HISTORICAL_JOURNAL_GAP:${entry.tag}`);
 
   const operations: RepairOperation[] = [];
   const simulated = new Map(actual);
@@ -101,7 +102,7 @@ export function buildSchemaRepairPlan(input: {
       const check = clean.match(/^ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+CONSTRAINT\s+`([^`]+)`\s+CHECK\b/i);
       let kind: RepairOperation["kind"] | undefined;
       let tableName: string | undefined;
-      if (create && !simulated.has(create[1]) && (REPAIR_POLICY.absent as readonly string[]).includes(m.tag)) {
+      if (create && !simulated.has(create[1])) {
         kind = "CREATE_TABLE"; tableName = create[1];
       } else if (column && simulated.has(column[1]) && !simulated.get(column[1])!.columns.some(c => c.name === column[2])) {
         // A new required column needs a canonical default; implicit coercion

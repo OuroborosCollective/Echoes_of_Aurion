@@ -36,7 +36,7 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     const invocations = workflow.match(
       /sudo \/usr\/local\/sbin\/promote-aurion-zone-runtime/g,
     );
-    expect(invocations?.length).toBe(3);
+    expect(invocations?.length).toBe(2);
     expect(workflow).toContain("SCHEMA_PREPARE_CAPABILITY_REQUIRED");
     expect(workflow).toContain("needs: [verify-and-build, apply-reviewed-schema-plan, production-schema-readback]");
     expect(promoter.indexOf('if [[ "$mode" == "--prepare-schema" ]]')).toBeLessThan(promoter.indexOf("docker build --pull=false"));

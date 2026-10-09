@@ -2,6 +2,9 @@
 // database. This script is never included in a production apply artifact.
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import mysql from "mysql2/promise";
 
 const target = new URL(process.env.DATABASE_URL ?? "");
@@ -28,6 +31,39 @@ try {
     await db.query("ALTER TABLE aurionItemInstancesV2 DROP CONSTRAINT aurionItemInstancesV2_exactly_one_provenance_ck");
     await db.query("ALTER TABLE aurionItemInstancesV2 DROP INDEX aurionItemInstancesV2_crafting_receipt_uq");
     await db.query("ALTER TABLE aurionItemInstancesV2 DROP COLUMN craftingReceiptId");
+  } else if (mode === "reject-tampered-plan") {
+    const env = { ...process.env, AURION_SCHEMA_APPLY_ROOT: path.resolve("dist-production-apply"),
+      AURION_SCHEMA_APPLY_SOURCE_SHA: process.env.GITHUB_SHA,
+      AURION_SCHEMA_APPLY_PLAN_SHA256: process.env.AURION_APPLY_TEST_PLAN };
+    const run = args => spawnSync(process.execPath, ["dist-production-apply/bin/repair.cjs", ...args], { env, encoding: "utf8" });
+    const planned = run(["plan"]);
+    assert.equal(planned.status, 0);
+    const original = JSON.parse(planned.stdout);
+    assert.equal(original.decision, "ADDITIVE_REPAIR_READY");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "schema-plan-proof-"));
+    try {
+      const file = path.join(dir, "plan.json");
+      const tampered = structuredClone(original);
+      tampered.operations[0].sql = "DROP TABLE aurionContentHashLedger";
+      fs.writeFileSync(file, JSON.stringify(tampered));
+      const rejected = run(["apply", file]);
+      assert.notEqual(rejected.status, 0);
+      assert.equal(JSON.parse(rejected.stdout).errorClass, "REPAIR_PLAN_OR_PRESTATE_CHANGED");
+      assert.deepEqual(JSON.parse(rejected.stdout).operations, []);
+      const stale = structuredClone(original);
+      stale.observedAt = "2000-01-01T00:00:00.000Z";
+      fs.writeFileSync(file, JSON.stringify(stale));
+      assert.equal(JSON.parse(run(["apply", file]).stdout).errorClass, "REPAIR_READBACK_STALE");
+      fs.writeFileSync(file, JSON.stringify(original));
+      await db.query("ALTER TABLE aurionItemInstancesV2 ADD COLUMN interveningSchemaProof text NULL");
+      try {
+        const changed = run(["apply", file]);
+        assert.equal(JSON.parse(changed.stdout).errorClass, "REPAIR_PLAN_OR_PRESTATE_CHANGED");
+        assert.deepEqual(JSON.parse(changed.stdout).operations, []);
+      } finally { await db.query("ALTER TABLE aurionItemInstancesV2 DROP COLUMN interveningSchemaProof"); }
+      const [rows] = await db.query("SELECT sourceSizeBytes FROM aurionContentHashLedger WHERE id='append-only-proof'");
+      assert.deepEqual(rows.map(row => row.sourceSizeBytes), [1]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   } else if (mode === "verify-repaired") {
     const [rows] = await db.query("SELECT sourceSizeBytes FROM aurionContentHashLedger WHERE id='append-only-proof'");
     assert.deepEqual(rows.map(row => row.sourceSizeBytes), [1], "existing data must survive repair and restore rehearsal");
