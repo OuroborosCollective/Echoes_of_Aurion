@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## $(date +%Y-%m-%d) - Optimize Wolfram CAG Matrices Processing
+**Learning:** In Wolfram Language evaluations inside Aurion's terrain generation pipeline, utilizing operations like `Flatten` and `Join` on massive geometric matrices causes significant and unnecessary performance overhead. Functions like `Min` and `Max` naturally auto-flatten structures, while functions like `Differences[Transpose[m]]` can replace inefficient mapped differences.
+**Action:** Always prefer native matrix/list functions (like `Transpose`) over functional mapping or forced flattening when generating deterministic geometry probes to avoid overhead within the CAG pipeline.

@@ -138,10 +138,9 @@ export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCag
   const rows = matrix.map(row => `{${row.join(",")}}`).join(",");
   const code = [
     `m={${rows}}`,
-    "flat=Flatten[m]",
-    "dx=Flatten[Abs[Map[Differences,m]]]",
-    "dz=Flatten[Abs[Differences[m]]]",
-    "{Min[flat],Max[flat],Max[Join[dx,dz]]}",
+    "dx=Abs[Differences[Transpose[m]]]",
+    "dz=Abs[Differences[m]]",
+    "{Min[m],Max[m],Max[dx,dz]}",
   ].join(";");
   return Object.freeze({
     kind: "terrain_invariants",
