@@ -4,6 +4,8 @@ import {
   buildProgressionCagProbe,
   buildWorldAssetScaleCagProbe,
   buildWorldChunkTerrainCagProbe,
+  buildTerrainTexturizationCagProbe,
+  summarizeWorldChunkTexturization,
   cagOracleXpForNextLevelExact,
   normalizeWorldAssetBounds,
   summarizeWorldChunkTerrain,
@@ -81,6 +83,32 @@ describe("Aurion CAG deterministic design oracle", () => {
     );
     expect(probe.code.length).toBeLessThan(20_000);
     expect(probe.truthNotice).toContain("does not generate or mutate terrain authority");
+  });
+
+
+  it("builds a terrain texturization CAG probe without assigning textures or modifying world state", () => {
+    const chunk = generateBaseWorldChunk({
+      worldId: "echoes-of-aurion-global",
+      worldSeed: "echoes-of-aurion-v1",
+      coordinate: { x: -93, z: 48 },
+    });
+    const summary = summarizeWorldChunkTexturization(chunk);
+    const expectedTotal =
+        summary.grassTiles +
+        summary.waterTiles +
+        summary.stoneTiles +
+        summary.forestFloorTiles +
+        summary.ashTiles +
+        summary.ruinPathTiles;
+    expect(summary.totalTiles).toBe(256);
+    expect(expectedTotal).toBe(256);
+
+    const probe = buildTerrainTexturizationCagProbe(chunk);
+    expect(probe.expectedExact).toBe(
+      `{${summary.totalTiles},${summary.grassTiles},${summary.waterTiles},${summary.stoneTiles},${summary.forestFloorTiles},${summary.ashTiles},${summary.ruinPathTiles}}`
+    );
+    expect(probe.code).toContain("Count[surfaces");
+    expect(probe.truthNotice).toContain("does not assign textures or modify world state");
   });
 
   it("recomputes every current world-asset scale from measured bounds and category targets", () => {

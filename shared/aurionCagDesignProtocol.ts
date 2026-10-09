@@ -53,7 +53,7 @@ export function cagOracleXpForNextLevelExact(levelExact: string): string {
 }
 
 export type AurionCagProbe = Readonly<{
-  kind: "progression" | "terrain_invariants" | "model_scale";
+  kind: "progression" | "terrain_invariants" | "model_scale" | "terrain_texturization";
   code: string;
   expectedExact: string;
   truthNotice: string;
@@ -148,6 +148,68 @@ export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCag
     code,
     expectedExact: `{${summary.minHeightMm},${summary.maxHeightMm},${summary.maxAdjacentDeltaMm}}`,
     truthNotice: "CAG checks bounded geometry statistics from a canonical Aurion chunk; it does not generate or mutate terrain authority.",
+  });
+}
+
+
+export type AurionTerrainTexturizationSummary = Readonly<{
+  totalTiles: number;
+  grassTiles: number;
+  waterTiles: number;
+  stoneTiles: number;
+  forestFloorTiles: number;
+  ashTiles: number;
+  ruinPathTiles: number;
+}>;
+
+export function summarizeWorldChunkTexturization(chunk: BaseWorldChunk): AurionTerrainTexturizationSummary {
+  let grass = 0, water = 0, stone = 0, forestFloor = 0, ash = 0, ruinPath = 0;
+  for (const tile of chunk.tiles) {
+    if (tile.surface === "grass") grass++;
+    else if (tile.surface === "riverbank") water++;
+    else if (tile.surface === "stone") stone++;
+    else if (tile.surface === "forest_floor") forestFloor++;
+    else if (tile.surface === "ash") ash++;
+    else if (tile.surface === "ruin_path") ruinPath++;
+  }
+  return Object.freeze({
+    totalTiles: chunk.tiles.length,
+    grassTiles: grass,
+    waterTiles: water,
+    stoneTiles: stone,
+    forestFloorTiles: forestFloor,
+    ashTiles: ash,
+    ruinPathTiles: ruinPath,
+  });
+}
+
+/**
+ * Recomputes and verifies the deterministic texture/material distribution of an authoritative chunk.
+ * CAG evaluates surface material counts without mutating world data.
+ */
+export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
+  const summary = summarizeWorldChunkTexturization(chunk);
+  const surfaces = chunk.tiles.map(t => {
+    switch(t.surface) {
+        case "grass": return 1;
+        case "riverbank": return 2;
+        case "stone": return 3;
+        case "forest_floor": return 4;
+        case "ash": return 5;
+        case "ruin_path": return 6;
+        default: return 0;
+    }
+  }).join(",");
+  const code = [
+    `surfaces={${surfaces}}`,
+    `{Length[surfaces], Count[surfaces, 1], Count[surfaces, 2], Count[surfaces, 3], Count[surfaces, 4], Count[surfaces, 5], Count[surfaces, 6]}`
+  ].join(";");
+
+  return Object.freeze({
+    kind: "terrain_texturization",
+    code,
+    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.waterTiles},${summary.stoneTiles},${summary.forestFloorTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
+    truthNotice: "CAG verifies texturization distribution of a canonical Aurion chunk; it does not assign textures or modify world state.",
   });
 }
 

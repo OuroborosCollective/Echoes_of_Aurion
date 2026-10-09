@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## 2024-05-18 - [Wolfram CAG Terrain Texturization Verification]
+**Learning:** Wolfram CAG can be used to verify the determinism of game texturization budgets, but must respect the game architecture boundaries. It should act solely as an offline/CI oracle and not an authoritative runtime generator. The `aurionCagDesignProtocol` provides a safe way to build bounded probes that analyze texture assignments mathematically (e.g. counting occurrences of tiles) to ensure they fall within designed limits.
+**Action:** When implementing checks for generated terrain or elements using Wolfram CAG, always build "probes" using the `AurionCagProbe` type and verify values purely mathematically (e.g., bounds, counts) instead of directly mutating or dictating state to the `BaseWorldChunk`.
