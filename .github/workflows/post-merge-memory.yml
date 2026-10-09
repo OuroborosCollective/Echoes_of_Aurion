@@ -7,11 +7,12 @@ on:
       - main
 
 concurrency:
-  group: post-merge-memory-main
+  group: aurion-production-release-main
   cancel-in-progress: false
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   record-memory:
@@ -103,3 +104,19 @@ jobs:
         run: |
           echo "::error::Configure repository secret SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY."
           exit 78
+
+      - name: Dispatch production only after Memory and its readback are complete
+        run: |
+          set -euo pipefail
+          release_required="$(node --input-type=module -e '
+            import fs from "node:fs";
+            import { requiresAurionRelease } from "./scripts/aurion-release-paths.mjs";
+            console.log(requiresAurionRelease(fs.readFileSync("merged-pr-files.txt","utf8").trim().split("\n")));
+          ')"
+          if [[ "$release_required" != "true" ]]; then
+            echo "Documentation-only PR: Memory synchronized; no runtime release required."
+            exit 0
+          fi
+          expected_sha="$(git rev-parse HEAD)"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$expected_sha"
+          gh workflow run deploy-aurion-zone-runtime.yml --ref main

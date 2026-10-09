@@ -113,24 +113,13 @@ describe("Aurion labelled Traefik runtime deployment", () => {
 
   it("keeps runtime-affecting main revisions serialized while excluding docs-only deployment noise", () => {
     const triggerBlock = workflow.slice(0, workflow.indexOf("\nconcurrency:"));
-    const pushBlock = triggerBlock.match(/  push:\n[\s\S]*?(?=\n  pull_request:)/)?.[0];
+    const memoryWorkflow = read(".github/workflows/post-merge-memory.yml");
     const trustedMainCondition =
       "if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'";
-
-    expect(pushBlock).toBeDefined();
-    expect(pushBlock).toContain("branches: [main]");
-    expect(pushBlock).toContain("paths-ignore:");
-    for (const ignored of [
-      '"docs/**"',
-      '"SUMMARY.md"',
-      '"Memory.md"',
-      '".game-dev/**"',
-      '".gitignore"',
-      '".github/workflows/game-development-studio-smoke.yml"',
-      '"scripts/install-game-development-studio.mjs"',
-    ]) {
-      expect(pushBlock).toContain(ignored);
-    }
+    expect(triggerBlock).not.toContain("  push:");
+    expect(memoryWorkflow).toContain("group: aurion-production-release-main");
+    expect(memoryWorkflow).toContain("requiresAurionRelease");
+    expect(memoryWorkflow.indexOf("node scripts/sync-agent-memory-to-supabase.mjs")).toBeLessThan(memoryWorkflow.indexOf("gh workflow run deploy-aurion-zone-runtime.yml --ref main"));
     expect(triggerBlock).toContain("workflow_dispatch:");
     for (const jobName of [
       "promote-zone-runtime",
@@ -145,16 +134,16 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     }
     const dispatchJob = workflow.split("\n  apply-reviewed-schema-plan:")[1]?.split("\n  production-schema-readback:")[0];
     expect(dispatchJob).toContain(trustedMainCondition);
-    expect(dispatchJob).toContain("needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]");
+    expect(dispatchJob).toContain("needs: [migration-ledger, prepare-schema-tools]");
     expect(dispatchJob).toContain("actions: write");
     expect(dispatchJob).toContain("node scripts/dispatch-aurion-schema-plan.mjs");
-    expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.ref }}");
+    expect(workflow).toContain("aurion-production-release-main");
     expect(workflow).not.toContain(
       "group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}"
     );
-    expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]");
-    expect(workflow).toContain("needs: [promote-zone-runtime, apply-reviewed-schema-plan]");
-    expect(workflow).toContain("if: always() && needs.promote-zone-runtime.result == \'success\'");
+    expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof, verify-schema-release-attestation]");
+    expect(workflow).toContain("needs: [prepare-schema-tools, apply-reviewed-schema-plan]");
+    expect(workflow).toContain("if: always() && needs.prepare-schema-tools.result == \'success\'");
   });
 
   it("keeps production cache read-only and records workflow provenance", () => {
@@ -236,9 +225,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(wrongTarget.stderr).toBe("");
   });
 
-  it("allows the existing fixed root entrypoint to bootstrap only a byte-identical Traefik promoter", () => {
+  it("promotes only through the byte-identical prepared root entrypoint", () => {
     expect(workflow).toContain('cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"');
-    expect(workflow).toContain("Bootstrap and promote labelled Traefik container");
+    expect(workflow).toContain("Promote only through the prepared exact-revision root entrypoint");
     expect(workflow).not.toContain("sudo docker");
     expect(promoter).toContain("docker compose --project-name echoes-of-aurion");
     expect(promoter).toContain('compose_digest_env=(');
@@ -254,15 +243,12 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).not.toContain("{{range .RepoDigests}}");
     expect(workflow).toContain("one-time promoter bootstrap artifact");
     expect(workflow).toContain("runtime-bootstrap-artifact");
-    expect(workflow).toContain('bootstrap_release_id="${bootstrap_expected_sha}-0"');
     expect(workflow).toContain("bootstrap-identity.json.sha256");
     expect(workflow).toContain("bootstrap runtime archive contains a legacy-incompatible path");
     expect(workflow).toContain("./patches/wouter-3.7.1.patch");
-    expect(workflow).toContain("legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad");
-    expect(workflow).toContain("refusing to invoke an unrecognized promoter");
-    expect(workflow).toContain("promoter_needs_readback_replay=0");
-    expect(workflow).toContain('if [[ "$promoter_needs_readback_replay" -eq 1 ]]; then');
-    expect(promoter).toContain("# aurion-traefik-promoter-protocol: 2");
+    expect(promoter).toContain("# aurion-traefik-promoter-protocol: 3");
+    expect(workflow).toContain("PREPARED_PROMOTER_IDENTITY_CHANGED");
+    expect(workflow).not.toContain('sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}"');
     expect(promoter).toContain("public_readback_dir=/var/lib/aurion-traefik-runtime-readback");
     expect(promoter).toContain('"recordType":"aurion_traefik_runtime_readback"');
     expect(promoter).toContain('chmod 0644 "$public_readback_tmp"');

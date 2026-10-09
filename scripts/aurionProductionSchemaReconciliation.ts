@@ -48,6 +48,8 @@ export type ExpectedColumn = Readonly<{
   name: string;
   sqlType: string;
   nullable: boolean;
+  defaultSql?: string | null;
+  extra?: string;
 }>;
 
 export type ExpectedIndex = Readonly<{
@@ -83,6 +85,8 @@ export type ObservedColumn = Readonly<{
   name: string;
   columnType: string;
   nullable: boolean;
+  defaultSql?: string | null;
+  extra?: string;
 }>;
 
 export type ObservedIndex = Readonly<{
@@ -279,10 +283,15 @@ function parseCreateTable(name: string, body: string): ExpectedTable {
     if (columnMatch) {
       const definition = columnMatch[2].trim();
       const constraintText = maskQuotedSqlLiterals(definition);
+      const defaultToken = /\bDEFAULT\b/i.exec(constraintText);
+      const defaultDefinition = defaultToken ? definition.slice(defaultToken.index + defaultToken[0].length).trimStart() : "";
       columns.push({
         name: columnMatch[1],
         sqlType: takeSqlType(definition),
         nullable: !/\bNOT\s+NULL\b/i.test(constraintText),
+        defaultSql: defaultDefinition.match(/^('(?:''|\\.|[^'])*'|\(now\(\)\)|current_timestamp(?:\(\))?|[^\s,;]+)/i)?.[1] ?? null,
+        extra: [ /\bAUTO_INCREMENT\b/i.test(constraintText) ? "auto_increment" : "",
+          /\bON\s+UPDATE\s+CURRENT_TIMESTAMP/i.test(constraintText) ? "on update current_timestamp()" : "" ].filter(Boolean).join(" "),
       });
       if (/\bPRIMARY\s+KEY\b/i.test(constraintText)) indexes.push({ name: "PRIMARY", unique: true, columns: [columnMatch[1]] });
       else if (/\bUNIQUE\b/i.test(constraintText)) indexes.push({ name: `inline_unique:${columnMatch[1]}`, unique: true, columns: [columnMatch[1]] });
@@ -482,6 +491,19 @@ function canonicalSignalStatement(statement: string): string | null {
   return match ? JSON.stringify([match[1], match[2]]) : null;
 }
 
+function normalizeColumnDefault(value: string | null | undefined, type: string): string {
+  if (value == null || /^null$/i.test(value)) return "null";
+  const trimmed = value.trim();
+  if (/^(?:\(now\(\)\)|current_timestamp(?:\(\))?)$/i.test(trimmed)) return "current_timestamp()";
+  const quoted = trimmed.startsWith("'") && trimmed.endsWith("'");
+  const literal = quoted ? trimmed.slice(1, -1).replace(/''/g, "'").replace(/\\'/g, "'").replace(/\\\\/g, "\\") : trimmed;
+  if (/^(?:tinyint|smallint|int|bigint|boolean|decimal|float|double)\b/i.test(type)) {
+    const numeric = /^false$/i.test(literal) ? "0" : /^true$/i.test(literal) ? "1" : literal;
+    return "number:" + numeric;
+  }
+  return (quoted ? "literal:" : "expression:") + literal;
+}
+
 export function compareTableContract(expected: ExpectedTable, observed: ObservedTable): string[] {
   const drift: string[] = [];
   const expectedColumns = new Map(expected.columns.map(column => [column.name, column]));
@@ -496,6 +518,10 @@ export function compareTableContract(expected: ExpectedTable, observed: Observed
       drift.push(`${expected.name}:type:${name}:expected=${normalizeType(column.sqlType)}:observed=${normalizeType(actual.columnType)}`);
     }
     if (column.nullable !== actual.nullable) drift.push(`${expected.name}:nullability:${name}`);
+    // Older evidence fixtures do not contain these fields. Live repair reads
+    // both explicitly; unknown expressions/extra attributes remain unequal.
+    if (actual.defaultSql !== undefined && normalizeColumnDefault(column.defaultSql, column.sqlType) !== normalizeColumnDefault(actual.defaultSql, column.sqlType)) drift.push(`${expected.name}:default:${name}`);
+    if (actual.extra !== undefined && (column.extra ?? "").toLowerCase() !== actual.extra.toLowerCase()) drift.push(`${expected.name}:extra:${name}`);
   }
   for (const name of observedColumns.keys()) {
     if (!expectedColumns.has(name)) drift.push(`${expected.name}:unexpected_column:${name}`);

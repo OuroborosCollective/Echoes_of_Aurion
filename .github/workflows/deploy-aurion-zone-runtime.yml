@@ -1,19 +1,7 @@
 name: Deploy Aurion Traefik runtime
 
 on:
-  push:
-    branches: [main]
-    # Documentation and local visual-tooling changes are non-runtime surfaces.
-    # Mixed commits still deploy because paths-ignore applies only when every
-    # changed path matches one of these patterns.
-    paths-ignore:
-      - "docs/**"
-      - "SUMMARY.md"
-      - "Memory.md"
-      - ".game-dev/**"
-      - ".gitignore"
-      - ".github/workflows/game-development-studio-smoke.yml"
-      - "scripts/install-game-development-studio.mjs"
+  # Main releases are dispatched after the single Memory entry and mirror readback.
   pull_request:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
@@ -42,7 +30,7 @@ on:
 concurrency:
   # A push and a trusted manual dispatch for main must never promote in
   # parallel. Pull-request refs remain isolated from the production queue.
-  group: deploy-aurion-zone-runtime-${{ github.ref }}
+  group: ${{ github.ref == 'refs/heads/main' && 'aurion-production-release-main' || format('deploy-aurion-zone-runtime-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -574,10 +562,72 @@ jobs:
     with:
       use_uploaded_artifact: true
 
+  verify-schema-release-attestation:
+    name: Independently verify release before schema preparation
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify-and-build
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: release
+      - name: Verify hosted signer, main ref and immutable source digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify release/aurion-traefik-runtime-release.tgz \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/deploy-aurion-zone-runtime.yml" \
+            --source-digest "$GITHUB_SHA" --source-ref refs/heads/main \
+            --predicate-type https://arelogic.space/attestations/aurion-release-artifact/v1 \
+            --deny-self-hosted-runners
+      - name: Require an authorized functional probe session before mutation
+        env:
+          AURION_READBACK_SESSION: ${{ secrets.AURION_READBACK_SESSION }}
+        run: |
+          node --input-type=module <<'NODE'
+          const session=process.env.AURION_READBACK_SESSION??"";
+          if(!/^[A-Za-z0-9._~-]{20,8192}$/.test(session)) throw new Error("AUTHENTICATED_PROBE_SESSION_REQUIRED");
+          const r=await fetch("https://arelogic.space/api/trpc/auth.me",{headers:{cookie:`app_session_id=${session}`},redirect:"error",signal:AbortSignal.timeout(15000)});
+          const body=r.ok?await r.json():null;
+          if(body?.result?.data?.json?.role!=="admin") throw new Error("AUTHORIZED_PROBE_SESSION_REQUIRED");
+          console.log("Authorized functional probe session verified; credentials omitted.");
+          NODE
+
+  prepare-schema-tools:
+    name: Prepare immutable schema tools without runtime promotion
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof, verify-schema-release-attestation]
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: schema-prepare-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+      - name: Require schema preparation capability before any root invocation
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if ! sudo grep -Fqx '# aurion-traefik-promoter-protocol: 3' /usr/local/sbin/promote-aurion-zone-runtime; then
+            echo 'SCHEMA_PREPARE_CAPABILITY_REQUIRED: install the reviewed v3 promoter before releasing; runtime untouched.' >&2
+            exit 70
+          fi
+          sudo /usr/local/sbin/promote-aurion-zone-runtime "${GITHUB_WORKSPACE}/schema-prepare-artifact" "$EXPECTED_SHA" "${EXPECTED_SHA}-${GITHUB_RUN_ID}" --prepare-schema
+
   promote-zone-runtime:
     name: Promote verified Aurion Traefik runtime
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
+    needs: [verify-and-build, apply-reviewed-schema-plan, production-schema-readback]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
     permissions:
@@ -613,69 +663,18 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
 
-      - name: Download one-time promoter bootstrap artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: aurion-zone-runtime-bootstrap-${{ github.sha }}
-          path: runtime-bootstrap-artifact
-          github-token: ${{ github.token }}
-          run-id: ${{ github.run_id }}
-
-      - name: Record legacy promoter compatibility (read-only)
+      - name: Promote only through the prepared exact-revision root entrypoint
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact"
           installed=/usr/local/sbin/promote-aurion-zone-runtime
+          # Preparation already installed this revision. A changed root tool
+          # must stop the release; no legacy promotion path can bypass it.
           if ! sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
-            printf 'legacy promoter sha256: '
-            sudo sha256sum "$installed"
-            sudo grep -nE 'pinned_image|image_digest|RepoDigests|docker image inspect|A-Za-z0-9|exit [0-9]+' "$installed" || true
-          fi
-
-      - name: Bootstrap and promote labelled Traefik container
-        run: |
-          set -euo pipefail
-          artifact="${GITHUB_WORKSPACE}/runtime-artifact"
-          bootstrap_artifact="${GITHUB_WORKSPACE}/runtime-bootstrap-artifact"
-          test -f "${bootstrap_artifact}/aurion-traefik-runtime-release.tgz"
-          test -f "${bootstrap_artifact}/dist-production-reconcile/manifest.json"
-          test -f "${bootstrap_artifact}/bootstrap-identity.json"
-          test -f "${bootstrap_artifact}/bootstrap-identity.json.sha256"
-          (cd "${bootstrap_artifact}" && sha256sum --strict -c bootstrap-identity.json.sha256)
-          bootstrap_expected_sha="$(node --input-type=module -e '
-            import fs from "node:fs";
-            const [file, expected]=process.argv.slice(1);
-            const identity=JSON.parse(fs.readFileSync(file,"utf8"));
-            if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==expected||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===expected||identity.mode!=="bootstrap_only") process.exit(2);
-            process.stdout.write(identity.bootstrapRevision);
-          ' "${bootstrap_artifact}/bootstrap-identity.json" "${EXPECTED_SHA}")"
-
-          installed=/usr/local/sbin/promote-aurion-zone-runtime
-          legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad
-          promoter_needs_readback_replay=0
-          if ! sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
-            installed_promoter_sha256="$(sudo sha256sum "$installed" | awk '{print $1}')"
-            if [[ "$installed_promoter_sha256" == "$legacy_promoter_sha256" ]]; then
-              bootstrap_release_id="${bootstrap_expected_sha}-0"
-              set +e
-              sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
-              bootstrap_status=$?
-              set -e
-              printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"
-              sudo test -x "$installed"
-              sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
-            elif sudo grep -Fqx '# aurion-traefik-promoter-protocol: 2' "$installed" || { sudo grep -Fq 'runtime_base=/opt/aurion-traefik-runtime' "$installed" && sudo grep -Fq 'image_id="$(docker image inspect' "$installed"; }; then
-              printf 'compatible promoter %s will receive the canonical artifact directly\n' "$installed_promoter_sha256"
-            else
-              printf 'refusing to invoke an unrecognized promoter: %s\n' "$installed_promoter_sha256" >&2
-              exit 70
-            fi
+            echo 'PREPARED_PROMOTER_IDENTITY_CHANGED' >&2
+            exit 70
           fi
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
-
-          if [[ "$promoter_needs_readback_replay" -eq 1 ]]; then
-            printf 'promoter readback replay required for revision=%s\n' "${EXPECTED_SHA}"
-          fi
 
           bash "$artifact/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$artifact/dist-production-reconcile/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
           sudo -n test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
@@ -1076,7 +1075,7 @@ jobs:
   apply-reviewed-schema-plan:
     name: Apply reviewed canonical migration plan through the existing OIDC workflow
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]
+    needs: [migration-ledger, prepare-schema-tools]
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
@@ -1100,17 +1099,48 @@ jobs:
 
   production-schema-readback:
     name: Require production schema readback receipt
-    if: always() && needs.promote-zone-runtime.result == 'success'
-    needs: [promote-zone-runtime, apply-reviewed-schema-plan]
+    if: always() && needs.prepare-schema-tools.result == 'success'
+    needs: [prepare-schema-tools, apply-reviewed-schema-plan]
     uses: ./.github/workflows/aurion-production-schema-readback.yml
     with:
       expected_sha: ${{ github.sha }}
       upstream_run_id: ${{ github.run_id }}
 
+  functional-production-readback:
+    name: Confirm world join, NPC lifecycle and guild persistence
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: [verify-release-attestations, production-schema-readback]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Execute authenticated gameplay and independent NPC readbacks
+        env:
+          AURION_EXPECTED_SHA: ${{ github.sha }}
+          AURION_READBACK_SESSION: ${{ secrets.AURION_READBACK_SESSION }}
+        run: pnpm exec tsx scripts/verify-aurion-production-gameplay.ts
+      - name: Preserve sanitized functional receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-production-gameplay-readback-${{ github.sha }}
+          path: aurion-production-gameplay-readback.json
+          if-no-files-found: error
+
   final-production-gate:
     name: Prove final Aurion production release identity
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [verify-release-attestations, production-schema-readback]
+    needs: [verify-release-attestations, production-schema-readback, functional-production-readback]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -1154,6 +1184,12 @@ jobs:
           path: schema-readback
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
+
+      - name: Download authenticated gameplay receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-production-gameplay-readback-${{ github.sha }}
+          path: gameplay-readback
 
       - name: Verify signed release identities independently
         env:
@@ -1212,6 +1248,8 @@ jobs:
           const blocker2=JSON.parse(fs.readFileSync("blocker2/aurion-gate-b2-attestation.json","utf8"));
           const schema=JSON.parse(fs.readFileSync("schema-readback/production-schema-readback.json","utf8"));
           const health=JSON.parse(fs.readFileSync("aurion-public-production-health.json","utf8"));
+          const gameplay=JSON.parse(fs.readFileSync("gameplay-readback/aurion-production-gameplay-readback.json","utf8"));
+          if(gameplay.recordType!=="aurion_production_gameplay_readback"||gameplay.sourceRevision!==process.env.GITHUB_SHA||gameplay.status!=="PASS"||gameplay.credentialReturned!==false) throw new Error("FINAL_GAMEPLAY_READBACK_NOT_PASS");
           const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8"));
           scanReleaseMetadataForSecrets({identity,installed,runtimeMeta,blocker2,schema,health});
 
@@ -1245,7 +1283,10 @@ jobs:
             schemaMigrationCount:expectedTags.length,
             schemaCausalReceiptV2Present:true,
             schemaLastMigration:expectedTags.at(-1),
-            attestationStatus:"PASS"
+            attestationStatus:"PASS",
+            worldJoin:"CONFIRMED",
+            zoneHandshake:"CONFIRMED",
+            npcStatus:"confirmed"
           };
           const observed={
             revision:health.revision,
@@ -1261,7 +1302,10 @@ jobs:
             schemaMigrationCount:schema.summary?.matchCount,
             schemaCausalReceiptV2Present:schema.migrations.some(item=>item.tag===requiredCausalReceiptV2Tag),
             schemaLastMigration:schema.migrations.at(-1)?.tag,
-            attestationStatus:blocker2.status
+            attestationStatus:blocker2.status,
+            worldJoin:gameplay.worldJoin,
+            zoneHandshake:gameplay.zoneHandshake,
+            npcStatus:gameplay.npcStatus
           };
           const checks=Object.keys(expected).map(name=>({name,expected:expected[name],observed:observed[name],pass:expected[name]===observed[name]}));
           const receipt={

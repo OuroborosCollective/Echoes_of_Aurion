@@ -49,7 +49,7 @@ function sealSnapshot({ worldId, sequence, observedAtMs, observations }) {
   return { ...unsigned, snapshotHash: canonicalSha256(unsigned) };
 }
 
-function verifySnapshot(value) {
+export function verifySnapshot(value) {
   try {
     const rebuilt = sealSnapshot(value);
     return rebuilt.snapshotHash === value.snapshotHash && canonicalSha256(rebuilt) === canonicalSha256(value);

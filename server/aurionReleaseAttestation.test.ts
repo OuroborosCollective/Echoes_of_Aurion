@@ -35,7 +35,12 @@ describe("Blocker 2 detached release attestation contract", () => {
 
   it("requires independent attestation verification before production schema apply", () => {
     expect(workflow).toContain("verify-release-attestations:");
-    expect(workflow).toContain("needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]");
+    expect(workflow).toContain("needs: [migration-ledger, prepare-schema-tools]");
+    expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof, verify-schema-release-attestation]");
+    const independent = workflow.split("  verify-schema-release-attestation:")[1].split("  prepare-schema-tools:")[0];
+    expect(independent).toContain("runs-on: ubuntu-24.04");
+    expect(independent).toContain("--deny-self-hosted-runners");
+    expect(independent).toContain('--source-digest "$GITHUB_SHA" --source-ref refs/heads/main');
     expect(workflow.indexOf("verify-release-attestations:")).toBeLessThan(workflow.indexOf("apply-reviewed-schema-plan:"));
   });
 
