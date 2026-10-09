@@ -1301,10 +1301,3 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
-
-### 2026-10-09 — Reviewed PRs #815–#824 consolidated in #825
-Status: VERIFIED focused regression and local HTTP boundary; final-head CI/runtime gates pending.
-Change: Preserve watermark/NPC/mob/quest iteration improvements, accessible community/achievement controls, Eclipse progression, explicit CORS origins and non-authoritative CAG terrain probes. Repair Eclipse HUD schema, retain sorted receipt identities, validate terrain grids/materials and compute sample variance with exact integer arithmetic. Reject unrelated benchmark rewrites, inaccurate bot notes, the script deletion and relaxed browser assertions/executable changes.
-Learned: Green isolated PR checks missed a client zone-enum gap and a receipt-order regression; independently recomputing CAG output and exercising permutation/boundary cases finds defects that string-shape assertions miss.
-Evidence: 14 focused files / 82 tests and tsc --noEmit passed; donor ledger 22 capabilities / zero external donor runtime dependencies. Real local HTTP OPTIONS: configured arelogic.space and owned.itch.io 204; foreign itch.io/itch.zone, suffix-spoof and null origins 403. Wolfram kernel: 103 old/new matrix-expression cases identical; actual Aurion chunk (-93,48), seed review-815-824: materials {256,86,44,37,0,0,89}, continuity {149809,138}, terrain {-881,726,1323} independently matched. Local tests do not certify production persistence; exact-head GitHub DB/container/browser gates remain mandatory.
-Next safe step: Merge #825 only after its final-head gates pass, close the ten superseded source PRs while retaining branches, then verify main and automatic Memory readback.

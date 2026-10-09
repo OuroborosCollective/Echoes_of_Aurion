@@ -624,12 +624,7 @@ export class AuthoritativeMovementZone {
     captureAuthorityStage("MEMBERSHIP_REVIVAL");
 
     // Stage ordering must not invalidate an already admitted lower-sequence action.
-    // ⚡ Bolt: Use a direct loop to avoid array allocation from .map() on every game tick
-    const actionSequenceWatermarks = new Map<number, number>();
-    for (let i = 0; i < this.sortedPeers.length; i++) {
-      const peer = this.sortedPeers[i];
-      actionSequenceWatermarks.set(peer.userId, peer.lastAcceptedClientSeq);
-    }
+    const actionSequenceWatermarks = new Map(this.sortedPeers.map(peer => [peer.userId, peer.lastAcceptedClientSeq]));
 
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {

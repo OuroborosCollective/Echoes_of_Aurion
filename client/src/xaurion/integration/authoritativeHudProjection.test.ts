@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aurionWorldHudSchema, playerReadbackSchema, projectPlayerReadback, projectReadback, worldReadbackSchema } from "./authoritativeHudProjection";
+import { playerReadbackSchema, projectPlayerReadback, projectReadback, worldReadbackSchema } from "./authoritativeHudProjection";
 
 export const confirmedPlayer = { profile: { userId: 7, aurionPoints: 23, victories: 2, selectedClass: "unbound" }, progression: { characterId: "char-7", tracks: [{ trackKind: "weapon", trackId: "greatsword.two_handed.v3", characterId: "char-7", levelExact: "9007199254740993", resultReceiptId: "result-00000001", sourceReceiptId: "source-00000001", receiptHash: "a".repeat(64) }] }, inventory: [] };
 describe("authoritative HUD readback", () => {
@@ -55,10 +55,3 @@ describe("authoritative HUD readback", () => {
     expect(projectPlayerReadback({ data: { guild: null, setBonuses: [] } }, 7)).toEqual({ state: "error" });
   });
 });
-
- it("accepts confirmed Eclipse world readback while rejecting unknown zones", () => {
-   const data = { globalWorld: { epoch: 1, worldSeed: "world", deterministicHash: "fnv1a-1234abcd" },
-     revision: 1, zoneId: "eclipse_spire", displayName: "Eklipsen-Spitze", primaryEncounter: null, pointsOfInterest: [] };
-   expect(projectReadback(aurionWorldHudSchema, { data }).state).toBe("live");
-   expect(projectReadback(aurionWorldHudSchema, { data: { ...data, zoneId: "invented" } }).state).toBe("error");
- });

@@ -21,7 +21,7 @@ const QUEST_CHAIN_REGRESSION_USER_ID = 2_146_999_992;
 
 async function cleanupQuestChainRegressionState() { await cleanupQuestRegressionUser(QUEST_CHAIN_REGRESSION_USER_ID); }
 
-async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "solarium" | "starfall_crater" | "rootgear_foundry" | "sunwatch_bastion" | "eclipse_spire") {
+async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "solarium" | "starfall_crater" | "rootgear_foundry" | "sunwatch_bastion") {
   const encounter = await startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey });
 
   await expect(applyGameplayAction({
@@ -32,7 +32,7 @@ async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "sola
     source: "human",
   })).rejects.toThrow("Die Aktionssequenz ist nicht gültig.");
 
-  for (let sequence = 1; sequence <= 15; sequence += 1) {
+  for (let sequence = 1; sequence <= 12; sequence += 1) {
     const resolution = await applyGameplayAction({
       userId: QUEST_CHAIN_REGRESSION_USER_ID,
       sessionId: encounter.session.id,
@@ -63,7 +63,6 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["starfall_resonance", "locked", false],
       ["clockwork_core", "locked", false],
       ["sunwatch_vanguard", "locked", false],
-      ["eclipse_ascension", "locked", false],
     ]);
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "starfall_resonance" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
@@ -83,7 +82,6 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["starfall_resonance", "locked", false],
       ["clockwork_core", "locked", false],
       ["sunwatch_vanguard", "locked", false],
-      ["eclipse_ascension", "locked", false],
     ]);
     expect((await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "astral_call", giver: "Lyra" })).profile).toMatchObject({ totalXp: 122, victories: 1 });
 
@@ -120,7 +118,6 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["starfall_resonance", "available", false],
       ["clockwork_core", "locked", false],
       ["sunwatch_vanguard", "locked", false],
-      ["eclipse_ascension", "locked", false],
     ]);
     expect(afterKey.keys).toEqual(["ember_key"]);
     expect(afterKey.canEnterDungeon).toBe(true);
@@ -152,7 +149,6 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["starfall_resonance", "completed", false],
       ["clockwork_core", "available", false],
       ["sunwatch_vanguard", "available", false],
-      ["eclipse_ascension", "locked", false],
     ]);
     expect(completed.keys).toEqual(["ember_key"]);
     expect(completed.canEnterDungeon).toBe(true);
@@ -176,7 +172,6 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["starfall_resonance", "completed", false],
       ["clockwork_core", "completed", false],
       ["sunwatch_vanguard", "available", false],
-      ["eclipse_ascension", "locked", false],
     ]);
 
     await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "sunwatch_vanguard" });
@@ -197,34 +192,18 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["starfall_resonance", "completed", false],
       ["clockwork_core", "completed", false],
       ["sunwatch_vanguard", "completed", false],
-      ["eclipse_ascension", "available", false],
     ]);
     expect((await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "sunwatch_vanguard", giver: "Orun" })).profile).toMatchObject({ totalXp: 2502, victories: 6 });
-
-    await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "eclipse_ascension" });
-    const eclipseBoss = await defeatQuestEncounter("eclipse_spire");
-    expect(eclipseBoss.resolution).toMatchObject({ completed: true, completedQuest: "eclipse_ascension", reward: { xp: 0, points: 0 } });
-    const completedEclipse = await getGameplayProgress(QUEST_CHAIN_REGRESSION_USER_ID);
-    expect(completedEclipse.quests.map(quest => [quest.key, quest.state, quest.readyToTurnIn])).toEqual([
-      ["astral_call", "completed", false],
-      ["archive_of_echoes", "completed", false],
-      ["ember_key", "completed", false],
-      ["starfall_resonance", "completed", false],
-      ["clockwork_core", "completed", false],
-      ["sunwatch_vanguard", "completed", false],
-      ["eclipse_ascension", "available", true],
-    ]);
-    expect((await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "eclipse_ascension", giver: "Lyra" })).profile).toMatchObject({ totalXp: 3302, victories: 7 });
 
     const dungeon = await startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey: "cinder_vault" });
     expect(dungeon.session).toMatchObject({ encounterKey: "cinder_vault", status: "active", bossHp: 258 });
     const rewards = await db.select().from(progressionLedger).where(eq(progressionLedger.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    expect(rewards).toHaveLength(21);
-    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(21);
+    expect(rewards).toHaveLength(18);
+    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(18);
     expect(rewards.map(reward => `${reward.kind}:${reward.delta}`).sort()).toEqual([
-      "points:100", "points:100", "points:150", "points:20", "points:35", "points:60", "points:75",
-      "victory:1", "victory:1", "victory:1", "victory:1", "victory:1", "victory:1", "victory:1",
-      "xp:122", "xp:220", "xp:360", "xp:500", "xp:650", "xp:650", "xp:800",
+      "points:100", "points:100", "points:20", "points:35", "points:60", "points:75",
+      "victory:1", "victory:1", "victory:1", "victory:1", "victory:1", "victory:1",
+      "xp:122", "xp:220", "xp:360", "xp:500", "xp:650", "xp:650",
     ]);
     expect(await db.select().from(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, QUEST_CHAIN_REGRESSION_USER_ID))).toHaveLength(1);
   }, 60_000);
