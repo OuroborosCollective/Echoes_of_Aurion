@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## 2026-10-10 - Eliminate array allocation in BuffDebuffSystem.multiplier()
+**Learning:** In high-frequency game loops like combat systems, using chained array methods like `Array.from(map.values()).filter(...).reduce(...)` creates significant intermediate array allocations and causes unnecessary garbage collection pressure.
+**Action:** Replaced the chained array methods with a direct `for...of` iteration over the map, calculating the reduction inline and filtering by condition directly inside the loop. Kept codebase-specific performance learning updated in `.jules/bolt.md`.

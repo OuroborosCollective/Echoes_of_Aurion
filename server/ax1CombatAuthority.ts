@@ -245,8 +245,14 @@ export class BuffDebuffSystem {
     this.buffs.set(buff.id, Object.freeze({ ...buff }));
   }
   multiplier(stat: Buff["stat"], tick: number): number {
-    for (const [id, buff] of this.buffs) if (buff.expiresAtTick <= tick) this.buffs.delete(id);
-    const totalBps = Array.from(this.buffs.values()).filter(buff => buff.stat === stat).reduce((sum, buff) => sum + buff.magnitudeBps, 0);
+    let totalBps = 0;
+    for (const [id, buff] of this.buffs) {
+      if (buff.expiresAtTick <= tick) {
+        this.buffs.delete(id);
+      } else if (buff.stat === stat) {
+        totalBps += buff.magnitudeBps;
+      }
+    }
     return Math.max(0.1, Math.min(3, 1 + totalBps / 10_000));
   }
 }
