@@ -15,6 +15,7 @@ import { globalZoneRegistry } from "./zoneRuntime";
 import { globalAssuranceService } from "./causality/assuranceService";
 import { runProductionGameplaySessionReadback } from "./aurionProductionGameplaySession";
 import { globalCausalPersistence } from "./causality/persistence";
+import { prepareProductionProbeZone } from "./aurionProductionProbeZone";
 
 /** Exact Origin plus non-simple header blocks ambient-cookie CSRF. CORS never grants approval. */
 export function requireProbeOwnerOrigin(headers: { origin?: string; contentType?: string; requestedWith?: string; fetchSite?: string }) {
@@ -96,15 +97,22 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
       }
       if (scope === AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE) {
         const result = await store.withExclusiveGameplayProbeSession(async () => {
+          const { zone, needsActivation } = await prepareProductionProbeZone(globalZoneRegistry, globalCausalPersistence);
           const receipt = await store.consume(run, scope);
           // Starting a zone is a real effect, allowed only after consuming this
           // separately approved scope. It is never reachable from read-only scopes.
-          const zone = globalZoneRegistry.get("observatory_threshold");
+          if (needsActivation) globalZoneRegistry.installProbeZone(zone);
+          try {
           const observed = await runProductionGameplaySessionReadback({ zone, expectedRevision: run.revision, health,
             readNpcGuildOverview, sampleAssurance: () => globalAssuranceService.sample(),
             readPersistedTicks: (zoneId, from, to) => globalCausalPersistence.getTicksInRange(zoneId, from, to) });
           return { ...receipt, ...observed, status: "OBSERVED", credentialReturned: false,
             mutationAuthority: aurionProbeMutationAuthority(scope) };
+          } finally {
+            // Session cleanup has confirmed the durable leave before returning,
+            // including error paths. Normal consumers can adopt the zone via get().
+            if (needsActivation) globalZoneRegistry.releaseProbeZone(zone);
+          }
         });
         res.json(result); return;
       }

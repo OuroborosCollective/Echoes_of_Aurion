@@ -325,6 +325,14 @@ export class AuthoritativeMovementZone {
     this.lastCommittedState = this.getCanonicalZoneState();
   }
 
+  restorePersistedHead(state: CanonicalZoneState, receipt: AurionCausalTickReceipt): void {
+    if (state.tick !== receipt.tick || hashCanonicalZoneState(state) !== receipt.postStateHash
+      || computeReceiptHash(receipt) !== receipt.receiptHash) throw new Error("ZONE_PERSISTED_HEAD_INVALID");
+    this.restoreFromCanonicalState(state, receipt.receiptHash);
+    this.lastReceipt = receipt;
+    this.evidenceRecorder.record({ receipt, postState: state });
+  }
+
   join(values: { userId: number; socket: WebSocket; combatProfile?: ZoneCombatProfile }): ZoneWelcome {
     if (!Number.isSafeInteger(values.userId) || values.userId < 1) throw new Error("ZONE_USER_INVALID");
     const profile = values.combatProfile ?? DEFAULT_ZONE_COMBAT_PROFILE;
@@ -900,6 +908,7 @@ export class AuthoritativeMovementZone {
 }
 
 export class ZoneRegistry {
+  private readonly probeOwned = new Set<AuthoritativeMovementZone>();
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
@@ -911,11 +920,27 @@ export class ZoneRegistry {
 
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
-    if (existing) return existing;
+    if (existing) { this.probeOwned.delete(existing); return existing; }
     const zone = new AuthoritativeMovementZone(zoneId);
     this.zones.set(zoneId, zone);
     this.sortedZonesDirty = true;
     return zone;
+  }
+
+  /** Called only after scope consumption, with a verified persisted head. */
+  installProbeZone(zone: AuthoritativeMovementZone): void {
+    if (this.zones.has(zone.zoneId)) throw new Error("PROBE_ZONE_ACTIVATION_RACE");
+    this.zones.set(zone.zoneId, zone);
+    this.probeOwned.add(zone);
+    this.sortedZonesDirty = true;
+  }
+
+  releaseProbeZone(zone: AuthoritativeMovementZone): void {
+    if (!this.probeOwned.has(zone) || this.zones.get(zone.zoneId) !== zone) return;
+    if (zone.getPendingIntents().length || zone.getCanonicalZoneState().players.length) throw new Error("PROBE_ZONE_CLEANUP_REQUIRED");
+    this.probeOwned.delete(zone);
+    this.zones.delete(zone.zoneId);
+    this.sortedZonesDirty = true;
   }
 
   tick(): void {

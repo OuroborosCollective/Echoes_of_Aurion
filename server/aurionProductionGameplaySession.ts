@@ -6,7 +6,9 @@ import { ZONE_TICK_MS, type ZoneSnapshot, type ZoneWelcome } from "./zoneProtoco
 import { ZONE_PROTOCOL_VERSION, validConfirmedPresences } from "../shared/zonePresenceContract";
 import { deadlineAfter, operationalNow } from "../shared/operationalClock";
 import { orderCanonicalZoneIntents, sanitizeIntentForHash } from "../shared/aurionZoneIntentContract";
-import { requireProbePersistenceEvidence } from "../shared/aurionProductionProbeEvidence";
+import { requireProbePersistenceEvidence, projectProbePersistenceReadback } from "../shared/aurionProductionProbeEvidence";
+import { computeReceiptHash } from "../shared/aurionCausalTickContract";
+import { hashCanonicalIntents } from "../shared/aurionZoneIntentContract";
 import type { RecordedTickEntry } from "./causality/tickRecorder";
 
 type ProbeHealth = Readonly<{
@@ -118,8 +120,9 @@ function isConfirmedWelcome(welcome: ZoneWelcome): boolean {
 }
 
 function redactWelcome(welcome: ZoneWelcome) {
-  const { connectionId: _connectionId, ...evidence } = welcome;
-  return evidence;
+  return { type: welcome.type, protocolVersion: welcome.protocolVersion, selfEntityId: welcome.selfEntityId,
+    zoneId: welcome.zoneId, tick: welcome.tick, snapshotSeq: welcome.snapshotSeq,
+    presences: welcome.presences.filter(p => p.userId === AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID) };
 }
 
 /**
@@ -151,6 +154,8 @@ export async function runProductionGameplaySessionReadback(dependencies: Gamepla
   } as unknown as WebSocket;
   let welcome: ZoneWelcome | undefined;
   let left = false;
+  let cleanupTick: number | undefined;
+  let cleanupConfirmed = false;
   try {
     welcome = zone.join({ userId: AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID, socket, combatProfile: DEFAULT_ZONE_COMBAT_PROFILE });
     if (!isConfirmedWelcome(welcome)) throw new Error("PROBE_ZONE_WELCOME_INVALID");
@@ -161,11 +166,11 @@ export async function runProductionGameplaySessionReadback(dependencies: Gamepla
       now,
       "PROBE_ZONE_HANDSHAKE_TIMEOUT",
     );
-    const cleanupTick = zone.getTickNumber();
+    cleanupTick = zone.getTickNumber();
     zone.leave(welcome.connectionId);
     left = true;
     await waitFor(
-      () => zone.getTickNumber() > cleanupTick ? true : undefined,
+      () => zone.getTickNumber() > cleanupTick! ? true : undefined,
       cleanupTimeoutMs,
       pollIntervalMs,
       now,
@@ -189,6 +194,7 @@ export async function runProductionGameplaySessionReadback(dependencies: Gamepla
       intents: orderCanonicalZoneIntents(entry.intents ?? []).map(sanitizeIntentForHash),
     })) };
     requireProbePersistenceEvidence(persistence, expectedRevision, zone.zoneId, welcome.tick, Number(snapshot.tick));
+    cleanupConfirmed = true;
     const healthAfter = await waitFor(() => {
       const current = assertCurrentRevision(health(), expectedRevision);
       return hasConfirmedNpcAdvance(healthBefore, current) ? current : undefined;
@@ -204,16 +210,44 @@ export async function runProductionGameplaySessionReadback(dependencies: Gamepla
       worldJoin: "CONFIRMED" as const,
       zoneHandshake: "CONFIRMED" as const,
       welcome: redactWelcome(welcome),
-      snapshot,
+      snapshot: { type: snapshot.type, zoneId: snapshot.zoneId, tick: snapshot.tick, snapshotSeq: snapshot.snapshotSeq,
+        presences: (snapshot as ZoneSnapshot).presences.filter(p => p.userId === AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID) },
       guilds,
       assurance,
-      persistence,
+      persistence: projectProbePersistenceReadback(persistence),
       probeEffect: "canonical-ephemeral-join-leave" as const,
       probeActorUserId: AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
     });
   } finally {
     if (welcome && !left && zone.connectionIdForUser(AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID) === welcome.connectionId) {
+      cleanupTick = zone.getTickNumber();
       zone.leave(welcome.connectionId);
+    }
+    // The exclusive-session caller must not release its lock while old membership
+    // intents can still affect a later probe. A stalled authority/DB keeps this
+    // cleanup quarantined (even if the HTTP client disconnects), never authorizes
+    // a second session. A restart must hydrate and validate the durable head.
+    if (welcome && !cleanupConfirmed && cleanupTick !== undefined) {
+      const leaveTick = cleanupTick + 1;
+      for (;;) {
+        try {
+          if (zone.getTickNumber() >= leaveTick) {
+            const entries = await boundedReadback(async () => {
+              await zone.flushEvidencePersistence();
+              return readPersistedTicks(zone.zoneId, leaveTick, leaveTick);
+            }, persistenceTimeoutMs);
+            const entry = entries[0], expected = zone.recordedTick(leaveTick);
+            if (entries.length === 1 && expected?.postState && entry?.intents
+              && !expected.postState.players.some(p => p.userId === AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID)
+              && entry.receipt.receiptHash === expected.receipt.receiptHash
+              && computeReceiptHash(entry.receipt) === entry.receipt.receiptHash
+              && hashCanonicalIntents(entry.intents) === entry.receipt.orderedIntentHash
+              && entry.intents.some(i => i.type === "presence_leave" && i.userId === AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID
+                && i.connectionId === welcome!.connectionId)) break;
+          }
+        } catch { /* Remain fail-closed under the session lock until durable cleanup. */ }
+        await wait(Math.max(250, pollIntervalMs));
+      }
     }
   }
 }
