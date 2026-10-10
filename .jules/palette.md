@@ -24,3 +24,7 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+
+## 2024-10-10 - Structural Entry Points & Missing Access Control Updates
+**Learning:** The "Events" community section was hidden behind a generic entry point or not exposed on key structural pages like the Home/Landing page. Additionally, buttons that restrict access to authenticated users should disable the action entirely using `!isAuthenticated`, rather than just displaying a warning title while still allowing the click.
+**Action:** When adding community entry points to a main page, verify all expected options are present to provide direct, contextual navigation for users. For action gating, always set `disabled={!isAuthenticated || loading}` and preserve existing styling classes like opacity fallbacks, contextual titles, and `aria-busy`.

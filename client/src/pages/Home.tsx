@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import {
   BookOpen,
   Box,
+  CalendarDays,
   Compass,
   FileText,
   MessageCircle,
@@ -358,7 +359,7 @@ export default function Home() {
           <button
             type="button"
             aria-haspopup="dialog"
-            disabled={loading}
+            disabled={!isAuthenticated || loading}
             aria-busy={loading}
             title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Signalraum öffnen"}
             onClick={() => openCommunity("chat")}
@@ -376,6 +377,16 @@ export default function Home() {
           >
             <FileText className="mr-2 size-4 text-cyan-300" />
             Forum
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            title="Events öffnen"
+            onClick={() => openCommunity("events")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+          >
+            <CalendarDays className="mr-2 size-4 text-cyan-300" />
+            Events
           </button>
           <button
             type="button"
