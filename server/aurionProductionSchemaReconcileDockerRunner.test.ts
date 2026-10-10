@@ -327,6 +327,13 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
 
   it("keeps the backup/recovery/apply core migration allowlists aligned through 0073", () => {
     const core = read("deploy/aurion-production-schema-apply-core");
+    const migrationCount = JSON.parse(read("config/aurion-migration-wave-manifest.json")).migrations.length;
+    // Retry receipts and promotion/rehearsal gates must describe the same closed wave.
+    for (const source of [core, read("deploy/promote-aurion-zone-runtime.sh"), read(".github/workflows/aurion-root-schema-apply-artifact-proof.yml")]) {
+      const counts = [...source.matchAll(/(?:migrationCount|matchCount)(?::|!==)(\d+)/g)];
+      expect(counts.length).toBeGreaterThan(0);
+      for (const count of counts) expect(Number(count[1])).toBe(migrationCount);
+    }
     expect((core.match(/0063_aurion_npc_information_ecology/g) ?? [])).toHaveLength(2);
     expect((core.match(/0064_aurion_world_entity_foundation/g) ?? [])).toHaveLength(2);
     expect((core.match(/0065_aurion_glb_asset_normalization/g) ?? [])).toHaveLength(2);
