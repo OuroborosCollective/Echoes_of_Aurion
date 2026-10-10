@@ -13,7 +13,15 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
     if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("ISOLATED_TEST_DB_REQUIRED");
     const pool = createPool(url.href);
     const zoneId = "observatory_threshold:probe-persistence-test";
-    const adapter = new MariaDBCausalPersistenceAdapter();
+    let releaseWrites!: () => void;
+    const writesAllowed = new Promise<void>(resolve => { releaseWrites = resolve; });
+    class DelayedPersistence extends MariaDBCausalPersistenceAdapter {
+      override async saveReceipt(...args: Parameters<MariaDBCausalPersistenceAdapter["saveReceipt"]>) {
+        await writesAllowed;
+        await super.saveReceipt(...args);
+      }
+    }
+    const adapter = new DelayedPersistence();
     const recorder = new AurionTickRecorder(20, adapter);
     const zone = new AuthoritativeMovementZone(zoneId, recorder);
     const revision = "a".repeat(40);
@@ -25,7 +33,11 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       const snapshotTick = zone.getTickNumber();
       zone.leave(welcome.connectionId);
       zone.tick();
-      await zone.flushEvidencePersistence();
+      const flushed = zone.flushEvidencePersistence();
+      expect(recorder.getPersistenceStatus().pending).toBe(2);
+      expect(await adapter.getTicksInRange(zoneId, 1, 2)).toEqual([]);
+      releaseWrites();
+      await flushed;
       expect(recorder.getPersistenceStatus()).toMatchObject({ pending: 0, failures: 0 });
       const readback = async () => ({ joinTick: 1, leaveTick: 2,
         ticks: (await adapter.getTicksInRange(zoneId, 1, 2)).map(entry => ({ receipt: entry.receipt,
@@ -38,6 +50,8 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       const incomplete = await readback();
       expect(() => requireProbePersistenceEvidence(incomplete, revision, zoneId, welcome.tick, snapshotTick)).toThrow("PROBE_PERSISTED_MEMBERSHIP_INVALID");
     } finally {
+      releaseWrites();
+      await zone.flushEvidencePersistence();
       await pool.execute("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
       await pool.execute("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
       await pool.end();

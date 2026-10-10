@@ -78,7 +78,10 @@ describe("effectful production gameplay session readback", () => {
   });
 
   it("does not change mob behavior relative to an idle zone, while ordinary players still trigger aggro", () => {
-    const probe = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder());
+    const recorder = new AurionTickRecorder();
+    const probe = new AuthoritativeMovementZone("observatory_threshold", recorder);
+    const replay = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder());
+    replay.isReplay = true;
     const idle = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder());
     const player = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder());
     const socket = () => ({ OPEN: 1, readyState: 1, send() {}, close() {} }) as any;
@@ -87,6 +90,9 @@ describe("effectful production gameplay session readback", () => {
     for (let tick = 1; tick <= 20; tick++) {
       probe.tick(); idle.tick(); player.tick();
       expect(probe.getCanonicalZoneState().mobs).toEqual(idle.getCanonicalZoneState().mobs);
+      for (const intent of recorder.getEntry(probe.zoneId, tick)!.intents!) replay.enqueueIntent(intent);
+      replay.tick();
+      expect(replay.getLatestReceipt()?.receiptHash).toBe(probe.getLatestReceipt()?.receiptHash);
       if (tick === 10) probe.leave(welcome.connectionId);
     }
     expect(player.getCanonicalZoneState().mobs.some(mob => mob.targetEntityId === "player:42")).toBe(true);

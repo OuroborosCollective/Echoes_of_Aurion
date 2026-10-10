@@ -1459,3 +1459,11 @@ Task: Complete the existing #838 record so its post-merge recorder can proceed w
 Evidence: The unchanged recorder rejects the original with INTEGRATION_MEMORY_ENTRY_INVALID and accepts the completed #838 and #839 entries without adding duplicates; the existing recorder regression passes.
 Learned: Pre-merge integration records require Status, Task, Evidence, Learned and Open; a documentation merge does not prove live recovery.
 Open: Production still serves 9b84e8093f731d72a66f339461cdaed462bc4ace with missing aurionNpcGuildStates; release 38007227256 stopped before schema preparation at the owner-approved probe gate.
+
+### 2026-10-10 — PR #841 — Production probe review corrections
+<!-- integration-memory: pr=841 -->
+Status: VERIFIED isolated runtime/MariaDB readback and regression; final-head CI remains a merge gate, production unverified.
+Task: Bind probe PASS to its committed join/leave receipt chain, exclude the reserved probe actor from hostile targeting, and require positively identified legacy revision for bootstrap.
+Learned: A queued tick, generic assurance snapshot or missing HTTP route cannot prove durable execution or authorize bootstrap by itself.
+Evidence: Code revision 3c00eb0a92378660206043b24a8292a25e362299; GitHub run 38066170266 passed all 45 approval/runtime/MariaDB tests, including independent membership readback and rejection after receipt deletion. Local full regression passed 416 files/2072 tests (65 files skipped); TypeScript and production build passed. Added delayed-write and deterministic replay regressions for final-head CI.
+Open: No production mutation or successful production readback is claimed; explicit run-bound owner approvals and existing release/schema/backup/recovery gates remain required.
