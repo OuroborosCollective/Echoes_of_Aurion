@@ -1451,3 +1451,11 @@ Learned: The GitBook gameplay page must follow the same Aurion ownership boundar
 Evidence: Exactly two wording substitutions; no AX1 reference remains in the page; frontmatter, GitBook blocks, SUMMARY.md and sync configuration preserved. Documentation-only; no runtime behavior or production recovery is claimed.
 Task: Align the two remaining GitBook journal/readmodel references with Aurion ownership.
 Open: Production recovery remains unverified; this documentation change does not restore a previous release or repair the live schema.
+
+### 2026-10-10 — PR #839 — Restore valid integration Memory for #838
+Status: VERIFIED recorder regression and replay against the actual Memory snapshot; production recovery unverified.
+<!-- integration-memory: pr=839 -->
+Task: Complete the existing #838 record so its post-merge recorder can proceed without weakening validation.
+Evidence: The unchanged recorder rejects the original with INTEGRATION_MEMORY_ENTRY_INVALID and accepts the completed #838 and #839 entries without adding duplicates; the existing recorder regression passes.
+Learned: Pre-merge integration records require Status, Task, Evidence, Learned and Open; a documentation merge does not prove live recovery.
+Open: Production still serves 9b84e8093f731d72a66f339461cdaed462bc4ace with missing aurionNpcGuildStates; release 38007227256 stopped before schema preparation at the owner-approved probe gate.
