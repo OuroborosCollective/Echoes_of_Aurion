@@ -128,6 +128,7 @@ jobs:
           pnpm test
           node --check scripts/build-aurion-sbom.mjs
           node --test \
+            scripts/aurion-probe-bootstrap.test.mjs \
             scripts/dispatch-aurion-schema-plan.test.mjs \
             scripts/aurion-build-input-manifest.test.mjs \
             scripts/aurion-release-attestation.test.mjs \
@@ -648,10 +649,16 @@ jobs:
             echo 'PROBE_CONTROL_PLANE_REQUIRED' >&2
             exit 70
           fi
+          # A successful SPA fallback is not a ready control plane. Keep the
+          # gate closed and report the missing prerequisite before parsing.
+          if ! grep -Eiq '^content-type:[[:space:]]*application/json([[:space:]]*;|[[:space:]]*$)' "$headers_file"; then
+            echo 'PROBE_CONTROL_PLANE_REQUIRED: expected application/json; verify the deployed control plane before retrying' >&2
+            exit 70
+          fi
           STATUS_FILE="$status_file" node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const status=JSON.parse(fs.readFileSync(process.env.STATUS_FILE,'utf8'));
-          if(status.recordType!=='aurion.production-probe-control-plane'||status.schemaVersion!==1||status.state!=='ready'||status.mutationAuthority!=='none') throw new Error('PROBE_CONTROL_PLANE_STATUS_INVALID');
+          import { parseProductionProbeControlPlaneStatus } from './scripts/aurion-probe-bootstrap.mjs';
+          parseProductionProbeControlPlaneStatus(fs.readFileSync(process.env.STATUS_FILE,'utf8'));
           NODE
           node --input-type=module <<'NODE'
           import { executeProductionProbe } from './scripts/aurion-production-probe-client.mjs';

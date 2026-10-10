@@ -1,6 +1,18 @@
 /** A reviewed legacy release identity, never a dispatch-controlled allowlist. */
 export const LEGACY_PROBE_BOOTSTRAP_REVISION = '9b84e8093f731d72a66f339461cdaed462bc4ace';
 
+/** Invalid upstream bodies must not be echoed into release logs. */
+export function parseProductionProbeControlPlaneStatus(body) {
+  let status;
+  try { status = JSON.parse(body); }
+  catch { throw new Error('PROBE_CONTROL_PLANE_STATUS_INVALID'); }
+  if (!status || status.recordType !== 'aurion.production-probe-control-plane'
+    || status.schemaVersion !== 1 || status.state !== 'ready' || status.mutationAuthority !== 'none') {
+    throw new Error('PROBE_CONTROL_PLANE_STATUS_INVALID');
+  }
+  return status;
+}
+
 export function requireLegacyProbeBootstrap(health) {
   if (!health || health.service !== 'echoes-of-aurion' || health.status !== 'ok'
     || health.revision !== LEGACY_PROBE_BOOTSTRAP_REVISION
