@@ -32,6 +32,10 @@ suite('isolated real HTTP + MariaDB + existing signed Aurion session (not produc
   await pool.execute("UPDATE users SET role='user' WHERE id=?",[userId]);
   try{expect((await post('list',{})).status).toBe(403);}finally{await pool.execute("UPDATE users SET role='admin' WHERE id=?",[userId]);}
  });
+ it('exposes bootstrap readiness only after the real approval table is queryable',async()=>{
+  const response=await fetch(`${base}/bootstrap-status`);expect(response.status).toBe(200);
+  await expect(response.json()).resolves.toMatchObject({recordType:'aurion.production-probe-control-plane',schemaVersion:1,state:'ready',mutationAuthority:'none',revision:run.revision});
+ });
  it('requires explicit confirmation and fresh password, reads persisted receipt, then revokes it',async()=>{
   const body={run,scope:'aurion.probe.admin-readback',purpose:'isolated HTTP approval proof',password,confirmed:true};
   expect((await post('approve',{...body,confirmed:false})).status).toBe(403);

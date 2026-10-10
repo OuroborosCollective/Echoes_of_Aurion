@@ -896,6 +896,11 @@ export class ZoneRegistry {
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
 
+  /** Observational lookup. Unlike get(), this never starts a canonical zone. */
+  find(zoneId: ZoneId): AuthoritativeMovementZone | undefined {
+    return this.zones.get(zoneId);
+  }
+
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
     if (existing) return existing;

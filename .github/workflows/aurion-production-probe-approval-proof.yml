@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'server/aurionProductionProbe*'
+      - 'server/aurionProductionGameplaySession*'
+      - 'server/zoneRuntime.ts'
       - 'server/_core/index.ts'
       - 'scripts/aurion-production-probe-client.mjs'
       - 'scripts/verify-aurion-production-gameplay.ts'
@@ -45,4 +47,4 @@ jobs:
       - run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
       - run: pnpm check
       - name: Real MariaDB races, replay, revocation, roles and local signed-JWT contracts
-        run: pnpm exec vitest run server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts server/aurionProductionProbeHttpMariaDb.test.ts
+        run: pnpm exec vitest run server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts server/aurionProductionProbeHttpMariaDb.test.ts server/aurionProductionGameplaySession.test.ts server/zoneRegistry.test.ts

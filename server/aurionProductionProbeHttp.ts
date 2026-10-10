@@ -3,10 +3,17 @@ import { rateLimit } from "express-rate-limit";
 import { sdk } from "./_core/sdk";
 import { productionProbeStore } from "./aurionProductionProbeStore";
 import { verifyGithubProbeOidc } from "./aurionProductionProbeOidc";
-import { AURION_PROBE_SCOPES, type AurionProbeRunIdentity } from "./aurionProductionProbeApprovalContract";
+import {
+  AURION_PROBE_ADMIN_READBACK_SCOPE,
+  AURION_PROBE_GAMEPLAY_READBACK_SCOPE,
+  AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE,
+  aurionProbeMutationAuthority,
+  type AurionProbeRunIdentity,
+} from "./aurionProductionProbeApprovalContract";
 import { readNpcGuildOverview } from "./aurion/npcGuildStore";
 import { globalZoneRegistry } from "./zoneRuntime";
 import { globalAssuranceService } from "./causality/assuranceService";
+import { runProductionGameplaySessionReadback } from "./aurionProductionGameplaySession";
 
 /** Exact Origin plus non-simple header blocks ambient-cookie CSRF. CORS never grants approval. */
 export function requireProbeOwnerOrigin(headers: { origin?: string; contentType?: string; requestedWith?: string; fetchSite?: string }) {
@@ -31,6 +38,17 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
   const path = "/api/production-probe";
   app.use(path, rateLimit({ windowMs: 60000, limit: 30, standardHeaders: "draft-7", legacyHeaders: false }));
   app.use(path, (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  /** Public only to make the one-time bootstrap fail closed once the table is live. */
+  app.get(`${path}/bootstrap-status`, async (_req, res) => {
+    try {
+      if (!await productionProbeStore().isReady()) throw new Error("PROBE_CONTROL_PLANE_UNAVAILABLE");
+      res.json({ recordType: "aurion.production-probe-control-plane", schemaVersion: 1,
+        state: "ready", revision: health().revision, mutationAuthority: "none" });
+    } catch {
+      res.status(503).json({ recordType: "aurion.production-probe-control-plane", schemaVersion: 1,
+        state: "unavailable", mutationAuthority: "none" });
+    }
+  });
   for (const operation of ["approve", "list", "revoke"] as const) app.post(`${path}/${operation}`, async (req, res) => {
     try {
       const actor = await owner(req), store = productionProbeStore();
@@ -52,21 +70,43 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
       if (!authorization?.startsWith("Bearer ")) throw new Error("PROBE_OIDC_REQUIRED");
       const run: AurionProbeRunIdentity = await verifyGithubProbeOidc(authorization.slice(7));
       const before = health();
-      if (body.scope === AURION_PROBE_SCOPES[1] && before.revision !== run.revision) throw new Error("PROBE_RUNTIME_REVISION_MISMATCH");
-      const receipt = await productionProbeStore().consume(run, body.scope);
-      if (body.scope === AURION_PROBE_SCOPES[0]) {
+      const scope = body.scope;
+      if ((scope === AURION_PROBE_GAMEPLAY_READBACK_SCOPE || scope === AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE)
+        && before.revision !== run.revision) throw new Error("PROBE_RUNTIME_REVISION_MISMATCH");
+      const store = productionProbeStore();
+      if (scope === AURION_PROBE_ADMIN_READBACK_SCOPE) {
+        const receipt = await store.consume(run, scope);
         res.json({ ...receipt, status: "AUTHORIZED", credentialReturned: false }); return;
       }
-      // Read existing canonical authority only. Never join a player, issue a
-      // combat ticket or grant tRPC/admin access under a read-only approval.
-      const zone = globalZoneRegistry.get("observatory_threshold");
-      const state = zone.getCanonicalZoneState(), latestReceipt = zone.getLatestReceipt();
-      const guilds = await readNpcGuildOverview();
-      const after = health();
-      if (after.revision !== run.revision) throw new Error("PROBE_RUNTIME_REVISION_MISMATCH");
-      res.json({ ...receipt, status: "OBSERVED", credentialReturned: false, healthBefore: before, health: after,
-        zone: { tick: state.tick, receiptHash: latestReceipt?.receiptHash ?? null, playerCount: state.players.length },
-        guilds, assurance: globalAssuranceService.latest(), worldJoin: "UNVERIFIED", zoneHandshake: "UNVERIFIED" });
+      if (scope === AURION_PROBE_GAMEPLAY_READBACK_SCOPE) {
+        // The read-only path refuses to start a zone. It can only observe
+        // canonical authority that was already active before this request.
+        const zone = globalZoneRegistry.find("observatory_threshold");
+        if (!zone) throw new Error("PROBE_ZONE_NOT_ACTIVE");
+        const receipt = await store.consume(run, scope);
+        const state = zone.getCanonicalZoneState(), latestReceipt = zone.getLatestReceipt();
+        const guilds = await readNpcGuildOverview();
+        const after = health();
+        if (after.revision !== run.revision) throw new Error("PROBE_RUNTIME_REVISION_MISMATCH");
+        res.json({ ...receipt, status: "OBSERVED", credentialReturned: false, mutationAuthority: aurionProbeMutationAuthority(scope), healthBefore: before, health: after,
+          zone: { tick: state.tick, receiptHash: latestReceipt?.receiptHash ?? null, playerCount: state.players.length },
+          guilds, assurance: globalAssuranceService.latest(), worldJoin: "UNVERIFIED", zoneHandshake: "UNVERIFIED" });
+        return;
+      }
+      if (scope === AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE) {
+        const result = await store.withExclusiveGameplayProbeSession(async () => {
+          const receipt = await store.consume(run, scope);
+          // Starting a zone is a real effect, allowed only after consuming this
+          // separately approved scope. It is never reachable from read-only scopes.
+          const zone = globalZoneRegistry.get("observatory_threshold");
+          const observed = await runProductionGameplaySessionReadback({ zone, expectedRevision: run.revision, health,
+            readNpcGuildOverview, sampleAssurance: () => globalAssuranceService.sample() });
+          return { ...receipt, ...observed, status: "OBSERVED", credentialReturned: false,
+            mutationAuthority: aurionProbeMutationAuthority(scope) };
+        });
+        res.json(result); return;
+      }
+      throw new Error("PROBE_SCOPE_INVALID");
     } catch { res.status(403).json({ error: "PROBE_EXECUTION_DENIED", credentialReturned: false }); }
   });
 }

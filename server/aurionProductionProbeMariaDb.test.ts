@@ -25,15 +25,23 @@ suite('real MariaDB one-shot transaction and role/reauth proof (isolated DB only
   await expect(store.approve(userId,password,r,scope,'reapproval must fail')).rejects.toThrow();
   const [rows]=await pool.execute<RowDataPacket[]>('SELECT consumedAtMs FROM aurionProductionProbeApprovals WHERE runJson=?',[JSON.stringify(r)]);expect(Number(rows[0].consumedAtMs)).toBeGreaterThan(0);
  });
+ it('serializes the separately approved effectful gameplay session across database connections',async()=>{
+  let release!:()=>void, entered!:()=>void;
+  const enteredPromise=new Promise<void>(resolve=>{entered=resolve;});
+  const first=store.withExclusiveGameplayProbeSession(async()=>{entered();await new Promise<void>(resolve=>{release=resolve;});});
+  await enteredPromise;
+  await expect(store.withExclusiveGameplayProbeSession(async()=>undefined)).rejects.toThrow('PROBE_GAMEPLAY_SESSION_BUSY');
+  release();await first;
+ });
  it('rejects stale revision, run ID, attempt and wrong scope without spending valid approval',async()=>{
   const r=identity();await store.approve(userId,password,r,scope,'isolated identity proof');
   for(const changed of [{...r,revision:'b'.repeat(40)},{...r,runId:'99'},{...r,runAttempt:2}]) await expect(store.consume(changed,scope)).rejects.toThrow();
   await expect(store.consume(r,'aurion.probe.gameplay-readback')).rejects.toThrow();await expect(store.consume(r,'schema.write')).rejects.toThrow();
   expect((await store.consume(r,scope)).mutationAuthority).toBe('none');
  });
- it('uses independently consumable scopes',async()=>{
-  const r=identity();for(const s of [scope,'aurion.probe.gameplay-readback'])await store.approve(userId,password,r,s,'separate read-only consumers');
-  await store.consume(r,scope);await store.consume(r,'aurion.probe.gameplay-readback');
+ it('uses independently consumable read-only and effectful scopes',async()=>{
+  const r=identity();for(const s of [scope,'aurion.probe.gameplay-readback','aurion.probe.gameplay-session-readback'])await store.approve(userId,password,r,s,'separate probe consumers');
+  await store.consume(r,scope);await store.consume(r,'aurion.probe.gameplay-readback');await store.consume(r,'aurion.probe.gameplay-session-readback');
  });
  it('rejects revoked and expired approvals',async()=>{
   const revoked=identity(),expired=identity();const a=await store.approve(userId,password,revoked,scope,'revocation proof');await store.revoke(userId,a.approvalId);await expect(store.consume(revoked,scope)).rejects.toThrow();

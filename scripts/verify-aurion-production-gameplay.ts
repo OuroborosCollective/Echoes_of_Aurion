@@ -43,7 +43,10 @@ export function requireFunctionalProbeReceipt(observed: any, sourceRevision: str
     causalAssuranceHash: observed.assurance.snapshotHash, visualStatus: "UNVERIFIED", credentialReturned: false };
 }
 export async function run() {
-  return requireFunctionalProbeReceipt(await executeProductionProbe("aurion.probe.gameplay-readback"), process.env.AURION_EXPECTED_SHA ?? "");
+  // This is deliberately not the read-only observation scope. A real welcome
+  // and subsequent snapshot require the separately owner-approved, short
+  // canonical probe session.
+  return requireFunctionalProbeReceipt(await executeProductionProbe("aurion.probe.gameplay-session-readback"), process.env.AURION_EXPECTED_SHA ?? "");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
