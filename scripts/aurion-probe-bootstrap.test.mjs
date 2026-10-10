@@ -5,7 +5,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { LEGACY_PROBE_BOOTSTRAP_REVISION, requireLegacyProbeBootstrap, parseProductionProbeControlPlaneStatus } from './aurion-probe-bootstrap.mjs';
+import { LEGACY_PROBE_BOOTSTRAP_REVISION, requireLegacyProbeBootstrap, parseProductionProbeControlPlaneStatus, productionProbeHttpDiagnostic } from './aurion-probe-bootstrap.mjs';
+
+test('HTTP diagnostics redact untrusted values and use the final response header block', () => {
+  for (const [status, headers, code, type] of [
+    ['403', 'HTTP/2 403\r\nContent-Type: text/html; token=private-secret\r\nLocation: https://example.invalid/?token=private-secret\r\n', 403, 'text/html'],
+    ['502', 'Content-Type: application/json; charset=utf-8\r\n', 502, 'application/json'],
+    ['301', 'Location: https://example.invalid/?token=private-secret\r\n', 301, 'missing'],
+    ['200', 'Content-Type: application/private-secret\r\n', 200, 'other'],
+    ['200', 'Content-Type: application/json\r\nContent-Type: text/html\r\n', 200, 'other'],
+    ['200', 'HTTP/1.1 200 Connection established\r\nContent-Type: text/html\r\n\r\nHTTP/2 200\r\nContent-Type: Application/JSON\r\n', 200, 'application/json'],
+    ['503', 'HTTP/1.1 200\r\nContent-Type: text/html\r\n\r\nHTTP/2 503\r\n', 503, 'missing'],
+    ['private-secret', 'Content-Type: private-secret\n', null, 'other'],
+  ]) {
+    const diagnostic = productionProbeHttpDiagnostic(status, headers);
+    assert.deepEqual(diagnostic, { recordType: 'aurion.production-probe-http-diagnostic', httpStatus: code, contentType: type });
+    assert.ok(!JSON.stringify(diagnostic).includes('private-secret'));
+  }
+});
 
 const legacy = { service: 'echoes-of-aurion', status: 'ok', revision: LEGACY_PROBE_BOOTSTRAP_REVISION,
   authority: { ruleset: 'aurion-zone-v3', tickHz: 10, causalReceipts: true } };
@@ -73,7 +90,40 @@ printf '%s' "$FIXTURE_STATUS"
       assert.ok(result.stderr.includes(expected), result.stderr);
       assert.ok(!result.stderr.includes('private upstream body'), 'upstream content must remain private');
       assert.ok(!result.stderr.includes('SyntaxError'), 'failure must be classified');
+      assert.equal(JSON.parse(result.stdout.trim()).httpStatus, Number(status));
       if (expected !== 'PROBE_OIDC_REQUEST_UNAVAILABLE') assert.ok(!result.stderr.includes('PROBE_OIDC_'));
+    }
+    for (const [status, type] of [['301', 'text/html'], ['403', 'text/html'], ['502', 'text/html'],
+      ['503', 'application/json'], ['200', 'application/json'], ['200', 'application/private-secret']]) {
+      fs.writeFileSync(env.FIXTURE_HEADERS, `HTTP/2 ${status}\r\ncontent-type: ${type}; token=private-secret\r\nlocation: https://example.invalid/?token=private-secret\r\n\r\n`);
+      fs.writeFileSync(env.FIXTURE_BODY, 'private-secret');
+      const result = spawnSync('bash', ['-c', step], { cwd: root,
+        env: { ...env, BOOTSTRAP_PROBE_CONTROL_PLANE: 'true', FIXTURE_STATUS: status }, encoding: 'utf8' });
+      assert.equal(result.status, 70);
+      assert.match(result.stderr, /PROBE_BOOTSTRAP_RESPONSE_NOT_ELIGIBLE/);
+      assert.equal(JSON.parse(result.stdout.trim()).httpStatus, Number(status));
+      assert.ok(!(result.stdout + result.stderr).includes('private-secret'));
+      assert.ok(!(result.stdout + result.stderr).includes('https://'));
+    }
+    // Stub only the external legacy read: eligible absence must still reach
+    // that identity check, never return success merely because a route is absent.
+    fs.writeFileSync(path.join(temp, 'node'), `#!/bin/bash
+source_text=$(cat)
+if [[ "$source_text" == *'await readLegacyProbeBootstrap()'* ]]; then
+  echo PROBE_BOOTSTRAP_LEGACY_IDENTITY_REQUIRED >&2
+  exit 77
+fi
+printf '%s' "$source_text" | "$REAL_NODE" "$@"
+`, { mode: 0o700 });
+    for (const [status, type] of [['404', 'application/json'], ['200', 'text/html; charset=utf-8']]) {
+      fs.writeFileSync(env.FIXTURE_HEADERS, `HTTP/2 ${status}\r\ncontent-type: ${type}\r\n\r\n`);
+      fs.writeFileSync(env.FIXTURE_BODY, 'private-secret');
+      const result = spawnSync('bash', ['-c', step], { cwd: root,
+        env: { ...env, REAL_NODE: process.execPath, BOOTSTRAP_PROBE_CONTROL_PLANE: 'true', FIXTURE_STATUS: status }, encoding: 'utf8' });
+      assert.equal(result.status, 77, result.stderr);
+      assert.match(result.stderr, /PROBE_BOOTSTRAP_LEGACY_IDENTITY_REQUIRED/);
+      assert.equal(JSON.parse(result.stdout.trim()).httpStatus, Number(status));
+      assert.ok(!(result.stdout + result.stderr).includes('private-secret'));
     }
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 });

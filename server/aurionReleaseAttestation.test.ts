@@ -53,7 +53,7 @@ describe("Blocker 2 detached release attestation contract", () => {
     expect(independent).toContain('if [[ "$status" != "404" ]] && !');
     expect(independent).toContain("--dump-header");
     expect(independent).toContain("text/html");
-    expect(independent).toContain("PROBE_BOOTSTRAP_NOT_ALLOWED_AFTER_CONTROL_PLANE_EXISTS");
+    expect(independent).toContain("PROBE_BOOTSTRAP_RESPONSE_NOT_ELIGIBLE");
     expect(independent).toContain("await readLegacyProbeBootstrap()");
     expect(independent).toContain("PROBE_CONTROL_PLANE_REQUIRED");
     expect(independent).toContain("executeProductionProbe('aurion.probe.admin-readback')");

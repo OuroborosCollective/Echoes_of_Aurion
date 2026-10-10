@@ -623,6 +623,11 @@ jobs:
             echo 'PROBE_CONTROL_PLANE_STATUS_UNAVAILABLE' >&2
             exit 70
           fi
+          STATUS_CODE="$status" HEADERS_FILE="$headers_file" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { productionProbeHttpDiagnostic } from './scripts/aurion-probe-bootstrap.mjs';
+          console.log(JSON.stringify(productionProbeHttpDiagnostic(process.env.STATUS_CODE, fs.readFileSync(process.env.HEADERS_FILE, 'utf8'))));
+          NODE
           if [[ "${BOOTSTRAP_PROBE_CONTROL_PLANE:-false}" == "true" ]]; then
             # The protected GitHub production environment is the independent
             # owner confirmation for this exact dispatched revision. A 404 is
@@ -632,7 +637,7 @@ jobs:
             # paths, so recognize that exact legacy absence without treating a
             # malformed JSON control-plane response as an allowed bootstrap.
             if [[ "$status" != "404" ]] && ! { [[ "$status" == "200" ]] && grep -Eiq '^content-type:[[:space:]]*text/html' "$headers_file"; }; then
-              echo 'PROBE_BOOTSTRAP_NOT_ALLOWED_AFTER_CONTROL_PLANE_EXISTS' >&2
+              echo 'PROBE_BOOTSTRAP_RESPONSE_NOT_ELIGIBLE' >&2
               exit 70
             fi
             node --input-type=module <<'NODE'
