@@ -148,6 +148,7 @@ export class AuthoritativeMovementZone {
   private sortedPeersByEntityId: PresencePeer[] = [];
   // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
   private sortedPresences: ZonePresence[] = [];
+  private cachedCombatants: ConfirmedZoneCombatant[] = [];
   private sortedPeersDirty = false;
   private pendingIntents: AurionZoneIntent[] = [];
   private arrivalSequence = 0;
@@ -855,24 +856,47 @@ export class AuthoritativeMovementZone {
 
   private combatants(): readonly ConfirmedZoneCombatant[] {
     this.refreshPeerOrder();
-    const out: ConfirmedZoneCombatant[] = [];
     let peerIndex = 0;
     const mobs = this.mobRuntime.orderedStates();
     let mobIndex = 0;
+    let cachedIndex = 0;
+    // ⚡ Bolt: Reuse the cached array and mutable objects to eliminate GC overhead during snapshot generation
     while (peerIndex < this.sortedPeersByEntityId.length || mobIndex < mobs.length) {
       const peer = this.sortedPeersByEntityId[peerIndex];
       const mob = mobs[mobIndex];
       const peerId = peer ? `player:${peer.userId}` : null;
       const mobId = mob ? mob.definition.entityId : null;
+      let targetObj = this.cachedCombatants[cachedIndex] as { -readonly [P in keyof ConfirmedZoneCombatant]: ConfirmedZoneCombatant[P] };
+      if (!targetObj) {
+        targetObj = { entityId: "", health: 0, maxHealth: 0, stamina: 0, maxStamina: 0, alive: false, combatLevel: 0, lastCombatSequence: 0 };
+        this.cachedCombatants.push(targetObj);
+      }
       if (peerId && (!mobId || compareBinary(peerId, mobId) < 0)) {
-        out.push(Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence }));
+        targetObj.entityId = peerId;
+        targetObj.health = peer.health;
+        targetObj.maxHealth = peer.maxHealth;
+        targetObj.stamina = peer.stamina;
+        targetObj.maxStamina = ZONE_COMBAT_MAX_STAMINA;
+        targetObj.alive = peer.health > 0;
+        targetObj.combatLevel = peer.combatLevel;
+        targetObj.lastCombatSequence = peer.lastCombatSequence;
         peerIndex += 1;
+        cachedIndex += 1;
       } else if (mobId) {
-        out.push(Object.freeze({ entityId: mobId, health: mob.health, maxHealth: mob.maxHealth, stamina: mob.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: mob.health > 0, combatLevel: mob.definition.level, lastCombatSequence: 0 }));
+        targetObj.entityId = mobId;
+        targetObj.health = mob.health;
+        targetObj.maxHealth = mob.maxHealth;
+        targetObj.stamina = mob.stamina;
+        targetObj.maxStamina = ZONE_COMBAT_MAX_STAMINA;
+        targetObj.alive = mob.health > 0;
+        targetObj.combatLevel = mob.definition.level;
+        targetObj.lastCombatSequence = 0;
         mobIndex += 1;
+        cachedIndex += 1;
       }
     }
-    return Object.freeze(out);
+    this.cachedCombatants.length = cachedIndex;
+    return this.cachedCombatants;
   }
 
   private broadcastSnapshot(): void {

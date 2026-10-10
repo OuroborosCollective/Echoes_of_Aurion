@@ -1,33 +1,6 @@
-## 2024-05-24 - React useMemo & Hashmap Optimization in InventoryModal
-**Learning:** Found a major performance bottleneck where a component was performing `indexOf` lookups on an array inside a `.sort()` function, resulting in O(N log N) array creations/lookups on every render since filtering and mapping were not memoized.
-**Action:** Used `useMemo` for heavy array mapping/filtering dependent on `readback`. Replaced array `indexOf` lookups inside `.sort` with a static hash map lookup for $O(1)$ access.
-- Cached the allowed origins from environment variable in `server/_core/index.ts` to optimize the `allowedCorsOrigin` function. This avoids performing expensive string operations (split, map, filter) on every incoming HTTP request, which will slightly improve the overall request throughput and lower latency.
-
-## 2026-09-08 - Array Allocation Overhead in Zone Tick Loop
-**Learning:** Found a severe performance bottleneck in `server/zoneRuntime.ts` where methods called in the 10Hz game loop (`presences()`, `combatants()`, `resolveMobAttacks()`) were allocating excessive intermediate arrays using `Array.from(...).map(...)` and `[...this.peers.values()].find(...)`. In a high-frequency tick environment, these temporary allocations create significant garbage collection pressure which can impact server latency.
-**Action:** Replaced dynamic array creations and chaining methods with static array initialization and iterative `for...of` loops, avoiding intermediate arrays entirely and reducing GC pressure on every server tick.
-## 2026-09-09 - [High-Frequency Server Ticks and Garbage Collection]
-**Learning:** Using dynamic array allocations (e.g., `Array.from()`), spread syntax, and `.sort()` on every server tick causes massive garbage collection latency, significantly harming performance in high-frequency game loops like `server/zoneRuntime.ts` and `server/zoneMobRuntime.ts`.
-**Action:** Always cache sorted arrays and use dirty flags to recalculate sorting only when items are added or removed. Use iterative `for...of` loops and pre-allocated arrays where possible, avoiding inline allocations on hot code paths.
-
-## 2026-09-12 - Transition from O(N) iterative lookups to O(1) Map lookups for resolving entities in high-frequency loops
-**Learning:** High-frequency game loops experience performance degradation and garbage collection latency when using O(N) array iterations to locate entities on every tick.
-**Action:** Implemented O(1) Map lookups (`peersByEntityId`) populated dynamically during lifecycle events (join/leave) instead of searching via array iteration, particularly beneficial in `AuthoritativeMovementZone.resolveMobAttacks()` and `AuthoritativeMovementZone.join()`.
-
-## 2024-05-19 - Optimization: caching sorted array to avoid map lookups/dynamic mapping in game loops
-**Learning:** Found a specific anti-pattern in the server game loop codebase: iterating over $O(1)$ maps dynamically on each high frequency tick or converting a map to a sorted array inside `snapshot` each time it is requested. Due to fixed 100ms game ticks, Map lookups in inner loops across numerous entities and allocating arrays mapping those states create huge overhead and GC pressure.
-**Action:** When working on arrays that map static keys to mutable states inside `tick()` or `snapshot()` routines in `zone*Runtime.ts`, pre-sort the list in the constructor as an array cache (like `this.orderedStates`). Use the array inside `tick()` loops and iterate exactly using `for...of` avoiding map `.get()` and avoiding spread + `.map()` dynamic allocations.
-
-## 2026-09-15 - Array Allocation Overhead in Zone Canonical State Snapshot
-**Learning:** In high-frequency game loops, calling `Array.from().sort()` repeatedly (e.g. to serialize `skillCooldownUntilTick` maps or `questSummaries`) on every `getCanonicalZoneState()` call causes unnecessary array creations and mappings, inducing GC pressure. Sorting is already handled centrally in `sortCanonicalZoneState`.
-**Action:** Replaced dynamic `Array.from().sort()` in `getCanonicalZoneState` with a dirty-flagged array cache (`cachedQuestSummaries`) and direct `for...of` Map iteration (for `skillCooldowns`), eliminating per-tick array mapping overhead.
-## 2025-02-13 - Optimize pathfinding and threat matrix lookups
-**Learning:** High-frequency game loop code (like A* pathfinding and ThreatMatrix target selection) suffers significantly from calling `Array.from(map.values()).sort(...)` due to continuous O(N) array allocation overhead and O(N log N) sorting costs.
-**Action:** Replace `Array.from().sort()` with linear `for...of` iteration over Map entries or values to find minimum/maximum targets, achieving O(N) time complexity. Pre-cache any string generation (like grid coordinates) inside the Map values to further eliminate string concatenation overhead during the scan.
-## 2026-09-17 - Array Allocation Overhead in Zone Presences Loop
-**Learning:** Found a severe performance bottleneck in `server/zoneRuntime.ts` where the `presences()` method was called multiple times per 10Hz game tick, using `Array.from(...).map(...)` to dynamically create new `ZonePresence` objects for every player. In a high-frequency tick environment, these temporary array and object allocations create significant garbage collection pressure which can impact server latency.
-**Action:** Caches the `ZonePresence` objects directly inside the `PresencePeer` interface (with initial values set during `join`). Maintained a cached `sortedPresences` array that is updated only when players join/leave (when `sortedPeersDirty` is true). Replaced the dynamic array creation and `.map()` calls in `presences()` with a direct $O(N)$ `for` loop that mutates the pre-allocated `presence` objects in-place (`peer.presence.position = peer.position`), returning the reference to the cached array, resulting in zero allocations per tick.
-
-## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
-**Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
-**Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-10-25 - Avoid Map value Array conversion and object allocation in ZoneRuntime snapshotting
+**Learning:** In the high-frequency ZoneRuntime `combatants()` loop, mapping peers and mob state into new `ConfirmedZoneCombatant` objects inside arrays (`Array.from().map()` equivalent) on every tick triggered excessive garbage collection and allocation overhead during combat and presence simulation.
+**Action:** Always reuse cached arrays (setting `.length = index` manually) and pre-allocated mutable target objects when generating transient snapshot arrays in high-frequency authoritative loops. Update the `ZoneRuntime` to keep a `cachedCombatants` array and mutate its objects instead of pushing new `{...}` allocations on every tick.
+## 2024-10-25 - Avoid Map value Array conversion and object allocation in ZoneRuntime snapshotting
+**Learning:** In the high-frequency ZoneRuntime `combatants()` loop, mapping peers and mob state into new `ConfirmedZoneCombatant` objects inside arrays (`Array.from().map()` equivalent) on every tick triggered excessive garbage collection and allocation overhead during combat and presence simulation.
+**Action:** Always reuse cached arrays (setting `.length = index` manually) and pre-allocated mutable target objects when generating transient snapshot arrays in high-frequency authoritative loops. Update the `ZoneRuntime` to keep a `cachedCombatants` array and mutate its objects instead of pushing new `{...}` allocations on every tick.
