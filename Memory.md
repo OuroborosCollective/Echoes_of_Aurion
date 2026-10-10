@@ -1441,3 +1441,11 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-10 — PR #838 — GitBook journal ownership correction
+Status: VERIFIED documentation diff; merge pending.
+<!-- integration-memory: pr=838 -->
+Change: Replace the two remaining active AX1 journal/readmodel assignments in causal-rumor-and-investigation-gameplay.md with Aurion client/readmodel terminology.
+Learned: The GitBook gameplay page must follow the same Aurion ownership boundary as the shared journal contract; AX1 has no active runtime role.
+Evidence: Exactly two wording substitutions; no AX1 reference remains in the page; frontmatter, GitBook blocks, SUMMARY.md and sync configuration preserved. Documentation-only; no runtime behavior or production recovery is claimed.
