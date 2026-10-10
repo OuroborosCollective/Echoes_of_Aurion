@@ -161,7 +161,7 @@ describe("open-world protocol", () => {
     }));
     expect(snapshot).toMatchObject({
       zoneId: "sunwatch_bastion",
-      zoneTier: 5,
+      zoneTier: 6,
       displayName: "Sonnenwacht-Bastion",
       primaryEncounter: { id: "sunwatch-commander", label: "Sonnenwacht-Kommandant", encounterKey: "sunwatch_bastion" },
     });

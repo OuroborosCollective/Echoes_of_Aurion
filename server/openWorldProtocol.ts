@@ -44,7 +44,7 @@ export type OpenWorldProfile = {
 export type OpenWorldSnapshot = {
   revision: 1;
   zoneId: OpenWorldZoneKey;
-  zoneTier: 0 | 1 | 2 | 3 | 4 | 5;
+  zoneTier: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   displayName: string;
   entryNarrative: string;
   encounter: { activeCount: number; budget: number; maximumVisible: number };
@@ -284,7 +284,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { id: "orun-clockwork", kind: "npc" as const, state: "available" as const, label: "Orun, Archivhüter" },
       { id: "rootgear-foundry", kind: "encounter" as const, state: "available" as const, label: "Rootgear-Kernwächter" },
     ] },
-    sunwatch_bastion: { tier: 5 as const, displayName: "Sonnenwacht-Bastion", narrative: "Alte Wehrmauern ragen in den Himmel. Die Vorhut muss hier Stellung beziehen.", pois: [
+    sunwatch_bastion: { tier: 6 as const, displayName: "Sonnenwacht-Bastion", narrative: "Alte Wehrmauern ragen in den Himmel. Die Vorhut muss hier Stellung beziehen.", pois: [
       { id: "sunwatch-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein Sonnenwacht" },
       { id: "orun-sunwatch", kind: "npc" as const, state: "available" as const, label: "Orun, Archivhüter" },
       { id: "sunwatch-commander", kind: "encounter" as const, state: "available" as const, label: "Sonnenwacht-Kommandant" },
