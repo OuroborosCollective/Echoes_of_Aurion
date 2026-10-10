@@ -3,6 +3,11 @@ import { createPool, type Pool, type PoolConnection, type RowDataPacket, type Re
 import { verifyLocalPassword } from "./localAuth";
 import { AURION_PROBE_MAX_APPROVAL_MS, AURION_PROBE_SCOPES, parseAurionProbeRunIdentity, requireMatchingAurionProbeApproval, type AurionProbeRunIdentity, type AurionProbeScope } from "./aurionProductionProbeApprovalContract";
 
+/** Reserved only for the explicitly approved, server-owned gameplay probe. */
+import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
+export { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID };
+const GAMEPLAY_PROBE_LOCK_NAME = "aurion-production-gameplay-probe-v1";
+
 type ApprovalRow = RowDataPacket & { approvalId: string; runKey: string; runJson: string; scope: AurionProbeScope;
   approvedByUserId: number; purpose: string; approvedAtMs: number; expiresAtMs: number; consumedAtMs: number | null; revokedAtMs: number | null };
 export function probeRunKey(run: AurionProbeRunIdentity) { return createHash("sha256").update(JSON.stringify(parseAurionProbeRunIdentity(run))).digest("hex"); }
@@ -71,6 +76,52 @@ export class AurionProductionProbeStore {
       await connection.execute("UPDATE aurionProductionProbeApprovals SET revokedAtMs=? WHERE approvalId=?", [await dbNow(connection), approvalId]);
       return { approvalId, revoked: true };
     });
+  }
+  /**
+   * Serialize the one effectful probe across every runtime process. The reserved
+   * actor must never collide with an actual Aurion account; otherwise fail closed.
+   * The named lock is held for the complete join/readback/leave sequence.
+   */
+  async withExclusiveGameplayProbeSession<T>(work: () => Promise<T>): Promise<T> {
+    const connection = await this.pool.getConnection();
+    let locked = false;
+    let fenced = false;
+    const ownerId = randomBytes(16).toString("hex");
+    try {
+      const [lockRows] = await connection.execute<RowDataPacket[]>("SELECT GET_LOCK(?, 0) AS acquired", [GAMEPLAY_PROBE_LOCK_NAME]);
+      if (Number(lockRows[0]?.acquired) !== 1) throw new Error("PROBE_GAMEPLAY_SESSION_BUSY");
+      locked = true;
+      const [actors] = await connection.execute<RowDataPacket[]>("SELECT id FROM users WHERE id=? LIMIT 1", [AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID]);
+      if (actors.length !== 0) throw new Error("PROBE_GAMEPLAY_ACTOR_COLLISION");
+      // Autocommitted before any effect. Unlike GET_LOCK, this survives a lost
+      // connection or process. An orphan requires operator recovery; never steal it.
+      try {
+        await connection.execute("INSERT INTO aurionProductionProbeSessionFence (fenceName,ownerId,createdAtMs) VALUES (?,?,?)", [GAMEPLAY_PROBE_LOCK_NAME, ownerId, await dbNow(connection)]);
+        fenced = true;
+      } catch (error) {
+        if ((error as { code?: string }).code === "ER_DUP_ENTRY") throw new Error("PROBE_GAMEPLAY_SESSION_BUSY");
+        throw error;
+      }
+      return await work();
+    } finally {
+      if (locked) {
+        try { await connection.execute("SELECT RELEASE_LOCK(?)", [GAMEPLAY_PROBE_LOCK_NAME]); }
+        catch { /* The durable fence remains authoritative after connection loss. */ }
+        finally { connection.release(); }
+      } else connection.release();
+      // work() must not settle until effectful cleanup is durably read back.
+      // Release the dedicated connection first so a one-connection pool can recover.
+      if (fenced) {
+        const [removed] = await this.pool.execute<ResultSetHeader>("DELETE FROM aurionProductionProbeSessionFence WHERE fenceName=? AND ownerId=?", [GAMEPLAY_PROBE_LOCK_NAME, ownerId]);
+        if (removed.affectedRows !== 1) throw new Error("PROBE_GAMEPLAY_FENCE_LOST");
+      }
+    }
+  }
+  /** Public bootstrap status only proves that the deployed control-plane table exists. */
+  async isReady() {
+    const [rows] = await this.pool.query<RowDataPacket[]>("SELECT 1 AS ready FROM aurionProductionProbeApprovals LIMIT 1");
+    await this.pool.query("SELECT fenceName FROM aurionProductionProbeSessionFence LIMIT 1");
+    return Number(rows[0]?.ready ?? 1) === 1;
   }
   async consume(verifiedRun: AurionProbeRunIdentity, rawScope: unknown) {
     const run = parseAurionProbeRunIdentity(verifiedRun), scope = probeScope(rawScope);

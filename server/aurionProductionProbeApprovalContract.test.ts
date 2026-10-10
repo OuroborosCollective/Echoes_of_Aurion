@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   AURION_PROBE_MAX_APPROVAL_MS,
   AURION_PROBE_SCOPES,
+  AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE,
+  aurionProbeMutationAuthority,
   parseAurionProbeRunIdentity,
   requireMatchingAurionProbeApproval,
 } from "./aurionProductionProbeApprovalContract";
@@ -47,6 +49,16 @@ describe("Aurion production-probe approval boundary (#833)", () => {
     });
     expect(JSON.stringify(bound)).not.toMatch(/app_session_id|session|token|cookie|schema|mutation/i);
     expect(Object.isFrozen(bound)).toBe(true);
+  });
+
+  it("keeps the short canonical gameplay session in its own explicitly effectful scope", () => {
+    expect(AURION_PROBE_SCOPES).toContain(AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE);
+    expect(aurionProbeMutationAuthority(AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE)).toBe("ephemeral-probe-session");
+    for (const scope of AURION_PROBE_SCOPES.filter(scope => scope !== AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE)) {
+      expect(aurionProbeMutationAuthority(scope)).toBe("none");
+    }
+    expect(() => requireMatchingAurionProbeApproval(approval({ scopes: [READBACK_SCOPE] }), RUN,
+      AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE, NOW)).toThrow("PROBE_SCOPE_INVALID");
   });
 
   it("rejects invalid identity fields and unexpected properties", () => {

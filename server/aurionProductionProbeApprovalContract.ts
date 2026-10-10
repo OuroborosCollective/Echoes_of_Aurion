@@ -16,12 +16,28 @@ export const AURION_PROBE_ENVIRONMENT = "production";
 export const AURION_PROBE_OIDC_AUDIENCE = "aurion-production-probe";
 export const AURION_PROBE_MAX_APPROVAL_MS = 5 * 60 * 1000;
 
+export const AURION_PROBE_ADMIN_READBACK_SCOPE = "aurion.probe.admin-readback";
+export const AURION_PROBE_GAMEPLAY_READBACK_SCOPE = "aurion.probe.gameplay-readback";
+/**
+ * This scope deliberately permits a short, canonical join/leave session. It is
+ * separate from every read-only probe and can never be inferred from another
+ * approval.
+ */
+export const AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE = "aurion.probe.gameplay-session-readback";
+
 export const AURION_PROBE_SCOPES = [
-  "aurion.probe.admin-readback",
-  "aurion.probe.gameplay-readback",
+  AURION_PROBE_ADMIN_READBACK_SCOPE,
+  AURION_PROBE_GAMEPLAY_READBACK_SCOPE,
+  AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE,
 ] as const;
 
 export type AurionProbeScope = (typeof AURION_PROBE_SCOPES)[number];
+export type AurionProbeMutationAuthority = "none" | "ephemeral-probe-session";
+
+/** The client and server must agree on the one effectful scope. */
+export function aurionProbeMutationAuthority(scope: AurionProbeScope): AurionProbeMutationAuthority {
+  return scope === AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE ? "ephemeral-probe-session" : "none";
+}
 
 export type AurionProbeRunIdentity = Readonly<{
   repository: string;

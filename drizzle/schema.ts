@@ -2187,7 +2187,7 @@ export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents",
 /** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
 export * from "./aurionWorldFoundationSchema";
 
-/** Owner-confirmed one-shot read-only production probes, never gameplay authority. */
+/** Owner-confirmed one-shot production probes; the session scope is limited to a canonical ephemeral join/leave and never grants player or schema authority. */
 export const aurionProductionProbeApprovals = mysqlTable("aurionProductionProbeApprovals", {
   approvalId: varchar("approvalId", { length: 32 }).primaryKey(),
   runKey: varchar("runKey", { length: 64 }).notNull(),
@@ -2200,3 +2200,10 @@ export const aurionProductionProbeApprovals = mysqlTable("aurionProductionProbeA
   consumedAtMs: bigint("consumedAtMs", { mode: "number" }),
   revokedAtMs: bigint("revokedAtMs", { mode: "number" }),
 }, table => [uniqueIndex("aurionProductionProbeApprovals_run_scope_uq").on(table.runKey, table.scope)]);
+
+/** Durable probe exclusion: connection loss never authorizes another session. */
+export const aurionProductionProbeSessionFence = mysqlTable("aurionProductionProbeSessionFence", {
+  fenceName: varchar("fenceName", { length: 64 }).primaryKey(),
+  ownerId: varchar("ownerId", { length: 32 }).notNull(),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+});

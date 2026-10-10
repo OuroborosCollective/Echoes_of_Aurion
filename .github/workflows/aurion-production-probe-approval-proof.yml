@@ -3,6 +3,11 @@ on:
   pull_request:
     paths:
       - 'server/aurionProductionProbe*'
+      - 'server/aurionProductionGameplaySession*'
+      - 'server/aurionProductionGameplayPersistence*'
+      - 'server/zoneRuntime.ts'
+      - 'shared/aurionProductionProbeEvidence.ts'
+      - 'scripts/aurion-probe-bootstrap*'
       - 'server/_core/index.ts'
       - 'scripts/aurion-production-probe-client.mjs'
       - 'scripts/verify-aurion-production-gameplay.ts'
@@ -44,5 +49,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
       - run: pnpm check
+      - run: node --test scripts/aurion-probe-bootstrap.test.mjs
       - name: Real MariaDB races, replay, revocation, roles and local signed-JWT contracts
-        run: pnpm exec vitest run server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts server/aurionProductionProbeHttpMariaDb.test.ts
+        # These files deliberately share the real global probe lock and isolated DB.
+        run: pnpm exec vitest run --no-file-parallelism server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts server/aurionProductionProbeHttpMariaDb.test.ts server/aurionProductionGameplaySession.test.ts server/aurionProductionGameplayPersistenceMariaDb.test.ts server/aurionProductionGameplayReadback.test.ts server/aurionProductionProbeZone.test.ts server/zoneRegistry.test.ts
