@@ -2187,7 +2187,7 @@ export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents",
 /** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
 export * from "./aurionWorldFoundationSchema";
 
-/** Owner-confirmed one-shot read-only production probes, never gameplay authority. */
+/** Owner-confirmed one-shot production probes; the session scope is limited to a canonical ephemeral join/leave and never grants player or schema authority. */
 export const aurionProductionProbeApprovals = mysqlTable("aurionProductionProbeApprovals", {
   approvalId: varchar("approvalId", { length: 32 }).primaryKey(),
   runKey: varchar("runKey", { length: 64 }).notNull(),

@@ -8,6 +8,8 @@ on:
       - ".github/workflows/aurion-wasd-migration-ledger.yml"
       - "scripts/build-aurion-wasd-migration-ledger.mjs"
       - "scripts/build-aurion-wasd-migration-ledger.test.mjs"
+      - "scripts/aurion-probe-bootstrap.mjs"
+      - "scripts/aurion-probe-bootstrap.test.mjs"
       - "Dockerfile"
       - "docker-compose.traefik.yml"
       - "package.json"
@@ -31,6 +33,11 @@ on:
         description: Exact main revision whose Memory snapshot has been synchronized and read back.
         required: true
         type: string
+      bootstrap_probe_control_plane:
+        description: Bootstrap from the reviewed legacy revision only; requires the protected production environment approval.
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   # A push and a trusted manual dispatch for main must never promote in
@@ -584,6 +591,8 @@ jobs:
       actions: read
       attestations: read
       id-token: write
+    env:
+      BOOTSTRAP_PROBE_CONTROL_PLANE: ${{ inputs.bootstrap_probe_control_plane }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -603,8 +612,47 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Require owner-approved one-shot OIDC preflight before mutation
+      - name: Require owner-approved OIDC preflight or reviewed legacy bootstrap
         run: |
+          set -euo pipefail
+          status_file="$(mktemp)"
+          headers_file="$(mktemp)"
+          trap 'rm -f "$status_file" "$headers_file"' EXIT
+          if ! status="$(curl --silent --show-error --dump-header "$headers_file" --output "$status_file" --write-out '%{http_code}' --connect-timeout 10 --max-time 20 --retry 2 --retry-all-errors https://arelogic.space/api/production-probe/bootstrap-status)"; then
+            echo 'PROBE_CONTROL_PLANE_STATUS_UNAVAILABLE' >&2
+            exit 70
+          fi
+          if [[ "${BOOTSTRAP_PROBE_CONTROL_PLANE:-false}" == "true" ]]; then
+            # The protected GitHub production environment is the independent
+            # owner confirmation for this exact dispatched revision. A 404 is
+            # insufficient on its own: require the positively identified,
+            # hard-pinned legacy deployment below as well.
+            # The old SPA fallback reports a 200 HTML document for unknown API
+            # paths, so recognize that exact legacy absence without treating a
+            # malformed JSON control-plane response as an allowed bootstrap.
+            if [[ "$status" != "404" ]] && ! { [[ "$status" == "200" ]] && grep -Eiq '^content-type:[[:space:]]*text/html' "$headers_file"; }; then
+              echo 'PROBE_BOOTSTRAP_NOT_ALLOWED_AFTER_CONTROL_PLANE_EXISTS' >&2
+              exit 70
+            fi
+            node --input-type=module <<'NODE'
+          import { readLegacyProbeBootstrap } from './scripts/aurion-probe-bootstrap.mjs';
+          console.log(JSON.stringify(await readLegacyProbeBootstrap()));
+          NODE
+            exit 0
+          fi
+          if [[ "${BOOTSTRAP_PROBE_CONTROL_PLANE:-false}" != "false" && -n "${BOOTSTRAP_PROBE_CONTROL_PLANE:-}" ]]; then
+            echo 'PROBE_BOOTSTRAP_INPUT_INVALID' >&2
+            exit 70
+          fi
+          if [[ "$status" != "200" ]]; then
+            echo 'PROBE_CONTROL_PLANE_REQUIRED' >&2
+            exit 70
+          fi
+          STATUS_FILE="$status_file" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const status=JSON.parse(fs.readFileSync(process.env.STATUS_FILE,'utf8'));
+          if(status.recordType!=='aurion.production-probe-control-plane'||status.schemaVersion!==1||status.state!=='ready'||status.mutationAuthority!=='none') throw new Error('PROBE_CONTROL_PLANE_STATUS_INVALID');
+          NODE
           node --input-type=module <<'NODE'
           import { executeProductionProbe } from './scripts/aurion-production-probe-client.mjs';
           const receipt = await executeProductionProbe('aurion.probe.admin-readback');

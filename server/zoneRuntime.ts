@@ -28,6 +28,7 @@ import {
 import { computeRngRootHash, resolveAddressableRandomU32, type RngEventRecord } from "./determinism/aurionAddressableRandom";
 import { globalTickRecorder, AurionTickRecorder } from "./causality/tickRecorder";
 import { globalCausalPersistence } from "./causality/persistence";
+import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
 import { activeProvenance } from "./aurionProvenance";
 import {
   makeZoneConnectionId,
@@ -324,6 +325,14 @@ export class AuthoritativeMovementZone {
     this.lastCommittedState = this.getCanonicalZoneState();
   }
 
+  restorePersistedHead(state: CanonicalZoneState, receipt: AurionCausalTickReceipt): void {
+    if (state.tick !== receipt.tick || hashCanonicalZoneState(state) !== receipt.postStateHash
+      || computeReceiptHash(receipt) !== receipt.receiptHash) throw new Error("ZONE_PERSISTED_HEAD_INVALID");
+    this.restoreFromCanonicalState(state, receipt.receiptHash);
+    this.lastReceipt = receipt;
+    this.evidenceRecorder.record({ receipt, postState: state });
+  }
+
   join(values: { userId: number; socket: WebSocket; combatProfile?: ZoneCombatProfile }): ZoneWelcome {
     if (!Number.isSafeInteger(values.userId) || values.userId < 1) throw new Error("ZONE_USER_INVALID");
     const profile = values.combatProfile ?? DEFAULT_ZONE_COMBAT_PROFILE;
@@ -395,6 +404,9 @@ export class AuthoritativeMovementZone {
   connectionIdForUser(userId: number): string | undefined {
     return this.peersByEntityId.get(`player:${userId}`)?.connectionId;
   }
+
+  async flushEvidencePersistence(): Promise<void> { await this.evidenceRecorder.flushPersistence(); }
+  recordedTick(tick: number) { return this.evidenceRecorder.getEntry(this.zoneId, tick); }
 
   nextClientSequenceForUser(userId: number): number {
     const peer = this.peersByEntityId.get(`player:${userId}`);
@@ -693,7 +705,11 @@ export class AuthoritativeMovementZone {
     const resourcesChanged = this.resourceRuntime.tick(this.tickNumber);
     captureAuthorityStage("RESOURCE");
     // 05 mob FSM.
-    const mobsChanged = this.mobRuntime.tick(this.presences(), this.tickNumber);
+    // The reserved diagnostic actor participates in membership receipts, never
+    // hostile targeting. Identity-based policy is identical during causal replay.
+    const mobsChanged = this.mobRuntime.tick(this.presences().filter(
+      presence => presence.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
+    ), this.tickNumber);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -892,17 +908,39 @@ export class AuthoritativeMovementZone {
 }
 
 export class ZoneRegistry {
+  private readonly probeOwned = new Set<AuthoritativeMovementZone>();
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
 
+  /** Observational lookup. Unlike get(), this never starts a canonical zone. */
+  find(zoneId: ZoneId): AuthoritativeMovementZone | undefined {
+    return this.zones.get(zoneId);
+  }
+
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
-    if (existing) return existing;
+    if (existing) { this.probeOwned.delete(existing); return existing; }
     const zone = new AuthoritativeMovementZone(zoneId);
     this.zones.set(zoneId, zone);
     this.sortedZonesDirty = true;
     return zone;
+  }
+
+  /** Called only after scope consumption, with a verified persisted head. */
+  installProbeZone(zone: AuthoritativeMovementZone): void {
+    if (this.zones.has(zone.zoneId)) throw new Error("PROBE_ZONE_ACTIVATION_RACE");
+    this.zones.set(zone.zoneId, zone);
+    this.probeOwned.add(zone);
+    this.sortedZonesDirty = true;
+  }
+
+  releaseProbeZone(zone: AuthoritativeMovementZone): void {
+    if (!this.probeOwned.has(zone) || this.zones.get(zone.zoneId) !== zone) return;
+    if (zone.getPendingIntents().length || zone.getCanonicalZoneState().players.length) throw new Error("PROBE_ZONE_CLEANUP_REQUIRED");
+    this.probeOwned.delete(zone);
+    this.zones.delete(zone.zoneId);
+    this.sortedZonesDirty = true;
   }
 
   tick(): void {
