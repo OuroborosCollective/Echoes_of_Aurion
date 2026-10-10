@@ -1,0 +1,48 @@
+name: Aurion Production Probe Approval Proof
+on:
+  pull_request:
+    paths:
+      - 'server/aurionProductionProbe*'
+      - 'server/_core/index.ts'
+      - 'scripts/aurion-production-probe-client.mjs'
+      - 'scripts/verify-aurion-production-gameplay.ts'
+      - 'client/src/components/ProductionProbeApproval*'
+      - 'drizzle/**'
+      - '.github/workflows/aurion-production-probe-approval-proof.yml'
+      - '.github/workflows/deploy-aurion-zone-runtime.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-approval-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-probe-test
+          MARIADB_DATABASE: aurion_probe_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-probe-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-probe-test@127.0.0.1:3306/aurion_probe_test
+      AURION_PROBE_E2E: '1'
+      JWT_SECRET: aurion-disposable-probe-signing-key-never-production
+      VITE_APP_ID: aurion-isolated-probe-test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
+      - run: pnpm check
+      - name: Real MariaDB races, replay, revocation, roles and local signed-JWT contracts
+        run: pnpm exec vitest run server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts server/aurionProductionProbeHttpMariaDb.test.ts

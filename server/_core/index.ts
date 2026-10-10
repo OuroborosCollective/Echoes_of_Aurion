@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerProductionProbeRoutes } from "../aurionProductionProbeHttp";
 import { createCorsOriginResolver } from "./corsOrigin";
 import express from "express";
 import helmet from "helmet";
@@ -94,6 +95,7 @@ async function startServer(){
     npcLife: autonomousNpcLife.readback(),
     causalAssurance: globalAssuranceService.latest()
   });
+  registerProductionProbeRoutes(app, healthPayload);
   app.get("/healthz", (_req, res) => res.status(200).json(healthPayload()));
   app.get("/api/health", (_req, res) => res.status(200).json(healthPayload()));
   registerGameDevelopmentStudioRuntime(app,gameDevelopmentStudio);registerGlbSmartUpload(app);registerGlbZipUpload(app);registerGlbAssetRoutes(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);

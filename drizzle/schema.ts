@@ -2186,3 +2186,17 @@ export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents",
 
 /** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
 export * from "./aurionWorldFoundationSchema";
+
+/** Owner-confirmed one-shot read-only production probes, never gameplay authority. */
+export const aurionProductionProbeApprovals = mysqlTable("aurionProductionProbeApprovals", {
+  approvalId: varchar("approvalId", { length: 32 }).primaryKey(),
+  runKey: varchar("runKey", { length: 64 }).notNull(),
+  runJson: text("runJson").notNull(),
+  scope: varchar("scope", { length: 64 }).notNull(),
+  approvedByUserId: int("approvedByUserId").notNull(),
+  purpose: varchar("purpose", { length: 240 }).notNull(),
+  approvedAtMs: bigint("approvedAtMs", { mode: "number" }).notNull(),
+  expiresAtMs: bigint("expiresAtMs", { mode: "number" }).notNull(),
+  consumedAtMs: bigint("consumedAtMs", { mode: "number" }),
+  revokedAtMs: bigint("revokedAtMs", { mode: "number" }),
+}, table => [uniqueIndex("aurionProductionProbeApprovals_run_scope_uq").on(table.runKey, table.scope)]);
