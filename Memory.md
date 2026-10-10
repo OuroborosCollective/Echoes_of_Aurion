@@ -1449,3 +1449,5 @@ Status: VERIFIED documentation diff; merge pending.
 Change: Replace the two remaining active AX1 journal/readmodel assignments in causal-rumor-and-investigation-gameplay.md with Aurion client/readmodel terminology.
 Learned: The GitBook gameplay page must follow the same Aurion ownership boundary as the shared journal contract; AX1 has no active runtime role.
 Evidence: Exactly two wording substitutions; no AX1 reference remains in the page; frontmatter, GitBook blocks, SUMMARY.md and sync configuration preserved. Documentation-only; no runtime behavior or production recovery is claimed.
+Task: Align the two remaining GitBook journal/readmodel references with Aurion ownership.
+Open: Production recovery remains unverified; this documentation change does not restore a previous release or repair the live schema.
