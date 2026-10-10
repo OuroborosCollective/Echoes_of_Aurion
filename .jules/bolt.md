@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2026-10-10 - Optimize Wolfram CAG probes
+**Learning:** When constructing Wolfram Language queries for CAG, avoid `Flatten` and `Join` when finding global min/max of matrices. Instead, pass matrices directly to `Min` and `Max` (which auto-flatten). However, you *must* use `Flatten` when calculating the overall scalar `Variance` of a matrix (e.g., `Variance[Flatten[h]]`), because calling it directly on a matrix computes column-wise variances. Use `Differences[Transpose[m]]` rather than `Map[Differences, m]` to compute horizontal differences efficiently.
+**Action:** Double-check whether an array method expects a flattened or unflattened matrix array before optimization.
