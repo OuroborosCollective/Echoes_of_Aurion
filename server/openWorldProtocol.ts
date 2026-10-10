@@ -12,7 +12,7 @@ import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldCl
 import type { WorldEpochReaction } from "./worldEpochReactionProtocol";
 import { worldServiceNpcs, type WorldServiceNpc } from "../shared/worldServiceNpcs";
 
-export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault" | "starfall_crater" | "clockwork_woods" | "sunwatch_bastion";
+export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault" | "starfall_crater" | "clockwork_woods" | "sunwatch_bastion" | "whispering_frontier";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
 export type PointOfInterestKind = "portal" | "npc" | "encounter" | "landmark";
 export type TerrainSurfaceKey = "grass" | "flower_meadow" | "earth" | "farmland" | "garden_parcels" | "starpath" | "starpath_crossing";
@@ -44,7 +44,7 @@ export type OpenWorldProfile = {
 export type OpenWorldSnapshot = {
   revision: 1;
   zoneId: OpenWorldZoneKey;
-  zoneTier: 0 | 1 | 2 | 3 | 4 | 5;
+  zoneTier: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   displayName: string;
   entryNarrative: string;
   encounter: { activeCount: number; budget: number; maximumVisible: number };
@@ -165,6 +165,8 @@ function propsForZone(zoneId: OpenWorldZoneKey): OpenWorldSnapshot["props"] {
 }
 
 export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZoneKey {
+  if (input.activeQuest === "whispering_frontier_recon") return "whispering_frontier";
+  if (input.completed.includes("sunwatch_vanguard")) return "whispering_frontier";
   if (input.activeQuest === "clockwork_core") return "clockwork_woods";
   if (input.activeQuest === "sunwatch_vanguard") return "sunwatch_bastion";
   if (input.completed.includes("clockwork_core")) return "clockwork_woods";
@@ -225,7 +227,7 @@ function npcReadModels(input: OpenWorldProfile, reaction: WorldReaction) {
 
 function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, resolutionIndex: number, epochReaction?: WorldEpochReaction): WorldSignal[] {
   const signals: WorldSignal[] = [];
-  const epochSector = epochReaction?.sectors[({ observatory_threshold: 0, windhollow: 1, emberfall: 2, cinder_vault: 3, starfall_crater: 4, clockwork_woods: 5, sunwatch_bastion: 6 } as const)[zoneId] % Math.max(1, epochReaction?.sectors.length ?? 1)];
+  const epochSector = epochReaction?.sectors[({ observatory_threshold: 0, windhollow: 1, emberfall: 2, cinder_vault: 3, starfall_crater: 4, clockwork_woods: 5, sunwatch_bastion: 6, whispering_frontier: 7 } as const)[zoneId] % Math.max(1, epochReaction?.sectors.length ?? 1)];
   if (epochSector) {
     signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:ecology`, kind: "ecology", regionId: zoneId, magnitude: epochSector.resources.forestHealth - 0.5, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
     signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:economy`, kind: "economy", regionId: zoneId, magnitude: epochSector.resources.food - 0.5, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
@@ -234,7 +236,7 @@ function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, reso
   }
   if (input.activeQuest) signals.push({ id: `quest:${input.activeQuest}`, kind: "resonance", regionId: zoneId, magnitude: 0.3, sourceReceiptId: `quest-state:${input.activeQuest}`, resolutionIndex });
   if (input.completed.length > 0) signals.push({ id: `progress:${input.completed.length}`, kind: "player_event", regionId: zoneId, magnitude: Math.min(1, input.completed.length * 0.2), sourceReceiptId: `quest-completed:${input.completed.slice().sort().join(",")}`, resolutionIndex });
-  if (zoneId === "emberfall" || zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion") signals.push({ id: `hazard:${zoneId}`, kind: "hazard", regionId: zoneId, magnitude: zoneId === "sunwatch_bastion" ? 0.9 : zoneId === "clockwork_woods" ? 0.85 : zoneId === "starfall_crater" ? 0.8 : zoneId === "cinder_vault" ? 0.7 : 0.35, sourceReceiptId: `zone:${zoneId}`, resolutionIndex });
+  if (zoneId === "emberfall" || zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion" || zoneId === "whispering_frontier") signals.push({ id: `hazard:${zoneId}`, kind: "hazard", regionId: zoneId, magnitude: zoneId === "whispering_frontier" ? 0.95 : zoneId === "sunwatch_bastion" ? 0.9 : zoneId === "clockwork_woods" ? 0.85 : zoneId === "starfall_crater" ? 0.8 : zoneId === "cinder_vault" ? 0.7 : 0.35, sourceReceiptId: `zone:${zoneId}`, resolutionIndex });
   return signals;
 }
 
@@ -245,6 +247,7 @@ function primaryEncounterFor(input: OpenWorldProfile): OpenWorldSnapshot["primar
   if (input.activeQuest === "starfall_resonance") return { id: "starfall-guardian", label: "Sternenfall-Wächter", encounterKey: "starfall_crater", narrative: "Die Resonanz des Kraters beschwört den Wächter." };
   if (input.activeQuest === "clockwork_core") return { id: "rootgear-foundry", label: "Rootgear-Kernwächter", encounterKey: "rootgear_foundry", narrative: "Das Uhrwerk erwacht nur durch die bestätigte Questbegegnung." };
   if (input.activeQuest === "sunwatch_vanguard") return { id: "sunwatch-commander", label: "Sonnenwacht-Kommandant", encounterKey: "sunwatch_bastion", narrative: "Der gefallene Kommandant verteidigt die Ruinen der Bastion." };
+  if (input.activeQuest === "whispering_frontier_recon") return { id: "frontier-guardian", label: "Grenz-Wächter", encounterKey: "whispering_frontier", narrative: "Ein uralter Wächter blockiert den Pfad zur Grenze." };
   if (input.canEnterDungeon) return { id: "cinder-guardian", label: "Glutwächter", encounterKey: "cinder_vault", narrative: "Der geborgene Schlüssel erlaubt den Eintritt ins Aschengewölbe." };
   return null;
 }
@@ -289,6 +292,11 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { id: "orun-sunwatch", kind: "npc" as const, state: "available" as const, label: "Orun, Archivhüter" },
       { id: "sunwatch-commander", kind: "encounter" as const, state: "available" as const, label: "Sonnenwacht-Kommandant" },
     ] },
+    whispering_frontier: { tier: 6 as const, displayName: "Flüsternde Grenze", narrative: "Neblige Pfade verbergen alte Ruinen am Rande der bekannten Welt.", pois: [
+      { id: "frontier-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein Grenze" },
+      { id: "lyra-frontier", kind: "npc" as const, state: "available" as const, label: "Lyra, Grenzbotin" },
+      { id: "frontier-guardian", kind: "encounter" as const, state: "available" as const, label: "Grenz-Wächter" },
+    ] },
   }[zoneId];
   // Quest progress changes the projected zone as soon as the Ember Key is turned in.
   // Keep the confirmed dungeon route visible in that zone and subsequent zones.
@@ -312,7 +320,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
   const polity = resolvePolityState({
     polityId: "asterion_compact",
     governmentType: "council",
-    territoryIds: ["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"],
+    territoryIds: ["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion", "whispering_frontier"],
     stability: 0.74,
     activeDiplomacy: ["alliance", "trade"],
     warSignals: signals,
@@ -348,7 +356,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     aggressionHazard,
   };
   const layout = resolveExpeditionLayout({ expeditionId: `${zoneId}_expedition`, seed: `echoes-of-aurion-v1:${zoneId}`, tier: zone.tier + 1, resolutionIndex });
-  const leadMonster = resolveMonsterSpawn({ spawnerId: `${zoneId}_spawner`, biome: (zoneId === "emberfall" || zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion") ? "desert" : zoneId === "windhollow" ? "mountain" : "forest", packIndex: 0, resolutionIndex });
+  const leadMonster = resolveMonsterSpawn({ spawnerId: `${zoneId}_spawner`, biome: (zoneId === "emberfall" || zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion" || zoneId === "whispering_frontier") ? "desert" : zoneId === "windhollow" ? "mountain" : "forest", packIndex: 0, resolutionIndex });
   const openingStrike = resolveCombatStrike({ action: "melee", attacker: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100 }, defender: { id: leadMonster.id, combatLevel: Math.max(1, leadMonster.strength), stamina: 100, health: 40 + leadMonster.resilience * 4 }, weaponBonus: Math.floor(input.level / 3), receiptId: `preview:${layout.receiptHash}`, resolutionIndex });
   const spellPreview = resolveSpellCast({ caster: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100, mana: 30 }, spell: { id: "starfall_spark", kind: "lightning", cost: 8, potency: 14, effect: "resonance_burst" }, weatherTone: world.reaction.weatherTone, receiptId: `preview:spell:${layout.receiptHash}`, resolutionIndex });
   const expedition = { layout, leadMonster, openingStrike, spellPreview };
@@ -364,7 +372,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     construction: resolveConstructionQueue({ tasks: [{ structureId: `${zoneId}_gate`, targetLevel: zone.tier + 1 }, { structureId: `${zoneId}_observatory`, targetLevel: 1 }], receiptId: world.reaction.id }),
     house: resolveHouse({ ownerId: "starwardens", plotId: `${zoneId}_house`, currentUpgrades: zone.tier, targetUpgrade: input.level >= 12 ? zone.tier + 1 : zone.tier, receiptId: world.reaction.id }),
     faith: resolveFaith({ religionId: "aurion_accord", adherents: ["lyra", "orun"], influence: 0.35 + polity.stability * 0.3, receiptId: world.reaction.id }),
-    gate: resolveGate({ gateId: `${zoneId}_gate`, state: (zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion") && !input.canEnterDungeon ? "locked" : "open", actorPermissions: input.canEnterDungeon ? ["gate_access"] : [], receiptId: world.reaction.id }),
+    gate: resolveGate({ gateId: `${zoneId}_gate`, state: (zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion" || zoneId === "whispering_frontier") && !input.canEnterDungeon ? "locked" : "open", actorPermissions: input.canEnterDungeon ? ["gate_access"] : [], receiptId: world.reaction.id }),
     structure: resolveStructureDamage({ structureId: `${zoneId}_wall`, currentHitpoints: 100, damage: Math.max(0, Math.round(world.reaction.threatDelta * 20)), receiptId: world.reaction.id }),
   };
   const inventory = resolveInventory({

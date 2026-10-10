@@ -22,6 +22,7 @@ describe("open-world protocol", () => {
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 4, completed: ["astral_call", "archive_of_echoes"], activeQuest: null, canEnterDungeon: true }))).toBe("cinder_vault");
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true }))).toBe("starfall_crater");
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true }))).toBe("sunwatch_bastion");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 6, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "sunwatch_vanguard"], activeQuest: null, canEnterDungeon: true }))).toBe("whispering_frontier");
   });
 
   it("keeps completed-quest receipt identity independent of persistence row order", () => {
@@ -107,7 +108,7 @@ describe("open-world protocol", () => {
     expect(lyra?.autonomy.goal).toBe("expand_influence");
     expect(lyra?.autonomy.decisionHash).toHaveLength(64);
     expect(snapshot.polity).toMatchObject({ polityId: "asterion_compact", governmentType: "council" });
-    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "clockwork_woods", "emberfall", "observatory_threshold", "starfall_crater", "sunwatch_bastion", "windhollow"]);
+    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "clockwork_woods", "emberfall", "observatory_threshold", "starfall_crater", "sunwatch_bastion", "whispering_frontier", "windhollow"]);
     expect(JSON.stringify(snapshot)).not.toContain("private key");
   });
 

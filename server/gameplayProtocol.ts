@@ -1,9 +1,9 @@
 import { ax1DamageForAction } from "./ax1CombatAuthority";
 
-export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key" | "starfall_resonance" | "clockwork_core" | "sunwatch_vanguard";
+export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key" | "starfall_resonance" | "clockwork_core" | "sunwatch_vanguard" | "whispering_frontier_recon";
 export type QuestState = "locked" | "available" | "active" | "completed";
 export type McpAction = "run" | "attack" | "interact" | "skill_1" | "skill_2" | "skill_3" | "skill_4" | "skill_5" | "skill_6" | "skill_7" | "skill_8" | "skill_9";
-export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault" | "starfall_crater" | "rootgear_foundry" | "sunwatch_bastion";
+export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault" | "starfall_crater" | "rootgear_foundry" | "sunwatch_bastion" | "whispering_frontier";
 
 export type QuestDefinition = {
   key: QuestKey;
@@ -70,6 +70,15 @@ export const aurionQuestline: readonly QuestDefinition[] = [
     requires: "starfall_resonance",
     reward: { xp: 650, points: 100 },
   },
+  {
+    key: "whispering_frontier_recon",
+    giver: "Lyra",
+    title: "Aufklärung der Flüsternden Grenze",
+    objective: "Erkunde das neue Grenzgebiet und besiege den Grenz-Wächter.",
+    requiredLevel: 6,
+    requires: "sunwatch_vanguard",
+    reward: { xp: 800, points: 150 },
+  },
 ] as const;
 
 export const dungeonDefinition = {
@@ -102,6 +111,7 @@ export const aurionEncounters: readonly {
   { key: "starfall_crater", name: "Sternenfall-Krater", enemyName: "Sternenfall-Wächter", maxBossHp: 320, questKey: "starfall_resonance" },
   { key: "rootgear_foundry", name: "Rootgear Foundry", enemyName: "Rootgear-Kernwächter", maxBossHp: 400, questKey: "clockwork_core" },
   { key: "sunwatch_bastion", name: "Sonnenwacht-Bastion", enemyName: "Sonnenwacht-Kommandant", maxBossHp: 400, questKey: "sunwatch_vanguard" },
+  { key: "whispering_frontier", name: "Flüsternde Grenze", enemyName: "Grenz-Wächter", maxBossHp: 480, questKey: "whispering_frontier_recon" },
 ] as const;
 
 export function getQuest(key: QuestKey): QuestDefinition {
