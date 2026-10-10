@@ -1387,3 +1387,57 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-10 — PR #834 — [WIP] Aurion #833: owner-approved one-shot OIDC production probes
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=834 merge=32412ac1246470b6935491601243ec06561b4385 -->
+Task: Merge PR #834 into `main` — [WIP] Aurion #833: owner-approved one-shot OIDC production probes.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-production-probe-approval-proof.yml`
+- `.github/workflows/aurion-production-schema-readback.yml`
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `.github/workflows/aurion-schema-reconciliation-proof.yml`
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `Memory.md`
+- `client/src/components/ProductionProbeApproval.tsx`
+- `client/src/pages/Operations.tsx`
+- `config/aurion-migration-wave-manifest.json`
+- `deploy/aurion-production-schema-apply-core`
+- `deploy/promote-aurion-zone-runtime.sh`
+- `deploy/verify-aurion-production-schema-apply-artifact.mjs`
+- `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`
+- `drizzle/0072_aurion_production_probe_approvals.sql`
+- `drizzle/meta/_journal.json`
+- `drizzle/schema.ts`
+- `scripts/aurion-production-probe-client.mjs`
+- `scripts/aurionProductionSchemaReconciliation.ts`
+- `scripts/aurionSchemaRepairPlan.ts`
+- `scripts/build-aurion-production-apply-artifact.mjs`
+- `scripts/build-aurion-production-reconcile-artifact.mjs`
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `scripts/schema-repair-proof-fixture.mjs`
+- `scripts/verify-aurion-production-gameplay.ts`
+- `server/_core/index.ts`
+- `server/aurionProductionGameplayReadback.test.ts`
+- `server/aurionProductionProbeApprovalContract.test.ts`
+- `server/aurionProductionProbeApprovalContract.ts`
+- `server/aurionProductionProbeHttp.ts`
+- `server/aurionProductionProbeHttpMariaDb.test.ts`
+- `server/aurionProductionProbeMariaDb.test.ts`
+- `server/aurionProductionProbeOidc.test.ts`
+- `server/aurionProductionProbeOidc.ts`
+- `server/aurionProductionProbeStore.ts`
+- `server/aurionProductionSchemaReconcileDockerRunner.test.ts`
+- `server/aurionSchemaRepairPlan.test.ts`
+- `server/blocker3Compliance.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/834
+- Merge commit: `32412ac1246470b6935491601243ec06561b4385`
+- PR head: `fad08ea77794a62c641d8ff45efe384c1a351674`
+- Merged at: 2026-10-10T00:01:24Z
+- Post-merge workflow run: 38007199772
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
