@@ -34,7 +34,7 @@ A rumor is never world truth. A player or NPC may act on a rumor, but only an ac
 | GitHub #781 | Player-facing causal rumor projection: claims, provenance, trust, disclosure and expiry |
 | GitHub #782 | Investigation graph: clues, prerequisites, contradictions, corroboration and deductions |
 | GitHub #783 | Rumor-to-behavior bridge: bounded belief inputs for existing NPC/economy planners       |
-| GitHub #784 | Investigation journal/rumor board: read-only AX1 projection                             |
+| GitHub #784 | Investigation journal/rumor board: read-only Aurion client projection                             |
 | GitHub #785 | Umbrella dependency and evidence gate                                                   |
 
 Existing foundations remain authoritative: #487 Information Ecology, #595 Systemic Quest Generation, #486 NPC planner, #544 Emergent Life and #558 Emergent World Master Integration.
@@ -86,7 +86,7 @@ False information is allowed to change an actor's decision. It is not allowed to
 
 ## Presentation boundary
 
-AX1/browser receives a server-confirmed readmodel. The journal may group clues, display confidence/source classes, show discovered relations and submit deduction intents. It cannot invent clues, mark truth, grant rewards or complete investigations locally.
+The Aurion client in the browser receives a server-confirmed Aurion readmodel. The journal may group clues, display confidence/source classes, show discovered relations and submit deduction intents. It cannot invent clues, mark truth, grant rewards or complete investigations locally.
 
 ## Research basis
 
