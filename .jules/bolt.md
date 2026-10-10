@@ -4,3 +4,6 @@
 ## 2024-10-25 - Avoid Map value Array conversion and object allocation in ZoneRuntime snapshotting
 **Learning:** In the high-frequency ZoneRuntime `combatants()` loop, mapping peers and mob state into new `ConfirmedZoneCombatant` objects inside arrays (`Array.from().map()` equivalent) on every tick triggered excessive garbage collection and allocation overhead during combat and presence simulation.
 **Action:** Always reuse cached arrays (setting `.length = index` manually) and pre-allocated mutable target objects when generating transient snapshot arrays in high-frequency authoritative loops. Update the `ZoneRuntime` to keep a `cachedCombatants` array and mutate its objects instead of pushing new `{...}` allocations on every tick.
+## 2024-10-25 - Object freezing caching trap
+**Learning:** Returning a cached, mutable array from an internal state method like `combatants()` can break tests or logic that cache snapshots if they expect the array elements to remain immutable.
+**Action:** When a method returns a cached array that mutates on every tick, ensure that any external `combatSnapshot()` methods clone and freeze the array elements if downstream assertions expect frozen state over time.

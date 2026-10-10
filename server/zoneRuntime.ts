@@ -413,7 +413,7 @@ export class AuthoritativeMovementZone {
     return position ? { ...position } : undefined;
   }
   mobSnapshot() { return this.mobRuntime.snapshot(); }
-  combatSnapshot() { return this.combatants(); }
+  combatSnapshot() { return Object.freeze(this.combatants().map(c => Object.freeze({ ...c }))); }
   resourceSnapshot() { return this.resourceRuntime.snapshot(this.tickNumber); }
 
   /** Development-only reset of the isolated authoritative fixture runtime. */
