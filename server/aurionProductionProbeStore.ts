@@ -4,7 +4,8 @@ import { verifyLocalPassword } from "./localAuth";
 import { AURION_PROBE_MAX_APPROVAL_MS, AURION_PROBE_SCOPES, parseAurionProbeRunIdentity, requireMatchingAurionProbeApproval, type AurionProbeRunIdentity, type AurionProbeScope } from "./aurionProductionProbeApprovalContract";
 
 /** Reserved only for the explicitly approved, server-owned gameplay probe. */
-export const AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID = 2_147_483_647;
+import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
+export { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID };
 const GAMEPLAY_PROBE_LOCK_NAME = "aurion-production-gameplay-probe-v1";
 
 type ApprovalRow = RowDataPacket & { approvalId: string; runKey: string; runJson: string; scope: AurionProbeScope;

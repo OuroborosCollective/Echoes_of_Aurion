@@ -14,6 +14,7 @@ import { readNpcGuildOverview } from "./aurion/npcGuildStore";
 import { globalZoneRegistry } from "./zoneRuntime";
 import { globalAssuranceService } from "./causality/assuranceService";
 import { runProductionGameplaySessionReadback } from "./aurionProductionGameplaySession";
+import { globalCausalPersistence } from "./causality/persistence";
 
 /** Exact Origin plus non-simple header blocks ambient-cookie CSRF. CORS never grants approval. */
 export function requireProbeOwnerOrigin(headers: { origin?: string; contentType?: string; requestedWith?: string; fetchSite?: string }) {
@@ -100,7 +101,8 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
           // separately approved scope. It is never reachable from read-only scopes.
           const zone = globalZoneRegistry.get("observatory_threshold");
           const observed = await runProductionGameplaySessionReadback({ zone, expectedRevision: run.revision, health,
-            readNpcGuildOverview, sampleAssurance: () => globalAssuranceService.sample() });
+            readNpcGuildOverview, sampleAssurance: () => globalAssuranceService.sample(),
+            readPersistedTicks: (zoneId, from, to) => globalCausalPersistence.getTicksInRange(zoneId, from, to) });
           return { ...receipt, ...observed, status: "OBSERVED", credentialReturned: false,
             mutationAuthority: aurionProbeMutationAuthority(scope) };
         });

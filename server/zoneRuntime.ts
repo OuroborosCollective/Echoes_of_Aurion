@@ -28,6 +28,7 @@ import {
 import { computeRngRootHash, resolveAddressableRandomU32, type RngEventRecord } from "./determinism/aurionAddressableRandom";
 import { globalTickRecorder, AurionTickRecorder } from "./causality/tickRecorder";
 import { globalCausalPersistence } from "./causality/persistence";
+import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
 import { activeProvenance } from "./aurionProvenance";
 import {
   makeZoneConnectionId,
@@ -396,6 +397,9 @@ export class AuthoritativeMovementZone {
     return this.peersByEntityId.get(`player:${userId}`)?.connectionId;
   }
 
+  async flushEvidencePersistence(): Promise<void> { await this.evidenceRecorder.flushPersistence(); }
+  recordedTick(tick: number) { return this.evidenceRecorder.getEntry(this.zoneId, tick); }
+
   nextClientSequenceForUser(userId: number): number {
     const peer = this.peersByEntityId.get(`player:${userId}`);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
@@ -693,7 +697,11 @@ export class AuthoritativeMovementZone {
     const resourcesChanged = this.resourceRuntime.tick(this.tickNumber);
     captureAuthorityStage("RESOURCE");
     // 05 mob FSM.
-    const mobsChanged = this.mobRuntime.tick(this.presences(), this.tickNumber);
+    // The reserved diagnostic actor participates in membership receipts, never
+    // hostile targeting. Identity-based policy is identical during causal replay.
+    const mobsChanged = this.mobRuntime.tick(this.presences().filter(
+      presence => presence.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
+    ), this.tickNumber);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);

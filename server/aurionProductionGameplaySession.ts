@@ -5,6 +5,9 @@ import { DEFAULT_ZONE_COMBAT_PROFILE, type AuthoritativeMovementZone } from "./z
 import { ZONE_TICK_MS, type ZoneSnapshot, type ZoneWelcome } from "./zoneProtocol";
 import { ZONE_PROTOCOL_VERSION, validConfirmedPresences } from "../shared/zonePresenceContract";
 import { deadlineAfter, operationalNow } from "../shared/operationalClock";
+import { orderCanonicalZoneIntents, sanitizeIntentForHash } from "../shared/aurionZoneIntentContract";
+import { requireProbePersistenceEvidence } from "../shared/aurionProductionProbeEvidence";
+import type { RecordedTickEntry } from "./causality/tickRecorder";
 
 type ProbeHealth = Readonly<{
   revision: string;
@@ -23,6 +26,7 @@ type ProbeTimings = Readonly<{
   cleanupTimeoutMs?: number;
   npcAdvanceTimeoutMs?: number;
   pollIntervalMs?: number;
+  persistenceTimeoutMs?: number;
 }>;
 
 type GameplaySessionDependencies = Readonly<{
@@ -31,6 +35,7 @@ type GameplaySessionDependencies = Readonly<{
   health: () => ProbeHealth;
   readNpcGuildOverview: () => Promise<unknown>;
   sampleAssurance: () => Promise<unknown>;
+  readPersistedTicks: (zoneId: string, fromTick: number, toTick: number) => Promise<RecordedTickEntry[]>;
   now?: () => number;
   timings?: ProbeTimings;
 }>;
@@ -42,6 +47,15 @@ const DEFAULT_POLL_INTERVAL_MS = 25;
 
 function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function boundedReadback<T>(work: () => Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([work(), new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("PROBE_PERSISTENCE_TIMEOUT")), timeoutMs);
+    })]);
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 async function waitFor<T>(read: () => T | undefined, timeoutMs: number, pollIntervalMs: number, now: () => number, code: string): Promise<T> {
@@ -116,14 +130,15 @@ function redactWelcome(welcome: ZoneWelcome) {
  * dedicated gameplay-session approval.
  */
 export async function runProductionGameplaySessionReadback(dependencies: GameplaySessionDependencies) {
-  const { zone, expectedRevision, health, readNpcGuildOverview, sampleAssurance } = dependencies;
+  const { zone, expectedRevision, health, readNpcGuildOverview, sampleAssurance, readPersistedTicks } = dependencies;
   const now = dependencies.now ?? operationalNow;
   const timings = dependencies.timings ?? {};
   const handshakeTimeoutMs = timings.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
   const cleanupTimeoutMs = timings.cleanupTimeoutMs ?? DEFAULT_CLEANUP_TIMEOUT_MS;
   const npcAdvanceTimeoutMs = timings.npcAdvanceTimeoutMs ?? DEFAULT_NPC_ADVANCE_TIMEOUT_MS;
   const pollIntervalMs = timings.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-  if (![handshakeTimeoutMs, cleanupTimeoutMs, npcAdvanceTimeoutMs, pollIntervalMs].every(value => Number.isSafeInteger(value) && value > 0)) {
+  const persistenceTimeoutMs = timings.persistenceTimeoutMs ?? 10_000;
+  if (![handshakeTimeoutMs, cleanupTimeoutMs, npcAdvanceTimeoutMs, pollIntervalMs, persistenceTimeoutMs].every(value => Number.isSafeInteger(value) && value > 0)) {
     throw new Error("PROBE_SESSION_TIMING_INVALID");
   }
   if (zone.connectionIdForUser(AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID)) throw new Error("PROBE_GAMEPLAY_ACTOR_ALREADY_ACTIVE");
@@ -156,6 +171,24 @@ export async function runProductionGameplaySessionReadback(dependencies: Gamepla
       now,
       "PROBE_ZONE_CLEANUP_TIMEOUT",
     );
+    const joinTick = welcome.tick + 1, leaveTick = cleanupTick + 1;
+    const persisted = await boundedReadback(async () => {
+      await zone.flushEvidencePersistence();
+      return readPersistedTicks(zone.zoneId, joinTick, leaveTick);
+    }, persistenceTimeoutMs);
+    // Compare the independently read database chain to this session's authority
+    // entries, not to an older generic assurance sample.
+    for (const entry of persisted) {
+      const expected = zone.recordedTick(entry.receipt.tick);
+      if (!expected || expected.receipt.receiptHash !== entry.receipt.receiptHash) {
+        throw new Error("PROBE_PERSISTED_SESSION_MISMATCH");
+      }
+    }
+    const persistence = { joinTick, leaveTick, ticks: persisted.map(entry => ({
+      receipt: entry.receipt,
+      intents: orderCanonicalZoneIntents(entry.intents ?? []).map(sanitizeIntentForHash),
+    })) };
+    requireProbePersistenceEvidence(persistence, expectedRevision, zone.zoneId, welcome.tick, Number(snapshot.tick));
     const healthAfter = await waitFor(() => {
       const current = assertCurrentRevision(health(), expectedRevision);
       return hasConfirmedNpcAdvance(healthBefore, current) ? current : undefined;
@@ -174,6 +207,7 @@ export async function runProductionGameplaySessionReadback(dependencies: Gamepla
       snapshot,
       guilds,
       assurance,
+      persistence,
       probeEffect: "canonical-ephemeral-join-leave" as const,
       probeActorUserId: AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
     });

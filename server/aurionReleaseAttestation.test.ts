@@ -44,7 +44,7 @@ describe("Blocker 2 detached release attestation contract", () => {
     expect(workflow.indexOf("verify-release-attestations:")).toBeLessThan(workflow.indexOf("apply-reviewed-schema-plan:"));
   });
 
-  it("permits the probe control-plane bootstrap only before its public readiness check exists", () => {
+  it("requires positively identified legacy runtime in addition to missing control plane", () => {
     const independent = workflow.split("  verify-schema-release-attestation:")[1].split("  prepare-schema-tools:")[0];
     expect(workflow).toContain("bootstrap_probe_control_plane:");
     expect(independent).toContain("environment: production");
@@ -54,6 +54,7 @@ describe("Blocker 2 detached release attestation contract", () => {
     expect(independent).toContain("--dump-header");
     expect(independent).toContain("text/html");
     expect(independent).toContain("PROBE_BOOTSTRAP_NOT_ALLOWED_AFTER_CONTROL_PLANE_EXISTS");
+    expect(independent).toContain("await readLegacyProbeBootstrap()");
     expect(independent).toContain("PROBE_CONTROL_PLANE_REQUIRED");
     expect(independent).toContain("executeProductionProbe('aurion.probe.admin-readback')");
   });

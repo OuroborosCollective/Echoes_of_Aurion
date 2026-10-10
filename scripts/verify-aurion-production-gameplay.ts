@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { executeProductionProbe } from "./aurion-production-probe-client.mjs";
 import { ZONE_PROTOCOL_VERSION, validConfirmedPresences } from "../shared/zonePresenceContract";
 import { verifySnapshot } from "./aurion-production-assurance.mjs";
+import { requireProbePersistenceEvidence } from "../shared/aurionProductionProbeEvidence";
 
 const zoneId = "observatory_threshold";
 export function requireGameplayHealth(health: any, expectedSha: string) {
@@ -34,12 +35,14 @@ export function requireFunctionalProbeReceipt(observed: any, sourceRevision: str
   if (!requireNpcAdvance(observed.healthBefore, observed.health)) throw new Error("NPC_FIXED_TICK_NOT_CONFIRMED");
   if (!Number.isSafeInteger(observed.guilds?.guildCount) || !Array.isArray(observed.guilds?.guilds)) throw new Error("NPC_GUILD_READBACK_FAILED");
   if (!verifySnapshot(observed.assurance) || observed.assurance.status === "CONTRADICTED") throw new Error("CAUSAL_ASSURANCE_READBACK_INVALID");
+  requireProbePersistenceEvidence(observed.persistence, sourceRevision, zoneId, observed.welcome.tick, snapshot.tick);
   return { recordType: "aurion_production_gameplay_readback", schemaVersion: 1, sourceRevision,
     approvalId: observed.approvalId, runId: observed.runId, runAttempt: observed.runAttempt,
     observedAt: new Date().toISOString(), status: "PASS", worldJoin: "CONFIRMED", zoneHandshake: "CONFIRMED",
     welcomeTick: observed.welcome.tick, snapshotTick: snapshot.tick, npcStatus: observed.health.npcLife.status,
     npcGatewayTick: observed.health.npcLife.lastGatewayTick, npcResolutionIndex: observed.health.npcLife.lastResolutionIndex,
     npcGuildCount: observed.guilds.guildCount, causalAssuranceStatus: observed.assurance.status,
+    membershipPersistence: observed.persistence,
     causalAssuranceHash: observed.assurance.snapshotHash, visualStatus: "UNVERIFIED", credentialReturned: false };
 }
 export async function run() {
