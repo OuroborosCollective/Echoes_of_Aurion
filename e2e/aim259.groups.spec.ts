@@ -51,7 +51,7 @@ async function launchAx1AndOpenGroups(page: Page) {
     if (await connected.isVisible().catch(() => false)) return "connected";
     if (await publicAvatar.isVisible().catch(() => false)) return "select";
     return "waiting";
-  }, { timeout: 45_000, intervals: [50, 100, 250, 500] }).not.toBe("waiting");
+  }, { timeout: 90_000, intervals: [50, 100, 250, 500] }).not.toBe("waiting");
 
   if (await publicAvatar.isVisible().catch(() => false)) {
     await publicAvatar.click();

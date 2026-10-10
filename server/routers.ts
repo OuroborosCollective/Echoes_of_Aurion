@@ -523,12 +523,12 @@ export const appRouter = router({
       })).mutation(({ ctx, input }) => db.resolveAndRecordGlobalWorldEpoch({ requestedByUserId: ctx.user.id, idempotencyKey: input.idempotencyKey })),
       resolve: adminProcedure.input(z.object({
         worldSeed: z.string().trim().min(3).max(160),
-        regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]),
+        regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion", "whispering_frontier"]),
         resolutionIndex: z.number().int().min(0),
         signals: z.array(z.object({
           id: z.string().trim().min(3).max(96),
           kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]),
-          regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]),
+          regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion", "whispering_frontier"]),
           magnitude: z.number().min(-1).max(1),
           sourceReceiptId: z.string().trim().min(3).max(128),
           resolutionIndex: z.number().int().min(0),
@@ -540,7 +540,7 @@ export const appRouter = router({
         territoryIds: z.array(z.string().trim().min(2).max(96)).min(1).max(32),
         stability: z.number().min(0).max(1),
         activeDiplomacy: z.array(z.enum(["alliance", "trade", "non_aggression", "tribute", "sanction"])).max(5),
-        warSignals: z.array(z.object({ id: z.string().trim().min(3).max(96), kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]), regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]), magnitude: z.number().min(-1).max(1), sourceReceiptId: z.string().trim().min(3).max(128), resolutionIndex: z.number().int().min(0) })).max(128),
+        warSignals: z.array(z.object({ id: z.string().trim().min(3).max(96), kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]), regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion", "whispering_frontier"]), magnitude: z.number().min(-1).max(1), sourceReceiptId: z.string().trim().min(3).max(128), resolutionIndex: z.number().int().min(0) })).max(128),
       })).mutation(({ input }) => resolveAndRecordPolity(input)),
     }),
     developer: router({
