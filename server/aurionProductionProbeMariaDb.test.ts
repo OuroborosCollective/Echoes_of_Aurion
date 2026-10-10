@@ -33,6 +33,15 @@ suite('real MariaDB one-shot transaction and role/reauth proof (isolated DB only
   await expect(store.withExclusiveGameplayProbeSession(async()=>undefined)).rejects.toThrow('PROBE_GAMEPLAY_SESSION_BUSY');
   release();await first;
  });
+ it('does not reclaim an orphan durable fence even when its timestamp is old',async()=>{
+  const owner='f'.repeat(32), name='aurion-production-gameplay-probe-v1';
+  await pool.execute('INSERT INTO aurionProductionProbeSessionFence (fenceName,ownerId,createdAtMs) VALUES (?,?,0)',[name,owner]);
+  try {
+   await expect(new AurionProductionProbeStore(pool).withExclusiveGameplayProbeSession(async()=>undefined)).rejects.toThrow('PROBE_GAMEPLAY_SESSION_BUSY');
+   const [rows]=await pool.execute<RowDataPacket[]>('SELECT ownerId FROM aurionProductionProbeSessionFence WHERE fenceName=?',[name]);
+   expect(rows[0].ownerId).toBe(owner);
+  } finally { await pool.execute('DELETE FROM aurionProductionProbeSessionFence WHERE fenceName=? AND ownerId=?',[name,owner]); }
+ });
  it('rejects stale revision, run ID, attempt and wrong scope without spending valid approval',async()=>{
   const r=identity();await store.approve(userId,password,r,scope,'isolated identity proof');
   for(const changed of [{...r,revision:'b'.repeat(40)},{...r,runId:'99'},{...r,runAttempt:2}]) await expect(store.consume(changed,scope)).rejects.toThrow();

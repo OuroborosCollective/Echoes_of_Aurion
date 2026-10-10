@@ -910,6 +910,7 @@ export class AuthoritativeMovementZone {
 export class ZoneRegistry {
   private readonly probeOwned = new Set<AuthoritativeMovementZone>();
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
+  private readonly dormantZones = new Map<ZoneId, AuthoritativeMovementZone>();
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
 
@@ -921,7 +922,8 @@ export class ZoneRegistry {
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
     if (existing) { this.probeOwned.delete(existing); return existing; }
-    const zone = new AuthoritativeMovementZone(zoneId);
+    const zone = this.dormantZones.get(zoneId) ?? new AuthoritativeMovementZone(zoneId);
+    this.dormantZones.delete(zoneId);
     this.zones.set(zoneId, zone);
     this.sortedZonesDirty = true;
     return zone;
@@ -930,6 +932,7 @@ export class ZoneRegistry {
   /** Called only after scope consumption, with a verified persisted head. */
   installProbeZone(zone: AuthoritativeMovementZone): void {
     if (this.zones.has(zone.zoneId)) throw new Error("PROBE_ZONE_ACTIVATION_RACE");
+    this.dormantZones.delete(zone.zoneId);
     this.zones.set(zone.zoneId, zone);
     this.probeOwned.add(zone);
     this.sortedZonesDirty = true;
@@ -940,6 +943,7 @@ export class ZoneRegistry {
     if (zone.getPendingIntents().length || zone.getCanonicalZoneState().players.length) throw new Error("PROBE_ZONE_CLEANUP_REQUIRED");
     this.probeOwned.delete(zone);
     this.zones.delete(zone.zoneId);
+    this.dormantZones.set(zone.zoneId, zone);
     this.sortedZonesDirty = true;
   }
 

@@ -2200,3 +2200,10 @@ export const aurionProductionProbeApprovals = mysqlTable("aurionProductionProbeA
   consumedAtMs: bigint("consumedAtMs", { mode: "number" }),
   revokedAtMs: bigint("revokedAtMs", { mode: "number" }),
 }, table => [uniqueIndex("aurionProductionProbeApprovals_run_scope_uq").on(table.runKey, table.scope)]);
+
+/** Durable probe exclusion: connection loss never authorizes another session. */
+export const aurionProductionProbeSessionFence = mysqlTable("aurionProductionProbeSessionFence", {
+  fenceName: varchar("fenceName", { length: 64 }).primaryKey(),
+  ownerId: varchar("ownerId", { length: 32 }).notNull(),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+});

@@ -21,7 +21,6 @@ describe("ZoneRegistry observational lookup", () => {
     registry.tick();
     expect(zone.getTickNumber()).toBe(tick);
     expect(registry.find(zone.zoneId)).toBeUndefined();
-    registry.installProbeZone(zone);
     expect(registry.get(zone.zoneId)).toBe(zone);
     registry.releaseProbeZone(zone);
     registry.tick();

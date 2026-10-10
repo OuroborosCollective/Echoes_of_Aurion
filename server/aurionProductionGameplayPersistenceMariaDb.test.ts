@@ -93,10 +93,15 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       const again = await prepareProductionProbeZone(registry, adapter, new AurionTickRecorder(20, adapter));
       expect(again.zone.getTickNumber()).toBe(4);
       expect(again.zone.getCanonicalZoneState()).toEqual(prepared.zone.getCanonicalZoneState());
-      // Never silently erase an interrupted player's persisted presence.
-      again.zone.sourceRevisionOverride = "b".repeat(40);
-      again.zone.join({ userId: 77, socket: socket() }); again.zone.tick(); await again.zone.flushEvidencePersistence();
-      await expect(prepareProductionProbeZone(registry, adapter, new AurionTickRecorder(20, adapter))).rejects.toThrow("PROBE_ZONE_PRESENCE_RECOVERY_REQUIRED");
+      // A normal consumer resumes the dormant head, never a fresh tick-zero zone.
+      const adopted = registry.get(zoneId);
+      expect(adopted).toBe(prepared.zone);
+      adopted.join({ userId: 77, socket: socket() }); registry.tick(); await adopted.flushEvidencePersistence();
+      const playerTick = await adapter.getRecordedTick(zoneId, 5);
+      expect(playerTick!.receipt.previousReceiptHash).toBe(continued[1].receipt.receiptHash);
+      expect(playerTick!.intents!.some(intent => intent.type === "presence_join" && intent.userId === 77)).toBe(true);
+      // A process restart must not silently erase that persisted player.
+      await expect(prepareProductionProbeZone(new ZoneRegistry(), adapter, new AurionTickRecorder(20, adapter))).rejects.toThrow("PROBE_ZONE_PRESENCE_RECOVERY_REQUIRED");
     } finally {
       await pool.execute("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
       await pool.execute("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
@@ -104,10 +109,12 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
     }
   }, 30000);
 
-  it("holds the actual MariaDB session lock across a timed-out handshake until the leave is committed", async () => {
+  it("keeps a durable fence after the actual lock connection dies until the delayed leave is committed", async () => {
     const url = new URL(process.env.DATABASE_URL ?? "");
     if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("ISOLATED_TEST_DB_REQUIRED");
     const pool = createPool(url.href), store = new AurionProductionProbeStore(pool);
+    const competingPool = createPool({ uri: url.href, connectionLimit: 1 });
+    const competingStore = new AurionProductionProbeStore(competingPool);
     const zoneId = "observatory_threshold:cleanup-lock-test";
     let allowWrites!: () => void;
     const allowed = new Promise<void>(resolve => { allowWrites = resolve; });
@@ -131,10 +138,18 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       expect(finished).toBe(false);
       expect(await adapter.getTicksInRange(zoneId, 1, 1)).toEqual([]);
       await expect(store.withExclusiveGameplayProbeSession(async () => undefined)).rejects.toThrow("PROBE_GAMEPLAY_SESSION_BUSY");
+      const [owners]: any = await pool.query("SELECT IS_USED_LOCK('aurion-production-gameplay-probe-v1') AS id");
+      const connectionId = Number(owners[0].id);
+      expect(Number.isSafeInteger(connectionId) && connectionId > 0).toBe(true);
+      await pool.query(`KILL CONNECTION ${connectionId}`);
+      const [unlocked]: any = await pool.query("SELECT IS_FREE_LOCK('aurion-production-gameplay-probe-v1') AS free");
+      expect(Number(unlocked[0].free)).toBe(1);
+      await expect(competingStore.withExclusiveGameplayProbeSession(async () => "must not enter")).rejects.toThrow("PROBE_GAMEPLAY_SESSION_BUSY");
+      expect(finished).toBe(false);
       allowWrites();
       expect(await result).toBe("PROBE_ZONE_HANDSHAKE_TIMEOUT");
       expect((await adapter.getRecordedTick(zoneId, 1))!.intents!.map(i => i.type)).toEqual(["presence_join", "presence_leave"]);
-      await expect(store.withExclusiveGameplayProbeSession(async () => "released after readback")).resolves.toBe("released after readback");
+      await expect(competingStore.withExclusiveGameplayProbeSession(async () => "released after readback")).resolves.toBe("released after readback");
     } finally {
       allowWrites();
       if (zone.getPendingIntents().length) zone.tick();
@@ -142,6 +157,7 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       await pool.execute("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
       await pool.execute("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
       await pool.end();
+      await competingPool.end();
     }
   }, 30000);
 });
