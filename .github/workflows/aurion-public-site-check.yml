@@ -1,0 +1,16 @@
+name: Aurion Player Site - Review
+on:
+  pull_request:
+    paths:
+      - 'public-site/**'
+      - 'scripts/verify-aurion-public-site.py'
+      - '.github/workflows/aurion-public-site-*.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/verify-aurion-public-site.py --mode preview
