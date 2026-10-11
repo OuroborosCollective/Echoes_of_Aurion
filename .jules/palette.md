@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2024-09-23 - Authentication Gating on UI Action Buttons
+**Learning:** Buttons requiring authentication (like the Signalraum button on the Home page) were only visually styled via title/tooltip, but not strictly `disabled` programmatically unless the app was `loading`, allowing unauthenticated clicks to dispatch events prematurely.
+**Action:** When enforcing authentication gates on UI buttons, always combine `loading` state with `!isAuthenticated` (e.g., `disabled={!isAuthenticated || loading}`) to physically prevent the interaction, maintaining synchronization with the tooltip's explanatory message.
