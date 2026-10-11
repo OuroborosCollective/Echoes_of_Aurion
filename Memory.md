@@ -1479,3 +1479,29 @@ Task: Reject HTTP 200 HTML before parsing the normal release preflight and sanit
 Learned: The release run reached JSON.parse on an HTML response. The previously recorded runtime revision has no probe routes and serves its SPA for unknown paths; this explains the observed failure but does not establish a fresh live identity. A diagnostic repair cannot install the missing control plane or authorize production.
 Evidence: Code revision e4da70c27bac4ac70fce7184cd3083be348744f1; the new regression fails against the original afe76b7f workflow and passes against the fixed actual workflow shell, including nine response/approval cases. All 26 Node release tests, 17 targeted deployment/attestation tests and TypeScript pass locally. Original production run https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/38070383232 passed build/signature and isolated schema/backup/recovery proofs but failed before schema preparation.
 Open: No new production run, schema mutation, promotion or gameplay probe performed. Fresh HTTPS readback is blocked by the execution environment's HTTP 403; the runtime connector rejects its advertised empty arguments with a missing kwargs error. Live control-plane installation/readback and run-bound owner approvals through the protected release path remain prerequisites. Bootstrap stays disabled; no credential or permission changes.
+
+
+### 2026-10-11 — PR #840 — feat(site): cinematic Echoes of Aurion player landing (GitHub Pages)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=840 merge=abcbf0ec9964cf55a3e4c4b1b806fdb3fc46b6ac -->
+Task: Merge PR #840 into `main` — feat(site): cinematic Echoes of Aurion player landing (GitHub Pages).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-public-site-check.yml`
+- `.github/workflows/aurion-public-site-publish.yml`
+- `docs/aurion-player-site/README.md`
+- `public-site/index.html`
+- `public-site/media/aurion-realm.svg`
+- `public-site/media/sigil.svg`
+- `public-site/rechtliches.html`
+- `public-site/styles.css`
+- `scripts/verify-aurion-public-site.py`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/840
+- Merge commit: `abcbf0ec9964cf55a3e4c4b1b806fdb3fc46b6ac`
+- PR head: `a2cf8824ab7a7bb811cade83cfeefbcfb1f3bd88`
+- Merged at: 2026-10-11T00:12:38Z
+- Post-merge workflow run: 38097650560
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
