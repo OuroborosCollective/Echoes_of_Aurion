@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## 2025-05-24 - [Optimize BuffAuthority Multiplier]
+**Learning:** Using `Array.from(map.values()).filter().reduce()` incurs unnecessary array allocation overhead and triggers garbage collection, especially in hot paths like game loop multipliers.
+**Action:** Replaced chained array methods with a direct `for...of` iteration to calculate sums on-the-fly, improving performance.
