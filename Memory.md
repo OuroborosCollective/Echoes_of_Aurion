@@ -1505,3 +1505,11 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-11 — PR #855 — Align GLB backfill workflow with bounded sudo wrapper
+<!-- integration-memory: pr=855 -->
+Status: VERIFIED isolated exact-head regression and candidate runtime; production backfill remains UNVERIFIED.
+Task: Correct the three production workflow CLI calls to the existing positional audit/apply/readback wrapper contract without altering persistence or gameplay authority.
+Evidence: PR head `89dfbccab72459003ca972b8c7b6cd3e3ad5858e`; six successful exact-head CI workflows (including AIM-240 real MariaDB GLB tests, container candidate health, and local suite 2079 passed / 233 skipped); `server/glbNormalizationBackfillContract.test.ts` passed three tests. No production mutation.
+Learned: Passing `--mode` to the two-positional-argument sudo wrapper fails before any backfill; aligning caller and wrapper plus a contract regression prevents this CLI drift but does not prove a deployed release.
+Open: Production deployment 38100805366 failed at `RELEASE_DISPATCH_REVISION_MISMATCH` (expected 12b11c33..., GITHUB_SHA bfb2e74f...); repair requires correct merged release SHA, complete protected promotion/schema/runtime checks, audit-first verified missing set, explicit apply, and independent GLB catalog readback.
