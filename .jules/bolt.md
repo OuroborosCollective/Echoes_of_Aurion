@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-05-15 - [Optimize Hot Loop Buff Magnitude Computation]
+**Learning:** Replaced a two-pass `for..of` cleanup + chained array operations (`Array.from(map.values()).filter(...).reduce(...)`) with a single `for..of` pass in `BuffDebuffSystem`. This eliminates overhead from array allocation, intermediate array mappings, closures, and garbage collection pressure in a hot code path (combat tick evaluation).
+**Action:** When filtering or mapping Map values or performing aggregations during high-frequency loops (e.g. game logic ticks), use direct `for...of` loops and scalar operations, avoiding intermediate chained array methods.
