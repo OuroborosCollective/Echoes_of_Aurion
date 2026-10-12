@@ -375,7 +375,10 @@ jobs:
           const r=JSON.parse(fs.readFileSync("repair-receipt.json","utf8"));
           assert.equal(r.overallState,"APPLY_SUCCEEDED");
           assert.equal(r.backup.created,true);
+          assert.match(r.backup.id,/-refreshed\.sql\.gz$/);
+          assert.match(r.backup.sha256,/^[a-f0-9]{64}$/);
           assert.equal(r.recovery.matched,true);
+          assert.match(r.recovery.schemaSha256,/^[a-f0-9]{64}$/);
           assert.match(r.apply.repairPlanSha256,/^[a-f0-9]{64}$/);
           assert.match(r.apply.rehearsalSha256,/^[a-f0-9]{64}$/);
           assert.equal(r.repairPlanRefresh.semanticsUnchanged,true);
