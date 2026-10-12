@@ -10,3 +10,7 @@
 **Vulnerability:** The `<ChartStyle>` component in shadcn/ui generic chart components utilized `dangerouslySetInnerHTML` to inject generated CSS styling, which is an anti-pattern and poses an XSS risk (defense-in-depth), despite generating its output from controlled object structures.
 **Learning:** React safely handles CSS injected as a child string inside `<style>` components without requiring `dangerouslySetInnerHTML`. Shadcn charts use this pattern to inject dynamic colors based on chart configurations.
 **Prevention:** Avoid `dangerouslySetInnerHTML` in standard component styling, substituting with standard `<style>{cssContent}</style>` usage.
+## 2026-09-14 - [Fixed Authentication Timing Attack]
+**Vulnerability:** User enumeration timing attack in login endpoint
+**Learning:** The `loginLocal` endpoint returned immediately when a user was not found, before verifying the password. This timing difference allowed attackers to enumerate valid usernames.
+**Prevention:** To prevent user enumeration timing attacks in authentication endpoints (like `loginLocal`), always execute a dummy password verification using a validly formatted target-cost hash (e.g., `scrypt$16384$...`) before throwing a generic 'invalid credentials' error when a user record is not found.

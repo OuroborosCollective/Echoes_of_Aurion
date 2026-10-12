@@ -132,6 +132,7 @@ export const appRouter = router({
       const handle = normalizeLocalHandle(input.handle);
       const record = await db.getLocalCredential(handle);
       if (!record) {
+        await verifyLocalPassword(input.password, "scrypt$16384$kAOcLRUlpEYoNHYrg9WZmw==$0YJWaWKrNwhh1wR1AOQZ4ANzJ1XH4ORqa9OZD9oUXvge0CRpas7j4cpZVWK79dS0vQrY8oIO4ObLiITTabcoXw==");
         // Do not dereference an absent credential record. Apart from preventing
         // a 500 response for an unknown handle, this keeps the authentication
         // failure on tRPC's JSON error path instead of exposing a runtime error.
