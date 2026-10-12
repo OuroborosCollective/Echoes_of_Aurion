@@ -83,6 +83,8 @@ emit_failure() {
   APPLY_RECOVERY_STDERR_SHA256="$recovery_stderr_sha256" \
   APPLY_RECOVERY_STDERR_BYTES="$recovery_stderr_bytes" \
   APPLY_FAILURE_RECEIPT="$apply_failure_receipt" \
+  APPLY_REPAIR_PLAN_PATH="$repair_plan" \
+  APPLY_RELEASE_ROOT="${release:-}" \
   node --input-type=module -e '
     import fs from "node:fs";
     const backupCreated=process.env.APPLY_BACKUP_CREATED==="true";
@@ -114,6 +116,16 @@ emit_failure() {
         }
       } catch {}
     }
+    let repair=null;
+    if(process.env.APPLY_FAILURE_STAGE==="REPAIR_PLAN_BLOCKED"&&process.env.APPLY_REPAIR_PLAN_PATH) {
+      try {
+        const planPath=process.env.APPLY_REPAIR_PLAN_PATH;
+        if(fs.statSync(planPath).size<=4*1024*1024) {
+          const {schemaRepairFailureReceipt}=await import(`${process.env.APPLY_RELEASE_ROOT}/deploy/aurion-schema-repair-failure-receipt.mjs`);
+          repair=schemaRepairFailureReceipt(JSON.parse(fs.readFileSync(planPath,"utf8")),process.env.APPLY_SOURCE_REVISION,process.env.APPLY_PLAN_SHA256);
+        }
+      } catch {}
+    }
     fs.writeFileSync(process.argv[1], `${JSON.stringify({
       recordType:"aurion_production_schema_apply",
       schemaVersion:1,
@@ -127,6 +139,7 @@ emit_failure() {
       backup,
       recovery,
       apply,
+      repair,
     },null,2)}\n`, {mode:0o600});
   ' "$tmp" >/dev/null 2>&1
   persist_receipt "$tmp" || true

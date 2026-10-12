@@ -52,6 +52,7 @@ const deployFiles = [
   "verify-aurion-installed-schema-tool",
   "aurion-production-schema-apply",
   "aurion-production-schema-apply-core",
+  "aurion-schema-repair-failure-receipt.mjs",
   "aurion-production-schema-apply.environment.template",
   "aurion-production-schema-apply.sudoers",
   "aurion-reconcile-runtime-image.conf",

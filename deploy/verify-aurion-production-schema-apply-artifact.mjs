@@ -49,6 +49,7 @@ const requiredFiles = [
   ...contractTags.map(tag => `drizzle/${tag}.sql`),
   "deploy/aurion-production-schema-apply",
   "deploy/aurion-production-schema-apply-core",
+  "deploy/aurion-schema-repair-failure-receipt.mjs",
   "deploy/aurion-production-schema-apply.environment.template",
   "deploy/aurion-production-schema-apply.sudoers",
   "deploy/aurion-reconcile-runtime-image.conf",
