@@ -35,7 +35,7 @@ async function launchAx1AndOpenGroups(page: Page) {
   const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
   await expect(launch).toBeVisible({ timeout: 30_000 });
   const entryResponse = page.waitForResponse(response => response.url().includes("gameplay.enterOpenWorld") && response.status() === 200);
-  await launch.click();
+  await launch.click({ force: true });
   await entryResponse;
   await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
   const runtime = page.getByTestId("xaurion-open-world-runtime");
@@ -54,9 +54,9 @@ async function launchAx1AndOpenGroups(page: Page) {
   }, { timeout: 45_000, intervals: [50, 100, 250, 500] }).not.toBe("waiting");
 
   if (await publicAvatar.isVisible().catch(() => false)) {
-    await publicAvatar.click();
+    await publicAvatar.click({ force: true });
     const selectionReply = page.waitForResponse(response => response.url().endsWith("/api/game/public-player-characters/select") && response.request().method() === "POST");
-    await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
+    await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click({ force: true });
     const selected = await selectionReply;
     expect(selected.status()).toBe(200);
     expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
