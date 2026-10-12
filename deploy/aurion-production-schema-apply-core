@@ -505,6 +505,98 @@ if [[ "$preflight_mode" == "repair" ]]; then
   repair_plan_fresh="$(mktemp "${state_dir}/${expected_sha}.repair-refresh.XXXXXX")"
   run_repair refresh "$repair_plan_fresh" || { phase=REPAIR_PLAN_REFRESH_FAILED; exit 70; }
   repair_plan="$repair_plan_fresh"
+
+  # A renewed schema/journal plan does NOT establish that the earlier backup
+  # includes rows committed by live traffic during the first restore. Never
+  # rehearse a post-recovery plan against that earlier snapshot.
+  phase=CAPTURE_REFRESHED_PRODUCTION_SNAPSHOT
+  refreshed_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  refreshed_basename="${expected_sha}-${plan_sha256:0:16}-${refreshed_stamp}-refreshed.sql.gz"
+  refreshed_tmp="$(mktemp "${backup_dir}/.${refreshed_basename}.XXXXXX")"
+  set +e
+  production_client dump --single-transaction --quick --skip-lock-tables --routines --events --triggers --add-drop-database --databases "$database_name" | gzip -n -9 > "$refreshed_tmp"
+  refreshed_status=$?
+  set -e
+  [[ "$refreshed_status" -eq 0 && -s "$refreshed_tmp" ]] || { phase=REFRESHED_BACKUP_FAILED; rm -f "$refreshed_tmp"; exit 70; }
+  gzip -t "$refreshed_tmp" || { phase=REFRESHED_BACKUP_INVALID; rm -f "$refreshed_tmp"; exit 70; }
+  refreshed_sha256="$(sha256sum "$refreshed_tmp" | awk '{print $1}')"
+  refreshed_bytes="$(stat -c '%s' "$refreshed_tmp")"
+  [[ "$refreshed_sha256" =~ ^[a-f0-9]{64}$ && "$refreshed_bytes" =~ ^[1-9][0-9]*$ ]] || { phase=REFRESHED_BACKUP_IDENTITY_INVALID; rm -f "$refreshed_tmp"; exit 70; }
+  refreshed_file="${backup_dir}/${refreshed_basename}"
+  mv -T "$refreshed_tmp" "$refreshed_file"
+  chown root:root "$refreshed_file"
+  chmod 0600 "$refreshed_file"
+
+  # Switch the rehearsal's backup identity only after the new file is sealed.
+  # Retain the first backup for audit and rollback; no production DDL occurs.
+  cleanup_recovery
+  backup_basename="$refreshed_basename"
+  backup_file="$refreshed_file"
+  backup_sha256="$refreshed_sha256"
+  backup_bytes="$refreshed_bytes"
+  phase=RESTORE_REFRESHED_PRODUCTION_SNAPSHOT
+  recovery_container="aurion-schema-recovery-${expected_sha:0:12}-${refreshed_stamp}-refresh"
+  docker run --detach --rm --name "$recovery_container" \
+    --network none \
+    --mount "type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly" \
+    -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 \
+    "$database_image_id" >/dev/null
+  recovery_ready=0
+  for _attempt in $(seq 1 60); do
+    if docker exec "$recovery_container" /bin/sh -ceu '
+      case "$(cat /proc/1/comm)" in mariadbd|mysqld) ;; *) exit 1 ;; esac
+      client="$(command -v mariadb || command -v mysql || true)"
+      test -n "$client"
+      "$client" --protocol=socket -uroot -e "SELECT 1" >/dev/null
+    ' >/dev/null 2>&1; then
+      recovery_ready=1
+      break
+    fi
+    sleep 1
+  done
+  [[ "$recovery_ready" -eq 1 ]] || { phase=REFRESHED_RECOVERY_NOT_READY; exit 69; }
+  docker exec "$recovery_container" /bin/sh -ceu 'test -r /recovery-input/production.sql.gz; command -v gzip >/dev/null' >/dev/null 2>&1 || { phase=REFRESHED_RECOVERY_TOOLING_UNAVAILABLE; exit 69; }
+  recovery_stderr="$(mktemp "${state_dir}/.refreshed-restore.XXXXXX")"
+  set +e
+  docker exec "$recovery_container" /bin/sh -ceu '
+    client="$(command -v mariadb || command -v mysql || true)"
+    test -n "$client"
+    gzip -t /recovery-input/production.sql.gz
+    gzip -cd /recovery-input/production.sql.gz | "$client" --protocol=socket -uroot
+  ' >/dev/null 2>"$recovery_stderr"
+  recovery_restore_status=$?
+  set -e
+  recovery_stderr_bytes="$(stat -c '%s' "$recovery_stderr")" || { phase=REFRESHED_RECOVERY_DIAGNOSTIC_FAILED; exit 69; }
+  recovery_stderr_sha256="$(sha256sum "$recovery_stderr" | awk '{print $1}')" || { phase=REFRESHED_RECOVERY_DIAGNOSTIC_FAILED; exit 69; }
+  recovery_error_class="$(node --input-type=module -e '
+    import fs from "node:fs";
+    const stderr=fs.readFileSync(process.argv[1],"utf8");
+    const maria=stderr.match(/\\bERROR\\s+([0-9]{4})\\b/i);
+    if(maria) process.stdout.write("MARIADB_ERROR_"+maria[1]);
+    else if(/Error response from daemon/i.test(stderr)) process.stdout.write("DOCKER_EXEC_ERROR");
+    else if(/gzip:/i.test(stderr)) process.stdout.write("GZIP_ERROR");
+    else if(stderr.length===0) process.stdout.write("NO_STDERR");
+    else process.stdout.write("UNCLASSIFIED_RESTORE_ERROR");
+  ' "$recovery_stderr")" || { phase=REFRESHED_RECOVERY_DIAGNOSTIC_FAILED; exit 69; }
+  rm -f "$recovery_stderr"
+  [[ "$recovery_restore_status" -eq 0 ]] || { phase=REFRESHED_RECOVERY_RESTORE_FAILED; exit "$recovery_restore_status"; }
+
+  phase=VERIFY_REFRESHED_RECOVERY
+  refreshed_source_tables="$(production_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=REFRESHED_SOURCE_TABLE_COUNT_FAILED; exit 69; }
+  refreshed_source_schema_sha256="$(production_client dump --no-data --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=REFRESHED_SOURCE_SCHEMA_HASH_FAILED; exit 69; }
+  recovery_table_count="$(recovery_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=REFRESHED_RECOVERY_TABLE_COUNT_FAILED; exit 69; }
+  recovery_schema_sha256="$(recovery_client dump --no-data --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=REFRESHED_RECOVERY_SCHEMA_HASH_FAILED; exit 69; }
+  [[ "$refreshed_source_tables" =~ ^[0-9]+$ && "$refreshed_source_schema_sha256" =~ ^[a-f0-9]{64}$ && "$recovery_table_count" == "$refreshed_source_tables" && "$recovery_schema_sha256" == "$refreshed_source_schema_sha256" ]] || { phase=REFRESHED_RECOVERY_PROOF_MISMATCH; exit 70; }
+  source_table_count="$refreshed_source_tables"
+  source_schema_sha256="$refreshed_source_schema_sha256"
+
+  # Restore may itself consume the freshness window: revalidate again against
+  # live schema/journal state; changed semantics abort before ANY production DDL.
+  phase=REVALIDATE_REFRESHED_REPAIR_PLAN
+  repair_plan_revalidated="$(mktemp "${state_dir}/${expected_sha}.repair-revalidated.XXXXXX")"
+  run_repair refresh "$repair_plan_revalidated" || { phase=REPAIR_PLAN_REVALIDATION_FAILED; exit 70; }
+  repair_plan="$repair_plan_revalidated"
+  repair_plan_fresh="$repair_plan_revalidated"
   phase=REHEARSE_CANONICAL_REPAIR
   repair_rehearsal="$(mktemp "${state_dir}/${expected_sha}.repair-rehearsal.XXXXXX")"
   run_repair rehearse "$repair_rehearsal" || { phase=REPAIR_REHEARSAL_FAILED; exit 70; }
