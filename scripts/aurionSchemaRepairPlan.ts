@@ -3,6 +3,8 @@ import {
   compareTableContract, parseLateMigrationSql, lateAurionMigrationTags,
   type ExpectedMigration, type ExpectedTable, type ObservedTable,
 } from "./aurionProductionSchemaReconciliation";
+import { proposeReviewed0068Transitions } from "./aurionSchemaReviewedTransitions";
+import { REVIEWED_JOURNAL, reviewedDialogueTable, type ReviewedJournalContract } from "./aurionSchemaReviewedJournal";
 
 export const REPAIR_POLICY = {
   absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence"],
@@ -18,7 +20,8 @@ export type RepairObservation = {
 };
 export type RepairOperation = {
   tag: string; statementIndex: number; sql: string; sqlSha256: string;
-  kind: "CREATE_TABLE" | "ADD_COLUMN" | "ADD_INDEX" | "ADD_CHECK";
+  kind: "CREATE_TABLE" | "ADD_COLUMN" | "ADD_INDEX" | "ADD_CHECK" | "REPLACE_CHECK_ATOMIC" | "DROP_REVIEWED_INDEX";
+  sourceStatementIndexes?: number[]; sourceSqlSha256?: string[];
 };
 export function canonicalJson(value: unknown): string {
   const canonical = (item: unknown): unknown => Array.isArray(item) ? item.map(canonical)
@@ -47,6 +50,7 @@ export function buildSchemaRepairPlan(input: {
   sourceRevision: string; ledgerPlanSha256: string; nowMs: number;
   observation: RepairObservation; contracts: ExpectedMigration[];
   sources: Record<string, string>; journal: JournalIdentity[];
+  reviewedJournalContract?: ReviewedJournalContract;
 }) {
   const { observation, contracts, sources, journal, nowMs, sourceRevision, ledgerPlanSha256 } = input;
   if (!/^[a-f0-9]{40}$/.test(sourceRevision) || !/^[a-f0-9]{64}$/.test(ledgerPlanSha256)) throw new Error("REPAIR_IDENTITY_INVALID");
@@ -65,6 +69,12 @@ export function buildSchemaRepairPlan(input: {
   }
   const finalTables = new Map<string, ExpectedTable>();
   for (const m of contracts) for (const table of m.tables) finalTables.set(table.name, table);
+  const reviewed = input.reviewedJournalContract;
+  if (reviewed) {
+    const expected = reviewedDialogueTable(reviewed.dialogueSql);
+    if (repairHash(expected) !== repairHash(reviewed.table) || sqlHash(reviewed.historicalInventorySql) !== REVIEWED_JOURNAL[1].hash) throw new Error("REVIEWED_JOURNAL_SOURCE_CHANGED");
+    finalTables.set(expected.name, expected);
+  }
   const actual = new Map(observation.observedTables.map(table => [table.name, table]));
   if (actual.size !== observation.observedTables.length) throw new Error("REPAIR_DUPLICATE_TABLE");
   const initialDrift = [...finalTables.values()].flatMap(table => actual.has(table.name)
@@ -81,12 +91,21 @@ export function buildSchemaRepairPlan(input: {
   const rows = journalTables[0]?.rows;
   if (journalTables.length !== 1 || journalTables[0].tableName !== "__drizzle_migrations" || !Array.isArray(rows)) blockers.push("JOURNAL_UNREADABLE_OR_AMBIGUOUS");
   const recorded = new Set<string>();
+  const preservedJournalRows: Array<(typeof REVIEWED_JOURNAL)[number]> = [];
+  const seenPairs = new Set<string>();
+  if (reviewed && REVIEWED_JOURNAL.some(e => identityByTag.get(e.tag)?.hash !== e.canonicalHash || identityByTag.get(e.tag)?.when !== e.canonicalWhen)) throw new Error("REVIEWED_JOURNAL_SOURCE_CHANGED");
   for (const row of rows ?? []) {
+    const pair = `${row.hash}:${row.createdAt}`;
+    if (seenPairs.has(pair)) { blockers.push("JOURNAL_IDENTITY_CONFLICT"); continue; }
+    seenPairs.add(pair);
+    const provenance = reviewed && REVIEWED_JOURNAL.find(e => row.hash === e.hash && row.createdAt === String(e.when));
+    if (provenance) { preservedJournalRows.push(provenance); continue; }
     const identity = identityByHash.get(row.hash);
     if (!identity || Number(row.createdAt) !== identity.when || recorded.has(row.hash)) blockers.push("JOURNAL_IDENTITY_CONFLICT");
     recorded.add(row.hash);
   }
-  for (const entry of journal) if (!(lateAurionMigrationTags as readonly string[]).includes(entry.tag) && !recorded.has(entry.hash)) blockers.push(`HISTORICAL_JOURNAL_GAP:${entry.tag}`);
+  for (const entry of journal) if (!(lateAurionMigrationTags as readonly string[]).includes(entry.tag) && !recorded.has(entry.hash)
+    && !preservedJournalRows.some(e => e.tag === entry.tag)) blockers.push(`HISTORICAL_JOURNAL_GAP:${entry.tag}`);
 
   const operations: RepairOperation[] = [];
   const simulated = new Map(actual);
@@ -138,18 +157,37 @@ export function buildSchemaRepairPlan(input: {
       if (kind === "CREATE_TABLE" && recorded.has(identityByTag.get(m.tag)!.hash)) blockers.push(`RECORDED_MIGRATION_TABLE_MISSING:${m.tag}:${tableName}`);
     }
   }
+  if (reviewed) {
+    const m = contracts.find(m => m.tag === "0068_aurion_item_manipulation_runtime")!;
+    const proposal = proposeReviewed0068Transitions({ sourceSql: sources[m.tag], priorTables: m.priorTables!, finalTables: m.tables, observedTables: [...simulated.values()] });
+    blockers.push(...proposal.blockers);
+    for (const op of proposal.operations) {
+      const name = op.kind === "REPLACE_CHECK_ATOMIC" ? "aurionItemInstancesV2" : "craftingReceipts";
+      const before = simulated.get(name)!;
+      if (op.kind === "REPLACE_CHECK_ATOMIC" && !before.columns.some(c => c.name === "craftingReceiptId")) { blockers.push("REVIEWED_CRAFTING_COLUMN_MISSING"); continue; }
+      const expected = finalTables.get(name)!;
+      simulated.set(name, op.kind === "REPLACE_CHECK_ATOMIC" ? { ...before,
+        checks: [...(before.checks ?? []).filter(c => c.name !== "aurionItemInstancesV2_exactly_one_provenance_ck"), expected.checks!.find(c => c.name === "aurionItemInstancesV2_exactly_one_provenance_ck")!],
+      } : op.kind === "DROP_REVIEWED_INDEX" ? { ...before, indexes: before.indexes.filter(i => i.name !== "craftingReceipts_inputItemId_unique") }
+        : { ...before, indexes: [...before.indexes, expected.indexes.find(i => i.name === "craftingReceipts_input_item_idx")!] });
+      operations.push({ ...op, tag: m.tag, statementIndex: op.sourceStatementIndexes[0] });
+    }
+  }
   const unresolved = [...finalTables.values()].flatMap(table => simulated.has(table.name)
     ? compareTableContract(table, simulated.get(table.name)!) : [`${table.name}:missing_table`]);
   blockers.push(...unresolved.map(reason => `OPERATOR_REVIEW_REQUIRED:${reason}`));
   const journalInsertions = contracts.filter(m => !recorded.has(identityByTag.get(m.tag)!.hash)).map(m => identityByTag.get(m.tag)!);
-  for (const entry of journalInsertions) if (![...REPAIR_POLICY.absent, ...REPAIR_POLICY.drift].includes(entry.tag as never)) blockers.push(`UNEXPECTED_JOURNAL_GAP:${entry.tag}`);
+  if (preservedJournalRows.some(e => e.tag === REVIEWED_JOURNAL[0].tag) && !recorded.has(REVIEWED_JOURNAL[0].canonicalHash)) journalInsertions.unshift(identityByTag.get(REVIEWED_JOURNAL[0].tag)!);
+  for (const entry of journalInsertions) if (![...REPAIR_POLICY.absent, ...REPAIR_POLICY.drift].includes(entry.tag as never)
+    && !(reviewed && entry.tag === REVIEWED_JOURNAL[0].tag && preservedJournalRows.some(e => e.tag === entry.tag))) blockers.push(`UNEXPECTED_JOURNAL_GAP:${entry.tag}`);
   const body = {
-    schemaVersion: "aurion.schema-repair-plan.v1", sourceRevision, ledgerPlanSha256,
+    schemaVersion: reviewed ? "aurion.schema-repair-plan.v2" : "aurion.schema-repair-plan.v1", sourceRevision, ledgerPlanSha256,
     observedAt: observation.observedAt, expiresAt: new Date(observedAtMs + REPAIR_MAX_AGE_MS).toISOString(),
     observationSha256: observationHash(observation), canonicalSchemaSha256: repairHash([...finalTables.values()]),
     policy: REPAIR_POLICY, affected, initialDrift,
-    decision: blockers.length ? "BLOCKED_OPERATOR_REVIEW" : operations.length || journalInsertions.length ? "ADDITIVE_REPAIR_READY" : "ALREADY_MATCHED",
+    decision: blockers.length ? "BLOCKED_OPERATOR_REVIEW" : operations.length || journalInsertions.length ? reviewed ? "REVIEWED_REPAIR_READY" : "ADDITIVE_REPAIR_READY" : "ALREADY_MATCHED",
     blockers: [...new Set(blockers)].sort(), operations, journalInsertions,
+    ...(reviewed ? { reviewedRecovery: { registryId: "aurion.schema-reviewed-recovery.v1", preservedJournalRows, protectedProductionApprovalRequired: true } } : {}),
   };
   return { ...body, repairPlanSha256: repairHash(body) };
 }

@@ -47,7 +47,7 @@ const tags = [
   "0068_aurion_item_manipulation_runtime",
   "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence",
 ];
-const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
+const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory", "0020_wasd_aurion_dialogue_quest_intents"];
 const deployFiles = [
   "verify-aurion-installed-schema-tool",
   "aurion-production-schema-apply",
@@ -66,6 +66,9 @@ await rm(out, { recursive: true, force: true });
 await mkdir(bin, { recursive: true });
 await mkdir(meta, { recursive: true });
 await mkdir(deploy, { recursive: true });
+await mkdir(path.join(drizzle, "provenance"), { recursive: true });
+const provenancePath = "drizzle/provenance/0066-dc6dfe393fb52c47d517f2ce56f8c302737274b7.sql";
+await copyFile(path.join(root, "config/schema-repair-provenance", path.basename(provenancePath)), path.join(out, provenancePath));
 for (const [source, target] of [
   ["reconcile-aurion-production-schema.ts", "reconcile.cjs"],
   ["apply-aurion-production-schema.ts", "apply.cjs"],
@@ -83,7 +86,7 @@ const repairHistory = await Promise.all(fullJournal.entries.map(async entry => (
 await writeFile(path.join(meta, "repair-history.json"), `${JSON.stringify(repairHistory, null, 2)}\n`, { mode: 0o644 });
 for (const tag of contractTags) await copyFile(path.join(root, "drizzle", `${tag}.sql`), path.join(drizzle, `${tag}.sql`));
 for (const filename of deployFiles) await copyFile(path.join(root, "deploy", filename), path.join(deploy, filename));
-const relativeFiles = ["bin/apply.cjs", "bin/repair.cjs", "bin/mysql-client-config.cjs", "bin/reconcile.cjs", "drizzle/meta/_journal.json", "drizzle/meta/repair-history.json", ...contractTags.map(tag => `drizzle/${tag}.sql`), ...deployFiles.map(filename => `deploy/${filename}`)].sort();
+const relativeFiles = [provenancePath, "bin/apply.cjs", "bin/repair.cjs", "bin/mysql-client-config.cjs", "bin/reconcile.cjs", "drizzle/meta/_journal.json", "drizzle/meta/repair-history.json", ...contractTags.map(tag => `drizzle/${tag}.sql`), ...deployFiles.map(filename => `deploy/${filename}`)].sort();
 const files = {};
 for (const relative of relativeFiles) {
   const absolute = path.join(out, relative);

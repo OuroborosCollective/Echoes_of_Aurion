@@ -375,8 +375,9 @@ if [[ "$preflight_mode" == "classify_repair" || "$preflight_mode" == "complete" 
   decision="$(APPLY_EXPECTED_SHA="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
     import fs from "node:fs";
     const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-    if(p.schemaVersion!=="aurion.schema-repair-plan.v1"||p.sourceRevision!==process.env.APPLY_EXPECTED_SHA||p.ledgerPlanSha256!==process.env.APPLY_PLAN_SHA256||!/^([a-f0-9]{64})$/.test(p.repairPlanSha256)||!Array.isArray(p.blockers)||p.blockers.length) process.exit(2);
-    if(!["ADDITIVE_REPAIR_READY","ALREADY_MATCHED"].includes(p.decision)) process.exit(3);
+    if(!["aurion.schema-repair-plan.v1","aurion.schema-repair-plan.v2"].includes(p.schemaVersion)||p.sourceRevision!==process.env.APPLY_EXPECTED_SHA||p.ledgerPlanSha256!==process.env.APPLY_PLAN_SHA256||!/^([a-f0-9]{64})$/.test(p.repairPlanSha256)||!Array.isArray(p.blockers)||p.blockers.length) process.exit(2);
+    if(p.schemaVersion==="aurion.schema-repair-plan.v1"&&! ["ADDITIVE_REPAIR_READY","ALREADY_MATCHED"].includes(p.decision)) process.exit(3);
+    if(p.schemaVersion==="aurion.schema-repair-plan.v2"&&(p.reviewedRecovery?.registryId!=="aurion.schema-reviewed-recovery.v1"||p.reviewedRecovery.protectedProductionApprovalRequired!==true||! ["REVIEWED_REPAIR_READY","ALREADY_MATCHED"].includes(p.decision))) process.exit(3);
     process.stdout.write(p.decision);
   ' "$repair_plan")" || { phase=REPAIR_PLAN_INVALID; exit 70; }
   if [[ "$decision" == "ALREADY_MATCHED" ]]; then
@@ -587,7 +588,7 @@ node --input-type=module -e '
     preflight:{state:preflight.overallState,summary:preflight.summary},
     backup:{created:true,id:process.env.APPLY_BACKUP_BASENAME,sha256:process.env.APPLY_BACKUP_SHA256,bytes:Number(process.env.APPLY_BACKUP_BYTES)},
     recovery:{executed:true,databaseImageId:process.env.APPLY_DATABASE_IMAGE_ID,sourceTableCount:Number(process.env.APPLY_SOURCE_TABLE_COUNT),recoveryTableCount:Number(process.env.APPLY_RECOVERY_TABLE_COUNT),schemaSha256:process.env.APPLY_SCHEMA_SHA256,matched:true},
-    apply:{state:execution.state,appliedMigrationTags:execution.appliedMigrationTags,repairedJournalTags:execution.repairedJournalTags??[],repairPlanSha256:execution.repairPlanSha256??null,rehearsalSha256:execution.rehearsalSha256??null,operations:execution.operations??[]},
+    apply:{state:execution.state,appliedMigrationTags:execution.appliedMigrationTags,repairedJournalTags:execution.repairedJournalTags??[],repairPlanSha256:execution.repairPlanSha256??null,rehearsalSha256:execution.rehearsalSha256??null,operations:execution.operations??[],reviewedRecovery:execution.reviewedRecovery??null},
     postflight:{state:postflight.overallState,summary:postflight.summary},
   },null,2)}\n`,{mode:0o600});
 ' "$success_tmp"

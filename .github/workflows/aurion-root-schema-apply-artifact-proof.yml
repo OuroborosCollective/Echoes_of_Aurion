@@ -14,6 +14,11 @@ on:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - "scripts/apply-aurion-production-schema.ts"
       - "scripts/repair-aurion-production-schema.ts"
+      - "scripts/aurionSchemaReviewedJournal.ts"
+      - "scripts/aurionSchemaReviewedTransitions.ts"
+      - "config/schema-repair-provenance/**"
+      - "server/aurionSchemaReviewedRecovery.test.ts"
+      - "server/aurionSchemaReviewedTransitions.test.ts"
       - "scripts/aurionSchemaRepair*.ts"
       - "scripts/schema-repair-proof-fixture.mjs"
       - "server/aurionSchemaRepairPlan.test.ts"
@@ -90,6 +95,7 @@ on:
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
+      - "drizzle/0020_wasd_aurion_dialogue_quest_intents.sql"
 
 permissions:
   contents: read
@@ -344,7 +350,7 @@ jobs:
           if(r.overallState!=="ALREADY_APPLIED"||r.backup?.created!==true||r.recovery?.executed!==true||r.recovery?.matched!==true||r.apply?.state!=="ALREADY_APPLIED") throw new Error("retry was not a safe no-op");
           NODE
 
-      - name: Prove sparse additive repair, isolated rehearsal, preserved data and unknown-drift rejection
+      - name: Prove reviewed sparse repair, isolated rehearsal, preserved history/data and unknown-drift rejection
         run: |
           set -euo pipefail
           fixture() {
@@ -356,7 +362,7 @@ jobs:
               node scripts/schema-repair-proof-fixture.mjs "$1"
           }
           fixture reject-column-contract-drift
-          fixture prepare-additive
+          fixture prepare-reviewed
           fixture reject-tampered-plan
           sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > repair-receipt.json
           node --input-type=module <<'NODE'
@@ -369,10 +375,14 @@ jobs:
           assert.match(r.apply.repairPlanSha256,/^[a-f0-9]{64}$/);
           assert.match(r.apply.rehearsalSha256,/^[a-f0-9]{64}$/);
           assert.ok(r.apply.operations.some(o=>o.tag==="0068_aurion_item_manipulation_runtime"&&o.kind==="ADD_COLUMN"));
+          assert.ok(r.apply.operations.some(o=>o.kind==="REPLACE_CHECK_ATOMIC"&&o.sourceStatementIndexes.join() === "4,5"));
+          assert.ok(r.apply.operations.some(o=>o.kind==="DROP_REVIEWED_INDEX"));
+          assert.equal(r.apply.reviewedRecovery.preservedJournalRows.length,2);
+          assert.ok(r.apply.repairedJournalTags.includes("0020_wasd_aurion_dialogue_quest_intents"));
           assert.ok(r.apply.operations.every(o=>o.result==="APPLIED"&&o.startedAt&&o.endedAt&&o.backupSha256===r.backup.sha256));
           assert.deepEqual(r.postflight.summary,{migrationCount:52,matchCount:52,absentCount:0,driftCount:0});
           NODE
-          fixture verify-repaired
+          fixture verify-reviewed
           fixture prepare-unknown
           set +e
           sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > blocked-repair-receipt.json

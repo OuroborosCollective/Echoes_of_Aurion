@@ -4,7 +4,7 @@ const identifier = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const tag = /^[0-9]{4}_[a-z0-9_]{1,96}$/;
 const states = new Set(['ABSENT_APPLY_REQUIRED', 'PRESENT_SCHEMA_DRIFT', 'PRESENT_SCHEMA_MATCH']);
 const driftKinds = new Set(['missing_table', 'missing_column', 'type', 'nullability', 'default', 'extra', 'unexpected_column', 'missing_index', 'index_uniqueness', 'index_columns', 'unexpected_index', 'missing_check', 'check_expression', 'unexpected_check', 'missing_trigger', 'trigger_contract', 'unexpected_trigger']);
-const errorClasses = new Set(['REPAIR_MODE_INVALID', 'DATABASE_URL_MISSING', 'DATABASE_URL_INVALID', 'DATABASE_LOCK_UNAVAILABLE', 'REPAIR_IDENTITY_INVALID', 'REPAIR_READBACK_IDENTITY_MISMATCH', 'REPAIR_READBACK_STALE', 'REPAIR_MIGRATION_COVERAGE_INVALID', 'REPAIR_DUPLICATE_TABLE', 'REPAIR_HISTORY_INVALID', 'REPAIR_SOURCE_HISTORY_MISMATCH', 'REPAIR_INDEX_SOURCE_INVALID', 'UNSUPPORTED_SCHEMA_STRUCTURE', 'JOURNAL_UNREADABLE_OR_AMBIGUOUS', 'REPAIR_EXECUTION_FAILED']);
+const errorClasses = new Set(['REVIEWED_JOURNAL_SOURCE_CHANGED', 'REVIEWED_TRANSITION_SOURCE_CHANGED', 'REVIEWED_TRANSITION_CONTRACT_MISSING', 'REPAIR_MODE_INVALID', 'DATABASE_URL_MISSING', 'DATABASE_URL_INVALID', 'DATABASE_LOCK_UNAVAILABLE', 'REPAIR_IDENTITY_INVALID', 'REPAIR_READBACK_IDENTITY_MISMATCH', 'REPAIR_READBACK_STALE', 'REPAIR_MIGRATION_COVERAGE_INVALID', 'REPAIR_DUPLICATE_TABLE', 'REPAIR_HISTORY_INVALID', 'REPAIR_SOURCE_HISTORY_MISMATCH', 'REPAIR_INDEX_SOURCE_INVALID', 'UNSUPPORTED_SCHEMA_STRUCTURE', 'JOURNAL_UNREADABLE_OR_AMBIGUOUS', 'REPAIR_EXECUTION_FAILED']);
 const stages = new Set(['INITIALIZE', 'PREFLIGHT_SCHEMA']);
 
 function canonicalJson(value) {
@@ -16,7 +16,7 @@ function canonicalJson(value) {
 function blockerDetails(value) {
   if (typeof value !== 'string') return { code: 'UNCLASSIFIED_BLOCKER' };
   const [code, first, second, third] = value.split(':');
-  if (['JOURNAL_UNREADABLE_OR_AMBIGUOUS', 'JOURNAL_IDENTITY_CONFLICT'].includes(code) && value === code) return { code };
+  if (['REVIEWED_CRAFTING_COLUMN_MISSING','REVIEWED_PROVENANCE_PRESTATE_UNKNOWN','REVIEWED_CRAFTING_INDEX_PRESTATE_UNKNOWN','REVIEWED_CRAFTING_REPLACEMENT_INDEX_INVALID','JOURNAL_UNREADABLE_OR_AMBIGUOUS', 'JOURNAL_IDENTITY_CONFLICT'].includes(code) && value === code) return { code };
   if (['HISTORICAL_JOURNAL_GAP', 'UNEXPECTED_JOURNAL_GAP'].includes(code) && tag.test(first ?? '') && second === undefined) return { code, migration: first };
   if (code === 'UNEXPECTED_MIGRATION_STATE' && tag.test(first ?? '') && states.has(second) && third === undefined) return { code, migration: first, state: second };
   if (code === 'UNKNOWN_TABLE' && identifier.test(first ?? '') && second === undefined) return { code, table: first };
@@ -44,7 +44,7 @@ export function schemaRepairFailureReceipt(value, sourceRevision, ledgerPlanSha2
     && errorClasses.has(value.errorClass) && stages.has(value.failureStage)) {
     return { ...base, kind: 'EXECUTION_ERROR', failureStage: value.failureStage, errorClass: value.errorClass };
   }
-  if (value?.schemaVersion !== 'aurion.schema-repair-plan.v1' || value.sourceRevision !== sourceRevision
+  if (!['aurion.schema-repair-plan.v1','aurion.schema-repair-plan.v2'].includes(value?.schemaVersion) || value.sourceRevision !== sourceRevision
     || value.ledgerPlanSha256 !== ledgerPlanSha256 || value.decision !== 'BLOCKED_OPERATOR_REVIEW'
     || !Array.isArray(value.blockers) || value.blockers.length < 1 || value.blockers.length > 10000
     || !Array.isArray(value.affected) || value.affected.length > 100) return null;

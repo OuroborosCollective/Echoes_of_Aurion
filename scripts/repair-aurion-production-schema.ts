@@ -5,6 +5,7 @@ import { readProductionSchemaContracts } from "./aurionProductionSchemaContracts
 import { compareTableContract } from "./aurionProductionSchemaReconciliation";
 import { buildSchemaRepairPlan, canonicalJson, type JournalIdentity, type SchemaRepairPlan } from "./aurionSchemaRepairPlan";
 import { readRepairObservation, repairDatabaseUrl } from "./aurionSchemaRepairDatabase";
+import { reviewedDialogueTable, historicalInventorySourcePath } from "./aurionSchemaReviewedJournal";
 
 const root = path.resolve(process.env.AURION_SCHEMA_APPLY_ROOT || process.cwd());
 const sourceRevision = process.env.AURION_SCHEMA_APPLY_SOURCE_SHA ?? "";
@@ -18,6 +19,10 @@ async function main() {
   const contracts = await readProductionSchemaContracts(root);
   const sources = Object.fromEntries(await Promise.all(contracts.map(async m => [m.tag, await readFile(path.join(root, "drizzle", `${m.tag}.sql`), "utf8")])));
   const journal = JSON.parse(await readFile(path.join(root, "drizzle/meta/repair-history.json"), "utf8")) as JournalIdentity[];
+  const dialogueSql = await readFile(path.join(root, "drizzle/0020_wasd_aurion_dialogue_quest_intents.sql"), "utf8");
+  const historicalInventorySql = await readFile(path.join(root, historicalInventorySourcePath), "utf8");
+  const reviewedJournalContract = { dialogueSql, historicalInventorySql, table: reviewedDialogueTable(dialogueSql) };
+  const observe = (connection: mysql.Connection) => readRepairObservation(connection, contracts, sourceRevision, [reviewedJournalContract.table]);
   const connection = await mysql.createConnection(await repairDatabaseUrl());
   let locked = false;
   try {
@@ -28,10 +33,10 @@ async function main() {
       locked = true;
     }
     stage = "PREFLIGHT_SCHEMA";
-    const observation = await readRepairObservation(connection, contracts, sourceRevision);
+    const observation = await observe(connection);
     const approved = mode === "plan" ? null : JSON.parse(await readFile(process.argv[3], "utf8")) as SchemaRepairPlan;
     if (approved) observation.observedAt = approved.observedAt;
-    const plan = buildSchemaRepairPlan({ sourceRevision, ledgerPlanSha256, nowMs: Date.now(), observation, contracts, sources, journal });
+    const plan = buildSchemaRepairPlan({ sourceRevision, ledgerPlanSha256, nowMs: Date.now(), observation, contracts, sources, journal, reviewedJournalContract });
     repairPlanSha256 = plan.repairPlanSha256;
     if (mode === "plan") {
       console.log(JSON.stringify(plan, null, 2));
@@ -47,15 +52,16 @@ async function main() {
     if (!/^[a-f0-9]{64}$/.test(backupSha256) || (mode === "apply" && !/^[a-f0-9]{64}$/.test(rehearsalSha256))) throw new Error("REPAIR_RECOVERY_EVIDENCE_REQUIRED");
     stage = "MIGRATE";
     for (const operation of plan.operations) {
-      const receipt: Record<string, unknown> = { tag: operation.tag, statementIndex: operation.statementIndex, sqlSha256: operation.sqlSha256, kind: operation.kind, startedAt: new Date().toISOString(), backupSha256, result: "PENDING" };
+      const receipt: Record<string, unknown> = { tag: operation.tag, statementIndex: operation.statementIndex, sqlSha256: operation.sqlSha256, kind: operation.kind, sourceStatementIndexes: operation.sourceStatementIndexes, sourceSqlSha256: operation.sourceSqlSha256, startedAt: new Date().toISOString(), backupSha256, result: "PENDING" };
       executed.push(receipt);
       try { await connection.query(operation.sql); receipt.result = "APPLIED"; }
       catch { receipt.result = "FAILED"; receipt.errorClass = "CANONICAL_STATEMENT_FAILED"; throw new Error("CANONICAL_STATEMENT_FAILED"); }
       finally { receipt.endedAt = new Date().toISOString(); }
     }
     stage = "POSTFLIGHT_SCHEMA";
-    const after = await readRepairObservation(connection, contracts, sourceRevision);
+    const after = await observe(connection);
     const final = new Map(contracts.flatMap(m => m.tables.map(t => [t.name, t] as const)));
+    final.set(reviewedJournalContract.table.name, reviewedJournalContract.table);
     const actual = new Map(after.observedTables.map(t => [t.name, t]));
     if ([...final].some(([name, table]) => !actual.has(name) || compareTableContract(table, actual.get(name)!).length)) throw new Error("REPAIR_POSTFLIGHT_MISMATCH");
     stage = "POSTFLIGHT_JOURNAL";
@@ -68,12 +74,13 @@ async function main() {
       catch { receipt.result = "FAILED"; receipt.errorClass = "JOURNAL_CONFLICT"; throw new Error("JOURNAL_CONFLICT"); }
       finally { receipt.endedAt = new Date().toISOString(); }
     }
-    const finalObservation = await readRepairObservation(connection, contracts, sourceRevision);
-    const verified = buildSchemaRepairPlan({ sourceRevision, ledgerPlanSha256, nowMs: Date.now(), observation: finalObservation, contracts, sources, journal });
+    const finalObservation = await observe(connection);
+    const verified = buildSchemaRepairPlan({ sourceRevision, ledgerPlanSha256, nowMs: Date.now(), observation: finalObservation, contracts, sources, journal, reviewedJournalContract });
     if (verified.decision !== "ALREADY_MATCHED") throw new Error("REPAIR_POSTFLIGHT_MISMATCH");
     console.log(JSON.stringify({ recordType: "aurion_production_schema_apply_execution", schemaVersion: 1, sourceRevision, planSha256: ledgerPlanSha256, repairPlanSha256,
       mode: "apply", executionMode: mode, state: "APPLY_SUCCEEDED", backupSha256, rehearsalSha256: mode === "apply" ? rehearsalSha256 : null,
       operations: executed, journalInsertions: plan.journalInsertions.map(x => x.tag),
+      reviewedRecovery: plan.reviewedRecovery,
       appliedMigrationTags: [...new Set(plan.operations.map(x => x.tag))], repairedJournalTags: plan.journalInsertions.map(x => x.tag),
       postflight: { migrationCount: contracts.length, matchCount: contracts.length, absentCount: 0, driftCount: 0 }, databaseCredentialReturned: false }, null, 2));
   } finally {

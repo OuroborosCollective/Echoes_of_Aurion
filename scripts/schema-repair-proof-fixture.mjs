@@ -47,7 +47,7 @@ try {
       }
     }
     assert.equal(run("reconcile").status, 0);
-  } else if (mode === "prepare-additive") {
+  } else if (["prepare-additive", "prepare-reviewed"].includes(mode)) {
     const history = JSON.parse(fs.readFileSync("dist-production-apply/drizzle/meta/repair-history.json", "utf8"));
     for (const tag of ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence"]) {
       const sql = fs.readFileSync(`drizzle/${tag}.sql`, "utf8");
@@ -63,6 +63,18 @@ try {
     await db.query("ALTER TABLE aurionItemInstancesV2 DROP CONSTRAINT aurionItemInstancesV2_exactly_one_provenance_ck");
     await db.query("ALTER TABLE aurionItemInstancesV2 DROP INDEX aurionItemInstancesV2_crafting_receipt_uq");
     await db.query("ALTER TABLE aurionItemInstancesV2 DROP COLUMN craftingReceiptId");
+    if (mode === "prepare-reviewed") {
+      await db.query("ALTER TABLE aurionItemInstancesV2 ADD CONSTRAINT aurionItemInstancesV2_exactly_one_provenance_ck CHECK ((lootReceiptId IS NOT NULL AND inventoryReceiptId IS NULL) OR (lootReceiptId IS NULL AND inventoryReceiptId IS NOT NULL))");
+      await db.query("ALTER TABLE craftingReceipts DROP INDEX craftingReceipts_input_item_idx, ADD UNIQUE INDEX craftingReceipts_inputItemId_unique (inputItemId)");
+      const inventory = history.find(e => e.tag === "0066_aurion_inventory_transaction_kernel");
+      const manipulation = history.find(e => e.tag === "0068_aurion_item_manipulation_runtime");
+      await db.query("DELETE FROM __drizzle_migrations WHERE hash IN (?,?)", [inventory.hash, manipulation.hash]);
+      await db.query("INSERT INTO __drizzle_migrations (hash,created_at) VALUES (?,?)", ["42ba1655995dc5ac0fcd47bd7ee4aca7dd025a8edf7602fccaa68d8dae83341f",1790816583000]);
+      const [changed] = await db.query("UPDATE __drizzle_migrations SET created_at=? WHERE hash=? AND created_at=?", [1787843338567,"918952d05fe420da9c3d8876d07cfaa73c78a7fbc2d3d16083d50afc4ee0064a",1787841103616]);
+      assert.equal(changed.affectedRows,1);
+      await db.query("INSERT INTO aurionItemInstancesV2 (id,ownerUserId,lootReceiptId,baseItemDefinitionId,category,quality,itemLevelExact,affixesJson,itemPower,deterministicHash,mergeKey,provenanceHash) VALUES ('reviewed-existing-item',1,'reviewed-loot','proof','weapon','normal','1','[]',1,REPEAT('a',64),'reviewed-merge','reviewed-provenance')");
+    }
+
   } else if (mode === "reject-tampered-plan") {
     const env = { ...process.env, AURION_SCHEMA_APPLY_ROOT: path.resolve("dist-production-apply"),
       AURION_SCHEMA_APPLY_SOURCE_SHA: process.env.GITHUB_SHA,
@@ -71,7 +83,7 @@ try {
     const planned = run(["plan"]);
     assert.equal(planned.status, 0);
     const original = JSON.parse(planned.stdout);
-    assert.equal(original.decision, "ADDITIVE_REPAIR_READY");
+    assert.equal(original.decision, "REVIEWED_REPAIR_READY");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "schema-plan-proof-"));
     try {
       const file = path.join(dir, "plan.json");
@@ -96,7 +108,7 @@ try {
       const [rows] = await db.query("SELECT sourceSizeBytes FROM aurionContentHashLedger WHERE id='append-only-proof'");
       assert.deepEqual(rows.map(row => row.sourceSizeBytes), [1]);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  } else if (mode === "verify-repaired") {
+  } else if (["verify-repaired", "verify-reviewed"].includes(mode)) {
     const [rows] = await db.query("SELECT sourceSizeBytes FROM aurionContentHashLedger WHERE id='append-only-proof'");
     assert.deepEqual(rows.map(row => row.sourceSizeBytes), [1], "existing data must survive repair and restore rehearsal");
     const [columns] = await db.query("SHOW COLUMNS FROM aurionItemInstancesV2 LIKE 'craftingReceiptId'");
@@ -104,7 +116,21 @@ try {
     const [tables] = await db.query("SHOW TABLES LIKE 'aurionNpcGuildStates'");
     assert.equal(tables.length, 1);
     const [journal] = await db.query("SELECT COUNT(*) AS n FROM __drizzle_migrations");
-    assert.equal(Number(journal[0].n), JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8")).entries.length);
+    const expectedCount = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8")).entries.length;
+    assert.equal(Number(journal[0].n), expectedCount + (mode === "verify-reviewed" ? 2 : 0));
+    if (mode === "verify-reviewed") {
+      const history = JSON.parse(fs.readFileSync("dist-production-apply/drizzle/meta/repair-history.json","utf8"));
+      const [actual] = await db.query("SELECT hash,created_at FROM __drizzle_migrations");
+      const pairs = actual.map(r=>`${r.hash}:${r.created_at}`);
+      for (const e of history) assert.equal(pairs.filter(p=>p===`${e.hash}:${e.when}`).length,1);
+      for (const pair of ["918952d05fe420da9c3d8876d07cfaa73c78a7fbc2d3d16083d50afc4ee0064a:1787843338567","42ba1655995dc5ac0fcd47bd7ee4aca7dd025a8edf7602fccaa68d8dae83341f:1790816583000"]) assert.equal(pairs.filter(p=>p===pair).length,1);
+      const [items]=await db.query("SELECT mergeKey,provenanceHash,craftingReceiptId,quantityExact,status FROM aurionItemInstancesV2 WHERE id='reviewed-existing-item'");
+      assert.deepEqual(items.map(i=>({...i})),[{mergeKey:'reviewed-merge',provenanceHash:'reviewed-provenance',craftingReceiptId:null,quantityExact:'1',status:'owned'}]);
+      const [indexes]=await db.query("SHOW INDEX FROM craftingReceipts WHERE Key_name IN ('craftingReceipts_inputItemId_unique','craftingReceipts_input_item_idx')");
+      assert.ok(indexes.length===1&&indexes[0].Key_name==='craftingReceipts_input_item_idx'&&Number(indexes[0].Non_unique)===1);
+      await db.query("INSERT INTO aurionItemInstancesV2 (id,ownerUserId,craftingReceiptId,baseItemDefinitionId,category,quality,itemLevelExact,affixesJson,itemPower,deterministicHash,mergeKey,provenanceHash) VALUES ('reviewed-crafted-item',1,'reviewed-crafted','proof','weapon','normal','1','[]',1,REPEAT('b',64),'reviewed-crafted-merge','reviewed-crafted-provenance')");
+      await assert.rejects(db.query("UPDATE aurionItemInstancesV2 SET lootReceiptId='invalid-double-provenance' WHERE id='reviewed-crafted-item'"),error=>Number(error.errno)===4025);
+    }
   } else if (mode === "prepare-unknown") {
     await db.query("ALTER TABLE aurionItemInstancesV2 ADD COLUMN unknownRepairProof text NULL");
     await db.query("ALTER TABLE aurionItemInstancesV2 DROP INDEX aurionItemInstancesV2_crafting_receipt_uq");
