@@ -13,6 +13,7 @@ describe("Home", () => {
     expect(screen.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet\./i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /SPIEL BETRETEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
+    expect(screen.getByRole("button", { name: "Events" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Asset-Katalog" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Signalraum" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Forum" }).length).toBeGreaterThan(0);

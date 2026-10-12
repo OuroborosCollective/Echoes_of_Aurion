@@ -24,3 +24,7 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+
+## 2026-10-12 - Landing Page Community Entry Points
+**Learning:** Important community sections like Events were missing direct entry points on the landing page, and some secondary CTA buttons lacked screen reader context.
+**Action:** Grouped related community functions with explicit entry buttons and ensured all tactile buttons have a valid title attribute.
