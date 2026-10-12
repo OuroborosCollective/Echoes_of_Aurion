@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: main
           fetch-depth: 1
           persist-credentials: false
       - name: Bind current main and unchanged prepared schema contracts
@@ -45,19 +45,10 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = OuroborosCollective/Echoes_of_Aurion
           test "$GITHUB_REF" = refs/heads/main
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$GITHUB_SHA" = "$EXPECTED_SHA"
-          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ && "$PREPARED_SHA" =~ ^[a-f0-9]{40}$ && "$ARTIFACT_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_SHA"
-          prepared_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$PREPARED_SHA" --jq '.tree.sha')"
-          prepared_drizzle="$(gh api "repos/$GITHUB_REPOSITORY/git/trees/$prepared_tree" --jq '.tree[] | select(.path=="drizzle" and .type=="tree") | .sha')"
-          test "$(git rev-parse HEAD:drizzle)" = "$prepared_drizzle"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN_ID" > source-run.json
-          node --input-type=module -e '
-            import fs from "node:fs";
-            const r=JSON.parse(fs.readFileSync("source-run.json","utf8"));
-            if(r.head_sha!==process.env.PREPARED_SHA||r.head_branch!=="main"||r.event!=="workflow_dispatch"||r.path!==".github/workflows/deploy-aurion-zone-runtime.yml"||r.repository.id!==1313103794||r.repository.owner.id!==266194342) throw new Error("DIAGNOSTIC_ARTIFACT_SOURCE_INVALID");
-          '
+          node scripts/verify-aurion-journal-diagnostic-source.mjs
       - name: Download only the prepared read-only reconciliation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
