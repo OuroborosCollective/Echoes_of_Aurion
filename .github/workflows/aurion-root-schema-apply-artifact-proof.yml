@@ -95,6 +95,7 @@ on:
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
+      - "drizzle/0020_wasd_aurion_dialogue_quest_intents.sql"
 
 permissions:
   contents: read
