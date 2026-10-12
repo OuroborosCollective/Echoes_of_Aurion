@@ -911,6 +911,7 @@ jobs:
           set -euo pipefail
           metadata="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 "https://arelogic.space/.well-known/oauth-protected-resource")"
           printf '%s' "$metadata" | node --input-type=module -e '
+            import fs from "node:fs";
             let raw="";
             for await (const chunk of process.stdin) raw+=chunk;
             const body=JSON.parse(raw);
@@ -918,7 +919,24 @@ jobs:
             if(!Array.isArray(body.authorization_servers)||body.authorization_servers.length<1) process.exit(22);
             if(body.authorization_servers.some(value=>typeof value!=="string"||!value.startsWith("https://"))) process.exit(23);
             const scopes=new Set(Array.isArray(body.scopes_supported)?body.scopes_supported:[]);
-            for(const required of ["aurion.admin.read","aurion.admin.assets.write","aurion.admin.authoring.write"]) {
+            const compose=fs.readFileSync("docker-compose.traefik.yml","utf8");
+            const mode=compose.match(/^      AURION_ADMIN_MCP_AUTH_MODE: ([a-z_]+)$/m)?.[1]||"scoped_oauth";
+            let requiredScopes;
+            if(mode==="application_roles") {
+              const expectedClient=compose.match(/^      AURION_ADMIN_MCP_CLIENT_ID: "([a-f0-9-]{36})"$/m)?.[1];
+              const authorization=body.aurion_admin_authorization;
+              if(!expectedClient||authorization?.mode!==mode||authorization?.client_id!==expectedClient) process.exit(25);
+              const roles=new Set(Array.isArray(authorization.roles_supported)?authorization.roles_supported:[]);
+              for(const role of ["aurion_admin_read","aurion_admin_assets_write","aurion_admin_authoring_write"]) {
+                if(!roles.has(role)) process.exit(26);
+              }
+              requiredScopes=["openid","profile","offline_access"];
+            } else if(mode==="scoped_oauth") {
+              requiredScopes=["aurion.admin.read","aurion.admin.assets.write","aurion.admin.authoring.write"];
+            } else {
+              process.exit(25);
+            }
+            for(const required of requiredScopes) {
               if(!scopes.has(required)) process.exit(24);
             }
           '

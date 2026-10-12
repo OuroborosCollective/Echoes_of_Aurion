@@ -10,6 +10,13 @@ export const AURION_ADMIN_MCP_READ_SCOPE = "aurion.admin.read" as const;
 export const AURION_ADMIN_GLB_WRITE_SCOPE = "aurion.admin.assets.write" as const;
 export const AURION_ADMIN_AUTHORING_WRITE_SCOPE = "aurion.admin.authoring.write" as const;
 export const AURION_ADMIN_MCP_SCOPES = [AURION_ADMIN_MCP_READ_SCOPE, AURION_ADMIN_GLB_WRITE_SCOPE, AURION_ADMIN_AUTHORING_WRITE_SCOPE] as const;
+export const AURION_ADMIN_MCP_STANDARD_OAUTH_SCOPES = ["openid", "profile", "offline_access"] as const;
+
+const APPLICATION_ROLE_SCOPES = [
+  ["aurion_admin_read", AURION_ADMIN_MCP_READ_SCOPE],
+  ["aurion_admin_assets_write", AURION_ADMIN_GLB_WRITE_SCOPE],
+  ["aurion_admin_authoring_write", AURION_ADMIN_AUTHORING_WRITE_SCOPE],
+] as const;
 
 export type AurionAdminMcpScope = (typeof AURION_ADMIN_MCP_SCOPES)[number];
 
@@ -17,7 +24,10 @@ export type AurionAdminMcpSettings = {
   resourceUrl: string;
   authorizationServerUrl: string;
   protectedResourceMetadataUrl: string;
-};
+} & (
+  | { authMode?: "scoped_oauth"; clientId?: never }
+  | { authMode: "application_roles"; clientId: string }
+);
 
 export type AurionAdminMcpTokenClaims = {
   issuer: string;
@@ -60,11 +70,23 @@ export function readAurionAdminMcpSettings(environment: NodeJS.ProcessEnv): Auri
   if (new URL(resourceUrl).pathname !== AURION_ADMIN_MCP_PATH) {
     throw new Error(`AURION_ADMIN_MCP_RESOURCE_URL must end with ${AURION_ADMIN_MCP_PATH}`);
   }
-  return Object.freeze({
+  const settings = {
     resourceUrl,
     authorizationServerUrl,
     protectedResourceMetadataUrl: new URL("/.well-known/oauth-protected-resource", resourceUrl).toString().replace(/\/$/, ""),
-  });
+  };
+  const authMode = environment.AURION_ADMIN_MCP_AUTH_MODE?.trim() || "scoped_oauth";
+  if (authMode === "scoped_oauth") return Object.freeze(settings);
+  if (authMode !== "application_roles") throw new Error("AURION_ADMIN_MCP_AUTH_MODE must be scoped_oauth or application_roles");
+  const clientId = environment.AURION_ADMIN_MCP_CLIENT_ID?.trim().toLowerCase();
+  if (!clientId || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(clientId)) {
+    throw new Error("AURION_ADMIN_MCP_CLIENT_ID must be a UUID in application_roles mode");
+  }
+  return Object.freeze({ ...settings, authMode, clientId });
+}
+
+export function adminMcpRequiredOAuthScope(settings: AurionAdminMcpSettings): string {
+  return settings.authMode === "application_roles" ? "openid" : AURION_ADMIN_MCP_READ_SCOPE;
 }
 
 export function hasAurionAdminMcpReadScope(scopes: readonly string[]): boolean {
@@ -87,8 +109,21 @@ export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionA
   openIdForOidcSubject(issuer, subject);
   const audience = parseAudienceClaim(payload.aud);
   if (!audience.includes(settings.resourceUrl)) throw new Error("Admin MCP token is not bound to this resource server");
-  const scopes = parseScopeClaim(payload.scope);
-  if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Admin MCP token lacks the required read scope");
+  let scopes: readonly string[];
+  if (settings.authMode === "application_roles") {
+    if (!audience.includes(settings.clientId)) throw new Error("Admin MCP token is not bound to the configured client application");
+    if (payload.applicationId !== settings.clientId) throw new Error("Admin MCP token applicationId does not match the configured client application");
+    // FusionAuth access tokens may omit OAuth scopes. When supplied, require standard read consent.
+    if (payload.scope !== undefined && !parseScopeClaim(payload.scope).includes("openid")) {
+      throw new Error("Admin MCP token lacks the required openid scope");
+    }
+    const roles = Array.isArray(payload.roles) ? payload.roles.filter((role): role is string => typeof role === "string") : [];
+    scopes = Object.freeze(APPLICATION_ROLE_SCOPES.filter(([role]) => roles.includes(role)).map(([, scope]) => scope).sort());
+    if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Admin MCP token lacks the required aurion_admin_read application role");
+  } else {
+    scopes = parseScopeClaim(payload.scope);
+    if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Admin MCP token lacks the required read scope");
+  }
   const expiresAtSeconds = typeof payload.exp === "number" && Number.isSafeInteger(payload.exp) ? payload.exp : 0;
   if (expiresAtSeconds <= Math.floor(validEpochMilliseconds(observedAtMs) / 1000)) throw new Error("Admin MCP token is expired");
   return Object.freeze({ issuer, subject, audience, scopes, expiresAtSeconds });
@@ -98,11 +133,18 @@ export function protectedResourceMetadata(settings: AurionAdminMcpSettings) {
   return Object.freeze({
     resource: settings.resourceUrl,
     authorization_servers: [settings.authorizationServerUrl],
-    scopes_supported: [...AURION_ADMIN_MCP_SCOPES],
+    scopes_supported: settings.authMode === "application_roles" ? [...AURION_ADMIN_MCP_STANDARD_OAUTH_SCOPES] : [...AURION_ADMIN_MCP_SCOPES],
+    ...(settings.authMode === "application_roles" ? {
+      aurion_admin_authorization: {
+        mode: "application_roles" as const,
+        client_id: settings.clientId,
+        roles_supported: APPLICATION_ROLE_SCOPES.map(([role]) => role),
+      },
+    } : {}),
     resource_documentation: "https://arelogic.space/docs/aurion-admin-mcp",
   });
 }
 
 export function bearerChallenge(settings: AurionAdminMcpSettings): string {
-  return `Bearer resource_metadata=${JSON.stringify(settings.protectedResourceMetadataUrl)}, scope=${JSON.stringify(AURION_ADMIN_MCP_READ_SCOPE)}`;
+  return `Bearer resource_metadata=${JSON.stringify(settings.protectedResourceMetadataUrl)}, scope=${JSON.stringify(adminMcpRequiredOAuthScope(settings))}`;
 }
