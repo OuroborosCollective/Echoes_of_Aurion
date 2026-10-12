@@ -571,7 +571,7 @@ if [[ "$preflight_mode" == "repair" ]]; then
   recovery_error_class="$(node --input-type=module -e '
     import fs from "node:fs";
     const stderr=fs.readFileSync(process.argv[1],"utf8");
-    const maria=stderr.match(/\\bERROR\\s+([0-9]{4})\\b/i);
+    const maria=stderr.match(/\bERROR\s+([0-9]{4})\b/i);
     if(maria) process.stdout.write("MARIADB_ERROR_"+maria[1]);
     else if(/Error response from daemon/i.test(stderr)) process.stdout.write("DOCKER_EXEC_ERROR");
     else if(/gzip:/i.test(stderr)) process.stdout.write("GZIP_ERROR");
