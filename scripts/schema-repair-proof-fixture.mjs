@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import mysql from "mysql2/promise";
+import { createHash } from "node:crypto";
 
 const target = new URL(process.env.DATABASE_URL ?? "");
 assert.equal(process.env.CI, "true");
@@ -96,14 +97,31 @@ try {
       assert.deepEqual(JSON.parse(rejected.stdout).operations, []);
       const stale = structuredClone(original);
       stale.observedAt = "2000-01-01T00:00:00.000Z";
+      stale.expiresAt = "2000-01-01T00:15:00.000Z";
+      const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==="object"?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+      const {repairPlanSha256: staleHash, ...staleBody}=stale;
+      stale.repairPlanSha256=createHash("sha256").update(JSON.stringify(canonical(staleBody))).digest("hex");
       fs.writeFileSync(file, JSON.stringify(stale));
       assert.equal(JSON.parse(run(["apply", file]).stdout).errorClass, "REPAIR_READBACK_STALE");
+      const [journalBeforeRefresh]=await db.query("SELECT hash,created_at FROM __drizzle_migrations ORDER BY id");
+      const [columnsBeforeRefresh]=await db.query("SHOW COLUMNS FROM aurionItemInstancesV2");
+      const refreshed=run(["refresh",file]);
+      assert.equal(refreshed.status,0,refreshed.stdout);
+      const renewed=JSON.parse(refreshed.stdout);
+      const semantic=({observedAt,expiresAt,repairPlanSha256,...body})=>body;
+      assert.deepEqual(semantic(renewed),semantic(original));
+      assert.equal(fs.readFileSync(file,"utf8"),JSON.stringify(stale));
+      assert.deepEqual((await db.query("SELECT hash,created_at FROM __drizzle_migrations ORDER BY id"))[0],journalBeforeRefresh);
+      assert.deepEqual((await db.query("SHOW COLUMNS FROM aurionItemInstancesV2"))[0],columnsBeforeRefresh);
       fs.writeFileSync(file, JSON.stringify(original));
       await db.query("ALTER TABLE aurionItemInstancesV2 ADD COLUMN interveningSchemaProof text NULL");
       try {
         const changed = run(["apply", file]);
         assert.equal(JSON.parse(changed.stdout).errorClass, "REPAIR_PLAN_OR_PRESTATE_CHANGED");
         assert.deepEqual(JSON.parse(changed.stdout).operations, []);
+        const refreshChanged=run(["refresh",file]);
+        assert.notEqual(refreshChanged.status,0);
+        assert.equal(JSON.parse(refreshChanged.stdout).errorClass,"REPAIR_PLAN_OR_PRESTATE_CHANGED");
       } finally { await db.query("ALTER TABLE aurionItemInstancesV2 DROP COLUMN interveningSchemaProof"); }
       const [rows] = await db.query("SELECT sourceSizeBytes FROM aurionContentHashLedger WHERE id='append-only-proof'");
       assert.deepEqual(rows.map(row => row.sourceSizeBytes), [1]);

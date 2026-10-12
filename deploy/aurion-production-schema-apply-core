@@ -39,6 +39,8 @@ recovery_stderr_bytes=0
 apply_raw=""
 apply_failure_receipt=""
 repair_plan=""
+repair_plan_original=""
+repair_plan_fresh=""
 repair_rehearsal=""
 repair_rehearsal_sha256=""
 
@@ -84,6 +86,9 @@ emit_failure() {
   APPLY_RECOVERY_STDERR_BYTES="$recovery_stderr_bytes" \
   APPLY_FAILURE_RECEIPT="$apply_failure_receipt" \
   APPLY_REPAIR_PLAN_PATH="$repair_plan" \
+  APPLY_REPAIR_FRESH_PATH="$repair_plan_fresh" \
+  APPLY_REPAIR_ORIGINAL_PATH="$repair_plan_original" \
+  APPLY_REPAIR_REHEARSAL_PATH="$repair_rehearsal" \
   APPLY_RELEASE_ROOT="${release:-}" \
   node --input-type=module -e '
     import fs from "node:fs";
@@ -126,6 +131,15 @@ emit_failure() {
         }
       } catch {}
     }
+    let rehearsal=null;
+    let repairPlanRefresh=null;
+    try {
+      const {schemaRepairFailureReceipt,schemaRepairRefreshReadback}=await import(`${process.env.APPLY_RELEASE_ROOT}/deploy/aurion-schema-repair-failure-receipt.mjs`);
+      const read=file=>file&&fs.statSync(file).size<=4*1024*1024?JSON.parse(fs.readFileSync(file,"utf8")):null;
+      if(process.env.APPLY_FAILURE_STAGE==="REPAIR_REHEARSAL_FAILED") rehearsal=schemaRepairFailureReceipt(read(process.env.APPLY_REPAIR_REHEARSAL_PATH),process.env.APPLY_SOURCE_REVISION,process.env.APPLY_PLAN_SHA256,"rehearse");
+      if(process.env.APPLY_FAILURE_STAGE==="REPAIR_PLAN_REFRESH_FAILED") repair=schemaRepairFailureReceipt(read(process.env.APPLY_REPAIR_FRESH_PATH),process.env.APPLY_SOURCE_REVISION,process.env.APPLY_PLAN_SHA256,"refresh");
+      if(process.env.APPLY_REPAIR_ORIGINAL_PATH&&process.env.APPLY_REPAIR_PLAN_PATH!==process.env.APPLY_REPAIR_ORIGINAL_PATH) repairPlanRefresh=schemaRepairRefreshReadback(read(process.env.APPLY_REPAIR_ORIGINAL_PATH),read(process.env.APPLY_REPAIR_PLAN_PATH),process.env.APPLY_SOURCE_REVISION,process.env.APPLY_PLAN_SHA256);
+    } catch {}
     fs.writeFileSync(process.argv[1], `${JSON.stringify({
       recordType:"aurion_production_schema_apply",
       schemaVersion:1,
@@ -140,6 +154,8 @@ emit_failure() {
       recovery,
       apply,
       repair,
+      rehearsal,
+      repairPlanRefresh,
     },null,2)}\n`, {mode:0o600});
   ' "$tmp" >/dev/null 2>&1
   persist_receipt "$tmp" || true
@@ -480,6 +496,15 @@ recovery_table_count="$(recovery_client query --batch --skip-column-names -e "SE
 recovery_schema_sha256="$(recovery_client dump --no-data --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=RECOVERY_SCHEMA_FINGERPRINT_FAILED; exit 69; }
 [[ "$recovery_table_count" =~ ^[0-9]+$ && "$recovery_schema_sha256" =~ ^[a-f0-9]{64}$ && "$recovery_table_count" == "$source_table_count" && "$recovery_schema_sha256" == "$source_schema_sha256" ]] || { phase=RECOVERY_PROOF_MISMATCH; exit 70; }
 if [[ "$preflight_mode" == "repair" ]]; then
+  # Restore can outlast the 15-minute observation window. Re-read production
+  # only after recovery matches, and require the complete original semantic
+  # plan (including its schema/journal fingerprint) to remain byte-identical.
+  # Both plans are retained; no stale plan or changed command is executed.
+  phase=REFRESH_CANONICAL_REPAIR
+  repair_plan_original="$repair_plan"
+  repair_plan_fresh="$(mktemp "${state_dir}/${expected_sha}.repair-refresh.XXXXXX")"
+  run_repair refresh "$repair_plan_fresh" || { phase=REPAIR_PLAN_REFRESH_FAILED; exit 70; }
+  repair_plan="$repair_plan_fresh"
   phase=REHEARSE_CANONICAL_REPAIR
   repair_rehearsal="$(mktemp "${state_dir}/${expected_sha}.repair-rehearsal.XXXXXX")"
   run_repair rehearse "$repair_rehearsal" || { phase=REPAIR_REHEARSAL_FAILED; exit 70; }
@@ -577,11 +602,20 @@ APPLY_SOURCE_TABLE_COUNT="$source_table_count" \
 APPLY_RECOVERY_TABLE_COUNT="$recovery_table_count" \
 APPLY_SCHEMA_SHA256="$source_schema_sha256" \
 APPLY_DATABASE_IMAGE_ID="$database_image_id" \
+APPLY_REPAIR_ORIGINAL_PATH="$repair_plan_original" \
+APPLY_REPAIR_PLAN_PATH="$repair_plan" \
+APPLY_RELEASE_ROOT="$release" \
 node --input-type=module -e '
   import fs from "node:fs";
   const preflight=JSON.parse(fs.readFileSync(process.env.APPLY_PREFLIGHT,"utf8"));
   const postflight=JSON.parse(fs.readFileSync(process.env.APPLY_POSTFLIGHT,"utf8"));
   const execution=JSON.parse(fs.readFileSync(process.env.APPLY_EXECUTION,"utf8"));
+  let repairPlanRefresh=null;
+  if(process.env.APPLY_REPAIR_ORIGINAL_PATH) {
+    const {schemaRepairRefreshReadback}=await import(`${process.env.APPLY_RELEASE_ROOT}/deploy/aurion-schema-repair-failure-receipt.mjs`);
+    repairPlanRefresh=schemaRepairRefreshReadback(JSON.parse(fs.readFileSync(process.env.APPLY_REPAIR_ORIGINAL_PATH,"utf8")),JSON.parse(fs.readFileSync(process.env.APPLY_REPAIR_PLAN_PATH,"utf8")),process.env.APPLY_SOURCE_REVISION,process.env.APPLY_PLAN_SHA256);
+    if(!repairPlanRefresh) throw new Error("REPAIR_REFRESH_RECEIPT_INVALID");
+  }
   fs.writeFileSync(process.argv[1],`${JSON.stringify({
     recordType:"aurion_production_schema_apply",schemaVersion:1,sourceRevision:process.env.APPLY_SOURCE_REVISION,planSha256:process.env.APPLY_PLAN_SHA256,
     mode:"backup_recovery_apply",databaseCredentialReturned:false,overallState:execution.state,
@@ -589,6 +623,7 @@ node --input-type=module -e '
     backup:{created:true,id:process.env.APPLY_BACKUP_BASENAME,sha256:process.env.APPLY_BACKUP_SHA256,bytes:Number(process.env.APPLY_BACKUP_BYTES)},
     recovery:{executed:true,databaseImageId:process.env.APPLY_DATABASE_IMAGE_ID,sourceTableCount:Number(process.env.APPLY_SOURCE_TABLE_COUNT),recoveryTableCount:Number(process.env.APPLY_RECOVERY_TABLE_COUNT),schemaSha256:process.env.APPLY_SCHEMA_SHA256,matched:true},
     apply:{state:execution.state,appliedMigrationTags:execution.appliedMigrationTags,repairedJournalTags:execution.repairedJournalTags??[],repairPlanSha256:execution.repairPlanSha256??null,rehearsalSha256:execution.rehearsalSha256??null,operations:execution.operations??[],reviewedRecovery:execution.reviewedRecovery??null},
+    repairPlanRefresh,
     postflight:{state:postflight.overallState,summary:postflight.summary},
   },null,2)}\n`,{mode:0o600});
 ' "$success_tmp"

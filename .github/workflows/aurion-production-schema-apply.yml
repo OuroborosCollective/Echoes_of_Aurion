@@ -248,6 +248,8 @@ jobs:
               output.recovery=receipt.recovery??null;
               output.apply=receipt.apply??null;
               output.repair=receipt.repair??null;
+              output.rehearsal=receipt.rehearsal??null;
+              output.repairPlanRefresh=receipt.repairPlanRefresh??null;
               output.preflight=receipt.preflight??null;
               output.postflight=receipt.postflight??null;
             } else {

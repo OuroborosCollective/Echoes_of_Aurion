@@ -3,7 +3,7 @@ import path from "node:path";
 import mysql from "mysql2/promise";
 import { readProductionSchemaContracts } from "./aurionProductionSchemaContracts";
 import { compareTableContract } from "./aurionProductionSchemaReconciliation";
-import { buildSchemaRepairPlan, canonicalJson, type JournalIdentity, type SchemaRepairPlan } from "./aurionSchemaRepairPlan";
+import { assertRepairPlanRefresh, buildSchemaRepairPlan, canonicalJson, type JournalIdentity, type SchemaRepairPlan } from "./aurionSchemaRepairPlan";
 import { readRepairObservation, repairDatabaseUrl } from "./aurionSchemaRepairDatabase";
 import { reviewedDialogueTable, historicalInventorySourcePath } from "./aurionSchemaReviewedJournal";
 
@@ -15,7 +15,7 @@ const executed: Array<Record<string, unknown>> = [];
 let repairPlanSha256: string | null = null;
 let stage = "INITIALIZE";
 async function main() {
-  if (!["plan", "apply", "rehearse"].includes(mode)) throw new Error("REPAIR_MODE_INVALID");
+  if (!["plan", "refresh", "apply", "rehearse"].includes(mode)) throw new Error("REPAIR_MODE_INVALID");
   const contracts = await readProductionSchemaContracts(root);
   const sources = Object.fromEntries(await Promise.all(contracts.map(async m => [m.tag, await readFile(path.join(root, "drizzle", `${m.tag}.sql`), "utf8")])));
   const journal = JSON.parse(await readFile(path.join(root, "drizzle/meta/repair-history.json"), "utf8")) as JournalIdentity[];
@@ -26,7 +26,7 @@ async function main() {
   const connection = await mysql.createConnection(await repairDatabaseUrl());
   let locked = false;
   try {
-    if (mode === "plan") await connection.query("SET SESSION TRANSACTION READ ONLY");
+    if (mode === "plan" || mode === "refresh") await connection.query("SET SESSION TRANSACTION READ ONLY");
     else {
       const [rows] = await connection.query<mysql.RowDataPacket[]>("SELECT GET_LOCK(?, 30) AS granted", ["aurion_production_schema_apply_0021_0027"]);
       if (Number(rows[0]?.granted) !== 1) throw new Error("DATABASE_LOCK_UNAVAILABLE");
@@ -35,10 +35,11 @@ async function main() {
     stage = "PREFLIGHT_SCHEMA";
     const observation = await observe(connection);
     const approved = mode === "plan" ? null : JSON.parse(await readFile(process.argv[3], "utf8")) as SchemaRepairPlan;
-    if (approved) observation.observedAt = approved.observedAt;
+    if (approved && mode !== "refresh") observation.observedAt = approved.observedAt;
     const plan = buildSchemaRepairPlan({ sourceRevision, ledgerPlanSha256, nowMs: Date.now(), observation, contracts, sources, journal, reviewedJournalContract });
     repairPlanSha256 = plan.repairPlanSha256;
-    if (mode === "plan") {
+    if (mode === "refresh") assertRepairPlanRefresh(approved!, plan, Date.now());
+    if (mode === "plan" || mode === "refresh") {
       console.log(JSON.stringify(plan, null, 2));
       if (plan.decision === "BLOCKED_OPERATOR_REVIEW") process.exitCode = 3;
       return;
