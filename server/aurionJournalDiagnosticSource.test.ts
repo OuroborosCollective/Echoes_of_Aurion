@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { verifyDiagnosticSource } from "../scripts/verify-aurion-journal-diagnostic-source.mjs";
@@ -83,6 +83,29 @@ describe("journal diagnostic source binding without GitHub CLI", () => {
       const workflow = readFileSync(".github/workflows/aurion-schema-repair-journal-diagnostic.yml", "utf8");
       expect(workflow).toContain("node scripts/verify-aurion-journal-diagnostic-source.mjs");
       expect(workflow).not.toMatch(/\bgh\s+api\b/);
+    } finally { rmSync(temp, { recursive: true, force: true }); }
+  });
+  it("rejects an unmerged input revision before executing checked-out helper code", () => {
+    const temp = mkdtempSync(join(tmpdir(), "aurion-journal-main-"));
+    try {
+      const workflow = readFileSync(".github/workflows/aurion-schema-repair-journal-diagnostic.yml", "utf8");
+      expect(workflow).toContain("ref: main");
+      const script = workflow.split("      - name: Bind current main and unchanged prepared schema contracts\n        run: |\n")[1]
+        .split("      - name:")[0].split("\n").map(line => line.replace(/^          /, "")).join("\n");
+      symlinkSync(execFileSync("which", ["git"], { encoding: "utf8" }).trim(), join(temp, "git"));
+      const marker = join(temp, "helper-executed");
+      writeFileSync(join(temp, "node"), '#!/bin/sh\nprintf invoked > "$AURION_TEST_SENTINEL"\n', { mode: 0o700 });
+      const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+      const run = values => spawnSync("/bin/bash", ["-c", script], { encoding: "utf8",
+        env: { ...process.env, ...env, PATH: temp, AURION_TEST_SENTINEL: marker, ...values } });
+      for (const bad of [{ EXPECTED_SHA: prepared, GITHUB_SHA: prepared },
+        { EXPECTED_SHA: head, GITHUB_SHA: head, GITHUB_REF: "refs/heads/other" },
+        { EXPECTED_SHA: head, GITHUB_SHA: prepared }]) {
+        expect(run(bad).status).not.toBe(0);
+        expect(existsSync(marker)).toBe(false);
+      }
+      expect(run({ EXPECTED_SHA: head, GITHUB_SHA: head }).status).toBe(0);
+      expect(existsSync(marker)).toBe(true);
     } finally { rmSync(temp, { recursive: true, force: true }); }
   });
 });
