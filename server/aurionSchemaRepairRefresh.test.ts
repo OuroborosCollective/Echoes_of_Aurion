@@ -48,6 +48,40 @@ describe("post-recovery repair plan freshness", () => {
     expect(() => assertRepairPlanRefresh(old, extended, now)).toThrow("REPAIR_READBACK_STALE");
   });
 
+  it("never rehearses a renewed plan against the earlier production snapshot", () => {
+    const core = readFileSync(new URL("../deploy/aurion-production-schema-apply-core", import.meta.url), "utf8");
+    const refresh = core.indexOf('run_repair refresh "$repair_plan_fresh"');
+    const snapshot = core.indexOf("phase=CAPTURE_REFRESHED_PRODUCTION_SNAPSHOT");
+    const backup = core.indexOf('refreshed_basename="${expected_sha}-${plan_sha256:0:16}-${refreshed_stamp}-refreshed.sql.gz"');
+    const restore = core.indexOf("phase=RESTORE_REFRESHED_PRODUCTION_SNAPSHOT");
+    const proof = core.indexOf("phase=VERIFY_REFRESHED_RECOVERY");
+    const revalidate = core.indexOf("phase=REVALIDATE_REFRESHED_REPAIR_PLAN");
+    const rehearsal = core.indexOf('run_repair rehearse "$repair_rehearsal"');
+    const apply = core.indexOf('run_repair apply "$apply_raw"');
+    expect(refresh).toBeGreaterThan(-1);
+    expect(snapshot).toBeGreaterThan(refresh);
+    expect(backup).toBeGreaterThan(snapshot);
+    expect(restore).toBeGreaterThan(backup);
+    expect(proof).toBeGreaterThan(restore);
+    expect(revalidate).toBeGreaterThan(proof);
+    expect(rehearsal).toBeGreaterThan(revalidate);
+    expect(apply).toBeGreaterThan(rehearsal);
+    const refreshPath = core.slice(snapshot, rehearsal);
+    expect(refreshPath).toContain('production_client dump --single-transaction --quick');
+    expect(refreshPath).toContain('gzip -t "$refreshed_tmp"');
+    expect(refreshPath).toContain('backup_sha256="$refreshed_sha256"');
+    expect(refreshPath).toContain('backup_file="$refreshed_file"');
+    expect(refreshPath).toContain('cleanup_recovery');
+    expect(refreshPath).toContain('--mount "type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly"');
+    expect(refreshPath).toContain('gzip -cd /recovery-input/production.sql.gz');
+    expect(refreshPath).toContain('recovery_restore_status=$?');
+    expect(refreshPath).toContain('[[ "$recovery_restore_status" -eq 0 ]]');
+    expect(refreshPath).toContain('phase=REFRESHED_RECOVERY_PROOF_MISMATCH');
+    expect(refreshPath).toContain('run_repair refresh "$repair_plan_revalidated"');
+    expect(refreshPath).toContain('repair_plan="$repair_plan_revalidated"');
+    expect(refreshPath).not.toContain('run_repair apply "$apply_raw"');
+  });
+
   it("places read-only renewal after verified recovery and before rehearsal and production apply", () => {
     const core = readFileSync(new URL("../deploy/aurion-production-schema-apply-core", import.meta.url), "utf8");
     const verified = core.indexOf('phase=RECOVERY_PROOF_MISMATCH');
