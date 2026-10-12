@@ -36,9 +36,10 @@ const tags = [
   "0067_aurion_npc_decision_log",
   "0068_aurion_item_manipulation_runtime", "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence",
 ];
-const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
+const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory", "0020_wasd_aurion_dialogue_quest_intents"];
 
 const requiredFiles = [
+  "drizzle/provenance/0066-dc6dfe393fb52c47d517f2ce56f8c302737274b7.sql",
   "deploy/verify-aurion-installed-schema-tool",
   "bin/apply.cjs",
   "bin/repair.cjs",
@@ -178,6 +179,8 @@ async function main() {
   const history = JSON.parse(await readFile(path.join(artifact, "drizzle/meta/repair-history.json"), "utf8"));
   if (!Array.isArray(history) || history.length !== tags.length + 21 || new Set(history.map(e => e.tag)).size !== history.length || new Set(history.map(e => e.hash)).size !== history.length) fail();
   if (history.some((e, i) => !/^\d{4}_[a-z0-9_]+$/.test(e.tag) || !/^[a-f0-9]{64}$/.test(e.hash) || !Number.isSafeInteger(e.when) || e.when <= 0 || (i > 0 && e.when <= history[i-1].when))) fail();
+  if (history[20]?.tag !== "0020_wasd_aurion_dialogue_quest_intents" || history[20].hash !== await sha256(path.join(artifact,"drizzle/0020_wasd_aurion_dialogue_quest_intents.sql"))) fail();
+  if (await sha256(path.join(artifact,"drizzle/provenance/0066-dc6dfe393fb52c47d517f2ce56f8c302737274b7.sql")) !== "42ba1655995dc5ac0fcd47bd7ee4aca7dd025a8edf7602fccaa68d8dae83341f") fail();
   for (const [index, entry] of journal.entries.entries()) {
     const identity = history[index + 21];
     if (identity.tag !== entry.tag || identity.when !== entry.when || identity.hash !== await sha256(path.join(artifact, `drizzle/${entry.tag}.sql`))) fail();

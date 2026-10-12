@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { Connection, RowDataPacket } from "mysql2/promise";
 import { readProductionTriggers } from "./aurionProductionTriggerReadback";
-import { classifyMigrationContracts, type ExpectedMigration, type ObservedTable } from "./aurionProductionSchemaReconciliation";
+import { classifyMigrationContracts, type ExpectedMigration, type ObservedTable, type ExpectedTable } from "./aurionProductionSchemaReconciliation";
 import type { RepairObservation } from "./aurionSchemaRepairPlan";
 
 export async function repairDatabaseUrl(): Promise<string> {
@@ -19,8 +19,8 @@ export async function repairDatabaseUrl(): Promise<string> {
   return value;
 }
 
-export async function readRepairObservation(connection: Connection, contracts: ExpectedMigration[], sourceRevision: string): Promise<RepairObservation> {
-  const names = [...new Set(contracts.flatMap(m => m.tables.map(t => t.name)))].sort();
+export async function readRepairObservation(connection: Connection, contracts: ExpectedMigration[], sourceRevision: string, reviewedTables: ExpectedTable[] = []): Promise<RepairObservation> {
+  const names = [...new Set([...contracts.flatMap(m => m.tables.map(t => t.name)), ...reviewedTables.map(t => t.name)])].sort();
   const placeholders = names.map(() => "?").join(",");
   const query = async (sql: string) => (await connection.query<RowDataPacket[]>(sql, names))[0];
   const columns = await query(`SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT,EXTRA FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (${placeholders}) ORDER BY TABLE_NAME,ORDINAL_POSITION`);
