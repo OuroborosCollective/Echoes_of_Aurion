@@ -1522,7 +1522,8 @@ Evidence: Local full suite passed 419 files / 2097 tests (65 files / 233 tests s
 Learned: FusionAuth custom scopes require a license in this tenant, while separate application roles work without it. Resource audience alone does not distinguish this provider's access and ID tokens. Application binding, exact roles and the independent Aurion database admin check must all remain enforced.
 Open: Live Aurion still serves legacy revision 9b84e8093f731d72a66f339461cdaed462bc4ace. The authenticated OIDC account currently has canonical role=user; its bounded operator must accept the existing 64-character OIDC hash before an approved role plan/apply. Final-head CI, protected promotion/schema/backup gates, ChatGPT's exact callback and authenticated production initialize/tools/readback remain required. No production MCP success is claimed.
 
-### 2026-10-12 — Bounded production schema-repair failure diagnostics
+### 2026-10-12 — PR #864 — Bounded production schema-repair failure diagnostics
+<!-- integration-memory: pr=864 -->
 Status: VERIFIED local diagnostic regression; production schema repair and Admin MCP access remain UNVERIFIED.
 Task: Expose the first causal blocker when the protected production schema runner stops at REPAIR_PLAN_BLOCKED before backup or DDL.
 Decisions: Preserve the repair-policy allowlists, exact revision/ledger/hash checks, protected production approval, backup/recovery rehearsal, and all schema/promotion gates. Project only allowlisted error classes and schema identifiers; omit SQL, observed type values, driver messages and journal rows. Bind the diagnostic helper into the closed immutable apply artifact and retain the diagnostic in the CI failure receipt.
