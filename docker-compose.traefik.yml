@@ -12,6 +12,8 @@ services:
       AURION_GAME_DEV_WORKSPACE: /var/lib/aurion/game-dev-workspace
       COMPANION_MEMORY_DIR: /var/lib/aurion/companion-memory
       AURION_ADMIN_MCP_RESOURCE_URL: https://${AURION_DOMAIN:-arelogic.space}/admin-mcp
+      AURION_ADMIN_MCP_AUTH_MODE: application_roles
+      AURION_ADMIN_MCP_CLIENT_ID: "91097c69-cf11-42ae-8be2-1d0a821e7758"
       AURION_BUILD_INPUT_DIGEST: ${AURION_BUILD_INPUT_DIGEST:?AURION_BUILD_INPUT_DIGEST must bind the canonical BuildInputManifest}
       AURION_ARTIFACT_DIGEST: ${AURION_ARTIFACT_DIGEST:?AURION_ARTIFACT_DIGEST must bind the verified release checksums}
       AURION_RUNTIME_IMAGE_DIGEST: ${AURION_RUNTIME_IMAGE_DIGEST:?AURION_RUNTIME_IMAGE_DIGEST must bind docker image inspect}

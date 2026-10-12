@@ -49,6 +49,21 @@ async function withDevControlApp<T>(run: (baseUrl: string) => Promise<T>): Promi
 afterEach(() => vi.unstubAllEnvs());
 
 describe("adminMcp HTTP resource", () => {
+  it("advertises built-in OAuth scopes and challenges with openid in application-role mode", async () => {
+    vi.stubEnv("AURION_ADMIN_MCP_RESOURCE_URL", "https://arelogic.space/admin-mcp");
+    vi.stubEnv("OIDC_ISSUER_URL", "https://id.arelogic.space");
+    vi.stubEnv("AURION_ADMIN_MCP_AUTH_MODE", "application_roles");
+    vi.stubEnv("AURION_ADMIN_MCP_CLIENT_ID", "b811b3a0-b885-4a9d-9fbc-13d7bcaefadb");
+    await withAdminMcpApp(async baseUrl => {
+      const metadata = await fetch(`${baseUrl}/.well-known/oauth-protected-resource`);
+      expect((await metadata.json()).scopes_supported).toEqual(["openid", "profile", "offline_access"]);
+      const response = await fetch(`${baseUrl}/admin-mcp`);
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toContain('scope="openid"');
+      expect((await response.json()).requiredScope).toBe("openid");
+    });
+  });
+
   it("fails closed when the public OAuth resource configuration is absent", async () => {
     vi.stubEnv("AURION_ADMIN_MCP_RESOURCE_URL", "");
     vi.stubEnv("OIDC_ISSUER_URL", "");

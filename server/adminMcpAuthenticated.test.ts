@@ -9,6 +9,9 @@ import { hashWorldContextQuery } from "../shared/aurionWorldContextCanonicalHash
 const auth = vi.hoisted(() => ({
   role: "admin",
   scopes: "aurion.admin.read",
+  roles: [] as string[],
+  applicationId: "",
+  audience: ["https://arelogic.space/admin-mcp"],
 }));
 vi.mock("jose", async importOriginal => ({
   ...await importOriginal<typeof import("jose")>(),
@@ -16,8 +19,10 @@ vi.mock("jose", async importOriginal => ({
   jwtVerify: vi.fn(async () => ({ payload: {
     iss: "https://admin-mcp-test.example",
     sub: "test-admin",
-    aud: "https://arelogic.space/admin-mcp",
+    aud: auth.audience,
     scope: auth.scopes,
+    roles: auth.roles,
+    applicationId: auth.applicationId,
     exp: Math.floor(Date.now() / 1000) + 600,
   } })),
 }));
@@ -32,6 +37,9 @@ afterEach(() => {
   vi.restoreAllMocks();
   auth.role = "admin";
   auth.scopes = "aurion.admin.read";
+  auth.roles = [];
+  auth.applicationId = "";
+  auth.audience = ["https://arelogic.space/admin-mcp"];
 });
 
 async function withAuthenticatedMcp(run: (call: (method: string, params?: object) => Promise<Response>) => Promise<void>) {
@@ -140,6 +148,35 @@ describe("authenticated admin MCP HTTP requests (isolated identity fixtures)", (
       const body = await response.json();
       expect(body.result.isError).not.toBe(true);
       expect(body.result.structuredContent.status).toBe("MATCH");
+    });
+  });
+
+  it("uses dedicated application roles for actual tool permissions in the free OAuth mode", async () => {
+    const clientId = "b811b3a0-b885-4a9d-9fbc-13d7bcaefadb";
+    vi.stubEnv("AURION_ADMIN_MCP_AUTH_MODE", "application_roles");
+    vi.stubEnv("AURION_ADMIN_MCP_CLIENT_ID", clientId);
+    auth.scopes = "openid profile offline_access";
+    auth.roles = ["aurion_admin_read"];
+    auth.applicationId = clientId;
+    auth.audience = ["https://arelogic.space/admin-mcp", clientId];
+    await withAuthenticatedMcp(async call => {
+      const names = async () => {
+        const response = await call("tools/list");
+        expect(response.status).toBe(200);
+        return (await response.json()).result.tools.map((tool: { name: string }) => tool.name);
+      };
+      expect(await names()).not.toContain("aurion_admin_glb_import");
+      expect(await names()).not.toContain("aurion_quest_publish");
+      auth.roles.push("aurion_admin_assets_write", "aurion_admin_authoring_write");
+      expect(await names()).toEqual(expect.arrayContaining(["aurion_admin_glb_import", "aurion_quest_publish"]));
+      auth.applicationId = "cdb22c5e-57f2-4008-bf88-3197e8b98389";
+      expect((await call("tools/list")).status).toBe(401);
+      auth.applicationId = clientId;
+      auth.roles = ["admin"];
+      expect((await call("tools/list")).status).toBe(401);
+      auth.roles = ["aurion_admin_read"];
+      auth.role = "user";
+      expect((await call("tools/list")).status).toBe(401);
     });
   });
 });

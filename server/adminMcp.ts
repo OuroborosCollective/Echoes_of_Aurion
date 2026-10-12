@@ -14,6 +14,7 @@ import {
   AURION_ADMIN_GLB_WRITE_SCOPE,
   AURION_ADMIN_AUTHORING_WRITE_SCOPE,
   bearerChallenge,
+  adminMcpRequiredOAuthScope,
   openIdForOidcSubject,
   parseAurionAdminMcpTokenClaims,
   protectedResourceMetadata,
@@ -205,7 +206,7 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
     chatGptProMode: writable || authoringWritable ? "read_evidence_plus_scoped_plan_confirm_writes" : "read_evidence_only",
     writePath: writable || authoringWritable
       ? "Only typed Aurion plan→confirm writes are available. Raw gameplay/database/shell/git/VPS mutations remain unavailable."
-      : "Write tools require explicit asset-write and/or authoring-write OAuth scopes.",
+      : "Write tools require explicit asset-write and/or authoring-write permissions.",
   });
 }
 
@@ -385,7 +386,7 @@ function createAdminMcpServer(actor: AdminActor) {
 
 function sendUnauthorized(response: Response, settings: AurionAdminMcpSettings) {
   response.setHeader("WWW-Authenticate", bearerChallenge(settings));
-  response.status(401).json({ error: "aurion_admin_oauth_required", requiredScope: AURION_ADMIN_MCP_READ_SCOPE });
+  response.status(401).json({ error: "aurion_admin_oauth_required", requiredScope: adminMcpRequiredOAuthScope(settings) });
 }
 
 export function registerAdminMcp(app: Express) {
