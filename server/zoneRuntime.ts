@@ -852,9 +852,28 @@ export class AuthoritativeMovementZone {
 
   private refreshPeerOrder(): void {
     if (!this.sortedPeersDirty) return;
-    this.sortedPeers = Array.from(this.peers.values()).sort((a, b) => compareBinary(a.connectionId, b.connectionId));
-    this.sortedPeersByEntityId = Array.from(this.peers.values()).sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
-    this.sortedPresences = this.sortedPeersByEntityId.map(peer => peer.presence);
+    // ⚡ Bolt: Eliminate dynamic array creation and mapping per tick while ensuring valid array length
+    const newPeers = new Array(this.peers.size);
+    const newPeersByEntityId = new Array(this.peers.size);
+    const newPresences = new Array(this.peers.size);
+
+    let i = 0;
+    for (const peer of this.peers.values()) {
+      newPeers[i] = peer;
+      newPeersByEntityId[i] = peer;
+      i++;
+    }
+
+    newPeers.sort((a, b) => compareBinary(a.connectionId, b.connectionId));
+    newPeersByEntityId.sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
+
+    for (let j = 0; j < newPeersByEntityId.length; j++) {
+      newPresences[j] = newPeersByEntityId[j].presence;
+    }
+
+    this.sortedPeers = newPeers;
+    this.sortedPeersByEntityId = newPeersByEntityId;
+    this.sortedPresences = newPresences;
     this.sortedPeersDirty = false;
   }
 
@@ -949,7 +968,13 @@ export class ZoneRegistry {
 
   tick(): void {
     if (this.sortedZonesDirty) {
-      this.sortedZones = Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).map(([, zone]) => zone);
+      // ⚡ Bolt: Eliminate Map entries allocation and array mapping overhead per tick
+      this.sortedZones.length = this.zones.size;
+      let i = 0;
+      for (const zone of this.zones.values()) {
+        this.sortedZones[i++] = zone;
+      }
+      this.sortedZones.sort((left, right) => compareBinary(left.zoneId, right.zoneId));
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) zone.tick();
