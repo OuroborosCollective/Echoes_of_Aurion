@@ -9,9 +9,9 @@ import { repairHash } from "../scripts/aurionSchemaRepairPlan";
 const revision = "a".repeat(40);
 const ledger = "b".repeat(64);
 const secret = "PRIVATE_DRIVER_SQL_VALUE_SENTINEL";
-function blockedPlan(blockers = ["JOURNAL_IDENTITY_CONFLICT"]) {
+function blockedPlan(blockers = ["JOURNAL_IDENTITY_CONFLICT"], schemaVersion = "aurion.schema-repair-plan.v1") {
   const body = {
-    schemaVersion: "aurion.schema-repair-plan.v1", sourceRevision: revision, ledgerPlanSha256: ledger,
+    schemaVersion, sourceRevision: revision, ledgerPlanSha256: ledger,
     decision: "BLOCKED_OPERATOR_REVIEW", blockers,
     affected: [{ tag: "0067_aurion_npc_decision_log", state: "ABSENT_APPLY_REQUIRED", privateField: secret }],
     operations: [{ sql: secret }], journalInsertions: [{ hash: secret }],
@@ -81,7 +81,7 @@ describe("schema repair failure diagnostic boundary", () => {
     try {
       const planFile = path.join(directory, "plan.json");
       const receiptFile = path.join(directory, "receipt.json");
-      writeFileSync(planFile, JSON.stringify(blockedPlan()), { mode: 0o600 });
+      writeFileSync(planFile, JSON.stringify(blockedPlan(["JOURNAL_IDENTITY_CONFLICT"], "aurion.schema-repair-plan.v2")), { mode: 0o600 });
       const run = spawnSync(process.execPath, ["--input-type=module", "-e", script!, receiptFile], {
         encoding: "utf8", env: { ...process.env, APPLY_SOURCE_REVISION: revision, APPLY_PLAN_SHA256: ledger,
           APPLY_FAILURE_STAGE: "REPAIR_PLAN_BLOCKED", APPLY_FAILURE_STATUS: "70", APPLY_BACKUP_CREATED: "false",
