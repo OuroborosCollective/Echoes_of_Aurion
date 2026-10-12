@@ -1531,7 +1531,8 @@ Evidence: Actual protected migration run 38302269611 at a0684727eae993ef5123c1a4
 Learned: The previous failure receipt discarded the planner's structured blocker or error class. A failed migration must remain failed while its first causal boundary becomes independently diagnosable.
 Open: The approved read-only production schema job 114988650055 completed with PRESENT_SCHEMA_DRIFT; its final match gate correctly failed. Final-head CI and protected installation are required before the new diagnostic can classify the actual blocked production plan. The canonical OIDC account users.id=1 has meanwhile been set to admin through the hash-bound operator and independently confirmed through both operator readback and a real website auth.me request. Fresh PKCE issuance and refresh-token exchange succeeded, and the user confirmed the configured legacy ChatGPT callback; production Admin MCP initialize/tools/readback is still pending runtime promotion.
 
-### 2026-10-12 — Read-only production journal identity diagnostics
+### 2026-10-12 — PR #865 — Read-only production journal identity diagnostics
+<!-- integration-memory: pr=865 -->
 Status: VERIFIED local regression; production journal identity readback remains pending protected workflow execution.
 Task: Identify the exact migration metadata behind JOURNAL_IDENTITY_CONFLICT without starting another runtime build or changing production data.
 Decisions: Use the already installed immutable read-only reconciliation runner. Verify its closed artifact against the main release source, installed manifest and wrapper; require the current diagnostic workflow SHA and an identical Drizzle tree to the prepared revision. Preserve production approval and every existing migration, repair, backup and promotion gate. Project only conflicting migration SHA-256 digests, numeric timestamps and canonical migration tags; omit malformed row values, player data and driver messages.
