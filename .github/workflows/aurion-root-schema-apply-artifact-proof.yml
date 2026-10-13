@@ -12,6 +12,7 @@ on:
     paths:
       - ".github/workflows/aurion-root-schema-apply-artifact-proof.yml"
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
+      - ".github/workflows/aurion-production-schema-apply.yml"
       - "scripts/apply-aurion-production-schema.ts"
       - "scripts/repair-aurion-production-schema.ts"
       - "scripts/aurionSchemaReviewedJournal.ts"
@@ -22,6 +23,9 @@ on:
       - "scripts/aurionSchemaRepair*.ts"
       - "scripts/schema-repair-proof-fixture.mjs"
       - "server/aurionSchemaRepairPlan.test.ts"
+      - "server/aurionSchemaRepairRefresh.test.ts"
+      - "server/aurionSchemaRepairFailureReceipt.test.ts"
+      - "deploy/aurion-schema-repair-failure-receipt.mjs"
       - "scripts/aurionProductionDatabaseClientConfig.ts"
       - "scripts/build-aurion-production-apply-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
@@ -130,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm check
-          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
+          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts server/aurionSchemaRepairRefresh.test.ts server/aurionSchemaRepairFailureReceipt.test.ts
           bash -n deploy/aurion-production-schema-apply
           bash -n deploy/aurion-production-schema-apply-core
           bash -n deploy/install-aurion-production-schema-apply
@@ -371,9 +375,15 @@ jobs:
           const r=JSON.parse(fs.readFileSync("repair-receipt.json","utf8"));
           assert.equal(r.overallState,"APPLY_SUCCEEDED");
           assert.equal(r.backup.created,true);
+          assert.match(r.backup.id,/-refreshed\.sql\.gz$/);
+          assert.match(r.backup.sha256,/^[a-f0-9]{64}$/);
           assert.equal(r.recovery.matched,true);
+          assert.match(r.recovery.schemaSha256,/^[a-f0-9]{64}$/);
           assert.match(r.apply.repairPlanSha256,/^[a-f0-9]{64}$/);
           assert.match(r.apply.rehearsalSha256,/^[a-f0-9]{64}$/);
+          assert.equal(r.repairPlanRefresh.semanticsUnchanged,true);
+          assert.equal(r.repairPlanRefresh.repairPlanSha256,r.apply.repairPlanSha256);
+          assert.match(r.repairPlanRefresh.originalRepairPlanSha256,/^[a-f0-9]{64}$/);
           assert.ok(r.apply.operations.some(o=>o.tag==="0068_aurion_item_manipulation_runtime"&&o.kind==="ADD_COLUMN"));
           assert.ok(r.apply.operations.some(o=>o.kind==="REPLACE_CHECK_ATOMIC"&&o.sourceStatementIndexes.join() === "4,5"));
           assert.ok(r.apply.operations.some(o=>o.kind==="DROP_REVIEWED_INDEX"));

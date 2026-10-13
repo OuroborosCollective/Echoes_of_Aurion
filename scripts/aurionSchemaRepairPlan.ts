@@ -192,3 +192,19 @@ export function buildSchemaRepairPlan(input: {
   return { ...body, repairPlanSha256: repairHash(body) };
 }
 export type SchemaRepairPlan = ReturnType<typeof buildSchemaRepairPlan>;
+
+/** Renew only the observation clock after slow backup/recovery work. The
+ * original immutable plan remains the exact semantic authorization boundary. */
+export function assertRepairPlanRefresh(original: SchemaRepairPlan, fresh: SchemaRepairPlan, nowMs: number) {
+  const semantic = (plan: SchemaRepairPlan) => {
+    const { observedAt, expiresAt, repairPlanSha256, ...body } = plan;
+    if (repairHash({ observedAt, expiresAt, ...body }) !== repairPlanSha256) throw new Error("REPAIR_PLAN_OR_PRESTATE_CHANGED");
+    const observed = Date.parse(observedAt);
+    if (!Number.isFinite(observed) || Date.parse(expiresAt) !== observed + REPAIR_MAX_AGE_MS) throw new Error("REPAIR_READBACK_STALE");
+    return canonicalJson(body);
+  };
+  if (semantic(original) !== semantic(fresh)
+    || !["ADDITIVE_REPAIR_READY", "REVIEWED_REPAIR_READY"].includes(fresh.decision)) throw new Error("REPAIR_PLAN_OR_PRESTATE_CHANGED");
+  const observed = Date.parse(fresh.observedAt);
+  if (observed < Date.parse(original.observedAt) || observed > nowMs || nowMs - observed > REPAIR_MAX_AGE_MS) throw new Error("REPAIR_READBACK_STALE");
+}

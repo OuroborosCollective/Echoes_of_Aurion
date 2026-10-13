@@ -102,4 +102,32 @@ describe("schema repair failure diagnostic boundary", () => {
       expect(JSON.parse(readFileSync(receiptFile, "utf8"))).toMatchObject({ overallState: "APPLY_FAILED", repair: null });
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
+
+  it("retains the isolated rehearsal's first failure without treating it as a production apply", () => {
+    const root = path.resolve(import.meta.dirname, "..");
+    const core = readFileSync(path.join(root, "deploy/aurion-production-schema-apply-core"), "utf8");
+    const script = core.match(/  node --input-type=module -e '\n([\s\S]+?)\n  ' "\$tmp"/)![1];
+    const directory = mkdtempSync(path.join(tmpdir(), "aurion-rehearsal-failure-"));
+    try {
+      const executionFile = path.join(directory, "rehearsal.json"), receiptFile = path.join(directory, "receipt.json");
+      const failure = { recordType: "aurion_production_schema_apply_execution", schemaVersion: 1,
+        sourceRevision: revision, planSha256: ledger, executionMode: "rehearse", mode: "apply", state: "APPLY_FAILED",
+        failureStage: "PREFLIGHT_SCHEMA", errorClass: "REPAIR_READBACK_STALE", operations: [{ sql: secret }],
+        driverMessage: secret, databaseCredentialReturned: false };
+      writeFileSync(executionFile, JSON.stringify(failure), { mode: 0o600 });
+      const env = { ...process.env, APPLY_SOURCE_REVISION: revision, APPLY_PLAN_SHA256: ledger,
+        APPLY_FAILURE_STAGE: "REPAIR_REHEARSAL_FAILED", APPLY_FAILURE_STATUS: "70", APPLY_BACKUP_CREATED: "false",
+        APPLY_RECOVERY_EXECUTED: "false", APPLY_FAILURE_RECEIPT: "", APPLY_REPAIR_PLAN_PATH: "",
+        APPLY_REPAIR_ORIGINAL_PATH: "", APPLY_REPAIR_FRESH_PATH: "", APPLY_REPAIR_REHEARSAL_PATH: executionFile, APPLY_RELEASE_ROOT: root };
+      const run = spawnSync(process.execPath, ["--input-type=module", "-e", script, receiptFile], { env, encoding: "utf8" });
+      expect(run.status, run.stderr).toBe(0);
+      const raw = readFileSync(receiptFile, "utf8");
+      expect(JSON.parse(raw)).toMatchObject({ overallState: "APPLY_FAILED", apply: null,
+        rehearsal: { executionMode: "rehearse", failureStage: "PREFLIGHT_SCHEMA", errorClass: "REPAIR_READBACK_STALE" } });
+      expect(raw).not.toContain(secret);
+      expect(schemaRepairFailureReceipt({ ...failure, sourceRevision: "c".repeat(40) }, revision, ledger, "rehearse")).toBeNull();
+      expect(schemaRepairFailureReceipt({ ...failure, executionMode: "apply" }, revision, ledger, "rehearse")).toBeNull();
+      expect(schemaRepairFailureReceipt({ ...failure, errorClass: secret }, revision, ledger, "rehearse")).toBeNull();
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
 });
