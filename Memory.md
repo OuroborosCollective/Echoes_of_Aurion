@@ -1655,3 +1655,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-13 — Protected VPS storage inventory and GDS integration readback
+Status: PARTIAL — isolated code and Python tests; exact-head GitHub CI and protected VPS runner readback pending.
+Task: Inventory disk consumers without indiscriminately removing live Aurion, MariaDB, Sovereign or needed Docker infrastructure.
+Decisions: Add bounded Python first-level du, Docker identity/volume counts, systemd status and host filesystem receipt; no deletion, no arbitrary shell, no passwords, no Docker volume writes. Run tests on GitHub hosted runner; production self-hosted job only through main workflow_dispatch and protected environment. Use existing pinned Game Development Studio 1.0.2 / GLB / Admin MCP integration, not a second gameplay authority; Game Dev & VPS Werkstatt provides an operating skill, not executable server APIs.
+Touched surfaces: scripts/ops/vps_cleanup_audit.py; scripts/ops/test_vps_cleanup_audit.py; .github/workflows/vps-readonly-storage-audit.yml; Memory.md.
+Evidence: VPS owner SSH menu inspected 24 healthy/running containers, 30 protected volumes, 344/388 GB disk used and 45 GB available; server GDS Dockerfile requires source-pinned 1.0.2, with version-gated healthcheck. 1,275,494,400 bytes reclaimed in earlier verified BuildKit/dangling cleanup, a second confirmed cleanup reclaimed 0; storage root cause remains unidentified. Three local no-delete Python regressions and py_compile passed. Aurion Node/V8 heap failures persist; see #879.
+Learned: Green container health does not prove sustained Aurion stability. Code-backed Game Development Studio is already present; live admin GDS readback requires its authenticated token, and the VPS skill cannot be promoted to server mutation authority. All actual cleanup remains separate hash-bound host action.
+Open: GitHub exact-head CI, protected self-hosted disk audit artifact, n8n forensic retirement #2261, Aurion OOM diagnosis #879 and authenticated GDS checks. No new VPS data removed by this PR.
+Next safe step: Review/merge gated audit code, explicitly dispatch protected main-only read-only workflow, inspect real directory metrics, and separately confirm any deletion candidate before applying.
