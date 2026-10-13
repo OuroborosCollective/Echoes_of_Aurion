@@ -110,10 +110,22 @@ export function planWorldChunkCache(input: { center: WorldChunkCoordinate; tier:
     if (!previous || entry.lastAccess > previous.lastAccess) byKey.set(key, Object.freeze({ coordinate: Object.freeze({ ...entry.coordinate }), lastAccess: entry.lastAccess }));
   }
   const request = visible.filter(coordinate => !byKey.has(worldChunkCoordinateKey(coordinate)));
-  const retainedBackground = Array.from(byKey.values()).filter(entry => !visibleKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => right.lastAccess - left.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).slice(0, Math.max(0, budget.maxCachedChunks - visible.length));
+  const backgroundCandidates: WorldChunkCacheEntry[] = [];
+  for (const entry of byKey.values()) {
+    if (!visibleKeys.has(worldChunkCoordinateKey(entry.coordinate))) {
+      backgroundCandidates.push(entry);
+    }
+  }
+  const retainedBackground = backgroundCandidates.sort((left, right) => right.lastAccess - left.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).slice(0, Math.max(0, budget.maxCachedChunks - visible.length));
   const retain = Object.freeze([...visible, ...retainedBackground.map(entry => entry.coordinate)]);
   const retainKeys = new Set(retain.map(worldChunkCoordinateKey));
-  const evict = Object.freeze(Array.from(byKey.values()).filter(entry => !retainKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => left.lastAccess - right.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).map(entry => entry.coordinate));
+  const evictCandidates: WorldChunkCacheEntry[] = [];
+  for (const entry of byKey.values()) {
+    if (!retainKeys.has(worldChunkCoordinateKey(entry.coordinate))) {
+      evictCandidates.push(entry);
+    }
+  }
+  const evict = Object.freeze(evictCandidates.sort((left, right) => left.lastAccess - right.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).map(entry => entry.coordinate));
   return Object.freeze({ visible, request: Object.freeze(request), retain, evict });
 }
 

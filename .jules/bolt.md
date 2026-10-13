@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-05-28 - Optimize array allocations in map iterating values
+**Learning:** Found that `Array.from(map.values()).filter(...)` inside `planWorldChunkCache` causes unnecessary array creations and dynamic allocations which increases GC pressure.
+**Action:** Replaced `Array.from(map.values()).filter(...)` with a pre-allocated array and a `for...of` loop, significantly reducing temporary allocations on every cache plan evaluation.
