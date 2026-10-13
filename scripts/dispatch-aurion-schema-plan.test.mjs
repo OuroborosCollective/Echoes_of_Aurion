@@ -8,7 +8,8 @@ function harness(overrides = {}) {
   const writes = [];
   return { writes, pause: async () => {}, attempts: 2, request: async (path, method, body) => {
     if (method === "POST") { writes.push({ path, body }); return { workflow_run_id: 456 }; }
-    if (path.endsWith("/123")) return { head_sha: input.expectedSha, head_branch: "main", event: "push", path: ".github/workflows/deploy-aurion-zone-runtime.yml", ...overrides.caller };
+    if (path.endsWith("/123")) return { head_sha: input.expectedSha, head_branch: "main", event: "push", run_attempt: 1, path: ".github/workflows/deploy-aurion-zone-runtime.yml", ...overrides.caller };
+    if (path.includes("/workflows/aurion-production-schema-apply.yml/runs?")) return { workflow_runs: overrides.activeRuns ?? [] };
     if (path.endsWith("/heads/main")) return { object: { sha: overrides.main ?? input.expectedSha } };
     return { head_sha: input.expectedSha, event: "workflow_dispatch", path: ".github/workflows/aurion-production-schema-apply.yml", status: "completed", conclusion: "success", ...overrides.run };
   } };
@@ -41,4 +42,22 @@ test("failed, mismatched and unfinished apply runs never count as successful", a
     await assert.rejects(dispatchSchemaPlan(input, api));
     assert.equal(api.writes.length, 1);
   }
+});
+
+test("parent rerun refuses to dispatch second production schema operation", async () => {
+  const api=harness({caller:{run_attempt:2}});
+  await assert.rejects(dispatchSchemaPlan(input,api),/SCHEMA_DISPATCH_PARENT_RETRY_FORBIDDEN/);
+  assert.equal(api.writes.length,0);
+});
+test("already active schema apply on same revision blocks dispatch", async () => {
+  const api=harness({activeRuns:[{id:789,head_sha:input.expectedSha,status:"in_progress"}]});
+  await assert.rejects(dispatchSchemaPlan(input,api),/SCHEMA_DISPATCH_EXISTING_ACTIVE_APPLY:789/);
+  assert.equal(api.writes.length,0);
+});
+test("missing active-run inventory fails closed", async () => {
+  const api=harness();
+  const original=api.request;
+  api.request=async(path,...rest)=>path.includes("/workflows/aurion-production-schema-apply.yml/runs?")?{}:original(path,...rest);
+  await assert.rejects(dispatchSchemaPlan(input,api),/SCHEMA_DISPATCH_ACTIVE_RUNS_UNAVAILABLE/);
+  assert.equal(api.writes.length,0);
 });
