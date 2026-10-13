@@ -22,7 +22,7 @@ import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, dig
 import { isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
-import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
+import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword, DUMMY_LOCAL_AUTH_HASH } from "./localAuth";
 import { proposeAurionDeveloperChange, proposeGameDevAssetDesign } from "./liveDeveloperGenkit";
 import { hashGameDevAssetDesignWorkOrder } from "./liveDeveloperProtocol";
 import { applyGameDevelopmentStudioLiveAsset, gameDevelopmentStudioLiveAssetInputSchema, planGameDevelopmentStudioLiveAsset } from "./gameDevelopmentStudioProduction";
@@ -132,6 +132,9 @@ export const appRouter = router({
       const handle = normalizeLocalHandle(input.handle);
       const record = await db.getLocalCredential(handle);
       if (!record) {
+        // Match the real scrypt workload before rejecting an unknown handle.
+        // The result is intentionally ignored: a nonexistent account never authenticates.
+        await verifyLocalPassword(input.password, DUMMY_LOCAL_AUTH_HASH);
         // Do not dereference an absent credential record. Apart from preventing
         // a 500 response for an unknown handle, this keeps the authentication
         // failure on tRPC's JSON error path instead of exposing a runtime error.
