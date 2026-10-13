@@ -1635,3 +1635,23 @@ Evidence: Original drafts #854/#863 patches reviewed against a new exact main co
 Learned: Fix the actual consumer behavior and retain independently testable regression rather than merging multiple overlapping changes in canonical combat hot loops.
 Open: CI, PR approval, independent post-merge proof; other world/content drafts remain separate.
 Next safe step: Run the exact-head test matrix, merge only when eligible and verify new main.
+
+
+### 2026-10-13 — PR #873 — Aurion-only: season accessibility and combat expiry regression salvage
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=873 merge=ea8c353bf679cc774f2dc1f597854b1e5a1e2f67 -->
+Task: Merge PR #873 into `main` — Aurion-only: season accessibility and combat expiry regression salvage.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/pages/Operations.tsx`
+- `server/ax1CombatAuthority.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/873
+- Merge commit: `ea8c353bf679cc774f2dc1f597854b1e5a1e2f67`
+- PR head: `658288ca9f00a6317e957f7289c43d96aa3f364a`
+- Merged at: 2026-10-13T09:29:07Z
+- Post-merge workflow run: 38376639941
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
