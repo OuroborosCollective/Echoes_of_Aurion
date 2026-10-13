@@ -127,6 +127,35 @@ for (const viewport of [
       expect(await selected.json()).toMatchObject({ assetId: playerReceipt.assetId, storageUrl: playerReceipt.storageUrl, visibility: "public", immutable: true });
 
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+      // Actual served image bytes and rendered-frame atlas status, not just a mocked Image.onload.
+      // This must not silently accept the neutral 1x1 pixel as a real paving surface.
+      const atlasReadback = async () => JSON.parse(await runtime.getByTestId("aurion-surface-atlas-evidence").getAttribute("data-readback") ?? "null");
+      await expect.poll(async () => (await atlasReadback())?.state, { timeout: 30_000 }).toBe("ready");
+      const pavingReadback = await atlasReadback();
+      expect(pavingReadback).toMatchObject({
+        protocol: "aurion.surface-atlas-readback.v1", state: "ready",
+        source: "aurion-surface-atlas.webp", sourceWidth: 1024, sourceHeight: 1024,
+        tileCount: 4, failureCode: null,
+      });
+      const committedAtlas = JSON.parse(await readFile("client/src/xaurion/world/assets/aurion-surface-atlas.json", "utf8"));
+      expect(committedAtlas.sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(committedAtlas.quadrants).toEqual(["paving", "forest", "wood", "rock"]);
+      const requestedAtlasUrls = await page.evaluate(() => performance.getEntriesByType("resource")
+        .map(entry => entry.name)
+        .filter(name => /\\/assets\\/aurion-surface-atlas-[^/]+\\.webp(?:\\?.*)?$/.test(name)));
+      expect(requestedAtlasUrls).toHaveLength(1);
+      const servedAtlasUrl = new URL(requestedAtlasUrls[0]!);
+      expect(servedAtlasUrl.origin).toBe(new URL(baseURL!).origin);
+      const servedAtlas = await page.request.get(servedAtlasUrl.pathname);
+      expect(servedAtlas.status()).toBe(200);
+      expect(servedAtlas.headers()["content-type"]).toContain("image/webp");
+      const servedAtlasSha256 = createHash("sha256").update(await servedAtlas.body()).digest("hex");
+      expect(servedAtlasSha256).toBe(committedAtlas.sha256);
+      await testInfo.attach("actual-paving-atlas-readback", { contentType: "application/json", body: JSON.stringify({
+        revision: process.env.AURION_RELEASE_SHA, viewport: viewport.name, imagePath: servedAtlasUrl.pathname,
+        sourceSha256: servedAtlasSha256, atlas: pavingReadback, sourceBindingVerified: true,
+        limitation: "CI SwiftShader rendered-frame evidence; not a production deployment or high-resolution city atlas proof",
+      }) });
       await expect(page.getByTestId("glb-model-status")).toHaveText("active", { timeout: 45_000 });
       const player = page.getByTestId("glb-presentation"), smith = page.getByTestId("smith-presentation");
       await expect.poll(async () => (await pose(player))?.clip, { timeout: 30_000 }).toBe("Idle");
