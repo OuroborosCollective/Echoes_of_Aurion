@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { worldSurfaceMaterial, disposeWorldSurfaceAtlas, mapWorldGround, addSanctumSurfaceDetails } from './WorldSurfaceAtlas';
+import { worldSurfaceMaterial, worldSurfaceAtlasReadback, disposeWorldSurfaceAtlas, mapWorldGround, addSanctumSurfaceDetails } from './WorldSurfaceAtlas';
 
 afterEach(() => vi.restoreAllMocks());
 function imageHarness() {
-  const images: { onload?: () => void; src?: string; width: number; height: number }[] = [];
-  vi.stubGlobal('Image', class { width = 1024; height = 1024; constructor() { images.push(this); } });
+  const images: { onload?: () => void; onerror?: () => void; src?: string; width: number; height: number }[] = [];
+  vi.stubGlobal('Image', class { width = 1024; height = 1024; onload?: () => void; onerror?: () => void; constructor() { images.push(this); } });
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect: vi.fn(), drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
   return images;
 }
@@ -17,11 +17,41 @@ describe('AX1 surface atlas lifetime and geometry boundaries', () => {
     const a = worldSurfaceMaterial(scene, 'wood'), b = worldSurfaceMaterial(scene, 'wood');
     const c = worldSurfaceMaterial(scene, 'rock');
     expect(a.map).toBe(b.map); expect(a.map).not.toBe(c.map); expect(images).toHaveLength(1);
+    expect(worldSurfaceAtlasReadback(scene)).toMatchObject({ state: 'loading', tileCount: 0, failureCode: null });
     images[0].onload!();
+    expect(worldSurfaceAtlasReadback(scene)).toMatchObject({ state: 'ready', tileCount: 4, sourceWidth: 1024, sourceHeight: 1024, failureCode: null });
     expect(a.map!.image.width).toBe(512); expect(a.map!.colorSpace).toBe(THREE.SRGBColorSpace);
     const release = vi.fn(); a.map!.addEventListener('dispose', release);
     disposeWorldSurfaceAtlas(scene); disposeWorldSurfaceAtlas(scene); expect(release).toHaveBeenCalledTimes(1);
     expect(worldSurfaceMaterial(scene, 'wood').map).not.toBe(a.map);
+    disposeWorldSurfaceAtlas(scene);
+  });
+  it('reports failed source-image requests without treating neutral placeholder pixels as loaded tiles', () => {
+    const images = imageHarness();
+    const scene = new THREE.Scene();
+    const paving = worldSurfaceMaterial(scene, 'paving');
+    images[0].onerror?.();
+    expect(worldSurfaceAtlasReadback(scene)).toMatchObject({
+      state: 'failed',
+      tileCount: 0,
+      failureCode: 'SURFACE_ATLAS_IMAGE_LOAD_FAILED',
+    });
+    expect(paving.map!.image.width).toBe(1);
+    disposeWorldSurfaceAtlas(scene);
+  });
+  it('rejects incorrect source dimensions without replacing an active material image', () => {
+    const images = imageHarness();
+    const scene = new THREE.Scene();
+    const paving = worldSurfaceMaterial(scene, 'paving');
+    images[0].width = 512;
+    images[0].onload?.();
+    expect(worldSurfaceAtlasReadback(scene)).toMatchObject({
+      state: 'failed',
+      tileCount: 0,
+      sourceWidth: 512,
+      failureCode: 'SURFACE_ATLAS_DIMENSIONS_INVALID',
+    });
+    expect(paving.map!.image.width).toBe(1);
     disposeWorldSurfaceAtlas(scene);
   });
   it('does not resurrect a texture after engine disposal while its atlas is loading', () => {

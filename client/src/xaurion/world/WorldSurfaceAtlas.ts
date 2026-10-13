@@ -3,7 +3,31 @@ import atlasUrl from './assets/aurion-surface-atlas.webp';
 
 export type WorldSurface = 'paving' | 'forest' | 'wood' | 'rock';
 const kinds: WorldSurface[] = ['paving', 'forest', 'wood', 'rock'];
-const atlases = new WeakMap<THREE.Scene, { textures: THREE.Texture[]; materials: Set<THREE.Material>; details: THREE.InstancedMesh[]; disposed: boolean }>();
+type SurfaceAtlasEntry = {
+  textures: THREE.Texture[];
+  materials: Set<THREE.Material>;
+  details: THREE.InstancedMesh[];
+  disposed: boolean;
+  state: 'loading' | 'ready' | 'failed';
+  failureCode: string | null;
+  sourceWidth: number | null;
+  sourceHeight: number | null;
+};
+const atlases = new WeakMap<THREE.Scene, SurfaceAtlasEntry>();
+
+/** Observable presentation evidence; does not decide gameplay or world state. */
+export function worldSurfaceAtlasReadback(scene: THREE.Scene) {
+  const entry = atlases.get(scene);
+  return Object.freeze({
+    protocol: 'aurion.surface-atlas-readback.v1' as const,
+    state: entry?.state ?? 'uninitialized',
+    source: 'aurion-surface-atlas.webp' as const,
+    sourceWidth: entry?.sourceWidth ?? null,
+    sourceHeight: entry?.sourceHeight ?? null,
+    tileCount: entry?.state === 'ready' ? kinds.length : 0,
+    failureCode: entry?.failureCode ?? null,
+  });
+}
 
 /** One fetched atlas, four isolated 512px tiles: independent mipmaps prevent quadrant bleed. */
 export function texturesFor(scene: THREE.Scene): THREE.Texture[] {
@@ -24,26 +48,56 @@ export function texturesFor(scene: THREE.Scene): THREE.Texture[] {
     t.needsUpdate = true;
     return t as THREE.Texture;
   });
-  const entry = { textures, materials: new Set<THREE.Material>(), details: [] as THREE.InstancedMesh[], disposed: false };
+  const entry: SurfaceAtlasEntry = {
+    textures,
+    materials: new Set<THREE.Material>(),
+    details: [],
+    disposed: false,
+    state: 'loading',
+    failureCode: null,
+    sourceWidth: null,
+    sourceHeight: null,
+  };
   atlases.set(scene, entry);
   const image = new Image();
   image.onload = () => {
     if (entry.disposed) return;
-    kinds.forEach((_, i) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(image, (i % 2) * image.width / 2, Math.floor(i / 2) * image.height / 2,
-        image.width / 2, image.height / 2, 0, 0, 512, 512);
-      // Convert the placeholder into an ordinary image texture without replacing material references.
-      const texture = textures[i];
-      texture.image = canvas;
-      texture.flipY = true;
-      texture.needsUpdate = true;
-    });
+    entry.sourceWidth = image.naturalWidth || image.width;
+    entry.sourceHeight = image.naturalHeight || image.height;
+    if (entry.sourceWidth !== 1024 || entry.sourceHeight !== 1024) {
+      entry.state = 'failed';
+      entry.failureCode = 'SURFACE_ATLAS_DIMENSIONS_INVALID';
+      return;
+    }
+    try {
+      // Draw all four tiles before updating any live material reference.
+      const tiles = kinds.map((_, i) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('SURFACE_ATLAS_CANVAS_UNAVAILABLE');
+        ctx.drawImage(image, (i % 2) * image.width / 2, Math.floor(i / 2) * image.height / 2,
+          image.width / 2, image.height / 2, 0, 0, 512, 512);
+        return canvas;
+      });
+      tiles.forEach((canvas, i) => {
+        const texture = textures[i]!;
+        texture.image = canvas;
+        texture.flipY = true;
+        texture.needsUpdate = true;
+      });
+      entry.state = 'ready';
+      entry.failureCode = null;
+    } catch {
+      entry.state = 'failed';
+      entry.failureCode = 'SURFACE_ATLAS_DECODE_FAILED';
+    }
   };
-  image.onerror = () => { /* Retain the neutral fallback; asset loading never blocks gameplay. */ };
+  image.onerror = () => {
+    if (entry.disposed) return;
+    entry.state = 'failed';
+    entry.failureCode = 'SURFACE_ATLAS_IMAGE_LOAD_FAILED';
+  };
   image.src = atlasUrl;
   return textures;
 }

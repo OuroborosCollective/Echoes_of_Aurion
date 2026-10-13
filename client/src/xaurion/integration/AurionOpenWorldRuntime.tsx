@@ -17,6 +17,7 @@ import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { runtimeIssueCode } from "@shared/runtimeContracts";
 import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import { MMOEngine } from "../core/MMOEngine";
+import { worldSurfaceAtlasReadback } from "../world/WorldSurfaceAtlas";
 import { createRuntimeRenderer, type RendererHandle, type RendererEvidence } from "../core/RendererFactory";
 import { PublicCharacterPicker, type PublicCharacterSelection } from "../components/PublicCharacterPicker";
 import { ConfirmedVisualEffects } from "./confirmedVisualEffects";
@@ -73,6 +74,7 @@ export default function AurionOpenWorldRuntime() {
   const { user, isAuthenticated } = useAuth();
   const rpcUtils = trpc.useUtils();
   const worldAssetsEvidenceRef = useRef<HTMLOutputElement>(null);
+  const surfaceAtlasEvidenceRef = useRef<HTMLOutputElement>(null);
   const runtimePerformanceEvidenceRef = useRef<HTMLOutputElement>(null);
   const explorationMemoryEvidenceRef = useRef<HTMLOutputElement>(null);
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
@@ -419,6 +421,9 @@ export default function AurionOpenWorldRuntime() {
       let evidenceFrames = 0;
       engine.onFrameRendered = () => {
         capture?.onRenderedFrame();
+        if (engine && surfaceAtlasEvidenceRef.current) {
+          surfaceAtlasEvidenceRef.current.dataset.readback = JSON.stringify(worldSurfaceAtlasReadback(engine.scene));
+        }
         if (++evidenceFrames === 1) setRendererEvidence(value => value?.generation === generation ? { ...value, status: "rendering" } : value);
         if (evidenceFrames % 3 !== 0 || !engine) return;
         const evidence = engine.player.glbPresentationEvidence();
@@ -866,6 +871,7 @@ export default function AurionOpenWorldRuntime() {
 
       {!webglError && nearbySmith && <button className="ax1-npc-prompt" aria-label="Schmied ansprechen" onClick={requestWorldInteraction}><Hammer size={18} /> Schmied ansprechen <kbd>F</kbd></button>}
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
+      <output ref={surfaceAtlasEvidenceRef} data-testid="aurion-surface-atlas-evidence" hidden />
       <output ref={runtimePerformanceEvidenceRef} data-testid="runtime-performance-evidence" hidden />
       <output ref={explorationMemoryEvidenceRef} data-testid="exploration-memory-evidence" hidden />
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
