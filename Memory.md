@@ -1571,3 +1571,24 @@ Status: PATCHED on isolated branch; exact-head CI and production readback PENDIN
 Change: Raise the protected release parent's bounded schema wait from 70 to 150 minutes, allow 480 x 15-second polls (120 minutes), reject reruns of the same parent job and reject another active exact-revision schema apply before dispatch. Add bounded wait telemetry and negative regression cases. No live schema operation is restarted or altered.
 Learned: Release run 38327675604 timed out in dispatch-aurion-schema-plan.mjs while the owner-approved child run 38329070423 continued its real root backup/recovery/DDL step. A failed parent is not proof that the child or database failed; a blind rerun can duplicate a non-idempotent production operation.
 Evidence: https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/38327675604 and https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/38329070423 ; SHA-bound patch and new negative tests require CI validation. Production result pending an independent child receipt and subsequent schema readback. Do not redeploy before that readback.
+
+
+### 2026-10-13 — PR #870 — Fix schema apply parent timeout and prevent duplicate production dispatch
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=870 merge=5d83bd178fd85b5bf1f330ed132d8829b602f134 -->
+Task: Merge PR #870 into `main` — Fix schema apply parent timeout and prevent duplicate production dispatch.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `Memory.md`
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `scripts/dispatch-aurion-schema-plan.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/870
+- Merge commit: `5d83bd178fd85b5bf1f330ed132d8829b602f134`
+- PR head: `0e13febcf240188c19e5ad1829c5983f9974aefd`
+- Merged at: 2026-10-13T02:49:29Z
+- Post-merge workflow run: 38338735307
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
