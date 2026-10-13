@@ -1,0 +1,7 @@
+# Aurion owner art atlas candidate (2026-10-13)
+
+This binary is extracted from the newly generated fantasy texture reference board, not from the previously missing owner-supplied high-resolution pavement files. It contains 16 representative material swatches in a 4x4 grid and is deliberately stored as an independent, opt-in presentation candidate. Do not substitute it for the existing `aurion-surface-atlas.webp`, its 1024x1024 shipping receipt, GLB baked maps, world geometry or canonical world/state authority. The artwork is compressed to 256x256 for transport: **64 pixels per tile**; do not claim high resolution, seamless PBR, or normal/displacement material capabilities. Tile labels in the source board were excluded from the selected swatches. The original source board should be retained outside the game asset bundle.
+
+Use `owner-art-atlas.v1.json` as the deterministically indexed, hash-bound source manifest when validating or constructing a reviewed higher-resolution atlas. Crops are currently artistic references, not texture-tiling certified. Before enabling live materials: regenerate from owner-approved full-resolution seamless source images, enforce decoded pixel/UV bounds and SHA-256, add browser /play paving and GLB-material readbacks, and verify device/mobile render quality. No Wolfram provider call or gameplay write is part of this asset admission.
+
+Atlas binary SHA-256: `9e41a70c7db13802c641e3c5ec632e6d7844a8255ddc710cabc2da6f45e08fdc`.

@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "aurion.owner-art-atlas.v1",
+  "revision": "2026-10-13-illustration-preview",
+  "source": "generated-owner-approved-fantasy-atlas",
+  "intendedUse": "visual-preview-only",
+  "status": "candidate-unverified-in-production",
+  "width": 256,
+  "height": 256,
+  "cols": 4,
+  "rows": 4,
+  "tileSize": 64,
+  "sha256": "9e41a70c7db13802c641e3c5ec632e6d7844a8255ddc710cabc2da6f45e08fdc",
+  "format": "image/webp",
+  "textureUse": "baseColor",
+  "normalMap": false,
+  "roughnessMap": false,
+  "verifiedSeamless": false,
+  "authoritativeGameplay": false,
+  "tiles": [
+    {
+      "id": "city.paving.grey",
+      "index": 0,
+      "x": 0,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "city.paving.radial",
+      "index": 1,
+      "x": 64,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "city.paving.flagstone",
+      "index": 2,
+      "x": 128,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "city.paving.redbrick",
+      "index": 3,
+      "x": 192,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "city.walls.moss",
+      "index": 4,
+      "x": 0,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "city.walls.plaster",
+      "index": 5,
+      "x": 64,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "city.walls.rubble",
+      "index": 6,
+      "x": 128,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "city.walls.framing",
+      "index": 7,
+      "x": 192,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "roof.terracotta",
+      "index": 8,
+      "x": 0,
+      "y": 128,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "wood.planks",
+      "index": 9,
+      "x": 64,
+      "y": 128,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "metal.armor",
+      "index": 10,
+      "x": 128,
+      "y": 128,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "leather.worn",
+      "index": 11,
+      "x": 192,
+      "y": 128,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "dungeon.stone",
+      "index": 12,
+      "x": 0,
+      "y": 192,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "lava.cracked",
+      "index": 13,
+      "x": 64,
+      "y": 192,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "nature.rock",
+      "index": 14,
+      "x": 128,
+      "y": 192,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "id": "nature.ground",
+      "index": 15,
+      "x": 192,
+      "y": 192,
+      "width": 64,
+      "height": 64
+    }
+  ]
+}
