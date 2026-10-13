@@ -1655,3 +1655,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-13 — Aurion owner-art atlas opt-in material preview
+Status: PARTIAL — Draft #878, exact-head CI and authenticated /play readback pending.
+Task: Stage owner-approved art, bind a deterministic paving preview only under an explicit URL opt-in.
+Decisions: Preserve current world/GLBs, production atlas, canonical Aurion gameplay and fallback; add hash-labelled candidate, isolated material presentation, negative load/disposal tests and ownership ledger; no AX1/WASD runtime dependencies.
+Touched surfaces: OwnerArtPavingPreview.ts and test, WorldSurfaceAtlas.ts, donor-ledger.json, preview WebP/manifest and docs.
+Evidence: Draft PR #878; source head eb21f6843bf7ef6ec77d6b20d3fa8416e0ed24dd; 16 candidate swatches, 64px per tile; first CI identified and subsequent commit repaired DONOR_SURFACE_UNINVENTORIED. No runtime/deployment acceptance yet.
+Learned: A generated reference board is not a high-resolution, seamlessly tiling PBR atlas; never replace the live pavement without verified source and browser evidence.
+Open: Exact updated-head CI, authentic rendered paving and GLB readback, texture SHA/quality and eventual owner-approved production material admission.
+Next safe step: Complete PR checks and review #877 independently; reject merge without full proof.
