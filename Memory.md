@@ -1625,3 +1625,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-13 — Curate season accessibility and combat expiry regressions
+Status: PARTIAL — isolated draft head CI pending.
+Task: Preserve useful non-duplicate code from legacy Drafts #854 and #863 after Aurion-only PR #872 merge.
+Decisions: Season UI remains a projection of canonical Aurion season readbacks. Mark selected season with aria-pressed and keyboard focus affordance; transfer combat expiry, stat isolation and clamp regression into Aurion-owned source without importing the older PR's extra files or duplicate combat implementation. Historical ax1 filename has no separate authority.
+Touched surfaces: client/src/pages/Operations.tsx; server/ax1CombatAuthority.test.ts; Memory.md.
+Evidence: Original drafts #854/#863 patches reviewed against a new exact main commit; PR #872 merge commit d9c8e9c5d6043ba08b20acf365a49297eae14e1e. No live runtime claim. Exact-head CI and later main readback pending.
+Learned: Fix the actual consumer behavior and retain independently testable regression rather than merging multiple overlapping changes in canonical combat hot loops.
+Open: CI, PR approval, independent post-merge proof; other world/content drafts remain separate.
+Next safe step: Run the exact-head test matrix, merge only when eligible and verify new main.
