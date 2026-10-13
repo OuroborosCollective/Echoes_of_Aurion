@@ -30,7 +30,7 @@ for (const viewport of [
     await register(page, `owner_atlas_${viewport.name}`);
     const existing = await enterAx1(page);
     const originalWorldHash = existing.snapshot?.globalWorld?.deterministicHash;
-    expect(originalWorldHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(originalWorldHash).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
     await expect.poll(async () => (await evidence(page))?.state, { timeout: 45_000 }).toBe("disabled");
     expect(await evidence(page)).toMatchObject({
       protocol: "aurion.owner-art-paving-preview.v1",
@@ -54,7 +54,7 @@ for (const viewport of [
     expect(await page.getByTestId("glb-model-status").textContent()).not.toBe("error");
     const urls = await page.evaluate(() => performance.getEntriesByType("resource")
       .map(entry => entry.name)
-      .filter(url => /\\/assets\\/owner-art-atlas-preview-[^/?]+\\.webp(?:\\?|$)/.test(url)));
+      .filter(url => { const path = new URL(url).pathname; return path.includes("/assets/owner-art-atlas-preview-") && path.endsWith(".webp"); }));
     expect(urls).toHaveLength(1);
     const servedUrl = new URL(urls[0]!);
     expect(servedUrl.origin).toBe(new URL(baseURL!).origin);

@@ -46,7 +46,7 @@ export function ownerArtPavingPreviewReadback(scene: THREE.Scene) {
     tileId: preview ? PAVING_TILE : null,
     tileSize: preview ? manifest.tileSize : null,
     sourceSha256: preview ? manifest.sha256 : null,
-    boundMaterials: preview?.texture ? preview.materials.size : 0,
+    boundMaterials: preview?.texture ? [...preview.materials].filter(material => material.map === preview.texture).length : 0,
     failureCode: preview?.failureCode ?? null,
     gameplayAuthority: false,
   });

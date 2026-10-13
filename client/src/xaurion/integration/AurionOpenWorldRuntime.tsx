@@ -421,7 +421,7 @@ export default function AurionOpenWorldRuntime() {
       let evidenceFrames = 0;
       engine.onFrameRendered = () => {
         capture?.onRenderedFrame();
-        if (ownerArtAtlasEvidenceRef.current) {
+        if (engine && ownerArtAtlasEvidenceRef.current) {
           ownerArtAtlasEvidenceRef.current.dataset.readback = JSON.stringify(ownerArtPavingPreviewReadback(engine.scene));
         }
         if (++evidenceFrames === 1) setRendererEvidence(value => value?.generation === generation ? { ...value, status: "rendering" } : value);
