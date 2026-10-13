@@ -794,6 +794,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/core/actorLod.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/core/AdminService.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
@@ -848,13 +854,13 @@
       "role": "CAPABILITY"
     },
     {
-      "path": "client/src/xaurion/core/GLBModelManager.ts",
+      "path": "client/src/xaurion/core/GlbModelLease.ts",
       "donor": "AX1",
       "capabilityId": "client.renderer-runtime",
       "role": "SUPPORT"
     },
     {
-      "path": "client/src/xaurion/core/GlbModelLease.ts",
+      "path": "client/src/xaurion/core/GLBModelManager.ts",
       "donor": "AX1",
       "capabilityId": "client.renderer-runtime",
       "role": "SUPPORT"
@@ -905,6 +911,12 @@
       "path": "client/src/xaurion/core/ProceduralEquipmentVisuals.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/renderBudget.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
       "role": "SUPPORT"
     },
     {
@@ -980,18 +992,6 @@
       "role": "CAPABILITY"
     },
     {
-      "path": "client/src/xaurion/core/actorLod.ts",
-      "donor": "AX1",
-      "capabilityId": "client.renderer-runtime",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/core/renderBudget.ts",
-      "donor": "AX1",
-      "capabilityId": "client.renderer-runtime",
-      "role": "SUPPORT"
-    },
-    {
       "path": "client/src/xaurion/data/ax1Lore.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
@@ -1034,6 +1034,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/integration/aurionAuthorityAdapter.ts",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/integration/AurionAuthorityHud.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
@@ -1058,6 +1064,18 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/integration/aurionWorldCore.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/authoritativeHudProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "progression.armor-mastery-content",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/integration/Ax1CompanionOverlay.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
@@ -1070,6 +1088,24 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/integration/ax1SourceManifest.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/integration/combatPresentation.ts",
+      "donor": "AX1",
+      "capabilityId": "client.combat-vfx",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/confirmedActionRequest.ts",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "CAPABILITY"
+    },
+    {
       "path": "client/src/xaurion/integration/ConfirmedChunkProjection.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
@@ -1080,6 +1116,12 @@
       "donor": "AX1",
       "capabilityId": "client.input-zone-bridge",
       "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/confirmedVisualEffects.ts",
+      "donor": "AX1",
+      "capabilityId": "client.combat-vfx",
+      "role": "CAPABILITY"
     },
     {
       "path": "client/src/xaurion/integration/EquipmentCatalogProjection.ts",
@@ -1178,48 +1220,6 @@
       "role": "SUPPORT"
     },
     {
-      "path": "client/src/xaurion/integration/aurionAuthorityAdapter.ts",
-      "donor": "AX1",
-      "capabilityId": "client.input-zone-bridge",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/integration/aurionWorldCore.ts",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/integration/authoritativeHudProjection.ts",
-      "donor": "AX1",
-      "capabilityId": "progression.armor-mastery-content",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/integration/ax1SourceManifest.ts",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
-      "role": "CAPABILITY"
-    },
-    {
-      "path": "client/src/xaurion/integration/combatPresentation.ts",
-      "donor": "AX1",
-      "capabilityId": "client.combat-vfx",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/integration/confirmedActionRequest.ts",
-      "donor": "AX1",
-      "capabilityId": "client.input-zone-bridge",
-      "role": "CAPABILITY"
-    },
-    {
-      "path": "client/src/xaurion/integration/confirmedVisualEffects.ts",
-      "donor": "AX1",
-      "capabilityId": "client.combat-vfx",
-      "role": "CAPABILITY"
-    },
-    {
       "path": "client/src/xaurion/integration/zoneCombatBridge.ts",
       "donor": "AX1",
       "capabilityId": "client.input-zone-bridge",
@@ -1256,6 +1256,18 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/spatial/bvhInit.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/spatial/bvhWorkerHelper.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/spatial/HighDensityPerformanceGate.ts",
       "donor": "AX1",
       "capabilityId": "client.renderer-runtime",
@@ -1274,19 +1286,25 @@
       "role": "SUPPORT"
     },
     {
-      "path": "client/src/xaurion/spatial/bvhInit.ts",
-      "donor": "AX1",
-      "capabilityId": "client.renderer-runtime",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/spatial/bvhWorkerHelper.ts",
-      "donor": "AX1",
-      "capabilityId": "client.renderer-runtime",
-      "role": "SUPPORT"
-    },
-    {
       "path": "client/src/xaurion/types.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/assets/aurion-surface-atlas.json",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/assets/owner-art-atlas.v1.json",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/chunkProjection.worker.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
       "role": "SUPPORT"
@@ -1295,6 +1313,12 @@
       "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
       "donor": "AX1",
       "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/OwnerArtPavingPreview.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
       "role": "SUPPORT"
     },
     {
@@ -1331,18 +1355,6 @@
       "path": "client/src/xaurion/world/WorldSurfaceAtlas.ts",
       "donor": "AX1",
       "capabilityId": "world.resource-ecology",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/world/assets/aurion-surface-atlas.json",
-      "donor": "AX1",
-      "capabilityId": "client.renderer-runtime",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/world/chunkProjection.worker.ts",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
       "role": "SUPPORT"
     },
     {

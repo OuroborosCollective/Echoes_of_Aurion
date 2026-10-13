@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import atlasUrl from './assets/aurion-surface-atlas.webp';
+import { attachOwnerArtPavingPreview, disposeOwnerArtPavingPreview } from './OwnerArtPavingPreview';
 
 export type WorldSurface = 'paving' | 'forest' | 'wood' | 'rock';
 const kinds: WorldSurface[] = ['paving', 'forest', 'wood', 'rock'];
@@ -54,6 +55,7 @@ export function worldSurfaceMaterial(scene: THREE.Scene, kind: WorldSurface): TH
     roughness: kind === 'paving' ? 0.88 : 0.96, metalness: 0,
   });
   atlases.get(scene)!.materials.add(material);
+  if (kind === 'paving' && typeof window !== 'undefined') attachOwnerArtPavingPreview(scene, material, window.location.search);
   return material;
 }
 
@@ -71,6 +73,7 @@ export function disposeWorldSurfaceAtlas(scene: THREE.Scene): void {
   const entry = atlases.get(scene);
   if (!entry) return;
   entry.disposed = true;
+  disposeOwnerArtPavingPreview(scene);
   entry.textures.forEach(texture => texture.dispose());
   entry.materials.forEach(material => material.dispose());
   entry.details.forEach(mesh => { mesh.dispose(); mesh.geometry.dispose(); });
