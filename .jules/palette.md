@@ -24,3 +24,4 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2026-10-13 - Add new community panels to Home page\n**Learning:** When adding new community functions or panels (e.g., via `openCommunity()` in UI components), ensure corresponding local TypeScript union types (like `type CommunityPanel`) are updated to include the new panel string keys to prevent 'Argument of type is not assignable to parameter of type' compilation errors.\n**Action:** Always search for associated type definitions or discriminated unions in the file before expanding literal string parameters to function calls.
