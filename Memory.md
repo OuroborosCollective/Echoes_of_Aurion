@@ -1602,3 +1602,26 @@ Evidence: main a0edd6e135ca83dd4b7466bb3dd0f4381776085e, 21 GitHub draft PRs #83
 Learned: Legacy filenames are not sufficient to prove a second authority. Security fixes must not silently weaken test suites; log-in timing equalization requires a structurally valid scrypt target-cost dummy, checked against real verifier code.
 Open: Complete exact-head review, regression, live behavior and CI. Evaluate additional drafts individually; close only after safe salvage or reasoned disqualification. No production promotion or blind schema apply.
 Next safe step: Gate candidate by exact GitHub CI and separate merge decisions from production repairs.
+
+
+### 2026-10-13 — PR #872 — Aurion-only: safely curate auth, combat and UI fixes from 21 legacy drafts
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=872 merge=d9c8e9c5d6043ba08b20acf365a49297eae14e1e -->
+Task: Merge PR #872 into `main` — Aurion-only: safely curate auth, combat and UI fixes from 21 legacy drafts.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/pages/Home.tsx`
+- `server/ax1CombatAuthority.ts`
+- `server/localAuth.test.ts`
+- `server/localAuth.ts`
+- `server/routers.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/872
+- Merge commit: `d9c8e9c5d6043ba08b20acf365a49297eae14e1e`
+- PR head: `d557de10499ff024c208cb1723a88777f6e46775`
+- Merged at: 2026-10-13T08:32:30Z
+- Post-merge workflow run: 38369959875
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
