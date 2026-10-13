@@ -1,0 +1,79 @@
+name: Aurion VPS read-only storage audit
+
+on:
+  pull_request:
+    paths:
+      - scripts/ops/vps_cleanup_audit.py
+      - scripts/ops/test_vps_cleanup_audit.py
+      - .github/workflows/vps-readonly-storage-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-vps-readonly-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-audit-source:
+    name: Verify no-delete Python audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Compile and exercise actual Python audit code
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/vps_cleanup_audit.py scripts/ops/test_vps_cleanup_audit.py
+          python3 -m unittest discover -s scripts/ops -p 'test_vps_cleanup_audit.py' -v
+
+  inspect-vps:
+    name: Read real VPS storage metadata
+    needs: verify-audit-source
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'OuroborosCollective/Echoes_of_Aurion'
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact main revision (credentials disabled)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check Python source on the VPS runner
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/vps_cleanup_audit.py
+          python3 -m unittest discover -s scripts/ops -p 'test_vps_cleanup_audit.py' -v
+      - name: Run fixed read-only inventory (no sudo, no secrets)
+        id: audit
+        shell: bash
+        run: |
+          set -u
+          python3 scripts/ops/vps_cleanup_audit.py --json > "$RUNNER_TEMP/aurion-vps-storage-audit.json"
+          result=$?
+          echo "audit_exit_code=$result" >> "$GITHUB_OUTPUT"
+          python3 - "$RUNNER_TEMP/aurion-vps-storage-audit.json" <<'PY'
+          import json
+          import sys
+          report = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert report["schemaVersion"] == "ouroboros.vps-storage-inventory.v1"
+          assert report["mutationPerformed"] is False
+          assert report["deleteCapability"] is False
+          assert report["secretValuesReturned"] is False
+          print("Audit receipt validated. Metadata-only artifact attached.")
+          PY
+          exit "$result"
+      - name: Retain one redacted bounded audit receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: aurion-vps-readonly-storage-${{ github.run_id }}
+          path: ${{ runner.temp }}/aurion-vps-storage-audit.json
+          if-no-files-found: warn
+          retention-days: 14
