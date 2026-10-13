@@ -10,19 +10,31 @@ export function validateSchemaDispatchPlan({ manifest, expectedSha, planSha256, 
   if (manifest?.waveId !== "aurion-production-0021-0073" || manifest.schemaVersion !== "aurion.migration-wave-manifest.v2" || manifest.policy?.ownerApprovalRequired !== true || manifest.policy?.productionWritesScheduled !== false || manifest.migrations?.map(entry => entry.tag).join(",") !== tags.join(",")) throw new Error("SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED");
 }
 
-export async function dispatchSchemaPlan(input, { request, pause, attempts = 260 }) {
+export async function dispatchSchemaPlan(input, { request, pause, attempts = 480 }) {
   validateSchemaDispatchPlan(input);
   const prefix = `/repos/${repository}`;
   const caller = await request(`${prefix}/actions/runs/${input.ledgerRunId}`);
   if (caller.head_sha !== input.expectedSha || caller.head_branch !== "main" || !["push", "workflow_dispatch"].includes(caller.event) || caller.path !== ".github/workflows/deploy-aurion-zone-runtime.yml") throw new Error("SCHEMA_DISPATCH_CALLER_INVALID");
+  // A re-run of the parent job must never create another production DDL run:
+  // the original child may still be active even after the parent timed out.
+  if (!Number.isSafeInteger(caller.run_attempt) || caller.run_attempt !== 1) throw new Error("SCHEMA_DISPATCH_PARENT_RETRY_FORBIDDEN");
   const main = await request(`${prefix}/git/ref/heads/main`);
   if (main.object?.sha !== input.expectedSha) throw new Error("SCHEMA_DISPATCH_STALE_MAIN");
+  // Guard against a second *manual* main release while its earlier schema
+  // apply is still running on the same immutable revision. An unrecognized
+  // actions-list response fails closed instead of assuming the lane is free.
+  const activeRuns = await request(`${prefix}/actions/workflows/${workflow}/runs?branch=main&event=workflow_dispatch&per_page=100`);
+  if (!Array.isArray(activeRuns?.workflow_runs)) throw new Error("SCHEMA_DISPATCH_ACTIVE_RUNS_UNAVAILABLE");
+  const collision = activeRuns.workflow_runs.find(run => run.head_sha === input.expectedSha && run.status !== "completed");
+  if (collision) throw new Error(`SCHEMA_DISPATCH_EXISTING_ACTIVE_APPLY:${Number.isSafeInteger(collision.id) ? collision.id : "UNKNOWN"}`);
   const dispatched = await request(`${prefix}/actions/workflows/${workflow}/dispatches`, "POST", { ref: "main", inputs: { ledger_run_id: input.ledgerRunId, plan_sha256: input.planSha256 } });
   const runId = dispatched.workflow_run_id;
   if (!Number.isSafeInteger(runId) || runId < 1) throw new Error("SCHEMA_DISPATCH_RUN_ID_MISSING");
+  console.log(JSON.stringify({ recordType: "aurion.schema-apply-dispatched", applyRunId: runId, sourceRevision: input.expectedSha }));
   for (let attempt = 0; attempt < attempts; attempt++) {
     const run = await request(`${prefix}/actions/runs/${runId}`);
     if (run.head_sha !== input.expectedSha || run.event !== "workflow_dispatch" || run.path !== `.github/workflows/${workflow}`) throw new Error("SCHEMA_DISPATCH_RUN_MISMATCH");
+    if (attempt % 20 === 0) console.log(JSON.stringify({ recordType: "aurion.schema-apply-wait", applyRunId: runId, status: run.status, attempt: attempt + 1, maxAttempts: attempts }));
     if (run.status === "completed") {
       if (run.conclusion !== "success") throw new Error(`SCHEMA_APPLY_RUN_FAILED:${runId}`);
       return { sourceRevision: input.expectedSha, planSha256: input.planSha256, applyRunId: runId, conclusion: "success" };
