@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
+import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword, DUMMY_LOCAL_AUTH_HASH } from "./localAuth";
 
 describe("Aurion local authentication primitives", () => {
   it("normalizes and strictly validates local handles", () => {
@@ -20,4 +20,10 @@ describe("Aurion local authentication primitives", () => {
     await expect(verifyLocalPassword("Sternwarte-2026!", encoded)).resolves.toBe(true);
     await expect(verifyLocalPassword("Sternwarte-2026?", encoded)).resolves.toBe(false);
   });
+  it("uses a structurally valid real-cost scrypt dummy while never granting access", async () => {
+    expect(DUMMY_LOCAL_AUTH_HASH.split("$")).toHaveLength(4);
+    await expect(verifyLocalPassword("any-password", DUMMY_LOCAL_AUTH_HASH)).resolves.toBe(false);
+    await expect(verifyLocalPassword("", DUMMY_LOCAL_AUTH_HASH)).resolves.toBe(false);
+  });
+
 });
