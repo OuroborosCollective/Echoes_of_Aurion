@@ -358,7 +358,7 @@ export default function Home() {
           <button
             type="button"
             aria-haspopup="dialog"
-            disabled={loading}
+            disabled={!isAuthenticated || loading}
             aria-busy={loading}
             title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Signalraum öffnen"}
             onClick={() => openCommunity("chat")}
