@@ -80,7 +80,7 @@
       },
       {
         "path": "shared/worldChunkStreamingProtocol.ts",
-        "sha256": "5c5caf6c3aeb82aa3a90ca71621b20b255d684531142f3f805817126b042cb55"
+        "sha256": "6dc80c44fa2ae0b1c9b845a6f27dc99d763589d49daa292693f0d25ccca2a0fe"
       },
       {
         "path": "scripts/balancing/aim265-v2.ts",
