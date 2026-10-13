@@ -78,13 +78,27 @@ def directory_sizes(run: Run) -> tuple[list[dict[str, Any]], list[str]]:
         if not target.exists() or target.is_symlink() or not target.is_dir():
             records.append({"path": item, "present": False, "bytes": None})
             continue
-        status, out = run(["du", "-s", "-x", "-B1", "--", item], 45)
-        match = re.fullmatch(r"([0-9]+)\t[^\n]+\n?", out)
-        if status or match is None:
+        # Only first-level directory metadata: no file names, no symlink traversal.
+        status, out = run(["du", "-x", "--max-depth=1", "-B1", "--", item], 45)
+        by_path: dict[str, int] = {}
+        valid = status == 0
+        for line in out.splitlines():
+            match = re.fullmatch(r"([0-9]+)\t([^\t\n]+)", line)
+            if match is None or not (match.group(2) == item or match.group(2).startswith(item + "/")):
+                valid = False
+                break
+            by_path[match.group(2)] = int(match.group(1))
+        if not valid or item not in by_path or len(by_path) > 2048:
             errors.append("DIRECTORY_USAGE_UNAVAILABLE:" + item)
-            records.append({"path": item, "present": True, "bytes": None})
+            records.append({"path": item, "present": True, "bytes": None, "largestChildren": []})
             continue
-        records.append({"path": item, "present": True, "bytes": int(match.group(1))})
+        children = [
+            {"path": child, "bytes": size}
+            for child, size in by_path.items()
+            if child != item and child.count("/") == item.count("/") + 1
+        ]
+        children.sort(key=lambda row: (-row["bytes"], row["path"]))
+        records.append({"path": item, "present": True, "bytes": by_path[item], "largestChildren": children[:12]})
     return sorted(records, key=lambda x: x["bytes"] or 0, reverse=True), errors
 
 
