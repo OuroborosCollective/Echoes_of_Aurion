@@ -1592,3 +1592,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-13 — Aurion-only open PR curation (21 initial drafts)
+Status: PARTIAL — curated candidate only, exact-head CI and production readback pending.
+Task: Inventory all open Aurion drafts, prohibit AX1/WASD active authorities and preserve good standalone contributions.
+Decisions: Aurion sole active runtime, DB, gameplay and receipt owner; historical provenance remains evidence, not a source of decisions. Never merge changes that bypass CI (PR #861 removes an explicit failure from .github/workflows/aim259-group-instances.yml and forces Playwright clicks). PR #848's dummy scrypt salt is too short and verifier returns before costly derivation, so take a valid-cost dummy candidate with separate regression. Avoid duplicate hot-loop patches (#835/#845/#852/#853/#863), matrix-difference proposals (#842/#851/#858/#871) pending Wolfram mathematical equivalence checks, and mutable cached live combat snapshots (#843). Keep README/docs history intact.
+Touched surfaces: server/localAuth.ts; server/routers.ts; server/localAuth.test.ts; server/ax1CombatAuthority.ts (historically named Aurion-owned module); client/src/pages/Home.tsx; Memory.md.
+Evidence: main a0edd6e135ca83dd4b7466bb3dd0f4381776085e, 21 GitHub draft PRs #835–#871 enumerated; per-file patches inspected. Actual current main deployment run 38364366832 ended FAILURE, so PR curation does not claim a healthy production runtime. This candidate has not passed exact-head CI yet.
+Learned: Legacy filenames are not sufficient to prove a second authority. Security fixes must not silently weaken test suites; log-in timing equalization requires a structurally valid scrypt target-cost dummy, checked against real verifier code.
+Open: Complete exact-head review, regression, live behavior and CI. Evaluate additional drafts individually; close only after safe salvage or reasoned disqualification. No production promotion or blind schema apply.
+Next safe step: Gate candidate by exact GitHub CI and separate merge decisions from production repairs.
