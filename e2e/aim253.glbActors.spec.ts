@@ -142,7 +142,7 @@ for (const viewport of [
       expect(committedAtlas.quadrants).toEqual(["paving", "forest", "wood", "rock"]);
       const requestedAtlasUrls = await page.evaluate(() => performance.getEntriesByType("resource")
         .map(entry => entry.name)
-        .filter(name => /\\/assets\\/aurion-surface-atlas-[^/]+\\.webp(?:\\?.*)?$/.test(name)));
+        .filter(name => name.includes("/assets/aurion-surface-atlas-") && new URL(name).pathname.endsWith(".webp")));
       expect(requestedAtlasUrls).toHaveLength(1);
       const servedAtlasUrl = new URL(requestedAtlasUrls[0]!);
       expect(servedAtlasUrl.origin).toBe(new URL(baseURL!).origin);
