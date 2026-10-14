@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-redis-compose-"));
 try {
   const envFile = path.join(directory, "application.env");
-  const previous = "REDIS_URL=redis://retired-redis.invalid:6379/2\n";
+  const previous = "REDIS_URL=redis://retired-redis.invalid:6379/2\nNODE_OPTIONS=--max-old-space-size=4096\n";
   fs.writeFileSync(envFile, previous, { mode: 0o600 });
   const raw = execFileSync("docker", ["compose", "--project-name", "aurion-redis-contract-test", "--file", "docker-compose.traefik.yml", "config", "--format", "json"], {
     encoding: "utf8",
@@ -25,6 +25,8 @@ try {
   });
   const compose = JSON.parse(raw);
   assert.equal(compose.services.aurion.environment.REDIS_URL, "");
+  // The Compose override must supersede a stale 4 GiB owner-managed environment.
+  assert.equal(compose.services.aurion.environment.NODE_OPTIONS, "--max-old-space-size=8800");
   assert.equal(fs.readFileSync(envFile, "utf8"), previous);
   const mount = compose.services.aurion.volumes.find(item => item.target === "/var/lib/aurion/companion-memory");
   assert.equal(mount?.type, "volume");
