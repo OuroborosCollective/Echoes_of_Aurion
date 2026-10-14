@@ -27,7 +27,14 @@ export class AurionSnapshotReconciliationService {
           await new Promise(resolve => setTimeout(resolve, 60_000));
           continue;
         }
-        for (const checkpoint of unreconciled) await this.reconcileCheckpoint(checkpoint);
+        for (const checkpoint of unreconciled) {
+          if (!this.isRunning) break;
+          await this.reconcileCheckpoint(checkpoint);
+        }
+        // Missing predecessor or tick evidence deliberately stays pending.
+        // Without a pause, the same five rows are replayed in a hot loop,
+        // allocating replay states and hammering MariaDB indefinitely.
+        if (this.isRunning) await new Promise(resolve => setTimeout(resolve, 10_000));
       } catch (error) {
         console.error("[C-Aurion] Snapshot reconciliation loop error", error);
         await new Promise(resolve => setTimeout(resolve, 10_000));
