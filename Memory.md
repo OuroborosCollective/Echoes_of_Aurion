@@ -1755,3 +1755,13 @@ Evidence: Owner mobile screenshot and actual main code traced to false `aurion:c
 Learned: A combat confirmation cannot be interpreted as a cold-archive receipt; presentation health must come from the validated authoritative zone message and be absent when no confirmed self exists.
 Open: Exact-head TypeScript, component regression and real 360px/desktop browser checks; server presentation when zone disconnects and repeated death-respawn transitions; production deploy/readback separate.
 Next safe step: Pass focused and full CI and verified browser UX before merging; then work on issue #892 for GLBs and atlases.
+
+### 2026-10-15 — Keep server-confirmed hostile actors visible through failed GLB presentation (#892)
+Status: PARTIAL — isolated branch, CI and actual device proof pending
+Task: Reproduce live invisible enemies where combat and HP remain authoritative but approved GLB catalog asset is pending, incompatible or fails to load.
+Decisions: Do not change server snapshots, combat, NPC authority, geometry budgets, 10 Hz, persistence or world asset paths. Retain an already existing presentation body for living authoritative enemies until the approved GLB actually passes load/rig/animation verification; maintain loaded GLB priority and no resurrection for dead actors.
+Touched surfaces: `client/src/xaurion/integration/MobCatalogProjection.ts` and matching focused tests.
+Evidence: Code path verified: pre-GLB `visual.body.visible=false` combined with `NO_COMPATIBLE_FALLBACK` and load failures left no rendered enemy; focused regression checks added. CI and actual browser screenshots still pending.
+Learned: Concealing the only renderable presentation before the real asset is ready creates invisible enemies even while damage and authoritative entity data remain intact.
+Open: Fix separately missing NPC model catalog/fallback and owner-provided surface atlas asset binding; browser/network asset readback and final exact-head CI required before merge.
+Next safe step: Finish exact-head regression checks; merge only after acceptance gates and production-safe proof, then test actual GLB and atlas rendering on phone/desktop.
