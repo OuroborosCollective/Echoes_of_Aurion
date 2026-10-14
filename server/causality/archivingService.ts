@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 import { aurionCausalCheckpoints } from "../../drizzle/aurionCausalitySchema";
 import { getDb } from "../db";
 import { globalCausalPersistence } from "./persistence";
@@ -41,15 +41,30 @@ export class AurionCausalArchivingService {
     try {
       const db = await getDb();
       if (!db) return;
-      const checkpoints = await db.select().from(aurionCausalCheckpoints)
-        .where(eq(aurionCausalCheckpoints.reconciled, 1))
-        .orderBy(desc(aurionCausalCheckpoints.tick));
-      const zones = Array.from(new Set(checkpoints.map(checkpoint => checkpoint.zoneId)));
-      for (const zoneId of zones) {
-        const zoneCheckpoints = checkpoints.filter(checkpoint => checkpoint.zoneId === zoneId);
-        if (zoneCheckpoints.length < 2) continue;
-        const threshold = zoneCheckpoints[1].tick + 1;
-        await globalCausalPersistence.archiveOldReceipts(zoneId, threshold);
+      // Never pull checkpoint snapshotJson blobs or an unbounded checkpoint history
+      // into the Node heap. Keyset-page zone IDs, then read two ticks per zone.
+      // Failure to complete a page is surfaced by the catch below; no archive
+      // source rows are deleted, and no zone is silently marked as complete.
+      let afterZone = "";
+      const zonePageSize = 32;
+      while (true) {
+        const page = await db.selectDistinct({ zoneId: aurionCausalCheckpoints.zoneId })
+          .from(aurionCausalCheckpoints)
+          .where(and(eq(aurionCausalCheckpoints.reconciled, 1), gt(aurionCausalCheckpoints.zoneId, afterZone)))
+          .orderBy(aurionCausalCheckpoints.zoneId)
+          .limit(zonePageSize);
+        if (page.length === 0) break;
+        for (const { zoneId } of page) {
+          const checkpoints = await db.select({ tick: aurionCausalCheckpoints.tick })
+            .from(aurionCausalCheckpoints)
+            .where(and(eq(aurionCausalCheckpoints.reconciled, 1), eq(aurionCausalCheckpoints.zoneId, zoneId)))
+            .orderBy(desc(aurionCausalCheckpoints.tick))
+            .limit(2);
+          if (checkpoints.length < 2) continue;
+          await globalCausalPersistence.archiveOldReceipts(zoneId, checkpoints[1].tick + 1);
+        }
+        afterZone = page[page.length - 1].zoneId;
+        if (page.length < zonePageSize) break;
       }
     } catch (error) {
       console.error("[C-Aurion] Archive cycle failed", error);
