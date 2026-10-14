@@ -1711,3 +1711,14 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-14 — Bounded causal archiving and reconciliation
+Status: PARTIAL — candidate branch, runtime/CI pending
+Task: Remove proven unbounded archival heap reads and hot-loop checkpoint replay without sacrificing gameplay evidence.
+Decisions: Preserve 10 Hz and MariaDB truth; keyset-page receipt source in groups of 64 under one transaction; verify immutable previous archive packets and hashes; stream new 60 KiB packets; restrict checkpoint queries to selected columns; pace pending reconciliation 10 s. Do not delete source rows or modify schema/archives.
+Touched surfaces: `server/causality/persistence.ts`, `archivePacking.ts`, `archivingService.ts`, `snapshotReconciliationService.ts` and `archiveMemoryBounds.test.ts`.
+Evidence: Source-verified old unbounded scan and PR #881 partial fix; regression test contract for 1100 receipts and UTF-8 packet identity; final SHA CI, real MariaDB archive/retry/rollback and live stability not yet evidenced.
+Learned: Increasing V8 heap or lowering authority Hz cannot repair an unbounded archive prefix; preserve persisted packet bytes and rollback invariants independently of query page size.
+Open: Exact-head real MariaDB/full CI, transaction-lock/backpressure assessment, independent heap/restart readback and production rollout.
+Next safe step: Integrate only after reproducible isolated database/replay tests and exact-revision receipts, then measure live process stability before declaring resolved.

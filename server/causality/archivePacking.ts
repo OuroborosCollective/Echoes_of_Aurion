@@ -36,3 +36,37 @@ export function packCausalArchivePayloads(rows: readonly ArchiveReceiptPayload[]
   if (packet.length) packets.push(`[${packet.join(",")}]`);
   return packets;
 }
+
+/**
+ * Incremental archive packet encoder. Holds at most one <60 KiB packet of
+ * receipts, preserving the historical byte-for-byte JSON packet format.
+ */
+export class BoundedCausalArchivePacker {
+  private parts: string[] = [];
+  private bytes = 2;
+
+  push(row: ArchiveReceiptPayload): string | null {
+    const json = JSON.stringify(row);
+    const size = Buffer.byteLength(json, "utf8");
+    if (size + 2 > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+      throw new Error(`CAUSAL_ARCHIVE_RECEIPT_TOO_LARGE:${row.tick}`);
+    }
+    let complete: string | null = null;
+    if (this.bytes + size + (this.parts.length ? 1 : 0) > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+      complete = `[${this.parts.join(",")}]`;
+      this.parts = [];
+      this.bytes = 2;
+    }
+    this.bytes += size + (this.parts.length ? 1 : 0);
+    this.parts.push(json);
+    return complete;
+  }
+
+  finish(): string | null {
+    if (this.parts.length === 0) return null;
+    const result = `[${this.parts.join(",")}]`;
+    this.parts = [];
+    this.bytes = 2;
+    return result;
+  }
+}

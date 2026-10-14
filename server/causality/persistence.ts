@@ -24,7 +24,7 @@ import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContra
 import { drainCombatQuestProjections, persistAurionCombatVictoryEvidenceInTransaction } from "../aurionCombatVictoryPersistence";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
-import { archiveReceiptPayload, causalArchiveHash, packCausalArchivePayloads, type ArchiveReceiptPayload } from "./archivePacking";
+import { archiveReceiptPayload, BoundedCausalArchivePacker, CAUSAL_ARCHIVE_PACKET_MAX_BYTES, causalArchiveHash } from "./archivePacking";
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
 
@@ -223,61 +223,171 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     return rows.map(row => ({ receipt: this.mapReceipt(row), intents: row.inputJson ? JSON.parse(row.inputJson) as AurionZoneIntent[] : undefined }));
   }
 
+
   async archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string; archiveIds: string[]; startTick: number; endTick: number } | null> {
-    const db = await getDb(); if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
+    const db = await getDb();
+    if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     if (!Number.isSafeInteger(beforeTick) || beforeTick < 1) throw new Error("CAUSAL_ARCHIVE_THRESHOLD_INVALID");
     if (beforeTick === 1) return null;
+
+    // Restrict the Node heap independent of the total number of receipts.
+    // Transaction-scoped row locks preserve fail-closed archive serialization.
+    const ARCHIVE_RECEIPT_PAGE_SIZE = 64;
+    const ARCHIVE_MAX_IDS = 100_000;
     return db.transaction(async tx => {
-      // Lock the retained prefix to serialize overlapping backup requests. No source rows are deleted.
-      const rows = await tx.select().from(aurionCausalTickReceipts)
-        .where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), lt(aurionCausalTickReceipts.tick, beforeTick)))
-        .orderBy(aurionCausalTickReceipts.tick).for("update");
-      if (rows.length === 0) return null;
-      if (rows.length !== beforeTick - 1 || rows.some((row, index) => row.tick !== index + 1 || row.worldId !== rows[0].worldId)) {
-        throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+      let sourceWorldId: string | null = null;
+      let scannedUntil = 0;
+
+      // Prove complete, contiguous source coverage without loading the entire
+      // receipt prefix or JSON evidence into memory.
+      while (scannedUntil < beforeTick - 1) {
+        const page = await tx.select().from(aurionCausalTickReceipts)
+          .where(and(
+            eq(aurionCausalTickReceipts.zoneId, zoneId),
+            gt(aurionCausalTickReceipts.tick, scannedUntil),
+            lt(aurionCausalTickReceipts.tick, beforeTick),
+          ))
+          .orderBy(aurionCausalTickReceipts.tick)
+          .limit(ARCHIVE_RECEIPT_PAGE_SIZE).for("update");
+        if (page.length === 0) {
+          if (scannedUntil === 0) return null;
+          throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+        }
+        for (const row of page) {
+          if (row.tick !== scannedUntil + 1 || (sourceWorldId !== null && row.worldId !== sourceWorldId)) {
+            throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+          }
+          sourceWorldId ??= row.worldId;
+          this.mapReceipt(row);
+          scannedUntil = row.tick;
+        }
       }
-      for (const row of rows) this.mapReceipt(row);
-      const existing = await tx.select().from(aurionCausalArchive)
-        .where(and(eq(aurionCausalArchive.zoneId, zoneId), lt(aurionCausalArchive.startTick, beforeTick)))
-        .orderBy(aurionCausalArchive.startTick).for("update");
+
+      if (sourceWorldId === null) return null;
       const archiveIds: string[] = [];
+      const rememberArchiveId = (archiveId: string): void => {
+        if (archiveIds.length >= ARCHIVE_MAX_IDS) throw new Error("CAUSAL_ARCHIVE_ID_COUNT_LIMIT");
+        archiveIds.push(archiveId);
+      };
       let coveredUntil = 0;
-      for (const archive of existing) {
-        if (archive.worldId !== rows[0].worldId || archive.startTick !== coveredUntil + 1 || archive.endTick < archive.startTick) {
+      let afterArchiveStart = 0;
+
+      // Each historical archive packet is at most 60 KiB. Read/verify one
+      // packet at a time, with separate bounded keyset pages of source rows.
+      // Preexisting packet bytes and boundaries remain strictly immutable.
+      while (true) {
+        const existingPage = await tx.select().from(aurionCausalArchive)
+          .where(and(
+            eq(aurionCausalArchive.zoneId, zoneId),
+            lt(aurionCausalArchive.startTick, beforeTick),
+            gt(aurionCausalArchive.startTick, afterArchiveStart),
+          ))
+          .orderBy(aurionCausalArchive.startTick)
+          .limit(1).for("update");
+        if (existingPage.length === 0) break;
+        const archive = existingPage[0];
+        if (archive.worldId !== sourceWorldId || archive.startTick !== coveredUntil + 1
+          || archive.endTick < archive.startTick) {
           throw new Error(`CAUSAL_ARCHIVE_COVERAGE_CONFLICT:${archive.id}`);
         }
-        // A previous larger backup may already cover beyond this request. Verify that whole packet.
-        const source = await tx.select().from(aurionCausalTickReceipts)
-          .where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), gt(aurionCausalTickReceipts.tick, archive.startTick - 1), lte(aurionCausalTickReceipts.tick, archive.endTick)))
-          .orderBy(aurionCausalTickReceipts.tick);
-        for (const row of source) this.mapReceipt(row);
-        const expected = stableJson(source.map(archiveReceiptPayload));
-        if (source.length !== archive.endTick - archive.startTick + 1 || archive.receiptCount !== source.length
-          || source.some(row => row.worldId !== archive.worldId)
-          || archive.payloadJson !== expected || archive.archiveHash !== causalArchiveHash(expected)) {
+
+        let verifiedUntil = archive.startTick - 1;
+        let validatedCount = 0;
+        const payloadParts: string[] = [];
+        let verifiedBytes = 2;
+        while (verifiedUntil < archive.endTick) {
+          const page = await tx.select().from(aurionCausalTickReceipts)
+            .where(and(
+              eq(aurionCausalTickReceipts.zoneId, zoneId),
+              gt(aurionCausalTickReceipts.tick, verifiedUntil),
+              lte(aurionCausalTickReceipts.tick, archive.endTick),
+            ))
+            .orderBy(aurionCausalTickReceipts.tick)
+            .limit(ARCHIVE_RECEIPT_PAGE_SIZE).for("update");
+          if (page.length === 0) throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+          for (const row of page) {
+            if (row.tick !== verifiedUntil + 1 || row.worldId !== sourceWorldId) {
+              throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+            }
+            this.mapReceipt(row);
+            const json = stableJson(archiveReceiptPayload(row));
+            verifiedBytes += Buffer.byteLength(json, "utf8") + (validatedCount ? 1 : 0);
+            if (verifiedBytes > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+              throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+            }
+            payloadParts.push(json);
+            verifiedUntil = row.tick;
+            validatedCount += 1;
+          }
+        }
+        const expected = `[${payloadParts.join(",")}]`;
+        if (archive.receiptCount !== validatedCount ||
+          archive.endTick !== archive.startTick + validatedCount - 1 ||
+          archive.payloadJson !== expected || archive.archiveHash !== causalArchiveHash(expected)) {
           throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
         }
-        archiveIds.push(archive.id);
+        rememberArchiveId(archive.id);
         coveredUntil = archive.endTick;
+        afterArchiveStart = archive.startTick;
       }
-      // Keep persisted packet boundaries unchanged; append only the uncovered suffix.
-      const packets = packCausalArchivePayloads(rows.filter(row => row.tick > coveredUntil).map(archiveReceiptPayload));
-      for (const payloadJson of packets) {
-        const packet = JSON.parse(payloadJson) as ArchiveReceiptPayload[];
-        const startTick = packet[0].tick, endTick = packet[packet.length - 1].tick;
+
+      // Commit only the uncovered suffix, keeping at most one uncommitted
+      // packet plus one 64-receipt page resident in Node.
+      const packer = new BoundedCausalArchivePacker();
+      let lastSourceTick = coveredUntil;
+      let packetStartTick = coveredUntil + 1;
+      let packetLastTick = coveredUntil;
+      const persistPacket = async (payloadJson: string, startTick: number, endTick: number): Promise<void> => {
         const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
         const archiveHash = causalArchiveHash(payloadJson);
-        await tx.insert(aurionCausalArchive).values({ id: archiveId, worldId: rows[0].worldId, zoneId, startTick, endTick, receiptCount: packet.length, archiveHash, payloadJson });
-        const [readback] = await tx.select().from(aurionCausalArchive).where(eq(aurionCausalArchive.id, archiveId)).limit(1);
+        const receiptCount = endTick - startTick + 1;
+        await tx.insert(aurionCausalArchive).values({
+          id: archiveId, worldId: sourceWorldId!, zoneId, startTick, endTick, receiptCount,
+          archiveHash, payloadJson,
+        });
+        const [readback] = await tx.select().from(aurionCausalArchive)
+          .where(eq(aurionCausalArchive.id, archiveId)).limit(1);
         if (!readback || readback.archiveHash !== archiveHash || readback.payloadJson !== payloadJson
-          || readback.receiptCount !== packet.length || readback.startTick !== startTick || readback.endTick !== endTick) {
+          || readback.receiptCount !== receiptCount || readback.startTick !== startTick || readback.endTick !== endTick) {
           throw new Error(`CAUSAL_ARCHIVE_READBACK_MISMATCH:${archiveId}`);
         }
-        archiveIds.push(archiveId);
+        rememberArchiveId(archiveId);
         coveredUntil = endTick;
+      };
+      while (lastSourceTick < beforeTick - 1) {
+        const page = await tx.select().from(aurionCausalTickReceipts)
+          .where(and(
+            eq(aurionCausalTickReceipts.zoneId, zoneId),
+            gt(aurionCausalTickReceipts.tick, lastSourceTick),
+            lt(aurionCausalTickReceipts.tick, beforeTick),
+          ))
+          .orderBy(aurionCausalTickReceipts.tick)
+          .limit(ARCHIVE_RECEIPT_PAGE_SIZE).for("update");
+        if (page.length === 0) throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+        for (const row of page) {
+          if (row.tick !== lastSourceTick + 1 || row.worldId !== sourceWorldId) {
+            throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+          }
+          this.mapReceipt(row);
+          const completePacket = packer.push(archiveReceiptPayload(row));
+          if (completePacket !== null) {
+            await persistPacket(completePacket, packetStartTick, packetLastTick);
+            packetStartTick = row.tick;
+          }
+          packetLastTick = row.tick;
+          lastSourceTick = row.tick;
+        }
       }
+      const finalPacket = packer.finish();
+      if (finalPacket !== null) await persistPacket(finalPacket, packetStartTick, packetLastTick);
       if (coveredUntil < beforeTick - 1) throw new Error("CAUSAL_ARCHIVE_CHECKPOINT_NOT_COVERED");
-      return { archivedCount: coveredUntil, archiveId: archiveIds[archiveIds.length - 1], archiveIds, startTick: 1, endTick: coveredUntil };
+      return {
+        archivedCount: coveredUntil,
+        archiveId: archiveIds[archiveIds.length - 1],
+        archiveIds,
+        startTick: 1,
+        endTick: coveredUntil,
+      };
     });
   }
 
