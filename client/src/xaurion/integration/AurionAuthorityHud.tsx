@@ -67,6 +67,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const [combatEvents, setCombatEvents] = useState<readonly ConfirmedCombatPresentationEvent[]>([]);
   const [selfHealth, setSelfHealth] = useState<{ hp: number; maxHp: number } | null>(null);
   const [lifeStatus, setLifeStatus] = useState<"alive" | "dead" | "respawn">("alive");
+  const previousConfirmedHealth = useRef<number | null>(null);
   const busy = useRef(false);
   const utils = trpc.useUtils();
   const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
@@ -185,7 +186,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     };
   }, [refresh, openPanel, auto, autoActive]);
   useEffect(() => {
-    if (!connected) { setSelfHealth(null); setLifeStatus("alive"); }
+    if (!connected) { previousConfirmedHealth.current = null; setSelfHealth(null); setLifeStatus("alive"); }
   }, [connected]);
   useEffect(() => {
     const receiveHealth = (event: Event) => {
@@ -194,6 +195,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       const health = value as { entityId?: unknown; health?: unknown; maxHealth?: unknown; alive?: unknown };
       if (health.entityId !== `player:${userId}`) return;
       if (health.health === null && health.maxHealth === null && health.alive === null) {
+        previousConfirmedHealth.current = null;
         setSelfHealth(null);
         setLifeStatus("alive");
         return;
@@ -204,12 +206,10 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
         || health.alive !== ((health.health as number) > 0)) return;
       const hp = health.health as number;
       const maxHp = health.maxHealth as number;
-      setSelfHealth(previous => {
-        if (hp === 0) setLifeStatus("dead");
-        else if (previous?.hp === 0) setLifeStatus("respawn");
-        else if (!previous) setLifeStatus("alive");
-        return { hp, maxHp };
-      });
+      const prior = previousConfirmedHealth.current;
+      previousConfirmedHealth.current = hp;
+      setLifeStatus(hp === 0 ? "dead" : prior === 0 ? "respawn" : "alive");
+      setSelfHealth({ hp, maxHp });
     };
     window.addEventListener("aurion:confirmed-self-health", receiveHealth);
     return () => window.removeEventListener("aurion:confirmed-self-health", receiveHealth);
