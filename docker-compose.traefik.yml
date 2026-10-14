@@ -11,6 +11,9 @@ services:
       AURION_GLB_STORAGE_DIR: /var/lib/aurion/glb
       AURION_GAME_DEV_WORKSPACE: /var/lib/aurion/game-dev-workspace
       COMPANION_MEMORY_DIR: /var/lib/aurion/companion-memory
+      # Companion memory is local-first. Clear the retired external Redis URL
+      # inherited from the owner-managed env_file; retain the memory volume below.
+      REDIS_URL: ""
       AURION_ADMIN_MCP_RESOURCE_URL: https://${AURION_DOMAIN:-arelogic.space}/admin-mcp
       AURION_ADMIN_MCP_AUTH_MODE: application_roles
       AURION_ADMIN_MCP_CLIENT_ID: "91097c69-cf11-42ae-8be2-1d0a821e7758"
