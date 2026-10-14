@@ -1690,3 +1690,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-14 — PR #887 — fix(runtime): raise Aurion V8 heap from ~4 GiB to 8800 MiB
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=887 merge=2de94da126cd0ce0ba8d860e7e37f247213852b9 -->
+Task: Merge PR #887 into `main` — fix(runtime): raise Aurion V8 heap from ~4 GiB to 8800 MiB.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `deploy/promote-aurion-zone-runtime.sh`
+- `docker-compose.traefik.yml`
+- `scripts/test-aurion-optional-redis-compose.mjs`
+- `server/aurionTraefikRuntimeDeployment.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/887
+- Merge commit: `2de94da126cd0ce0ba8d860e7e37f247213852b9`
+- PR head: `a7bfa454b9f02db5eec56e5b978fb46d4061161e`
+- Merged at: 2026-10-14T20:42:16Z
+- Post-merge workflow run: 38634313380
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
