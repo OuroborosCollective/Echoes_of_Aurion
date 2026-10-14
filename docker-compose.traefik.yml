@@ -14,6 +14,9 @@ services:
       # Companion memory is local-first. Clear the retired external Redis URL
       # inherited from the owner-managed env_file; retain the memory volume below.
       REDIS_URL: ""
+      # Apply the same V8 old-space ceiling on every immutable Aurion release.
+      # Override any stale NODE_OPTIONS value from the owner-managed env_file.
+      NODE_OPTIONS: "--max-old-space-size=8800"
       AURION_ADMIN_MCP_RESOURCE_URL: https://${AURION_DOMAIN:-arelogic.space}/admin-mcp
       AURION_ADMIN_MCP_AUTH_MODE: application_roles
       AURION_ADMIN_MCP_CLIENT_ID: "91097c69-cf11-42ae-8be2-1d0a821e7758"
