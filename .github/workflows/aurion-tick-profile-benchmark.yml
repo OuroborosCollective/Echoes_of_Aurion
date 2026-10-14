@@ -36,6 +36,7 @@ jobs:
           mkdir -p evidence
           env -u DATABASE_URL -u AURION_RELEASE_SHA NODE_ENV=test pnpm exec tsx scripts/benchmark-aurion-tick-profiles.ts > evidence/aurion-isolated-10-5-1-hz.json
           node -e 'const fs=require("node:fs");const j=JSON.parse(fs.readFileSync("evidence/aurion-isolated-10-5-1-hz.json","utf8"));if(j.productionMutation!==false||j.persistenceEnabled!==false||j.measurements.some(x=>!x.chainValid||x.productionMutation||x.receiptCount!==x.tickCount))process.exit(1)'
+          cat evidence/aurion-isolated-10-5-1-hz.json
           sha256sum evidence/aurion-isolated-10-5-1-hz.json > evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
