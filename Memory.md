@@ -1745,3 +1745,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Aurion confirmed self HP and combat notification integrity (issue #891)
+Status: PARTIAL — isolated candidate branch, exact-head CI and browser readback pending
+Task: Correct false backup notifications on each confirmed attack, duplicate toast stacking, and invisible player health/death/respawn state in mobile HUD.
+Decisions: Preserve Aurion server authority; project only schema-validated zone snapshot combatant data; never infer life state from input or fake an archival success on a UI refresh; deduplicate real confirmation via one stable toast ID. Do not touch combat damage, 10 Hz, assets, MariaDB or persisted receipts.
+Touched surfaces: `client/src/xaurion/integration/zoneCombatBridge.ts`, `AurionAuthorityHud.tsx`, `client/src/xaurion/components/GameHUD.tsx`, `client/src/components/CausalBackupNotifier.tsx`, `client/src/xaurion/integration/AurionCombatHudRegression.test.tsx`.
+Evidence: Owner mobile screenshot and actual main code traced to false `aurion:causal-backup-confirmed` emission inside `aurion:authoritative-action` UI refresh; server-confirmed self HP already existed but had no HUD path. CI test/actual phone proof not yet complete.
+Learned: A combat confirmation cannot be interpreted as a cold-archive receipt; presentation health must come from the validated authoritative zone message and be absent when no confirmed self exists.
+Open: Exact-head TypeScript, component regression and real 360px/desktop browser checks; server presentation when zone disconnects and repeated death-respawn transitions; production deploy/readback separate.
+Next safe step: Pass focused and full CI and verified browser UX before merging; then work on issue #892 for GLBs and atlases.
