@@ -69,13 +69,13 @@ export class MobCatalogProjection {
     const id = visual.data.id, failure = this.failures.get(id), tier = this.presentationTier(), diagnostics = enemyFallbackDiagnostics(this.catalog, visual.data.type, tier), selection = this.selection(visual, failure?.attempts ?? 0);
     if (!selection || this.pending.has(id) || this.projected.has(id) || (failure && (failure.attempts >= 3 || this.clock < failure.retryAt))) {
       if (!selection && this.catalog) this.failures.set(id, { attempts: failure?.attempts ?? 0, retryAt: this.clock + 5, reason: diagnostics.fallbackCandidates === 0 ? "NO_FALLBACK_CANDIDATES" : diagnostics.compatibleCandidates === 0 ? "NO_COMPATIBLE_FALLBACK" : "NO_FALLBACK_SELECTION", tier, fallbackCandidates: diagnostics.fallbackCandidates, budgetRejectedCandidates: diagnostics.budgetRejected });
-      if (!selection && this.catalog) visual.body.visible = false;
+      if (!selection && this.catalog && visual.data.hp > 0) visual.body.visible = true;
       return;
     }
     const token = ++this.generation; this.pending.set(id, token);
     // A compatible approved enemy GLB suppresses the legacy red capsule immediately;
     // the catalog actor becomes visible only after its rig/animation checks pass.
-    visual.body.visible = false;
+    visual.body.visible = visual.data.hp > 0;
     let loaded: Loaded | null = null;
     let actor: AnimatedGlbActor | null = null;
     try {
@@ -95,11 +95,12 @@ export class MobCatalogProjection {
       actor.group.position.copy(visual.group.position);
       this.engine.scene.add(actor.group);
       this.failures.delete(id);
-      this.projected.set(id, { visual, actor, assetId: selection.entry.assetId, variantKey: selection.variantKey, sha256: selection.entry.sha256, lodLevel: selection.lod, oldBodyVisible: visual.body.visible, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0 });
+      this.projected.set(id, { visual, actor, assetId: selection.entry.assetId, variantKey: selection.variantKey, sha256: selection.entry.sha256, lodLevel: selection.lod, oldBodyVisible: true, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0 });
       visual.body.visible = false; actor = null;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
       this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 0.25, reason, tier, fallbackCandidates: diagnostics.fallbackCandidates, budgetRejectedCandidates: diagnostics.budgetRejected });
+      if (visual.data.hp > 0 && !this.projected.has(id)) visual.body.visible = true;
     } finally {
       actor?.dispose(); if (loaded) releaseGlbTree(loaded.scene);
       if (this.pending.get(id) === token) this.pending.delete(id);
@@ -186,7 +187,7 @@ export class MobCatalogProjection {
   }
   private remove(id: string, restoreBody = false): void {
     const p = this.projected.get(id); if (!p) return;
-    p.visual.body.visible = restoreBody ? p.oldBodyVisible : false; p.actor.group.removeFromParent(); p.actor.dispose(); this.projected.delete(id);
+    p.visual.body.visible = p.visual.data.hp > 0 && (restoreBody || p.visual.group.userData.aurionConfirmedMob === true); p.actor.group.removeFromParent(); p.actor.dispose(); this.projected.delete(id);
   }
   dispose(): void { this.disposed = true; this.detach(); this.pending.clear(); this.wanted.clear(); for (const id of [...this.projected.keys()]) this.remove(id, true); }
 }
