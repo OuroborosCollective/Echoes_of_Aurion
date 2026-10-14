@@ -1,0 +1,44 @@
+name: Aurion isolated 10-5-1 Hz benchmark
+on:
+  pull_request:
+    paths:
+      - 'server/validation/aurionTickProfileBenchmark*'
+      - 'scripts/benchmark-aurion-tick-profiles.ts'
+      - '.github/workflows/aurion-tick-profile-benchmark.yml'
+      - 'shared/zoneTimingContract.ts'
+      - 'server/zoneRuntime.ts'
+      - 'server/causality/tickRecorder.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-real-zone-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check TypeScript and replay-backed performance assertions
+        run: |
+          pnpm check
+          env -u DATABASE_URL -u AURION_RELEASE_SHA NODE_ENV=test pnpm exec vitest run server/validation/aurionTickProfileBenchmark.test.ts server/causality/causalTick.test.ts server/zoneRuntime.test.ts
+      - name: Measure bounded actual-zone CPU and heap without production writes
+        run: |
+          mkdir -p evidence
+          env -u DATABASE_URL -u AURION_RELEASE_SHA NODE_ENV=test pnpm exec tsx scripts/benchmark-aurion-tick-profiles.ts > evidence/aurion-isolated-10-5-1-hz.json
+          node -e 'const fs=require("node:fs");const j=JSON.parse(fs.readFileSync("evidence/aurion-isolated-10-5-1-hz.json","utf8"));if(j.productionMutation!==false||j.persistenceEnabled!==false||j.measurements.some(x=>!x.chainValid||x.productionMutation||x.receiptCount!==x.tickCount))process.exit(1)'
+          sha256sum evidence/aurion-isolated-10-5-1-hz.json > evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurion-isolated-tick-profile-evidence
+          path: evidence/
+          retention-days: 30
