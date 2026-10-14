@@ -298,6 +298,24 @@ export AURION_ARTIFACT_DIGEST="$artifact_digest"
 export AURION_RUNTIME_IMAGE_DIGEST="$runtime_image_id"
 export AURION_RELEASE_ARCHIVE_DIGEST="$release_archive_digest"
 compose=(docker compose --project-name echoes-of-aurion --env-file "$runtime_env" -f "${release}/docker-compose.traefik.yml")
+# companion-memory-preflight-start
+phase=companion-memory-preflight
+previous_aurion="$(docker ps --all --quiet --no-trunc --filter 'name=^/echoes-of-aurion-aurion-1$')"
+if [[ -n "$previous_aurion" ]]; then
+  [[ "$previous_aurion" =~ ^[a-f0-9]{64}$ ]]
+  [[ "$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$previous_aurion")" == "echoes-of-aurion" ]]
+  [[ "$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$previous_aurion")" == "aurion" ]]
+  docker volume inspect echoes-of-aurion-companion-memory >/dev/null
+  docker inspect --format '{{json .Mounts}}' "$previous_aurion" | node --input-type=module -e '
+    import fs from "node:fs";
+    try {
+      const mounts=JSON.parse(fs.readFileSync(0,"utf8"));
+      const selected=mounts.filter(m=>m.Destination==="/var/lib/aurion/companion-memory");
+      if(selected.length!==1||selected[0].Type!=="volume"||selected[0].Name!=="echoes-of-aurion-companion-memory"||selected[0].RW!==true) process.exit(2);
+    } catch { process.exit(2); }
+  '
+fi
+# companion-memory-preflight-end
 phase=compose-promotion
 compose_digest_env=(
   "AURION_BUILD_INPUT_DIGEST=$build_input_digest"
@@ -319,6 +337,7 @@ docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{pr
 [[ "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" == "$expected_sha" ]]
 docker volume inspect echoes-of-aurion-companion-memory >/dev/null
 docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/aurion/companion-memory"}}{{println .Name}}{{end}}{{end}}' "$container_id" | grep -Fxq echoes-of-aurion-companion-memory
+docker exec "$container_id" node -e 'if(process.env.REDIS_URL!=="") process.exit(2)'
 
 container_ready=0
 container_probe_status=0

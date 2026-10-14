@@ -2,7 +2,7 @@ import { z } from "zod";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { canConnectToDatabase, isConfiguredDatabaseUrl } from "../db";
-import { createClient } from "redis";
+import { optionalRedisStatus } from "../optionalRedis";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -39,20 +39,7 @@ export const systemRouter = router({
       }
 
       // 3. Redis
-      if (!process.env.REDIS_URL) {
-        statuses.push({ service: "Redis (Cache & PubSub)", status: "MAINTAINED", reason: "REDIS_URL environment variable not configured" });
-      } else {
-        try {
-          const client = createClient({ url: process.env.REDIS_URL });
-          client.on("error", () => {}); // Suppress unhandled error events
-          await client.connect();
-          await client.ping();
-          await client.quit();
-          statuses.push({ service: "Redis (Cache & PubSub)", status: "UP" });
-        } catch (error: any) {
-          statuses.push({ service: "Redis (Cache & PubSub)", status: "DOWN", reason: error.message || "Failed to connect to Redis" });
-        }
-      }
+      statuses.push(await optionalRedisStatus(process.env.REDIS_URL));
 
       // 4. Firebase
       if (!process.env.FIREBASE_PROJECT_ID && !process.env.FIREBASE_CONFIG) {

@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -21,6 +23,47 @@ describe("ARE-rLOGIC companion production bridge", () => {
     expect(dockerfile).toContain("/var/lib/aurion/companion-memory");
     expect(promoter).toContain("docker volume inspect echoes-of-aurion-companion-memory");
     expect(promoter).toContain('eq .Destination "/var/lib/aurion/companion-memory"');
+  });
+
+  it("clears the retired Redis URL while retaining the durable companion volume", () => {
+    expect(compose).toMatch(/^\s+REDIS_URL: ""$/m);
+    expect(compose).toContain("- ${AURION_ENV_FILE:");
+    expect(compose).toContain("name: echoes-of-aurion-companion-memory");
+  });
+
+  it("runs the real pre-promotion volume guard and rejects unsafe existing mounts", () => {
+    const start = "# companion-memory-preflight-start";
+    const end = "# companion-memory-preflight-end";
+    const guard = promoter.split(start)[1]?.split(end)[0];
+    expect(guard).toBeTruthy();
+    expect(promoter.indexOf(start)).toBeLessThan(promoter.indexOf("phase=compose-promotion"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-volume-preflight-"));
+    try {
+      const docker = path.join(dir, "docker");
+      fs.writeFileSync(docker, `#!${process.execPath}
+const args=process.argv.slice(2);
+if(args[0]==="ps") { console.log("a".repeat(64)); process.exit(0); }
+if(args[0]==="volume"&&args[1]==="inspect") process.exit(0);
+if(args[0]==="inspect"&&args[1]==="--format") {
+  if(args[2].includes("com.docker.compose.project")) console.log("echoes-of-aurion");
+  else if(args[2].includes("com.docker.compose.service")) console.log("aurion");
+  else if(args[2]==="{{json .Mounts}}") console.log(process.env.TEST_COMPANION_MOUNTS);
+  else process.exit(64);
+  process.exit(0);
+}
+process.exit(64);
+`, { mode: 0o700 });
+      const valid = { Type: "volume", Name: "echoes-of-aurion-companion-memory", Destination: "/var/lib/aurion/companion-memory", RW: true };
+      const check = (mounts: unknown) => spawnSync("bash", ["-c", `set -euo pipefail\n${guard}`], {
+        encoding: "utf8", env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, TEST_COMPANION_MOUNTS: JSON.stringify(mounts) },
+      });
+      expect(check([valid]).status).toBe(0);
+      for (const mounts of [[], [valid, valid], [{ ...valid, RW: false }], [{ ...valid, Name: "different-volume" }], [{ ...valid, Type: "bind" }]]) {
+        expect(check(mounts).status).not.toBe(0);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("keeps raw memory behind a fixed root sanitizer", () => {
