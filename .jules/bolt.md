@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-05-18 - Optimize Wolfram CAG Query
+**Learning:** `Flatten[Map[Differences,s]]` creates unnecessary mapping overhead in Wolfram Language. `Differences[Transpose[s]]` utilizes vectorized matrix operations for significantly better performance.
+**Action:** When working with Wolfram Language code for matrix operations, prefer built-in vectorized matrix manipulations over mapping functional primitives across rows where possible.
