@@ -78,7 +78,12 @@ export class AurionCausalArchivingService {
     try {
       const db = await getDb();
       if (!db) return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: null, checkpointTick: null, checkpointHash: null, archiveId: null, archivedCount: 0, status: "UNPROVABLE", reason: "DATABASE_UNAVAILABLE" });
-      const checkpoints = await db.select().from(aurionCausalCheckpoints)
+      const checkpoints = await db.select({
+        id: aurionCausalCheckpoints.id,
+        tick: aurionCausalCheckpoints.tick,
+        snapshotHash: aurionCausalCheckpoints.snapshotHash,
+        reconciled: aurionCausalCheckpoints.reconciled,
+      }).from(aurionCausalCheckpoints)
         .where(eq(aurionCausalCheckpoints.zoneId, zoneId))
         .orderBy(desc(aurionCausalCheckpoints.tick)).limit(20);
       const checkpoint = checkpoints.find(candidate => candidate.reconciled === 1);
