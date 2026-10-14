@@ -32,9 +32,17 @@ export function attachZoneCombatTransport(next:ZoneCombatTransport):()=>void{
 
 export function projectConfirmedZoneSnapshot(values:{selfEntityId:string;mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[]}):void{
   selfEntityId=values.selfEntityId;
+  const self=values.combatants.find(entry=>entry.entityId===values.selfEntityId);
+  // The gameplay state comes exclusively from validated, authoritative zone snapshots.
+  // Publish the confirmed self state even when the presentation engine is still mounting.
+  window.dispatchEvent(new CustomEvent("aurion:confirmed-self-health", { detail: {
+    entityId: values.selfEntityId,
+    health: self?.health ?? null,
+    maxHealth: self?.maxHealth ?? null,
+    alive: self?.alive ?? null,
+  } }));
   if(!engine)return;
   engine.mobManager.applyAuthoritativeSnapshot(values.mobs);
-  const self=values.combatants.find(entry=>entry.entityId===values.selfEntityId);
   if(self){engine.player.stats.hp=self.health;engine.player.stats.maxHp=self.maxHealth;if(self.health<=0){engine.player.setConfirmedGlbSpeed(0);engine.setVirtualMovement(0,0);}}
   if(engine.targetMob&&engine.targetMob.hp<=0)engine.targetMob=null;
 }
