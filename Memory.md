@@ -1711,3 +1711,14 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-14 — Isolated 10/5/1 Hz simulation profiling
+Status: PARTIAL — experimental PR, no production rate change
+Task: Evaluate owner-approved 5 Hz world and 1 Hz background cadence alongside fixed 10 Hz movement/combat.
+Decisions: Preserve canonical `ZONE_TICK_MS=100`, gameplay state, receipt format, character and database persistence. Use an exact integer-ratio cadence and replay-mode real zone ticks without DB, network or production writes.
+Touched surfaces: `server/validation/aurionTickProfileBenchmark.ts`, matching Vitest contract, `scripts/benchmark-aurion-tick-profiles.ts`, `.github/workflows/aurion-tick-profile-benchmark.yml`.
+Evidence: Wolfram computed 36000/18000/3600 ticks per hour at 10/5/1 Hz and 360/180/36 per-100-tick checkpoints (theoretical, not CPU measures); CI performs real-zone isolated CPU/heap/receipt-chain verification and uploads SHA256-bound JSON, pending at time of entry.
+Learned: Movement distance, cooldowns, respawns and canonical hashes depend on the 100 ms authority tick; simply slowing that tick changes gameplay rather than transparently saving resources.
+Open: Exact-head CI, repeatable benchmarking under realistic NPC/population load, separate production scheduler design and archive/heap stabilization.
+Next safe step: Review CI evidence before considering any separately versioned and replay-compatible workload scheduling change; do not deploy a tickrate switch.
