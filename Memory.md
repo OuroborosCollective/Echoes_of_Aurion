@@ -1755,3 +1755,26 @@ Evidence: Owner mobile screenshot and actual main code traced to false `aurion:c
 Learned: A combat confirmation cannot be interpreted as a cold-archive receipt; presentation health must come from the validated authoritative zone message and be absent when no confirmed self exists.
 Open: Exact-head TypeScript, component regression and real 360px/desktop browser checks; server presentation when zone disconnects and repeated death-respawn transitions; production deploy/readback separate.
 Next safe step: Pass focused and full CI and verified browser UX before merging; then work on issue #892 for GLBs and atlases.
+
+
+### 2026-10-14 — PR #893 — fix(aurion): confirmed HP, death/respawn HUD and bounded real backup notifications (#891)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=893 merge=94390a4fe2ed5db6295cea1b8f57fb604a20e435 -->
+Task: Merge PR #893 into `main` — fix(aurion): confirmed HP, death/respawn HUD and bounded real backup notifications (#891).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/components/CausalBackupNotifier.tsx`
+- `client/src/xaurion/components/GameHUD.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.tsx`
+- `client/src/xaurion/integration/AurionCombatHudRegression.test.tsx`
+- `client/src/xaurion/integration/zoneCombatBridge.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/893
+- Merge commit: `94390a4fe2ed5db6295cea1b8f57fb604a20e435`
+- PR head: `2a880aa4ba3d6b00f392cd0179efcd235438f008`
+- Merged at: 2026-10-14T23:01:25Z
+- Post-merge workflow run: 38651487822
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
