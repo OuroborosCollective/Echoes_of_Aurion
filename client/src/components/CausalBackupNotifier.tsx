@@ -16,6 +16,7 @@ export function CausalBackupNotifier() {
     const handleBackup = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
       toast.success(detail.message || "Kausale Kette gesichert", {
+        id: "aurion-confirmed-causal-backup",
         description: "Der Weltzustand und deine Fortschritte wurden im Kaltlager archiviert.",
         icon: <ShieldCheck className="h-4 w-4 text-emerald-400" />,
         duration: 5000,

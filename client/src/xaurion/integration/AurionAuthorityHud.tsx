@@ -65,6 +65,9 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const [autoActive, setAutoActive] = useState(false);
   const [startAfterClose, setStartAfterClose] = useState(false);
   const [combatEvents, setCombatEvents] = useState<readonly ConfirmedCombatPresentationEvent[]>([]);
+  const [selfHealth, setSelfHealth] = useState<{ hp: number; maxHp: number } | null>(null);
+  const [lifeStatus, setLifeStatus] = useState<"alive" | "dead" | "respawn">("alive");
+  const previousConfirmedHealth = useRef<number | null>(null);
   const busy = useRef(false);
   const utils = trpc.useUtils();
   const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
@@ -164,10 +167,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   useEffect(() => {
     const update = () => { 
       void refresh().catch(() => setMessage("Aktuelle Daten sind nicht verfügbar."));
-      // Notify about causal backup on significant actions
-      window.dispatchEvent(new CustomEvent("aurion:causal-backup-confirmed", { 
-        detail: { message: "Sitzung serverseitig gesichert" } 
-      }));
     };
     const contacts = () => { setQuestTab("contacts"); openPanel("quests"); };
     const crafting = () => openPanel("crafting");
@@ -186,6 +185,35 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       document.removeEventListener("visibilitychange", stop);
     };
   }, [refresh, openPanel, auto, autoActive]);
+  useEffect(() => {
+    if (!connected) { previousConfirmedHealth.current = null; setSelfHealth(null); setLifeStatus("alive"); }
+  }, [connected]);
+  useEffect(() => {
+    const receiveHealth = (event: Event) => {
+      const value = (event as CustomEvent<unknown>).detail;
+      if (!value || typeof value !== "object") return;
+      const health = value as { entityId?: unknown; health?: unknown; maxHealth?: unknown; alive?: unknown };
+      if (health.entityId !== `player:${userId}`) return;
+      if (health.health === null && health.maxHealth === null && health.alive === null) {
+        previousConfirmedHealth.current = null;
+        setSelfHealth(null);
+        setLifeStatus("alive");
+        return;
+      }
+      if (!Number.isSafeInteger(health.health) || !Number.isSafeInteger(health.maxHealth)
+        || (health.maxHealth as number) < 1 || (health.health as number) < 0
+        || (health.health as number) > (health.maxHealth as number)
+        || health.alive !== ((health.health as number) > 0)) return;
+      const hp = health.health as number;
+      const maxHp = health.maxHealth as number;
+      const prior = previousConfirmedHealth.current;
+      previousConfirmedHealth.current = hp;
+      setLifeStatus(hp === 0 ? "dead" : prior === 0 ? "respawn" : "alive");
+      setSelfHealth({ hp, maxHp });
+    };
+    window.addEventListener("aurion:confirmed-self-health", receiveHealth);
+    return () => window.removeEventListener("aurion:confirmed-self-health", receiveHealth);
+  }, [userId]);
   useEffect(() => {
     const receive = (event: Event) => {
       const value = (event as CustomEvent<unknown>).detail;
@@ -289,6 +317,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       progressionCount={player.data?.progression.tracks.length}
       mastery={mastery ? { name: mastery.trackId, level: mastery.levelExact } : undefined}
       playerState={player.state}
+      selfHealth={selfHealth ?? undefined}
+      lifeStatus={selfHealth ? lifeStatus : undefined}
       playerStateLabel={readbackLabels[player.state]}
       connected={connected}
       remotePlayerCount={remotePlayers.length}

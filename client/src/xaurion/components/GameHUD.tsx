@@ -76,6 +76,9 @@ export interface GameHUDProps {
   progressionCount?: number;
   mastery?: Readonly<{ name: string; level: number | string; xpPercent?: number }>;
   playerState: string;
+  /** Server-confirmed self combatant HP only; no estimated/default health. */
+  selfHealth?: Readonly<{ hp: number; maxHp: number }>;
+  lifeStatus?: "alive" | "dead" | "respawn";
   playerStateLabel: string;
   connected: boolean;
   remotePlayerCount: number;
@@ -238,6 +241,12 @@ export function GameHUD(props: GameHUDProps) {
                 <b className="truncate font-serif">{props.playerName}</b>
                 <strong className="shrink-0 text-[8px] sm:text-[10px] font-mono text-[#fbbf24]">◆ {props.points ?? "—"}</strong>
               </div>
+              {props.selfHealth && (
+                <div data-testid="aurion-self-hp" aria-label={`Lebenspunkte ${props.selfHealth.hp} von ${props.selfHealth.maxHp}`} className="min-w-0">
+                  <Ax1HpMeter hp={props.selfHealth.hp} maxHp={props.selfHealth.maxHp} className="!h-3" />
+                  {props.lifeStatus !== "alive" && <span data-testid="aurion-self-life-status" role="status" className={`block text-[9px] font-bold ${props.lifeStatus === "dead" ? "text-red-300" : "text-emerald-300"}`}>{props.lifeStatus === "dead" ? "Kampfunfähig · Wiederbelebung abwarten" : "Wiederbelebt · Kampfbereit"}</span>}
+                </div>
+              )}
               <div className="relative h-2.5 sm:h-4 overflow-hidden rounded-md border border-emerald-950 bg-black/80 p-0.5">
                 <div className="h-full rounded bg-gradient-to-r from-emerald-800 via-emerald-600 to-emerald-300" style={{ width: props.playerState === "live" ? "100%" : "12%" }} />
                 <span className="absolute inset-0 grid place-items-center text-[7px] sm:text-[9px] font-mono font-bold">
@@ -546,7 +555,7 @@ export function GameHUD(props: GameHUDProps) {
         <div className="max-h-36 space-y-1 overflow-y-auto text-[8px]">{props.combat.logs.length ? props.combat.logs.slice(0, 8).map(log => <div key={log.id} className="flex gap-1 rounded border border-stone-800 bg-black/60 px-2 py-1"><i className="shrink-0 text-gray-500">T{log.tick}</i><span className="flex-1 text-gray-300">{log.text}</span><b className="text-amber-300">{log.value}</b></div>) : <p className="py-3 text-center italic text-gray-600">Noch keine bestätigten Combat-Events.</p>}</div>
       </section>}
 
-      {props.feedback && <p className="ax1-hud-feedback pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
+      {props.feedback && <p className="ax1-hud-feedback pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 max-w-[min(88vw,340px)] rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-center text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
     </div>
   );
 }
