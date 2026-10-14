@@ -67,7 +67,8 @@ describe("causal archive bounded-memory contracts", () => {
     const archiver = source("archivingService.ts");
     const reconciler = source("snapshotReconciliationService.ts");
     expect(archiver).toContain("selectDistinct({ zoneId: aurionCausalCheckpoints.zoneId })");
-    expect(archiver).toContain(".limit(32)");
+    expect(archiver).toMatch(/const zonePageSize\s*=\s*32\b/);
+    expect(archiver).toContain(".limit(zonePageSize)");
     expect(archiver).toContain("select({ tick: aurionCausalCheckpoints.tick })");
     expect(archiver).not.toContain("db.select().from(aurionCausalCheckpoints)");
     expect(reconciler).toContain("setTimeout(resolve, 10_000)");
