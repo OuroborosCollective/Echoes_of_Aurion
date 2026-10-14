@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2026-10-14 - Added Events and Guild to Community Options
+**Learning:** Verified the necessity of grouping related community functions and maintaining design consistency on the Landing page by exposing missing valid options ('Events', 'Guild') from the CommunityOverlay architecture.
+**Action:** Always check the underlying enum/type definition (like `CommunityPanel`) to ensure the main entry points (like the Homepage) surface all relevant options for discoverability.

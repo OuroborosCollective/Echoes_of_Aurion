@@ -16,6 +16,8 @@ describe("Home", () => {
     expect(screen.getByRole("button", { name: "Asset-Katalog" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Signalraum" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Forum" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Events" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Gilde" }).length).toBeGreaterThan(0);
     expect(screen.getByText("NPCs mit eigenem Leben")).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Hauptnavigation" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Fußzeilennavigation" })).toBeTruthy();
