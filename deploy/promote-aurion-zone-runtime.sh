@@ -338,6 +338,8 @@ docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{pr
 docker volume inspect echoes-of-aurion-companion-memory >/dev/null
 docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/aurion/companion-memory"}}{{println .Name}}{{end}}{{end}}' "$container_id" | grep -Fxq echoes-of-aurion-companion-memory
 docker exec "$container_id" node -e 'if(process.env.REDIS_URL!=="") process.exit(2)'
+# Verify the *effective* Node environment and real V8 limit, not only Compose text.
+docker exec "$container_id" node -e 'const v8=require("node:v8"); const options=process.env.NODE_OPTIONS; const bytes=v8.getHeapStatistics().heap_size_limit; if(options!=="--max-old-space-size=8800" || bytes < 8*1024**3 || bytes > 10*1024**3) process.exit(2)'
 
 container_ready=0
 container_probe_status=0
