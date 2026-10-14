@@ -1722,3 +1722,26 @@ Evidence: Source-verified old unbounded scan and PR #881 partial fix; regression
 Learned: Increasing V8 heap or lowering authority Hz cannot repair an unbounded archive prefix; preserve persisted packet bytes and rollback invariants independently of query page size.
 Open: Exact-head real MariaDB/full CI, transaction-lock/backpressure assessment, independent heap/restart readback and production rollout.
 Next safe step: Integrate only after reproducible isolated database/replay tests and exact-revision receipts, then measure live process stability before declaring resolved.
+
+
+### 2026-10-14 — PR #889 — fix(causality): bound archive receipt memory, checkpoint scans and reconciliation
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=889 merge=a486ccdf95dff832fbeba17ae13bf2ba8d48eb8d -->
+Task: Merge PR #889 into `main` — fix(causality): bound archive receipt memory, checkpoint scans and reconciliation.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `server/causality/archiveMemoryBounds.test.ts`
+- `server/causality/archivePacking.ts`
+- `server/causality/archivingService.ts`
+- `server/causality/persistence.ts`
+- `server/causality/snapshotReconciliationService.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/889
+- Merge commit: `a486ccdf95dff832fbeba17ae13bf2ba8d48eb8d`
+- PR head: `5bd242cb8576f089ffa8104232965ae6971eca30`
+- Merged at: 2026-10-14T22:14:45Z
+- Post-merge workflow run: 38646278837
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
