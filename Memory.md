@@ -1663,3 +1663,30 @@ Change: Keep companion JSONL memory primary; bound Redis connect/PING/SET, disab
 Evidence: Main baseline 9c1c110501361a857672b1cc854579957719d57a. The actual CompanionMemoryStore against a silent TCP peer missed the baseline deadline and completed locally on the candidate (131 ms). Thirty focused tests pass, including replication/readback and outage fallback with real Redis 7.4.7 built from official commit 4d1a341aaf0b96f9d2c43418efac732e31dc28ad; pnpm check, shell syntax and diff checks pass. Full local regression passes: 427 files / 2,157 tests, with 65 files / 233 environment-dependent tests skipped. Actual Docker Compose rendering is mandatory in the release workflow and remains unverified locally because Docker is unavailable.
 Learned: A deleted optional Redis endpoint can indefinitely hold successful local writes and leak health-probe clients; this does not establish the cause of the separate heap/archive issue. PatchMon already has its own healthy Redis and must not become Aurion's memory authority.
 Open: Exact-head CI, immutable deployment, effective environment and durable-volume readback; PatchMon foreign-network dependency review/migration and the separate archive/heap investigation remain open. No production configuration, network or data was modified by this work.
+
+
+### 2026-10-14 — PR #885 — Bound optional Redis and retire the stale production endpoint
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=885 merge=dc8dd4455fe53b786335c497c859088920f88b00 -->
+Task: Merge PR #885 into `main` — Bound optional Redis and retire the stale production endpoint.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `Memory.md`
+- `deploy/promote-aurion-zone-runtime.sh`
+- `docker-compose.traefik.yml`
+- `scripts/test-aurion-optional-redis-compose.mjs`
+- `server/_core/systemRouter.ts`
+- `server/aurionArelogicCompanionRuntime.test.ts`
+- `server/companionMemory.ts`
+- `server/optionalRedis.test.ts`
+- `server/optionalRedis.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/885
+- Merge commit: `dc8dd4455fe53b786335c497c859088920f88b00`
+- PR head: `707d40dd3dfb23bb63a1f5db3eeaf86bd8865fa4`
+- Merged at: 2026-10-14T20:22:51Z
+- Post-merge workflow run: 38631572655
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
