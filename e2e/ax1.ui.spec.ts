@@ -278,6 +278,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       })).toBe(true);
       await expect(hud.getByText(/WASD-Zonenvertrag|AX1-Skill|AX1-Reichweite/)).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-combat-feedback.png`) });
+      await expect(combatFeedback).toBeHidden({ timeout: 6_000 });
 
       const attack = hud.getByTitle("Angriff [R]", { exact: true });
       const auto = hud.getByTitle("Auto-Angriff", { exact: true });

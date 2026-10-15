@@ -1918,3 +1918,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Bounded Aurion combat feedback
+Status: VERIFIED candidate
+Task: Expire server-confirmed combat feedback after four seconds without clearing newer combat outcomes or persistent HUD messages.
+Decisions: Keep transient combat state separate; route event, direct-action and auto-attack writers through one restartable timer.
+Touched surfaces: Aurion authority HUD, focused combat HUD regression, AIM-259 browser proof.
+Evidence: Candidate `55b61d58a302768abf5e189935755a7fae4ff6a2`; all 9 workflows green; Local Test Pack `38752697562`; AIM-259 `38752697600` / artifact `11982688338` passed real server rejection visibility, topmost and dismissal on phone/tablet/desktop; exact-head code/security review clear.
+Learned: Message text cannot identify timer ownership because later outcomes may repeat it; one publisher must own the transient instance lifetime.
+Open: Merge and main readback only.
+Next safe step: Re-run required gates on the Memory-bearing final head, merge if green, then verify main.
