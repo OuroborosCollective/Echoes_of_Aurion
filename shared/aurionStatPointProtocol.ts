@@ -49,7 +49,7 @@ export function resolveAurionStatWallet(input: StatWalletInput) {
     earnedExact: earned.toString(), spentExact: spent.toString(), availableExact: (earned - spent).toString(),
     unconfiguredProgressions: Object.freeze([...unconfigured].sort()),
     attributes: Object.freeze(aurionStatAttributes.map(key => Object.freeze({
-      key, baselineExact: "10", allocatedExact: totals.get(key)!.toString(), totalExact: (10n + totals.get(key)!).toString(),
+      key, baselineExact: (key === "strength" || key === "agility" || key === "intelligence" || key === "defense") ? "10" : "0", allocatedExact: totals.get(key)!.toString(), totalExact: ((key === "strength" || key === "agility" || key === "intelligence" || key === "defense" ? 10n : 0n) + totals.get(key)!).toString(),
     }))),
   });
 }
