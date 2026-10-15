@@ -9,6 +9,8 @@
     * [Engineentscheidung — Godot 4.x](docs/godot-migration/engine-decision.md)
       * [Evidence — Godot gegenüber Unity](docs/godot-migration/evidence/engine-comparison.md)
     * [Netzwerkvertrag — HTTPS, JSON und WSS](docs/godot-migration/network-contract.md)
+    * [Native Anmeldung — Entscheidung und Übergabe](docs/godot-migration/native-auth-decision.md)
+      * [Native Anmeldung — Bedrohungs- und Fehlerfälle](docs/godot-migration/native-auth-threat-cases.md)
   * [Aurion Admin-MCP in ChatGPT](docs/aurion-admin-mcp.md)
   * [Public Pattern — Stateless Determinism](docs/public-patterns/stateless-determinism-minimal-runtime.md)
   * [Spieler-Einstieg — Living World](docs/account-first-entry.md)
