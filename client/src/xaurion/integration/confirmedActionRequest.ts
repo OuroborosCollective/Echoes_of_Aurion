@@ -14,6 +14,7 @@ export const AURION_COMBAT_FEEDBACK_EVENT = "aurion:combat-feedback";
 export function requestConfirmedAction(command:AurionGameplayCommand):Promise<ActionOutcome>{
   if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback."});
   if(command==="F")return requestZoneBasicAttack();
+  // Mapping selects only the typed transport intent; the zone server still decides acceptance.
   const skill = ax1BladeSkillForCommand(command);
   if(skill)return requestZoneSkill(skill.skillId);
   return Promise.resolve({confirmed:false,completed:false,message:`Aktion ${command} ist über diesen Client noch nicht mit dem Aurion-Zonenserver verbunden.`});
