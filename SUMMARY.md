@@ -4,6 +4,8 @@
 * [Architektur — Aurion Single Authority](ARCHITECTURE_OWNERSHIP.md)
 * [Technische Dokumentation](docs/README.md)
   * [Godot-Client — Architektur und Migrationsplan](docs/godot-migration/architecture.md)
+    * [Samsung Galaxy Tab A9 — Zielprofil](docs/godot-migration/tab-a9-profile.md)
+    * [Samsung Galaxy Tab A9 — Gerätecheck](docs/godot-migration/device-check.md)
   * [Aurion Admin-MCP in ChatGPT](docs/aurion-admin-mcp.md)
   * [Public Pattern — Stateless Determinism](docs/public-patterns/stateless-determinism-minimal-runtime.md)
   * [Spieler-Einstieg — Living World](docs/account-first-entry.md)
