@@ -162,14 +162,24 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     void act(() => saveControls.mutateAsync({ ...settings, autoLoot: !settings.autoLoot }), uiFresh);
   };
   useEffect(() => {
+    let feedbackTimer: number | undefined;
     const receiveFeedback = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
       if (!detail || typeof detail !== "object") return;
       const message = (detail as { message?: unknown }).message;
-      if (typeof message === "string" && message.length > 0 && message.length <= 240) setMessage(message);
+      if (typeof message !== "string" || message.length === 0 || message.length > 240) return;
+      window.clearTimeout(feedbackTimer);
+      setMessage(message);
+      feedbackTimer = window.setTimeout(() => {
+        setMessage(current => current === message ? "" : current);
+        feedbackTimer = undefined;
+      }, 4_000);
     };
     window.addEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
-    return () => window.removeEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+    return () => {
+      window.clearTimeout(feedbackTimer);
+      window.removeEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+    };
   }, []);
   useEffect(() => {
     if (!permitted.current) auto.stop();
