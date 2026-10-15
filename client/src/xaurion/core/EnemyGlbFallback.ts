@@ -132,7 +132,7 @@ export function enemyFallbackDiagnostics(
 ): EnemyFallbackDiagnostics {
   const variants = enemyFallbackVariants(catalog);
   const evaluated = variants.map(variant => ({
-    score: matchScore(variant.key, archetype),
+    score: variant.key.startsWith("rigged-monster · monster ") ? 1 : variant.entries[0]?.entry.purpose === "auto" ? Math.max(2, matchScore(variant.key, archetype)) : matchScore(variant.key, archetype),
     physical: variant.entries,
   }));
   const bestMatchScore = evaluated.length ? Math.min(...evaluated.map(candidate => candidate.score)) : null;
