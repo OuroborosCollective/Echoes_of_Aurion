@@ -2295,3 +2295,24 @@ Evidence: Implementation head `18cb9e65dc6b212d7bfa03cba7ce35b02a934ecb`; Local 
 Learned: Fixed-string React state cannot restart an effect for an identical later event; the publisher must own transient instance lifetime.
 Open: Final Memory-bearing exact-head gates, security review, merge and main readback.
 Next safe step: Merge only after every final-head workflow and review gate is green.
+
+
+### 2026-10-15 — PR #964 — fix(player): restart repeated mount feedback lifetime
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=964 merge=b83f4b84bc864fdffcddef8f5af1e4cd5cfdc838 -->
+Task: Merge PR #964 into `main` — fix(player): restart repeated mount feedback lifetime.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.tsx`
+- `e2e/ax1.ui.spec.ts`
+- `server/aim242AuthorityAdapter.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/964
+- Merge commit: `b83f4b84bc864fdffcddef8f5af1e4cd5cfdc838`
+- PR head: `a4d6a8427346b061986815b8c2b35c69aab8f789`
+- Merged at: 2026-10-15T20:36:30Z
+- Post-merge workflow run: 38803331085
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
