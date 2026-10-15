@@ -421,6 +421,20 @@ export const aurionMasteryEvents = mysqlTable("aurionMasteryEvents", {
   index("aurionMasteryEvents_user_discipline_created_idx").on(table.userId, table.disciplineId, table.createdAt),
 ]);
 
+/** One persistent, append-only point spending proof per authoritative player intent. */
+export const aurionStatAllocationReceipts = mysqlTable("aurionStatAllocationReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  attribute: varchar("attribute", { length: 32 }).notNull(),
+  amountExact: varchar("amountExact", { length: 128 }).notNull(),
+  earnedAtSpendExact: varchar("earnedAtSpendExact", { length: 128 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionStatAllocationReceipts_idempotency_uq").on(table.idempotencyKey),
+  index("aurionStatAllocationReceipts_user_created_idx").on(table.userId, table.createdAt),
+]);
+
 /** Moral alignment uses bounded, receipt-bound integer deltas. Auras are derived readmodel data, not permissions. */
 export const aurionEthosEvents = mysqlTable("aurionEthosEvents", {
   id: varchar("id", { length: 64 }).primaryKey(),
