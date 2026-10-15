@@ -17,7 +17,7 @@ import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionGroupFinder } from "./AurionGroupFinder";
 import { AuthoredQuestJournal } from "@/components/AuthoredQuestJournal";
 import { projectPlayerReadback, projectReadback, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
-import { ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
+import { AURION_COMBAT_FEEDBACK_EVENT, ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import { CONFIRMED_COMBAT_PRESENTATION_EVENT, reduceConfirmedCombatMetrics, validConfirmedCombatPresentation, type ConfirmedCombatPresentationEvent } from "./combatPresentation";
 import "./ax1AuthorityHud.css";
@@ -101,6 +101,10 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     () => permitted.current && !document.hidden && !document.querySelector(WORLD_PANEL_SELECTOR),
     (active, note) => { setAutoActive(active); if (note) setMessage(note); },
   ), [userId]);
+  const runAction = useCallback(async (command: AurionGameplayCommand) => {
+    const outcome = await onAction(command);
+    setMessage(outcome.message);
+  }, [onAction]);
   const openPanel = useCallback((value: Panel) => {
     auto.stop();
     onMove(0, 0);
@@ -157,6 +161,16 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     if (!settings) return;
     void act(() => saveControls.mutateAsync({ ...settings, autoLoot: !settings.autoLoot }), uiFresh);
   };
+  useEffect(() => {
+    const receiveFeedback = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== "object") return;
+      const message = (detail as { message?: unknown }).message;
+      if (typeof message === "string" && message.length > 0 && message.length <= 240) setMessage(message);
+    };
+    window.addEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+    return () => window.removeEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+  }, []);
   useEffect(() => {
     if (!permitted.current) auto.stop();
     if (startAfterClose && permitted.current) {
@@ -367,8 +381,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       onToggleAutoLoot={toggleLoot}
       onInteract={() => { if (onInteract) onInteract(); else void onAction("E"); }}
       onToggleAutoAttack={() => { if (autoActive) auto.stop(); else auto.start(); }}
-      onAttack={() => { void onAction("F"); }}
-      onCastSkill={command => { void onAction(command as AurionGameplayCommand); }}
+      onAttack={() => { void runAction("F"); }}
+      onCastSkill={command => { void runAction(command as AurionGameplayCommand); }}
       pending={pending}
       context={panel === "dialogue" ? "dialogue" : panel !== null ? "management" : autoActive ? "combat" : "exploration"}
     />

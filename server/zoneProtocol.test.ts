@@ -1,6 +1,6 @@
 import { ZONE_PROTOCOL_VERSION } from "../shared/zonePresenceContract";
 import { describe, expect, it } from "vitest";
-import { createZoneTicket, digestZoneTicket, isAllowedZoneOrigin, parseZoneHello, parseZoneMove } from "./zoneProtocol";
+import { createZoneTicket, digestZoneTicket, isAllowedZoneOrigin, parseZoneHello, parseZoneMove, parseZoneSkill } from "./zoneProtocol";
 
 describe("zone protocol", () => {
   it("creates opaque tickets whose persisted representation is a stable digest", () => {
@@ -22,6 +22,16 @@ describe("zone protocol", () => {
     expect(parseZoneMove({ type: "move", clientSeq: 0, input: { x: 1, z: 0 } })).toBeNull();
     expect(parseZoneMove({ type: "move", clientSeq: 2, input: { x: 2, z: 0 } })).toBeNull();
     expect(parseZoneMove({ type: "attack", clientSeq: 2, input: { x: 1, z: 0 } })).toBeNull();
+  });
+
+  it("accepts targetless typed skills while preserving target validation", () => {
+    expect(parseZoneSkill({ type: "skill", clientSeq: 1, skillId: "k_shield" })).toEqual({
+      type: "skill",
+      clientSeq: 1,
+      skillId: "k_shield",
+    });
+    expect(parseZoneSkill({ type: "skill", clientSeq: 2, skillId: "k_strike", targetEntityId: "not-a-mob" })).toBeNull();
+    expect(parseZoneSkill({ type: "skill", clientSeq: 3, skillId: "unknown" })).toBeNull();
   });
 
   it("allows only explicit production and local browser origins", () => {
