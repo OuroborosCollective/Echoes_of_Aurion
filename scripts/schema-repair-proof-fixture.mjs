@@ -50,7 +50,7 @@ try {
     assert.equal(run("reconcile").status, 0);
   } else if (["prepare-additive", "prepare-reviewed"].includes(mode)) {
     const history = JSON.parse(fs.readFileSync("dist-production-apply/drizzle/meta/repair-history.json", "utf8"));
-    for (const tag of ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence"]) {
+    for (const tag of ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts"]) {
       const sql = fs.readFileSync(`drizzle/${tag}.sql`, "utf8");
       for (const match of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)? `([^`]+)`/g)) {
         const [rows] = await db.query(`SELECT COUNT(*) AS n FROM \`${match[1]}\``);

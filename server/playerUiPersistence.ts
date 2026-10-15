@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { readAurionStatWalletInTransaction } from "./aurionStatPointPersistence";
 import { aurionAx1StarterEquipmentReceipts, aurionAx1StarterEquipmentStates } from "../drizzle/ax1StarterEquipmentSchema";
 import { aurionEquipmentSlots, aurionItemInstancesV2, aurionMasteryEvents, itemInstances, playerProfiles } from "../drizzle/schema";
 import { aurionPlayerUiSettings } from "../drizzle/playerUiSchema";
@@ -112,11 +113,13 @@ async function readAcegSources(tx: UiTransaction, userId: number, inventoryRevis
     contentVersion: aurionMasteryEvents.contentVersion,
   }).from(aurionMasteryEvents).where(eq(aurionMasteryEvents.userId, userId)).limit(4097);
   if (rows.length > 4096) throw new Error("ACEG_MASTERY_CHECKPOINT_REQUIRED");
-  return acegSourcesFromMasteryEvents(
+  const derived = acegSourcesFromMasteryEvents(
     userId,
     acegStateIndexFromRevision(inventoryRevisionExact),
     rows as Parameters<typeof acegSourcesFromMasteryEvents>[2],
   );
+  const wallet = await readAurionStatWalletInTransaction(tx, userId);
+  return Object.freeze({ ...derived, permanentStats: Object.freeze(wallet.attributes.map(entry => ({ capability: entry.key, delta: Number(BigInt(entry.totalExact) > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : BigInt(entry.totalExact)) }))) });
 }
 
 async function readAcegConfirmations(tx: UiTransaction, userId: number, ui: Awaited<ReturnType<typeof readUi>>): Promise<readonly AcegEquipmentConfirmation[]> {

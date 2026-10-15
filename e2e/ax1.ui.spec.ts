@@ -195,7 +195,15 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(characterDialog.getByRole("button", { name: "Stats", exact: true })).toBeVisible();
       await expect(characterDialog.getByRole("button", { name: "Mastery", exact: true })).toBeVisible();
       await expect(characterDialog.getByRole("button", { name: /Vorhut|Seher|Hüter/ })).toHaveCount(0);
-      await expect(characterDialog.getByText("Attribute warten auf einen bestätigten Aurion-Readback.", { exact: true })).toBeVisible();
+      // The wallet is a canonical server readback, never the retired local AX1 count.
+      const walletResponse = await rpc<any>(page, "player.statWallet");
+      await expect(characterDialog.getByTestId("confirmed-stat-wallet")).toBeVisible();
+      await expect(characterDialog.getByText(new RegExp(`Frei: ${walletResponse.availableExact} · Verdient: ${walletResponse.earnedExact}`))).toBeVisible();
+      expect(walletResponse.userId).toBe(userId);
+      const strength = walletResponse.attributes.find((item: { key: string }) => item.key === "strength");
+      expect(strength?.totalExact).toMatch(/^[1-9][0-9]*$/);
+      await expect(characterDialog.getByRole("button", { name: "Stat-Punkt auf strength verteilen" }))
+        [walletResponse.availableExact === "0" ? "toBeDisabled" : "toBeEnabled"]();
       await expect(characterDialog.getByLabel(/Heilendes Licht/)).toHaveCount(0);
       await expect(characterDialog.getByLabel("Skillplatz 1", { exact: true })).toHaveCount(0);
       await characterDialog.getByRole("button", { name: "Mastery", exact: true }).click();

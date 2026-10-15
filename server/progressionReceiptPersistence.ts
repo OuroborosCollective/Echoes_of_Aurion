@@ -64,7 +64,7 @@ function storedInput(row: StoredProgressionReceiptRow): ProgressionReceiptInput 
   };
 }
 
-function verifyStoredProgressionReceipt(row: StoredProgressionReceiptRow) {
+export function verifyStoredProgressionReceipt(row: StoredProgressionReceiptRow) {
   let normalized: ReturnType<typeof normalizeProgressionReceipt>;
   try {
     normalized = normalizeProgressionReceipt(storedInput(row));

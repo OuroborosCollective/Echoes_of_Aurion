@@ -27,12 +27,23 @@ export async function consumeZoneTicketWithCombatProfile(values:{ticket:string;z
   if(mainHand&&!decision)throw new Error("ZONE_ACEG_EQUIPMENT_DECISION_MISSING");
   const baseWeaponBonus=mainHand?(mainHand.stats.power??mainHand.stats.attack??0):0;
   const weaponBonus=mainHand&&decision?scaleAcegEquipmentStat(baseWeaponBonus,decision.effectivenessBps):0;
+  // Previously only local visual code applied these two attribute effects.
+  // Server-authoritative ACEG capabilities now supply only confirmed allocations.
+  const bonusStrength=BigInt(Math.max(0,(aceg.resolution.capabilities.strength??10)-10));
+  const bonusDefense=BigInt(Math.max(0,(aceg.resolution.capabilities.defense??10)-10));
+  const strengthDamage=bonusStrength*7n/2n;
+  const defenseHealth=bonusDefense*22n;
+  const safeAdd=(base:number,bonus:bigint)=>{
+    const result=BigInt(base)+bonus;
+    if(result>BigInt(Number.MAX_SAFE_INTEGER)||result<0n)throw new Error("AURION_STAT_COMBAT_OVERFLOW");
+    return Number(result);
+  };
   const starterEquipped=mainHand?.version==="ax1_starter";
   const selectedClass=profile.selectedClass;
   return Object.freeze({...ticket,combatProfile:Object.freeze({
     combatLevel:profile.level,
-    maxHealth:ax1PlayerBaseMaxHealth(selectedClass,starterEquipped),
-    weaponBonus:starterEquipped?ax1StarterWeaponBonus(loadout.weaponTrack):weaponBonus,
+    maxHealth:safeAdd(ax1PlayerBaseMaxHealth(selectedClass,starterEquipped),defenseHealth),
+    weaponBonus:safeAdd(starterEquipped?ax1StarterWeaponBonus(loadout.weaponTrack):weaponBonus,strengthDamage),
     weaponTrack:loadout.weaponTrack,
     weaponEquipped:Boolean(mainHand),
   })});

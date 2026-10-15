@@ -14,7 +14,7 @@ const f = vi.hoisted(() => {
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ gameplay: { relationshipStanding: { invalidate: vi.fn() } } }),
-    player: { me: { useQuery: () => f.empty }, ui: { useQuery: () => f.empty }, saveControls: { useMutation: () => ({}) }, collectLoot: { useMutation: () => ({}) }, equipItem: { useMutation: () => ({}) }, unequipItem: { useMutation: () => ({}) } },
+    player: { statWallet: { useQuery: () => f.empty }, allocateStatPoint: { useMutation: () => ({ mutateAsync: vi.fn(async () => ({})) }) }, me: { useQuery: () => f.empty }, ui: { useQuery: () => f.empty }, saveControls: { useMutation: () => ({}) }, collectLoot: { useMutation: () => ({}) }, equipItem: { useMutation: () => ({}) }, unequipItem: { useMutation: () => ({}) } },
     gameplay: { openWorld: { useQuery: () => f.empty } },
     groups: { read: { useQuery: () => f.empty }, command: { useMutation: () => ({}) } },
     crafting: { read: { useQuery: () => f.empty }, manipulationRead: { useQuery: () => f.empty }, manipulate: { useMutation: () => ({}) }, craft: { useMutation: () => ({}) }, materializeBonus: { useMutation: () => ({}) } },
