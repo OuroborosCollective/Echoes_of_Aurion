@@ -49,7 +49,8 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     const home = read("client/src/pages/Home.tsx");
     expect(runtime).toContain("ax1MovementToAurionIntent(engine.cameraYaw, forward, right)");
     expect(runtime).toContain("bindAurionAuthorityProjection");
-    expect(runtime).toContain("return requestConfirmedAction(command)");
+    expect(runtime).toContain("const outcome = await requestConfirmedAction(command)");
+    expect(runtime).toContain("new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, { detail: outcome })");
     expect(request).not.toContain("aurion:request-action");
     expect(request).toContain("Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback.");
     expect(request).not.toContain("WASD-Zonenvertrag");
