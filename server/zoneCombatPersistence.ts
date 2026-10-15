@@ -29,8 +29,8 @@ export async function consumeZoneTicketWithCombatProfile(values:{ticket:string;z
   const weaponBonus=mainHand&&decision?scaleAcegEquipmentStat(baseWeaponBonus,decision.effectivenessBps):0;
   // Previously only local visual code applied these two attribute effects.
   // Server-authoritative ACEG capabilities now supply only confirmed allocations.
-  const bonusStrength=BigInt(aceg.resolution.capabilities.strength??0);
-  const bonusDefense=BigInt(aceg.resolution.capabilities.defense??0);
+  const bonusStrength=BigInt(Math.max(0,(aceg.resolution.capabilities.strength??10)-10));
+  const bonusDefense=BigInt(Math.max(0,(aceg.resolution.capabilities.defense??10)-10));
   const strengthDamage=bonusStrength*7n/2n;
   const defenseHealth=bonusDefense*22n;
   const safeAdd=(base:number,bonus:bigint)=>{
