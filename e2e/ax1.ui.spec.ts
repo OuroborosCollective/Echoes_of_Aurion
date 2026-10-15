@@ -120,6 +120,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
         element.style.pointerEvents = previousPointerEvents;
         return topmost === element || element.contains(topmost);
       })).toBe(true);
+      await expect(mountFeedback).toBeHidden({ timeout: 6_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
       await expect.poll(() => latestPresences.some(p => p.entityId === selfEntityId), { timeout: 20_000 }).toBe(true);
 
