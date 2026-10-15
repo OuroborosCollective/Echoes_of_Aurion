@@ -2218,3 +2218,45 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #962 — feat(godot): fertige responsive Startszene und Projektgrenzen (#913)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=962 merge=1ce2ac6a91ff154bd45d9355a3e6eb52c69677ac -->
+Task: Merge PR #962 into `main` — feat(godot): fertige responsive Startszene und Projektgrenzen (#913).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/godot-headless.yml`
+- `.gitignore`
+- `docs/godot-migration/evidence/g06/startup-1340x800.png`
+- `docs/godot-migration/evidence/g06/startup-360x640.png`
+- `docs/godot-migration/evidence/g06/startup-800x1340.png`
+- `docs/godot-migration/workspace.md`
+- `godot-client/README.md`
+- `godot-client/actors/.gitkeep`
+- `godot-client/addons/.gitkeep`
+- `godot-client/app/main.gd`
+- `godot-client/app/main.gd.uid`
+- `godot-client/app/main.tscn`
+- `godot-client/assets/.gitkeep`
+- `godot-client/config/runtime_config.gd`
+- `godot-client/config/runtime_config.gd.uid`
+- `godot-client/project.godot`
+- `godot-client/projection/.gitkeep`
+- `godot-client/tests/capture_startup.gd`
+- `godot-client/tests/capture_startup.gd.uid`
+- `godot-client/tests/contracts/test_zone_contract.gd.uid`
+- `godot-client/tests/test_startup.gd`
+- `godot-client/tests/test_startup.gd.uid`
+- `godot-client/ui/mobile/.gitkeep`
+- `godot-client/ui/screens/.gitkeep`
+- `godot-client/world/.gitkeep`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/962
+- Merge commit: `1ce2ac6a91ff154bd45d9355a3e6eb52c69677ac`
+- PR head: `f34cb4f683dee4baeb0b7107b3fbd8a9b2045a63`
+- Merged at: 2026-10-15T19:31:30Z
+- Post-merge workflow run: 38794612816
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
