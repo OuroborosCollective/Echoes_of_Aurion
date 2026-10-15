@@ -178,4 +178,40 @@ describe("approved confirmed mob GLB presentation", () => {
     p.dispose();
   });
 
+  it("keeps a successfully verified retry variant visible through animation updates and catalog refresh", async () => {
+    const firstSha = "3".repeat(64), secondSha = "4".repeat(64);
+    const entries = [firstSha, secondSha].map((digest, index) => ({
+      ...catalog.entries[0]!,
+      assetId: `glb_retry_${index}`,
+      sha256: digest,
+      storageUrl: `/api/assets/glb/${digest}.glb`,
+      displayName: `Enemy Fallback · rigged-monster · Monster Big Variant ${index}`,
+    }));
+    const batch: GlbRuntimeCatalog = { ...catalog, entries };
+    const primary = selectEnemyGlb(batch, "clockwork_stalker", 0, "desktop", "clockwork_stalker:mob_1");
+    expect(primary).not.toBeNull();
+    const load = vi.fn(async (url: string) => {
+      if (url === primary!.entry.storageUrl) throw new Error("GLB_PRIMARY_UNAVAILABLE");
+      return loaded();
+    });
+    const s = setup();
+    const p = new MobCatalogProjection(s.engine as never, load);
+    p.setCatalog(batch);
+    await step(p);
+    expect(s.mobs[0]!.body.visible).toBe(true);
+    await step(p);
+    expect(p.evidence().projected).toBe(1);
+    const recovered = p.evidence().physicalLods[0]!.sha256;
+    expect(recovered).not.toBe(primary!.entry.sha256);
+    expect(s.mobs[0]!.body.visible).toBe(false);
+    await step(p);
+    expect(p.evidence().physicalLods[0]?.sha256).toBe(recovered);
+    p.setCatalog({ ...batch, revision: "d".repeat(64) });
+    await step(p);
+    expect(p.evidence().physicalLods[0]?.sha256).toBe(recovered);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(s.mobs[0]!.data.hp).toBe(100);
+    p.dispose();
+  });
+
 });
