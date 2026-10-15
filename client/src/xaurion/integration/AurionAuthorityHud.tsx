@@ -17,7 +17,7 @@ import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionGroupFinder } from "./AurionGroupFinder";
 import { AuthoredQuestJournal } from "@/components/AuthoredQuestJournal";
 import { projectPlayerReadback, projectReadback, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
-import { ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
+import { AURION_COMBAT_FEEDBACK_EVENT, ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import { CONFIRMED_COMBAT_PRESENTATION_EVENT, reduceConfirmedCombatMetrics, validConfirmedCombatPresentation, type ConfirmedCombatPresentationEvent } from "./combatPresentation";
 import "./ax1AuthorityHud.css";
@@ -161,6 +161,16 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     if (!settings) return;
     void act(() => saveControls.mutateAsync({ ...settings, autoLoot: !settings.autoLoot }), uiFresh);
   };
+  useEffect(() => {
+    const receiveFeedback = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== "object") return;
+      const message = (detail as { message?: unknown }).message;
+      if (typeof message === "string" && message.length > 0 && message.length <= 240) setMessage(message);
+    };
+    window.addEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+    return () => window.removeEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+  }, []);
   useEffect(() => {
     if (!permitted.current) auto.stop();
     if (startAfterClose && permitted.current) {
