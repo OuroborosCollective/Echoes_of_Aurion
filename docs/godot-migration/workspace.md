@@ -38,3 +38,15 @@ Quellen: [offizielles Godot-Release](https://github.com/godotengine/godot-builds
 ## Tatsächlicher Toolchain-Readback
 
 Der isolierte Lauf bestätigte `javac 17.0.20`, ADB `37.0.1-15733141` und AAPT `v0.2-12874835`. Der Doctor prüfte den vollständigen Installationsbaum erfolgreich. SDK-Lizenzen, APK-Export, GPU und physisches Gerät sind weiterhin als `unverified` ausgewiesen. Das Owner-Foto bestätigt Godot `4.7.2.stable.official [ed1daf0bf]` auf seinem Tab A9; es belegt die Editorversion, keinen Aurion-Spielstart.
+
+## Startprojekt G06
+
+Das [Godot-Projekt](../../godot-client/README.md) enthält jetzt eine vollständige offline Startszene. Ein Projektstart lädt sie automatisch; es sind keine Node-/Signal-/Inspectorarbeiten nötig. Die Schaltfläche „Anmelden“ bleibt sichtbar deaktiviert und die Ansicht meldet „Nicht verbunden“. Es wird kein erfolgreicher Login oder Serverkontakt vorgetäuscht.
+
+Echter Nachweis: Godot-Import, Headless-Start, URL-/Build-Negativfälle, InputMap und Layout in 1340×800, 800×1340 und 360×640. Die erste Prüfung deckte eine zu starke Verkleinerung durch feste Canvas-Skalierung auf; das Layout verwendet nun die tatsächlichen Fenstermaße. Die folgenden Bilder stammen aus dem tatsächlichen Godot-X11-/OpenGL-Lauf mit Mesa llvmpipe, ohne Hardware-GPU. Es sind keine erzeugten Designbilder und keine Tab-A9-Aufnahmen.
+
+![Godot-Startansicht, Software-Rendering 1340×800](evidence/g06/startup-1340x800.png)
+
+[Hochformat 800×1340](evidence/g06/startup-800x1340.png) · [Schmales Fenster 360×640](evidence/g06/startup-360x640.png)
+
+Der CI-Job wiederholt den Software-Renderlauf am jeweiligen Kandidaten und archiviert die drei PNGs für sieben Tage. Die Bilder hier dokumentieren den lokal geprüften G06-Stand. Auth, APK-Installation und physische Geräteabnahme bleiben folgende Schritte.

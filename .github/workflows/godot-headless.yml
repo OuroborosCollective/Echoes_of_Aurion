@@ -29,8 +29,25 @@ jobs:
           node scripts/godot/bootstrap.mjs
       - name: Real GDScript contract and TS parity
         run: |
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
           .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/contracts/test_zone_contract.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_startup.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --quit-after 3
           node scripts/godot/verify-contract-parity.mjs
+      - name: Render startup with software OpenGL
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          AURION_CAPTURE_DIR: ${{ runner.temp }}/aurion-startup
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri
+          xvfb-run -a -s '-screen 0 1600x1600x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_startup.gd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-startup-software-render-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurion-startup/*.png
+          if-no-files-found: error
+          retention-days: 7
   android-toolchain:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
