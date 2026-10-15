@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Toaster, toast } from "sonner";
 import { CausalBackupNotifier } from "@/components/CausalBackupNotifier";
 import { projectConfirmedZoneSnapshot } from "./zoneCombatBridge";
+import { AURION_COMBAT_FEEDBACK_EVENT } from "./confirmedActionRequest";
 import { AurionAuthorityHud } from "./AurionAuthorityHud";
 
 const f = vi.hoisted(() => {
@@ -39,6 +40,14 @@ describe("Aurion authoritative self-health and combat feedback", () => {
     fireEvent.click(screen.getByRole("button", { name: "Angriff [R]" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Ziel außerhalb der bestätigten Aurion-Reichweite."));
     expect(screen.getAllByText("Ziel außerhalb der bestätigten Aurion-Reichweite.")).toHaveLength(1);
+  });
+
+  it("projects keyboard combat outcomes from the runtime into the same feedback lane", () => {
+    mount();
+    act(() => window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, {
+      detail: { confirmed: false, completed: false, message: "Der Aurion-Skill ist serverseitig noch auf Abklingzeit." },
+    })));
+    expect(screen.getByRole("status").textContent).toBe("Der Aurion-Skill ist serverseitig noch auf Abklingzeit.");
   });
 
   it("never announces a successful cold archive simply because a combat action was confirmed", async () => {
