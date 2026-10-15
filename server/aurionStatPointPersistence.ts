@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { aurionProgressionReceipts, aurionStatAllocationReceipts, playerProfiles } from "../drizzle/schema";
+import { aurionMasteryEvents, aurionProgressionReceipts, aurionStatAllocationReceipts, playerProfiles } from "../drizzle/schema";
 import { getDb } from "./db";
+import { aurionMasteryDisciplineIds, resolveMasteryReadmodel } from "./aurionMasteryEthosProtocol";
 import { normalizeProgressionReceipt, type ProgressionReceiptInput } from "./progressionReceiptPersistence";
 import { confirmAurionStatAllocation, resolveAurionStatWallet, type AurionStatAttribute, type StatAllocation } from "../shared/aurionStatPointProtocol";
 
@@ -31,6 +32,23 @@ export async function readAurionStatWalletInTransaction(tx: Transaction, userId:
       const current = masteries.get(trackId);
       if(!current || cmp(row.levelExact,current.levelExact)>0) masteries.set(trackId,{trackId,levelExact:row.levelExact,sourceReceiptId:row.id});
     }
+  }
+  // Provenance-checked Aurion mastery events already guard accepted source receipts.
+  // Include all discipline level changes (including crafting/civic as unconfigured
+  // until an explicit rate is approved), without granting duplicate weapon awards.
+  const masteryEvents = await tx.select().from(aurionMasteryEvents).where(eq(aurionMasteryEvents.userId,userId));
+  for(const disciplineId of aurionMasteryDisciplineIds) {
+    const events = masteryEvents.filter(e=>e.disciplineId===disciplineId);
+    if(!events.length) continue;
+    const readmodel = resolveMasteryReadmodel({
+      playerId: String(userId), disciplineId,
+      events: events.map(e=>({idempotencyKey:e.idempotencyKey,sourceReceiptId:e.sourceReceiptId,disciplineId,
+        source:e.source as typeof e.source, amountExact:e.amountExact,resolutionIndex:e.resolutionIndex,
+        ruleSetVersion:e.ruleSetVersion,contentVersion:e.contentVersion})),
+    });
+    const levelExact=readmodel.progression.levelExact;
+    const current=masteries.get(disciplineId);
+    if(!current||cmp(levelExact,current.levelExact)>0)masteries.set(disciplineId,{trackId:disciplineId,levelExact,sourceReceiptId:readmodel.receiptHash});
   }
   const existing = await tx.select().from(aurionStatAllocationReceipts).where(eq(aurionStatAllocationReceipts.userId,userId));
   const allocations: StatAllocation[] = existing.map(r=>({key:r.attribute as AurionStatAttribute,amountExact:r.amountExact,idempotencyKey:r.idempotencyKey}));
