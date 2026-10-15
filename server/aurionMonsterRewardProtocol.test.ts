@@ -4,7 +4,7 @@ import { buildAurionMonsterVictoryReward, verifyAurionMonsterVictoryReward } fro
 import { levelFromTotalXp, xpRequiredForNextLevel } from "./endgameProtocol";
 import { advanceExactSkillProgression } from "./wasdAurionSkillProgressionProtocol";
 
-const input = (speciesId: string, monsterLevel: number, playerLevel = monsterLevel, weaponTrack: "blade" | "staff" | "spear" | "focus" | null = "blade") => ({
+const input = (speciesId: string, monsterLevel: number | string, playerLevel: number | string = monsterLevel, weaponTrack: "blade" | "staff" | "spear" | "focus" | null = "blade") => ({
   receiptId: "combat-receipt-0123456789abcdef0123456789abcdef",
   userId: 17, speciesId, monsterLevel, playerLevel, weaponTrack,
 });
@@ -78,4 +78,33 @@ describe("Aurion confirmed monster victory reward curve", () => {
     expect(buildAurionMonsterVictoryReward({...input("monster_big_birb",3),userId:18}).rewardHash).not.toBe(p.rewardHash);
     expect(buildAurionMonsterVictoryReward({...input("monster_big_birb",3),weaponTrack:"staff"}).rewardHash).not.toBe(p.rewardHash);
   });
+  it("accepts unbounded exact character and monster levels; 60 and 10000 are not caps", () => {
+    const player = buildAurionMonsterVictoryReward({ ...input("monster_big_birb", 3), playerLevel: "100000000000000000000000000000000000" });
+    expect(player.playerLevelExact).toBe("100000000000000000000000000000000000");
+    expect(player.characterXpExact).toBe("4");
+    expect(player.weaponXpExact).toBe("2");
+    expect(player.combatSkillXpExact).toBe("1");
+    expect(verifyAurionMonsterVictoryReward(player)).toEqual(player);
+    expect(buildAurionMonsterVictoryReward({ ...input("monster_big_birb", 3), playerLevel: 10001 }).characterXpExact).toBe("4");
+    const high = buildAurionMonsterVictoryReward({ ...input("monster_big_birb", 3), monsterLevel: "100000000000000000", playerLevel: "100000000000000000" });
+    expect(high.monsterLevelExact).toBe("100000000000000000");
+    expect(high.characterXpExact).toMatch(/^[1-9][0-9]+$/);
+    expect(BigInt(high.characterXpExact)).toBeGreaterThan(BigInt(Number.MAX_SAFE_INTEGER));
+    expect(high.numberProjectionExact).toBe(false);
+    expect(high.characterXp).toBe(Number.MAX_SAFE_INTEGER);
+    expect(verifyAurionMonsterVictoryReward(high)).toEqual(high);
+    expect(() => buildAurionMonsterVictoryReward({ ...input("monster_big_birb", 3), playerLevel: "00001" })).toThrow();
+    expect(() => buildAurionMonsterVictoryReward({ ...input("monster_big_birb", 3), monsterLevel: "0" })).toThrow();
+    expect(() => buildAurionMonsterVictoryReward({ ...input("monster_big_birb", 3), monsterLevel: "2" })).toThrow();
+  });
+
+  it("preserves identical canonical reward digests across safe numeric and exact level inputs", () => {
+    const numeric = buildAurionMonsterVictoryReward(input("monster_big_birb", 3, 60));
+    const exact = buildAurionMonsterVictoryReward({ ...input("monster_big_birb", 3), playerLevel: "60", monsterLevel: "3" });
+    expect(numeric.rewardHash).toBe(exact.rewardHash);
+    expect(numeric.playerLevelExact).toBe(exact.playerLevelExact);
+    expect(numeric.monsterLevelExact).toBe(exact.monsterLevelExact);
+    expect(numeric.characterXpExact).toBe(exact.characterXpExact);
+  });
+
 });
