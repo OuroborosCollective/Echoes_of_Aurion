@@ -23,6 +23,33 @@ export function isServerEvidenceDigest(value: string): boolean {
 /** Legacy metadata only; classes never authorize gameplay. */
 export const CLASS_UNLOCK_LEVEL = Number.POSITIVE_INFINITY;
 
+const EXACT_LEVEL = /^[1-9][0-9]*$/;
+const EXACT_XP = /^(0|[1-9][0-9]*)$/;
+/** Aurion character's original quadratic XP requirement, now in unbounded exact form. */
+export function xpRequiredForNextLevelExact(levelExact: string): string {
+  if (!EXACT_LEVEL.test(levelExact) || levelExact.length > 128) throw new Error("CHARACTER_LEVEL_EXACT_INVALID");
+  const level = BigInt(levelExact);
+  return (100n + 18n * level + 4n * level * level).toString();
+}
+function cumulativeCharacterXp(level: bigint): bigint {
+  const n = level - 1n;
+  return 4n * n * (n + 1n) * (2n * n + 1n) / 6n
+    + 9n * n * (n + 1n) + 100n * n;
+}
+/** Exact inverse from total XP, no hard level cap; binary search is logarithmic. */
+export function levelFromTotalXpExact(totalXpExact: string): string {
+  if (!EXACT_XP.test(totalXpExact) || totalXpExact.length > 256) throw new Error("CHARACTER_TOTAL_XP_EXACT_INVALID");
+  const total = BigInt(totalXpExact);
+  let low = 1n, high = 2n;
+  while (cumulativeCharacterXp(high) <= total) high *= 2n;
+  while (low + 1n < high) {
+    const middle = (low + high) / 2n;
+    if (cumulativeCharacterXp(middle) <= total) low = middle;
+    else high = middle;
+  }
+  return low.toString();
+}
+
 export function xpRequiredForNextLevel(level: number): number {
   if (!Number.isSafeInteger(level) || level < 1) return 0;
   return 100 + 18 * level + 4 * level * level;
