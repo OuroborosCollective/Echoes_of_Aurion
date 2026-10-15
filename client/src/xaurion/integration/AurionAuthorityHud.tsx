@@ -57,6 +57,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [message, setMessage] = useState("");
+  const [combatFeedback, setCombatFeedback] = useState("");
+  const feedbackTimer = useRef<number | undefined>(undefined);
   const [expandedMenu, setExpandedMenu] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupMode, setGroupMode] = useState<"party" | "dungeon">("party");
@@ -96,15 +98,23 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   permitted.current = connected && panel === null && !groupOpen && !expandedMenu && !pending;
   const action = useRef(onAction);
   action.current = onAction;
+  const publishCombatFeedback = useCallback((next: string) => {
+    window.clearTimeout(feedbackTimer.current);
+    setCombatFeedback(next);
+    feedbackTimer.current = window.setTimeout(() => {
+      setCombatFeedback("");
+      feedbackTimer.current = undefined;
+    }, 4_000);
+  }, []);
   const auto = useMemo(() => new ConfirmedAutoAttack(
     () => action.current("F", true),
     () => permitted.current && !document.hidden && !document.querySelector(WORLD_PANEL_SELECTOR),
-    (active, note) => { setAutoActive(active); if (note) setMessage(note); },
-  ), [userId]);
+    (active, note) => { setAutoActive(active); if (note) publishCombatFeedback(note); },
+  ), [userId, publishCombatFeedback]);
   const runAction = useCallback(async (command: AurionGameplayCommand) => {
     const outcome = await onAction(command);
-    setMessage(outcome.message);
-  }, [onAction]);
+    publishCombatFeedback(outcome.message);
+  }, [onAction, publishCombatFeedback]);
   const openPanel = useCallback((value: Panel) => {
     auto.stop();
     onMove(0, 0);
@@ -162,25 +172,19 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     void act(() => saveControls.mutateAsync({ ...settings, autoLoot: !settings.autoLoot }), uiFresh);
   };
   useEffect(() => {
-    let feedbackTimer: number | undefined;
     const receiveFeedback = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
       if (!detail || typeof detail !== "object") return;
-      const message = (detail as { message?: unknown }).message;
-      if (typeof message !== "string" || message.length === 0 || message.length > 240) return;
-      window.clearTimeout(feedbackTimer);
-      setMessage(message);
-      feedbackTimer = window.setTimeout(() => {
-        setMessage(current => current === message ? "" : current);
-        feedbackTimer = undefined;
-      }, 4_000);
+      const next = (detail as { message?: unknown }).message;
+      if (typeof next !== "string" || next.length === 0 || next.length > 240) return;
+      publishCombatFeedback(next);
     };
     window.addEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
     return () => {
-      window.clearTimeout(feedbackTimer);
+      window.clearTimeout(feedbackTimer.current);
       window.removeEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
     };
-  }, []);
+  }, [publishCombatFeedback]);
   useEffect(() => {
     if (!permitted.current) auto.stop();
     if (startAfterClose && permitted.current) {
@@ -367,7 +371,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       }}
       miniMap={<MiniMap world={worldProjection} position={position} remotePlayers={remotePlayers} state={world.state} onOpen={() => openPanel("map")} />}
       movementControl={<MobileMovementController mode={ui.data?.settings.movementMode ?? "joystick"} onMove={onMove} onDestination={({ screenX, screenY }) => onTouchMoveDestination(screenX, screenY)} enabled={panel === null && !groupOpen && !pending && connected} />}
-      feedback={panel === null ? message : undefined}
+      feedback={panel === null ? combatFeedback || message : undefined}
       onMenuOpenChange={setExpandedMenu}
       onOpenCharacter={() => openPanel("character")}
       onOpenInventory={() => openPanel("inventory")}
