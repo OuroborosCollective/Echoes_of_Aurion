@@ -101,6 +101,10 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     () => permitted.current && !document.hidden && !document.querySelector(WORLD_PANEL_SELECTOR),
     (active, note) => { setAutoActive(active); if (note) setMessage(note); },
   ), [userId]);
+  const runAction = useCallback(async (command: AurionGameplayCommand) => {
+    const outcome = await onAction(command);
+    setMessage(outcome.message);
+  }, [onAction]);
   const openPanel = useCallback((value: Panel) => {
     auto.stop();
     onMove(0, 0);
@@ -367,8 +371,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       onToggleAutoLoot={toggleLoot}
       onInteract={() => { if (onInteract) onInteract(); else void onAction("E"); }}
       onToggleAutoAttack={() => { if (autoActive) auto.stop(); else auto.start(); }}
-      onAttack={() => { void onAction("F"); }}
-      onCastSkill={command => { void onAction(command as AurionGameplayCommand); }}
+      onAttack={() => { void runAction("F"); }}
+      onCastSkill={command => { void runAction(command as AurionGameplayCommand); }}
       pending={pending}
       context={panel === "dialogue" ? "dialogue" : panel !== null ? "management" : autoActive ? "combat" : "exploration"}
     />
