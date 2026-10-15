@@ -5,6 +5,7 @@ import {
   NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS,
   NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS,
   NATIVE_AUTH_RETURN_ID,
+  NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
   nativeAuthCallbackQuerySchema,
   nativeAuthErrorSchema,
   nativeAuthExchangeRequestSchema,
@@ -36,9 +37,9 @@ describe("native auth public contract", () => {
         version,
         transactionId: opaque("t"),
         browserUrl: "https://arelogic.space/api/native-auth/browser/t",
-        expiresInSeconds: 300,
+        expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
       }),
-    ).toMatchObject({ expiresInSeconds: 300 });
+    ).toMatchObject({ expiresInSeconds: 10 * 60 });
     expect(
       nativeAuthCallbackQuerySchema.parse({
         code: opaque("h"),
@@ -76,6 +77,12 @@ describe("native auth public contract", () => {
         accessToken: "header.payload.signature",
       }),
     ).toThrow();
+    expect(() =>
+      nativeAuthTokenPairSchema.parse({
+        ...pair,
+        accessToken: pair.refreshToken,
+      }),
+    ).toThrow("NATIVE_AUTH_TOKENS_MUST_DIFFER");
   });
 
   it("rejects downgrade, weak binding and unsafe browser destinations", () => {
@@ -105,7 +112,15 @@ describe("native auth public contract", () => {
         version,
         transactionId: opaque("t"),
         browserUrl: "http://arelogic.space/api/native-auth/browser/t",
-        expiresInSeconds: 300,
+        expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
+      }),
+    ).toThrow();
+    expect(() =>
+      nativeAuthStartResponseSchema.parse({
+        version,
+        transactionId: opaque("t"),
+        browserUrl: "https://example.com/api/native-auth/browser/t",
+        expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
       }),
     ).toThrow();
   });
