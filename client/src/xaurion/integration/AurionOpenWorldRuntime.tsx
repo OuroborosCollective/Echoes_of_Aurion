@@ -870,7 +870,7 @@ export default function AurionOpenWorldRuntime() {
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
       <output ref={runtimePerformanceEvidenceRef} data-testid="runtime-performance-evidence" hidden />
       <output ref={explorationMemoryEvidenceRef} data-testid="exploration-memory-evidence" hidden />
-      {mountFeedback && <p className="aurion-authority-hud__feedback" role="status">{mountFeedback}</p>}
+      {mountFeedback && <p className="aurion-ui-feedback" role="status">{mountFeedback}</p>}
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onTouchMoveDestination={handleTouchMoveDestination} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
