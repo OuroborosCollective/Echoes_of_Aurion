@@ -120,3 +120,40 @@ export function planAurionMonsterEncounter(region: AurionMonsterRegion, seed: st
     return Object.freeze({ slot, speciesId: species.speciesId, region, habitat: species.habitat, level, ...aurionMonsterCombatStats(species, level) });
   }));
 }
+
+/** Exact arbitrary-precision combat scaling: authored spawn bands are recommended
+ * starting regions, not maximum monster or player levels.
+ */
+export function aurionMonsterCombatStatsExact(species: AurionMonsterSpecies, levelExact: string) {
+  if (!/^[1-9][0-9]*$/.test(levelExact) || levelExact.length > 128) throw new Error("AURION_MONSTER_EXACT_LEVEL_INVALID");
+  const level = BigInt(levelExact);
+  if (level < BigInt(species.levelMin)) throw new Error("AURION_MONSTER_EXACT_LEVEL_INVALID");
+  const hpBase = 110n + 33n * level + 3n * level * level + 5n * BigInt(species.ordinal);
+  const attackBase = 1n + level / 3n + BigInt(species.ordinal % 5);
+  const hp = hpBase * BigInt(healthScaleBps[species.family]) / 10000n;
+  const attack = attackBase * BigInt(damageScaleBps[species.family]) / 10000n;
+  const MAX = BigInt(Number.MAX_SAFE_INTEGER);
+  const presentation = aurionMonsterCombatStats(species, species.levelMin);
+  return Object.freeze({ ...presentation, levelExact: level.toString(),
+    maxHealthExact: hp.toString(), attackBonusExact: attack.toString(),
+    maxHealth: Number(hp > MAX ? MAX : hp), attackBonus: Number(attack > MAX ? MAX : attack),
+    levelNumberProjectionExact: level <= MAX,
+    statsNumberProjectionExact: hp <= MAX && attack <= MAX,
+  });
+}
+
+/** Deterministic high-level authored-region scaling. Does not create actors or
+ * bypass 10 Hz zone, collision, quest or persistence authority.
+ */
+export function planAurionScaledMonsterEncounter(region: AurionMonsterRegion, seed: string, count: number, baseLevelExact: string) {
+  if (!/^[1-9][0-9]*$/.test(baseLevelExact) || baseLevelExact.length > 128) throw new Error("AURION_MONSTER_SCALE_LEVEL_INVALID");
+  const baseLevel = BigInt(baseLevelExact);
+  const planned = planAurionMonsterEncounter(region, seed, count);
+  return Object.freeze(planned.map((entry) => {
+    const species = requireAurionMonsterSpecies(entry.speciesId);
+    const resolved = baseLevel + BigInt(entry.level) - 1n;
+    const level = resolved < BigInt(species.levelMin) ? BigInt(species.levelMin) : resolved;
+    const stats = aurionMonsterCombatStatsExact(species, level.toString());
+    return Object.freeze({ ...entry, levelExact: level.toString(), ...stats });
+  }));
+}
