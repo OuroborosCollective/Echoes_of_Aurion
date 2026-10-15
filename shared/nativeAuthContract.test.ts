@@ -36,7 +36,7 @@ describe("native auth public contract", () => {
       nativeAuthStartResponseSchema.parse({
         version,
         transactionId: opaque("t"),
-        browserUrl: "https://arelogic.space/api/native-auth/browser/t",
+        browserUrl: `https://arelogic.space/api/native-auth/browser/${opaque("t")}`,
         expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
       }),
     ).toMatchObject({ expiresInSeconds: 10 * 60 });
@@ -118,6 +118,14 @@ describe("native auth public contract", () => {
         version,
         transactionId: opaque("t"),
         browserUrl: "http://arelogic.space/api/native-auth/browser/t",
+        expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
+      }),
+    ).toThrow();
+    expect(() =>
+      nativeAuthStartResponseSchema.parse({
+        version,
+        transactionId: opaque("t"),
+        browserUrl: `https://arelogic.space/api/native-auth/browser/${opaque("t")}?refreshToken=${opaque("r")}`,
         expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
       }),
     ).toThrow();
