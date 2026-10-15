@@ -124,6 +124,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
         element.style.pointerEvents = previousPointerEvents;
         return topmost === element || element.contains(topmost);
       })).toBe(true);
+      // Cross the first intent's four-second deadline after repeating Z; only the latest timer may hide the message.
       await page.waitForTimeout(2_500);
       await page.keyboard.press("z");
       await page.waitForTimeout(2_000);
