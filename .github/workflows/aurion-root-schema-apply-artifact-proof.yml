@@ -391,7 +391,7 @@ jobs:
           assert.equal(r.apply.reviewedRecovery.preservedJournalRows.length,2);
           assert.ok(r.apply.repairedJournalTags.includes("0020_wasd_aurion_dialogue_quest_intents"));
           assert.ok(r.apply.operations.every(o=>o.result==="APPLIED"&&o.startedAt&&o.endedAt&&o.backupSha256===r.backup.sha256));
-          assert.deepEqual(r.postflight.summary,{migrationCount:52,matchCount:52,absentCount:0,driftCount:0});
+          assert.deepEqual(r.postflight.summary,{migrationCount:53,matchCount:53,absentCount:0,driftCount:0});
           NODE
           fixture verify-reviewed
           fixture prepare-unknown
