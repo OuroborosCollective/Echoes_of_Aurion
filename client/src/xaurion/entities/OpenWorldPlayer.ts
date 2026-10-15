@@ -56,6 +56,7 @@ export class OpenWorldPlayer {
   private mountLegs: THREE.Mesh[] = [];
   private gallopPhase: number = 0;
   private shieldBubble: THREE.Mesh;
+  private equipmentAuraTimer: ReturnType<typeof setTimeout> | undefined;
   private classAura: THREE.Points;
   private spellGlyphRing: THREE.Mesh;
   private buffShockwaveRing: THREE.Mesh;
@@ -887,12 +888,12 @@ export class OpenWorldPlayer {
 
   public emitEquipmentAura() {
     if (this.shieldBubble) {
+      clearTimeout(this.equipmentAuraTimer);
       const mat = this.shieldBubble.material as THREE.MeshStandardMaterial;
       mat.opacity = 0.45;
-      setTimeout(() => {
-        if (this.shieldBubble) {
-          (this.shieldBubble.material as THREE.MeshStandardMaterial).opacity = 0.0;
-        }
+      this.equipmentAuraTimer = setTimeout(() => {
+        (this.shieldBubble.material as THREE.MeshStandardMaterial).opacity = 0.0;
+        this.equipmentAuraTimer = undefined;
       }, 300);
     }
   }
@@ -1452,6 +1453,8 @@ export class OpenWorldPlayer {
   }
 
   public disposePresentation(): void {
+    clearTimeout(this.equipmentAuraTimer);
+    this.equipmentAuraTimer = undefined;
     this.proceduralVisuals.dispose();
     void this.equipGlbModel(null);
     releaseGlbTree(this.group);
