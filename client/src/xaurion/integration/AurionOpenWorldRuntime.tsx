@@ -102,13 +102,10 @@ export default function AurionOpenWorldRuntime() {
   const npcEvidenceRef = useRef<HTMLOutputElement>(null);
   const [nearbySmith, setNearbySmith] = useState(false);
   const [mountFeedback, setMountFeedback] = useState<string | null>(null);
+  const mountFeedbackTimerRef = useRef<number | undefined>(undefined);
   const [bvhDebugActive, setBvhDebugActive] = useState(false);
 
-  useEffect(() => {
-    if (!mountFeedback) return;
-    const timeout = window.setTimeout(() => setMountFeedback(null), MOUNT_FEEDBACK_DURATION_MS);
-    return () => window.clearTimeout(timeout);
-  }, [mountFeedback]);
+  useEffect(() => () => window.clearTimeout(mountFeedbackTimerRef.current), []);
 
   const toggleBvhDebug = useCallback(() => {
     if (engineRef.current) {
@@ -202,7 +199,12 @@ export default function AurionOpenWorldRuntime() {
   }, [requestAuthoritativeAction]);
 
   const requestAuthoritativeMount = useCallback(() => {
+    window.clearTimeout(mountFeedbackTimerRef.current);
     setMountFeedback(MOUNT_PENDING_MESSAGE);
+    mountFeedbackTimerRef.current = window.setTimeout(() => {
+      setMountFeedback(null);
+      mountFeedbackTimerRef.current = undefined;
+    }, MOUNT_FEEDBACK_DURATION_MS);
     window.dispatchEvent(new CustomEvent("aurion:xaurion-mount-intent", { detail: { source: "human" as const } }));
   }, []);
 

@@ -2285,3 +2285,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Restartable Aurion mount feedback
+Status: VERIFIED candidate
+Task: Keep repeated human `Z` mount feedback visible for four seconds from the latest intent.
+Decisions: Let the request path own one restartable presentation timer and cancel it during runtime disposal; Aurion intent dispatch and gameplay authority remain unchanged.
+Touched surfaces: Open-world runtime mount feedback, AIM-242 source regression, AIM-259 authenticated browser journey.
+Evidence: Implementation head `18cb9e65dc6b212d7bfa03cba7ce35b02a934ecb`; Local Test Pack `38793563854`; AIM-259 `38793563811` / artifact `12002470501` passed repeat-before-expiry visibility and latest-intent expiry on phone/tablet/desktop; exact-head Codex code review clear.
+Learned: Fixed-string React state cannot restart an effect for an identical later event; the publisher must own transient instance lifetime.
+Open: Final Memory-bearing exact-head gates, security review, merge and main readback.
+Next safe step: Merge only after every final-head workflow and review gate is green.
