@@ -33,6 +33,10 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
 
   it("removes Aurion gameplay fallbacks from the mounted AX1 runtime", () => {
     const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
+    const route = read("client/src/xaurion/integration/AurionPlayRoute.tsx");
+    expect(route).toContain("Aurion-Spielstart benötigt einen bestätigten Weltvertrag");
+    expect(route).not.toContain("AX1-Spielstart");
+    expect(route).not.toContain("WASD-Weltvertrag");
     const request = read("client/src/xaurion/integration/confirmedActionRequest.ts");
     const hud = read("client/src/xaurion/integration/AurionAuthorityHud.tsx");
     const home = read("client/src/pages/Home.tsx");

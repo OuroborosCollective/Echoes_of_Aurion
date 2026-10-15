@@ -316,7 +316,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(persistedPlayerReadback.data?.profile.userId).toBe(userId);
       // AurionPlayRoute consumes a one-shot launch contract. Reload must not
       // replay it: follow the real portal action to obtain a fresh server world.
-      await expect(page.getByRole("heading", { name: "AX1-Spielstart benötigt einen bestätigten WASD-Weltvertrag", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Aurion-Spielstart benötigt einen bestätigten Weltvertrag", exact: true })).toBeVisible();
       await expect(hud).toHaveCount(0);
       await page.getByRole("link", { name: "Zum Aurion-Portal", exact: true }).click();
       selfEntityId = ""; latestPresences = []; latestCombatants = [];
