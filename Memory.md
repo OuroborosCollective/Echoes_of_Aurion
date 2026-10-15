@@ -1972,3 +1972,58 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #900 — feat(aurion): receipt-backed stat allocation wallet, HUD and ACEG effects
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=900 merge=f4836188de9f632cdfbe84c942aaafbf4c56e1f9 -->
+Task: Merge PR #900 into `main` — feat(aurion): receipt-backed stat allocation wallet, HUD and ACEG effects.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-production-schema-readback.yml`
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `.github/workflows/aurion-schema-reconciliation-proof.yml`
+- `client/src/xaurion/components/Ax1CharacterModal.tsx`
+- `client/src/xaurion/components/CharacterModal.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.test.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.tsx`
+- `client/src/xaurion/integration/AurionCombatHudRegression.test.tsx`
+- `config/aurion-migration-wave-manifest.json`
+- `deploy/aurion-production-schema-apply-core`
+- `deploy/promote-aurion-zone-runtime.sh`
+- `deploy/verify-aurion-production-schema-apply-artifact.mjs`
+- `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`
+- `docs/aurion-stat-allocation-authority-checkpoint-2026-10-15.md`
+- `drizzle/0074_aurion_stat_allocation_receipts.sql`
+- `drizzle/meta/_journal.json`
+- `drizzle/schema.ts`
+- `e2e/ax1.ui.spec.ts`
+- `scripts/aurionProductionSchemaReconciliation.ts`
+- `scripts/aurionSchemaRepairPlan.ts`
+- `scripts/build-aurion-production-apply-artifact.mjs`
+- `scripts/build-aurion-production-reconcile-artifact.mjs`
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `scripts/schema-repair-proof-fixture.mjs`
+- `server/aurionAcegEquipmentAuthority.ts`
+- `server/aurionProductionSchemaReconcileDockerRunner.test.ts`
+- `server/aurionSchemaRepairPlan.test.ts`
+- `server/aurionSchemaReviewedRecovery.test.ts`
+- `server/aurionStatAcegIntegration.test.ts`
+- `server/aurionStatPointPersistence.ts`
+- `server/blocker3Compliance.test.ts`
+- `server/playerUiPersistence.ts`
+- `server/progressionReceiptPersistence.test.ts`
+- `server/progressionReceiptPersistence.ts`
+- `server/routers.ts`
+- `server/zoneCombatPersistence.ts`
+- `shared/aurionStatPointProtocol.test.ts`
+- `shared/aurionStatPointProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/900
+- Merge commit: `f4836188de9f632cdfbe84c942aaafbf4c56e1f9`
+- PR head: `7f3223e7b07a2607e9826b4abe8f1bc2520df995`
+- Merged at: 2026-10-15T16:18:10Z
+- Post-merge workflow run: 38767847640
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
