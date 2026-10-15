@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arelogic.space/contracts/aurion/zone-v5.schema.json",
+  "title": "Aurion Zone Wire Contract v5",
+  "description": "Language-neutral projection and intent contract. Aurion remains the sole gameplay authority.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/clientMessage" },
+    { "$ref": "#/$defs/serverMessage" }
+  ],
+  "x-aurion-wire-limits": {
+    "path": "/v1/ws",
+    "protocol_version": 5,
+    "tick_ms": 100,
+    "fixed_point_units_per_meter": 1000,
+    "client_message_utf8_bytes_max": 2048,
+    "browser_snapshot_utf16_code_units_max": 65536,
+    "hello_timeout_ms": 5000,
+    "safe_integer_max": 9007199254740991
+  },
+  "$defs": {
+    "safeNonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "clientSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "zoneId": { "const": "observatory_threshold" },
+    "playerEntityId": {
+      "type": "string",
+      "pattern": "^player:[1-9][0-9]*$"
+    },
+    "mobEntityId": {
+      "type": "string",
+      "pattern": "^mob_[1-9][0-9]{0,2}$"
+    },
+    "entityId": {
+      "oneOf": [
+        { "$ref": "#/$defs/playerEntityId" },
+        { "$ref": "#/$defs/mobEntityId" }
+      ]
+    },
+    "worldPosition": {
+      "type": "object",
+      "required": ["x", "z"],
+      "properties": {
+        "x": { "type": "integer", "minimum": -64000032000, "maximum": 64000031999 },
+        "z": { "type": "integer", "minimum": -64000032000, "maximum": 64000031999 }
+      }
+    },
+    "zoneHello": {
+      "type": "object",
+      "required": ["type", "ticket", "zoneId", "protocolVersion"],
+      "properties": {
+        "type": { "const": "hello" },
+        "ticket": { "type": "string", "minLength": 24, "maxLength": 160 },
+        "zoneId": { "$ref": "#/$defs/zoneId" },
+        "protocolVersion": { "const": 5 }
+      }
+    },
+    "zoneMove": {
+      "type": "object",
+      "required": ["type", "clientSeq", "input"],
+      "properties": {
+        "type": { "const": "move" },
+        "clientSeq": { "$ref": "#/$defs/clientSequence" },
+        "input": {
+          "type": "object",
+          "required": ["x", "z"],
+          "properties": {
+            "x": { "enum": [-1, 0, 1] },
+            "z": { "enum": [-1, 0, 1] }
+          }
+        }
+      }
+    },
+    "zoneAttack": {
+      "type": "object",
+      "required": ["type", "clientSeq", "targetEntityId"],
+      "properties": {
+        "type": { "const": "attack" },
+        "clientSeq": { "$ref": "#/$defs/clientSequence" },
+        "targetEntityId": { "$ref": "#/$defs/mobEntityId" }
+      }
+    },
+    "zoneSkill": {
+      "type": "object",
+      "required": ["type", "clientSeq", "skillId"],
+      "properties": {
+        "type": { "const": "skill" },
+        "clientSeq": { "$ref": "#/$defs/clientSequence" },
+        "skillId": {
+          "enum": ["k_strike", "k_charge", "k_shield", "k_whirlwind", "k_overdrive"]
+        },
+        "targetEntityId": { "$ref": "#/$defs/mobEntityId" }
+      }
+    },
+    "clientMessage": {
+      "oneOf": [
+        { "$ref": "#/$defs/zoneHello" },
+        { "$ref": "#/$defs/zoneMove" },
+        { "$ref": "#/$defs/zoneAttack" },
+        { "$ref": "#/$defs/zoneSkill" }
+      ]
+    },
+    "presence": {
+      "type": "object",
+      "required": ["entityId", "userId", "position", "lastAcceptedClientSeq"],
+      "properties": {
+        "entityId": { "$ref": "#/$defs/playerEntityId" },
+        "userId": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "position": { "$ref": "#/$defs/worldPosition" },
+        "lastAcceptedClientSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "mob": {
+      "type": "object",
+      "required": ["entityId", "archetype", "level", "state", "position", "targetEntityId", "isBoss", "isElite", "health", "maxHealth"],
+      "properties": {
+        "entityId": { "$ref": "#/$defs/mobEntityId" },
+        "archetype": { "enum": ["clockwork_stalker", "corrupted_golem", "aether_wisp", "steam_drake", "centurion_elite", "titan_boss"] },
+        "level": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "state": { "enum": ["idle", "patrolling", "combat", "evading", "dead"] },
+        "position": { "$ref": "#/$defs/worldPosition" },
+        "targetEntityId": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/playerEntityId" }
+          ]
+        },
+        "isBoss": { "type": "boolean" },
+        "isElite": { "type": "boolean" },
+        "health": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "maxHealth": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    },
+    "combatant": {
+      "type": "object",
+      "required": ["entityId", "health", "maxHealth", "stamina", "maxStamina", "alive", "combatLevel", "lastCombatSequence"],
+      "properties": {
+        "entityId": { "$ref": "#/$defs/entityId" },
+        "health": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "maxHealth": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "stamina": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "maxStamina": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "alive": { "type": "boolean" },
+        "combatLevel": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "lastCombatSequence": { "$ref": "#/$defs/safeNonNegativeInteger" }
+      }
+    },
+    "resourceNode": {
+      "type": "object",
+      "required": ["nodeId", "remaining", "depleted", "respawnAtTick"],
+      "properties": {
+        "nodeId": { "enum": ["node_beast_1", "node_copper_1", "node_cotton_1", "node_iron_1", "node_steel_1"] },
+        "remaining": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "depleted": { "type": "boolean" },
+        "respawnAtTick": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+          ]
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": ["contractVersion", "contentSourceRevision", "revision", "nodes"],
+      "properties": {
+        "contractVersion": { "const": 1 },
+        "contentSourceRevision": { "const": "286c575d3d0050ffa77b794d5b7a7e24858acee8" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "nodes": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/resourceNode" }
+        }
+      }
+    },
+    "zoneState": {
+      "type": "object",
+      "required": ["zoneId", "snapshotSeq", "tick", "presences", "mobs", "combatants", "resources"],
+      "properties": {
+        "zoneId": { "$ref": "#/$defs/zoneId" },
+        "snapshotSeq": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "tick": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "presences": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/presence" } },
+        "mobs": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/mob" } },
+        "combatants": { "type": "array", "maxItems": 160, "items": { "$ref": "#/$defs/combatant" } },
+        "resources": { "$ref": "#/$defs/resources" }
+      }
+    },
+    "zoneWelcome": {
+      "allOf": [
+        { "$ref": "#/$defs/zoneState" },
+        {
+          "type": "object",
+          "required": ["type", "protocolVersion", "connectionId", "selfEntityId"],
+          "properties": {
+            "type": { "const": "welcome" },
+            "protocolVersion": { "const": 5 },
+            "connectionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{12,96}$" },
+            "selfEntityId": { "$ref": "#/$defs/playerEntityId" }
+          }
+        }
+      ]
+    },
+    "zoneSnapshot": {
+      "allOf": [
+        { "$ref": "#/$defs/zoneState" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": { "type": { "const": "snapshot" } }
+        }
+      ]
+    },
+    "zoneReject": {
+      "type": "object",
+      "required": ["type", "code"],
+      "properties": {
+        "type": { "const": "reject" },
+        "code": {
+          "enum": ["INVALID_MESSAGE", "STALE_CLIENT_SEQUENCE", "UNSUPPORTED_ZONE_COMMAND", "PROTOCOL_VERSION_UNSUPPORTED", "INVALID_COMBAT_TARGET", "COMBAT_TARGET_OUT_OF_RANGE", "COMBATANT_DEAD", "INVALID_COMBAT_SKILL", "COMBAT_SKILL_COOLDOWN"]
+        }
+      }
+    },
+    "combatEvent": {
+      "type": "object",
+      "required": ["type", "contractVersion", "tick", "sequence", "action", "skillId", "skillSourceRevision", "attackerEntityId", "defenderEntityId", "hit", "damage", "crit", "killed", "defenderHealth", "attackerStamina", "gameplaySourceRevision"],
+      "properties": {
+        "type": { "const": "combat" },
+        "contractVersion": { "const": "wasd-zone-combat.v2" },
+        "tick": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "action": { "const": "melee" },
+        "skillId": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["k_strike", "k_charge", "k_shield", "k_whirlwind", "k_overdrive"] }
+          ]
+        },
+        "skillSourceRevision": {
+          "oneOf": [
+            { "type": "null" },
+            { "const": "d356881538dae23c3aa97364a5596d48b6ac3079" }
+          ]
+        },
+        "attackerEntityId": { "$ref": "#/$defs/entityId" },
+        "defenderEntityId": { "$ref": "#/$defs/entityId" },
+        "hit": { "type": "boolean" },
+        "damage": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "crit": { "type": "boolean" },
+        "killed": { "type": "boolean" },
+        "defenderHealth": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "attackerStamina": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "gameplaySourceRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "telegraphEvent": {
+      "type": "object",
+      "required": ["type", "contractVersion", "id", "sequence", "startTick", "impactTick", "attackerEntityId", "targetEntityId", "kind", "origin", "target", "widthFixed", "color", "visualSourceRevision", "authorityRuleset"],
+      "properties": {
+        "type": { "const": "telegraph" },
+        "contractVersion": { "const": "aurion-zone-telegraph.v1" },
+        "id": { "type": "string", "pattern": "^telegraph:mob_[1-9][0-9]{0,2}:[1-9][0-9]*$" },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "startTick": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "impactTick": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "attackerEntityId": { "$ref": "#/$defs/mobEntityId" },
+        "targetEntityId": { "$ref": "#/$defs/playerEntityId" },
+        "kind": { "const": "line" },
+        "origin": { "$ref": "#/$defs/worldPosition" },
+        "target": { "$ref": "#/$defs/worldPosition" },
+        "widthFixed": { "type": "integer", "minimum": 500, "maximum": 8000 },
+        "color": { "const": "#ef4444" },
+        "visualSourceRevision": { "const": "286c575d3d0050ffa77b794d5b7a7e24858acee8" },
+        "authorityRuleset": { "const": "aurion-ax1-mob-windup.v1" }
+      }
+    },
+    "serverMessage": {
+      "oneOf": [
+        { "$ref": "#/$defs/zoneWelcome" },
+        { "$ref": "#/$defs/zoneSnapshot" },
+        { "$ref": "#/$defs/zoneReject" },
+        { "$ref": "#/$defs/combatEvent" },
+        { "$ref": "#/$defs/telegraphEvent" }
+      ]
+    }
+  }
+}
+
