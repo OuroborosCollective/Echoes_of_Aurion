@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "host": "linux-x64",
+  "engine": {
+    "version": "4.7.2.stable.official.ed1daf0bf",
+    "file": "Godot_v4.7.2-stable_linux.x86_64",
+    "url": "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip",
+    "sha256": "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4",
+    "bytes": 77860424
+  },
+  "android": {
+    "status": "pending-bootstrap-and-runtime-verification",
+    "templates": {
+      "url": "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz",
+      "sha256": "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011",
+      "bytes": 1281349702
+    },
+    "jdkMajor": 17,
+    "buildTools": "35.0.1",
+    "platform": 35,
+    "ndk": "28.1.13356709",
+    "cmake": "3.10.2.4988404",
+    "source": "https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_android.html"
+  }
+}
