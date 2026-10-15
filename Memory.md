@@ -1819,3 +1819,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Repair Admin newline leakage, strict OS3A apply and historical tick verification
+Status: IN REVIEW — isolated branch; CI, production deployment and live mobile browser readback not yet proved.
+Owner evidence: live Android Admin screenshots show literal `\\n\\n` next to Tabs, OS3A `unrecognized_keys: expectedPlanSha256, confirmation`, and `REPLAY_PRE_STATE_UNAVAILABLE` for observatory_threshold tick 1352100; checkpoint 1352100 marked UNVERIFIED.
+Root causes: Operations.tsx contains literal escaped separators between JSX tabs. applyOpenSource3dFallback accepts a strict apply schema, then incorrectly passes the apply object into a strict plan schema rejecting confirmation fields. Direct replayTick requires a checkpoint at tick-1 even though durable checkpoints are periodic (every 100 ticks); a read-only bounded oracleRange endpoint already exists to replay from a checkpoint.
+Changes: replace escaped JSX text nodes with source line breaks; project only sourceAssetId, purpose and tier to OS3A plan resolution while preserving expected plan SHA and explicit admin confirmation; switch Causal Studio tick-verification UI to the bounded read-only oracleRange, expose verified/warmup ticks and digest identities, invalidate stale UI results on input changes, select checkpoint.tick + 1 as the next replayable tick. Include focused regression checks.
+Safety: No modification of historical receipts/checkpoints, archival content, world authority, player data, asset byte limits, deterministic replay, backend tick rate or production runtime. An unavailable checkpoint or missing intents remains UNPROVABLE; v1 intermediate stages remain unobservable.
+Open: Exact-head CI, OS3A bounded fetch preflight, genuine MariaDB checkpoint readback and mobile screenshot/production verification. Detect historical frontend/runtime revision 9b84e8093f731d72a66f339461cdaed462bc4ace shown on phone, older than repo main — prove deployment separately.
+Next: Green CI and browser check, review exact SHA, then promote only via existing secure deployment process.
