@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues";
 const openCommunity = (panel: CommunityPanel) =>
   window.dispatchEvent(
     new CustomEvent("aurion:open-community", { detail: { panel } })

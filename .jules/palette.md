@@ -24,3 +24,7 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+
+## 2026-10-15 - Extend Home Page Community Functions
+**Learning:** Grouped related community functions (Chat, Forum, Events, Assets) and provided direct contextual entry points on the landing page.
+**Action:** Added 'Events' entry point to the Home page to match the Community page and ensure consistency.

@@ -14,6 +14,7 @@ describe("Home", () => {
     expect(screen.queryByRole("button", { name: /SPIEL BETRETEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
     expect(screen.getByRole("button", { name: "Asset-Katalog" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Events" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Signalraum" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Forum" }).length).toBeGreaterThan(0);
     expect(screen.getByText("NPCs mit eigenem Leben")).toBeTruthy();
