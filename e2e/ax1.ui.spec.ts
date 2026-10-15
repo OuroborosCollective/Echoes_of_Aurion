@@ -26,6 +26,7 @@ type ZoneCombatEvent = {
   damage: number;
   killed: boolean;
   defenderHealth: number;
+  skillId?: string | null;
   gameplaySourceRevision: string;
 };
 type Combatant = { entityId: string; health: number; maxHealth: number; stamina: number; alive: boolean };
@@ -123,12 +124,28 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(mountFeedback).toBeHidden({ timeout: 6_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
       await expect.poll(() => latestPresences.some(p => p.entityId === selfEntityId), { timeout: 20_000 }).toBe(true);
-      const unavailableSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
-      await expect(unavailableSkill).toBeVisible();
-      await unavailableSkill.click();
-      const combatFeedback = hud.getByText("2 ist im Aurion-Zonenvertrag noch nicht freigeschaltet.", { exact: true });
+      const serverSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
+      await expect(serverSkill).toBeVisible();
+      const skillEventsBefore = combatEvents.filter(event => event.attackerEntityId === selfEntityId && event.skillId === "k_charge").length;
+      await serverSkill.click();
+      await expect.poll(
+        () => combatEvents.filter(event => event.attackerEntityId === selfEntityId && event.skillId === "k_charge").length,
+        { timeout: 8_000 },
+      ).toBeGreaterThan(skillEventsBefore);
+      const combatFeedback = hud.getByText(/^(Treffer bestätigt:|Aktion bestätigt, aber verfehlt\.)/);
       await expect(combatFeedback).toBeVisible();
+      expect(await combatFeedback.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const withinViewport = bounds.left >= 0 && bounds.top >= 0
+          && bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight;
+        const previousPointerEvents = element.style.pointerEvents;
+        element.style.pointerEvents = "auto";
+        const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        element.style.pointerEvents = previousPointerEvents;
+        return withinViewport && (topmost === element || element.contains(topmost));
+      })).toBe(true);
       await expect(hud.getByText(/WASD-Zonenvertrag|AX1-Skill|AX1-Reichweite/)).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-combat-feedback.png`) });
 
       const environment = page.getByTestId("world-assets-evidence");
       const assetEvidence = async () => JSON.parse(await environment.getAttribute("data-presentation") || "{}");
