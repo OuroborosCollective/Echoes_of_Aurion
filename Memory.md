@@ -2260,3 +2260,28 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #963 — feat(godot): revisionsgebundene Tests und Negativkontrollen (#914)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=963 merge=c31d2b3dca1beb0e5e4f6598d300b4ddf923920d -->
+Task: Merge PR #963 into `main` — feat(godot): revisionsgebundene Tests und Negativkontrollen (#914).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/godot-headless.yml`
+- `godot-client/tests/test_project_boot.gd`
+- `godot-client/tests/test_project_boot.gd.uid`
+- `scripts/godot/check-runtime.mjs`
+- `scripts/godot/check.mjs`
+- `scripts/godot/check.test.mjs`
+- `scripts/godot/negative-controls.mjs`
+- `scripts/godot/verify-evidence.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/963
+- Merge commit: `c31d2b3dca1beb0e5e4f6598d300b4ddf923920d`
+- PR head: `9a7a419d7b6af9f1f256922e36f671153767e3a3`
+- Merged at: 2026-10-15T19:49:57Z
+- Post-merge workflow run: 38797070669
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
