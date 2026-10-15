@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canChooseClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
+import { canChooseClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, levelFromTotalXpExact, xpRequiredForNextLevelExact, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
 
 describe("endgame protocol", () => {
   it("keeps the XP requirement monotone without a level cap", () => {
@@ -7,6 +7,18 @@ describe("endgame protocol", () => {
     expect(xpRequiredForNextLevel(36)).toBe(5932);
     expect(xpRequiredForNextLevel(36)).toBeGreaterThan(xpRequiredForNextLevel(35));
     expect(xpRequiredForNextLevel(50_000)).toBeGreaterThan(0);
+  });
+
+  it("supports the established character curve with exact XP and no global level cap", () => {
+    expect(xpRequiredForNextLevelExact("1")).toBe("122");
+    expect(xpRequiredForNextLevelExact("50000")).toBe("1000000900100");
+    const enormous = xpRequiredForNextLevelExact("100000000000000000");
+    expect(BigInt(enormous)).toBeGreaterThan(BigInt(Number.MAX_SAFE_INTEGER));
+    const target = "100000000000000000";
+    const cumulative = (BigInt(target) - 1n) * BigInt(target) * (2n * BigInt(target) - 1n) * 4n / 6n
+      + (BigInt(target) - 1n) * BigInt(target) * 18n / 2n + (BigInt(target) - 1n) * 100n;
+    expect(levelFromTotalXpExact(cumulative.toString())).toBe(target);
+    expect(levelFromTotalXpExact((cumulative - 1n).toString())).toBe((BigInt(target) - 1n).toString());
   });
 
   it("keeps legacy class selection disabled because progression is classless", () => {
