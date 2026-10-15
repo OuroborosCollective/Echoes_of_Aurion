@@ -43,6 +43,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
     const pool = createPool(process.env.DATABASE_URL!);
     const errors: string[] = [];
     const combatEvents: ZoneCombatEvent[] = [];
+    const combatRejects: string[] = [];
     let selfEntityId = "";
     let latestPresences: Presence[] = [];
     let latestCombatants: Combatant[] = [];
@@ -58,6 +59,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
             latestCombatants = Array.isArray(value.combatants) ? value.combatants : latestCombatants;
           } else if (value.type === "combat") {
             combatEvents.push(value as ZoneCombatEvent);
+          } else if (value.type === "reject" && typeof value.code === "string") {
+            combatRejects.push(value.code);
           }
         } catch {}
       });
@@ -256,13 +259,11 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       const serverSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
       await expect(serverSkill).toBeVisible();
-      const skillEventsBefore = combatEvents.filter(event => event.attackerEntityId === selfEntityId && event.skillId === "k_charge").length;
+      const skillRejectsBefore = combatRejects.length;
       await serverSkill.click();
-      await expect.poll(
-        () => combatEvents.filter(event => event.attackerEntityId === selfEntityId && event.skillId === "k_charge").length,
-        { timeout: 8_000 },
-      ).toBeGreaterThan(skillEventsBefore);
-      const combatFeedback = hud.getByText(/^(Treffer bestätigt:|Aktion bestätigt, aber verfehlt\.)/);
+      await expect.poll(() => combatRejects.length, { timeout: 8_000 }).toBeGreaterThan(skillRejectsBefore);
+      expect(combatRejects.at(-1)).toBe("INVALID_COMBAT_SKILL");
+      const combatFeedback = hud.getByText("Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.", { exact: true });
       await expect(combatFeedback).toBeVisible();
       expect(await combatFeedback.evaluate(element => {
         const bounds = element.getBoundingClientRect();
