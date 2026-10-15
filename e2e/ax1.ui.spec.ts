@@ -377,6 +377,24 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(hud.getByText(persistedSummary, { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect(hud.getByText("Charakterdaten ausstehend", { exact: true })).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-rehydrated-hud.png`) });
+
+      await page.goto("/account");
+      const accountAuthorityCopy = page.getByText(
+        "Aggregiertes Charakterlevel und Gesamt-EP sind keine Felder des aktuellen bestätigten Aurion-Progressions-Readbacks und werden in dieser Projektion nicht erfunden.",
+        { exact: true },
+      );
+      await expect(accountAuthorityCopy).toBeVisible();
+      await expect(page.getByText(/Legacy-Aurion|WASD-Snapshot/)).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-account-aurion-authority.png`) });
+
+      await page.goto("/ops");
+      await expect(page.getByText("Aggregate Level/XP: nicht im bestätigten Aurion-Readback", { exact: true })).toBeVisible();
+      await page.getByRole("tab", { name: "Endgame", exact: true }).click();
+      await expect(page.getByRole("tabpanel", { name: "Endgame" })).toContainText(
+        "Fähigkeiten und Waffenpfade erscheinen nur aus bestätigten Aurion-Progressionsreceipts.",
+      );
+      await expect(page.getByText(/WASD-(?:Snapshot|Progressionsreceipts)/)).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-operations-aurion-authority.png`) });
       expect(errors).toEqual([]);
 
       await info.attach("ax1-wasd-live-readback", {

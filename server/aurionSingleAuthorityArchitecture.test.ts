@@ -49,6 +49,18 @@ describe("Aurion single-authority architecture", () => {
     });
   });
 
+  it("keeps visible profile progression copy under Aurion authority", () => {
+    const account = read("client/src/pages/Account.tsx");
+    const operations = read("client/src/pages/Operations.tsx");
+
+    expect(account).toContain("keine Felder des aktuellen bestätigten Aurion-Progressions-Readbacks");
+    expect(account).toContain("die Projektion erfindet weder Klassen noch Ersatzlevel.");
+    expect(account).not.toMatch(/Legacy-Aurion|kanonischen WASD-Snapshots/);
+    expect(operations).toContain("Aggregate Level/XP: nicht im bestätigten Aurion-Readback");
+    expect(operations).toContain("bestätigten Aurion-Progressionsreceipts");
+    expect(operations).not.toMatch(/WASD-(?:Snapshot|Progressionsreceipts)/);
+  });
+
   it("protects the project license boundary from a permissive MIT project license", () => {
     const license = read("LICENSE.md");
     const notice = read("NOTICE.md");
