@@ -22,6 +22,7 @@ func verify() -> void:
 		require(InputMap.has_action(action), "missing input action: " + action)
 	require(ProjectSettings.get_setting("rendering/renderer/rendering_method") == "gl_compatibility", "renderer changed")
 	require(ProjectSettings.get_setting("rendering/textures/vram_compression/import_etc2_astc", false), "Android texture import missing")
+	require(ResourceLoader.exists(ProjectSettings.get_setting("application/config/icon", "")), "Android project icon missing")
 	var packed := load("res://app/main.tscn") as PackedScene
 	require(packed != null, "main scene unavailable")
 	if packed == null:

@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 
 export const previewPackage = 'org.ouroboroscollective.aurion.godot.preview';
-export function validateApk(badging, signature, entries) {
+export function validateApk(badging, signature, entries, manifest) {
   assert.match(badging, new RegExp(`package: name='${previewPackage.replaceAll('.', '\\.')}'.*versionCode='1'.*versionName='0.1.0-preview'`));
-  assert.match(badging, /launchable-activity:/);
+  // aapt 35 badging omits launchable-activity for Godot 4.7's activity-alias.
+  // Verify the exported alias and its concrete target in the actual manifest.
+  const blocks = manifest.split(/(?=^ {6}E: )/m);
+  const launcher = blocks.find(block => block.includes('E: activity-alias') && block.includes('android.intent.action.MAIN') && block.includes('android.intent.category.LAUNCHER'));
+  assert.ok(launcher, 'MAIN/LAUNCHER alias missing');
+  assert.match(launcher, /android:exported[^\n]*0xffffffff/);
+  const target = launcher.match(/android:targetActivity[^\n]*="([^"]+)"/);
+  assert.ok(target, 'launcher target missing');
+  assert.ok(blocks.some(block => block.startsWith('      E: activity (') && block.includes(`="${target[1]}"`)), 'launcher target activity missing');
   assert.match(badging, /application-label:'Aurion Preview'/);
   assert.match(badging, /uses-permission: name='android.permission.INTERNET'/);
   const permissions = [...badging.matchAll(/uses-permission: name='([^']+)'/g)].map(x => x[1]);

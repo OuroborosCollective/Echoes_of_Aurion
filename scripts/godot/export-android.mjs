@@ -55,7 +55,7 @@ try {
   assert.equal(signatureResult.status, 0, signatureResult.stderr);
   const signature = signatureResult.stdout;
   const entries = run('unzip', ['-Z1', apk]).split('\n');
-  const identity = validateApk(badging, signature, entries);
+  const identity = validateApk(badging, signature, entries, manifest);
   assert.match(manifest, /screenOrientation.*0x0/, 'landscape not encoded in manifest');
   const override = run('unzip', ['-p', apk, 'assets/override.cfg']);
   assert.ok(override.includes(revision), 'source revision absent from packaged settings');
