@@ -15,9 +15,11 @@ const lodCatalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revisio
     { level: 2, assetId: "glb_clockwork_stalker_lod2", sha256: lod2Sha, bytes: 400, storageUrl: `/api/assets/glb/${lod2Sha}.glb`, targetKey: null },
   ],
 }] };
-function loaded() {
+function loaded(triangleCount?: number) {
   const scene = new THREE.Group(), bone = new THREE.Bone(); bone.name = "Spine";
   const geometry = new THREE.BoxGeometry(1, 2, 1); geometry.translate(0, 1, 0);
+  // Reproduce the 8,284-triangle maximum observed in the CC0 monster import set.
+  if (triangleCount !== undefined) geometry.setIndex(Array.from({ length: 3 * triangleCount }, (_, i) => i % 3));
   const count = geometry.getAttribute("position").count;
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Uint16Array(count * 4), 4));
   const weights = new Float32Array(count * 4); for (let i = 0; i < count; i++) weights[i * 4] = 1;
@@ -151,6 +153,18 @@ describe("approved confirmed mob GLB presentation", () => {
       Object.defineProperty(window, "innerWidth", { value: old, configurable: true });
       p.dispose();
     }
+  });
+
+  it("accepts an imported 8,284-triangle rigged monster instead of enforcing the legacy 1,600-triangle art limit", async () => {
+    const s = setup();
+    const p = new MobCatalogProjection(s.engine as never, async () => loaded(8284));
+    p.setCatalog(catalog);
+    await step(p);
+    expect(p.evidence().projected).toBe(1);
+    expect(p.evidence().physicalLods[0]).toMatchObject({ triangles: 8284, bones: 1 });
+    expect(s.mobs[0]!.body.visible).toBe(false);
+    expect(s.scene.getObjectByName("aurion-confirmed-mob-glb:mob_1")).toBeDefined();
+    p.dispose();
   });
 
   it("does not make an authoritative enemy invisible when no compatible GLB is available", async () => {
