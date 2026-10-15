@@ -390,7 +390,9 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await page.goto("/ops");
       await expect(page.getByText("Aggregate Level/XP: nicht im bestätigten Aurion-Readback", { exact: true })).toBeVisible();
       await page.getByRole("tab", { name: "Endgame", exact: true }).click();
-      await expect(page.getByText("Fähigkeiten und Waffenpfade erscheinen nur aus bestätigten Aurion-Progressionsreceipts.", { exact: true })).toBeVisible();
+      await expect(page.getByRole("tabpanel", { name: "Endgame" })).toContainText(
+        "Fähigkeiten und Waffenpfade erscheinen nur aus bestätigten Aurion-Progressionsreceipts.",
+      );
       await expect(page.getByText(/WASD-(?:Snapshot|Progressionsreceipts)/)).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-operations-aurion-authority.png`) });
       expect(errors).toEqual([]);
