@@ -36,6 +36,10 @@ const httpsBrowserUrlSchema = z.string().url().superRefine((value, ctx) => {
   if (
     parsed.protocol !== "https:" ||
     parsed.origin !== "https://arelogic.space" ||
+    !/^\/api\/native-auth\/browser\/[A-Za-z0-9_-]{32,128}$/.test(
+      parsed.pathname,
+    ) ||
+    parsed.search !== "" ||
     parsed.username !== "" ||
     parsed.password !== "" ||
     parsed.hash !== ""
@@ -59,6 +63,14 @@ export const nativeAuthStartResponseSchema = z.strictObject({
   transactionId: transactionIdSchema,
   browserUrl: httpsBrowserUrlSchema,
   expiresInSeconds: z.literal(NATIVE_AUTH_TRANSACTION_TTL_SECONDS),
+}).superRefine((value, ctx) => {
+  try {
+    if (new URL(value.browserUrl).pathname.split("/").at(-1) !== value.transactionId) {
+      ctx.addIssue({ code: "custom", message: "TRANSACTION_URL_MISMATCH" });
+    }
+  } catch {
+    // The field-level schema owns malformed URL reporting.
+  }
 });
 
 export const nativeAuthCallbackQuerySchema = z.strictObject({
