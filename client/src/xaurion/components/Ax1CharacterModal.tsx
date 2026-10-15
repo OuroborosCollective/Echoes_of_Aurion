@@ -85,12 +85,12 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
           {activeTab === 'stats' && <div className="grid grid-cols-2 gap-4">
             <div className="bg-black/50 p-4 rounded-xl border border-gray-800">
               <h3 className="text-[#fbbf24] mb-2 font-bold">Base Attributes</h3>
-              <div className="space-y-2">
+              {!statWallet && <div className="space-y-2">
                 <div className="flex justify-between"><span>Strength:</span><span>{shown(stats.attributes?.strength)}</span></div>
                 <div className="flex justify-between"><span>Agility:</span><span>{shown(stats.attributes?.agility)}</span></div>
                 <div className="flex justify-between"><span>Intelligence:</span><span>{shown(stats.attributes?.intelligence)}</span></div>
                 <div className="flex justify-between"><span>Defense:</span><span>{shown(stats.attributes?.defense)}</span></div>
-              </div>
+              </div>}
               {statWallet ? <div className="mt-4 space-y-2" data-testid="confirmed-stat-wallet">
                 <p className="text-sm text-amber-300">Frei: {statWallet.availableExact} · Verdient: {statWallet.earnedExact} · Verteilt: {statWallet.spentExact}</p>
                 {statWallet.attributes.map(stat => <div key={stat.key} className="flex justify-between gap-2 items-center">
