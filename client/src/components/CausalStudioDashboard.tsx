@@ -28,8 +28,13 @@ export default function CausalStudioDashboard() {
     },
   });
   const checkpointsQuery = trpc.causality.getCheckpoints.useQuery({ zoneId, limit: 100 });
-  const replayQuery = trpc.causality.replayTick.useQuery(
-    requestedReplay ?? { zoneId, tick: tickNumber },
+  // Sparse checkpoints are created every 100 ticks; single-tick direct replay
+  // cannot assume a checkpoint exists at tick-1. The bounded, read-only oracle
+  // replays forward from the closest persisted checkpoint without forging state.
+  const replayQuery = trpc.causality.oracleRange.useQuery(
+    requestedReplay
+      ? { zoneId: requestedReplay.zoneId, fromTick: requestedReplay.tick, toTick: requestedReplay.tick }
+      : { zoneId, fromTick: Math.max(1, tickNumber), toTick: Math.max(1, tickNumber) },
     { enabled: requestedReplay !== null, retry: false },
   );
 
@@ -41,13 +46,13 @@ export default function CausalStudioDashboard() {
   }, [checkpointsQuery.data, search]);
 
   const result = replayQuery.data;
-  const verdict = result?.verdict;
+  const verdict = result;
 
   function stageState(stage: string): "match" | "diverged" | "unprovable" | "pending" {
     if (!verdict) return "pending";
     if (verdict.status === "UNPROVABLE") return "unprovable";
     if (verdict.status === "MATCH") return OBSERVABLE_STAGES.includes(stage as any) ? "match" : "unprovable";
-    const index = OBSERVABLE_STAGES.indexOf(verdict.stage as any);
+    const index = OBSERVABLE_STAGES.indexOf(verdict.firstDivergence?.stage as any);
     const current = OBSERVABLE_STAGES.indexOf(stage as any);
     if (current < 0 || index < 0) return "unprovable";
     if (current < index) return "match";
@@ -59,7 +64,7 @@ export default function CausalStudioDashboard() {
       exportedAt: operationalDate().toISOString(),
       runtimeIdentity: healthQuery.data ?? null,
       zoneId,
-      tick: tickNumber,
+      tick: requestedReplay?.tick ?? tickNumber,
       replay: result ?? null,
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
@@ -100,15 +105,15 @@ export default function CausalStudioDashboard() {
                 <h4 className="text-sm font-semibold text-cyan-300">Tick Explorer</h4>
                 <div>
                   <Label htmlFor={`${inputId}-zone`} className="text-xs">Zone</Label>
-                  <Input id={`${inputId}-zone`} value={zoneId} onChange={event => setZoneId(event.target.value)} className="mt-1 h-8 text-xs" />
+                  <Input id={`${inputId}-zone`} value={zoneId} onChange={event => { setZoneId(event.target.value); setRequestedReplay(null); }} className="mt-1 h-8 text-xs" />
                 </div>
                 <div>
                   <Label htmlFor={`${inputId}-tick`} className="text-xs">Tick</Label>
-                  <Input id={`${inputId}-tick`} type="number" min={0} value={tickNumber} onChange={event => setTickNumber(Math.max(0, Number.parseInt(event.target.value, 10) || 0))} className="mt-1 h-8 text-xs" />
+                  <Input id={`${inputId}-tick`} type="number" min={1} value={tickNumber} onChange={event => { setTickNumber(Math.max(1, Number.parseInt(event.target.value, 10) || 1)); setRequestedReplay(null); }} className="mt-1 h-8 text-xs" />
                 </div>
-                <Button disabled={replayQuery.isFetching} aria-busy={replayQuery.isFetching} className="h-8 w-full text-xs" onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}>
+                <Button disabled={replayQuery.isFetching || tickNumber < 1 || !zoneId.trim()} aria-busy={replayQuery.isFetching} className="h-8 w-full text-xs" onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}>
                   {replayQuery.isFetching && <Loader2 aria-hidden="true" className="mr-2 h-3.5 w-3.5 motion-safe:animate-spin" />}
-                  {replayQuery.isFetching ? "Verifying..." : "Verify Tick"}
+                  {replayQuery.isFetching ? "Prüfe Checkpoint-Kette…" : "Tick aus Checkpoint verifizieren"}
                 </Button>
               </section>
             </div>
@@ -125,16 +130,17 @@ export default function CausalStudioDashboard() {
               {verdict?.status === "UNPROVABLE" && <div className="rounded border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-200">{verdict.reason}</div>}
               {verdict?.status === "FIRST_DIVERGENCE" && (
                 <div className="rounded border border-red-500/30 bg-red-950/20 p-3 text-xs">
-                  <div className="mb-2 flex items-center gap-2 font-semibold text-red-300"><AlertCircle className="h-4 w-4" /> FIRST_DIVERGENCE: {verdict.stage}</div>
-                  <HashRow label="Expected" value={verdict.expectedHash} />
-                  <HashRow label="Observed" value={verdict.observedHash} />
+                  <div className="mb-2 flex items-center gap-2 font-semibold text-red-300"><AlertCircle className="h-4 w-4" /> FIRST_DIVERGENCE: {verdict.firstDivergence?.stage}</div>
+                  <HashRow label="Expected" value={verdict.firstDivergence?.expectedHash} />
+                  <HashRow label="Observed" value={verdict.firstDivergence?.observedHash} />
                 </div>
               )}
               {verdict?.status === "MATCH" && (
                 <div className="rounded border border-emerald-500/20 bg-emerald-950/15 p-3 text-xs">
-                  <HashRow label="PRE" value={verdict.preStateHash} />
-                  <HashRow label="POST" value={verdict.postStateHash} />
-                  <HashRow label="Receipt" value={verdict.receiptHash} />
+                  <p className="mb-2 text-emerald-100">Prüfung erfolgreich von Checkpoint {verdict.checkpoint?.tick ?? "?"} bis Tick {requestedReplay?.tick ?? "?"}.</p>
+                  <p className="mb-2 text-slate-300">Warmup: {verdict.warmupTicks.length} Ticks · Verifiziert: {verdict.verifiedTicks.length} Tick(s)</p>
+                  <HashRow label="State" value={verdict.finalStateHash ?? undefined} />
+                  <HashRow label="Receipt" value={verdict.terminalReceiptHash ?? undefined} />
                 </div>
               )}
 
@@ -155,7 +161,7 @@ export default function CausalStudioDashboard() {
             </div>
             <div className="max-h-72 overflow-auto rounded border border-white/5">
               {checkpoints.map(checkpoint => (
-                <button key={checkpoint.id} type="button" onClick={() => setTickNumber(checkpoint.tick)} className="grid w-full grid-cols-[70px_100px_1fr] gap-2 border-b border-white/5 px-3 py-2 text-left text-xs hover:bg-white/5">
+                <button key={checkpoint.id} type="button" onClick={() => { setTickNumber(checkpoint.tick + 1); setRequestedReplay(null); }} className="grid w-full grid-cols-[70px_100px_1fr] gap-2 border-b border-white/5 px-3 py-2 text-left text-xs hover:bg-white/5">
                   <span className="font-mono text-slate-300">{checkpoint.tick}</span>
                   <span className={checkpoint.reconciled === 1 ? "text-emerald-400" : checkpoint.reconciled === -1 ? "text-red-400" : "text-amber-300"}>
                     {checkpoint.reconciled === 1 ? "MATCH" : checkpoint.reconciled === -1 ? "DIVERGED" : "UNVERIFIED"}
