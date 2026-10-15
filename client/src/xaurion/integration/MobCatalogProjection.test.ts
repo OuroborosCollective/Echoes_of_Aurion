@@ -3,6 +3,7 @@ import * as THREE from "three";
 import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { ZONE_COMBAT_CONTRACT_VERSION } from "@shared/zoneCombatContract";
 import { MobCatalogProjection, CLOCKWORK_STALKER_GLB_SHA as sha } from "./MobCatalogProjection";
+import { selectEnemyGlb } from "../core/EnemyGlbFallback";
 import { acceptConfirmedZoneCombat, projectConfirmedZoneSnapshot } from "./zoneCombatBridge";
 
 const catalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "b".repeat(64), entries: [{ assetId: `glb_${sha.slice(0,48)}`, sha256: sha, displayName: "Enemy Fallback · Clockwork Stalker", purpose: "enemy-fallback", assetType: "enemy", subcategory: null, targetKey: null, equipmentSlot: null, storageUrl: `/api/assets/glb/${sha}.glb` }] };
