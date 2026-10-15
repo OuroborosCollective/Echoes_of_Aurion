@@ -512,6 +512,13 @@
       "when": 1791648000000,
       "tag": "0073_aurion_production_probe_session_fence",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792046400000,
+      "tag": "0074_aurion_stat_allocation_receipts",
+      "breakpoints": true
     }
   ]
 }
