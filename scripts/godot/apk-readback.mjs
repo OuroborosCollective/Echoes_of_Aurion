@@ -11,7 +11,8 @@ export function validateApk(badging, signature, entries, manifest) {
   assert.match(launcher, /android:exported[^\n]*0xffffffff/);
   const target = launcher.match(/android:targetActivity[^\n]*="([^"]+)"/);
   assert.ok(target, 'launcher target missing');
-  assert.ok(blocks.some(block => block.startsWith('      E: activity (') && block.includes(`="${target[1]}"`)), 'launcher target activity missing');
+  const activities = blocks.filter(block => block.startsWith('      E: activity ('));
+  assert.ok(activities.some(block => block.match(/android:name[^\n]*="([^"]+)"/)?.[1] === target[1]), 'launcher target activity missing');
   assert.match(badging, /application-label:'Aurion Preview'/);
   assert.match(badging, /uses-permission: name='android.permission.INTERNET'/);
   const permissions = [...badging.matchAll(/uses-permission: name='([^']+)'/g)].map(x => x[1]);
