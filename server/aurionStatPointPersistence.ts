@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { aurionMasteryEvents, aurionProgressionReceipts, aurionStatAllocationReceipts, playerProfiles } from "../drizzle/schema";
 import { getDb } from "./db";
 import { aurionMasteryDisciplineIds, resolveMasteryReadmodel } from "./aurionMasteryEthosProtocol";
-import { normalizeProgressionReceipt, type ProgressionReceiptInput } from "./progressionReceiptPersistence";
+import { verifyStoredProgressionReceipt } from "./progressionReceiptPersistence";
 import { confirmAurionStatAllocation, resolveAurionStatWallet, type AurionStatAttribute, type StatAllocation } from "../shared/aurionStatPointProtocol";
 
 const WALLET_ID = "aurion.stat-alloc.v1";
@@ -16,9 +16,9 @@ export async function readAurionStatWalletInTransaction(tx: Transaction, userId:
   const masteries = new Map<string, {trackId:string;levelExact:string;sourceReceiptId:string}>();
   let character: {levelExact:string;sourceReceiptId:string}|null = null;
   for(const row of rows) {
-    const normalized = normalizeProgressionReceipt(row as ProgressionReceiptInput);
-    const digest = normalized.receiptHash;
-    if(row.receiptHash !== digest || row.id !== `progression_${digest.slice(0,52)}`) throw new Error("AURION_STAT_PROGRESSION_RECEIPT_CORRUPT");
+    // Drizzle rows contain id, receiptHash and createdAt. The canonical verifier
+    // extracts exactly the signed fields and rehashes before trusting the level.
+    verifyStoredProgressionReceipt(row);
     if (row.actionKind === "encounter") {
       if(!character || cmp(row.levelExact,character.levelExact)>0) character={levelExact:row.levelExact,sourceReceiptId:row.id};
     }
