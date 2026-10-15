@@ -59,6 +59,8 @@ import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence"
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
 import { readExplorationMemory, recordExplorationDiscovery } from "./explorationMemoryPersistence";
 import { desc, eq } from "drizzle-orm";
+import { readAurionStatWallet, allocateAurionStatPoint } from "./aurionStatPointPersistence";
+import { aurionStatAttributes } from "../shared/aurionStatPointProtocol";
 import { 
   getConfirmedNpcPolicy, 
   requestNpcPolicyRollback 
@@ -203,6 +205,12 @@ export const appRouter = router({
     }),
   }),
   player: router({
+    statWallet: protectedProcedure.query(({ctx})=>readAurionStatWallet(ctx.user.id)),
+    allocateStatPoint: protectedProcedure.input(z.object({
+      attribute: z.enum(aurionStatAttributes),
+      idempotencyKey: z.string().regex(/^[A-Za-z0-9:._-]{4,128}$/),
+      expectedAvailableExact: z.string().regex(/^(0|[1-9][0-9]*)$/).max(128),
+    }).strict()).mutation(({ctx,input})=>allocateAurionStatPoint(ctx.user.id,input.attribute,input.idempotencyKey,input.expectedAvailableExact)),
     ui: protectedProcedure.query(({ ctx }) => readPlayerUi(ctx.user.id)),
     saveControls: protectedProcedure.input(controlSettingsSchema).mutation(({ ctx, input }) => savePlayerControls(ctx.user.id, input)),
     collectLoot: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => collectPlayerLoot(ctx.user.id, input)),
