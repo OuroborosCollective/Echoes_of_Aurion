@@ -37,6 +37,13 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     expect(route).toContain("Aurion-Spielstart benötigt einen bestätigten Weltvertrag");
     expect(route).not.toContain("AX1-Spielstart");
     expect(route).not.toContain("WASD-Weltvertrag");
+    expect(runtime).toContain("Mount bleibt auf der Aurion-Taste Z");
+    expect(runtime).not.toContain("-ax1-Keybind");
+    expect(runtime).toContain("setMountFeedback(MOUNT_PENDING_MESSAGE)");
+    expect(runtime).toContain("MOUNT_FEEDBACK_DURATION_MS = 4_000");
+    expect(runtime).toContain("window.setTimeout(() => setMountFeedback(null), MOUNT_FEEDBACK_DURATION_MS)");
+    expect(runtime).toContain('className="aurion-ui-feedback" role="status">{mountFeedback}');
+    expect(runtime).not.toContain('addChatMessage("system", "Aurion", MOUNT_PENDING_MESSAGE)');
     const request = read("client/src/xaurion/integration/confirmedActionRequest.ts");
     const hud = read("client/src/xaurion/integration/AurionAuthorityHud.tsx");
     const home = read("client/src/pages/Home.tsx");
@@ -95,6 +102,8 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     expect(compact).toContain("player.gainXp=()=>false");
     expect(compact).toContain("player.consumeResource=()=>false");
     expect(compact).toContain("player.equipItem=()=>null");
+    expect(compact).toContain("engine.toggleMount=()=>handlers.requestMount()");
+    expect(compact).toContain("player.toggleMount=()=>player.stats.isMounted");
     expect(compact).toContain("engine.castClassSkill=index=>");
     expect(compact).toContain('handlers.requestAction("E")');
   });

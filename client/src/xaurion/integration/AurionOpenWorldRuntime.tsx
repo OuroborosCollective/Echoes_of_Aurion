@@ -57,6 +57,8 @@ const classForAurion = (value: "unbound" | "vanguard" | "seer" | "warden" | unde
 const ZONE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000] as const;
 const ZONE_MAX_RECONNECT_ATTEMPTS = 8;
 const FATAL_ZONE_REJECT_CODES = new Set(["PROTOCOL_VERSION_UNSUPPORTED", "INVALID_MESSAGE", "UNSUPPORTED_ZONE_COMMAND"]);
+const MOUNT_PENDING_MESSAGE = "Mount bleibt auf der Aurion-Taste Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.";
+const MOUNT_FEEDBACK_DURATION_MS = 4_000;
 
 function validActivation(detail: unknown): ActivationSnapshot {
   if (!detail || typeof detail !== "object") return Object.freeze({ displayName: "Aurion Open World" });
@@ -99,7 +101,14 @@ export default function AurionOpenWorldRuntime() {
   const modelEvidenceRef = useRef<HTMLOutputElement>(null);
   const npcEvidenceRef = useRef<HTMLOutputElement>(null);
   const [nearbySmith, setNearbySmith] = useState(false);
+  const [mountFeedback, setMountFeedback] = useState<string | null>(null);
   const [bvhDebugActive, setBvhDebugActive] = useState(false);
+
+  useEffect(() => {
+    if (!mountFeedback) return;
+    const timeout = window.setTimeout(() => setMountFeedback(null), MOUNT_FEEDBACK_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [mountFeedback]);
 
   const toggleBvhDebug = useCallback(() => {
     if (engineRef.current) {
@@ -187,7 +196,7 @@ export default function AurionOpenWorldRuntime() {
   }, [requestAuthoritativeAction]);
 
   const requestAuthoritativeMount = useCallback(() => {
-    engineRef.current?.addChatMessage("system", "Aurion", "Mount bleibt auf dem -ax1-Keybind Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.");
+    setMountFeedback(MOUNT_PENDING_MESSAGE);
     window.dispatchEvent(new CustomEvent("aurion:xaurion-mount-intent", { detail: { source: "human" as const } }));
   }, []);
 
@@ -868,6 +877,7 @@ export default function AurionOpenWorldRuntime() {
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
       <output ref={runtimePerformanceEvidenceRef} data-testid="runtime-performance-evidence" hidden />
       <output ref={explorationMemoryEvidenceRef} data-testid="exploration-memory-evidence" hidden />
+      {mountFeedback && <p className="aurion-ui-feedback" role="status">{mountFeedback}</p>}
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onTouchMoveDestination={handleTouchMoveDestination} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}

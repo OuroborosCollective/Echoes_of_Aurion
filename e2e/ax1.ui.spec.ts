@@ -109,6 +109,18 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       const hud = page.getByTestId("authoritative-world-hud");
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+      await page.keyboard.press("z");
+      const mountFeedback = page.getByText("Mount bleibt auf der Aurion-Taste Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.", { exact: true });
+      await expect(mountFeedback).toBeVisible();
+      expect(await mountFeedback.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const previousPointerEvents = element.style.pointerEvents;
+        element.style.pointerEvents = "auto";
+        const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        element.style.pointerEvents = previousPointerEvents;
+        return topmost === element || element.contains(topmost);
+      })).toBe(true);
+      await expect(mountFeedback).toBeHidden({ timeout: 6_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
       await expect.poll(() => latestPresences.some(p => p.entityId === selfEntityId), { timeout: 20_000 }).toBe(true);
 
