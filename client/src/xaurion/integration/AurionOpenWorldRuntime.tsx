@@ -3,7 +3,7 @@ import { ConfirmedChunkProjection } from "./ConfirmedChunkProjection";
 import { WorldLoadingScreen, type WorldAssetLoadingEvidence, type WorldChunkLoadingEvidence } from "../../components/WorldLoadingScreen";
 import { AURION_CLIENT_VERIFICATION_SCHEMA, createClientVerificationReceipt } from "@shared/aurionClientVerificationContract";
 import { ConfirmedPlayerMotion } from "./ConfirmedPlayerMotion";
-import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
+import { AURION_COMBAT_FEEDBACK_EVENT, requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import { playerUiReadbackSchema, type ControlSettings } from "@shared/playerUiProtocol";
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
 import { WORLD_DEMONSTRATION_EVENT } from "@/lib/companionWorldInputs";
@@ -188,7 +188,9 @@ export default function AurionOpenWorldRuntime() {
   const requestAuthoritativeAction = useCallback(async (command: AurionGameplayCommand, automated = false): Promise<ActionOutcome> => {
     if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };
     if (!automated) window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
-    return requestConfirmedAction(command);
+    const outcome = await requestConfirmedAction(command);
+    if (!automated) window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, { detail: outcome }));
+    return outcome;
   }, []);
   const requestHotbarAction = useCallback((command: AurionGameplayCommand) => {
     const mapped = /^[1-5]$/.test(command) ? controlsRef.current?.hotbar[Number(command) - 1] : command;
