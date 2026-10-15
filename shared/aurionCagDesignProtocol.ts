@@ -310,7 +310,7 @@ export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk):
     `h={${hRows}}`,
     `s={${sRows}}`,
     "var=Round[Variance[Flatten[h]]]",
-    "sdx=Flatten[Map[Differences,s]]",
+    "sdx=Flatten[Differences[Transpose[s]]]",
     "sdz=Flatten[Differences[s]]",
     "trans=Count[sdx,x_/;x!=0]+Count[sdz,x_/;x!=0]",
     "{var,trans}"

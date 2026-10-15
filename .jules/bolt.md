@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2026-10-15 - Optimize Wolfram CAG Queries
+**Learning:** Using Differences[Transpose[m]] is more efficient than Map[Differences, m] for computing horizontal differences.
+**Action:** Replaced Map[Differences,s] with Differences[Transpose[s]] in CAG probes.
