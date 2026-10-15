@@ -51,7 +51,9 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     expect(runtime).toContain("bindAurionAuthorityProjection");
     expect(runtime).toContain("return requestConfirmedAction(command)");
     expect(request).not.toContain("aurion:request-action");
-    expect(request).toContain("kein Aurion-Gameplay-Fallback");
+    expect(request).toContain("Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback.");
+    expect(request).not.toContain("WASD-Zonenvertrag");
+    expect(request).not.toContain("AX1-Skill");
     expect(hud).not.toContain("AurionEncounterPanel");
     expect(hud).not.toContain("trpc.gameplay.acceptQuest");
     expect(hud).not.toContain("trpc.gameplay.completeQuest");
