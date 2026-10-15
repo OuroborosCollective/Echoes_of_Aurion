@@ -2343,3 +2343,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #972 — fix(godot): verify launcher target activity name
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=972 merge=c46bd567750ed52ceab8aa4a005e7c195b73c71e -->
+Task: Merge PR #972 into `main` — fix(godot): verify launcher target activity name.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `scripts/godot/apk-readback.mjs`
+- `scripts/godot/apk-readback.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/972
+- Merge commit: `c46bd567750ed52ceab8aa4a005e7c195b73c71e`
+- PR head: `0f7c38379d563601637a5b325d9a0e5f8d0d8647`
+- Merged at: 2026-10-15T22:30:40Z
+- Post-merge workflow run: 38817603429
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
