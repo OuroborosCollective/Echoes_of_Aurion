@@ -2163,3 +2163,9 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Restartable equipment-change aura
+Status: VERIFIED candidate
+Change: Repeated confirmed equipment changes now restart one 300 ms presentation timer, and runtime disposal cancels that timer.
+Learning: Presentation pulses need one owned lifetime; independent timers let an older equipment change hide the latest pulse early.
+Evidence: Baseline `abc6ed9d356ba1776319094c5f780eba04256acb` failed at t=300 ms in AIM-262 run `38784522455`; implementation/provenance head `68f0e9a51daaf3b358752a6448212fba0823018d` passed the real `OpenWorldPlayer` fake-clock regression, owner-ZIP reconstruction, and neighboring browser jobs in run `38786102785`.
