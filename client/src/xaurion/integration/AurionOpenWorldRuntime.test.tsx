@@ -239,4 +239,22 @@ describe("open world session ownership", () => {
     expect(screen.getByRole("alert")).toBeTruthy();
   });
 
+  it("publishes a disconnected keyboard action guard through the combat feedback lane", async () => {
+    const outcomes: unknown[] = [];
+    const listener = (event: Event) => outcomes.push((event as CustomEvent).detail);
+    window.addEventListener("aurion:combat-feedback", listener);
+    try {
+      render(<AurionOpenWorldRuntime />);
+      await enter();
+      fireEvent.keyDown(window, { key: "r", code: "KeyR" });
+      expect(outcomes).toEqual([{
+        confirmed: false,
+        completed: false,
+        message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten.",
+      }]);
+    } finally {
+      window.removeEventListener("aurion:combat-feedback", listener);
+    }
+  });
+
 });
