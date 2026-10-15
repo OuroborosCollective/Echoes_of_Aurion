@@ -2190,3 +2190,31 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #960 — feat(godot): geprüfte Editor- und Android-Toolchain automatisieren
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=960 merge=640d5817db0fcb3addb9781f15c8a0c7289c1265 -->
+Task: Merge PR #960 into `main` — feat(godot): geprüfte Editor- und Android-Toolchain automatisieren.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/godot-headless.yml`
+- `.gitignore`
+- `SUMMARY.md`
+- `config/godot-toolchain.lock.json`
+- `docs/godot-migration/workspace.md`
+- `scripts/godot/android-toolchain.mjs`
+- `scripts/godot/bootstrap-android.mjs`
+- `scripts/godot/bootstrap.mjs`
+- `scripts/godot/doctor.mjs`
+- `scripts/godot/toolchain.mjs`
+- `scripts/godot/toolchain.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/960
+- Merge commit: `640d5817db0fcb3addb9781f15c8a0c7289c1265`
+- PR head: `97556e8e7e2d50bc03c9ca8762d134d9fe25b1f5`
+- Merged at: 2026-10-15T19:15:45Z
+- Post-merge workflow run: 38792450375
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
