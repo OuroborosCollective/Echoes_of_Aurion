@@ -12,6 +12,7 @@ import {
 import { requestConfirmedAction } from "./confirmedActionRequest";
 
 const target = { id: "mob_1", hp: 100, x: 4, z: 0 };
+const sendSkill = vi.fn(() => true);
 const engine = {
   targetMob: null,
   mobManager: {
@@ -30,8 +31,9 @@ let detachProjection: () => void;
 let detachTransport: () => void;
 
 beforeEach(() => {
+  engine.targetMob = null;
   detachProjection = attachAx1ZoneProjection(engine);
-  detachTransport = attachZoneCombatTransport({ attack: vi.fn(() => true), skill: vi.fn(() => true) });
+  detachTransport = attachZoneCombatTransport({ attack: vi.fn(() => true), skill: sendSkill });
   projectConfirmedZoneSnapshot({
     selfEntityId: "player:7",
     mobs: [],
@@ -72,6 +74,16 @@ describe("Aurion-owned combat feedback", () => {
     const outcome = requestZoneSkill("k_strike");
     rejectPendingZoneAttack(code);
     await expect(outcome).resolves.toEqual({ confirmed: false, completed: false, message });
+  });
+
+  it("forwards hotbar skill two to the typed server skill transport", async () => {
+    const outcome = requestConfirmedAction("2");
+    expect(sendSkill).toHaveBeenCalledWith("k_charge", "mob_1");
+    rejectPendingZoneAttack("COMBAT_SKILL_COOLDOWN");
+    await expect(outcome).resolves.toMatchObject({
+      confirmed: false,
+      message: "Der Aurion-Skill ist serverseitig noch auf Abklingzeit.",
+    });
   });
 
   it("identifies the disconnected action gate as the Aurion zone contract", async () => {
