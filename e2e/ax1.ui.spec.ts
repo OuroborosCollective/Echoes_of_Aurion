@@ -114,7 +114,10 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(mountFeedback).toBeVisible();
       expect(await mountFeedback.evaluate(element => {
         const bounds = element.getBoundingClientRect();
+        const previousPointerEvents = element.style.pointerEvents;
+        element.style.pointerEvents = "auto";
         const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        element.style.pointerEvents = previousPointerEvents;
         return topmost === element || element.contains(topmost);
       })).toBe(true);
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
