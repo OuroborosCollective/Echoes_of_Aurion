@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, lock } from './toolchain.mjs';
+import { treeDigest } from './android-toolchain.mjs';
 
 async function isolated(fn) {
   const workspace = await mkdtemp(resolve(tmpdir(), 'aurion-doctor-'));
@@ -32,6 +33,19 @@ test('present but unreceipted binary fails closed', () => isolated(async workspa
 test('concurrent bootstrap stops before download or extraction', () => isolated(async workspace => {
   await mkdir(resolve(workspace, 'bootstrap.lock'));
   const result = invoke('bootstrap', workspace);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /EEXIST/);
+}));
+test('SDK receipt changes when an installed file is altered', () => isolated(async workspace => {
+  await writeFile(resolve(workspace, 'sdk-file'), 'original');
+  const first = await treeDigest(workspace);
+  assert.equal(await treeDigest(workspace), first);
+  await writeFile(resolve(workspace, 'sdk-file'), 'modified');
+  assert.notEqual(await treeDigest(workspace), first);
+}));
+test('Android bootstrap respects the same exclusive workspace lock', () => isolated(async workspace => {
+  await mkdir(resolve(workspace, 'bootstrap.lock'));
+  const result = invoke('bootstrap-android', workspace);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /EEXIST/);
 }));

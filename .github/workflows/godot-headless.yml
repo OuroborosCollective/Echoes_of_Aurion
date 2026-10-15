@@ -31,3 +31,19 @@ jobs:
         run: |
           .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/contracts/test_zone_contract.gd
           node scripts/godot/verify-contract-parity.mjs
+  android-toolchain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned editor and Android packages
+        run: |
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/bootstrap-android.mjs
+          node scripts/godot/doctor.mjs --android
+          node scripts/godot/bootstrap-android.mjs

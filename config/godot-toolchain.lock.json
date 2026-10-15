@@ -9,7 +9,7 @@
     "bytes": 77860424
   },
   "android": {
-    "status": "pending-bootstrap-and-runtime-verification",
+    "status": "pinned",
     "templates": {
       "url": "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz",
       "sha256": "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011",
@@ -20,6 +20,88 @@
     "platform": 35,
     "ndk": "28.1.13356709",
     "cmake": "3.10.2.4988404",
-    "source": "https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_android.html"
+    "source": "https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_android.html",
+    "packages": [
+      {
+        "id": "jdk",
+        "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20_8.tar.gz",
+        "bytes": 193273593,
+        "sha256": "be7668bc030d578b83d6d5ef9221d6d6729bbbca8cf94a7d52e16ac68b5a5a35",
+        "format": "tar.gz",
+        "directory": "jdk-17.0.20+8",
+        "destination": "jdk"
+      },
+      {
+        "id": "platforms;android-35",
+        "url": "https://dl.google.com/android/repository/platform-35_r02.zip",
+        "bytes": 64273788,
+        "sha1": "0bb560a90a7a2cbd0dd8348224d518b638fe7949",
+        "format": "zip",
+        "sha256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+        "directory": "android-35",
+        "destination": "sdk/platforms/android-35"
+      },
+      {
+        "id": "ndk;28.1.13356709",
+        "url": "https://dl.google.com/android/repository/android-ndk-r28b-linux.zip",
+        "bytes": 722264879,
+        "sha1": "f574d3165405bd59ffc5edaadac02689075a729f",
+        "format": "zip",
+        "sha256": "e9f2759862cecfd48c20bbb7d8cfedbb020f4d91b5f78d9a2fc106f7db3c27ed",
+        "directory": "android-ndk-r28b",
+        "destination": "sdk/ndk/28.1.13356709"
+      },
+      {
+        "id": "build-tools;35.0.1",
+        "url": "https://dl.google.com/android/repository/build-tools_r35.0.1_linux.zip",
+        "bytes": 61959297,
+        "sha1": "e009a9b188cfeb1d2b4c318ab5cb4f1ddc368861",
+        "format": "zip",
+        "sha256": "5993499f3229a021b89f87088c57242aeefaa62316bf3d69da7de40bfd5350f1",
+        "directory": "android-15",
+        "destination": "sdk/build-tools/35.0.1"
+      },
+      {
+        "id": "cmdline-tools;19.0",
+        "url": "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip",
+        "bytes": 164760899,
+        "sha1": "5fdcc763663eefb86a5b8879697aa6088b041e70",
+        "format": "zip",
+        "sha256": "7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee",
+        "directory": "cmdline-tools",
+        "destination": "sdk/cmdline-tools/19.0"
+      },
+      {
+        "id": "cmake;3.10.2.4988404",
+        "url": "https://dl.google.com/android/repository/cmake-3.10.2-linux-x86_64.zip",
+        "bytes": 14275684,
+        "sha1": "439e8799bf59f724f104bf62784b2985f1bfe561",
+        "format": "zip",
+        "sha256": "763572c87f77d3ddbf7e72d080e8b45184d5c368bfdd170f2589f08a089570fd",
+        "directory": ".",
+        "destination": "sdk/cmake/3.10.2.4988404"
+      },
+      {
+        "id": "platform-tools",
+        "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-linux.zip",
+        "bytes": 9054187,
+        "sha1": "477254aa5f903c15cf51001717bdf347fb6b53e0",
+        "format": "zip",
+        "sha256": "d230f13842f60f782a8645f9c813f8f845bf36089ea7289f28c48f17979313f1",
+        "directory": "platform-tools",
+        "destination": "sdk/platform-tools"
+      },
+      {
+        "id": "templates",
+        "url": "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz",
+        "bytes": 1281349702,
+        "sha256": "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011",
+        "format": "zip",
+        "directory": "templates",
+        "destination": "data/godot/export_templates/4.7.2.stable"
+      }
+    ],
+    "jdkVersion": "17.0.20+8",
+    "sdkManifestSource": "https://dl.google.com/android/repository/repository2-3.xml"
   }
 }

@@ -1,6 +1,7 @@
 import { readFile, access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { lock, root, executable, digest, run } from './toolchain.mjs';
+import { androidReport } from './android-toolchain.mjs';
 
 const report = { host: `${process.platform}-${process.arch}`, editor: 'missing', android: 'missing', rendering: 'unverified', tablet: 'unverified' };
 if (report.host !== lock.host) report.editor = 'incompatible';
@@ -16,5 +17,8 @@ else {
     }
   } catch (error) { report.detail = error.message; }
 }
+const android = await androidReport();
+report.android = android.status;
+report.androidDetails = android;
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = report.editor === 'ready' ? 0 : 1;
+process.exitCode = report.editor === 'ready' && (!process.argv.includes('--android') || android.status === 'ready') ? 0 : 1;
