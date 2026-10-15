@@ -1,0 +1,39 @@
+name: Godot Android Preview APK
+on:
+  pull_request:
+    paths:
+      - 'godot-client/**'
+      - 'scripts/godot/**'
+      - 'config/godot-toolchain.lock.json'
+      - '.github/workflows/godot-android-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: APK readback regression
+        run: node --test scripts/godot/apk-readback.test.mjs
+      - name: Install pinned build tools
+        run: |
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/bootstrap-android.mjs
+      - name: Build and independently inspect APK
+        env:
+          AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURION_APK_OUTPUT: ${{ runner.temp }}/aurion-apk
+        run: node scripts/godot/export-android.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aurion-Preview-APK-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurion-apk/
+          if-no-files-found: error
+          retention-days: 30

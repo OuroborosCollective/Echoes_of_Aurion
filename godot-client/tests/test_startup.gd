@@ -21,6 +21,8 @@ func verify() -> void:
 	for action in ["move_left", "move_right", "move_forward", "move_backward", "interact", "primary_action"]:
 		require(InputMap.has_action(action), "missing input action: " + action)
 	require(ProjectSettings.get_setting("rendering/renderer/rendering_method") == "gl_compatibility", "renderer changed")
+	require(ProjectSettings.get_setting("rendering/textures/vram_compression/import_etc2_astc", false), "Android texture import missing")
+	require(ResourceLoader.exists(ProjectSettings.get_setting("application/config/icon", "")), "Android project icon missing")
 	var packed := load("res://app/main.tscn") as PackedScene
 	require(packed != null, "main scene unavailable")
 	if packed == null:
@@ -37,6 +39,7 @@ func verify() -> void:
 		print("Layout: window=", viewport_size, " root=", root.size, " scene=", scene.size, " card=", card.size, " minimum=", card.get_combined_minimum_size())
 		require(card.size.x <= viewport_size.x - 32, "launch card overflows width")
 		require(button.size.y >= 48, "touch target too small")
+		require(scene.get_node("%BuildIdentity").text == "Build · " + Config.current().client_build, "visible build identity missing")
 		require(button.disabled, "unimplemented login must stay disabled")
 		require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "offline status missing")
 	scene.queue_free()
