@@ -21,10 +21,11 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
     expect(journal.entries[68]).toMatchObject({ idx: 68, tag: "0068_aurion_item_manipulation_runtime" });
     expect(journal.entries[69]).toMatchObject({ idx: 69, tag: "0069_aurion_combat_victory_events" });
     expect(journal.entries[70]).toMatchObject({ idx: 70, tag: "0071_aurion_npc_guild_authority" });
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 72, tag: "0073_aurion_production_probe_session_fence" });
-    expect(manifest.waveId).toBe("aurion-production-0021-0073");
+    expect(journal.entries[72]).toMatchObject({ idx: 72, tag: "0073_aurion_production_probe_session_fence" });
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 73, tag: "0074_aurion_stat_allocation_receipts" });
+    expect(manifest.waveId).toBe("aurion-production-0021-0074");
     expect(manifest.migrations.some((migration: { tag: string }) => migration.tag === "0049_aurion_causal_receipt_v2")).toBe(true);
-    expect(manifest.migrations.at(-1)?.tag).toBe("0073_aurion_production_probe_session_fence");
+    expect(manifest.migrations.at(-1)?.tag).toBe("0074_aurion_stat_allocation_receipts");
 
     expect(sql).toContain("ADD COLUMN `receiptSchema`");
     expect(sql).toContain("ADD COLUMN `stageReceiptsJson`");
