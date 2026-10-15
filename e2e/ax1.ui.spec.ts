@@ -259,6 +259,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       const serverSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
       await expect(serverSkill).toBeVisible();
+      // The typed intent must reach Aurion; only the server may reject unsupported skill execution.
       const skillRejectsBefore = combatRejects.length;
       await serverSkill.click();
       await expect.poll(() => combatRejects.length, { timeout: 8_000 }).toBeGreaterThan(skillRejectsBefore);
