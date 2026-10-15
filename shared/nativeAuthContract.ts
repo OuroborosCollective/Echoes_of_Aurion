@@ -26,7 +26,13 @@ const pkceVerifierSchema = z
   .regex(/^[A-Za-z0-9._~-]+$/);
 
 const httpsBrowserUrlSchema = z.string().url().superRefine((value, ctx) => {
-  const parsed = new URL(value);
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    ctx.addIssue({ code: "custom", message: "HTTPS_BROWSER_URL_REQUIRED" });
+    return;
+  }
   if (
     parsed.protocol !== "https:" ||
     parsed.origin !== "https://arelogic.space" ||
@@ -75,9 +81,11 @@ export const nativeAuthTokenPairSchema = z
     accessToken: opaqueSecretSchema,
     accessExpiresInSeconds: z.literal(NATIVE_AUTH_ACCESS_TTL_SECONDS),
     refreshToken: opaqueSecretSchema,
-    refreshAbsoluteExpiresInSeconds: z.literal(
-      NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS,
-    ),
+    refreshAbsoluteRemainingSeconds: z
+      .number()
+      .int()
+      .positive()
+      .max(NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS),
     refreshIdleExpiresInSeconds: z.literal(NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS),
   })
   .refine((value) => value.accessToken !== value.refreshToken, {
@@ -96,16 +104,17 @@ export const nativeAuthRevokeRequestSchema = z.strictObject({
 });
 
 export const nativeAuthErrorCodes = [
-  "CONFIGURATION_UNAVAILABLE",
-  "INVALID_REQUEST",
-  "TRANSACTION_EXPIRED",
-  "STATE_MISMATCH",
-  "PKCE_VERIFICATION_FAILED",
-  "HANDOFF_INVALID",
-  "HANDOFF_REPLAYED",
-  "SESSION_EXPIRED",
-  "REFRESH_REPLAYED",
-  "SESSION_REVOKED",
+  "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE",
+  "NATIVE_AUTH_TRANSACTION_INVALID",
+  "NATIVE_AUTH_STATE_MISMATCH",
+  "NATIVE_AUTH_CODE_EXPIRED",
+  "NATIVE_AUTH_CODE_CONSUMED",
+  "NATIVE_AUTH_PKCE_FAILED",
+  "NATIVE_AUTH_SESSION_EXPIRED",
+  "NATIVE_AUTH_REFRESH_REUSED",
+  "NATIVE_AUTH_REVOKED",
+  "NATIVE_AUTH_BUILD_UNSUPPORTED",
+  "NATIVE_AUTH_RATE_LIMITED",
 ] as const;
 
 export const nativeAuthErrorSchema = z.strictObject({
