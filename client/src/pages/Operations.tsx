@@ -621,7 +621,9 @@ export default function Operations() {
             </Card>
           </section>
         </TabsContent>}
-        {user?.role === "admin" && <TabsContent value="game-dev" className="mt-5 space-y-5"><GameDevelopmentStudioWorkbench /></TabsContent>}\n        {user?.role === "admin" && <TabsContent value="authoring" className="mt-5 space-y-5"><AurionAuthoringWorkbench /></TabsContent>}\n        {user?.role === "admin" && <TabsContent value="causality" className="mt-5 space-y-5"><CausalStudioDashboard /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="game-dev" className="mt-5 space-y-5"><GameDevelopmentStudioWorkbench /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="authoring" className="mt-5 space-y-5"><AurionAuthoringWorkbench /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="causality" className="mt-5 space-y-5"><CausalStudioDashboard /></TabsContent>}
         {user?.role === "admin" && <TabsContent value="replay" className="mt-5 space-y-5"><SessionReplayVisualizer /></TabsContent>}
         {user?.role === "admin" && <TabsContent value="archives" className="mt-5 space-y-5"><ArchiveDashboard /></TabsContent>}
         {user?.role === "admin" && <TabsContent value="crosszone" className="mt-5 space-y-5"><CrossZoneSyncDashboard /></TabsContent>}
