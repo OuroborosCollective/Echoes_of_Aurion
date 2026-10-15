@@ -29,6 +29,7 @@ export type AcegEquipmentAuthoritySources = Readonly<{
   stateIndex: number;
   skillRanks: readonly AcegModifier[];
   professionModifiers: readonly AcegModifier[];
+  permanentStats?: readonly AcegModifier[];
 }>;
 
 export type AcegEquipmentProjection = Readonly<{
@@ -154,7 +155,7 @@ function snapshot(userId: number, sources: AcegEquipmentAuthoritySources): AcegC
   return Object.freeze({
     entityId: `player:${userId}`,
     tickIndex: sources.stateIndex,
-    permanentStats: Object.freeze([]),
+    permanentStats: Object.freeze([...(sources.permanentStats ?? [])]),
     skillRanks: Object.freeze([...sources.skillRanks]),
     professionModifiers: Object.freeze([...sources.professionModifiers]),
     // No receipt-backed implant or temporary-buff persistence exists yet. Empty
