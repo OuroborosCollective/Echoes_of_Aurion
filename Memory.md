@@ -1928,3 +1928,24 @@ Evidence: Candidate `55b61d58a302768abf5e189935755a7fae4ff6a2`; all 9 workflows 
 Learned: Message text cannot identify timer ownership because later outcomes may repeat it; one publisher must own the transient instance lifetime.
 Open: Merge and main readback only.
 Next safe step: Re-run required gates on the Memory-bearing final head, merge if green, then verify main.
+
+
+### 2026-10-15 — PR #905 — fix(aurion): expire stale combat feedback
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=905 merge=cdf9470fa0b0c1771b5644fd69e7ce652a13da8a -->
+Task: Merge PR #905 into `main` — fix(aurion): expire stale combat feedback.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/xaurion/integration/AurionAuthorityHud.tsx`
+- `client/src/xaurion/integration/AurionCombatHudRegression.test.tsx`
+- `e2e/ax1.ui.spec.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/905
+- Merge commit: `cdf9470fa0b0c1771b5644fd69e7ce652a13da8a`
+- PR head: `229041d99fc6df989f7a1f5a6994170b603049bd`
+- Merged at: 2026-10-15T15:17:20Z
+- Post-merge workflow run: 38759000000
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
