@@ -16,7 +16,7 @@ const sendSkill = vi.fn(() => true);
 const engine = {
   targetMob: null,
   mobManager: {
-    nearest: vi.fn(() => target),
+    nearest,
     applyAuthoritativeSnapshot: vi.fn(),
   },
   player: {
@@ -83,6 +83,21 @@ describe("Aurion-owned combat feedback", () => {
     await expect(outcome).resolves.toMatchObject({
       confirmed: false,
       message: "Der Aurion-Skill ist serverseitig noch auf Abklingzeit.",
+    });
+  });
+
+  it.each([
+    ["3", "k_shield"],
+    ["4", "k_whirlwind"],
+    ["5", "k_overdrive"],
+  ] as const)("forwards targetless hotbar command %s to Aurion as %s", async (command, skillId) => {
+    nearest.mockReturnValueOnce(null);
+    const outcome = requestConfirmedAction(command);
+    expect(sendSkill).toHaveBeenCalledWith(skillId, undefined);
+    rejectPendingZoneAttack("INVALID_COMBAT_SKILL");
+    await expect(outcome).resolves.toMatchObject({
+      confirmed: false,
+      message: "Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.",
     });
   });
 
