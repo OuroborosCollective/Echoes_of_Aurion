@@ -10,10 +10,10 @@ export type ActionCompletion=(outcome:ActionOutcome)=>void;
  * There is deliberately no Aurion encounter/arena fallback.
  */
 export function requestConfirmedAction(command:AurionGameplayCommand):Promise<ActionOutcome>{
-  if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"WASD-Zonenvertrag nicht verbunden; kein Aurion-Gameplay-Fallback."});
+  if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback."});
   if(command==="F")return requestZoneBasicAttack();
   if(command==="1")return requestZoneSkill("k_strike");
-  return Promise.resolve({confirmed:false,completed:false,message:`${command} ist im WASD-Zonenvertrag noch nicht freigeschaltet.`});
+  return Promise.resolve({confirmed:false,completed:false,message:`${command} ist im Aurion-Zonenvertrag noch nicht freigeschaltet.`});
 }
 
 /** Timers schedule requests only. This controller cannot infer damage, issue receipts or retry a lost action. */
