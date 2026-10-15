@@ -154,6 +154,6 @@ export function planAurionScaledMonsterEncounter(region: AurionMonsterRegion, se
     const resolved = baseLevel + BigInt(entry.level) - 1n;
     const level = resolved < BigInt(species.levelMin) ? BigInt(species.levelMin) : resolved;
     const stats = aurionMonsterCombatStatsExact(species, level.toString());
-    return Object.freeze({ ...entry, levelExact: level.toString(), ...stats });
+    return Object.freeze({ ...entry, level: Number(level > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : level), levelExact: level.toString(), ...stats });
   }));
 }
