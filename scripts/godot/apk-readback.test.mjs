@@ -29,5 +29,5 @@ test('classic export keeps template SDK defaults and includes build override', a
 });
 
 test('manifest reader requires an exported launcher alias with an existing activity', () => {
-  for (const broken of ['', manifest.replace('0xffffffff', '0x0'), manifest.replace('category.LAUNCHER', 'category.HOME'), manifest.replace('E: activity (', 'E: service (')]) assert.throws(() => validateApk(badge, signature, entries, broken));
+  for (const broken of ['', manifest.replace('0xffffffff', '0x0'), manifest.replace('category.LAUNCHER', 'category.HOME'), manifest.replace('E: activity (', 'E: service ('), manifest.replace('A: android:name="com.godot.game.GodotApp"', 'A: android:label="com.godot.game.GodotApp"')]) assert.throws(() => validateApk(badge, signature, entries, broken));
 });
