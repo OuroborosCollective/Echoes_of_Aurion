@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile, readdir, rm } from 'node:fs/promises';
+import { resolve, relative, join } from 'node:path';
+import { repo, root, executable, digest, run } from './toolchain.mjs';
+import { execute } from './check-runtime.mjs';
+import { negativeControls } from './negative-controls.mjs';
+import { verifyEvidence } from './verify-evidence.mjs';
+
+const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
+run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
+assert.equal(run('git', ['-C', repo, 'ls-files', '--others', '--exclude-standard', 'godot-client', 'scripts/godot']), '', 'commit new source files before producing evidence');
+if (process.env.AURION_EXPECTED_REVISION) assert.equal(revision, process.env.AURION_EXPECTED_REVISION);
+const output = resolve(process.env.AURION_GODOT_EVIDENCE || join(root, 'evidence', revision));
+await mkdir(output, { recursive: true });
+const evidencePath = join(output, 'evidence.json');
+await rm(evidencePath, { force: true }); // Failed reruns cannot leave a stale green receipt.
+const evidence = { schemaVersion: 1, sourceRevision: revision, toolchainHash: await digest(join(repo, 'config/godot-toolchain.lock.json')), editorHash: await digest(executable), result: 'passed', testRuns: [], artifactHashes: {} };
+async function record(id, layer, result, expectedFailure = false) {
+  const log = `${id}.log`;
+  await writeFile(join(output, log), result.output);
+  evidence.artifactHashes[log] = await digest(join(output, log));
+  const passed = result.passed === !expectedFailure;
+  evidence.testRuns.push({ id, layer, passed, expectedFailure, observedPassed: result.passed, exitCode: result.exitCode, log });
+  console.log(`${passed ? 'PASS' : 'FAIL'} ${id} (${layer})`);
+  assert.ok(passed, `${id}: ${result.output}`);
+}
+async function stage(id, layer, file, args, marker) {
+  await record(id, layer, execute(file, args, { cwd: repo, marker }));
+}
+const project = join(repo, 'godot-client');
+const godot = (...args) => ['--headless', '--path', project, ...args];
+await stage('doctor', 'static', process.execPath, ['scripts/godot/doctor.mjs'], '"editor": "ready"');
+await stage('import', 'headless', executable, godot('--editor', '--import'));
+async function scripts(directory) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (entry.name === '.godot') continue;
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) await scripts(path);
+    else if (entry.name.endsWith('.gd')) {
+      const name = relative(project, path);
+      await stage(`parse-${name.replaceAll('/', '-').replace(/\.gd$/, '')}`, 'static', executable, godot('--check-only', '--script', name));
+    }
+  }
+}
+await scripts(project);
+await stage('parity', 'static', process.execPath, ['scripts/godot/verify-contract-parity.mjs'], 'zone-v5 contract parity verified');
+for (const [id, script, marker] of [
+  ['contract', 'contracts/test_zone_contract.gd', 'zone-v5 Godot contract verified'],
+  ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
+  ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
+]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
+for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
+run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
+await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+await verifyEvidence(evidencePath);
