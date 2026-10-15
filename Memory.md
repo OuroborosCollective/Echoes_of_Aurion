@@ -1949,3 +1949,26 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #896 — fix(admin): repair OS3A confirmation, escaped tab text and checkpoint-backed replay
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=896 merge=4f595fe679bd808b473961c1c6c636a965247ebd -->
+Task: Merge PR #896 into `main` — fix(admin): repair OS3A confirmation, escaped tab text and checkpoint-backed replay.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/components/CausalStudioDashboard.test.tsx`
+- `client/src/components/CausalStudioDashboard.tsx`
+- `client/src/pages/Operations.tsx`
+- `client/src/pages/OperationsAdminMarkup.test.ts`
+- `server/openSource3dFallback.test.ts`
+- `server/openSource3dFallback.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/896
+- Merge commit: `4f595fe679bd808b473961c1c6c636a965247ebd`
+- PR head: `68f1c195d05580cc0383b58c4f13b8eb03e1d699`
+- Merged at: 2026-10-15T16:15:54Z
+- Post-merge workflow run: 38767522666
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
