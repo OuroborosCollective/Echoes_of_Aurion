@@ -1860,3 +1860,27 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #898 — feat(aurion): 49 authoritative monster species profiles and Wolfram-verified deterministic balancing
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=898 merge=a4c9dc2b8e4345258b39fa335560967cffcccebf -->
+Task: Merge PR #898 into `main` — feat(aurion): 49 authoritative monster species profiles and Wolfram-verified deterministic balancing.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `server/aurionMonsterRewardProtocol.test.ts`
+- `server/aurionMonsterRewardProtocol.ts`
+- `server/aurionMonsterSpeciesCatalog.test.ts`
+- `server/aurionMonsterSpeciesCatalog.ts`
+- `server/endgameProtocol.test.ts`
+- `server/endgameProtocol.ts`
+- `shared/aurionMonsterAssetRegistry.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/898
+- Merge commit: `a4c9dc2b8e4345258b39fa335560967cffcccebf`
+- PR head: `89cd86fbb00568970439ee7fa820264930b0f321`
+- Merged at: 2026-10-15T12:53:54Z
+- Post-merge workflow run: 38738202184
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
