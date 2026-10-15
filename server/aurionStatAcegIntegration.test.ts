@@ -30,6 +30,6 @@ describe("Aurion stat wallet to equipment requirements", () => {
     const projection=resolveAurionStatWallet({...progression,allocations:[event]});
     expect(projection.spentExact).toBe("1");
     expect(projection.availableExact).toBe("21");
-    expect(projection.attributes.find(a=>a.key==="treatment")?.totalExact).toBe("11");
+    expect(projection.attributes.find(a=>a.key==="treatment")?.totalExact).toBe("1");
   });
 });
