@@ -11,7 +11,7 @@ describe("endgame protocol", () => {
 
   it("supports the established character curve with exact XP and no global level cap", () => {
     expect(xpRequiredForNextLevelExact("1")).toBe("122");
-    expect(xpRequiredForNextLevelExact("50000")).toBe("1000000900100");
+    expect(xpRequiredForNextLevelExact("50000")).toBe("10000900100");
     const enormous = xpRequiredForNextLevelExact("100000000000000000");
     expect(BigInt(enormous)).toBeGreaterThan(BigInt(Number.MAX_SAFE_INTEGER));
     const target = "100000000000000000";
