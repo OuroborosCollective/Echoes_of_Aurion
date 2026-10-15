@@ -1819,3 +1819,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #901 — fix(aurion): identify the play launch gate as Aurion-owned
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=901 merge=62bf3cbc593636f59f03f0618d4ecba2a623a1d7 -->
+Task: Merge PR #901 into `main` — fix(aurion): identify the play launch gate as Aurion-owned.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/xaurion/integration/AurionPlayRoute.tsx`
+- `e2e/ax1.ui.spec.ts`
+- `server/aim242AuthorityAdapter.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/901
+- Merge commit: `62bf3cbc593636f59f03f0618d4ecba2a623a1d7`
+- PR head: `d33b55b9a977f553220835c042fb0bd43d7e2b1b`
+- Merged at: 2026-10-15T08:36:39Z
+- Post-merge workflow run: 38706900735
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
