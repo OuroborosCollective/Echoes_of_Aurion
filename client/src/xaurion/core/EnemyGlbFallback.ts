@@ -50,7 +50,7 @@ export function enemyFallbackPool(catalog: GlbRuntimeCatalog | null | undefined)
   return catalog.entries
     .filter(isEnemyFallbackCatalogEntry)
     .slice()
-    .sort((left, right) => left.sha256.localeCompare(right.sha256) || left.assetId.localeCompare(right.assetId));
+    .sort((left, right) => (left.sha256 < right.sha256 ? -1 : left.sha256 > right.sha256 ? 1 : 0) || (left.assetId < right.assetId ? -1 : left.assetId > right.assetId ? 1 : 0));
 }
 
 function descriptor(entry: EnemyGlbCatalogEntry): { variantKey: string; lod: number | null } {
@@ -98,12 +98,12 @@ export function enemyFallbackVariants(catalog: GlbRuntimeCatalog | null | undefi
     grouped.set(key, current);
   }
   return Object.freeze([...grouped.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
     .map(([key, entries]) => Object.freeze({
       key,
       entries: Object.freeze(entries.slice().sort(
         (left, right) => (left.lod ?? Number.MAX_SAFE_INTEGER) - (right.lod ?? Number.MAX_SAFE_INTEGER)
-          || left.entry.sha256.localeCompare(right.entry.sha256),
+          || (left.entry.sha256 < right.entry.sha256 ? -1 : left.entry.sha256 > right.entry.sha256 ? 1 : 0),
       )),
     })));
 }
@@ -168,7 +168,9 @@ export function selectEnemyGlb(
   const eligible = enemyFallbackVariants(catalog)
     .map((variant, index) => Object.freeze({
       variant,
-      score: matchScore(variant.key, archetype),
+      // Imported Quaternius creature families are a deliberate visual pool, not
+      // semantic matches to one of the six authoritative combat archetypes.
+      score: variant.key.startsWith("rigged-monster · monster ") ? 1 : variant.entries[0]?.entry.purpose === "auto" ? Math.max(2, matchScore(variant.key, archetype)) : matchScore(variant.key, archetype),
       physical: variant.entries.filter(candidate => fitsTier(candidate.entry, tier)),
     }))
     .filter(candidate => candidate.physical.length > 0);
@@ -176,7 +178,14 @@ export function selectEnemyGlb(
 
   const bestScore = Math.min(...eligible.map(candidate => candidate.score));
   const ranked = eligible.filter(candidate => candidate.score === bestScore);
-  const selected = ranked[(enemyVisualIdentityHash(entityIdentity) + Math.max(0, Math.trunc(fallbackOffset))) % ranked.length]!;
+  // Numbered confirmed entities walk the sorted approved families without hash
+  // collisions. A non-numbered identity retains stable FNV selection.
+  const identityNumber = /(?:^|:)mob_([1-9][0-9]*)$/.exec(entityIdentity);
+  const ordinal = identityNumber ? Number(identityNumber[1]) : NaN;
+  const index = Number.isSafeInteger(ordinal)
+    ? (enemyVisualIdentityHash(entityIdentity.slice(0, identityNumber!.index)) % ranked.length + (ordinal - 1) % ranked.length) % ranked.length
+    : enemyVisualIdentityHash(entityIdentity) % ranked.length;
+  const selected = ranked[(index + Math.max(0, Math.trunc(fallbackOffset))) % ranked.length]!;
   const candidates = selected.physical.slice().sort((left, right) => {
     const leftLod = left.lod ?? Number.MAX_SAFE_INTEGER;
     const rightLod = right.lod ?? Number.MAX_SAFE_INTEGER;
