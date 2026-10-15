@@ -391,7 +391,13 @@ export async function planOpenSource3dFallback(input: Os3aPlanInput, deps: Os3aF
 export async function applyOpenSource3dFallback(actorUserId: number, rawInput: Os3aApplyInput) {
   if (!Number.isSafeInteger(actorUserId) || actorUserId < 1) throw new Error("OS3A_ACTOR_INVALID");
   const input = os3aApplyInputSchema.parse(rawInput);
-  const resolved = await resolveOpenSource3dFallbackPlan(input);
+  // An apply request carries SHA and human confirmation; the pure plan schema
+  // is strict and must receive only the immutable planning identity.
+  const resolved = await resolveOpenSource3dFallbackPlan({
+    sourceAssetId: input.sourceAssetId,
+    purpose: input.purpose,
+    tier: input.tier,
+  });
   if (resolved.publicPlan.planSha256 !== input.expectedPlanSha256) throw new Error("OS3A_FALLBACK_PLAN_CHANGED");
 
   const provenance: GlbExternalProvenanceInput = {
