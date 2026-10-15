@@ -26,6 +26,7 @@ Ein erfolgreicher Build mit geprüftem Manifest und APK-Signatur ist **BUILD PAS
 | Renderer | Godot Compatibility / OpenGL |
 | Orientierung | Querformat |
 | Berechtigung | INTERNET |
+| Template-SDK | minSdk 24 / targetSdk 36 laut gepinntem Godot-4.7.2-Template; APK-Readback ist verbindlich |
 | Build-ID | vollständiger Source-Commit, in die APK übernommen und sichtbar |
 | Signierung | Debug; Fingerprint steht in `build-evidence.json` |
 
