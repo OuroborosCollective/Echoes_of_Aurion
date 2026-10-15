@@ -186,7 +186,11 @@ export default function AurionOpenWorldRuntime() {
   terrainAudioRef.current = worldSnapshot.data?.terrain ?? null;
 
   const requestAuthoritativeAction = useCallback(async (command: AurionGameplayCommand, automated = false): Promise<ActionOutcome> => {
-    if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) {\n      const outcome = { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };\n      if (!automated) window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, { detail: outcome }));\n      return outcome;\n    }
+    if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) {
+      const outcome = { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };
+      if (!automated) window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, { detail: outcome }));
+      return outcome;
+    }
     if (!automated) window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
     const outcome = await requestConfirmedAction(command);
     if (!automated) window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, { detail: outcome }));
