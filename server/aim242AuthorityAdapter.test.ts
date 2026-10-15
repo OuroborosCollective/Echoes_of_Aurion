@@ -97,6 +97,8 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     expect(compact).toContain("player.gainXp=()=>false");
     expect(compact).toContain("player.consumeResource=()=>false");
     expect(compact).toContain("player.equipItem=()=>null");
+    expect(compact).toContain("engine.toggleMount=()=>handlers.requestMount()");
+    expect(compact).toContain("player.toggleMount=()=>player.stats.isMounted");
     expect(compact).toContain("engine.castClassSkill=index=>");
     expect(compact).toContain('handlers.requestAction("E")');
   });
