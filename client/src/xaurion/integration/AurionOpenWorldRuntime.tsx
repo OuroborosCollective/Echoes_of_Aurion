@@ -58,6 +58,7 @@ const ZONE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000] as const;
 const ZONE_MAX_RECONNECT_ATTEMPTS = 8;
 const FATAL_ZONE_REJECT_CODES = new Set(["PROTOCOL_VERSION_UNSUPPORTED", "INVALID_MESSAGE", "UNSUPPORTED_ZONE_COMMAND"]);
 const MOUNT_PENDING_MESSAGE = "Mount bleibt auf der Aurion-Taste Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.";
+const MOUNT_FEEDBACK_DURATION_MS = 4_000;
 
 function validActivation(detail: unknown): ActivationSnapshot {
   if (!detail || typeof detail !== "object") return Object.freeze({ displayName: "Aurion Open World" });
@@ -102,6 +103,12 @@ export default function AurionOpenWorldRuntime() {
   const [nearbySmith, setNearbySmith] = useState(false);
   const [mountFeedback, setMountFeedback] = useState<string | null>(null);
   const [bvhDebugActive, setBvhDebugActive] = useState(false);
+
+  useEffect(() => {
+    if (!mountFeedback) return;
+    const timeout = window.setTimeout(() => setMountFeedback(null), MOUNT_FEEDBACK_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [mountFeedback]);
 
   const toggleBvhDebug = useCallback(() => {
     if (engineRef.current) {
