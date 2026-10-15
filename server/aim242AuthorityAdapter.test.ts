@@ -40,6 +40,8 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     expect(runtime).toContain("Mount bleibt auf der Aurion-Taste Z");
     expect(runtime).not.toContain("-ax1-Keybind");
     expect(runtime).toContain("setMountFeedback(MOUNT_PENDING_MESSAGE)");
+    expect(runtime).toContain("MOUNT_FEEDBACK_DURATION_MS = 4_000");
+    expect(runtime).toContain("window.setTimeout(() => setMountFeedback(null), MOUNT_FEEDBACK_DURATION_MS)");
     expect(runtime).toContain('className="aurion-ui-feedback" role="status">{mountFeedback}');
     expect(runtime).not.toContain('addChatMessage("system", "Aurion", MOUNT_PENDING_MESSAGE)');
     const request = read("client/src/xaurion/integration/confirmedActionRequest.ts");
