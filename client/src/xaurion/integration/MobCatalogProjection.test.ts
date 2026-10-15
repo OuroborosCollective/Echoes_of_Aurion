@@ -15,9 +15,11 @@ const lodCatalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revisio
     { level: 2, assetId: "glb_clockwork_stalker_lod2", sha256: lod2Sha, bytes: 400, storageUrl: `/api/assets/glb/${lod2Sha}.glb`, targetKey: null },
   ],
 }] };
-function loaded() {
+function loaded(triangleCount?: number) {
   const scene = new THREE.Group(), bone = new THREE.Bone(); bone.name = "Spine";
   const geometry = new THREE.BoxGeometry(1, 2, 1); geometry.translate(0, 1, 0);
+  // Reproduce the 8,284-triangle maximum observed in the CC0 monster import set.
+  if (triangleCount !== undefined) geometry.setIndex(Array.from({ length: 3 * triangleCount }, (_, i) => i % 3));
   const count = geometry.getAttribute("position").count;
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Uint16Array(count * 4), 4));
   const weights = new Float32Array(count * 4); for (let i = 0; i < count; i++) weights[i * 4] = 1;
@@ -38,16 +40,16 @@ function setup(count = 1) {
 async function step(p: MobCatalogProjection, dt=.5) { p.update(dt); await Promise.resolve(); await Promise.resolve(); }
 
 describe("approved confirmed mob GLB presentation", () => {
-  it("uses the exact catalog binding and keeps primitives hidden until loading completes", async () => {
+  it("keeps confirmed enemies visible until an approved GLB actually loads", async () => {
     const s=setup(3); s.mobs[1]!.data.type="aether_wisp";s.mobs[1]!.group.userData.aurionConfirmedMob=false;s.mobs[2]!.group.userData.aurionConfirmedMob=false;
     let resolve!: (v: ReturnType<typeof loaded>)=>void;
     const p=new MobCatalogProjection(s.engine as never,()=>new Promise(r=>{resolve=r;}));p.setCatalog(catalog);p.update(.5);
-    expect(s.mobs[0]!.body.visible).toBe(false);
+    expect(s.mobs[0]!.body.visible).toBe(true);
     resolve(loaded());await Promise.resolve();await step(p);
     expect(p.evidence().projected).toBe(1);expect(s.mobs[0]!.body.visible).toBe(false);expect(s.mobs[1]!.body.visible).toBe(true);expect(s.mobs[2]!.body.visible).toBe(true);
     const actor=s.scene.getObjectByName("aurion-confirmed-mob-glb:mob_1")!;
     expect(actor.position.y).toBe(2);expect(actor.scale.y).toBeCloseTo(.825);
-    p.dispose();expect(s.mobs.every(m=>m.body.visible)).toBe(false);
+    p.dispose();expect(s.mobs.every(m=>m.body.visible)).toBe(true);
   });
   it("switches only the physical GLB member when confirmed distance crosses the existing actor LOD bands", async()=>{
     const s=setup();
@@ -81,7 +83,7 @@ describe("approved confirmed mob GLB presentation", () => {
     acceptConfirmedZoneCombat(event);acceptConfirmedZoneCombat({...event,sequence:2});expect(p.evidence().lastAttackSequences[0]!.sequence).toBe(3);p.dispose();
   });
   it("restores on catalog revocation and never attaches a late decode to a disposed world",async()=>{
-    const s=setup(),p=new MobCatalogProjection(s.engine as never,async()=>loaded());p.setCatalog(catalog);await step(p);p.setCatalog({...catalog,entries:[]});expect(s.mobs[0]!.body.visible).toBe(false);expect(p.evidence().projected).toBe(0);p.dispose();
+    const s=setup(),p=new MobCatalogProjection(s.engine as never,async()=>loaded());p.setCatalog(catalog);await step(p);p.setCatalog({...catalog,entries:[]});expect(s.mobs[0]!.body.visible).toBe(true);expect(p.evidence().projected).toBe(0);p.dispose();
     let resolve!: (v:ReturnType<typeof loaded>)=>void;
     const q=new MobCatalogProjection(s.engine as never,()=>new Promise(r=>{resolve=r;}));q.setCatalog(catalog);q.update(.5);q.dispose();resolve(loaded());await Promise.resolve();expect(q.evidence().projected).toBe(0);
   });
@@ -89,7 +91,7 @@ describe("approved confirmed mob GLB presentation", () => {
     const old=window.innerWidth;Object.defineProperty(window,"innerWidth",{value:412,configurable:true});
     try {
       const s=setup(16),p=new MobCatalogProjection(s.engine as never,async()=>loaded());p.setCatalog(catalog);for(let i=0;i<10;i++)await step(p);expect(p.evidence().projected).toBe(8);p.dispose();
-      const load=vi.fn(async()=>{throw Error("decode failure");});const q=new MobCatalogProjection(setup().engine as never,load);q.setCatalog(catalog);for(let i=0;i<12;i++)await step(q,6);expect(load).toHaveBeenCalledTimes(3);expect(q.evidence().projected).toBe(0);q.dispose();
+      const load=vi.fn(async()=>{throw Error("decode failure");});const q=new MobCatalogProjection(setup().engine as never,load);q.setCatalog(catalog);for(let i=0;i<12;i++)await step(q,6);expect(load).toHaveBeenCalledTimes(3);expect(q.evidence().projected).toBe(0);expect(q.evidence().failed).toBe(1);expect(q.evidence().rejected[0]?.reason).toContain("decode_failure");expect(q.evidence().projected).toBe(0);q.dispose();
     } finally {Object.defineProperty(window,"innerWidth",{value:old,configurable:true});}
   });
   it("projects every current mob archetype through a matching generic fallback family", async () => {
@@ -151,6 +153,29 @@ describe("approved confirmed mob GLB presentation", () => {
       Object.defineProperty(window, "innerWidth", { value: old, configurable: true });
       p.dispose();
     }
+  });
+
+  it("accepts an imported 8,284-triangle rigged monster instead of enforcing the legacy 1,600-triangle art limit", async () => {
+    const s = setup();
+    const p = new MobCatalogProjection(s.engine as never, async () => loaded(8284));
+    p.setCatalog(catalog);
+    await step(p);
+    expect(p.evidence().projected).toBe(1);
+    expect(p.evidence().physicalLods[0]).toMatchObject({ triangles: 8284, bones: 1 });
+    expect(s.mobs[0]!.body.visible).toBe(false);
+    expect(s.scene.getObjectByName("aurion-confirmed-mob-glb:mob_1")).toBeDefined();
+    p.dispose();
+  });
+
+  it("does not make an authoritative enemy invisible when no compatible GLB is available", async () => {
+    const s = setup();
+    const p = new MobCatalogProjection(s.engine as never, async () => { throw Error("GLB not available"); });
+    p.setCatalog({ ...catalog, entries: [] });
+    await step(p);
+    expect(p.evidence().projected).toBe(0);
+    expect(s.mobs[0]!.body.visible).toBe(true);
+    expect(s.mobs[0]!.data.hp).toBe(100);
+    p.dispose();
   });
 
 });

@@ -1778,3 +1778,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Keep server-confirmed hostile actors visible through failed GLB presentation (#892)
+Status: PARTIAL — isolated branch, CI and actual device proof pending
+Task: Reproduce live invisible enemies where combat and HP remain authoritative but approved GLB catalog asset is pending, incompatible or fails to load.
+Decisions: Do not change server snapshots, combat, NPC authority, geometry budgets, 10 Hz, persistence or world asset paths. Retain an already existing presentation body for living authoritative enemies until the approved GLB actually passes load/rig/animation verification; maintain loaded GLB priority and no resurrection for dead actors.
+Touched surfaces: `client/src/xaurion/integration/MobCatalogProjection.ts` and matching focused tests.
+Evidence: Code path verified: pre-GLB `visual.body.visible=false` combined with `NO_COMPATIBLE_FALLBACK` and load failures left no rendered enemy; focused regression checks added. CI and actual browser screenshots still pending.
+Learned: Concealing the only renderable presentation before the real asset is ready creates invisible enemies even while damage and authoritative entity data remain intact.
+Open: Fix separately missing NPC model catalog/fallback and owner-provided surface atlas asset binding; browser/network asset readback and final exact-head CI required before merge.
+Next safe step: Finish exact-head regression checks; merge only after acceptance gates and production-safe proof, then test actual GLB and atlas rendering on phone/desktop.
+
+### 2026-10-15 — Measured monster geometry replaces fabricated 1,600-triangle actor rejection
+Status: PARTIAL — exact-head CI and GPU/device runtime profiling pending
+Task: Let the owner's real CC0 rigged monster models render in Aurion without inventing geometry caps.
+Decisions: Preserve canonical GLB authorization, SHA-256, resource pool, asset bytes, decoded texture/geometry, <=64-rig-bone validation, authentic motion clips and 10 Hz authority; remove only the redundant 1,600-triangle art cutoff in approved enemy GLB presentation, preserving a fail-closed nonempty safe-integer geometry/rig check. Static mobile LOD worker explicitly disables skins/animations and must NOT process these combat actors; GPU device profiling determines eventual authored LODs.
+Touched surfaces: `client/src/xaurion/integration/MobCatalogProjection.ts`, `MobCatalogProjection.test.ts`, `docs/assets/monster-geometry-evidence-2026-10-15.md`.
+Evidence: Exact CC0 `PacksMODELLE` 49-file GLB archive structurally validated (49/49), min/median/max 1,030/3,696/8,284 triangles, 45 exceed old 1,600 art target, max 49 skin joints, max 15 clips; 1 source quarantined. Synthetic 8,284-triangle Three.js actor regression added; source-control CI outcome and real Android GPU frame time not yet confirmed at entry.
+Learned: The 1,600 number originated as a static LOD production target but was mistakenly treated as a runtime actor compatibility rule, rejecting otherwise sound animated monsters.
+Open: Exact-head CI, immutable asset-import receipts, in-game texture/animation and mobile/desktop GPU frame-time/memory verification, rig-preserving authored LODs only if performance warrants.
+Next safe step: Verify exact-head tests, merge once gates pass, then import a small approved monster pilot via owner-authenticated Aurion ZIP endpoint; do not claim deployed GLBs or stable FPS until readback.
