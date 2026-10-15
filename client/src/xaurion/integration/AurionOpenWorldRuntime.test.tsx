@@ -198,7 +198,7 @@ describe("open world session ownership", () => {
     expect(fixture.connections[0].close).toHaveBeenCalled();
     expect(screen.queryByText("World controls")).toBeNull();
     expect(screen.getByRole("alert").textContent).not.toContain("private renderer diagnostics");
-    expect(screen.getByRole("button", { name: "ZUR STERNWARTE" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Zur Sternwarte zurückkehren" })).toBeTruthy();
   });
   it("retires late initialization before it can attach an engine or obtain a zone ticket", async () => {
     fixture.deferRenderer = true;

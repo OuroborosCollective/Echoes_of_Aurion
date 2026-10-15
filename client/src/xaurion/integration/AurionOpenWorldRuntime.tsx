@@ -856,7 +856,7 @@ export default function AurionOpenWorldRuntime() {
         <span>{webglError ? "Angehalten" : zoneStatus === "connected" ? worldLabel : zoneStatus === "connecting" ? "Verbindung wird hergestellt" : "Verbindung unterbrochen"}</span>
         <b className="sr-only">{zoneStatus === "connected" ? "BEWEGUNG VERBUNDEN" : "NICHT VERBUNDEN"}</b>
       </div>
-      <button className="xaurion-runtime__return" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>
+      <button aria-label="Zur Sternwarte zurückkehren" title="Zur Sternwarte zurückkehren" className="xaurion-runtime__return" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>
         <ArrowLeft size={18} /><span className="sr-only">ZUR STERNWARTE</span>
       </button>
 
