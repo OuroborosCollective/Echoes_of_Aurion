@@ -2141,3 +2141,25 @@ Evidence: Earlier candidate `7bfad45c6da39ce9088326a49b3ee595d6ffe97b` passed al
 Learned: The confirmed `player.me` readback contains tracks but no aggregate level/XP fields; ownership copy must distinguish absent fields from a missing readback, and runtime evidence must activate tab-scoped content before asserting visibility.
 Open: Final Memory-bearing head gates, review, merge and main readback.
 Next safe step: Merge only after all exact-final-head gates and review are green, then verify the change on `main`.
+
+
+### 2026-10-15 — PR #952 — fix(profile): identify progression readback as Aurion-owned
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=952 merge=ad38e8c8387cddc827d098988649736d63c529ec -->
+Task: Merge PR #952 into `main` — fix(profile): identify progression readback as Aurion-owned.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/pages/Account.tsx`
+- `client/src/pages/Operations.tsx`
+- `e2e/ax1.ui.spec.ts`
+- `server/aurionSingleAuthorityArchitecture.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/952
+- Merge commit: `ad38e8c8387cddc827d098988649736d63c529ec`
+- PR head: `4755827ab5565c012990452b7e5379900abaeb6d`
+- Merged at: 2026-10-15T18:07:35Z
+- Post-merge workflow run: 38783029159
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
