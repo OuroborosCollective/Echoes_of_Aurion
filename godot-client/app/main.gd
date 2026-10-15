@@ -12,6 +12,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 func _ready() -> void:
 	Engine.max_fps = 30
 	var config := RuntimeConfig.current()
+	%BuildIdentity.text = "Build · " + config.client_build
 	login.disabled = true
 	if config.server_base_url.is_empty() or config.client_build.is_empty() or config.renderer_profile != "compatibility":
 		status.text = "Konfiguration ungültig"

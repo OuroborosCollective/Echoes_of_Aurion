@@ -37,6 +37,7 @@ func verify() -> void:
 		print("Layout: window=", viewport_size, " root=", root.size, " scene=", scene.size, " card=", card.size, " minimum=", card.get_combined_minimum_size())
 		require(card.size.x <= viewport_size.x - 32, "launch card overflows width")
 		require(button.size.y >= 48, "touch target too small")
+		require(scene.get_node("%BuildIdentity").text == "Build · " + Config.current().client_build, "visible build identity missing")
 		require(button.disabled, "unimplemented login must stay disabled")
 		require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "offline status missing")
 	scene.queue_free()
