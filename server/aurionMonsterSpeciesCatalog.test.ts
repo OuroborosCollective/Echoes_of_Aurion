@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aurionMonsterAssetRegistry } from "../shared/aurionMonsterAssetRegistry";
-import { aurionMonsterSpecies, aurionMonsterRegions, aurionMonsterCombatStats, planAurionMonsterEncounter, requireAurionMonsterSpecies } from "./aurionMonsterSpeciesCatalog";
+import { aurionMonsterSpecies, aurionMonsterRegions, aurionMonsterCombatStats, aurionMonsterCombatStatsExact, planAurionMonsterEncounter, planAurionScaledMonsterEncounter, requireAurionMonsterSpecies } from "./aurionMonsterSpeciesCatalog";
 
 describe("Aurion authoritative monster species catalog", () => {
   it("binds 49 distinct author-reviewed gameplay identities to 49 immutable uploaded GLBs", () => {
@@ -51,4 +51,18 @@ describe("Aurion authoritative monster species catalog", () => {
     expect(() => planAurionMonsterEncounter("observatory_threshold", "", 1)).toThrow();
     expect(() => planAurionMonsterEncounter("observatory_threshold", "valid", 17)).toThrow();
   });
+  it("treats authored level bands as encounter defaults, not a global progression cap", () => {
+    const species = requireAurionMonsterSpecies("monster_big_birb");
+    const result = aurionMonsterCombatStatsExact(species, "100000000000000000000");
+    expect(result.levelExact).toBe("100000000000000000000");
+    expect(BigInt(result.maxHealthExact)).toBeGreaterThan(BigInt(Number.MAX_SAFE_INTEGER));
+    expect(BigInt(result.attackBonusExact)).toBeGreaterThan(0n);
+    const region = planAurionScaledMonsterEncounter("observatory_threshold", "scale-seed", 5, "100000000000000000000");
+    expect(region).toHaveLength(5);
+    expect(region.every(actor => BigInt(actor.levelExact) > 100000000000000000000n)).toBe(true);
+    expect(region.every(actor => actor.levelNumberProjectionExact === false)).toBe(true);
+    expect(planAurionScaledMonsterEncounter("observatory_threshold", "scale-seed", 5, "100000000000000000000")).toEqual(region);
+    expect(() => planAurionScaledMonsterEncounter("observatory_threshold", "scale-seed", 5, "-1")).toThrow();
+  });
+
 });
