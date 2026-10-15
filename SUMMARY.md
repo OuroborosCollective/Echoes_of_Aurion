@@ -3,6 +3,7 @@
 * [Echoes of Aurion — Living World](README.md)
 * [Architektur — Aurion Single Authority](ARCHITECTURE_OWNERSHIP.md)
 * [Technische Dokumentation](docs/README.md)
+  * [Godot-Client — Architektur und Migrationsplan](docs/godot-migration/architecture.md)
   * [Aurion Admin-MCP in ChatGPT](docs/aurion-admin-mcp.md)
   * [Public Pattern — Stateless Determinism](docs/public-patterns/stateless-determinism-minimal-runtime.md)
   * [Spieler-Einstieg — Living World](docs/account-first-entry.md)
