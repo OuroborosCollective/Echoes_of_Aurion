@@ -50,6 +50,30 @@ describe("Aurion authoritative self-health and combat feedback", () => {
     expect(screen.getByRole("status").textContent).toBe("Der Aurion-Skill ist serverseitig noch auf Abklingzeit.");
   });
 
+  it("expires stale combat feedback and restarts the lifetime for a newer outcome", () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      act(() => window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, {
+        detail: { confirmed: false, completed: false, message: "Erste Aurion-Rückmeldung." },
+      })));
+      expect(screen.getByRole("status").textContent).toBe("Erste Aurion-Rückmeldung.");
+
+      act(() => vi.advanceTimersByTime(3_999));
+      expect(screen.getByRole("status").textContent).toBe("Erste Aurion-Rückmeldung.");
+      act(() => window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, {
+        detail: { confirmed: false, completed: false, message: "Neuere Aurion-Rückmeldung." },
+      })));
+
+      act(() => vi.advanceTimersByTime(3_999));
+      expect(screen.getByRole("status").textContent).toBe("Neuere Aurion-Rückmeldung.");
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.queryByText("Neuere Aurion-Rückmeldung.")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("never announces a successful cold archive simply because a combat action was confirmed", async () => {
     mount();
     act(() => window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { sequence: 1, command: "F" } })));
