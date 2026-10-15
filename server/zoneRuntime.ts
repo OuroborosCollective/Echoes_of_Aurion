@@ -496,6 +496,7 @@ export class AuthoritativeMovementZone {
     const definition = ax1BladeSkillById(skill.skillId);
     if (peer.weaponTrack !== "blade" || !definition || definition.skillId !== "k_strike" || definition.kind !== "melee") return "invalid_skill";
     if (this.tickNumber < (peer.skillCooldownUntilTick.get(skill.skillId) ?? 0)) return "cooldown";
+    if (!skill.targetEntityId) return "invalid_target";
     const mob = this.mobRuntime.stateFor(skill.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
     if (mobDistance(peer.position, mob.position) > definition.rangeFixed) return "out_of_range";
