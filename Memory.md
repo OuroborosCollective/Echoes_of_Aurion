@@ -1798,3 +1798,24 @@ Evidence: Exact CC0 `PacksMODELLE` 49-file GLB archive structurally validated (4
 Learned: The 1,600 number originated as a static LOD production target but was mistakenly treated as a runtime actor compatibility rule, rejecting otherwise sound animated monsters.
 Open: Exact-head CI, immutable asset-import receipts, in-game texture/animation and mobile/desktop GPU frame-time/memory verification, rig-preserving authored LODs only if performance warrants.
 Next safe step: Verify exact-head tests, merge once gates pass, then import a small approved monster pilot via owner-authenticated Aurion ZIP endpoint; do not claim deployed GLBs or stable FPS until readback.
+
+
+### 2026-10-15 — PR #895 — fix(aurion): keep confirmed mob visible until GLB presentation loads (#892)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=895 merge=9730f574f2f678ed4f19f96c14e0716a257924d9 -->
+Task: Merge PR #895 into `main` — fix(aurion): keep confirmed mob visible until GLB presentation loads (#892).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/xaurion/integration/MobCatalogProjection.test.ts`
+- `client/src/xaurion/integration/MobCatalogProjection.ts`
+- `docs/assets/monster-geometry-evidence-2026-10-15.md`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/895
+- Merge commit: `9730f574f2f678ed4f19f96c14e0716a257924d9`
+- PR head: `a51883b55bb8dcd6c790c3ababbc15912c809e8d`
+- Merged at: 2026-10-15T00:50:56Z
+- Post-merge workflow run: 38662350429
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
