@@ -187,7 +187,7 @@ export default function AurionOpenWorldRuntime() {
   }, [requestAuthoritativeAction]);
 
   const requestAuthoritativeMount = useCallback(() => {
-    engineRef.current?.addChatMessage("system", "Aurion", "Mount bleibt auf dem -ax1-Keybind Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.");
+    engineRef.current?.addChatMessage("system", "Aurion", "Mount bleibt auf der Aurion-Taste Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.");
     window.dispatchEvent(new CustomEvent("aurion:xaurion-mount-intent", { detail: { source: "human" as const } }));
   }, []);
 
