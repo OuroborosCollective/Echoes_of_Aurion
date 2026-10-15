@@ -1860,3 +1860,14 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — Aurion-owned combat feedback reaches the live HUD
+Status: VERIFIED candidate
+Task: Replace deprecated AX1/WASD combat ownership copy and project direct pointer/keyboard outcomes into the existing single HUD feedback lane.
+Decisions: Map all five existing typed hotbar intents to the zone transport; preserve Aurion server acceptance/rejection and gameplay semantics; show only the resolved outcome.
+Touched surfaces: Combat action/bridge/HUD integration, focused regressions, source guards and AIM-259 browser evidence.
+Evidence: Implementation commit `2f6ca2e32a961c7da240d21ecf923a9761ac9b31`; AIM-259 run `38737427907` and artifact `11974039356` passed authenticated phone/tablet/desktop `k_charge` -> `INVALID_COMBAT_SKILL` WebSocket rejection, exact feedback, viewport and topmost checks; Local Test Pack `38737428181` passed full regression.
+Learned: Typed client intent is not server capability; forward it to Aurion and surface the canonical reject through one feedback projection.
+Open: Final Memory-only head gates, review and merge/readback.
+Next safe step: Merge only after every required workflow is green for the exact final PR head and review remains clear.
