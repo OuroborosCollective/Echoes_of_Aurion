@@ -2131,3 +2131,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Aurion-owned profile progression copy
+Status: VERIFIED candidate
+Task: Remove visible active Legacy-Aurion/WASD ownership claims from the authenticated Account and Operations progression explanations.
+Decisions: Keep the existing read-only Aurion readbacks unchanged; state that aggregate level/XP are absent from the current confirmed contract while the client projection invents neither aggregates nor classes.
+Touched surfaces: `client/src/pages/Account.tsx`, `client/src/pages/Operations.tsx`, the single-authority regression and the existing authenticated three-viewport browser journey.
+Evidence: Earlier candidate `7bfad45c6da39ce9088326a49b3ee595d6ffe97b` passed all eight workflows; AIM-259 `38772754165` / artifact `11991789777` captured authenticated Account readback on phone, tablet and desktop. Final Account plus Operations exact-head evidence is pending.
+Learned: The confirmed `player.me` readback contains tracks but no aggregate level/XP fields; ownership copy must distinguish absent fields from a missing readback, and runtime evidence must activate tab-scoped content before asserting visibility.
+Open: Final Memory-bearing head gates, review, merge and main readback.
+Next safe step: Merge only after all exact-final-head gates and review are green, then verify the change on `main`.
