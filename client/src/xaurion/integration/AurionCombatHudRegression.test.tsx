@@ -50,25 +50,27 @@ describe("Aurion authoritative self-health and combat feedback", () => {
     expect(screen.getByRole("status").textContent).toBe("Der Aurion-Skill ist serverseitig noch auf Abklingzeit.");
   });
 
-  it("expires stale combat feedback and restarts the lifetime for a newer outcome", () => {
+  it("expires stale combat feedback and restarts the lifetime for an identical newer outcome", async () => {
     vi.useFakeTimers();
     try {
+      const repeatedMessage = "Wiederholte Aurion-Rückmeldung.";
+      f.onAction.mockResolvedValueOnce({ confirmed: false, completed: false, message: repeatedMessage });
       mount();
       act(() => window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, {
-        detail: { confirmed: false, completed: false, message: "Erste Aurion-Rückmeldung." },
+        detail: { confirmed: false, completed: false, message: repeatedMessage },
       })));
-      expect(screen.getByRole("status").textContent).toBe("Erste Aurion-Rückmeldung.");
+      expect(screen.getByRole("status").textContent).toBe(repeatedMessage);
 
       act(() => vi.advanceTimersByTime(3_999));
-      expect(screen.getByRole("status").textContent).toBe("Erste Aurion-Rückmeldung.");
-      act(() => window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, {
-        detail: { confirmed: false, completed: false, message: "Neuere Aurion-Rückmeldung." },
-      })));
+      expect(screen.getByRole("status").textContent).toBe(repeatedMessage);
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Angriff [R]" }));
+      });
 
       act(() => vi.advanceTimersByTime(3_999));
-      expect(screen.getByRole("status").textContent).toBe("Neuere Aurion-Rückmeldung.");
+      expect(screen.getByRole("status").textContent).toBe(repeatedMessage);
       act(() => vi.advanceTimersByTime(1));
-      expect(screen.queryByText("Neuere Aurion-Rückmeldung.")).toBeNull();
+      expect(screen.queryByText(repeatedMessage)).toBeNull();
     } finally {
       vi.useRealTimers();
     }
