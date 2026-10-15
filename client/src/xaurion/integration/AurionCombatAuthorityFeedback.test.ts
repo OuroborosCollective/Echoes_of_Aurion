@@ -13,6 +13,7 @@ import { requestConfirmedAction } from "./confirmedActionRequest";
 
 const target = { id: "mob_1", hp: 100, x: 4, z: 0 };
 const sendSkill = vi.fn(() => true);
+const nearest = vi.fn((): typeof target | null => target);
 const engine = {
   targetMob: null,
   mobManager: {
