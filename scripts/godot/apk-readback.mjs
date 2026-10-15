@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 export const previewPackage = 'org.ouroboroscollective.aurion.godot.preview';
 export function validateApk(badging, signature, entries, manifest) {
-  assert.match(badging, new RegExp(`package: name='${previewPackage.replaceAll('.', '\\.')}.*versionCode='1'.*versionName='0.1.0-preview'`));
+  assert.match(badging, new RegExp(`package: name='${previewPackage.replaceAll('.', '\\.')}'.*versionCode='1'.*versionName='0.1.0-preview'`));
   // aapt 35 badging omits launchable-activity for Godot 4.7's activity-alias.
   // Verify the exported alias and its concrete target in the actual manifest.
   const blocks = manifest.split(/(?=^ {6}E: )/m);
