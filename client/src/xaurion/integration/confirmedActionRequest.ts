@@ -6,8 +6,8 @@ export type ActionOutcome={confirmed:boolean;completed:boolean;message:string};
 export type ActionCompletion=(outcome:ActionOutcome)=>void;
 
 /**
- * AX1 requests gameplay only from the live WASD zone contract.
- * There is deliberately no Aurion encounter/arena fallback.
+ * Aurion requests gameplay only from its live server zone contract.
+ * There is deliberately no local encounter or arena fallback.
  */
 export function requestConfirmedAction(command:AurionGameplayCommand):Promise<ActionOutcome>{
   if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback."});
