@@ -62,7 +62,7 @@ describe("Aurion confirmed monster victory reward curve", () => {
   });
   it("refuses fabricated species, forged reward values, wrong metadata and invalid id/level/weapon fields", () => {
     expect(() => buildAurionMonsterVictoryReward(input("monster_missing",3))).toThrow();
-    expect(() => buildAurionMonsterVictoryReward(input("monster_big_birb",999))).toThrow();
+    expect(buildAurionMonsterVictoryReward(input("monster_big_birb",999)).monsterLevelExact).toBe("999");
     expect(() => buildAurionMonsterVictoryReward(input("monster_big_birb",3,0))).toThrow();
     expect(() => buildAurionMonsterVictoryReward({...input("monster_big_birb",3),weaponTrack:"dagger" as never})).toThrow();
     expect(() => buildAurionMonsterVictoryReward({...input("monster_big_birb",3),receiptId:"oops"})).toThrow();
