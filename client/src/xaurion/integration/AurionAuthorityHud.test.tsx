@@ -41,6 +41,7 @@ describe("server-backed Aurion HUD", () => {
     fixtures.ui.refetch.mockImplementation(async () => ({ data: fixtures.ui.data, isError: false }));
     fixtures.appearance.refetch.mockImplementation(async () => ({ data: fixtures.appearance.data, isError: fixtures.appearance.isError }));
     fixtures.mutate.mockResolvedValue({});
+    fixtures.onAction.mockResolvedValue({ confirmed: true, completed: false, message: "Aktion bestätigt." });
   });
 
   it("sends basic attack F from the pointer/touch button independently of hotbar slot one", () => {
