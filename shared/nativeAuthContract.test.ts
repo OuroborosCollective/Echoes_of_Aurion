@@ -64,12 +64,12 @@ describe("native auth public contract", () => {
       accessToken: opaque("a"),
       accessExpiresInSeconds: NATIVE_AUTH_ACCESS_TTL_SECONDS,
       refreshToken: opaque("r"),
-      refreshAbsoluteExpiresInSeconds:
+      refreshAbsoluteRemainingSeconds:
         NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS,
       refreshIdleExpiresInSeconds: NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS,
     });
     expect(pair.accessExpiresInSeconds).toBe(15 * 60);
-    expect(pair.refreshAbsoluteExpiresInSeconds).toBe(30 * 24 * 60 * 60);
+    expect(pair.refreshAbsoluteRemainingSeconds).toBe(30 * 24 * 60 * 60);
     expect(pair.refreshIdleExpiresInSeconds).toBe(7 * 24 * 60 * 60);
     expect(() =>
       nativeAuthTokenPairSchema.parse({
@@ -83,6 +83,12 @@ describe("native auth public contract", () => {
         accessToken: pair.refreshToken,
       }),
     ).toThrow("NATIVE_AUTH_TOKENS_MUST_DIFFER");
+    expect(
+      nativeAuthTokenPairSchema.parse({
+        ...pair,
+        refreshAbsoluteRemainingSeconds: 24 * 60 * 60,
+      }).refreshAbsoluteRemainingSeconds,
+    ).toBe(24 * 60 * 60);
   });
 
   it("rejects downgrade, weak binding and unsafe browser destinations", () => {
@@ -116,6 +122,22 @@ describe("native auth public contract", () => {
       }),
     ).toThrow();
     expect(() =>
+      nativeAuthStartResponseSchema.safeParse({
+        version,
+        transactionId: opaque("t"),
+        browserUrl: "x",
+        expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
+      }),
+    ).not.toThrow();
+    expect(
+      nativeAuthStartResponseSchema.safeParse({
+        version,
+        transactionId: opaque("t"),
+        browserUrl: "x",
+        expiresInSeconds: NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
+      }).success,
+    ).toBe(false);
+    expect(() =>
       nativeAuthStartResponseSchema.parse({
         version,
         transactionId: opaque("t"),
@@ -136,7 +158,7 @@ describe("native auth public contract", () => {
     expect(() =>
       nativeAuthErrorSchema.parse({
         version,
-        error: "SESSION_REVOKED",
+        error: "NATIVE_AUTH_REVOKED",
         detail: opaque("a"),
       }),
     ).toThrow();
