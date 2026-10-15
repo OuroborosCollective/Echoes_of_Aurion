@@ -2048,3 +2048,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #954 — docs(godot): Tab-A9-4-GB-Abnahmeprofil festlegen (#908)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=954 merge=7deb10f4abebe8cce383422ffc0f24cecfc6eb51 -->
+Task: Merge PR #954 into `main` — docs(godot): Tab-A9-4-GB-Abnahmeprofil festlegen (#908).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `SUMMARY.md`
+- `docs/godot-migration/device-check.md`
+- `docs/godot-migration/tab-a9-profile.md`
+- `godot-client/config/device_profiles/tab_a9.json`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/954
+- Merge commit: `7deb10f4abebe8cce383422ffc0f24cecfc6eb51`
+- PR head: `2629e8d2d4627919cabadd63cfa77fcc6e65d70c`
+- Merged at: 2026-10-15T16:56:30Z
+- Post-merge workflow run: 38773177164
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
