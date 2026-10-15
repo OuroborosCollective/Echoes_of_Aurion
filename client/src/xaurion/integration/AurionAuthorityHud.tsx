@@ -72,6 +72,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const utils = trpc.useUtils();
   const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
   const playerQuery = trpc.player.me.useQuery(undefined, options);
+  const statWalletQuery = trpc.player.statWallet.useQuery(undefined, { ...options, enabled: userId > 0 && panel === "character" });
+  const spendStat = trpc.player.allocateStatPoint.useMutation();
   const worldQuery = trpc.gameplay.openWorld.useQuery(undefined, options);
   const uiQuery = trpc.player.ui.useQuery(undefined, options);
   const groupQuery = trpc.groups.read.useQuery(undefined, options);
@@ -109,12 +111,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     setPanel(value);
   }, [auto, onMove]);
   const refresh = useCallback(async () => {
-    const results = await Promise.all([playerQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch(), manipulationQuery.refetch()]);
+    const results = await Promise.all([playerQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch(), manipulationQuery.refetch(), statWalletQuery.refetch()]);
     if (results.some(result => result.isError)) throw new Error("UI_READBACK_UNAVAILABLE");
     const parsed = playerUiReadbackSchema.parse(results[1].data);
     if (parsed.userId !== userId) throw new Error("UI_READBACK_OWNER_MISMATCH");
     await utils.gameplay.relationshipStanding.invalidate();
-  }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, manipulationQuery.refetch, utils, userId]);
+  }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, manipulationQuery.refetch, statWalletQuery.refetch, utils, userId]);
   const act = async (operation: () => Promise<unknown>, ready = fresh) => {
     if (!ready || busy.current) return;
     busy.current = true;
@@ -395,6 +397,15 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       isOpen={panel === "character"}
       onClose={() => openPanel(null)}
       player={player.data}
+      statWallet={!statWalletQuery.isError && !statWalletQuery.isStale ? statWalletQuery.data : undefined}
+      statPending={!fresh || statWalletQuery.isFetching || pending}
+      onSpendStat={attribute => {
+        const wallet = statWalletQuery.data;
+        if (!wallet || statWalletQuery.isError || statWalletQuery.isStale || !connected || pending) return;
+        const nonce = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
+        if (!nonce) return;
+        void act(() => spendStat.mutateAsync({ attribute, idempotencyKey: `stat:${nonce}`, expectedAvailableExact: wallet.availableExact }), fresh);
+      }}
       settings={ui.data?.settings}
       uiPending={!uiFresh}
       groupPending={!groupFresh}
