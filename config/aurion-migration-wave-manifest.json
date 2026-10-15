@@ -210,6 +210,10 @@
     {
       "tag": "0073_aurion_production_probe_session_fence",
       "source": "aurion"
+    },
+    {
+      "tag": "0074_aurion_stat_allocation_receipts",
+      "source": "aurion"
     }
   ],
   "policy": {
