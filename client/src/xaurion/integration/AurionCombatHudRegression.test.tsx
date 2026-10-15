@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Toaster, toast } from "sonner";
 import { CausalBackupNotifier } from "@/components/CausalBackupNotifier";
@@ -29,6 +29,18 @@ const confirmed = (health: number) => ({
 });
 
 describe("Aurion authoritative self-health and combat feedback", () => {
+  it("projects a rejected direct attack into the single visible combat feedback lane", async () => {
+    f.onAction.mockResolvedValueOnce({
+      confirmed: false,
+      completed: false,
+      message: "Ziel außerhalb der bestätigten Aurion-Reichweite.",
+    });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Angriff [R]" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Ziel außerhalb der bestätigten Aurion-Reichweite."));
+    expect(screen.getAllByText("Ziel außerhalb der bestätigten Aurion-Reichweite.")).toHaveLength(1);
+  });
+
   it("never announces a successful cold archive simply because a combat action was confirmed", async () => {
     mount();
     act(() => window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { sequence: 1, command: "F" } })));
