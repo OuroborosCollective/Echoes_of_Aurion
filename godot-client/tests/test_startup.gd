@@ -21,6 +21,7 @@ func verify() -> void:
 	for action in ["move_left", "move_right", "move_forward", "move_backward", "interact", "primary_action"]:
 		require(InputMap.has_action(action), "missing input action: " + action)
 	require(ProjectSettings.get_setting("rendering/renderer/rendering_method") == "gl_compatibility", "renderer changed")
+	require(ProjectSettings.get_setting("rendering/textures/vram_compression/import_etc2_astc", false), "Android texture import missing")
 	var packed := load("res://app/main.tscn") as PackedScene
 	require(packed != null, "main scene unavailable")
 	if packed == null:
