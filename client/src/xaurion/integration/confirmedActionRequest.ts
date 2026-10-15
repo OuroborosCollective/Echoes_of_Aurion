@@ -1,19 +1,23 @@
+import { ax1BladeSkillForCommand } from "@shared/ax1BladeSkillProtocol";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import { requestZoneBasicAttack, requestZoneSkill, zoneCombatAvailable } from "./zoneCombatBridge";
 
 export const WORLD_PANEL_SELECTOR='[data-aurion-panel="open"], [role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]';
 export type ActionOutcome={confirmed:boolean;completed:boolean;message:string};
 export type ActionCompletion=(outcome:ActionOutcome)=>void;
+export const AURION_COMBAT_FEEDBACK_EVENT = "aurion:combat-feedback";
 
 /**
- * AX1 requests gameplay only from the live WASD zone contract.
- * There is deliberately no Aurion encounter/arena fallback.
+ * Aurion requests gameplay only from its live server zone contract.
+ * There is deliberately no local encounter or arena fallback.
  */
 export function requestConfirmedAction(command:AurionGameplayCommand):Promise<ActionOutcome>{
-  if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"WASD-Zonenvertrag nicht verbunden; kein Aurion-Gameplay-Fallback."});
+  if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback."});
   if(command==="F")return requestZoneBasicAttack();
-  if(command==="1")return requestZoneSkill("k_strike");
-  return Promise.resolve({confirmed:false,completed:false,message:`${command} ist im WASD-Zonenvertrag noch nicht freigeschaltet.`});
+  // Mapping selects only the typed transport intent; the zone server still decides acceptance.
+  const skill = ax1BladeSkillForCommand(command);
+  if(skill)return requestZoneSkill(skill.skillId);
+  return Promise.resolve({confirmed:false,completed:false,message:`Aktion ${command} ist über diesen Client noch nicht mit dem Aurion-Zonenserver verbunden.`});
 }
 
 /** Timers schedule requests only. This controller cannot infer damage, issue receipts or retry a lost action. */

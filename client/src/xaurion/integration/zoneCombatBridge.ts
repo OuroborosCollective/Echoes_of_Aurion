@@ -6,7 +6,7 @@ import { CONFIRMED_COMBAT_PRESENTATION_EVENT, projectConfirmedCombatPresentation
 
 export type ZoneActionOutcome={confirmed:boolean;completed:boolean;message:string};
 type PendingAttack={expectedSkillId:Ax1BladeSkillId|null;resolve:(value:ZoneActionOutcome)=>void;timer:number};
-type ZoneCombatTransport={attack:(targetEntityId:string)=>boolean;skill:(skillId:Ax1BladeSkillId,targetEntityId:string)=>boolean};
+type ZoneCombatTransport={attack:(targetEntityId:string)=>boolean;skill:(skillId:Ax1BladeSkillId,targetEntityId?:string)=>boolean};
 let engine:MMOEngine|null=null;
 let transport:ZoneCombatTransport|null=null;
 let selfEntityId:string|null=null;
@@ -67,7 +67,7 @@ export function acceptConfirmedZoneCombat(event:ConfirmedZoneCombatEvent):void{
 
 export function rejectPendingZoneAttack(code:string):void{
   if(!pending)return;
-  const message=code==="COMBAT_TARGET_OUT_OF_RANGE"?"Ziel außerhalb der bestätigten AX1-Reichweite.":code==="INVALID_COMBAT_TARGET"?"Ziel ist nicht mehr angreifbar.":code==="COMBATANT_DEAD"?"Dein Charakter ist kampfunfähig.":code==="INVALID_COMBAT_SKILL"?"Dieser AX1-Skill gehört nicht zum bestätigten Waffenpfad.":code==="COMBAT_SKILL_COOLDOWN"?"Der AX1-Skill ist serverseitig noch auf Abklingzeit.":`Angriff verworfen: ${code}`;
+  const message=code==="COMBAT_TARGET_OUT_OF_RANGE"?"Ziel außerhalb der bestätigten Aurion-Reichweite.":code==="INVALID_COMBAT_TARGET"?"Ziel ist nicht mehr angreifbar.":code==="COMBATANT_DEAD"?"Dein Charakter ist kampfunfähig.":code==="INVALID_COMBAT_SKILL"?"Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.":code==="COMBAT_SKILL_COOLDOWN"?"Der Aurion-Skill ist serverseitig noch auf Abklingzeit.":`Angriff verworfen: ${code}`;
   clearPending({confirmed:false,completed:false,message});
 }
 
@@ -81,7 +81,7 @@ function currentTarget():ReturnType<MMOEngine["mobManager"]["nearest"]>|null{
 }
 
 export function requestZoneBasicAttack():Promise<ZoneActionOutcome>{
-  if(!engine||!transport||!selfEntityId)return Promise.resolve({confirmed:false,completed:false,message:"WASD-Zonenkampf ist nicht verbunden."});
+  if(!engine||!transport||!selfEntityId)return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenkampf ist nicht verbunden."});
   if(pending)return Promise.resolve({confirmed:false,completed:false,message:"Vorherige Kampfaktion wartet noch auf Serverbestätigung."});
   const target=currentTarget();
   if(!target)return Promise.resolve({confirmed:false,completed:false,message:"Kein angreifbares Ziel in der Nähe."});
@@ -93,13 +93,14 @@ export function requestZoneBasicAttack():Promise<ZoneActionOutcome>{
 }
 
 export function requestZoneSkill(skillId:Ax1BladeSkillId):Promise<ZoneActionOutcome>{
-  if(!engine||!transport||!selfEntityId)return Promise.resolve({confirmed:false,completed:false,message:"WASD-Zonenkampf ist nicht verbunden."});
+  if(!engine||!transport||!selfEntityId)return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenkampf ist nicht verbunden."});
   if(pending)return Promise.resolve({confirmed:false,completed:false,message:"Vorherige Kampfaktion wartet noch auf Serverbestätigung."});
-  const target=currentTarget();
-  if(!target)return Promise.resolve({confirmed:false,completed:false,message:"Kein angreifbares Ziel in der Nähe."});
+  const definition=ax1BladeSkillById(skillId);
+  const target=definition && definition.rangeFixed > 0 ? currentTarget() : null;
+  if(definition && definition.rangeFixed > 0 && !target)return Promise.resolve({confirmed:false,completed:false,message:"Kein angreifbares Ziel in der Nähe."});
   return new Promise(resolve=>{
     const timer=window.setTimeout(()=>{if(pending?.resolve===resolve)clearPending({confirmed:false,completed:false,message:"Keine Kampfbestätigung erhalten; Zustand wird nicht geraten."});},3_000);
     pending={expectedSkillId:skillId,resolve,timer};
-    if(!transport!.skill(skillId,target.id))clearPending({confirmed:false,completed:false,message:"Skill konnte nicht an die Zone gesendet werden."});
+    if(!transport!.skill(skillId,target?.id))clearPending({confirmed:false,completed:false,message:"Skill konnte nicht an die Zone gesendet werden."});
   });
 }

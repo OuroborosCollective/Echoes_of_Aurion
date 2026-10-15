@@ -1820,11 +1820,132 @@ Learned: Repository memory is now recorded automatically from the completed merg
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
-### 2026-10-15 — Repair Admin newline leakage, strict OS3A apply and historical tick verification
-Status: IN REVIEW — isolated branch; CI, production deployment and live mobile browser readback not yet proved.
-Owner evidence: live Android Admin screenshots show literal `\\n\\n` next to Tabs, OS3A `unrecognized_keys: expectedPlanSha256, confirmation`, and `REPLAY_PRE_STATE_UNAVAILABLE` for observatory_threshold tick 1352100; checkpoint 1352100 marked UNVERIFIED.
-Root causes: Operations.tsx contains literal escaped separators between JSX tabs. applyOpenSource3dFallback accepts a strict apply schema, then incorrectly passes the apply object into a strict plan schema rejecting confirmation fields. Direct replayTick requires a checkpoint at tick-1 even though durable checkpoints are periodic (every 100 ticks); a read-only bounded oracleRange endpoint already exists to replay from a checkpoint.
-Changes: replace escaped JSX text nodes with source line breaks; project only sourceAssetId, purpose and tier to OS3A plan resolution while preserving expected plan SHA and explicit admin confirmation; switch Causal Studio tick-verification UI to the bounded read-only oracleRange, expose verified/warmup ticks and digest identities, invalidate stale UI results on input changes, select checkpoint.tick + 1 as the next replayable tick. Include focused regression checks.
-Safety: No modification of historical receipts/checkpoints, archival content, world authority, player data, asset byte limits, deterministic replay, backend tick rate or production runtime. An unavailable checkpoint or missing intents remains UNPROVABLE; v1 intermediate stages remain unobservable.
-Open: Exact-head CI, OS3A bounded fetch preflight, genuine MariaDB checkpoint readback and mobile screenshot/production verification. Detect historical frontend/runtime revision 9b84e8093f731d72a66f339461cdaed462bc4ace shown on phone, older than repo main — prove deployment separately.
-Next: Green CI and browser check, review exact SHA, then promote only via existing secure deployment process.
+
+### 2026-10-15 — PR #901 — fix(aurion): identify the play launch gate as Aurion-owned
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=901 merge=62bf3cbc593636f59f03f0618d4ecba2a623a1d7 -->
+Task: Merge PR #901 into `main` — fix(aurion): identify the play launch gate as Aurion-owned.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/xaurion/integration/AurionPlayRoute.tsx`
+- `e2e/ax1.ui.spec.ts`
+- `server/aim242AuthorityAdapter.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/901
+- Merge commit: `62bf3cbc593636f59f03f0618d4ecba2a623a1d7`
+- PR head: `d33b55b9a977f553220835c042fb0bd43d7e2b1b`
+- Merged at: 2026-10-15T08:36:39Z
+- Post-merge workflow run: 38706900735
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #902 — fix(aurion): identify the mount key as Aurion-owned
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=902 merge=05e55d0fd2a2568a7cbbb4339c6e9cd6a4a13882 -->
+Task: Merge PR #902 into `main` — fix(aurion): identify the mount key as Aurion-owned.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.tsx`
+- `client/src/xaurion/integration/aurionOpenWorldRuntime.css`
+- `e2e/ax1.ui.spec.ts`
+- `server/aim242AuthorityAdapter.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/902
+- Merge commit: `05e55d0fd2a2568a7cbbb4339c6e9cd6a4a13882`
+- PR head: `a133d363c3c6f3bc5222ca0f812672c05368142f`
+- Merged at: 2026-10-15T11:54:38Z
+- Post-merge workflow run: 38730715911
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #898 — feat(aurion): 49 authoritative monster species profiles and Wolfram-verified deterministic balancing
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=898 merge=a4c9dc2b8e4345258b39fa335560967cffcccebf -->
+Task: Merge PR #898 into `main` — feat(aurion): 49 authoritative monster species profiles and Wolfram-verified deterministic balancing.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `server/aurionMonsterRewardProtocol.test.ts`
+- `server/aurionMonsterRewardProtocol.ts`
+- `server/aurionMonsterSpeciesCatalog.test.ts`
+- `server/aurionMonsterSpeciesCatalog.ts`
+- `server/endgameProtocol.test.ts`
+- `server/endgameProtocol.ts`
+- `shared/aurionMonsterAssetRegistry.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/898
+- Merge commit: `a4c9dc2b8e4345258b39fa335560967cffcccebf`
+- PR head: `89cd86fbb00568970439ee7fa820264930b0f321`
+- Merged at: 2026-10-15T12:53:54Z
+- Post-merge workflow run: 38738202184
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #903 — fix(aurion): identify combat feedback as Aurion-owned
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=903 merge=5dc8779647d7c1ab02c7992237b3ee6bd2bc4b21 -->
+Task: Merge PR #903 into `main` — fix(aurion): identify combat feedback as Aurion-owned.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/lib/zoneMovement.test.ts`
+- `client/src/lib/zoneMovement.ts`
+- `client/src/xaurion/integration/AurionAuthorityHud.test.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.tsx`
+- `client/src/xaurion/integration/AurionCombatAuthorityFeedback.test.ts`
+- `client/src/xaurion/integration/AurionCombatHudRegression.test.tsx`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.tsx`
+- `client/src/xaurion/integration/confirmedActionRequest.ts`
+- `client/src/xaurion/integration/zoneCombatBridge.ts`
+- `e2e/ax1.ui.spec.ts`
+- `server/aim242AuthorityAdapter.test.ts`
+- `server/aim270LegacyEncounterReachability.test.ts`
+- `server/zoneProtocol.test.ts`
+- `server/zoneProtocol.ts`
+- `server/zoneRuntime.test.ts`
+- `server/zoneRuntime.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/903
+- Merge commit: `5dc8779647d7c1ab02c7992237b3ee6bd2bc4b21`
+- PR head: `0ffcc9b8844376aad5a2942c8720da6d1a6d2200`
+- Merged at: 2026-10-15T13:41:21Z
+- Post-merge workflow run: 38744839384
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-15 — Bounded Aurion combat feedback
+Status: VERIFIED candidate
+Task: Expire server-confirmed combat feedback after four seconds without clearing newer combat outcomes or persistent HUD messages.
+Decisions: Keep transient combat state separate; route event, direct-action and auto-attack writers through one restartable timer.
+Touched surfaces: Aurion authority HUD, focused combat HUD regression, AIM-259 browser proof.
+Evidence: Candidate `55b61d58a302768abf5e189935755a7fae4ff6a2`; all 9 workflows green; Local Test Pack `38752697562`; AIM-259 `38752697600` / artifact `11982688338` passed real server rejection visibility, topmost and dismissal on phone/tablet/desktop; exact-head code/security review clear.
+Learned: Message text cannot identify timer ownership because later outcomes may repeat it; one publisher must own the transient instance lifetime.
+Open: Merge and main readback only.
+Next safe step: Re-run required gates on the Memory-bearing final head, merge if green, then verify main.
+
+
+### 2026-10-15 — PR #905 — fix(aurion): expire stale combat feedback
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=905 merge=cdf9470fa0b0c1771b5644fd69e7ce652a13da8a -->
+Task: Merge PR #905 into `main` — fix(aurion): expire stale combat feedback.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/xaurion/integration/AurionAuthorityHud.tsx`
+- `client/src/xaurion/integration/AurionCombatHudRegression.test.tsx`
+- `e2e/ax1.ui.spec.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/905
+- Merge commit: `cdf9470fa0b0c1771b5644fd69e7ce652a13da8a`
+- PR head: `229041d99fc6df989f7a1f5a6994170b603049bd`
+- Merged at: 2026-10-15T15:17:20Z
+- Post-merge workflow run: 38759000000
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.

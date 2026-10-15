@@ -26,6 +26,7 @@ type ZoneCombatEvent = {
   damage: number;
   killed: boolean;
   defenderHealth: number;
+  skillId?: string | null;
   gameplaySourceRevision: string;
 };
 type Combatant = { entityId: string; health: number; maxHealth: number; stamina: number; alive: boolean };
@@ -42,6 +43,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
     const pool = createPool(process.env.DATABASE_URL!);
     const errors: string[] = [];
     const combatEvents: ZoneCombatEvent[] = [];
+    const combatRejects: string[] = [];
     let selfEntityId = "";
     let latestPresences: Presence[] = [];
     let latestCombatants: Combatant[] = [];
@@ -57,6 +59,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
             latestCombatants = Array.isArray(value.combatants) ? value.combatants : latestCombatants;
           } else if (value.type === "combat") {
             combatEvents.push(value as ZoneCombatEvent);
+          } else if (value.type === "reject" && typeof value.code === "string") {
+            combatRejects.push(value.code);
           }
         } catch {}
       });
@@ -109,6 +113,18 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       const hud = page.getByTestId("authoritative-world-hud");
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+      await page.keyboard.press("z");
+      const mountFeedback = page.getByText("Mount bleibt auf der Aurion-Taste Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.", { exact: true });
+      await expect(mountFeedback).toBeVisible();
+      expect(await mountFeedback.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const previousPointerEvents = element.style.pointerEvents;
+        element.style.pointerEvents = "auto";
+        const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        element.style.pointerEvents = previousPointerEvents;
+        return topmost === element || element.contains(topmost);
+      })).toBe(true);
+      await expect(mountFeedback).toBeHidden({ timeout: 6_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
       await expect.poll(() => latestPresences.some(p => p.entityId === selfEntityId), { timeout: 20_000 }).toBe(true);
 
@@ -241,6 +257,29 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       const damagedPlayer = latestCombatants.find(entry => entry.entityId === selfEntityId)!;
       expect(damagedPlayer.alive).toBe(true);
 
+      const serverSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
+      await expect(serverSkill).toBeVisible();
+      // The typed intent must reach Aurion; only the server may reject unsupported skill execution.
+      const skillRejectsBefore = combatRejects.length;
+      await serverSkill.click();
+      await expect.poll(() => combatRejects.length, { timeout: 8_000 }).toBeGreaterThan(skillRejectsBefore);
+      expect(combatRejects.at(-1)).toBe("INVALID_COMBAT_SKILL");
+      const combatFeedback = hud.getByText("Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.", { exact: true });
+      await expect(combatFeedback).toBeVisible();
+      expect(await combatFeedback.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const withinViewport = bounds.left >= 0 && bounds.top >= 0
+          && bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight;
+        const previousPointerEvents = element.style.pointerEvents;
+        element.style.pointerEvents = "auto";
+        const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        element.style.pointerEvents = previousPointerEvents;
+        return withinViewport && (topmost === element || element.contains(topmost));
+      })).toBe(true);
+      await expect(hud.getByText(/WASD-Zonenvertrag|AX1-Skill|AX1-Reichweite/)).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-combat-feedback.png`) });
+      await expect(combatFeedback).toBeHidden({ timeout: 6_000 });
+
       const attack = hud.getByTitle("Angriff [R]", { exact: true });
       const auto = hud.getByTitle("Auto-Angriff", { exact: true });
       await page.getByTestId("glb-presentation").evaluate(element => {
@@ -316,7 +355,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(persistedPlayerReadback.data?.profile.userId).toBe(userId);
       // AurionPlayRoute consumes a one-shot launch contract. Reload must not
       // replay it: follow the real portal action to obtain a fresh server world.
-      await expect(page.getByRole("heading", { name: "AX1-Spielstart benötigt einen bestätigten WASD-Weltvertrag", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Aurion-Spielstart benötigt einen bestätigten Weltvertrag", exact: true })).toBeVisible();
       await expect(hud).toHaveCount(0);
       await page.getByRole("link", { name: "Zum Aurion-Portal", exact: true }).click();
       selfEntityId = ""; latestPresences = []; latestCombatants = [];

@@ -148,13 +148,15 @@ describe("zone movement browser transport", () => {
     client.close();
   });
 
-  it("sends k_strike as a dedicated authenticated skill command after the zone welcome", () => {
+  it("sends targeted and targetless authenticated skill commands after the zone welcome", () => {
     vi.stubGlobal("WebSocket", TestSocket);
     const options = { onStatus: vi.fn(), onSnapshot: vi.fn(), onReject: vi.fn() };
     const client = new ZoneMovementClient(options); client.connect("fixture-ticket");
     const socket = TestSocket.instances[0]; socket.readyState = TestSocket.OPEN; socket.dispatchEvent(new Event("open")); socket.receive(welcome);
     expect(client.sendSkill("k_strike", "mob_12")).toBe(true);
     expect(JSON.parse(socket.send.mock.calls.at(-1)![0])).toEqual({ type: "skill", clientSeq: 1, skillId: "k_strike", targetEntityId: "mob_12" });
+    expect(client.sendSkill("k_shield")).toBe(true);
+    expect(JSON.parse(socket.send.mock.calls.at(-1)![0])).toEqual({ type: "skill", clientSeq: 2, skillId: "k_shield" });
     expect(client.sendSkill("k_strike", "not-a-mob")).toBe(false);
     client.close();
   });

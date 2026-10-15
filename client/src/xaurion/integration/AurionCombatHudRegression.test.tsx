@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Toaster, toast } from "sonner";
 import { CausalBackupNotifier } from "@/components/CausalBackupNotifier";
 import { projectConfirmedZoneSnapshot } from "./zoneCombatBridge";
+import { AURION_COMBAT_FEEDBACK_EVENT } from "./confirmedActionRequest";
 import { AurionAuthorityHud } from "./AurionAuthorityHud";
 
 const f = vi.hoisted(() => {
@@ -29,6 +30,52 @@ const confirmed = (health: number) => ({
 });
 
 describe("Aurion authoritative self-health and combat feedback", () => {
+  it("projects a rejected direct attack into the single visible combat feedback lane", async () => {
+    f.onAction.mockResolvedValueOnce({
+      confirmed: false,
+      completed: false,
+      message: "Ziel außerhalb der bestätigten Aurion-Reichweite.",
+    });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Angriff [R]" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Ziel außerhalb der bestätigten Aurion-Reichweite."));
+    expect(screen.getAllByText("Ziel außerhalb der bestätigten Aurion-Reichweite.")).toHaveLength(1);
+  });
+
+  it("projects keyboard combat outcomes from the runtime into the same feedback lane", () => {
+    mount();
+    act(() => window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, {
+      detail: { confirmed: false, completed: false, message: "Der Aurion-Skill ist serverseitig noch auf Abklingzeit." },
+    })));
+    expect(screen.getByRole("status").textContent).toBe("Der Aurion-Skill ist serverseitig noch auf Abklingzeit.");
+  });
+
+  it("expires stale combat feedback and restarts the lifetime for an identical newer outcome", async () => {
+    vi.useFakeTimers();
+    try {
+      const repeatedMessage = "Wiederholte Aurion-Rückmeldung.";
+      f.onAction.mockResolvedValueOnce({ confirmed: false, completed: false, message: repeatedMessage });
+      mount();
+      act(() => window.dispatchEvent(new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, {
+        detail: { confirmed: false, completed: false, message: repeatedMessage },
+      })));
+      expect(screen.getByRole("status").textContent).toBe(repeatedMessage);
+
+      act(() => vi.advanceTimersByTime(3_999));
+      expect(screen.getByRole("status").textContent).toBe(repeatedMessage);
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Angriff [R]" }));
+      });
+
+      act(() => vi.advanceTimersByTime(3_999));
+      expect(screen.getByRole("status").textContent).toBe(repeatedMessage);
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.queryByText(repeatedMessage)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("never announces a successful cold archive simply because a combat action was confirmed", async () => {
     mount();
     act(() => window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { sequence: 1, command: "F" } })));

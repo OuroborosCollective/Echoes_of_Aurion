@@ -38,7 +38,7 @@ function consumeLaunch(): PlayLaunch | null {
   } catch { return null; }
 }
 
-/** `/play` is the only mounted AX1 runtime. Aurion routes remain host/auth/community surfaces. */
+/** `/play` mounts Aurion's canonical runtime from a confirmed one-shot launch contract. */
 export default function AurionPlayRoute() {
   const launch = useMemo(consumeLaunch, []);
   const [, navigate] = useLocation();
@@ -62,8 +62,8 @@ export default function AurionPlayRoute() {
   if (!launch) return (
     <main className="min-h-screen grid place-items-center bg-slate-950 text-slate-100 p-6">
       <section className="max-w-xl text-center space-y-4">
-        <h1 className="text-2xl font-semibold">AX1-Spielstart benötigt einen bestätigten WASD-Weltvertrag</h1>
-        <p className="text-slate-300">Öffne die Welt über das Aurion-Portal. Die Spielroute erfindet keinen Snapshot und startet keine Legacy-Arena.</p>
+        <h1 className="text-2xl font-semibold">Aurion-Spielstart benötigt einen bestätigten Weltvertrag</h1>
+        <p className="text-slate-300">Öffne die Welt über das Aurion-Portal. Die Spielroute erfindet keinen Snapshot und startet keine Legacy-Runtime.</p>
         <Link href="/" className="underline">Zum Aurion-Portal</Link>
       </section>
     </main>
