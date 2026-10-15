@@ -2089,3 +2089,25 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #956 — feat(godot): Aurion-Zone-v5-Vertrag sprachneutral fixieren (#910)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=956 merge=988a7079a5aaa838dd313dc1284501ed4c32b254 -->
+Task: Merge PR #956 into `main` — feat(godot): Aurion-Zone-v5-Vertrag sprachneutral fixieren (#910).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `SUMMARY.md`
+- `docs/godot-migration/network-contract.md`
+- `godot-client/net/contracts/zone_v5.schema.json`
+- `godot-client/tests/contracts/test_zone_contract.gd`
+- `scripts/godot/verify-contract-parity.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/956
+- Merge commit: `988a7079a5aaa838dd313dc1284501ed4c32b254`
+- PR head: `c15341b7f16351628461d37d20be8585fce2d7bf`
+- Merged at: 2026-10-15T17:22:16Z
+- Post-merge workflow run: 38776771171
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
