@@ -12,7 +12,7 @@ import { enemyFallbackDiagnostics, selectEnemyGlb } from "../core/EnemyGlbFallba
 
 type MobVisual = MMOEngine["mobManager"]["mobs"][number];
 type Loaded = Awaited<ReturnType<typeof glbManager.loadModel>>;
-type Projected = { visual: MobVisual; actor: AnimatedGlbActor; assetId: string; variantKey: string; sha256: string; lodLevel: GlbLodLevel; triangles: number; bones: number; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; lastAttackSequence: number };
+type Projected = { visual: MobVisual; actor: AnimatedGlbActor; assetId: string; variantKey: string; sha256: string; lodLevel: GlbLodLevel; triangles: number; bones: number; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; lastAttackSequence: number; fallbackOffset: number };
 /** Exact authored presentation binding. Catalog approval/revocation remains
  * mandatory; a filename or a legacy occupied starter target cannot claim it. */
 /** Legacy fixture identity retained for tests/asset provenance only; runtime selection is generic. */
@@ -60,7 +60,7 @@ export class MobCatalogProjection {
     this.failures.clear();
     this.elapsed = 1;
     for (const [id, projected] of this.projected) {
-      const selected = this.selection(projected.visual);
+      const selected = this.selection(projected.visual, projected.fallbackOffset);
       if (!selected || selected.entry.sha256 !== projected.sha256) this.remove(id, false);
     }
   }
@@ -100,7 +100,7 @@ export class MobCatalogProjection {
       actor.group.position.copy(visual.group.position);
       this.engine.scene.add(actor.group);
       this.failures.delete(id);
-      this.projected.set(id, { visual, actor, assetId: selection.entry.assetId, variantKey: selection.variantKey, sha256: selection.entry.sha256, lodLevel: selection.lod, triangles, bones, oldBodyVisible: true, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0 });
+      this.projected.set(id, { visual, actor, assetId: selection.entry.assetId, variantKey: selection.variantKey, sha256: selection.entry.sha256, lodLevel: selection.lod, triangles, bones, oldBodyVisible: true, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0, fallbackOffset: failure?.attempts ?? 0 });
       visual.body.visible = false; actor = null;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
@@ -128,7 +128,7 @@ export class MobCatalogProjection {
     for (const [id, p] of [...this.projected]) {
       const v = byId.get(id);
       if (v !== p.visual || v.group.userData.aurionConfirmedMob !== true) { this.remove(id, false); continue; }
-      const desiredSelection = this.selection(v);
+      const desiredSelection = this.selection(v, p.fallbackOffset);
       if (v.data.hp > 0 && (!desiredSelection || desiredSelection.entry.sha256 !== p.sha256)) { this.remove(id); continue; }
       if (v.data.hp <= 0) {
         if (p.deadSeconds === null) { p.deadSeconds = 0; p.actor.playOnce("death"); }
