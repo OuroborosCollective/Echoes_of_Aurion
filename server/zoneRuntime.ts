@@ -149,6 +149,7 @@ export class AuthoritativeMovementZone {
   private sortedPeersByEntityId: PresencePeer[] = [];
   // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
   private sortedPresences: ZonePresence[] = [];
+  private readonly filteredPresencesCache: ZonePresence[] = [];
   private sortedPeersDirty = false;
   private pendingIntents: AurionZoneIntent[] = [];
   private arrivalSequence = 0;
@@ -708,9 +709,14 @@ export class AuthoritativeMovementZone {
     // 05 mob FSM.
     // The reserved diagnostic actor participates in membership receipts, never
     // hostile targeting. Identity-based policy is identical during causal replay.
-    const mobsChanged = this.mobRuntime.tick(this.presences().filter(
-      presence => presence.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
-    ), this.tickNumber);
+    const allPresences = this.presences();
+    this.filteredPresencesCache.length = 0;
+    for (let i = 0; i < allPresences.length; i++) {
+      if (allPresences[i]!.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID) {
+        this.filteredPresencesCache.push(allPresences[i]!);
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.filteredPresencesCache, this.tickNumber);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);

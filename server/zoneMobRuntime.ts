@@ -66,10 +66,14 @@ export class ZoneMobRuntime {
 
   tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS): boolean {
     let changed = false;
-    for (const entityId of this.orderedEntityIds) {
-      const current = this.states.get(entityId)!;
+    for (let i = 0; i < this.cachedOrderedStates.length; i++) {
+      const current = this.cachedOrderedStates[i];
+      const entityId = this.orderedEntityIds[i];
       const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
-      this.updateState(entityId, next);
+      if (next !== current) {
+        this.states.set(entityId, next);
+        this.cachedOrderedStates[i] = next;
+      }
       if (!sameMobState(current, next)) changed = true;
     }
     return changed;
