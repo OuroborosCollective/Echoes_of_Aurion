@@ -123,6 +123,12 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(mountFeedback).toBeHidden({ timeout: 6_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
       await expect.poll(() => latestPresences.some(p => p.entityId === selfEntityId), { timeout: 20_000 }).toBe(true);
+      const unavailableSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
+      await expect(unavailableSkill).toBeVisible();
+      await unavailableSkill.click();
+      const combatFeedback = hud.getByText("2 ist im Aurion-Zonenvertrag noch nicht freigeschaltet.", { exact: true });
+      await expect(combatFeedback).toBeVisible();
+      await expect(hud.getByText(/WASD-Zonenvertrag|AX1-Skill|AX1-Reichweite/)).toHaveCount(0);
 
       const environment = page.getByTestId("world-assets-evidence");
       const assetEvidence = async () => JSON.parse(await environment.getAttribute("data-presentation") || "{}");
