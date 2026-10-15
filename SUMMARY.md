@@ -6,6 +6,8 @@
   * [Godot-Client — Architektur und Migrationsplan](docs/godot-migration/architecture.md)
     * [Samsung Galaxy Tab A9 — Zielprofil](docs/godot-migration/tab-a9-profile.md)
     * [Samsung Galaxy Tab A9 — Gerätecheck](docs/godot-migration/device-check.md)
+    * [Engineentscheidung — Godot 4.x](docs/godot-migration/engine-decision.md)
+      * [Evidence — Godot gegenüber Unity](docs/godot-migration/evidence/engine-comparison.md)
   * [Aurion Admin-MCP in ChatGPT](docs/aurion-admin-mcp.md)
   * [Public Pattern — Stateless Determinism](docs/public-patterns/stateless-determinism-minimal-runtime.md)
   * [Spieler-Einstieg — Living World](docs/account-first-entry.md)
