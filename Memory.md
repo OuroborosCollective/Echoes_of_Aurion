@@ -1839,3 +1839,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #902 — fix(aurion): identify the mount key as Aurion-owned
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=902 merge=05e55d0fd2a2568a7cbbb4339c6e9cd6a4a13882 -->
+Task: Merge PR #902 into `main` — fix(aurion): identify the mount key as Aurion-owned.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.tsx`
+- `client/src/xaurion/integration/aurionOpenWorldRuntime.css`
+- `e2e/ax1.ui.spec.ts`
+- `server/aim242AuthorityAdapter.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/902
+- Merge commit: `05e55d0fd2a2568a7cbbb4339c6e9cd6a4a13882`
+- PR head: `a133d363c3c6f3bc5222ca0f812672c05368142f`
+- Merged at: 2026-10-15T11:54:38Z
+- Post-merge workflow run: 38730715911
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
