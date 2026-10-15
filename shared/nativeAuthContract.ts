@@ -6,6 +6,7 @@ export const NATIVE_AUTH_ACCESS_TTL_SECONDS = 15 * 60;
 export const NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const NATIVE_AUTH_HANDOFF_TTL_SECONDS = 60;
+export const NATIVE_AUTH_TRANSACTION_TTL_SECONDS = 10 * 60;
 
 const base64Url = /^[A-Za-z0-9_-]+$/;
 const opaqueSecretSchema = z.string().min(43).max(256).regex(base64Url);
@@ -28,6 +29,7 @@ const httpsBrowserUrlSchema = z.string().url().superRefine((value, ctx) => {
   const parsed = new URL(value);
   if (
     parsed.protocol !== "https:" ||
+    parsed.origin !== "https://arelogic.space" ||
     parsed.username !== "" ||
     parsed.password !== "" ||
     parsed.hash !== ""
@@ -50,7 +52,7 @@ export const nativeAuthStartResponseSchema = z.strictObject({
   version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
   transactionId: transactionIdSchema,
   browserUrl: httpsBrowserUrlSchema,
-  expiresInSeconds: z.number().int().positive().max(10 * 60),
+  expiresInSeconds: z.literal(NATIVE_AUTH_TRANSACTION_TTL_SECONDS),
 });
 
 export const nativeAuthCallbackQuerySchema = z.strictObject({
@@ -66,17 +68,21 @@ export const nativeAuthExchangeRequestSchema = z.strictObject({
   appBuild: appBuildSchema,
 });
 
-export const nativeAuthTokenPairSchema = z.strictObject({
-  version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
-  tokenType: z.literal("Bearer"),
-  accessToken: opaqueSecretSchema,
-  accessExpiresInSeconds: z.literal(NATIVE_AUTH_ACCESS_TTL_SECONDS),
-  refreshToken: opaqueSecretSchema,
-  refreshAbsoluteExpiresInSeconds: z.literal(
-    NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS,
-  ),
-  refreshIdleExpiresInSeconds: z.literal(NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS),
-});
+export const nativeAuthTokenPairSchema = z
+  .strictObject({
+    version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+    tokenType: z.literal("Bearer"),
+    accessToken: opaqueSecretSchema,
+    accessExpiresInSeconds: z.literal(NATIVE_AUTH_ACCESS_TTL_SECONDS),
+    refreshToken: opaqueSecretSchema,
+    refreshAbsoluteExpiresInSeconds: z.literal(
+      NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS,
+    ),
+    refreshIdleExpiresInSeconds: z.literal(NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS),
+  })
+  .refine((value) => value.accessToken !== value.refreshToken, {
+    message: "NATIVE_AUTH_TOKENS_MUST_DIFFER",
+  });
 
 export const nativeAuthRefreshRequestSchema = z.strictObject({
   version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
