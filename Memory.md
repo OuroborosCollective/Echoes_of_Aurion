@@ -1884,3 +1884,37 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #903 — fix(aurion): identify combat feedback as Aurion-owned
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=903 merge=5dc8779647d7c1ab02c7992237b3ee6bd2bc4b21 -->
+Task: Merge PR #903 into `main` — fix(aurion): identify combat feedback as Aurion-owned.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/lib/zoneMovement.test.ts`
+- `client/src/lib/zoneMovement.ts`
+- `client/src/xaurion/integration/AurionAuthorityHud.test.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.tsx`
+- `client/src/xaurion/integration/AurionCombatAuthorityFeedback.test.ts`
+- `client/src/xaurion/integration/AurionCombatHudRegression.test.tsx`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx`
+- `client/src/xaurion/integration/AurionOpenWorldRuntime.tsx`
+- `client/src/xaurion/integration/confirmedActionRequest.ts`
+- `client/src/xaurion/integration/zoneCombatBridge.ts`
+- `e2e/ax1.ui.spec.ts`
+- `server/aim242AuthorityAdapter.test.ts`
+- `server/aim270LegacyEncounterReachability.test.ts`
+- `server/zoneProtocol.test.ts`
+- `server/zoneProtocol.ts`
+- `server/zoneRuntime.test.ts`
+- `server/zoneRuntime.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/903
+- Merge commit: `5dc8779647d7c1ab02c7992237b3ee6bd2bc4b21`
+- PR head: `0ffcc9b8844376aad5a2942c8720da6d1a6d2200`
+- Merged at: 2026-10-15T13:41:21Z
+- Post-merge workflow run: 38744839384
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
