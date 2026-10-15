@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeProgressionReceipt, projectConfirmedProgressionTracks, type ProgressionReceiptInput } from "./progressionReceiptPersistence";
+import { normalizeProgressionReceipt, projectConfirmedProgressionTracks, verifyStoredProgressionReceipt, type ProgressionReceiptInput } from "./progressionReceiptPersistence";
 
 const base: ProgressionReceiptInput = {
   userId: 41,
@@ -71,6 +71,19 @@ describe("AIM-236 canonical progression receipts", () => {
   it("rejects a stored row whose hashed bytes were modified after persistence", () => {
     const valid = stored({ actionKind: "skill_use", weaponTrack: "none", skillId: "combat", idempotencyKey: "projection:tamper" });
     expect(() => projectConfirmedProgressionTracks([{ ...valid, levelExact: "43" }])).toThrow("PROGRESSION_RECEIPT_CORRUPT");
+  });
+
+
+  it("verifies real Drizzle rows with createdAt metadata without weakening strict receipt-input validation", () => {
+    const receipt = stored({ idempotencyKey: "projection:db-row" });
+    const dbRow = { ...receipt, createdAt: new Date("2026-10-15T00:00:00.000Z") };
+    expect(verifyStoredProgressionReceipt(dbRow)).toMatchObject({
+      idempotencyKey: receipt.idempotencyKey,
+      receiptHash: receipt.receiptHash,
+    });
+    expect(() => normalizeProgressionReceipt(dbRow)).toThrow();
+    expect(() => verifyStoredProgressionReceipt({ ...dbRow, xpGrantedExact: "999999" })).toThrow("PROGRESSION_RECEIPT_CORRUPT");
+    expect(() => verifyStoredProgressionReceipt({ ...dbRow, id: "progression_fake" })).toThrow("PROGRESSION_RECEIPT_CORRUPT");
   });
 
   it("fails closed when one account resolves to multiple valid progression characters", () => {
