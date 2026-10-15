@@ -83,4 +83,26 @@ describe("deterministic generic enemy GLB fallback selection", () => {
     expect(second?.entry.sha256).toBe(first?.entry.sha256);
     expect(second?.variantKey).toBe(first?.variantKey);
   });
+  it("covers all 49 imported monster families once across 49 consecutive confirmed mob identities", () => {
+    const imported = Array.from({ length: 49 }, (_, index) => {
+      const digest = (index + 1).toString(16).padStart(64, "0");
+      return {
+        ...enemy(`glb_monster_${index + 1}`, "a", `Enemy Fallback · rigged-monster · Monster Variant ${String(index + 1).padStart(2, "0")}`),
+        sha256: digest,
+        storageUrl: `/api/assets/glb/${digest}.glb`,
+      };
+    });
+    const oldUnassignedAuto = { ...enemy("glb_auto_clockwork", "b", "Aurion Clockwork Stalker"), purpose: "auto" as const };
+    const firstCatalog = catalog([oldUnassignedAuto, ...imported]);
+    const reversedCatalog = catalog([...imported].reverse().concat(oldUnassignedAuto));
+    const identities = Array.from({ length: 49 }, (_, index) => `clockwork_stalker:mob_${index + 1}`);
+    const selected = identities.map(identity => selectEnemyGlb(firstCatalog, "clockwork_stalker", 0, "phone", identity));
+    expect(selected.every(item => item?.entry.purpose === "enemy-fallback")).toBe(true);
+    expect(new Set(selected.map(item => item?.entry.sha256)).size).toBe(49);
+    for (let i = 0; i < identities.length; i++) {
+      expect(selectEnemyGlb(reversedCatalog, "clockwork_stalker", 0, "phone", identities[i])?.entry.sha256).toBe(selected[i]?.entry.sha256);
+      expect(selectEnemyGlb(firstCatalog, "clockwork_stalker", 0, "phone", identities[i])?.entry.sha256).toBe(selected[i]?.entry.sha256);
+    }
+  });
+
 });
