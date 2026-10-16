@@ -200,7 +200,26 @@ describe("open world session ownership", () => {
     expect(screen.getByRole("alert").textContent).not.toContain("private renderer diagnostics");
     expect(screen.getByRole("button", { name: "ZUR STERNWARTE" })).toBeTruthy();
   });
-  it("retires late initialization before it can attach an engine or obtain a zone ticket", async () => {
+  it("connects a real Aurion transport while software renderer initialization is still pending and projects only confirmed snapshots", async () => {
+    fixture.deferRenderer = true;
+    render(<AurionOpenWorldRuntime />); await enter();
+    expect(fixture.rendererRequests).toHaveLength(1);
+    // RED: Renderer readiness must never gate a server-authorized zone ticket.
+    expect(fixture.tickets).toHaveLength(1);
+    act(() => fixture.tickets[0]!.onSuccess({ ticket: "early-server-fixture" }));
+    expect(fixture.connections[0]!.connect).toHaveBeenCalledWith("early-server-fixture");
+    const confirmed: ZonePresenceSnapshot = { type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 7, tick: 101,
+      presences: [{ entityId: "player:1", userId: 1, position: { x: 1000, z: -32300 }, lastAcceptedClientSeq: 0 }],
+      mobs: [], combatants: [], resources: confirmedResources };
+    act(() => fixture.snapshots[0]!(confirmed));
+    expect(fixture.engines).toHaveLength(0);
+    const dispose = vi.fn();
+    await act(async () => fixture.rendererRequests[0]!.resolve({ handle: { dispose }, evidence: { protocol: "ax1-renderer.v1", requested: "webgl2", backend: "webgl2", fallback: "disabled" } }));
+    expect(fixture.engines).toHaveLength(1);
+    expect(fixture.engines[0]!.start).toHaveBeenCalled();
+  });
+
+  it("retires late initialization and ignores ticket replies after leaving Aurion", async () => {
     fixture.deferRenderer = true;
     render(<AurionOpenWorldRuntime />); await enter();
     expect(fixture.rendererRequests).toHaveLength(1);
@@ -210,7 +229,11 @@ describe("open world session ownership", () => {
     await act(async () => fixture.rendererRequests[0].resolve({ handle: { dispose }, evidence: {} }));
     expect(dispose).toHaveBeenCalledOnce();
     expect(fixture.engines).toHaveLength(0);
-    expect(fixture.tickets).toHaveLength(0);
+    // Transport may have already requested an authentic one-time ticket;
+    // after leaving, its stale response must never attach a socket.
+    expect(fixture.tickets).toHaveLength(1);
+    act(() => fixture.tickets[0]!.onSuccess({ ticket: "retired-generation" }));
+    expect(fixture.connections).toHaveLength(0);
   });
 
   it("rebuilds after loss with a fresh world and ticket, rejecting the old generation", async () => {
