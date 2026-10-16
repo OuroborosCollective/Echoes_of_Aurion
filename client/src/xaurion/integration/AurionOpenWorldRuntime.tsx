@@ -561,10 +561,11 @@ export default function AurionOpenWorldRuntime() {
   }, [activation, selectedCharacterUrl, catalog?.revision, worldSnapshot.data?.serviceNpcs, readyGeneration]);
 
   useEffect(() => {
-    if (!readyGeneration || !activation || !selectedCharacterUrl || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
-    const boundEngine = engineRef.current;
+    // One-time Aurion zone admission is independent of expensive WebGL setup.
+    // Presentation starts only after the server confirms a snapshot and the renderer exists.
+    if (!activation || !selectedCharacterUrl || webglError || !isAuthenticated || !user?.id) return;
     let disposed = false;
-    const current = () => !disposed && engineRef.current === boundEngine;
+    const current = () => !disposed;
     let client: ZoneMovementClient | undefined;
     let retryTimer: number | undefined;
     let fatalReject = false;
@@ -587,7 +588,7 @@ export default function AurionOpenWorldRuntime() {
     setZoneStatus("connecting");
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "xaurion-open-world-v1" }, {
       onSuccess: ({ ticket }) => {
-        if (!current() || !engineRef.current) return;
+        if (!current()) return;
         client = new ZoneMovementClient({
           onStatus: status => {
             if (!current()) return;
@@ -631,7 +632,7 @@ export default function AurionOpenWorldRuntime() {
               terrain: terrainAudioRef.current,
             });
             if (movementCue) window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: movementCue }));
-            boundEngine.start();
+            engine.start();
             window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
           },
           onCombat: event => {
@@ -664,7 +665,7 @@ export default function AurionOpenWorldRuntime() {
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
-  }, [activation, selectedCharacterUrl, webglError, isAuthenticated, user?.id, zoneRetryEpoch, readyGeneration]);
+  }, [activation, selectedCharacterUrl, webglError, isAuthenticated, user?.id, zoneRetryEpoch, recoveryEpoch]);
 
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
