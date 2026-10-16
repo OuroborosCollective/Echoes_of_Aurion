@@ -82,7 +82,15 @@ export function resolveMobFsmTick(input: Readonly<{ current: MobRuntimeState; pr
     return Object.freeze({ ...current, targetEntityId: null, position: move(stepToward(current.position, definition.homePosition, 750)) });
   }
   if (current.state === "combat") {
-    const target = current.targetEntityId ? presences.find(p => p.entityId === current.targetEntityId) : undefined;
+    let target: ConfirmedZonePresence | undefined = undefined;
+    if (current.targetEntityId) {
+      for (let i = 0; i < presences.length; i++) {
+        if (presences[i]!.entityId === current.targetEntityId) {
+          target = presences[i];
+          break;
+        }
+      }
+    }
     const leashBroken = mobDistance(current.position, definition.homePosition) > WASD_MOB_LEASH_DISTANCE_FIXED;
     if (!target || leashBroken) return Object.freeze({ ...current, state: "evading", targetEntityId: null });
     const targetDistance = mobDistance(current.position, target.position), dropoff = Math.trunc(wasdMobAggroRadiusFixed(definition) * WASD_MOB_COMBAT_DROPOFF_MULTIPLIER_BPS / 10_000);

@@ -31,3 +31,7 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+
+## 2026-10-16 - Eliminate Array/Map allocations in Hot Game Loop
+**Learning:** High-frequency game loops (like 10Hz zone ticks) suffer from significant GC pressure when using dynamic array methods (`.find`, `.filter`, `.map`) and allocating new `Map` objects per tick.
+**Action:** Use pre-allocated cached arrays and `Map`s, cleared before reuse, and populated via traditional `for` loops in hot paths to achieve zero-allocation tick loops.
