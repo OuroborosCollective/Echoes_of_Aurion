@@ -63,6 +63,8 @@ describe("AX1 full visible cutover contract", () => {
     const panel = readFileSync(join(process.cwd(), "client/src/xaurion/integration/NpcDecisionPanel.tsx"), "utf8");
     const routes = readFileSync(join(process.cwd(), "server/routers.ts"), "utf8");
     const runtime = readFileSync(join(process.cwd(), "server/autonomousNpcLifeRuntime.ts"), "utf8");
+    const livingHistory = readFileSync(join(process.cwd(), "server/aurion/livingHistoryLoop.ts"), "utf8");
+    const npcPersistence = readFileSync(join(process.cwd(), "server/wasdAurionRuntime.ts"), "utf8");
     expect(hud).toContain("<NPCDialogueModal");
     expect(hud).toContain("<NpcDecisionPanel userId={userId}");
     expect(panel).toContain("gameplay.npcSnapshots");
@@ -75,7 +77,10 @@ describe("AX1 full visible cutover contract", () => {
     expect(panel).toContain("decodeOwnedNpcActions");
     expect(panel).toContain("decodeOwnedNpcSemanticGraphs");
     expect(runtime).toContain("readConfirmedNpcMultiMemory");
-    expect(runtime).toContain("resolveAndRecordAx1LivingWorld");
+    expect(runtime).toContain("executeLivingHistoryCycle");
+    expect(livingHistory).toContain("resolveAndRecordAx1LivingWorld");
+    expect(livingHistory).toContain("orchestrateCivilizationLoop");
+    expect(npcPersistence).not.toContain("orchestrateCivilizationLoop");
     expect(runtime).toContain("createAutonomousNpcLifeRuntime");
   });
 

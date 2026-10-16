@@ -247,6 +247,9 @@ jobs:
               output.backup=receipt.backup??null;
               output.recovery=receipt.recovery??null;
               output.apply=receipt.apply??null;
+              output.repair=receipt.repair??null;
+              output.rehearsal=receipt.rehearsal??null;
+              output.repairPlanRefresh=receipt.repairPlanRefresh??null;
               output.preflight=receipt.preflight??null;
               output.postflight=receipt.postflight??null;
             } else {
@@ -255,6 +258,7 @@ jobs:
               output.backup=null;
               output.recovery=null;
               output.apply=null;
+              output.repair=null;
               output.preflight=null;
               output.postflight=null;
             }

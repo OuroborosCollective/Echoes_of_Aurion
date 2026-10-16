@@ -90,6 +90,58 @@ describe("groupGlbCatalogRows", () => {
     ]);
   });
 
+  it("groups the owner street-lamp LOD0-LOD3 family with LOD0 primary", () => {
+    const members = [0, 1, 2, 3].map(level => ({
+      ...row(level, sha(String(level + 1))),
+      displayName: `World Environment · street-prop · Aurion Village Street Lamp LOD${level}`,
+    }));
+    const catalog = groupGlbCatalogRows([members[3]!, members[1]!, members[0]!, members[2]!]);
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]).toMatchObject({
+      displayName: "World Environment · street-prop · Aurion Village Street Lamp",
+      purpose: "world-environment",
+      subcategory: "street-prop",
+      sha256: sha("1"),
+    });
+    expect(catalog[0]!.lods.map(lod => lod.level)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("groups the owner fountain LOD1/LOD2 pair without inventing a missing LOD0", () => {
+    const lod1 = {
+      ...row(1, sha("1")),
+      displayName: "World Environment · fountain · Aurion Village Fountain LOD1",
+    };
+    const lod2 = {
+      ...row(2, sha("2")),
+      displayName: "World Environment · fountain · Aurion Village Fountain LOD2",
+    };
+    const catalog = groupGlbCatalogRows([lod2, lod1]);
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]).toMatchObject({
+      displayName: "World Environment · fountain · Aurion Village Fountain",
+      purpose: "world-environment",
+      subcategory: "fountain",
+      sha256: sha("1"),
+    });
+    expect(catalog[0]!.lods.map(lod => lod.level)).toEqual([1, 2]);
+  });
+
+  it("groups the three-stage Asterion auto arena family with LOD0 primary", () => {
+    const a = { ...row(0, sha("a")), displayName: "Asterion Courtyard LOD0", assetType: "arena" as const, targetKey: "asterion_courtyard" };
+    const b = { ...row(1, sha("b")), displayName: "Asterion Courtyard LOD1", assetType: "arena" as const, targetKey: null };
+    const c = { ...row(2, sha("c")), displayName: "Asterion Courtyard LOD2", assetType: "arena" as const, targetKey: null };
+    const catalog = groupGlbCatalogRows([c, a, b]);
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]).toMatchObject({
+      displayName: "Asterion Courtyard",
+      purpose: "auto",
+      assetType: "arena",
+      sha256: sha("a"),
+      targetKey: "asterion_courtyard",
+    });
+    expect(catalog[0]!.lods.map(lod => [lod.level, lod.sha256])).toEqual([[0, sha("a")], [1, sha("b")], [2, sha("c")]]);
+  });
+
   it("keeps ordinary single models independent and backward compatible", () => {
     const catalog = groupGlbCatalogRows([
       { ...row(0, sha("e")), displayName: "World Nature · tree · Lone Oak" },

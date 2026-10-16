@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       expected_sha:
-        description: Exact main revision promoted by the caller.
+        description: Exact main revision prepared by the caller.
         required: true
         type: string
       upstream_run_id:
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   production-readback:
-    name: Read production schema after verified zone promotion
+    name: Read production schema after controlled schema apply
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
     timeout-minutes: 10
@@ -169,6 +169,7 @@ jobs:
             "0066_aurion_inventory_transaction_kernel",
             "0067_aurion_npc_decision_log",
             "0068_aurion_item_manipulation_runtime",
+            "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);

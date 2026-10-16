@@ -15,7 +15,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
   assetSubmissions: { characterAppearance: { useQuery: () => fixtures.appearance } },
   groups: { read: { useQuery: () => fixtures.other }, command: { useMutation: () => ({ mutateAsync: fixtures.mutate }) } },
   crafting: { manipulationRead: { useQuery: () => fixtures.other }, manipulate: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, read: { useQuery: () => fixtures.other }, craft: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, materializeBonus: { useMutation: () => ({ mutateAsync: fixtures.mutate }) } },
-  player: { ui: { useQuery: () => fixtures.ui }, saveControls: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, collectLoot: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, equipItem: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, unequipItem: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, me: { useQuery: () => fixtures.player } },
+  player: { statWallet: { useQuery: () => fixtures.other }, allocateStatPoint: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, ui: { useQuery: () => fixtures.ui }, saveControls: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, collectLoot: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, equipItem: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, unequipItem: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, me: { useQuery: () => fixtures.player } },
   gameplay: { npcActions: { useQuery: () => ({}) }, npcMultiMemory: { useQuery: () => ({}) }, npcSemanticGraph: { useQuery: () => ({}) }, npcProjectionProvenance: { useQuery: () => ({}) }, npcSnapshots: { useQuery: () => ({}) }, npcUtilityScores: { useQuery: () => ({}) }, relationshipStanding: { useQuery: () => fixtures.standing }, currentEncounter: { useQuery: () => fixtures.other }, startEncounter: { useMutation: () => ({}) }, progress: { useQuery: () => fixtures.other }, openWorld: { useQuery: () => fixtures.other }, acceptQuest: { useMutation: () => ({}) }, completeQuest: { useMutation: () => ({}) } },
 } }));
 vi.mock("../components/VirtualJoystick", () => ({ VirtualJoystick: () => null }));
@@ -41,6 +41,14 @@ describe("server-backed Aurion HUD", () => {
     fixtures.ui.refetch.mockImplementation(async () => ({ data: fixtures.ui.data, isError: false }));
     fixtures.appearance.refetch.mockImplementation(async () => ({ data: fixtures.appearance.data, isError: fixtures.appearance.isError }));
     fixtures.mutate.mockResolvedValue({});
+    fixtures.onAction.mockResolvedValue({ confirmed: true, completed: false, message: "Aktion bestätigt." });
+  });
+
+  it("sends basic attack F from the pointer/touch button independently of hotbar slot one", () => {
+    fixtures.ui.data = { ...uiState, settings: { ...uiState.settings, hotbar: ["2", "1", "3", "4", "5"] } };
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Angriff [R]" }));
+    expect(fixtures.onAction).toHaveBeenCalledWith("F");
   });
 
   it("shows no fabricated gold, hit points or class before a confirmed readback", () => {

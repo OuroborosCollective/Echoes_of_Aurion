@@ -12,7 +12,20 @@ on:
     paths:
       - ".github/workflows/aurion-root-schema-apply-artifact-proof.yml"
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
+      - ".github/workflows/aurion-production-schema-apply.yml"
       - "scripts/apply-aurion-production-schema.ts"
+      - "scripts/repair-aurion-production-schema.ts"
+      - "scripts/aurionSchemaReviewedJournal.ts"
+      - "scripts/aurionSchemaReviewedTransitions.ts"
+      - "config/schema-repair-provenance/**"
+      - "server/aurionSchemaReviewedRecovery.test.ts"
+      - "server/aurionSchemaReviewedTransitions.test.ts"
+      - "scripts/aurionSchemaRepair*.ts"
+      - "scripts/schema-repair-proof-fixture.mjs"
+      - "server/aurionSchemaRepairPlan.test.ts"
+      - "server/aurionSchemaRepairRefresh.test.ts"
+      - "server/aurionSchemaRepairFailureReceipt.test.ts"
+      - "deploy/aurion-schema-repair-failure-receipt.mjs"
       - "scripts/aurionProductionDatabaseClientConfig.ts"
       - "scripts/build-aurion-production-apply-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
@@ -77,9 +90,17 @@ on:
       - "drizzle/0066_aurion_inventory_transaction_kernel.sql"
       - "drizzle/0067_aurion_npc_decision_log.sql"
       - "drizzle/0068_aurion_item_manipulation_runtime.sql"
+      - "drizzle/0069_aurion_combat_victory_events.sql"
+      - "drizzle/0070_aurion_quest_inventory_rewards.sql"
+      - "drizzle/0071_aurion_npc_guild_authority.sql"
+      - "drizzle/0072_aurion_production_probe_approvals.sql"
+      - "drizzle/0073_aurion_production_probe_session_fence.sql"
+      - "drizzle/0074_aurion_stat_allocation_receipts.sql"
+      - "config/aurion-migration-wave-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
+      - "drizzle/0020_wasd_aurion_dialogue_quest_intents.sql"
 
 permissions:
   contents: read
@@ -114,7 +135,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm check
-          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
+          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts server/aurionSchemaRepairRefresh.test.ts server/aurionSchemaRepairFailureReceipt.test.ts
           bash -n deploy/aurion-production-schema-apply
           bash -n deploy/aurion-production-schema-apply-core
           bash -n deploy/install-aurion-production-schema-apply
@@ -205,6 +226,16 @@ jobs:
           docker pull "$image"
           docker image inspect "$image" >/dev/null
 
+      - name: Reject default and update-attribute drift before applying a valid partial prefix
+        run: |
+          set -euo pipefail
+          docker run --rm --network "$AURION_APPLY_TEST_NETWORK" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --workdir /workspace --env CI=true --env GITHUB_SHA --env AURION_APPLY_TEST_PLAN \
+            --env DATABASE_URL="mysql://root:${AURION_APPLY_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_APPLY_TEST_DATABASE}" \
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
+            node scripts/schema-repair-proof-fixture.mjs reject-column-contract-drift
+
       - name: Create root-protected production environment and install fixed runner
         run: |
           set -euo pipefail
@@ -251,7 +282,7 @@ jobs:
           if(r.recordType!=="aurion_production_schema_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_FAILED"||r.failureStage!=="VERIFY_GITHUB_ACTIONS_OIDC"||r.errorClass!=="GITHUB_ACTIONS_OIDC_INVALID"||r.backup?.created!==false) process.exit(2);
           NODE
 
-      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0068
+      - name: Prove fixed runner creates a backup, restores it in isolation and applies the exact declared migration wave
         run: |
           set -euo pipefail
           set +e
@@ -275,8 +306,7 @@ jobs:
           const raw=fs.readFileSync("apply-receipt.json","utf8");
           if(raw.includes("aurionapplyroot")||raw.includes("mysql://")) throw new Error("apply receipt leaked a credential");
           const r=JSON.parse(raw);
-          const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint","0029_aurion_guild_kingdom_authority","0030_aurion_guild_bank_economy","0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
-          "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key", "0047_aurion_world_context_capsules", "0048_aurion_causal_evidence", "0049_aurion_causal_receipt_v2","0050_aurion_human_ai_authoring", "0051_aurion_cross_zone_handover_v2", "0052_aurion_effect_intent_journal", "0053_aurion_npc_action_gateway_v2","0054_aurion_semantic_memory_graph_v2","0055_aurion_glb_external_provenance","0056_aurion_temporal_history_v1","0057_aurion_economic_ledger_v2","0058_aurion_quest_causal_anchor","0059_aurion_mobile_movement_mode","0060_aurion_npc_policy_evolution","0061_aurion_exploration_memory", "0062_aurion_world_director", "0063_aurion_npc_information_ecology", "0064_aurion_world_entity_foundation", "0065_aurion_glb_asset_normalization", "0066_aurion_inventory_transaction_kernel", "0067_aurion_npc_decision_log", "0068_aurion_item_manipulation_runtime"];
+          const tags=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.map(({tag})=>tag);
           if(r.recordType!=="aurion_production_schema_apply"||r.schemaVersion!==1||r.sourceRevision!==process.env.GITHUB_SHA||r.planSha256!==process.env.AURION_APPLY_TEST_PLAN||r.mode!=="backup_recovery_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_SUCCEEDED") throw new Error("apply receipt identity mismatch");
           if(r.preflight?.state!=="RECONCILIATION_REQUIRED"||r.preflight?.summary?.absentCount!==tags.length) throw new Error("apply did not require an absent preflight");
           if(r.backup?.created!==true||!/^[a-f0-9]{64}$/.test(r.backup?.sha256??"")||!Number.isSafeInteger(r.backup?.bytes)||r.backup.bytes<1) throw new Error("backup receipt invalid");
@@ -290,7 +320,8 @@ jobs:
           test "$(sudo stat -c '%U:%G:%a' "$backup_file")" = "root:root:600"
           sudo gzip -t "$backup_file"
           rows="$(docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM __drizzle_migrations" "$AURION_APPLY_TEST_DATABASE")"
-          test "$rows" -eq 69
+          expected_rows="$(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync("drizzle/meta/_journal.json","utf8")).entries.length))')"
+          test "$rows" -eq "$expected_rows"
 
       - name: Prove applied ledger triggers reject real updates and deletes
         run: |
@@ -321,8 +352,63 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("retry-receipt.json","utf8"));
-          if(r.overallState!=="ALREADY_APPLIED"||r.backup?.created!==false||r.recovery?.executed!==false||r.apply?.state!=="ALREADY_APPLIED") throw new Error("retry was not a safe no-op");
+          if(r.overallState!=="ALREADY_APPLIED"||r.backup?.created!==true||r.recovery?.executed!==true||r.recovery?.matched!==true||r.apply?.state!=="ALREADY_APPLIED") throw new Error("retry was not a safe no-op");
           NODE
+
+      - name: Prove reviewed sparse repair, isolated rehearsal, preserved history/data and unknown-drift rejection
+        run: |
+          set -euo pipefail
+          fixture() {
+            docker run --rm --network "$AURION_APPLY_TEST_NETWORK" \
+              --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+              --workdir /workspace --env CI=true --env GITHUB_SHA --env AURION_APPLY_TEST_PLAN \
+              --env DATABASE_URL="mysql://root:${AURION_APPLY_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_APPLY_TEST_DATABASE}" \
+              node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
+              node scripts/schema-repair-proof-fixture.mjs "$1"
+          }
+          fixture reject-column-contract-drift
+          fixture prepare-reviewed
+          fixture reject-tampered-plan
+          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > repair-receipt.json
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("repair-receipt.json","utf8"));
+          assert.equal(r.overallState,"APPLY_SUCCEEDED");
+          assert.equal(r.backup.created,true);
+          assert.match(r.backup.id,/-refreshed\.sql\.gz$/);
+          assert.match(r.backup.sha256,/^[a-f0-9]{64}$/);
+          assert.equal(r.recovery.matched,true);
+          assert.match(r.recovery.schemaSha256,/^[a-f0-9]{64}$/);
+          assert.match(r.apply.repairPlanSha256,/^[a-f0-9]{64}$/);
+          assert.match(r.apply.rehearsalSha256,/^[a-f0-9]{64}$/);
+          assert.equal(r.repairPlanRefresh.semanticsUnchanged,true);
+          assert.equal(r.repairPlanRefresh.repairPlanSha256,r.apply.repairPlanSha256);
+          assert.match(r.repairPlanRefresh.originalRepairPlanSha256,/^[a-f0-9]{64}$/);
+          assert.ok(r.apply.operations.some(o=>o.tag==="0068_aurion_item_manipulation_runtime"&&o.kind==="ADD_COLUMN"));
+          assert.ok(r.apply.operations.some(o=>o.kind==="REPLACE_CHECK_ATOMIC"&&o.sourceStatementIndexes.join() === "4,5"));
+          assert.ok(r.apply.operations.some(o=>o.kind==="DROP_REVIEWED_INDEX"));
+          assert.equal(r.apply.reviewedRecovery.preservedJournalRows.length,2);
+          assert.ok(r.apply.repairedJournalTags.includes("0020_wasd_aurion_dialogue_quest_intents"));
+          assert.ok(r.apply.operations.every(o=>o.result==="APPLIED"&&o.startedAt&&o.endedAt&&o.backupSha256===r.backup.sha256));
+          assert.deepEqual(r.postflight.summary,{migrationCount:53,matchCount:53,absentCount:0,driftCount:0});
+          NODE
+          fixture verify-reviewed
+          fixture prepare-unknown
+          set +e
+          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > blocked-repair-receipt.json
+          status=$?
+          set -e
+          test "$status" -ne 0
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("blocked-repair-receipt.json","utf8"));
+          assert.equal(r.overallState,"APPLY_FAILED");
+          assert.equal(r.failureStage,"REPAIR_PLAN_BLOCKED");
+          assert.equal(r.backup.created,false);
+          NODE
+          fixture verify-blocked
 
       - name: Prove the fixed runner rejects caller-supplied code paths
         run: |

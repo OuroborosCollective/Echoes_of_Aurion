@@ -27,6 +27,17 @@ describe("AIM-263 autonomous deterministic NPC life", () => {
     expect(first.state.stateHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("preserves opportunity net-score and lexicographic ties across permutations", () => {
+    const opportunities = [opportunity("safe:z", "safe_hub", 10), opportunity("safe:a", "safe_hub", 10),
+      opportunity("safe:weak", "safe_hub", 10, 100), opportunity("unrelated", "market", 10, 10000)];
+    const input = { ...base(10), needs: needs({ safety: 0, resources: 1, belonging: 1, status: 1, wealth: 1, power: 1 }) };
+    for (const candidates of [opportunities, [...opportunities].reverse(), [...opportunities.slice(1), opportunities[0]]]) {
+      const before = JSON.stringify(candidates);
+      expect(resolveNpcLife({ ...input, opportunities: candidates }).decision.plan.opportunityId).toBe("safe:a");
+      expect(JSON.stringify(candidates)).toBe(before);
+    }
+  });
+
   it("fails closed instead of inventing a plan when no confirmed opportunity exists", () => {
     const result = resolveNpcLife({ ...base(11), needs: needs({ wealth: 0, safety: 1, resources: 1, belonging: 1, status: 1, power: 1 }) });
     expect(result.decision.goal).toBe("trade");

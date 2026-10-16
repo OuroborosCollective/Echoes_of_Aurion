@@ -6,6 +6,7 @@ import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from 
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
+import { aurionQuestNpcIdValues } from "./aurionStarterVillageContract";
 import { COMPANION_FEATURE_VECTOR_LENGTH, COMPANION_STATE_VECTOR_LENGTH } from "@shared/companionLearningProtocol";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
@@ -21,7 +22,7 @@ import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, dig
 import { isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
-import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
+import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword, DUMMY_LOCAL_AUTH_HASH } from "./localAuth";
 import { proposeAurionDeveloperChange, proposeGameDevAssetDesign } from "./liveDeveloperGenkit";
 import { hashGameDevAssetDesignWorkOrder } from "./liveDeveloperProtocol";
 import { applyGameDevelopmentStudioLiveAsset, gameDevelopmentStudioLiveAssetInputSchema, planGameDevelopmentStudioLiveAsset } from "./gameDevelopmentStudioProduction";
@@ -58,6 +59,8 @@ import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence"
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
 import { readExplorationMemory, recordExplorationDiscovery } from "./explorationMemoryPersistence";
 import { desc, eq } from "drizzle-orm";
+import { readAurionStatWallet, allocateAurionStatPoint } from "./aurionStatPointPersistence";
+import { aurionStatAttributes } from "../shared/aurionStatPointProtocol";
 import { 
   getConfirmedNpcPolicy, 
   requestNpcPolicyRollback 
@@ -131,6 +134,9 @@ export const appRouter = router({
       const handle = normalizeLocalHandle(input.handle);
       const record = await db.getLocalCredential(handle);
       if (!record) {
+        // Match the real scrypt workload before rejecting an unknown handle.
+        // The result is intentionally ignored: a nonexistent account never authenticates.
+        await verifyLocalPassword(input.password, DUMMY_LOCAL_AUTH_HASH);
         // Do not dereference an absent credential record. Apart from preventing
         // a 500 response for an unknown handle, this keeps the authentication
         // failure on tRPC's JSON error path instead of exposing a runtime error.
@@ -199,6 +205,12 @@ export const appRouter = router({
     }),
   }),
   player: router({
+    statWallet: protectedProcedure.query(({ctx})=>readAurionStatWallet(ctx.user.id)),
+    allocateStatPoint: protectedProcedure.input(z.object({
+      attribute: z.enum(aurionStatAttributes),
+      idempotencyKey: z.string().regex(/^[A-Za-z0-9:._-]{4,128}$/),
+      expectedAvailableExact: z.string().regex(/^(0|[1-9][0-9]*)$/).max(128),
+    }).strict()).mutation(({ctx,input})=>allocateAurionStatPoint(ctx.user.id,input.attribute,input.idempotencyKey,input.expectedAvailableExact)),
     ui: protectedProcedure.query(({ ctx }) => readPlayerUi(ctx.user.id)),
     saveControls: protectedProcedure.input(controlSettingsSchema).mutation(({ ctx, input }) => savePlayerControls(ctx.user.id, input)),
     collectLoot: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => collectPlayerLoot(ctx.user.id, input)),
@@ -382,17 +394,17 @@ export const appRouter = router({
 
     startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault", "starfall_crater", "rootgear_foundry", "sunwatch_bastion", "abyssal_depths"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
     act: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), sequence: z.number().int().positive(), command: z.string().trim().length(1), source: z.enum(["human", "gateway"]) })).mutation(({ ctx, input }) => db.applyGameplayAction({ userId: ctx.user.id, ...input })),
-    interpretNpcDialogue: protectedProcedure.input(z.object({ npcId: z.enum(["lyra", "orun"]), text: z.string().trim().min(1).max(280), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => interpretAndRecordDialogue({ userId: ctx.user.id, npcId: input.npcId, text: input.text, trust: 0.6, threat: 0.1, idempotencyKey: input.idempotencyKey })),
+    interpretNpcDialogue: protectedProcedure.input(z.object({ npcId: z.enum(aurionQuestNpcIdValues), text: z.string().trim().min(1).max(280), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => interpretAndRecordDialogue({ userId: ctx.user.id, npcId: input.npcId, text: input.text, trust: 0.6, threat: 0.1, idempotencyKey: input.idempotencyKey })),
     requestQuestActionFromDialogue: protectedProcedure.input(z.object({
       dialogueReceiptId: z.string().trim().min(8).max(64),
       actionKind: z.enum(["offer_quest", "request_turn_in"]),
-      questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard", "abyssal_depths"]),
+      questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard", "starter-wolves-6"]),
       idempotencyKey: z.string().trim().min(16).max(128),
     })).mutation(({ ctx, input }) => db.requestQuestActionFromDialogue({
       userId: ctx.user.id,
       dialogueReceiptId: input.dialogueReceiptId,
       actionKind: input.actionKind,
-      questKey: input.questKey as QuestKey,
+      questKey: input.questKey,
       idempotencyKey: input.idempotencyKey,
     })),
   }),

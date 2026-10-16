@@ -132,6 +132,8 @@ describe("smart GLB upload runtime", () => {
       entries: [
         { assetId: "glb_public_b", sha256: "b".repeat(64), displayName: "B", assetType: "character", storageUrl: `/api/assets/glb/${"b".repeat(64)}.glb`, targetKey: null, purpose: "player-public", subcategory: "rigged-character", equipmentSlot: null },
         { assetId: "glb_npc", sha256: "c".repeat(64), displayName: "NPC", assetType: "character", storageUrl: `/api/assets/glb/${"c".repeat(64)}.glb`, targetKey: null, purpose: "npc-fallback", subcategory: "rigged-character", equipmentSlot: null },
+        { assetId: "glb_foreign_private_like", sha256: "e".repeat(64), displayName: "Explorer private rig", assetType: "character", storageUrl: `/api/assets/glb/${"e".repeat(64)}.glb`, targetKey: null, purpose: "auto", subcategory: "rigged-character", equipmentSlot: null },
+        { assetId: "glb_wrong_type", sha256: "f".repeat(64), displayName: "Not a player", assetType: "enemy", storageUrl: `/api/assets/glb/${"f".repeat(64)}.glb`, targetKey: null, purpose: "player-public", subcategory: "humanoid", equipmentSlot: null },
         { assetId: "glb_public_a", sha256: "a".repeat(64), displayName: "A", assetType: "character", storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, targetKey: null, purpose: "player-public", subcategory: "rigged-character", equipmentSlot: null },
         { assetId: "glb_targeted", sha256: "d".repeat(64), displayName: "Targeted", assetType: "character", storageUrl: `/api/assets/glb/${"d".repeat(64)}.glb`, targetKey: "starter_player", purpose: "player-public", subcategory: "rigged-character", equipmentSlot: null },
       ],

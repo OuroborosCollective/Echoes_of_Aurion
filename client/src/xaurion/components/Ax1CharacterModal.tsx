@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { AurionStatAttribute, resolveAurionStatWallet } from '@shared/aurionStatPointProtocol';
 import { X } from 'lucide-react';
 import type { CharacterAttributes, ClassSkill, MilestoneWeaponSkill, PlayerStats, WeaponMastery, WeaponType } from '../types';
 import { Ax1Modal } from './Ax1Modal';
@@ -9,6 +10,9 @@ interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
   stats: Ax1VisiblePlayerStats;
+  statWallet?: ReturnType<typeof resolveAurionStatWallet>;
+  onSpendStat?: (key: AurionStatAttribute) => void;
+  statPending?: boolean;
   onAllocateStatPoint?: (attribute: keyof CharacterAttributes) => { success: boolean; message: string };
   onUnlockMilestoneSkill?: (skillId: string) => { success: boolean; message: string; skill?: MilestoneWeaponSkill };
   onEquipSkill?: (slotIndex: number, skill: ClassSkill) => void;
@@ -25,6 +29,9 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
   isOpen,
   onClose,
   stats,
+  statWallet,
+  onSpendStat,
+  statPending = false,
   onAllocateStatPoint,
   onUnlockMilestoneSkill,
   onEquipSkill,
@@ -78,13 +85,20 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
           {activeTab === 'stats' && <div className="grid grid-cols-2 gap-4">
             <div className="bg-black/50 p-4 rounded-xl border border-gray-800">
               <h3 className="text-[#fbbf24] mb-2 font-bold">Base Attributes</h3>
-              <div className="space-y-2">
+              {!statWallet && <div className="space-y-2">
                 <div className="flex justify-between"><span>Strength:</span><span>{shown(stats.attributes?.strength)}</span></div>
                 <div className="flex justify-between"><span>Agility:</span><span>{shown(stats.attributes?.agility)}</span></div>
                 <div className="flex justify-between"><span>Intelligence:</span><span>{shown(stats.attributes?.intelligence)}</span></div>
                 <div className="flex justify-between"><span>Defense:</span><span>{shown(stats.attributes?.defense)}</span></div>
-              </div>
-              {!onAllocateStatPoint && <p className="mt-3 text-[11px] text-gray-500">Attribute warten auf einen bestätigten Aurion-Readback.</p>}
+              </div>}
+              {statWallet ? <div className="mt-4 space-y-2" data-testid="confirmed-stat-wallet">
+                <p className="text-sm text-amber-300">Frei: {statWallet.availableExact} · Verdient: {statWallet.earnedExact} · Verteilt: {statWallet.spentExact}</p>
+                {statWallet.attributes.map(stat => <div key={stat.key} className="flex justify-between gap-2 items-center">
+                  <span className="capitalize">{stat.key}: {stat.totalExact} (+{stat.allocatedExact})</span>
+                  <button type="button" aria-label={`Stat-Punkt auf ${stat.key} verteilen`} disabled={!onSpendStat || statPending || statWallet.availableExact === '0'} onClick={() => onSpendStat?.(stat.key)} className="border rounded px-2 py-1 disabled:opacity-50">+1</button>
+                </div>)}
+                {statWallet.unconfiguredProgressions.length>0 && <p className="text-xs text-gray-400">Noch keine Punktregel für: {statWallet.unconfiguredProgressions.join(', ')}</p>}
+              </div> : <p className="mt-3 text-[11px] text-gray-500">Attribute warten auf einen bestätigten Aurion-Readback.</p>}
             </div>
           </div>}
 

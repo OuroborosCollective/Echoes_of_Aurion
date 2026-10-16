@@ -1,7 +1,9 @@
 import {
   buildProgressionCagProbe,
+  buildTerrainTexturizationCagProbe,
   buildWorldAssetScaleCagProbe,
   buildWorldChunkTerrainCagProbe,
+  buildWorldChunkTerrainContinuityCagProbe,
   type ModelBounds,
 } from "../../shared/aurionCagDesignProtocol";
 import { generateBaseWorldChunk } from "../../shared/worldChunkProtocol";
@@ -32,6 +34,8 @@ if (!status.configured) {
     buildProgressionCagProbe("1000"),
     buildProgressionCagProbe("1000000"),
     buildWorldChunkTerrainCagProbe(terrainChunk),
+    buildWorldChunkTerrainContinuityCagProbe(terrainChunk),
+    buildTerrainTexturizationCagProbe(terrainChunk),
     buildWorldAssetScaleCagProbe(representativeAsset.category, representativeAsset.bounds as ModelBounds),
   ] as const;
 

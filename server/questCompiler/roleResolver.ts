@@ -8,6 +8,7 @@ export interface WorldEntity {
 }
 
 export const DEFAULT_AURION_ENTITIES: WorldEntity[] = [
+  { id: 'starter_village_north_gate_guard', name: 'Nordtorwache', type: 'npc' },
   { id: 'lyra', name: 'Lyra von der Sternwarte', type: 'npc' },
   { id: 'orun', name: 'Orun, Archivhüter', type: 'npc' },
   { id: 'npc_merchant_kaelen', name: 'Merchant Kaelen', type: 'npc' },

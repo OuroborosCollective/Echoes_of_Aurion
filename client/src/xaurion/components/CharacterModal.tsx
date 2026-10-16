@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { AurionStatAttribute, resolveAurionStatWallet } from '@shared/aurionStatPointProtocol';
 import type { playerReadbackSchema } from "../integration/authoritativeHudProjection";
 import type { ControlSettings, SkillCommand } from "@shared/playerUiProtocol";
 import type { GroupReadmodel } from "@shared/groupInstanceProtocol";
@@ -88,10 +89,13 @@ export function projectConfirmedAx1Character(player?: z.infer<typeof playerReadb
 }
 
 /** Thin authority adapter. The rendered surface itself is AX1. */
-export function CharacterModal({ isOpen, onClose, player, settings: _settings, uiPending: _uiPending, groupPending: _groupPending, message: _message, group: _group, onBind: _onBind, onRoleSkill: _onRoleSkill, onInventory: _onInventory }: {
+export function CharacterModal({ isOpen, onClose, player, statWallet, statPending, onSpendStat, settings: _settings, uiPending: _uiPending, groupPending: _groupPending, message: _message, group: _group, onBind: _onBind, onRoleSkill: _onRoleSkill, onInventory: _onInventory }: {
   isOpen: boolean;
   onClose: () => void;
   player?: z.infer<typeof playerReadbackSchema>;
+  statWallet?: ReturnType<typeof resolveAurionStatWallet>;
+  statPending?: boolean;
+  onSpendStat?: (key: AurionStatAttribute) => void;
   settings?: ControlSettings;
   uiPending: boolean;
   groupPending: boolean;
@@ -105,5 +109,8 @@ export function CharacterModal({ isOpen, onClose, player, settings: _settings, u
     isOpen={isOpen}
     onClose={onClose}
     stats={projectConfirmedAx1Character(player)}
+    statWallet={statWallet}
+    statPending={statPending}
+    onSpendStat={onSpendStat}
   />;
 }

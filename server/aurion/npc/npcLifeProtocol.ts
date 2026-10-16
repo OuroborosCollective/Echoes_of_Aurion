@@ -556,10 +556,24 @@ function opportunityNet(opportunity: NpcLifeOpportunity): number {
 }
 
 function bestOpportunity(goal: NpcGoal, opportunities: readonly NpcLifeOpportunity[]): NpcLifeOpportunity | undefined {
-  return opportunities
-    .filter((value) => value.kind === opportunityForGoal[goal])
-    .slice()
-    .sort((a, b) => opportunityNet(b) - opportunityNet(a) || compareText(a.id, b.id))[0];
+  let best: NpcLifeOpportunity | undefined;
+  let bestNet = -Infinity;
+  const targetKind = opportunityForGoal[goal];
+  for (const opp of opportunities) {
+    if (opp.kind === targetKind) {
+      const net = opportunityNet(opp);
+      if (best === undefined) {
+        best = opp;
+        bestNet = net;
+      } else {
+        if (net > bestNet || (net === bestNet && compareText(opp.id, best.id) < 0)) {
+          best = opp;
+          bestNet = net;
+        }
+      }
+    }
+  }
+  return best;
 }
 
 function makePlan(goal: NpcGoal, opportunities: readonly NpcLifeOpportunity[]): NpcLifePlan {

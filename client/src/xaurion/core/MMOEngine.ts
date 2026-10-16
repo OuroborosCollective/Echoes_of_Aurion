@@ -581,7 +581,7 @@ export class MMOEngine {
   }
 
   public spawnTerritoryGuards(chunkKey: string, count: number, ownerName: string) {
-    const chunk = Array.from(this.landscape.chunkManager.chunks.values()).find(c => c.chunkKey === chunkKey);
+    const chunk = this.landscape.chunkManager.chunks.get(chunkKey);
     if (!chunk) return;
 
     for (let i = 0; i < count; i++) {
@@ -1339,6 +1339,22 @@ export class MMOEngine {
   public setVirtualMovement(forward: number, right: number) {
     this.virtualForward = forward;
     this.virtualRight = right;
+  }
+
+  /**
+   * Render exactly one presentation-only frame without advancing simulation.
+   * This is used to prove renderer viability before the first authoritative
+   * zone snapshot arrives. It must not create movement/gameplay/world truth.
+   */
+  public renderPresentationFrame(): void {
+    if (this.disposed) return;
+    try {
+      this.handleResize();
+      this.renderer.render(this.scene, this.camera);
+      this.onFrameRendered?.();
+    } catch (error) {
+      this.failRuntime(error);
+    }
   }
 
   public start() {

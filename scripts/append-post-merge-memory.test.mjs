@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { buildEntry } from "./append-post-merge-memory.mjs";
+import { appendEntry, buildEntry } from "./append-post-merge-memory.mjs";
+import { requiresAurionRelease } from "./aurion-release-paths.mjs";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 const body = [
   "## Summary",
@@ -63,3 +67,22 @@ assert.ok(entry2.includes("Aurion remains the sole active gameplay/world/persist
 assert.match(entry2, /Changed-file list unavailable/);
 
 console.log("post-merge memory entry regression: PASS");
+
+const dir = await mkdtemp(path.join(os.tmpdir(), "aurion-memory-proof-"));
+try {
+  const memoryPath = path.join(dir, "Memory.md");
+  const marker = "<!-- integration-memory: pr=830 -->";
+  const entry = `### Integration\n${marker}\nStatus: Verified tests\nTask: Schema repair\nEvidence: CI run\nLearned: Bind revisions\nOpen: Production verification\n`;
+  await writeFile(memoryPath, entry);
+  const meta = { memoryPath, prNumber: "830", mergeCommitSha: "a".repeat(40) };
+  assert.equal((await appendEntry(meta)).changed, false);
+  assert.equal(await readFile(memoryPath, "utf8"), entry);
+  await writeFile(memoryPath, marker);
+  await assert.rejects(appendEntry(meta), /INTEGRATION_MEMORY_ENTRY_INVALID/);
+  await writeFile(memoryPath, entry + entry);
+  await assert.rejects(appendEntry(meta), /INTEGRATION_MEMORY_ENTRY_INVALID/);
+} finally { await rm(dir, { recursive: true, force: true }); }
+assert.equal(requiresAurionRelease(["docs/schema.md", "Memory.md"]), false);
+assert.equal(requiresAurionRelease(["docs/schema.md", "server/router.ts"]), true);
+assert.equal(requiresAurionRelease([".github/workflows/deploy-aurion-zone-runtime.yml"]), true);
+assert.throws(() => requiresAurionRelease([]), /RELEASE_FILE_LIST_REQUIRED/);

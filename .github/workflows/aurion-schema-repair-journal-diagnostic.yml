@@ -1,0 +1,103 @@
+name: Read Aurion schema repair journal identities
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact current main revision of this diagnostic workflow.
+        required: true
+        type: string
+      prepared_schema_sha:
+        description: Exact already-installed read-only schema tool revision.
+        required: true
+        type: string
+      artifact_run_id:
+        description: Main release run that built and prepared these schema tools.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: aurion-schema-repair-journal-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  journal-readback:
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      PREPARED_SHA: ${{ inputs.prepared_schema_sha }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Bind current main and unchanged prepared schema contracts
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = OuroborosCollective/Echoes_of_Aurion
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          node scripts/verify-aurion-journal-diagnostic-source.mjs
+      - name: Download only the prepared read-only reconciliation artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-production-reconcile-${{ inputs.prepared_schema_sha }}
+          path: journal-diagnostic-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id }}
+      - name: Independently verify artifact and installed read-only runner
+        run: |
+          set -euo pipefail
+          cd journal-diagnostic-artifact
+          sha256sum --strict -c "aurion-production-reconcile-${PREPARED_SHA}.tgz.sha256"
+          mkdir reader
+          tar -tzf "aurion-production-reconcile-${PREPARED_SHA}.tgz" | while IFS= read -r entry; do
+            [[ "$entry" =~ ^[A-Za-z0-9_./-]+$ && "$entry" != /* && "$entry" != .. && "$entry" != ../* && "$entry" != */../* && "$entry" != */.. ]]
+          done
+          tar -tvzf "aurion-production-reconcile-${PREPARED_SHA}.tgz" | awk 'substr($0,1,1)!="-" && substr($0,1,1)!="d" {bad=1} END {exit bad}'
+          tar --no-same-owner -xzf "aurion-production-reconcile-${PREPARED_SHA}.tgz" -C reader
+          artifact="$PWD/reader"
+          installed="/opt/echoes-of-aurion-schema-reconcile/releases/$PREPARED_SHA"
+          test "$(readlink -f /opt/echoes-of-aurion-schema-reconcile/current)" = "$installed"
+          node "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$PREPARED_SHA"
+          node "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$installed" "$PREPARED_SHA"
+          cmp -s "$artifact/manifest.json" "$installed/manifest.json"
+          cmp -s "$artifact/checksums.sha256" "$installed/checksums.sha256"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if(!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)) throw new Error("DIAGNOSTIC_IMAGE_IDENTITY_INVALID");
+            console.log(`DIAGNOSTIC_IMAGE_DIGEST=${c.imageDigest}`);
+          ' "$artifact/deploy/aurion-reconcile-runtime-image.conf" >> "$GITHUB_ENV"
+      - name: Read and project only migration journal metadata
+        run: |
+          set -euo pipefail
+          umask 077
+          raw="$(mktemp)"
+          stderr_file="$(mktemp)"
+          trap 'rm -f "$raw" "$stderr_file"' EXIT
+          set +e
+          sudo -n /usr/local/sbin/aurion-production-schema-reconcile "$PREPARED_SHA" > "$raw" 2> "$stderr_file"
+          status=$?
+          set -e
+          node scripts/aurion-schema-repair-journal-diagnostic.mjs "$raw" "$PREPARED_SHA" "$DIAGNOSTIC_IMAGE_DIGEST" "$status" journal-diagnostic.json
+      - name: Retain bounded read-only diagnostic
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-schema-repair-journal-${{ inputs.prepared_schema_sha }}
+          path: journal-diagnostic.json
+          if-no-files-found: error
+          retention-days: 7

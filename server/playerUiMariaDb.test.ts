@@ -7,6 +7,7 @@ import { aurionPlayerUiSettings } from "../drizzle/playerUiSchema";
 import { defaultHotbar } from "../shared/playerUiProtocol";
 import { craftItemForUser, createMarketListing, getDb, sellItemToSystem } from "./db";
 import { collectPlayerLoot, equipPlayerItem, readPlayerUi, savePlayerControls, unequipPlayerItem } from "./playerUiPersistence";
+import { inventoryItemShapeHash, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 
 const suite = process.env.AURION_UI_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const ids = [9330001, 9330002];
@@ -19,7 +20,7 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
   async function clean() {
     if (!isolated) throw new Error("ISOLATED_UI_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS ui_abort_equip");
-    for (const [table, column] of [["aurionEquipmentSlots", "userId"], ["aurionPlayerUiSettings", "userId"], ["systemSaleReceipts", "sellerUserId"], ["marketListings", "sellerUserId"], ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"], ["playerProfiles", "userId"], ["users", "id"]]) await pool.query(`DELETE FROM \`${table}\` WHERE \`${column}\` IN (?)`, [ids]);
+    for (const [table, column] of [["aurionEquipmentSlots", "userId"], ["aurionPlayerUiSettings", "userId"], ["systemSaleReceipts", "sellerUserId"], ["marketListings", "sellerUserId"], ["itemInstances", "ownerUserId"], ["aurionItemInstancesV2", "ownerUserId"], ["aurionMasteryEvents", "userId"], ["playerProfiles", "userId"], ["users", "id"]]) await pool.query(`DELETE FROM \`${table}\` WHERE \`${column}\` IN (?)`, [ids]);
   }
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
@@ -35,7 +36,8 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
     await db.insert(users).values(ids.map(id => ({ id, openId: `local:ui_database_fixture_${id}`, name: `UI fixture ${id}` })));
     await db.insert(playerProfiles).values(ids.map(userId => ({ userId })));
     await db.insert(itemInstances).values({ id: ref().id, ownerUserId: owner, lootReceiptId: "ui_fixture_drop", baseItemKey: "aurion_spear", quality: "normal", itemLevel: 1, affixesJson: "[]", status: "pending_pickup" });
-    await db.insert(aurionItemInstancesV2).values({ id: v2ref.id, ownerUserId: owner, lootReceiptId: "ui_fixture_drop_v2", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "rare", itemLevelExact: "10000000000000000001", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), status: "pending_pickup" });
+    const v2Shape = { definitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "rare", levelExact: "10000000000000000001", affixesJson: "[]", setId: null, itemPower: 9 };
+    await db.insert(aurionItemInstancesV2).values({ id: v2ref.id, ownerUserId: owner, lootReceiptId: "ui_fixture_drop_v2", baseItemDefinitionId: "weapon-blade-v2", category: "weapon", equipmentSlot: "main_hand", quality: "rare", itemLevelExact: "10000000000000000001", affixesJson: "[]", itemPower: 9, deterministicHash: "a".repeat(64), mergeKey: inventoryMergeKey(v2Shape), provenanceHash: inventoryItemShapeHash(v2Shape), status: "pending_pickup" });
   });
   afterAll(async () => { if (pool) { if (isolated) await clean(); await pool.end(); } });
   it("persists optimistic-revision controls and rejects a competing stale save", async () => {
@@ -74,6 +76,8 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
     const replaced = await readPlayerUi(owner);
     expect(replaced.equipment).toEqual([{ ...v2ref, slot: "main_hand" }]);
     expect(replaced.items.find(i => i.id === ref().id)!.status).toBe("owned");
+    const [acegSlot] = await (await getDb())!.select().from(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.userId, owner));
+    expect(acegSlot!.id).toMatch(/^aceg:[a-f0-9]{59}$/);
     await expect(unequipPlayerItem(owner, ref())).rejects.toThrow("EQUIPMENT_SLOT_STALE");
     await unequipPlayerItem(owner, v2ref);
     expect((await readPlayerUi(owner)).equipment).toEqual([]);

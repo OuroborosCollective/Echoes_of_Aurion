@@ -1,0 +1,77 @@
+name: Godot headless contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/godot/**'
+      - 'config/godot-toolchain.lock.json'
+      - 'godot-client/**'
+      - 'shared/**'
+      - 'server/zoneProtocol.ts'
+      - 'server/zoneGateway.ts'
+      - 'client/src/lib/zoneMovement.ts'
+      - '.github/workflows/godot-headless.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bootstrap regression
+        run: node --test scripts/godot/toolchain.test.mjs
+      - name: Install and verify editor
+        run: |
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/doctor.mjs
+          node scripts/godot/bootstrap.mjs
+      - name: Reproducible checks and fault injection
+        env:
+          AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURION_GODOT_EVIDENCE: ${{ runner.temp }}/godot-evidence
+        run: |
+          node --test scripts/godot/check.test.mjs
+          node scripts/godot/check.mjs
+          node scripts/godot/verify-evidence.mjs "$AURION_GODOT_EVIDENCE/evidence.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-headless-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/godot-evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Render startup with software OpenGL
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          AURION_CAPTURE_DIR: ${{ runner.temp }}/aurion-startup
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri
+          xvfb-run -a -s '-screen 0 1600x1600x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_startup.gd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-startup-software-render-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurion-startup/*.png
+          if-no-files-found: error
+          retention-days: 7
+  android-toolchain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned editor and Android packages
+        run: |
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/bootstrap-android.mjs
+          node scripts/godot/doctor.mjs --android
+          node scripts/godot/bootstrap-android.mjs

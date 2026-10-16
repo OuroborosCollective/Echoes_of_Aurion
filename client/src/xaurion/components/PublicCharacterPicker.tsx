@@ -73,14 +73,16 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
     } finally { setBusy(false); }
   };
 
-  return <section className="rounded-2xl border border-cyan-300/20 bg-black/20 p-5" data-testid="public-character-picker">
+  const catalogState = error ? "failed" : !catalog ? "loading" : catalog.selected ? "selected" : catalog.entries.length === 0 ? "empty" : "ready";
+
+  return <section className="rounded-2xl border border-cyan-300/20 bg-black/20 p-5" data-testid="public-character-picker" data-catalog-state={catalogState}>
     <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 size-5 text-cyan-300"/><div><h3 className="font-semibold">Öffentliches Spielermodell</h3><p className="mt-1 text-xs text-slate-400">Diese Auswahl ist einmalig und wird serverseitig gebunden. Andere aktuell verbundene Spieler dürfen anschließend nur dieses öffentliche Darstellungsmodell sehen; Werte, Klasse, Inventar und Kampf bleiben unverändert.</p></div></div>
-    {!catalog && !error && <p className="mt-4 flex items-center gap-2 text-sm text-slate-400"><LoaderCircle className="size-4 animate-spin"/>Charaktermodelle werden geladen…</p>}
-    {error && <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}
-    {catalog?.selected && <div className="mt-4 rounded-xl border border-emerald-300/25 bg-emerald-300/5 p-4 text-sm"><p className="flex items-center gap-2 text-emerald-200"><CheckCircle2 className="size-4"/><b>Dauerhaft gewählt</b></p><p className="mt-1 text-slate-300">{catalog.selected.displayName}</p></div>}
-    {catalog && !catalog.selected && catalog.entries.length === 0 && <p className="mt-4 text-sm text-slate-400">Noch kein Charakter wurde vom Admin als öffentliche Spielerwahl freigegeben.</p>}
+    {!catalog && !error && <p data-testid="public-character-catalog-loading" className="mt-4 flex items-center gap-2 text-sm text-slate-400"><LoaderCircle className="size-4 animate-spin"/>Charaktermodelle werden geladen…</p>}
+    {error && <p role="alert" data-testid="public-character-catalog-failed" className="mt-4 rounded-xl border border-red-300/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}
+    {catalog?.selected && <div data-testid="public-character-catalog-selected" className="mt-4 rounded-xl border border-emerald-300/25 bg-emerald-300/5 p-4 text-sm"><p className="flex items-center gap-2 text-emerald-200"><CheckCircle2 className="size-4"/><b>Dauerhaft gewählt</b></p><p className="mt-1 text-slate-300">{catalog.selected.displayName}</p></div>}
+    {catalog && !catalog.selected && catalog.entries.length === 0 && <p data-testid="public-character-catalog-empty" className="mt-4 text-sm text-slate-400">Noch kein Charakter wurde vom Admin als öffentliche Spielerwahl freigegeben.</p>}
     {catalog && !catalog.immutable && catalog.entries.length > 0 && <>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Öffentliche Charaktermodelle">
+      <div data-testid="public-character-catalog-ready" className="mt-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Öffentliche Charaktermodelle">
         {catalog.entries.map(entry => <button key={entry.assetId} type="button" role="radio" aria-checked={candidate === entry.assetId} onClick={() => setCandidate(entry.assetId)} className="rounded-xl border border-slate-600/50 bg-white/5 p-3 text-left aria-checked:border-cyan-300 aria-checked:bg-cyan-300/10"><b className="text-sm text-slate-100">{entry.displayName}</b><p className="mt-1 text-[11px] text-slate-500">{entry.subcategory}</p></button>)}
       </div>
       {selectedCandidate && <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/5 p-4"><p className="text-sm text-amber-100"><b>Einmalige Wahl:</b> {selectedCandidate.displayName}</p><p className="mt-1 text-xs text-slate-400">Nach der Bestätigung kann kein anderes öffentliches Charaktermodell mehr gewählt werden.</p><button type="button" disabled={busy} onClick={() => void confirm()} className="mt-3 min-h-11 rounded-xl bg-amber-200 px-4 font-bold text-slate-950 disabled:opacity-50">{busy ? "Wird bestätigt…" : "Dauerhaft wählen"}</button></div>}

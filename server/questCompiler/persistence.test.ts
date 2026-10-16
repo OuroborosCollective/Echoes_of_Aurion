@@ -71,6 +71,8 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     expect(replay.receipt).toEqual(committed.receipt);
     expect(replay.updatedInstance.objectiveProgress.investigate).toBe(1);
     expect((await persistence.getReceiptsForInstance(instance.id))).toHaveLength(1);
+    expect(await persistence.getReceiptByIdempotencyKey(first.receipt.idempotencyKey)).toEqual(committed.receipt);
+    expect(await persistence.getReceiptByIdempotencyKey("missing-idempotency-key")).toBeUndefined();
   });
 
   it("rejects a receipt whose result hash does not match the persisted next state", async () => {

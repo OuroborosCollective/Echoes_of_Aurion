@@ -18,12 +18,12 @@ function fixture(tickCount = 4) {
   const zone = new AuthoritativeMovementZone("observatory_threshold:oracle-v2" as any);
   zone.sourceRevisionOverride = REVISION;
   zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V2;
+  const checkpointState = zone.getCanonicalZoneState();
   const { connectionId } = zone.join({
     userId: 25_001,
     socket,
     combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" },
   });
-  const checkpointState = zone.getCanonicalZoneState();
   const checkpoint: PersistedCheckpoint = {
     id: "physical-id-is-not-oracle-truth",
     worldId: checkpointState.worldId,

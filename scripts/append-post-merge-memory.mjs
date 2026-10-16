@@ -81,6 +81,17 @@ export async function appendEntry({ memoryPath = DEFAULT_MEMORY_PATH, filesPath 
   const memory = await readFile(memoryPath, "utf8");
   const marker = "<!-- auto-memory: pr=" + required(meta.prNumber, "PR_NUMBER") + " merge=" + required(meta.mergeCommitSha, "MERGE_COMMIT_SHA") + " -->";
   if (memory.includes(marker)) return { changed: false, marker };
+  // The owner may require the single evidence entry before merge. Preserve
+  // that append-only entry instead of adding a second post-merge entry.
+  const preMergeMarker = "<!-- integration-memory: pr=" + required(meta.prNumber, "PR_NUMBER") + " -->";
+  if (memory.includes(preMergeMarker)) {
+    const entries = memory.split(/(?=^### )/m).filter(entry => entry.includes(preMergeMarker));
+    if (entries.length !== 1 || memory.split(preMergeMarker).length !== 2
+      || !["Status", "Task", "Evidence", "Learned", "Open"].every(label => new RegExp("^" + label + ":\\s*\\S", "m").test(entries[0]))) {
+      throw new Error("INTEGRATION_MEMORY_ENTRY_INVALID");
+    }
+    return { changed: false, marker: preMergeMarker };
+  }
   const filesText = await readFile(filesPath, "utf8").catch(() => "");
   const files = filesText.split("\n").map((value) => value.trim()).filter(Boolean);
   const entry = buildEntry({ ...meta, files });

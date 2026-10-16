@@ -1,0 +1,130 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://app/main.gd" id="1_main"]
+
+[sub_resource type="StyleBoxFlat" id="Style_card"]
+bg_color = Color(0.045, 0.085, 0.11, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.38, 0.39, 0.31, 0.7)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+content_margin_left = 24.0
+content_margin_top = 28.0
+content_margin_right = 24.0
+content_margin_bottom = 28.0
+
+[sub_resource type="StyleBoxFlat" id="Style_button"]
+bg_color = Color(0.14, 0.22, 0.25, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
+
+[node name="AurionLaunch" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_main")
+
+[node name="SafeMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Scroll" type="ScrollContainer" parent="SafeMargin"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Center" type="CenterContainer" parent="SafeMargin/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="LaunchCard" type="PanelContainer" parent="SafeMargin/Scroll/Center"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_card")
+
+[node name="Content" type="VBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Eyebrow" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.77, 0.69, 0.46, 1)
+theme_override_font_sizes/font_size = 16
+text = "DIE STERNWARTE ERWACHT"
+autowrap_mode = 3
+
+[node name="Title" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.92, 0.83, 1)
+theme_override_font_sizes/font_size = 44
+text = "Echoes of Aurion"
+autowrap_mode = 3
+
+[node name="Introduction" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.81, 0.82, 1)
+theme_override_font_sizes/font_size = 20
+text = "Eine lebendige Welt. Deine Spuren bleiben."
+autowrap_mode = 3
+
+[node name="Separator" type="HSeparator" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+layout_mode = 2
+
+[node name="ConnectionStatus" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.90, 0.75, 0.44, 1)
+theme_override_font_sizes/font_size = 22
+text = "Nicht verbunden"
+autowrap_mode = 3
+
+[node name="Destination" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.81, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "Aurion · arelogic.space"
+autowrap_mode = 3
+
+[node name="Login" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+theme_override_colors/font_disabled_color = Color(0.69, 0.77, 0.78, 1)
+theme_override_font_sizes/font_size = 20
+theme_override_styles/disabled = SubResource("Style_button")
+disabled = true
+text = "Anmelden"
+
+[node name="DevelopmentNotice" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.73, 0.75, 1)
+theme_override_font_sizes/font_size = 16
+text = "Entwicklungsversion · Die Online-Anmeldung ist noch nicht verfügbar."
+autowrap_mode = 3
+
+[node name="BuildIdentity" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Build wird geprüft"
+autowrap_mode = 3

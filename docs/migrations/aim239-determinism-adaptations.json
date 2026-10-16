@@ -7,7 +7,7 @@
     {
       "path": "client/src/xaurion/entities/OpenWorldPlayer.ts",
       "sourceSha256": "6be036e5f3fb974f2bcbf63624bffb62c22ea9b61e568f2dc21409d8a0f30456",
-      "targetSha256": "0c6257f670dee01a65fc9ec8aa557ae45982a76384b687755fda5d699fb8a17e",
+      "targetSha256": "ad3ee36de06ac44e050f895e7e9f1981fcf3a5c6da63357c991335d30c87085f",
       "adaptations": [
         {
           "before": "",
@@ -88,6 +88,24 @@
           "after": "      this.rootGroup.visible = true;\n      this.activeGlbModelId = null;\n      return false;\n    } finally { if (unowned) releaseGlbTree(unowned); }\n  }\n\n  public disposePresentation(): void {\n    this.proceduralVisuals.dispose();\n    void this.equipGlbModel(null);\n    releaseGlbTree(this.group);\n  }\n\n  public setConfirmedGlbSpeed(speedMetersPerSecond: number): void {\n",
           "occurrences": 1,
           "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "  private shieldBubble: THREE.Mesh;\n  private classAura: THREE.Points;",
+          "after": "  private shieldBubble: THREE.Mesh;\n  private equipmentAuraTimer: ReturnType<typeof setTimeout> | undefined;\n  private classAura: THREE.Points;",
+          "occurrences": 1,
+          "reason": "Restart the Aurion-owned equipment-change presentation pulse from the latest confirmed change and retain exact owner-ZIP reconstruction."
+        },
+        {
+          "before": "  public emitEquipmentAura() {\n    if (this.shieldBubble) {\n      const mat = this.shieldBubble.material as THREE.MeshStandardMaterial;\n      mat.opacity = 0.45;\n      setTimeout(() => {\n        if (this.shieldBubble) {\n          (this.shieldBubble.material as THREE.MeshStandardMaterial).opacity = 0.0;\n        }\n      }, 300);\n    }\n  }",
+          "after": "  public emitEquipmentAura() {\n    if (this.shieldBubble) {\n      clearTimeout(this.equipmentAuraTimer);\n      const mat = this.shieldBubble.material as THREE.MeshStandardMaterial;\n      mat.opacity = 0.45;\n      this.equipmentAuraTimer = setTimeout(() => {\n        (this.shieldBubble.material as THREE.MeshStandardMaterial).opacity = 0.0;\n        this.equipmentAuraTimer = undefined;\n      }, 300);\n    }\n  }",
+          "occurrences": 1,
+          "reason": "Restart the Aurion-owned equipment-change presentation pulse from the latest confirmed change and retain exact owner-ZIP reconstruction."
+        },
+        {
+          "before": "  public disposePresentation(): void {\n    this.proceduralVisuals.dispose();",
+          "after": "  public disposePresentation(): void {\n    clearTimeout(this.equipmentAuraTimer);\n    this.equipmentAuraTimer = undefined;\n    this.proceduralVisuals.dispose();",
+          "occurrences": 1,
+          "reason": "Cancel the presentation-only aura timer when the active runtime is disposed and retain exact owner-ZIP reconstruction."
         }
       ]
     },

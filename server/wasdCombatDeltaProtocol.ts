@@ -21,6 +21,8 @@ export interface CombatDeltaContext {
   tick: number;
   sequence: number;
   weaponBonus?: number;
+  /** Explicit authoritative equipment readback; never inferred from mastery/weapon track. */
+  unarmed?: boolean;
   /** Aurion-owned addressable draws are mandatory for every gameplay-authority caller. */
   entropy: CombatEntropy;
 }
@@ -72,8 +74,10 @@ export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDe
   if (!hit) return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:0, result:Object.freeze({ success:true, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore }) });
 
   const crit = context.entropy.critU32 < probabilityThreshold(0.08);
-  const damageRoll = context.entropy.damageU32 % 4;
-  const base = 5 + combatLevel(attacker) + Math.max(0, weaponBonus);
+  // A starting fist hit is one. Preserve the existing +combatLevel progression
+  // term and mitigation; do not invent usage XP or cap higher-level damage.
+  const damageRoll = context.unarmed ? 0 : context.entropy.damageU32 % 4;
+  const base = context.unarmed ? combatLevel(attacker) : 5 + combatLevel(attacker) + Math.max(0, weaponBonus);
   const mitigation = Math.floor(combatLevel(defender) * 0.3);
   const baseDamage = Math.max(1, base - mitigation + damageRoll);
   const damage = crit ? Math.floor(baseDamage * 1.75) : baseDamage;

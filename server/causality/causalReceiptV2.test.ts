@@ -16,12 +16,12 @@ const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} } as un
 function v2Fixture(suffix: string) {
   const zone = new AuthoritativeMovementZone(`observatory_threshold:${suffix}` as any);
   zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V2;
+  const preState = zone.getCanonicalZoneState();
   const { connectionId } = zone.join({
     userId: 9101,
     socket,
     combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" },
   });
-  const preState = zone.getCanonicalZoneState();
   zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } });
   const intents = [...zone.getPendingIntents()];
   zone.tick();
@@ -107,12 +107,12 @@ describe("Blocker 5 causal receipt v2", () => {
   it("keeps receipt-v1 intermediate authority stages unobservable", () => {
     const zone = new AuthoritativeMovementZone("observatory_threshold:v1-compat" as any);
     zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V1;
+    const preState = zone.getCanonicalZoneState();
     const { connectionId } = zone.join({
       userId: 9102,
       socket,
       combatProfile: { combatLevel: 5, maxHealth: 500, weaponBonus: 10, weaponTrack: "blade" },
     });
-    const preState = zone.getCanonicalZoneState();
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
     const intents = [...zone.getPendingIntents()];
     zone.tick();

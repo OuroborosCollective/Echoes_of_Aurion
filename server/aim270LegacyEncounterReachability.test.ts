@@ -50,7 +50,7 @@ describe("AIM-270 legacy Aurion encounter reachability", () => {
     const zone = readFileSync("server/zoneRuntime.ts", "utf8");
 
     expect(request).toContain("requestZoneBasicAttack");
-    expect(request).toContain("kein Aurion-Gameplay-Fallback");
+    expect(request).toContain("Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback.");
     expect(zone).toContain('from "./wasdCombatDeltaProtocol"');
     expect(zone).toContain("WASD_GAMEPLAY_SOURCE_REVISION");
   });

@@ -33,14 +33,30 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
 
   it("removes Aurion gameplay fallbacks from the mounted AX1 runtime", () => {
     const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
+    const route = read("client/src/xaurion/integration/AurionPlayRoute.tsx");
+    expect(route).toContain("Aurion-Spielstart benötigt einen bestätigten Weltvertrag");
+    expect(route).not.toContain("AX1-Spielstart");
+    expect(route).not.toContain("WASD-Weltvertrag");
+    expect(runtime).toContain("Mount bleibt auf der Aurion-Taste Z");
+    expect(runtime).not.toContain("-ax1-Keybind");
+    expect(runtime).toContain("setMountFeedback(MOUNT_PENDING_MESSAGE)");
+    expect(runtime).toContain("MOUNT_FEEDBACK_DURATION_MS = 4_000");
+    expect(runtime).toContain("window.clearTimeout(mountFeedbackTimerRef.current)");
+    expect(runtime).toContain("mountFeedbackTimerRef.current = window.setTimeout(() => {");
+    expect(runtime).toContain("useEffect(() => () => window.clearTimeout(mountFeedbackTimerRef.current), [])");
+    expect(runtime).toContain('className="aurion-ui-feedback" role="status">{mountFeedback}');
+    expect(runtime).not.toContain('addChatMessage("system", "Aurion", MOUNT_PENDING_MESSAGE)');
     const request = read("client/src/xaurion/integration/confirmedActionRequest.ts");
     const hud = read("client/src/xaurion/integration/AurionAuthorityHud.tsx");
     const home = read("client/src/pages/Home.tsx");
     expect(runtime).toContain("ax1MovementToAurionIntent(engine.cameraYaw, forward, right)");
     expect(runtime).toContain("bindAurionAuthorityProjection");
-    expect(runtime).toContain("return requestConfirmedAction(command)");
+    expect(runtime).toContain("const outcome = await requestConfirmedAction(command)");
+    expect(runtime).toContain("new CustomEvent(AURION_COMBAT_FEEDBACK_EVENT, { detail: outcome })");
     expect(request).not.toContain("aurion:request-action");
-    expect(request).toContain("kein Aurion-Gameplay-Fallback");
+    expect(request).toContain("Aurion-Zonenvertrag nicht verbunden; kein lokaler Gameplay-Fallback.");
+    expect(request).not.toContain("WASD-Zonenvertrag");
+    expect(request).not.toContain("AX1-Skill");
     expect(hud).not.toContain("AurionEncounterPanel");
     expect(hud).not.toContain("trpc.gameplay.acceptQuest");
     expect(hud).not.toContain("trpc.gameplay.completeQuest");
@@ -91,6 +107,8 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     expect(compact).toContain("player.gainXp=()=>false");
     expect(compact).toContain("player.consumeResource=()=>false");
     expect(compact).toContain("player.equipItem=()=>null");
+    expect(compact).toContain("engine.toggleMount=()=>handlers.requestMount()");
+    expect(compact).toContain("player.toggleMount=()=>player.stats.isMounted");
     expect(compact).toContain("engine.castClassSkill=index=>");
     expect(compact).toContain('handlers.requestAction("E")');
   });

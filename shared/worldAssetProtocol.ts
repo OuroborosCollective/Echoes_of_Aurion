@@ -1,7 +1,8 @@
-import collision from "./worldCollisionManifest.json";
+import collision from "./worldCollisionManifest.json" with { type: "json" };
 import { z } from "zod";
-import catalog from "./worldAssetCatalog.json";
+import catalog from "./worldAssetCatalog.json" with { type: "json" };
 import { WORLD_CHUNK_COORDINATE_LIMIT, type WorldChunkCoordinate } from "./worldChunkProtocol";
+import { AURION_STARTER_VILLAGE_ASSET_PLACEMENTS, AURION_STARTER_VILLAGE_CONTRACT_VERSION } from "./aurionStarterVillageContract";
 export const WORLD_ASSET_VERSION = "aurion-world-assets.v1" as const;
 export const worldAssetCatalog = catalog;
 export type WorldAsset = typeof catalog.assets[number];
@@ -23,6 +24,11 @@ const city = catalog.assets.filter(a => a.family === "city"), nature = catalog.a
 export function worldAssetsForChunk(worldSeed: string, coordinate: WorldChunkCoordinate): WorldAssetPlacement[] {
   worldAssetRegionInput.parse(coordinate); if(!worldSeed) throw Error("WORLD_SEED_REQUIRED");
   const {x,z}=coordinate;const settlement=mod(x,6)<2 && mod(z,6)<2;
+  // The origin chunk is the canonical starter village. It is never selected by
+  // seed, random choice or catalog cycling; the client receives this confirmed plan.
+  if(x===0&&z===0)return AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.map(placement=>({
+    ...placement,id:`${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:${placement.id}`,
+  }));
   const models=settlement?city:nature;
   const start=mod(x*31+z*17+seedHash(worldSeed),models.length);
   const result: WorldAssetPlacement[]=[];let slot=0;

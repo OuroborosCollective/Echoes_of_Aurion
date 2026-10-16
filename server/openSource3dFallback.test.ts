@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   OS3A_FALLBACK_CONFIRMATION,
+  applyOpenSource3dFallback,
   openSource3dFallbackSource,
   os3aApplyInputSchema,
   os3aPlanInputSchema,
@@ -59,6 +60,27 @@ describe("pinned OS3A fallback catalog", () => {
     expect(xyz.every(match => match.discoveryOnly && match.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE")).toBe(true);
     expect(() => os3aPlanInputSchema.parse({ sourceAssetId: "xyz-037", purpose: "world-nature", tier: "phone" })).not.toThrow();
     expect(os3aPlanInputSchema.parse({ sourceAssetId: "xyz-037", purpose: "enemy-fallback", tier: "phone" }).purpose).toBe("enemy-fallback");
+  });
+
+
+  it("accepts the confirmed apply fields, then reaches real pinned-byte validation without rejecting extra plan keys", async () => {
+    const match = searchOpenSource3dFallback({ query: "medieval barrel", tier: "phone", limit: 8 }).matches
+      .find(candidate => candidate.transferBudgetFit && !candidate.discoveryOnly);
+    expect(match).toBeDefined();
+    const fetchSpy = vi.fn(async () => { throw new Error("TEST_PINNED_BYTE_FETCH_REACHED"); });
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      await expect(applyOpenSource3dFallback(1, {
+        sourceAssetId: match!.sourceAssetId,
+        purpose: "world-environment",
+        tier: "phone",
+        expectedPlanSha256: "a".repeat(64),
+        confirmation: OS3A_FALLBACK_CONFIRMATION,
+      })).rejects.toThrow("TEST_PINNED_BYTE_FETCH_REACHED");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("requires the exact named confirmation on admission", () => {

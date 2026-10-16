@@ -73,10 +73,15 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     };
     expect(Number((journal as Array<{ rowCount: number | string }>)[0]?.rowCount))
       .toBe(declaredJournal.entries.length);
-    expect(declaredJournal.entries.at(-1)).toMatchObject({
+    // This causal-receipt contract requires migration 0068, not that no
+    // later independently verified migration can exist.
+    expect(declaredJournal.entries).toContainEqual(expect.objectContaining({
       idx: 68,
       tag: "0068_aurion_item_manipulation_runtime",
-    });
+    }));
+    expect(declaredJournal.entries.map(entry => entry.idx)).toEqual(
+      Array.from({ length: declaredJournal.entries.length }, (_, index) => index),
+    );
   });
 
   it("round-trips v2 stage evidence through MariaDB and verifies the persisted receipt hash", async () => {

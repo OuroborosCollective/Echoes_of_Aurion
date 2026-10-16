@@ -26,6 +26,8 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
       name: column.name,
       columnType: column.sqlType === "int" ? "int(11)" : column.sqlType,
       nullable: column.nullable,
+      defaultSql: column.defaultSql ?? null,
+      extra: column.extra ?? "",
     })),
     indexes: table.indexes.map(index => ({
       name: index.name.startsWith("inline_unique:") ? index.name.slice("inline_unique:".length) : index.name,
@@ -36,6 +38,20 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
 }
 
 describe("Aurion production schema reconciliation", () => {
+  it("rejects wrong defaults and update attributes in an otherwise valid schema prefix", async () => {
+    const contracts = await readProductionSchemaContracts(process.cwd());
+    const observed = new Map<string, ObservedTable>();
+    for (const migration of contracts) for (const table of migration.tables) observed.set(table.name, observedFromExpected(table));
+    const table = observed.get("itemInstances")!;
+    for (const [change, reason] of [
+      [{ defaultSql: "'2001-01-01 00:00:00'" }, "default:createdAt"],
+      [{ extra: "on update current_timestamp()" }, "extra:createdAt"],
+    ] as const) {
+      observed.set(table.name, { ...table, columns: table.columns.map(column => column.name === "createdAt" ? { ...column, ...change } : column) });
+      expect(classifyMigrationContracts(contracts, observed).some(migration => migration.drift.includes(`itemInstances:${reason}`))).toBe(true);
+    }
+  });
+
   it("covers every journaled migration through the canonical wave manifest", async () => {
     const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8"));
     const manifest = JSON.parse(await readFile("config/aurion-migration-wave-manifest.json", "utf8"));
@@ -67,6 +83,20 @@ describe("Aurion production schema reconciliation", () => {
       .toContain("aurionContentHashLedger:unexpected_trigger:shadow_trigger");
     expect(() => parseLateMigrationSql("0041_aurion_content_hash_ledger", "CREATE TABLE `items` (`id` int NOT NULL); CREATE TRIGGER `unsafe` BEFORE UPDATE ON `items` FOR EACH ROW SET NEW.id = OLD.id;"))
       .toThrow("unsupported TRIGGER");
+  });
+
+  it("matches MariaDB's numeric confirmed constraint and rejects a weakened one", async () => {
+    const migration = await parse("0069_aurion_combat_victory_events");
+    const table = migration.tables.find(table => table.name === "aurionCombatVictoryEvents")!;
+    const observed = observedFromExpected(table);
+    observed.checks = table.checks!.map(check => check.name.endsWith("confirmed_ck")
+      ? { ...check, expression: "(`confirmed` = 1)" } : check);
+    expect(compareTableContract(table, observed)).toEqual([]);
+    observed.checks = observed.checks.map(check => check.name.endsWith("confirmed_ck")
+      ? { ...check, expression: "(`confirmed` >= 0)" } : check);
+    expect(compareTableContract(table, observed)).toContain(
+      "aurionCombatVictoryEvents:check_expression:aurionCombatVictoryEvents_confirmed_ck",
+    );
   });
 
   it("compares CHECK boolean structure without discarding grouping or string literals", () => {

@@ -138,3 +138,8 @@ scripts/__pycache__/
 
 # Game Development Studio local evidence/workspace
 .game-dev/workspace/
+# Isolated Godot toolchain downloads and local receipts
+/.aurion-godot/
+
+# Godot editor cache stays local; stable script UIDs remain tracked.
+/godot-client/.godot/

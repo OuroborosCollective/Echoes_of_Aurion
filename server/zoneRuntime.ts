@@ -28,6 +28,7 @@ import {
 import { computeRngRootHash, resolveAddressableRandomU32, type RngEventRecord } from "./determinism/aurionAddressableRandom";
 import { globalTickRecorder, AurionTickRecorder } from "./causality/tickRecorder";
 import { globalCausalPersistence } from "./causality/persistence";
+import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
 import { activeProvenance } from "./aurionProvenance";
 import {
   makeZoneConnectionId,
@@ -81,6 +82,7 @@ type PresencePeer = {
   maxHealth: number;
   stamina: number;
   weaponBonus: number;
+  weaponEquipped?: boolean;
   weaponTrack: WasdZoneCombatProfile["weaponTrack"];
   skillCooldownUntilTick: Map<Ax1BladeSkillId, number>;
   lastCombatSequence: number;
@@ -98,12 +100,41 @@ export function integrateZoneMovement(position: ZonePosition, input: ZoneMove["i
   return integrateWasdZoneMovement(position, input, (from, desired) => worldNatureCollision.resolve(from, desired));
 }
 
+function createPresencePeer(values: {
+  connectionId: string;
+  userId: number;
+  socket: WebSocket;
+  combatProfile: ZoneCombatProfile;
+}): PresencePeer {
+  const entityId = `player:${values.userId}`;
+  return {
+    connectionId: values.connectionId,
+    userId: values.userId,
+    socket: values.socket,
+    input: { x: 0, z: 0 },
+    lastAcceptedClientSeq: 0,
+    lastReceivedClientSeq: 0,
+    position: { x: 0, z: 0 },
+    combatLevel: values.combatProfile.combatLevel,
+    health: values.combatProfile.maxHealth,
+    maxHealth: values.combatProfile.maxHealth,
+    stamina: WASD_MAX_STAMINA,
+    weaponBonus: values.combatProfile.weaponBonus,
+    weaponEquipped: values.combatProfile.weaponEquipped,
+    weaponTrack: values.combatProfile.weaponTrack,
+    skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
+    lastCombatSequence: 0,
+    presence: { entityId, userId: values.userId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 },
+  };
+}
+
 /**
  * Sole authoritative zone state machine. Network handlers admit and enqueue
  * intents only; canonical mutation occurs inside tick(). WASD/AX1 identifiers
  * below are donor provenance, not external runtime authorities.
  */
 export class AuthoritativeMovementZone {
+  private rulesetVersion: string = AURION_ZONE_RULESET_VERSION;
   private readonly peers = new Map<string, PresencePeer>();
   private readonly peersByEntityId = new Map<string, PresencePeer>();
   private readonly mobRuntime = new ZoneMobRuntime();
@@ -126,6 +157,12 @@ export class AuthoritativeMovementZone {
   private questSummaries = new Map<string, CanonicalQuestSummary>();
   private questSummariesDirty = false;
   private cachedQuestSummaries: CanonicalQuestSummary[] = [];
+  /**
+   * Last receipt-bound canonical state. Transport join/leave readbacks remain
+   * immediate, but the next causal receipt must begin from the prior committed
+   * post-state so between-tick membership projection cannot rewrite history.
+   */
+  private lastCommittedState: CanonicalZoneState;
 
   /** Replay disables persistence and transport projection. */
   public isReplay = false;
@@ -140,7 +177,9 @@ export class AuthoritativeMovementZone {
     | typeof AURION_CAUSAL_TICK_SCHEMA_V2
     | null = null;
 
-  constructor(readonly zoneId: ZoneId, private readonly evidenceRecorder: AurionTickRecorder = globalTickRecorder) {}
+  constructor(readonly zoneId: ZoneId, private readonly evidenceRecorder: AurionTickRecorder = globalTickRecorder) {
+    this.lastCommittedState = this.getCanonicalZoneState();
+  }
 
   enqueueIntent(intent: AurionZoneIntent): void { this.pendingIntents.push(intent); }
   getPendingIntents(): readonly AurionZoneIntent[] { return this.pendingIntents; }
@@ -170,6 +209,7 @@ export class AuthoritativeMovementZone {
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
         weaponBonus: peer.weaponBonus,
+        ...(peer.weaponEquipped === undefined ? {} : { weaponEquipped: peer.weaponEquipped }),
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
         lastCombatSequence: peer.lastCombatSequence,
@@ -216,7 +256,7 @@ export class AuthoritativeMovementZone {
       worldId: WORLD_ID,
       zoneId: this.zoneId,
       tick: this.tickNumber,
-      ruleset: AURION_ZONE_RULESET_VERSION,
+      ruleset: this.rulesetVersion,
       combatSequence: this.combatSequence,
       players,
       mobs,
@@ -237,8 +277,10 @@ export class AuthoritativeMovementZone {
   }
 
   restoreFromCanonicalState(state: CanonicalZoneState, previousReceiptHash?: string | null): void {
+    if (!["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
     if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
     if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
+    this.rulesetVersion = state.ruleset;
     this.tickNumber = state.tick;
     this.combatSequence = state.combatSequence;
     if (previousReceiptHash !== undefined) this.previousReceiptHash = previousReceiptHash;
@@ -265,6 +307,7 @@ export class AuthoritativeMovementZone {
         maxHealth: player.maxHealth,
         stamina: player.stamina,
         weaponBonus: player.weaponBonus,
+        weaponEquipped: player.weaponEquipped,
         weaponTrack: player.weaponTrack as WasdZoneCombatProfile["weaponTrack"],
         skillCooldownUntilTick: cooldowns,
         lastCombatSequence: player.lastCombatSequence,
@@ -279,6 +322,15 @@ export class AuthoritativeMovementZone {
     this.questSummaries.clear();
     for (const quest of state.questSummaries || []) this.questSummaries.set(`${quest.userId}:${quest.questId}`, { ...quest });
     this.questSummariesDirty = true;
+    this.lastCommittedState = this.getCanonicalZoneState();
+  }
+
+  restorePersistedHead(state: CanonicalZoneState, receipt: AurionCausalTickReceipt): void {
+    if (state.tick !== receipt.tick || hashCanonicalZoneState(state) !== receipt.postStateHash
+      || computeReceiptHash(receipt) !== receipt.receiptHash) throw new Error("ZONE_PERSISTED_HEAD_INVALID");
+    this.restoreFromCanonicalState(state, receipt.receiptHash);
+    this.lastReceipt = receipt;
+    this.evidenceRecorder.record({ receipt, postState: state });
   }
 
   join(values: { userId: number; socket: WebSocket; combatProfile?: ZoneCombatProfile }): ZoneWelcome {
@@ -289,32 +341,31 @@ export class AuthoritativeMovementZone {
     const previous = this.peersByEntityId.get(entityId);
     if (!previous && this.peers.size >= ZONE_MAX_PRESENCES) throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
+      this.pendingIntents = this.pendingIntents.filter(intent => intent.entityId !== entityId);
       this.peers.delete(previous.connectionId);
       this.peersByEntityId.delete(entityId);
       previous.socket.close(1000, "superseded by authenticated reconnect");
     }
     const connectionId = makeZoneConnectionId();
-    const peer: PresencePeer = {
-      connectionId,
-      userId: values.userId,
-      socket: values.socket,
-      input: { x: 0, z: 0 },
-      lastAcceptedClientSeq: 0,
-      lastReceivedClientSeq: 0,
-      position: { x: 0, z: 0 },
-      combatLevel: profile.combatLevel,
-      health: profile.maxHealth,
-      maxHealth: profile.maxHealth,
-      stamina: WASD_MAX_STAMINA,
-      weaponBonus: profile.weaponBonus,
-      weaponTrack: profile.weaponTrack,
-      skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
-      lastCombatSequence: 0,
-      presence: { entityId, userId: values.userId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 },
-    };
+    const peer = createPresencePeer({ connectionId, userId: values.userId, socket: values.socket, combatProfile: profile });
     this.peers.set(connectionId, peer);
     this.peersByEntityId.set(entityId, peer);
     this.sortedPeersDirty = true;
+    this.pendingIntents.push({
+      type: "presence_join",
+      connectionId,
+      entityId,
+      clientSeq: 0,
+      arrivalSeq: ++this.arrivalSequence,
+      userId: values.userId,
+      combatProfile: {
+        combatLevel: profile.combatLevel,
+        maxHealth: profile.maxHealth,
+        weaponBonus: profile.weaponBonus,
+        ...(profile.weaponEquipped === undefined ? {} : { weaponEquipped: profile.weaponEquipped }),
+        weaponTrack: profile.weaponTrack,
+      },
+    });
     const welcome: ZoneWelcome = {
       type: "welcome",
       protocolVersion: ZONE_PROTOCOL_VERSION,
@@ -335,6 +386,15 @@ export class AuthoritativeMovementZone {
   leave(connectionId: string): void {
     const peer = this.peers.get(connectionId);
     if (!peer) return;
+    const entityId = `player:${peer.userId}`;
+    this.pendingIntents.push({
+      type: "presence_leave",
+      connectionId,
+      entityId,
+      clientSeq: Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq) + 1,
+      arrivalSeq: ++this.arrivalSequence,
+      userId: peer.userId,
+    });
     this.peers.delete(connectionId);
     this.peersByEntityId.delete(`player:${peer.userId}`);
     this.sortedPeersDirty = true;
@@ -345,10 +405,14 @@ export class AuthoritativeMovementZone {
     return this.peersByEntityId.get(`player:${userId}`)?.connectionId;
   }
 
+  async flushEvidencePersistence(): Promise<void> { await this.evidenceRecorder.flushPersistence(); }
+  recordedTick(tick: number) { return this.evidenceRecorder.getEntry(this.zoneId, tick); }
+
   nextClientSequenceForUser(userId: number): number {
     const peer = this.peersByEntityId.get(`player:${userId}`);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
-    return peer.lastReceivedClientSeq + 1;
+    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
+      ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
   }
 
   nextArrivalSequence(): number {
@@ -385,11 +449,14 @@ export class AuthoritativeMovementZone {
     this.sortedPeersDirty = true;
     this.mobRuntime.resetDevelopmentFixture(this.tickNumber);
     this.resourceRuntime.resetDevelopmentFixture();
+    this.lastCommittedState = this.getCanonicalZoneState();
   }
 
   /** Development-only bounded encounter fixture selection over canonical mobs. */
   seedDevelopmentEncounter(fixtureType: "starter_encounter" | "boss_encounter" | "npc_dialogue_fixture"): readonly string[] {
-    return this.mobRuntime.seedDevelopmentEncounter(fixtureType);
+    const seeded = this.mobRuntime.seedDevelopmentEncounter(fixtureType);
+    if (this.lastReceipt === null) this.lastCommittedState = this.getCanonicalZoneState();
+    return seeded;
   }
 
   private admitSequence(peer: PresencePeer, clientSeq: number): boolean {
@@ -429,6 +496,7 @@ export class AuthoritativeMovementZone {
     const definition = ax1BladeSkillById(skill.skillId);
     if (peer.weaponTrack !== "blade" || !definition || definition.skillId !== "k_strike" || definition.kind !== "melee") return "invalid_skill";
     if (this.tickNumber < (peer.skillCooldownUntilTick.get(skill.skillId) ?? 0)) return "cooldown";
+    if (!skill.targetEntityId) return "invalid_target";
     const mob = this.mobRuntime.stateFor(skill.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
     if (mobDistance(peer.position, mob.position) > definition.rangeFixed) return "out_of_range";
@@ -443,7 +511,7 @@ export class AuthoritativeMovementZone {
     const eventId = `${this.zoneId}:${entityId}->${targetEntityId}:seq:${sequence}`;
     const address = (purpose: string, drawIndex: number) => ({
       worldSeedDigest: WORLD_SEED_DIGEST,
-      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      rulesetVersion: this.rulesetVersion,
       tick: this.tickNumber,
       systemId,
       entityId,
@@ -476,7 +544,7 @@ export class AuthoritativeMovementZone {
     const attacker = { id: `player:${peer.userId}`, stamina: peer.stamina, skills: { combat: { level: peer.combatLevel } } };
     const defender = { id: mob.definition.entityId, health: mob.health, skills: { combat: { level: mob.definition.level } } };
     const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, entropy: entropyBundle.entropy });
+    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, unarmed: this.rulesetVersion === AURION_ZONE_RULESET_VERSION && skillId === null && peer.weaponEquipped === false, entropy: entropyBundle.entropy });
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
     peer.lastCombatSequence = sequence;
@@ -485,7 +553,7 @@ export class AuthoritativeMovementZone {
   }
 
   tick(): boolean {
-    const preState = this.getCanonicalZoneState();
+    const preState = this.lastCommittedState;
     const preStateHash = hashCanonicalZoneState(preState);
     const intentsToProcess = orderCanonicalZoneIntents(this.pendingIntents);
     this.pendingIntents = [];
@@ -517,7 +585,37 @@ export class AuthoritativeMovementZone {
       previousStageStateHash = canonicalStateHash;
     };
 
-    // 01 membership/order is stable after refreshPeerOrder().
+    // 01 membership changes are canonical intents. Live transport readbacks apply
+    // them immediately; replay reconstructs the identical canonical mutation here.
+    for (const intent of intentsToProcess) {
+      if (intent.type === "presence_join") {
+        const current = this.peersByEntityId.get(intent.entityId);
+        if (!current || current.connectionId !== intent.connectionId) {
+          if (current) this.peers.delete(current.connectionId);
+          const replaySocket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} } as unknown as WebSocket;
+          const peer = createPresencePeer({
+            connectionId: intent.connectionId,
+            userId: intent.userId,
+            socket: replaySocket,
+            combatProfile: intent.combatProfile,
+          });
+          this.peers.set(peer.connectionId, peer);
+          this.peersByEntityId.set(intent.entityId, peer);
+          this.sortedPeersDirty = true;
+        }
+        changed = true;
+      } else if (intent.type === "presence_leave") {
+        const current = this.peersByEntityId.get(intent.entityId);
+        if (current) {
+          this.peers.delete(current.connectionId);
+          this.peersByEntityId.delete(intent.entityId);
+          this.sortedPeersDirty = true;
+        }
+        changed = true;
+      }
+    }
+    this.refreshPeerOrder();
+
     // 01.5 deterministic return-stone revival. Visual GLB availability is not an input.
     for (const peer of this.sortedPeersByEntityId) {
       const revival = resolveReturnStoneRevival({
@@ -538,6 +636,9 @@ export class AuthoritativeMovementZone {
     }
     captureAuthorityStage("MEMBERSHIP_REVIVAL");
 
+    // Stage ordering must not invalidate an already admitted lower-sequence action.
+    const actionSequenceWatermarks = new Map(this.sortedPeers.map(peer => [peer.userId, peer.lastAcceptedClientSeq]));
+
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {
       if (intent.type !== "move") continue;
@@ -557,10 +658,11 @@ export class AuthoritativeMovementZone {
 
     // 03 player actions and quest summaries.
     for (const intent of intentsToProcess) {
-      if (intent.type === "move") continue;
+      if (intent.type === "move" || intent.type === "presence_join" || intent.type === "presence_leave") continue;
       const peer = this.peersByEntityId.get(intent.entityId);
-      if (!peer || intent.clientSeq <= peer.lastAcceptedClientSeq) continue;
-      peer.lastAcceptedClientSeq = intent.clientSeq;
+      if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
+      actionSequenceWatermarks.set(peer.userId, intent.clientSeq);
+      peer.lastAcceptedClientSeq = Math.max(peer.lastAcceptedClientSeq, intent.clientSeq);
 
       if (intent.type === "attack") {
         const resolution = this.resolvePlayerMelee(peer, intent.targetEntityId, null, AX1_PLAYER_BASIC_MELEE_RANGE_FIXED, ++actionIndex);
@@ -604,7 +706,11 @@ export class AuthoritativeMovementZone {
     const resourcesChanged = this.resourceRuntime.tick(this.tickNumber);
     captureAuthorityStage("RESOURCE");
     // 05 mob FSM.
-    const mobsChanged = this.mobRuntime.tick(this.presences(), this.tickNumber);
+    // The reserved diagnostic actor participates in membership receipts, never
+    // hostile targeting. Identity-based policy is identical during causal replay.
+    const mobsChanged = this.mobRuntime.tick(this.presences().filter(
+      presence => presence.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
+    ), this.tickNumber);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -617,6 +723,11 @@ export class AuthoritativeMovementZone {
       if (peer.health <= 0) continue;
       const next = regenerateWasdStamina(peer.stamina);
       if (next !== peer.stamina) { peer.stamina = next; changed = true; }
+    }
+    for (const mob of this.rulesetVersion === "aurion.zone.rules.v2" ? [] : this.mobRuntime.orderedStates()) {
+      if (mob.health <= 0) continue;
+      const next = regenerateWasdStamina(mob.stamina);
+      if (next !== mob.stamina) { this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, stamina: next }); changed = true; }
     }
     captureAuthorityStage("REGENERATION");
 
@@ -637,7 +748,7 @@ export class AuthoritativeMovementZone {
       zoneId: this.zoneId,
       tick: this.tickNumber,
       sourceRevision: this.sourceRevisionOverride ?? activeProvenance.sourceRevision,
-      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      rulesetVersion: this.rulesetVersion,
       previousReceiptHash: this.previousReceiptHash,
       preStateHash,
       orderedIntentHash,
@@ -655,7 +766,26 @@ export class AuthoritativeMovementZone {
     } as AurionCausalTickReceipt;
     this.previousReceiptHash = receipt.receiptHash;
     this.lastReceipt = receipt;
-    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess);
+    this.lastCommittedState = postState;
+    const combatVictories = combatEvents.flatMap(event => {
+      if (!event.killed || !event.attackerEntityId.startsWith("player:")) return [];
+      const opponent = this.mobRuntime.stateFor(event.defenderEntityId);
+      if (!opponent) return [];
+      const playerUserId = Number(event.attackerEntityId.slice("player:".length));
+      const identity = canonicalSha256({ receiptHash: receipt.receiptHash, combatSequence: event.sequence });
+      return [{
+        schema: "aurion.combat.victory.v1" as const,
+        eventId: `combat-event-${identity.slice("sha256:".length, "sha256:".length + 32)}`,
+        receiptId: `combat-receipt-${identity.slice("sha256:".length, "sha256:".length + 32)}`,
+        logicalRevision: event.sequence,
+        playerUserId,
+        opponentEntityId: event.defenderEntityId,
+        opponentSpecies: opponent.definition.archetype,
+        outcome: "victory" as const,
+        confirmed: true as const,
+      }];
+    });
+    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess, combatVictories);
 
     // 09 projection/transport. Replay emits no socket or persistence side effects.
     if (!this.isReplay) {
@@ -779,17 +909,43 @@ export class AuthoritativeMovementZone {
 }
 
 export class ZoneRegistry {
+  private readonly probeOwned = new Set<AuthoritativeMovementZone>();
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
+  private readonly dormantZones = new Map<ZoneId, AuthoritativeMovementZone>();
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
 
+  /** Observational lookup. Unlike get(), this never starts a canonical zone. */
+  find(zoneId: ZoneId): AuthoritativeMovementZone | undefined {
+    return this.zones.get(zoneId);
+  }
+
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
-    if (existing) return existing;
-    const zone = new AuthoritativeMovementZone(zoneId);
+    if (existing) { this.probeOwned.delete(existing); return existing; }
+    const zone = this.dormantZones.get(zoneId) ?? new AuthoritativeMovementZone(zoneId);
+    this.dormantZones.delete(zoneId);
     this.zones.set(zoneId, zone);
     this.sortedZonesDirty = true;
     return zone;
+  }
+
+  /** Called only after scope consumption, with a verified persisted head. */
+  installProbeZone(zone: AuthoritativeMovementZone): void {
+    if (this.zones.has(zone.zoneId)) throw new Error("PROBE_ZONE_ACTIVATION_RACE");
+    this.dormantZones.delete(zone.zoneId);
+    this.zones.set(zone.zoneId, zone);
+    this.probeOwned.add(zone);
+    this.sortedZonesDirty = true;
+  }
+
+  releaseProbeZone(zone: AuthoritativeMovementZone): void {
+    if (!this.probeOwned.has(zone) || this.zones.get(zone.zoneId) !== zone) return;
+    if (zone.getPendingIntents().length || zone.getCanonicalZoneState().players.length) throw new Error("PROBE_ZONE_CLEANUP_REQUIRED");
+    this.probeOwned.delete(zone);
+    this.zones.delete(zone.zoneId);
+    this.dormantZones.set(zone.zoneId, zone);
+    this.sortedZonesDirty = true;
   }
 
   tick(): void {

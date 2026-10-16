@@ -123,7 +123,7 @@ export function AchievementsGallery(props: AchievementsGalleryProps) {
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Meilenstein-Kategorien">
           {CATEGORY.map(item => <button key={item.id} type="button" role="tab" aria-selected={category === item.id}
             onClick={() => setCategory(item.id)}
-            className={`rounded-lg border px-3 py-1.5 text-xs ${category === item.id ? "border-cyan-400/50 bg-cyan-950/70 text-cyan-200" : "border-slate-700 bg-slate-950/50 text-slate-400"}`}>
+            className={`rounded-lg border px-3 py-1.5 text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50 motion-safe:active:scale-95 ${category === item.id ? "border-cyan-400/50 bg-cyan-950/70 text-cyan-200" : "border-slate-700 bg-slate-950/50 text-slate-400"}`}>
             {item.label}
           </button>)}
         </div>
@@ -132,26 +132,28 @@ export function AchievementsGallery(props: AchievementsGalleryProps) {
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500"/>
             <span className="sr-only">Meilensteine suchen</span>
             <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Abzeichen / Pfad suchen..."
-              className="h-8 w-48 rounded-lg border border-slate-700 bg-slate-900/80 pl-8 pr-2 text-xs text-slate-200"/>
+              className="h-8 w-48 rounded-lg border border-slate-700 bg-slate-900/80 pl-8 pr-2 text-xs text-slate-200 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"/>
           </label>
           <button type="button" onClick={() => setOnlyUnlocked(value => !value)}
-            className={`rounded-lg border px-3 text-xs ${onlyUnlocked ? "border-amber-400/50 bg-amber-950/60 text-amber-200" : "border-slate-700 text-slate-400"}`}>
-            <CheckCircle2 className="mr-1 inline size-3.5"/> Nur erreicht
+            aria-pressed={onlyUnlocked}
+            className={`group rounded-lg border px-3 text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 ${onlyUnlocked ? "border-amber-400/50 bg-amber-950/60 text-amber-200" : "border-slate-700 text-slate-400"}`}>
+            <CheckCircle2 className="mr-1 inline size-3.5 transition-transform motion-safe:group-hover:scale-110"/> Nur erreicht
           </button>
         </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {visible.map(badge => <button key={badge.id} type="button" onClick={() => setSelected(badge)}
-          className={`rounded-xl border p-3 text-left transition ${badge.unlocked ? "border-cyan-400/40 bg-cyan-950/25" : "border-slate-700 bg-slate-950/60 opacity-65"}`}>
+          aria-pressed={selected?.id === badge.id}
+          className={`group rounded-xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 ${badge.unlocked ? "border-cyan-400/40 bg-cyan-950/25" : "border-slate-700 bg-slate-950/60 opacity-65"}`}>
           <div className="flex items-center justify-between text-xs text-slate-400">{icon(badge.category)}<span>{badge.tier}</span></div>
           <div className="my-3 flex items-center justify-center">
-            <span className={`flex size-14 items-center justify-center rounded-full border-2 font-serif text-2xl font-black ${badge.unlocked ? "border-amber-300/70 text-amber-200" : "border-slate-700 text-slate-600"}`}>
+            <span className={`flex size-14 items-center justify-center rounded-full border-2 font-serif text-2xl font-black transition-transform motion-safe:group-hover:scale-110 ${badge.unlocked ? "border-amber-300/70 text-amber-200" : "border-slate-700 text-slate-600"}`}>
               {badge.roman}
             </span>
           </div>
           <b className="block truncate text-xs text-slate-100">{badge.title}</b>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-cyan-400" style={{width:`${badge.progress}%`}}/></div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-cyan-400 transition-all" style={{width:`${badge.progress}%`}}/></div>
           <span className="mt-1 block text-[10px] text-slate-500">{badge.unlocked ? "✓ erreicht" : `${badge.current}/${badge.required}`}</span>
         </button>)}
       </div>

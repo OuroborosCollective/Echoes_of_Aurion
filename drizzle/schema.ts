@@ -421,6 +421,20 @@ export const aurionMasteryEvents = mysqlTable("aurionMasteryEvents", {
   index("aurionMasteryEvents_user_discipline_created_idx").on(table.userId, table.disciplineId, table.createdAt),
 ]);
 
+/** One persistent, append-only point spending proof per authoritative player intent. */
+export const aurionStatAllocationReceipts = mysqlTable("aurionStatAllocationReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  attribute: varchar("attribute", { length: 32 }).notNull(),
+  amountExact: varchar("amountExact", { length: 128 }).notNull(),
+  earnedAtSpendExact: varchar("earnedAtSpendExact", { length: 128 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionStatAllocationReceipts_idempotency_uq").on(table.idempotencyKey),
+  index("aurionStatAllocationReceipts_user_created_idx").on(table.userId, table.createdAt),
+]);
+
 /** Moral alignment uses bounded, receipt-bound integer deltas. Auras are derived readmodel data, not permissions. */
 export const aurionEthosEvents = mysqlTable("aurionEthosEvents", {
   id: varchar("id", { length: 64 }).primaryKey(),
@@ -711,6 +725,72 @@ export const aurionNpcDecisionReceipts = mysqlTable("aurionNpcDecisionReceipts",
   uniqueIndex("aurionNpcDecisionReceipts_hash_uq").on(table.decisionHash),
   index("aurionNpcDecisionReceipts_region_created_idx").on(table.regionId, table.createdAt),
 ]);
+
+/** Canonical persisted state for autonomous NPC-founded guilds. */
+export const aurionNpcGuildStates = mysqlTable("aurionNpcGuildStates", {
+  guildId: varchar("guildId", { length: 64 }).primaryKey(),
+  name: varchar("name", { length: 64 }).notNull().unique(),
+  hubId: varchar("hubId", { length: 96 }).notNull(),
+  leaderNpcId: varchar("leaderNpcId", { length: 96 }).notNull(),
+  tradePolicy: mysqlEnum("tradePolicy", ["free_trade", "protectionist", "caravan_focused", "self_sufficient"]).default("free_trade").notNull(),
+  treasuryCopper: int("treasuryCopper").default(0).notNull(),
+  foundedCycle: int("foundedCycle").notNull(),
+  lastElectionCycle: int("lastElectionCycle").notNull(),
+  revision: int("revision").notNull(),
+  stateHash: varchar("stateHash", { length: 64 }).notNull(),
+  stateJson: mediumtext("stateJson").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("aurionNpcGuildStates_hub_idx").on(table.hubId),
+  check("aurionNpcGuildStates_revision_ck", sql`${table.revision} >= 1`),
+]);
+
+/** Exactly one active guild membership projection per NPC. */
+export const aurionNpcGuildMemberships = mysqlTable("aurionNpcGuildMemberships", {
+  membershipId: varchar("membershipId", { length: 64 }).primaryKey(),
+  guildId: varchar("guildId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull().unique(),
+  hubId: varchar("hubId", { length: 96 }).notNull(),
+  role: mysqlEnum("role", ["leader", "merchant", "trader", "prospector"]).notNull(),
+  joinedCycle: int("joinedCycle").notNull(),
+  status: mysqlEnum("status", ["active", "left"]).default("active").notNull(),
+  lastReceiptId: varchar("lastReceiptId", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("aurionNpcGuildMemberships_guild_status_idx").on(table.guildId, table.status),
+]);
+
+/** Append-only causal receipts for autonomous NPC guild mutations. */
+export const aurionNpcGuildReceipts = mysqlTable("aurionNpcGuildReceipts", {
+  receiptId: varchar("receiptId", { length: 64 }).primaryKey(),
+  guildId: varchar("guildId", { length: 64 }).notNull(),
+  actorNpcId: varchar("actorNpcId", { length: 96 }).notNull(),
+  operation: mysqlEnum("operation", ["found_guild", "elect_leader", "join_guild", "leave_guild", "set_trade_policy", "set_diplomacy"]).notNull(),
+  cycle: int("cycle").notNull(),
+  sourceDecisionReceiptId: varchar("sourceDecisionReceiptId", { length: 64 }).notNull(),
+  sourceResolutionIndex: int("sourceResolutionIndex").notNull(),
+  expectedRevision: int("expectedRevision").notNull(),
+  resultingRevision: int("resultingRevision").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  confirmationHash: varchar("confirmationHash", { length: 64 }).notNull(),
+  requestHash: varchar("requestHash", { length: 64 }).notNull(),
+  resultHash: varchar("resultHash", { length: 64 }).notNull(),
+  stateHash: varchar("stateHash", { length: 64 }).notNull(),
+  resultJson: mediumtext("resultJson").notNull(),
+  receiptJson: mediumtext("receiptJson").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcGuildReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionNpcGuildReceipts_guild_revision_uq").on(table.guildId, table.resultingRevision),
+  index("aurionNpcGuildReceipts_actor_cycle_idx").on(table.actorNpcId, table.cycle),
+]);
+
 
 /** Append-only NPC decision log from the native Aurion resolveNpcLife system, for impact analysis. */
 export const aurionNpcDecisionLog = mysqlTable("aurionNpcDecisionLog", {
@@ -2100,5 +2180,44 @@ export const aurionWorldDirectorReceipts = mysqlTable("aurionWorldDirectorReceip
   index("aurionWorldDirectorReceipts_decision_idx").on(table.decisionHash),
 ]);
 
+/** Canonical, append-only combat victories eligible for server-side quest projection. */
+export const aurionCombatVictoryEvents = mysqlTable("aurionCombatVictoryEvents", {
+  eventId: varchar("eventId", { length: 128 }).primaryKey(),
+  receiptId: varchar("receiptId", { length: 128 }).notNull(),
+  logicalRevision: int("logicalRevision").notNull(),
+  playerUserId: int("playerUserId").notNull(),
+  opponentEntityId: varchar("opponentEntityId", { length: 128 }).notNull(),
+  opponentSpecies: varchar("opponentSpecies", { length: 128 }).notNull(),
+  outcome: mysqlEnum("outcome", ["victory", "defeat"]).notNull(),
+  confirmed: boolean("confirmed").notNull(),
+  questInstanceIdsJson: text("questInstanceIdsJson").notNull(),
+  questProjected: boolean("questProjected").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionCombatVictoryEvents_receipt_uq").on(table.receiptId),
+  index("aurionCombatVictoryEvents_player_revision_idx").on(table.playerUserId, table.logicalRevision),
+]);
+
 /** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
 export * from "./aurionWorldFoundationSchema";
+
+/** Owner-confirmed one-shot production probes; the session scope is limited to a canonical ephemeral join/leave and never grants player or schema authority. */
+export const aurionProductionProbeApprovals = mysqlTable("aurionProductionProbeApprovals", {
+  approvalId: varchar("approvalId", { length: 32 }).primaryKey(),
+  runKey: varchar("runKey", { length: 64 }).notNull(),
+  runJson: text("runJson").notNull(),
+  scope: varchar("scope", { length: 64 }).notNull(),
+  approvedByUserId: int("approvedByUserId").notNull(),
+  purpose: varchar("purpose", { length: 240 }).notNull(),
+  approvedAtMs: bigint("approvedAtMs", { mode: "number" }).notNull(),
+  expiresAtMs: bigint("expiresAtMs", { mode: "number" }).notNull(),
+  consumedAtMs: bigint("consumedAtMs", { mode: "number" }),
+  revokedAtMs: bigint("revokedAtMs", { mode: "number" }),
+}, table => [uniqueIndex("aurionProductionProbeApprovals_run_scope_uq").on(table.runKey, table.scope)]);
+
+/** Durable probe exclusion: connection loss never authorizes another session. */
+export const aurionProductionProbeSessionFence = mysqlTable("aurionProductionProbeSessionFence", {
+  fenceName: varchar("fenceName", { length: 64 }).primaryKey(),
+  ownerId: varchar("ownerId", { length: 32 }).notNull(),
+  createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+});

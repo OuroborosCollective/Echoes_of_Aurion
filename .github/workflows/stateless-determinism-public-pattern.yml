@@ -1,0 +1,52 @@
+name: Stateless Determinism Public Pattern
+
+on:
+  pull_request:
+    paths:
+      - "examples/stateless-determinism/**"
+      - "scripts/export-stateless-determinism-gist.mjs"
+      - "docs/public-patterns/stateless-determinism-minimal-runtime.md"
+      - "Memory.md"
+      - ".github/workflows/stateless-determinism-public-pattern.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+
+      - name: Run deterministic reference tests
+        run: node --experimental-strip-types --test --test-reporter=tap examples/stateless-determinism/deterministic-step.test.ts
+
+      - name: Run independent digest demo twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          TZ=UTC node --experimental-strip-types examples/stateless-determinism/demo.ts > /tmp/demo-utc.txt
+          TZ=Pacific/Honolulu node --experimental-strip-types examples/stateless-determinism/demo.ts > /tmp/demo-honolulu.txt
+          diff -u /tmp/demo-utc.txt /tmp/demo-honolulu.txt
+          tail -n 1 /tmp/demo-utc.txt | grep -Eq '^[0-9a-f]{64}$'
+
+      - name: Export Gist bundle without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$(mktemp -d)/bundle"
+          node scripts/export-stateless-determinism-gist.mjs --out "$out" --revision "$GITHUB_SHA"
+          test -s "$out/README.md"
+          test -s "$out/deterministic-step.ts"
+          test -s "$out/deterministic-step.test.ts"
+          test -s "$out/demo.ts"
+          test -s "$out/gist-create.json"
+          node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(p.public!==true||p.publicationStatus!=="NOT_PERFORMED"||p.sourceRevision!==process.env.GITHUB_SHA) process.exit(1)' "$out/gist-create.json"

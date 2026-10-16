@@ -41,11 +41,11 @@ function fixture() {
   zone.sourceRevisionOverride = revision;
   zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V2;
   const socket = { send() { throw Error('CHAOS_NETWORK_FORBIDDEN'); }, close() { throw Error('CHAOS_NETWORK_FORBIDDEN'); } } as unknown as WebSocket;
+  const checkpointState = zone.getCanonicalZoneState();
   const { connectionId } = zone.join({ userId: 30001, socket });
-  const state = zone.getCanonicalZoneState();
-  const checkpoint: PersistedCheckpoint = { id: 'isolated-chaos', worldId: state.worldId, zoneId: state.zoneId,
-    tick: 0, state, snapshotHash: hashCanonicalZoneState(state), reconciled: 0 };
-  const entries: RecordedTickEntry[] = [], states = [state];
+  const checkpoint: PersistedCheckpoint = { id: 'isolated-chaos', worldId: checkpointState.worldId, zoneId: checkpointState.zoneId,
+    tick: 0, state: checkpointState, snapshotHash: hashCanonicalZoneState(checkpointState), reconciled: 0 };
+  const entries: RecordedTickEntry[] = [], states = [checkpointState];
   for (let tick = 1; tick <= 2; tick++) {
     zone.submitMovement(connectionId, { type: 'move', clientSeq: tick, input: { x: 1, z: 0 } });
     const intents = structuredClone([...zone.getPendingIntents()]);
@@ -56,7 +56,7 @@ function fixture() {
   const oracle = (cp = checkpoint, rows = entries) => new AurionHeadlessCausalOracle({
     async getCheckpointAtOrBefore() { return structuredClone(cp); },
     async getTicksInRange() { return structuredClone(rows); },
-  }).replayRange({ zoneId: state.zoneId, fromTick: 1, toTick: 2 });
+  }).replayRange({ zoneId: checkpointState.zoneId, fromTick: 1, toTick: 2 });
   return { checkpoint, entries, states, oracle };
 }
 

@@ -68,6 +68,10 @@ export async function recordCivilizationHistoryEvent(input: CivilizationHistoryE
     if (
       prior.civilizationId !== normalized.civilizationId ||
       prior.worldId !== normalized.worldId ||
+      prior.worldEpoch !== normalized.worldEpoch ||
+      prior.eventType !== normalized.eventType ||
+      prior.sourceReceiptId !== normalized.sourceReceiptId ||
+      prior.sourceRevision !== normalized.sourceRevision ||
       prior.occurredSequence !== normalized.occurredSequence ||
       prior.eventPayloadHash !== normalized.eventPayloadHash
     ) {
@@ -109,6 +113,22 @@ export async function listCivilizationHistoryEvents(worldId: string, limit = 50)
     .where(eq(aurionCivilizationHistoryEvents.worldId, worldId))
     .orderBy(desc(aurionCivilizationHistoryEvents.occurredSequence))
     .limit(limit);
+}
+
+export async function findCivilizationHistoryEventsBySourceReceipt(
+  worldId: string,
+  sourceReceiptId: string,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db
+    .select()
+    .from(aurionCivilizationHistoryEvents)
+    .where(and(
+      eq(aurionCivilizationHistoryEvents.worldId, worldId),
+      eq(aurionCivilizationHistoryEvents.sourceReceiptId, sourceReceiptId),
+    ))
+    .orderBy(desc(aurionCivilizationHistoryEvents.occurredSequence));
 }
 
 export const ruinOriginInputSchema = z
@@ -324,6 +344,236 @@ export const activeCivilizationInputSchema = z
   .strict();
 
 export type ActiveCivilizationInput = z.infer<typeof activeCivilizationInputSchema>;
+
+function historyInsertValues(normalized: ReturnType<typeof normalizeCivilizationHistoryEvent>) {
+  return {
+    eventId: normalized.eventId,
+    civilizationId: normalized.civilizationId,
+    worldId: normalized.worldId,
+    worldEpoch: normalized.worldEpoch,
+    eventType: normalized.eventType,
+    sourceReceiptId: normalized.sourceReceiptId,
+    sourceRevision: normalized.sourceRevision,
+    eventPayloadHash: normalized.eventPayloadHash,
+    occurredSequence: normalized.occurredSequence,
+  };
+}
+
+function assertHistoryMatches(
+  prior: typeof aurionCivilizationHistoryEvents.$inferSelect,
+  normalized: ReturnType<typeof normalizeCivilizationHistoryEvent>,
+) {
+  if (
+    prior.civilizationId !== normalized.civilizationId ||
+    prior.worldId !== normalized.worldId ||
+    prior.worldEpoch !== normalized.worldEpoch ||
+    prior.eventType !== normalized.eventType ||
+    prior.sourceReceiptId !== normalized.sourceReceiptId ||
+    prior.sourceRevision !== normalized.sourceRevision ||
+    prior.occurredSequence !== normalized.occurredSequence ||
+    prior.eventPayloadHash !== normalized.eventPayloadHash
+  ) throw new Error("CIVILIZATION_HISTORY_EVENT_IDEMPOTENCY_CONFLICT");
+}
+
+function activeCivilizationMatches(
+  row: typeof aurionActiveCivilizations.$inferSelect,
+  expected: ActiveCivilizationInput,
+) {
+  return row.civilizationId === expected.civilizationId &&
+    row.worldId === expected.worldId &&
+    row.worldEpoch === expected.worldEpoch &&
+    row.population === expected.population &&
+    Math.abs(row.stability - expected.stability) < 0.000001 &&
+    Math.abs(row.hazardIndex - expected.hazardIndex) < 0.000001 &&
+    Math.abs(row.scarcitySeverity - expected.scarcitySeverity) < 0.000001 &&
+    row.lastResolutionIndex === expected.lastResolutionIndex;
+}
+
+/**
+ * Atomically advances canonical civilization state and its causal history.
+ * A transition receipt and its state projection either commit together or not at all.
+ */
+export async function recordCivilizationAdvance(input: Readonly<{
+  state: ActiveCivilizationInput;
+  transitionEvent: CivilizationHistoryEventInput;
+  economicEvent?: CivilizationHistoryEventInput | null;
+}>) {
+  const state = activeCivilizationInputSchema.parse(input.state);
+  const transition = normalizeCivilizationHistoryEvent(input.transitionEvent);
+  const economic = input.economicEvent ? normalizeCivilizationHistoryEvent(input.economicEvent) : null;
+  const finalSequence = economic?.occurredSequence ?? transition.occurredSequence;
+  if (
+    transition.eventType !== "EPOCH_ADVANCE" ||
+    transition.civilizationId !== state.civilizationId ||
+    transition.worldId !== state.worldId ||
+    finalSequence !== state.lastResolutionIndex
+  ) throw new Error("CIVILIZATION_ADVANCE_EVENT_BINDING_INVALID");
+  if (economic && (
+    economic.eventType !== "ECONOMIC_MARKET_DEVELOPMENT" ||
+    economic.civilizationId !== state.civilizationId ||
+    economic.worldId !== state.worldId ||
+    economic.sourceReceiptId !== transition.sourceReceiptId ||
+    economic.occurredSequence !== transition.occurredSequence + 1
+  )) throw new Error("CIVILIZATION_ECONOMIC_EVENT_BINDING_INVALID");
+
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+
+  return db.transaction(async tx => {
+    const priorTransition = (
+      await tx.select().from(aurionCivilizationHistoryEvents)
+        .where(eq(aurionCivilizationHistoryEvents.eventId, transition.eventId))
+        .limit(1)
+        .for("update")
+    )[0];
+    const activeRows = await tx.select().from(aurionActiveCivilizations)
+      .where(eq(aurionActiveCivilizations.worldId, state.worldId))
+      .limit(2)
+      .for("update");
+    if (activeRows.length > 1) throw new Error("CIVILIZATION_ACTIVE_WORLD_AMBIGUOUS");
+    const current = activeRows[0];
+
+    if (priorTransition) {
+      assertHistoryMatches(priorTransition, transition);
+      if (!current || !activeCivilizationMatches(current, state)) throw new Error("CIVILIZATION_ADVANCE_READBACK_MISMATCH");
+      if (economic) {
+        const priorEconomic = (
+          await tx.select().from(aurionCivilizationHistoryEvents)
+            .where(eq(aurionCivilizationHistoryEvents.eventId, economic.eventId))
+            .limit(1)
+            .for("update")
+        )[0];
+        if (!priorEconomic) throw new Error("CIVILIZATION_ECONOMIC_EVENT_READBACK_REQUIRED");
+        assertHistoryMatches(priorEconomic, economic);
+      }
+      return Object.freeze({ applied: false as const, civilizationId: state.civilizationId });
+    }
+
+    if (!current || current.civilizationId !== state.civilizationId) throw new Error("CIVILIZATION_ACTIVE_STATE_REQUIRED");
+    if (transition.occurredSequence !== current.lastResolutionIndex + 1) throw new Error("CIVILIZATION_ADVANCE_REVISION_CONFLICT");
+    if (state.lastResolutionIndex !== current.lastResolutionIndex + (economic ? 2 : 1)) throw new Error("CIVILIZATION_ADVANCE_FINAL_SEQUENCE_CONFLICT");
+
+    await tx.update(aurionActiveCivilizations).set({
+      worldEpoch: state.worldEpoch,
+      population: state.population,
+      stability: state.stability,
+      hazardIndex: state.hazardIndex,
+      scarcitySeverity: state.scarcitySeverity,
+      lastResolutionIndex: state.lastResolutionIndex,
+    }).where(and(
+      eq(aurionActiveCivilizations.worldId, state.worldId),
+      eq(aurionActiveCivilizations.civilizationId, state.civilizationId),
+    ));
+    await tx.insert(aurionCivilizationHistoryEvents).values(historyInsertValues(transition));
+    if (economic) await tx.insert(aurionCivilizationHistoryEvents).values(historyInsertValues(economic));
+
+    const readback = (
+      await tx.select().from(aurionActiveCivilizations)
+        .where(eq(aurionActiveCivilizations.worldId, state.worldId))
+        .limit(1)
+    )[0];
+    if (!readback || !activeCivilizationMatches(readback, state)) throw new Error("CIVILIZATION_ADVANCE_READBACK_MISMATCH");
+    return Object.freeze({ applied: true as const, civilizationId: state.civilizationId });
+  });
+}
+
+/** Atomically creates the first active civilization together with its seed receipt. */
+export async function recordInitialCivilizationSeed(input: Readonly<{
+  state: ActiveCivilizationInput;
+  event: CivilizationHistoryEventInput;
+}>) {
+  const state = activeCivilizationInputSchema.parse(input.state);
+  const event = normalizeCivilizationHistoryEvent(input.event);
+  if (
+    state.lastResolutionIndex !== 0 ||
+    event.eventType !== "INITIAL_CIV_SEEDED" ||
+    event.civilizationId !== state.civilizationId ||
+    event.worldId !== state.worldId ||
+    event.occurredSequence !== 0
+  ) throw new Error("CIVILIZATION_INITIAL_SEED_BINDING_INVALID");
+
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const priorEvent = (
+      await tx.select().from(aurionCivilizationHistoryEvents)
+        .where(eq(aurionCivilizationHistoryEvents.eventId, event.eventId))
+        .limit(1)
+        .for("update")
+    )[0];
+    const activeRows = await tx.select().from(aurionActiveCivilizations)
+      .where(eq(aurionActiveCivilizations.worldId, state.worldId))
+      .limit(2)
+      .for("update");
+    if (activeRows.length > 1) throw new Error("CIVILIZATION_ACTIVE_WORLD_AMBIGUOUS");
+    const current = activeRows[0];
+
+    if (priorEvent) {
+      assertHistoryMatches(priorEvent, event);
+      if (!current || !activeCivilizationMatches(current, state)) throw new Error("CIVILIZATION_INITIAL_SEED_READBACK_MISMATCH");
+      return Object.freeze({ applied: false as const, civilizationId: state.civilizationId });
+    }
+    if (current) throw new Error("CIVILIZATION_ACTIVE_STATE_ALREADY_EXISTS");
+
+    await tx.insert(aurionActiveCivilizations).values(state);
+    await tx.insert(aurionCivilizationHistoryEvents).values(historyInsertValues(event));
+    return Object.freeze({ applied: true as const, civilizationId: state.civilizationId });
+  });
+}
+
+/** Atomically records an eligible rebirth candidate and its causal history event. */
+export async function recordSettlementRebirthTransition(input: Readonly<{
+  candidate: SettlementRebirthCandidateInput;
+  event: CivilizationHistoryEventInput;
+}>) {
+  const candidate = settlementRebirthCandidateInputSchema.parse(input.candidate);
+  const event = normalizeCivilizationHistoryEvent(input.event);
+  if (
+    event.eventType !== "REBIRTH_CANDIDATE_CREATED" ||
+    event.eventId !== candidate.candidateId ||
+    event.worldId !== candidate.worldId
+  ) throw new Error("SETTLEMENT_REBIRTH_EVENT_BINDING_INVALID");
+
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const priorCandidate = (
+      await tx.select().from(aurionSettlementRebirthCandidates)
+        .where(eq(aurionSettlementRebirthCandidates.candidateId, candidate.candidateId))
+        .limit(1)
+        .for("update")
+    )[0];
+    const priorEvent = (
+      await tx.select().from(aurionCivilizationHistoryEvents)
+        .where(eq(aurionCivilizationHistoryEvents.eventId, event.eventId))
+        .limit(1)
+        .for("update")
+    )[0];
+
+    if (priorCandidate || priorEvent) {
+      if (!priorCandidate || !priorEvent) throw new Error("SETTLEMENT_REBIRTH_PARTIAL_COMMIT_DETECTED");
+      if (
+        priorCandidate.worldId !== candidate.worldId ||
+        priorCandidate.locationIdentity !== candidate.locationIdentity ||
+        priorCandidate.candidateSeedDigest !== candidate.candidateSeedDigest
+      ) throw new Error("SETTLEMENT_REBIRTH_CANDIDATE_IDEMPOTENCY_CONFLICT");
+      assertHistoryMatches(priorEvent, event);
+      return Object.freeze({ applied: false as const, candidateId: candidate.candidateId });
+    }
+
+    await tx.insert(aurionSettlementRebirthCandidates).values({
+      candidateId: candidate.candidateId,
+      worldId: candidate.worldId,
+      locationIdentity: candidate.locationIdentity,
+      ruinId: candidate.ruinId ?? null,
+      eligibilityReceipt: candidate.eligibilityReceipt,
+      candidateSeedDigest: candidate.candidateSeedDigest,
+      state: candidate.state,
+    });
+    await tx.insert(aurionCivilizationHistoryEvents).values(historyInsertValues(event));
+    return Object.freeze({ applied: true as const, candidateId: candidate.candidateId });
+  });
+}
 
 export async function getActiveCivilization(worldId: string) {
   const db = await getDb();

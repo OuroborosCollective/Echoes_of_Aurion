@@ -45,7 +45,8 @@ describe("Blocker 1 final production proof contract", () => {
 
   it("requires trusted attestations and exact production schema before final PASS", () => {
     expect(workflow).toContain("final-production-gate:");
-    expect(workflow).toContain("needs: [verify-release-attestations, production-schema-readback]");
+    expect(workflow).toContain("needs: [verify-release-attestations, production-schema-readback, functional-production-readback]");
+    expect(workflow).toContain("FINAL_GAMEPLAY_READBACK_NOT_PASS");
     expect(workflow).toContain('--deny-self-hosted-runners');
     expect(workflow).toContain('schema.state!=="PRESENT_SCHEMA_MATCH"');
     expect(workflow).toContain('expectedTags.includes(requiredCausalReceiptV2Tag)');

@@ -109,7 +109,7 @@ function detectUniqueEquipmentSlot(names: readonly string[]): GlbEquipmentSlot |
     const searchable = name.toLowerCase().replace(/[_-]+/g, " ");
     for (const [slot, keywords] of EQUIPMENT_SLOT_RULES) if (hasKeyword(searchable, keywords)) matched.add(slot);
   }
-  return matched.size === 1 ? [...matched][0]! : null;
+  return matched.size === 1 ? matched.values().next().value! : null;
 }
 
 function detectLod(names: readonly string[]): number | null {
@@ -192,9 +192,11 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
       return Object.freeze({ assetType: "armor", subcategory: `equipment-${equipmentSlot}`, confidence: "medium", ...base, equipmentSlot, worldFamily: null });
     }
     const environmentKind = detectRule(searchable, ENVIRONMENT_RULES);
-    // A teleporter/portal/waygate signal is more specific than generic material
-    // words such as "stone". Preserve nature-first classification otherwise.
-    if (environmentKind === "teleporter") {
+    // Teleporters and explicit street props are more specific than accidental
+    // nature substrings. In particular, "street" contains "tree", so a filename
+    // such as Street_Lamp_LOD0 must not be admitted as world-nature.
+    const explicitStreetProp = /(?:^|\s)(?:market|stall|bench|lamp|lantern|statue|sign|crate|barrel|cart|prop)(?:\s|\.|$)/.test(searchable);
+    if (environmentKind === "teleporter" || (environmentKind === "street-prop" && explicitStreetProp)) {
       return Object.freeze({ assetType: "arena", subcategory: environmentKind, confidence: "medium", ...base, equipmentSlot: null, worldFamily: "environment" });
     }
     const natureKind = detectRule(searchable, NATURE_RULES);

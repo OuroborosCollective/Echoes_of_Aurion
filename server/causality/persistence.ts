@@ -20,7 +20,11 @@ import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldContract";
 import { operationalDate } from "../../shared/operationalClock";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
+import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContract";
+import { drainCombatQuestProjections, persistAurionCombatVictoryEvidenceInTransaction } from "../aurionCombatVictoryPersistence";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
+
+import { archiveReceiptPayload, BoundedCausalArchivePacker, CAUSAL_ARCHIVE_PACKET_MAX_BYTES, causalArchiveHash } from "./archivePacking";
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
 
@@ -60,42 +64,54 @@ export function causalCheckpointPersistenceId(
 }
 
 export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter {
-  async saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[]): Promise<void> {
+  async saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): Promise<void> {
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     const id = causalReceiptPersistenceId(receipt);
     const inputJson = intents ? stableJson(intents) : null;
     const stageReceiptsJson = receipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2 ? stableJson(receipt.stages) : null;
-    try {
-      await db.insert(aurionCausalTickReceipts).values({
-        id, worldId: receipt.worldId, zoneId: receipt.zoneId, tick: receipt.tick,
-        revision: receipt.sourceRevision, rulesetVersion: receipt.rulesetVersion,
-        receiptSchema: receipt.schema,
-        preStateHash: receipt.preStateHash, inputHash: receipt.orderedIntentHash, inputJson,
-        stageReceiptsJson,
-        transitionHash: receipt.transitionHash, rngRootHash: receipt.rngRootHash,
-        postStateHash: receipt.postStateHash, previousReceiptHash: receipt.previousReceiptHash,
-        receiptHash: receipt.receiptHash,
-      });
-    } catch (error) {
-      // Natural-key readback preserves idempotency for receipts created before
-      // compact hashed IDs were introduced. Historical primary keys are never rewritten.
-      const [existing] = await db.select().from(aurionCausalTickReceipts).where(and(
-        eq(aurionCausalTickReceipts.worldId, receipt.worldId),
-        eq(aurionCausalTickReceipts.zoneId, receipt.zoneId),
-        eq(aurionCausalTickReceipts.tick, receipt.tick),
-      )).limit(1);
-      if (!existing) throw error;
-      const same = existing.worldId === receipt.worldId && existing.zoneId === receipt.zoneId && existing.tick === receipt.tick &&
-        existing.revision === receipt.sourceRevision && existing.rulesetVersion === receipt.rulesetVersion &&
-        existing.receiptSchema === receipt.schema &&
-        existing.preStateHash === receipt.preStateHash && existing.inputHash === receipt.orderedIntentHash &&
-        existing.inputJson === inputJson && existing.stageReceiptsJson === stageReceiptsJson &&
-        existing.transitionHash === receipt.transitionHash &&
-        existing.rngRootHash === receipt.rngRootHash && existing.postStateHash === receipt.postStateHash &&
-        existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
-      if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
-    }
+    // A confirmed tick must never survive without its combat evidence/outbox.
+    await db.transaction(async tx => {
+      try {
+        await tx.insert(aurionCausalTickReceipts).values({
+          id, worldId: receipt.worldId, zoneId: receipt.zoneId, tick: receipt.tick,
+          revision: receipt.sourceRevision, rulesetVersion: receipt.rulesetVersion,
+          receiptSchema: receipt.schema,
+          preStateHash: receipt.preStateHash, inputHash: receipt.orderedIntentHash, inputJson,
+          stageReceiptsJson,
+          transitionHash: receipt.transitionHash, rngRootHash: receipt.rngRootHash,
+          postStateHash: receipt.postStateHash, previousReceiptHash: receipt.previousReceiptHash,
+          receiptHash: receipt.receiptHash,
+        });
+      } catch (error) {
+        // Natural-key readback preserves idempotency for receipts created before
+        // compact hashed IDs were introduced. Historical primary keys are never rewritten.
+        const [existing] = await tx.select().from(aurionCausalTickReceipts).where(and(
+          eq(aurionCausalTickReceipts.worldId, receipt.worldId),
+          eq(aurionCausalTickReceipts.zoneId, receipt.zoneId),
+          eq(aurionCausalTickReceipts.tick, receipt.tick),
+        )).limit(1);
+        if (!existing) throw error;
+        const same = existing.worldId === receipt.worldId && existing.zoneId === receipt.zoneId && existing.tick === receipt.tick &&
+          existing.revision === receipt.sourceRevision && existing.rulesetVersion === receipt.rulesetVersion &&
+          existing.receiptSchema === receipt.schema &&
+          existing.preStateHash === receipt.preStateHash && existing.inputHash === receipt.orderedIntentHash &&
+          existing.inputJson === inputJson && existing.stageReceiptsJson === stageReceiptsJson &&
+          existing.transitionHash === receipt.transitionHash &&
+          existing.rngRootHash === receipt.rngRootHash && existing.postStateHash === receipt.postStateHash &&
+          existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
+        if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
+      }
+      for (const victory of combatVictories ?? []) {
+        await persistAurionCombatVictoryEvidenceInTransaction(tx, victory);
+      }
+    });
+  }
+
+  async projectPendingCombatVictories(): Promise<void> {
+    const { adminQuestService } = await import("../routes/aurionQuestRouter");
+    await drainCombatQuestProjections((userId, receiptId, instanceIds) =>
+      adminQuestService.applyConfirmedCombatVictory(userId, receiptId, instanceIds));
   }
 
   async saveCheckpoint(zoneId: string, tick: number, stateHash: string, state: CanonicalZoneState): Promise<void> {
@@ -207,29 +223,172 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     return rows.map(row => ({ receipt: this.mapReceipt(row), intents: row.inputJson ? JSON.parse(row.inputJson) as AurionZoneIntent[] : undefined }));
   }
 
-  async archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string } | null> {
-    const db = await getDb(); if (!db) return null;
-    const rows = await db.select().from(aurionCausalTickReceipts).where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), lt(aurionCausalTickReceipts.tick, beforeTick))).orderBy(aurionCausalTickReceipts.tick);
-    if (rows.length === 0) return null;
-    const startTick = rows[0].tick, endTick = rows[rows.length - 1].tick;
-    const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
-    const payload = rows.map(row => ({
-      id: row.id, worldId: row.worldId, zoneId: row.zoneId, tick: row.tick, revision: row.revision,
-      rulesetVersion: row.rulesetVersion, receiptSchema: row.receiptSchema,
-      preStateHash: row.preStateHash, inputHash: row.inputHash,
-      inputJson: row.inputJson, stageReceiptsJson: row.stageReceiptsJson,
-      transitionHash: row.transitionHash, rngRootHash: row.rngRootHash,
-      postStateHash: row.postStateHash, previousReceiptHash: row.previousReceiptHash, receiptHash: row.receiptHash,
-    }));
-    const payloadJson = stableJson(payload);
-    const archiveHash = createHash("sha256").update(payloadJson, "utf8").digest("hex");
-    const [existing] = await db.select().from(aurionCausalArchive).where(eq(aurionCausalArchive.id, archiveId)).limit(1);
-    if (existing) {
-      if (existing.archiveHash !== archiveHash || existing.payloadJson !== payloadJson) throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archiveId}`);
-      return { archivedCount: rows.length, archiveId };
-    }
-    await db.insert(aurionCausalArchive).values({ id: archiveId, worldId: rows[0].worldId, zoneId, startTick, endTick, receiptCount: rows.length, archiveHash, payloadJson });
-    return { archivedCount: rows.length, archiveId };
+
+  async archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string; archiveIds: string[]; startTick: number; endTick: number } | null> {
+    const db = await getDb();
+    if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
+    if (!Number.isSafeInteger(beforeTick) || beforeTick < 1) throw new Error("CAUSAL_ARCHIVE_THRESHOLD_INVALID");
+    if (beforeTick === 1) return null;
+
+    // Restrict the Node heap independent of the total number of receipts.
+    // Transaction-scoped row locks preserve fail-closed archive serialization.
+    const ARCHIVE_RECEIPT_PAGE_SIZE = 64;
+    const ARCHIVE_MAX_IDS = 100_000;
+    return db.transaction(async tx => {
+      let sourceWorldId: string | null = null;
+      let scannedUntil = 0;
+
+      // Prove complete, contiguous source coverage without loading the entire
+      // receipt prefix or JSON evidence into memory.
+      while (scannedUntil < beforeTick - 1) {
+        const page = await tx.select().from(aurionCausalTickReceipts)
+          .where(and(
+            eq(aurionCausalTickReceipts.zoneId, zoneId),
+            gt(aurionCausalTickReceipts.tick, scannedUntil),
+            lt(aurionCausalTickReceipts.tick, beforeTick),
+          ))
+          .orderBy(aurionCausalTickReceipts.tick)
+          .limit(ARCHIVE_RECEIPT_PAGE_SIZE).for("update");
+        if (page.length === 0) {
+          if (scannedUntil === 0) return null;
+          throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+        }
+        for (const row of page) {
+          if (row.tick !== scannedUntil + 1 || (sourceWorldId !== null && row.worldId !== sourceWorldId)) {
+            throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+          }
+          sourceWorldId ??= row.worldId;
+          this.mapReceipt(row);
+          scannedUntil = row.tick;
+        }
+      }
+
+      if (sourceWorldId === null) return null;
+      const archiveIds: string[] = [];
+      const rememberArchiveId = (archiveId: string): void => {
+        if (archiveIds.length >= ARCHIVE_MAX_IDS) throw new Error("CAUSAL_ARCHIVE_ID_COUNT_LIMIT");
+        archiveIds.push(archiveId);
+      };
+      let coveredUntil = 0;
+      let afterArchiveStart = 0;
+
+      // Each historical archive packet is at most 60 KiB. Read/verify one
+      // packet at a time, with separate bounded keyset pages of source rows.
+      // Preexisting packet bytes and boundaries remain strictly immutable.
+      while (true) {
+        const existingPage = await tx.select().from(aurionCausalArchive)
+          .where(and(
+            eq(aurionCausalArchive.zoneId, zoneId),
+            lt(aurionCausalArchive.startTick, beforeTick),
+            gt(aurionCausalArchive.startTick, afterArchiveStart),
+          ))
+          .orderBy(aurionCausalArchive.startTick)
+          .limit(1).for("update");
+        if (existingPage.length === 0) break;
+        const archive = existingPage[0];
+        if (archive.worldId !== sourceWorldId || archive.startTick !== coveredUntil + 1
+          || archive.endTick < archive.startTick) {
+          throw new Error(`CAUSAL_ARCHIVE_COVERAGE_CONFLICT:${archive.id}`);
+        }
+
+        let verifiedUntil = archive.startTick - 1;
+        let validatedCount = 0;
+        const payloadParts: string[] = [];
+        let verifiedBytes = 2;
+        while (verifiedUntil < archive.endTick) {
+          const page = await tx.select().from(aurionCausalTickReceipts)
+            .where(and(
+              eq(aurionCausalTickReceipts.zoneId, zoneId),
+              gt(aurionCausalTickReceipts.tick, verifiedUntil),
+              lte(aurionCausalTickReceipts.tick, archive.endTick),
+            ))
+            .orderBy(aurionCausalTickReceipts.tick)
+            .limit(ARCHIVE_RECEIPT_PAGE_SIZE).for("update");
+          if (page.length === 0) throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+          for (const row of page) {
+            if (row.tick !== verifiedUntil + 1 || row.worldId !== sourceWorldId) {
+              throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+            }
+            this.mapReceipt(row);
+            const json = stableJson(archiveReceiptPayload(row));
+            verifiedBytes += Buffer.byteLength(json, "utf8") + (validatedCount ? 1 : 0);
+            if (verifiedBytes > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+              throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+            }
+            payloadParts.push(json);
+            verifiedUntil = row.tick;
+            validatedCount += 1;
+          }
+        }
+        const expected = `[${payloadParts.join(",")}]`;
+        if (archive.receiptCount !== validatedCount ||
+          archive.endTick !== archive.startTick + validatedCount - 1 ||
+          archive.payloadJson !== expected || archive.archiveHash !== causalArchiveHash(expected)) {
+          throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+        }
+        rememberArchiveId(archive.id);
+        coveredUntil = archive.endTick;
+        afterArchiveStart = archive.startTick;
+      }
+
+      // Commit only the uncovered suffix, keeping at most one uncommitted
+      // packet plus one 64-receipt page resident in Node.
+      const packer = new BoundedCausalArchivePacker();
+      let lastSourceTick = coveredUntil;
+      let packetStartTick = coveredUntil + 1;
+      let packetLastTick = coveredUntil;
+      const persistPacket = async (payloadJson: string, startTick: number, endTick: number): Promise<void> => {
+        const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
+        const archiveHash = causalArchiveHash(payloadJson);
+        const receiptCount = endTick - startTick + 1;
+        await tx.insert(aurionCausalArchive).values({
+          id: archiveId, worldId: sourceWorldId!, zoneId, startTick, endTick, receiptCount,
+          archiveHash, payloadJson,
+        });
+        const [readback] = await tx.select().from(aurionCausalArchive)
+          .where(eq(aurionCausalArchive.id, archiveId)).limit(1);
+        if (!readback || readback.archiveHash !== archiveHash || readback.payloadJson !== payloadJson
+          || readback.receiptCount !== receiptCount || readback.startTick !== startTick || readback.endTick !== endTick) {
+          throw new Error(`CAUSAL_ARCHIVE_READBACK_MISMATCH:${archiveId}`);
+        }
+        rememberArchiveId(archiveId);
+        coveredUntil = endTick;
+      };
+      while (lastSourceTick < beforeTick - 1) {
+        const page = await tx.select().from(aurionCausalTickReceipts)
+          .where(and(
+            eq(aurionCausalTickReceipts.zoneId, zoneId),
+            gt(aurionCausalTickReceipts.tick, lastSourceTick),
+            lt(aurionCausalTickReceipts.tick, beforeTick),
+          ))
+          .orderBy(aurionCausalTickReceipts.tick)
+          .limit(ARCHIVE_RECEIPT_PAGE_SIZE).for("update");
+        if (page.length === 0) throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+        for (const row of page) {
+          if (row.tick !== lastSourceTick + 1 || row.worldId !== sourceWorldId) {
+            throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+          }
+          this.mapReceipt(row);
+          const completePacket = packer.push(archiveReceiptPayload(row));
+          if (completePacket !== null) {
+            await persistPacket(completePacket, packetStartTick, packetLastTick);
+            packetStartTick = row.tick;
+          }
+          packetLastTick = row.tick;
+          lastSourceTick = row.tick;
+        }
+      }
+      const finalPacket = packer.finish();
+      if (finalPacket !== null) await persistPacket(finalPacket, packetStartTick, packetLastTick);
+      if (coveredUntil < beforeTick - 1) throw new Error("CAUSAL_ARCHIVE_CHECKPOINT_NOT_COVERED");
+      return {
+        archivedCount: coveredUntil,
+        archiveId: archiveIds[archiveIds.length - 1],
+        archiveIds,
+        startTick: 1,
+        endTick: coveredUntil,
+      };
+    });
   }
 
   async getArchiveStats(zoneId: string): Promise<{ totalArchives: number; totalArchivedReceipts: number }> {

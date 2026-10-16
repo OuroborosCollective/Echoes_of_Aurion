@@ -159,6 +159,14 @@ describe("WASD authoritative zone movement", () => {
     expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 5, skillId: "k_strike", targetEntityId: "mob_12" })).toBe("accepted");
   });
 
+  it("lets Aurion reject unavailable targetless blade skills before target validation", () => {
+    const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
+    const zone = createIsolatedTestZone();
+    const { connectionId } = zone.join({ userId: 10, socket: socket as unknown as WebSocket, combatProfile: { combatLevel: 7, maxHealth: 540, weaponBonus: 15, weaponTrack: "blade" } });
+
+    expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 1, skillId: "k_shield" })).toBe("invalid_skill");
+  });
+
   it("rejects AX1 blade skills on the wrong weapon track before any combat mutation", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
     const zone = createIsolatedTestZone();

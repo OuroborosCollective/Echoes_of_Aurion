@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
+import { AURION_STARTER_VILLAGE_ASSET_PLACEMENTS, AURION_STARTER_VILLAGE_CONTRACT_VERSION } from "../shared/aurionStarterVillageContract";
+import { worldAssetRegionSchema } from "../shared/worldAssetProtocol";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 import { projectPlayerReadback } from "../client/src/xaurion/integration/authoritativeHudProjection";
@@ -24,6 +26,7 @@ type ZoneCombatEvent = {
   damage: number;
   killed: boolean;
   defenderHealth: number;
+  skillId?: string | null;
   gameplaySourceRevision: string;
 };
 type Combatant = { entityId: string; health: number; maxHealth: number; stamina: number; alive: boolean };
@@ -40,6 +43,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
     const pool = createPool(process.env.DATABASE_URL!);
     const errors: string[] = [];
     const combatEvents: ZoneCombatEvent[] = [];
+    const combatRejects: string[] = [];
     let selfEntityId = "";
     let latestPresences: Presence[] = [];
     let latestCombatants: Combatant[] = [];
@@ -55,6 +59,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
             latestCombatants = Array.isArray(value.combatants) ? value.combatants : latestCombatants;
           } else if (value.type === "combat") {
             combatEvents.push(value as ZoneCombatEvent);
+          } else if (value.type === "reject" && typeof value.code === "string") {
+            combatRejects.push(value.code);
           }
         } catch {}
       });
@@ -107,6 +113,23 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       const hud = page.getByTestId("authoritative-world-hud");
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+      await page.keyboard.press("z");
+      const mountFeedback = page.getByText("Mount bleibt auf der Aurion-Taste Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.", { exact: true });
+      await expect(mountFeedback).toBeVisible();
+      expect(await mountFeedback.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const previousPointerEvents = element.style.pointerEvents;
+        element.style.pointerEvents = "auto";
+        const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        element.style.pointerEvents = previousPointerEvents;
+        return topmost === element || element.contains(topmost);
+      })).toBe(true);
+      // Cross the first intent's four-second deadline after repeating Z; only the latest timer may hide the message.
+      await page.waitForTimeout(2_500);
+      await page.keyboard.press("z");
+      await page.waitForTimeout(2_000);
+      await expect(mountFeedback).toBeVisible();
+      await expect(mountFeedback).toBeHidden({ timeout: 4_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
       await expect.poll(() => latestPresences.some(p => p.entityId === selfEntityId), { timeout: 20_000 }).toBe(true);
 
@@ -115,7 +138,19 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect.poll(async () => (await assetEvidence()).rendered, { timeout: 60_000 }).toBeGreaterThan(0);
       await expect.poll(async () => (await assetEvidence()).loading, { timeout: 60_000 }).toBe(0);
       expect((await assetEvidence()).failed).toBe(0);
-      expect((await assetEvidence()).planned).toBe(108);
+      const regionResponse = await page.request.get("/api/trpc/worldAssets.regionV2", {
+        params: { input: JSON.stringify({ json: { x: 0, z: 0 } }) },
+      });
+      expect(regionResponse.ok()).toBe(true);
+      const regionBody = await regionResponse.json();
+      const region = worldAssetRegionSchema.parse(regionBody.result.data.json);
+      expect(region.placements.filter(p => p.id.startsWith(`${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:`)))
+        .toEqual(AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.map(p => ({
+          ...p, id: `${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:${p.id}`,
+        })));
+      expect(region.placements).toHaveLength(8 * 12 + AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.length);
+      expect((await assetEvidence()).center).toEqual(region.center);
+      expect((await assetEvidence()).planned).toBe(region.placements.length);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-world-assets.png`) });
 
       const initial = await rpc<PlayerUiReadback>(page, "player.ui");
@@ -165,7 +200,15 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(characterDialog.getByRole("button", { name: "Stats", exact: true })).toBeVisible();
       await expect(characterDialog.getByRole("button", { name: "Mastery", exact: true })).toBeVisible();
       await expect(characterDialog.getByRole("button", { name: /Vorhut|Seher|Hüter/ })).toHaveCount(0);
-      await expect(characterDialog.getByText("Attribute warten auf einen bestätigten Aurion-Readback.", { exact: true })).toBeVisible();
+      // The wallet is a canonical server readback, never the retired local AX1 count.
+      const walletResponse = await rpc<any>(page, "player.statWallet");
+      await expect(characterDialog.getByTestId("confirmed-stat-wallet")).toBeVisible();
+      await expect(characterDialog.getByText(new RegExp(`Frei: ${walletResponse.availableExact} · Verdient: ${walletResponse.earnedExact}`))).toBeVisible();
+      expect(walletResponse.userId).toBe(userId);
+      const strength = walletResponse.attributes.find((item: { key: string }) => item.key === "strength");
+      expect(strength?.totalExact).toMatch(/^[1-9][0-9]*$/);
+      await expect(characterDialog.getByRole("button", { name: "Stat-Punkt auf strength verteilen" }))
+        [walletResponse.availableExact === "0" ? "toBeDisabled" : "toBeEnabled"]();
       await expect(characterDialog.getByLabel(/Heilendes Licht/)).toHaveCount(0);
       await expect(characterDialog.getByLabel("Skillplatz 1", { exact: true })).toHaveCount(0);
       await characterDialog.getByRole("button", { name: "Mastery", exact: true }).click();
@@ -226,6 +269,29 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       }, { timeout: 10_000 }).toBe(true);
       const damagedPlayer = latestCombatants.find(entry => entry.entityId === selfEntityId)!;
       expect(damagedPlayer.alive).toBe(true);
+
+      const serverSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
+      await expect(serverSkill).toBeVisible();
+      // The typed intent must reach Aurion; only the server may reject unsupported skill execution.
+      const skillRejectsBefore = combatRejects.length;
+      await serverSkill.click();
+      await expect.poll(() => combatRejects.length, { timeout: 8_000 }).toBeGreaterThan(skillRejectsBefore);
+      expect(combatRejects.at(-1)).toBe("INVALID_COMBAT_SKILL");
+      const combatFeedback = hud.getByText("Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.", { exact: true });
+      await expect(combatFeedback).toBeVisible();
+      expect(await combatFeedback.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const withinViewport = bounds.left >= 0 && bounds.top >= 0
+          && bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight;
+        const previousPointerEvents = element.style.pointerEvents;
+        element.style.pointerEvents = "auto";
+        const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        element.style.pointerEvents = previousPointerEvents;
+        return withinViewport && (topmost === element || element.contains(topmost));
+      })).toBe(true);
+      await expect(hud.getByText(/WASD-Zonenvertrag|AX1-Skill|AX1-Reichweite/)).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-combat-feedback.png`) });
+      await expect(combatFeedback).toBeHidden({ timeout: 6_000 });
 
       const attack = hud.getByTitle("Angriff [R]", { exact: true });
       const auto = hud.getByTitle("Auto-Angriff", { exact: true });
@@ -302,7 +368,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(persistedPlayerReadback.data?.profile.userId).toBe(userId);
       // AurionPlayRoute consumes a one-shot launch contract. Reload must not
       // replay it: follow the real portal action to obtain a fresh server world.
-      await expect(page.getByRole("heading", { name: "AX1-Spielstart benötigt einen bestätigten WASD-Weltvertrag", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Aurion-Spielstart benötigt einen bestätigten Weltvertrag", exact: true })).toBeVisible();
       await expect(hud).toHaveCount(0);
       await page.getByRole("link", { name: "Zum Aurion-Portal", exact: true }).click();
       selfEntityId = ""; latestPresences = []; latestCombatants = [];
@@ -316,6 +382,24 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(hud.getByText(persistedSummary, { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect(hud.getByText("Charakterdaten ausstehend", { exact: true })).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-rehydrated-hud.png`) });
+
+      await page.goto("/account");
+      const accountAuthorityCopy = page.getByText(
+        "Aggregiertes Charakterlevel und Gesamt-EP sind keine Felder des aktuellen bestätigten Aurion-Progressions-Readbacks und werden in dieser Projektion nicht erfunden.",
+        { exact: true },
+      );
+      await expect(accountAuthorityCopy).toBeVisible();
+      await expect(page.getByText(/Legacy-Aurion|WASD-Snapshot/)).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-account-aurion-authority.png`) });
+
+      await page.goto("/ops");
+      await expect(page.getByText("Aggregate Level/XP: nicht im bestätigten Aurion-Readback", { exact: true })).toBeVisible();
+      await page.getByRole("tab", { name: "Endgame", exact: true }).click();
+      await expect(page.getByRole("tabpanel", { name: "Endgame" })).toContainText(
+        "Fähigkeiten und Waffenpfade erscheinen nur aus bestätigten Aurion-Progressionsreceipts.",
+      );
+      await expect(page.getByText(/WASD-(?:Snapshot|Progressionsreceipts)/)).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-operations-aurion-authority.png`) });
       expect(errors).toEqual([]);
 
       await info.attach("ax1-wasd-live-readback", {

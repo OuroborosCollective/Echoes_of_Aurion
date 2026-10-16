@@ -24,7 +24,10 @@ describe("truth-bound achievements gallery", () => {
 
   it("filters to reached milestones without changing source data", () => {
     render(<AchievementsGallery profile={{ victories: 5, aurionPoints: 50 }} />);
-    fireEvent.click(screen.getByRole("button", { name: /Nur erreicht/i }));
+    const toggle = screen.getByRole("button", { name: /Nur erreicht/i });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Aurion-Punkte I")).toBeTruthy();
     expect(screen.queryByText("Kampfsiege I")).toBeNull();
   });

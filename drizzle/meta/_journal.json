@@ -484,6 +484,41 @@
       "when": 1790816585000,
       "tag": "0068_aurion_item_manipulation_runtime",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1790991000000,
+      "tag": "0069_aurion_combat_victory_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1791209100000,
+      "tag": "0071_aurion_npc_guild_authority",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791550800000,
+      "tag": "0072_aurion_production_probe_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791648000000,
+      "tag": "0073_aurion_production_probe_session_fence",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792046400000,
+      "tag": "0074_aurion_stat_allocation_receipts",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,6 @@ export class ZoneMovementClient{
   }
   sendMovement(input:ZoneMovementInput):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN)return false;this.socket.send(JSON.stringify({type:"move",clientSeq:this.nextClientSeq++,input}));return true;}
   sendAttack(targetEntityId:string):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN||!/^mob_[1-9][0-9]{0,2}$/.test(targetEntityId))return false;this.socket.send(JSON.stringify({type:"attack",clientSeq:this.nextClientSeq++,targetEntityId}));return true;}
-  sendSkill(skillId:Ax1BladeSkillId,targetEntityId:string):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN||!isAx1BladeSkillId(skillId)||!/^mob_[1-9][0-9]{0,2}$/.test(targetEntityId))return false;this.socket.send(JSON.stringify({type:"skill",clientSeq:this.nextClientSeq++,skillId,targetEntityId}));return true;}
+  sendSkill(skillId:Ax1BladeSkillId,targetEntityId?:string):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN||!isAx1BladeSkillId(skillId)||(targetEntityId!==undefined&&!/^mob_[1-9][0-9]{0,2}$/.test(targetEntityId)))return false;this.socket.send(JSON.stringify({type:"skill",clientSeq:this.nextClientSeq++,skillId,targetEntityId}));return true;}
   close():void{this.connectionId=null;this.detachCombatTransport?.();this.detachCombatTransport=null;this.selfEntityId=null;const socket=this.socket;this.socket=null;if(socket&&(socket.readyState===WebSocket.CONNECTING||socket.readyState===WebSocket.OPEN))socket.close(1000,"zone client closed");}
 }

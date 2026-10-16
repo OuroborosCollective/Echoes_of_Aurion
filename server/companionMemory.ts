@@ -1,8 +1,6 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { createClient } from "redis";
-
-type RedisConnection = ReturnType<typeof createClient>;
+import { closeOptionalRedis, connectOptionalRedis, redisTimeoutMs, withRedisDeadline, type OptionalRedisClient } from "./optionalRedis";
 import { createHash } from "node:crypto";
 import { COMPANION_FEATURE_VECTOR_LENGTH, COMPANION_STATE_VECTOR_LENGTH } from "@shared/companionLearningProtocol";
 
@@ -43,27 +41,34 @@ function validateObservation(observation: CompanionMemoryObservation): void {
 export class CompanionMemoryStore {
   private readonly dataDir: string;
   private readonly redisUrl?: string;
-  private redis?: RedisConnection;
-  private redisPromise?: Promise<RedisConnection | undefined>;
+  private readonly redisTimeout: number;
+  private redis?: OptionalRedisClient;
+  private redisPromise?: Promise<OptionalRedisClient | undefined>;
+  private redisUnavailable = false;
+  private closed = false;
 
-  constructor(options: { dataDir?: string; redisUrl?: string } = {}) {
+  constructor(options: { dataDir?: string; redisUrl?: string; redisTimeoutMs?: number } = {}) {
     this.dataDir = path.resolve(options.dataDir ?? process.env.COMPANION_MEMORY_DIR ?? "./data/companion-memory");
-    this.redisUrl = options.redisUrl ?? process.env.REDIS_URL;
+    this.redisUrl = (options.redisUrl ?? process.env.REDIS_URL)?.trim() || undefined;
+    this.redisTimeout = redisTimeoutMs(options.redisTimeoutMs);
   }
 
-  private async getRedis(): Promise<RedisConnection | undefined> {
-    if (!this.redisUrl) return undefined;
+  private async getRedis(): Promise<OptionalRedisClient | undefined> {
+    if (!this.redisUrl || this.redisUnavailable || this.closed) return undefined;
     if (this.redis?.isReady) return this.redis;
     if (!this.redisPromise) {
       this.redisPromise = (async () => {
         try {
-          const client = createClient({ url: this.redisUrl });
-          client.on("error", (error) => console.warn("[Companion memory] Redis unavailable", error instanceof Error ? error.message : error));
-          await client.connect();
+          const client = await connectOptionalRedis(this.redisUrl!, this.redisTimeout);
+          if (this.closed) {
+            await closeOptionalRedis(client);
+            return undefined;
+          }
           this.redis = client;
           return client;
-        } catch (error) {
-          console.warn("[Companion memory] Redis connection failed; local memory remains active", error instanceof Error ? error.message : error);
+        } catch {
+          this.redisUnavailable = true;
+          console.warn("[Companion memory] Redis unavailable; local memory remains active");
           return undefined;
         }
       })();
@@ -85,13 +90,20 @@ export class CompanionMemoryStore {
     let redisStored = false;
     if (redis) {
       const key = `aurion:companion:memory:${userId}:${safeSegment(observation.sessionId)}:${observation.sequenceIndex}`;
-      const added = await redis.set(key, serialized.trim(), { NX: true });
-      redisStored = added === "OK";
+      try {
+        const added = await withRedisDeadline(redis, () => redis.set(key, serialized.trim(), { NX: true }), this.redisTimeout);
+        redisStored = added === "OK";
+      } catch {
+        this.redisUnavailable = true;
+        console.warn("[Companion memory] Redis replication unavailable; local memory remains active");
+      }
     }
     return { stored: true, local: true, redis: redisStored, memoryHash: createHash("sha256").update(serialized).digest("hex") };
   }
 
   async close(): Promise<void> {
-    if (this.redis?.isOpen) await this.redis.quit();
+    this.closed = true;
+    const client = this.redis ?? await this.redisPromise;
+    await closeOptionalRedis(client);
   }
 }

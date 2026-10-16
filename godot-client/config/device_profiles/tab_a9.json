@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "profile_id": "samsung-galaxy-tab-a9-4gb",
+  "profile_status": "planning_baseline",
+  "authority": "aurion",
+  "device": {
+    "manufacturer": "Samsung",
+    "family": "Galaxy Tab A9",
+    "plus_variant": false,
+    "owner_confirmed_ram_mib": 4096,
+    "model_number": null,
+    "connectivity_variant": null,
+    "storage_capacity_gib": null,
+    "android_version": null,
+    "android_api_level": null,
+    "soc": null,
+    "gpu": null,
+    "gpu_driver": null
+  },
+  "display": {
+    "diagonal_inches": 8.7,
+    "physical_width_px": 1340,
+    "physical_height_px": 800,
+    "maximum_refresh_hz": 60,
+    "required_orientation": "landscape",
+    "fullscreen_baseline": true
+  },
+  "performance_acceptance": {
+    "required_fps": 30,
+    "optional_fps": 60,
+    "minimum_sustained_fps": 27,
+    "warmup_seconds": 180,
+    "measurement_seconds": 1200,
+    "frame_time_p95_ms_max": 40,
+    "frame_time_p99_ms_max": 50,
+    "long_frame_threshold_ms": 100,
+    "long_frames_per_minute_max": 1,
+    "steady_pss_mib_max": 1200,
+    "peak_pss_mib_max": 1536,
+    "cold_start_to_login_seconds_max": 15,
+    "login_to_playable_zone_seconds_max": 20,
+    "crashes_max": 0,
+    "anrs_max": 0,
+    "low_memory_kills_max": 0,
+    "sustained_thermal_status_max": "moderate"
+  },
+  "touch_ui": {
+    "minimum_target_logical_px": 48,
+    "minimum_body_text_logical_px": 16,
+    "minimum_edge_margin_logical_px": 16,
+    "hover_only_actions_allowed": false,
+    "keyboard_required": false,
+    "resize_safe": true
+  },
+  "evidence": {
+    "manufacturer_reference": "https://www.samsung.com/uk/business/tablets/galaxy-tab-a/galaxy-tab-a9-wifi-graphite-64gb-sm-x110nzaaeua/",
+    "owner_ram_confirmation_date": "2026-10-15",
+    "physical_device_measurement_required": true,
+    "emulator_counts_as_physical_evidence": false,
+    "required_run_fields": [
+      "build_sha",
+      "engine_version",
+      "renderer",
+      "internal_resolution",
+      "physical_resolution",
+      "quality_preset",
+      "server_identity",
+      "zone_id",
+      "visible_entity_count",
+      "network_profile",
+      "device_model",
+      "android_version",
+      "measurement_duration_seconds"
+    ]
+  }
+}
+

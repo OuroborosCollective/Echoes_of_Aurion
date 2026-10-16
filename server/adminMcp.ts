@@ -14,6 +14,7 @@ import {
   AURION_ADMIN_GLB_WRITE_SCOPE,
   AURION_ADMIN_AUTHORING_WRITE_SCOPE,
   bearerChallenge,
+  adminMcpRequiredOAuthScope,
   openIdForOidcSubject,
   parseAurionAdminMcpTokenClaims,
   protectedResourceMetadata,
@@ -73,6 +74,10 @@ import {
   chatGptTickReplay,
 } from "./chatgptCausalityBridge";
 import { registerDevControlChannel } from "./devControlChannel";
+import { AdminQuestStudioService } from "./questCompiler/adminService";
+import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
+import { QuestValidator } from "./questCompiler/validator";
+import { aurionWorldContextService } from "./worldContext/service";
 
 type AdminActor = {
   userId: number;
@@ -201,7 +206,7 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
     chatGptProMode: writable || authoringWritable ? "read_evidence_plus_scoped_plan_confirm_writes" : "read_evidence_only",
     writePath: writable || authoringWritable
       ? "Only typed Aurion plan→confirm writes are available. Raw gameplay/database/shell/git/VPS mutations remain unavailable."
-      : "Write tools require explicit asset-write and/or authoring-write OAuth scopes.",
+      : "Write tools require explicit asset-write and/or authoring-write permissions.",
   });
 }
 
@@ -299,7 +304,7 @@ function createAdminMcpServer(actor: AdminActor) {
     }).strict() }, async input => content(await applyDungeonDesign(actor.userId, input.draft, input.expectedPlanHash)));
   }
 
-  const questService = new (require("./questCompiler/adminService").AdminQuestStudioService)();
+  const questService = new AdminQuestStudioService();
   server.registerTool("aurion_quest_status", { title: "Aurion Quest Compiler Status", description: "Reads compiler version, schema, template-set hash and metrics.", inputSchema: z.object({}) }, async () => content(await questService.getStatus()));
   server.registerTool("aurion_quest_template_list", { title: "List Quest Templates", description: "Lists canonical active quest templates.", inputSchema: z.object({}) }, async () => content(await questService.getTemplates()));
   server.registerTool("aurion_quest_template_get", { title: "Get Quest Template", description: "Reads a quest template by ID/version.", inputSchema: z.object({ templateId: z.string(), version: z.number().int().optional() }) }, async input => {
@@ -310,10 +315,8 @@ function createAdminMcpServer(actor: AdminActor) {
   });
   server.registerTool("aurion_quest_validate", { title: "Validate Quest Template", description: "Fail-closed validation without storing it.", inputSchema: z.object({ templateJson: z.string() }) }, async input => {
     const parsed = JSON.parse(input.templateJson);
-    const { AurionQuestTemplateSchema } = require("../shared/aurionQuestContract");
-    const { validateQuestGraph } = require("./questCompiler/validator");
-    const validation = AurionQuestTemplateSchema.safeParse(parsed);
-    return content(validation.success ? validateQuestGraph(validation.data) : { valid: false, errors: validation.error.format() });
+    const validation = QuestTemplateVersionSchema.safeParse(parsed);
+    return content(validation.success ? QuestValidator.validateTemplate(validation.data) : { valid: false, errors: validation.error.format() });
   });
   server.registerTool("aurion_quest_instance_explain", { title: "Explain Quest Instance", description: "Reads objective progress and hash chain for a live quest instance.", inputSchema: z.object({ instanceId: z.string() }) }, async input => {
     const instances = await questService.listInstances();
@@ -345,29 +348,24 @@ function createAdminMcpServer(actor: AdminActor) {
   }
 
   server.registerTool("aurion_context_inspect_capsule", { title: "Inspect Context Capsule", description: "Reads immutable context-capsule evidence.", inputSchema: z.object({ capsuleId: z.string() }) }, async input => {
-    const { aurionWorldContextService } = require("./worldContext/service");
     const capsule = await aurionWorldContextService.getCapsule(input.capsuleId);
     if (!capsule) throw new Error(`Capsule ${input.capsuleId} not found`);
     return content(capsule);
   });
   server.registerTool("aurion_context_replay_capsule", { title: "Replay Context Capsule", description: "Re-executes context assembly and reports divergence.", inputSchema: z.object({ capsuleId: z.string() }) }, async input => {
-    const { aurionWorldContextService } = require("./worldContext/service");
     const capsule = await aurionWorldContextService.getCapsule(input.capsuleId);
     if (!capsule) throw new Error(`Capsule ${input.capsuleId} not found`);
-    return content(await aurionWorldContextService.replayCapsule({ capsule, sources: [] }));
+    return content(await aurionWorldContextService.replayCapsule({ capsule: capsule.capsule, sources: [] }));
   });
   server.registerTool("aurion_context_expand_sources", { title: "Expand Context Sources", description: "Reversibly reads requested canonical sources from a capsule receipt.", inputSchema: z.object({ capsuleId: z.string(), requestedSourceIds: z.array(z.string()), expectedCapsuleHash: z.string() }) }, async input => {
-    const { aurionWorldContextService } = require("./worldContext/service");
     return content(await aurionWorldContextService.expandSources(input));
   });
   server.registerTool("aurion_context_get_episode", { title: "Get Structured Episode", description: "Reads an immutable structured historical episode.", inputSchema: z.object({ episodeId: z.string() }) }, async input => {
-    const { aurionWorldContextService } = require("./worldContext/service");
     const episode = await aurionWorldContextService.getEpisode(input.episodeId);
     if (!episode) throw new Error(`Episode ${input.episodeId} not found`);
     return content(episode);
   });
   server.registerTool("aurion_context_eval_summary", { title: "World Context Evaluation Summary", description: "Reads the standard context evaluation summary.", inputSchema: z.object({}) }, async () => {
-    const { aurionWorldContextService } = require("./worldContext/service");
     return content(await aurionWorldContextService.getEvaluationSummary());
   });
 
@@ -388,7 +386,7 @@ function createAdminMcpServer(actor: AdminActor) {
 
 function sendUnauthorized(response: Response, settings: AurionAdminMcpSettings) {
   response.setHeader("WWW-Authenticate", bearerChallenge(settings));
-  response.status(401).json({ error: "aurion_admin_oauth_required", requiredScope: AURION_ADMIN_MCP_READ_SCOPE });
+  response.status(401).json({ error: "aurion_admin_oauth_required", requiredScope: adminMcpRequiredOAuthScope(settings) });
 }
 
 export function registerAdminMcp(app: Express) {

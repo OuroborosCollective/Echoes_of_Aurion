@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# aurion-traefik-promoter-protocol: 2
+# aurion-traefik-promoter-protocol: 3
 set -euo pipefail
 unset NODE_OPTIONS
 
-if [[ $# -ne 3 ]]; then
-  echo "usage: promote-aurion-zone-runtime <artifact-dir> <expected-sha40> <release-id>" >&2
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+  echo "usage: promote-aurion-zone-runtime <artifact-dir> <expected-sha40> <release-id> [--prepare-schema]" >&2
   exit 64
 fi
+mode="${4:-promote}"
+[[ "$mode" == "promote" || "$mode" == "--prepare-schema" ]] || exit 64
 
 artifact_dir="$1"
 expected_sha="$2"
@@ -103,7 +105,7 @@ node --input-type=module -e '
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
+  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -176,6 +178,45 @@ cmp -s "${schema_apply_artifact}/deploy/verify-aurion-production-schema-apply-ar
 phase=promoter-self-install
 install -D -o root -g root -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
 cmp -s "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+
+# Preparation installs only the checksum-bound tools. It must return before
+# building an application image, touching services, or changing containers.
+if [[ "$mode" == "--prepare-schema" ]]; then
+  printf '{"recordType":"aurion_schema_tools_prepared","revision":"%s","runtimeMutationPerformed":false}\n' "$expected_sha"
+  exit 0
+fi
+
+# Defense in depth for every caller, including manual invocations: application
+# image construction/promotion is gated by a completed root apply receipt AND
+# a new read-only schema process. A health-200 response is not this gate.
+phase=require-completed-schema-apply
+schema_receipt=/var/lib/echoes-of-aurion/schema-apply/latest.json
+node --input-type=module -e '
+  import fs from "node:fs";
+  const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+  if(r.sourceRevision!==process.argv[2]||r.databaseCredentialReturned!==false||!["APPLY_SUCCEEDED","ALREADY_APPLIED"].includes(r.overallState)) process.exit(2);
+  if(r.postflight?.summary?.migrationCount!==53||r.postflight.summary.matchCount!==53||r.postflight.summary.absentCount!==0||r.postflight.summary.driftCount!==0) process.exit(3);
+  if(r.backup?.created!==true||r.recovery?.executed!==true||r.recovery?.matched!==true||!/^([a-f0-9]{64})$/.test(r.backup.sha256)) process.exit(4);
+' "$schema_receipt" "$expected_sha"
+schema_readback="$(mktemp)"
+if ! /usr/local/sbin/aurion-production-schema-reconcile "$expected_sha" >"$schema_readback"; then
+  rm -f "$schema_readback"
+  exit 70
+fi
+node --input-type=module -e '
+  import fs from "node:fs";
+  const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+  if(r.sourceRevision!==process.argv[2]||r.readOnly!==true||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary?.matchCount!==53||r.summary?.absentCount!==0||r.summary?.driftCount!==0) process.exit(2);
+' "$schema_readback" "$expected_sha"
+rm -f "$schema_readback"
+
+# Install the fixed companion-memory sanitizer and its no-argument root wrapper.
+# Raw companion memory remains inside the Docker volume; only sanitized research
+# rows are exposed to the unprivileged Actions runner.
+install -D -o root -g root -m 0755 "${release}/scripts/export-arelogic-companion-memory.mjs" /usr/local/lib/echoes-of-aurion/export-arelogic-companion-memory.mjs
+install -D -o root -g root -m 0755 "${release}/deploy/aurion-arelogic-companion-export" /usr/local/sbin/aurion-arelogic-companion-export
+cmp -s "${release}/scripts/export-arelogic-companion-memory.mjs" /usr/local/lib/echoes-of-aurion/export-arelogic-companion-memory.mjs
+cmp -s "${release}/deploy/aurion-arelogic-companion-export" /usr/local/sbin/aurion-arelogic-companion-export
 # The self-hosted deploy user may read only this fixed root-owned promoter
 # through narrowly scoped, passwordless readback commands. No arbitrary root
 # command or caller-controlled path is granted.
@@ -184,6 +225,7 @@ Defaults:aurion-deploy !requiretty
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/sha256sum /usr/local/sbin/promote-aurion-zone-runtime
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/grep * /usr/local/sbin/promote-aurion-zone-runtime
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/cmp * /usr/local/sbin/promote-aurion-zone-runtime
+aurion-deploy ALL=(root) NOPASSWD: /usr/local/sbin/aurion-arelogic-companion-export
 SUDOERS
 chown root:root /etc/sudoers.d/aurion-zone-runtime-readback
 chmod 0440 /etc/sudoers.d/aurion-zone-runtime-readback
@@ -256,6 +298,24 @@ export AURION_ARTIFACT_DIGEST="$artifact_digest"
 export AURION_RUNTIME_IMAGE_DIGEST="$runtime_image_id"
 export AURION_RELEASE_ARCHIVE_DIGEST="$release_archive_digest"
 compose=(docker compose --project-name echoes-of-aurion --env-file "$runtime_env" -f "${release}/docker-compose.traefik.yml")
+# companion-memory-preflight-start
+phase=companion-memory-preflight
+previous_aurion="$(docker ps --all --quiet --no-trunc --filter 'name=^/echoes-of-aurion-aurion-1$')"
+if [[ -n "$previous_aurion" ]]; then
+  [[ "$previous_aurion" =~ ^[a-f0-9]{64}$ ]]
+  [[ "$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$previous_aurion")" == "echoes-of-aurion" ]]
+  [[ "$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$previous_aurion")" == "aurion" ]]
+  docker volume inspect echoes-of-aurion-companion-memory >/dev/null
+  docker inspect --format '{{json .Mounts}}' "$previous_aurion" | node --input-type=module -e '
+    import fs from "node:fs";
+    try {
+      const mounts=JSON.parse(fs.readFileSync(0,"utf8"));
+      const selected=mounts.filter(m=>m.Destination==="/var/lib/aurion/companion-memory");
+      if(selected.length!==1||selected[0].Type!=="volume"||selected[0].Name!=="echoes-of-aurion-companion-memory"||selected[0].RW!==true) process.exit(2);
+    } catch { process.exit(2); }
+  '
+fi
+# companion-memory-preflight-end
 phase=compose-promotion
 compose_digest_env=(
   "AURION_BUILD_INPUT_DIGEST=$build_input_digest"
@@ -275,6 +335,11 @@ docker inspect --format '{{ index .Config.Labels "traefik.http.routers.aurion.ru
 docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$container_id" | grep -Fxq "$traefik_network"
 docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$container_id" | grep -Fxq "$database_network"
 [[ "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" == "$expected_sha" ]]
+docker volume inspect echoes-of-aurion-companion-memory >/dev/null
+docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/aurion/companion-memory"}}{{println .Name}}{{end}}{{end}}' "$container_id" | grep -Fxq echoes-of-aurion-companion-memory
+docker exec "$container_id" node -e 'if(process.env.REDIS_URL!=="") process.exit(2)'
+# Verify the *effective* Node environment and real V8 limit, not only Compose text.
+docker exec "$container_id" node -e 'const v8=require("node:v8"); const options=process.env.NODE_OPTIONS; const bytes=v8.getHeapStatistics().heap_size_limit; if(options!=="--max-old-space-size=8800" || bytes < 8*1024**3 || bytes > 10*1024**3) process.exit(2)'
 
 container_ready=0
 container_probe_status=0

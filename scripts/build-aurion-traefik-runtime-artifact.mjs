@@ -27,6 +27,8 @@ const filesToCopy = [
   "deploy/promote-aurion-zone-runtime.sh",
   "deploy/aurion-traefik-runtime.environment.template",
   "deploy/verify-aurion-runtime-database.mjs",
+  "deploy/aurion-arelogic-companion-export",
+  "scripts/export-arelogic-companion-memory.mjs",
 ];
 const directoriesToCopy = ["dist", "patches"];
 

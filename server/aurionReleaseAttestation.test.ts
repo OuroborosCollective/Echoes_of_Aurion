@@ -35,8 +35,28 @@ describe("Blocker 2 detached release attestation contract", () => {
 
   it("requires independent attestation verification before production schema apply", () => {
     expect(workflow).toContain("verify-release-attestations:");
-    expect(workflow).toContain("needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]");
+    expect(workflow).toContain("needs: [migration-ledger, prepare-schema-tools]");
+    expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof, verify-schema-release-attestation]");
+    const independent = workflow.split("  verify-schema-release-attestation:")[1].split("  prepare-schema-tools:")[0];
+    expect(independent).toContain("runs-on: ubuntu-24.04");
+    expect(independent).toContain("--deny-self-hosted-runners");
+    expect(independent).toContain('--source-digest "$GITHUB_SHA" --source-ref refs/heads/main');
     expect(workflow.indexOf("verify-release-attestations:")).toBeLessThan(workflow.indexOf("apply-reviewed-schema-plan:"));
+  });
+
+  it("requires positively identified legacy runtime in addition to missing control plane", () => {
+    const independent = workflow.split("  verify-schema-release-attestation:")[1].split("  prepare-schema-tools:")[0];
+    expect(workflow).toContain("bootstrap_probe_control_plane:");
+    expect(independent).toContain("environment: production");
+    expect(independent).toContain("BOOTSTRAP_PROBE_CONTROL_PLANE");
+    expect(independent).toContain("https://arelogic.space/api/production-probe/bootstrap-status");
+    expect(independent).toContain('if [[ "$status" != "404" ]] && !');
+    expect(independent).toContain("--dump-header");
+    expect(independent).toContain("text/html");
+    expect(independent).toContain("PROBE_BOOTSTRAP_RESPONSE_NOT_ELIGIBLE");
+    expect(independent).toContain("await readLegacyProbeBootstrap()");
+    expect(independent).toContain("PROBE_CONTROL_PLANE_REQUIRED");
+    expect(independent).toContain("executeProductionProbe('aurion.probe.admin-readback')");
   });
 
   it("seals a canonical BuildInputManifest into the runtime artifact", () => {

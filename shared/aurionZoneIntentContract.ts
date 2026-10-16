@@ -4,6 +4,8 @@ export type AurionZoneIntentKind =
   | "move"
   | "attack"
   | "skill"
+  | "presence_join"
+  | "presence_leave"
   | "resource_interact"
   | "mob_trigger"
   | "quest_accept"
@@ -43,6 +45,23 @@ export interface AurionQuestHandInIntent extends OperationalIntentMetadata {
   seedDigest?: string;
   roleBindingHash?: string;
 }
+
+export interface AurionPresenceJoinIntent extends OperationalIntentMetadata {
+  type: "presence_join";
+  userId: number;
+  combatProfile: {
+    combatLevel: number;
+    maxHealth: number;
+    weaponBonus: number;
+    weaponEquipped?: boolean;
+    weaponTrack: "blade" | "staff" | "spear" | "focus";
+  };
+}
+export interface AurionPresenceLeaveIntent extends OperationalIntentMetadata {
+  type: "presence_leave";
+  userId: number;
+}
+
 export interface AurionMoveIntent extends OperationalIntentMetadata {
   type: "move";
   input: { x: number; z: number };
@@ -67,6 +86,8 @@ export interface AurionMobTriggerIntent extends OperationalIntentMetadata {
 }
 
 export type AurionZoneIntent =
+  | AurionPresenceJoinIntent
+  | AurionPresenceLeaveIntent
   | AurionMoveIntent
   | AurionAttackIntent
   | AurionSkillIntent
@@ -97,6 +118,20 @@ export function sanitizeIntentForHash(intent: AurionZoneIntent): Record<string, 
   assertIntentIdentity(intent);
   const base = { type: intent.type, entityId: intent.entityId, clientSeq: intent.clientSeq };
   switch (intent.type) {
+    case "presence_join":
+      return {
+        ...base,
+        userId: intent.userId,
+        combatProfile: {
+          combatLevel: intent.combatProfile.combatLevel,
+          maxHealth: intent.combatProfile.maxHealth,
+          weaponBonus: intent.combatProfile.weaponBonus,
+          ...(intent.combatProfile.weaponEquipped === undefined ? {} : { weaponEquipped: intent.combatProfile.weaponEquipped }),
+          weaponTrack: intent.combatProfile.weaponTrack,
+        },
+      };
+    case "presence_leave":
+      return { ...base, userId: intent.userId };
     case "move":
       return { ...base, input: { x: intent.input.x, z: intent.input.z } };
     case "attack":

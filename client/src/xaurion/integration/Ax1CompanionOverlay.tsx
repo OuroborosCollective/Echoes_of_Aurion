@@ -19,6 +19,7 @@ import {
 } from "@/lib/companionWorldInputs";
 import { requestCompanionFrame } from "@/lib/companionFrameCapture";
 import { useCompanionCaptureLoop } from "@/hooks/useCompanionCaptureLoop";
+import { NATIVE_RESEARCH_LABEL, startNativeResearchRecording, stopNativeResearchRecording } from "@/lib/nativeResearchRecording";
 
 const PROVIDERS = ["ChatGPT", "Claude", "Gemini", "Mistral", "Lokales LLM", "Eigener MCP-Client"] as const;
 type GatewayPairing = Readonly<{ sessionId: string; pairingToken: string; mcpUrl: string; allowedCommands: string[] }>;
@@ -115,6 +116,25 @@ export default function Ax1CompanionOverlay() {
     onError: () => setMessage("Die sichtbare AX1-Aufzeichnung konnte nicht bestätigt werden; es wurde kein Ersatzsample erfunden."),
   });
 
+  const nativeRecording = session?.llmLabel === NATIVE_RESEARCH_LABEL;
+
+  const toggleNativeRecording = () => {
+    if (!isAuthenticated || !user?.id) {
+      setMessage("Melde dich an, bevor du Forschungsdaten aufzeichnest.");
+      return;
+    }
+    try {
+      const next = nativeRecording && session?.mode === "learning"
+        ? stopNativeResearchRecording()
+        : startNativeResearchRecording(user.id);
+      setSession(next);
+      pending.current = undefined;
+      if (next?.mode === "learning") setOpen(false);
+    } catch {
+      setMessage("Die lokale Forschungsaufzeichnung konnte nicht gestartet werden.");
+    }
+  };
+
   const pair = async () => {
     if (!isAuthenticated || !user?.id || createGatewaySession.isPending) return;
     setMessage("");
@@ -168,6 +188,10 @@ export default function Ax1CompanionOverlay() {
       <DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop">
         <DialogTitle>Companion-Aufzeichnung</DialogTitle>
         <DialogDescription>AX1 zeichnet nur nach deiner Aktivierung sichtbare Spielbilder und deine tatsächlichen Eingaben auf. Aurion speichert ausschließlich bestätigte Metadaten und Samples.</DialogDescription>
+        <button type="button" disabled={!isAuthenticated} onClick={toggleNativeRecording}>
+          {nativeRecording && session?.mode === "learning" ? "Forschungsaufzeichnung beenden" : "Für ARE-rLOGIC aufzeichnen"}
+        </button>
+        <p>Für die Forschungsaufzeichnung ist kein externer MCP- oder LLM-Partner erforderlich.</p>
         {!pairing ? (
           <>
             <label>MCP-Partner

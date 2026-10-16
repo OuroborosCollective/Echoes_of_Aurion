@@ -68,14 +68,29 @@ export const QuestObjectiveRequirementSchema = z.object({
   targetValue: z.union([z.number(), z.string(), z.boolean()]),
   description: z.string().optional(),
   eventBinding: z.object({
-    source: z.enum(["world_chunk_delta", "group_instance", "encounter"]),
-    event: z.enum(["resource_depleted", "structure_placed", "structure_removed", "road_built", "cleared", "completed"]),
-    matchField: z.enum(["targetId", "resourceKind", "assetKey", "dungeonId", "encounterKey"]).nullable().default(null),
+    source: z.enum(["world_chunk_delta", "group_instance", "encounter", "combat"]),
+    event: z.enum(["resource_depleted", "structure_placed", "structure_removed", "road_built", "cleared", "completed", "victory"]),
+    matchField: z.enum(["targetId", "resourceKind", "assetKey", "dungeonId", "encounterKey", "opponentSpecies"]).nullable().default(null),
     matchValue: z.string().min(1).max(128).nullable().default(null),
   }).strict().optional(),
 });
 
 export type QuestObjectiveRequirement = z.infer<typeof QuestObjectiveRequirementSchema>;
+
+/** Durable Aurion combat evidence consumed by quest objectives; never client-authored progress. */
+export const AurionCombatVictoryEvidenceSchema = z.object({
+  schema: z.literal("aurion.combat.victory.v1"),
+  eventId: z.string().min(1).max(128),
+  receiptId: z.string().min(1).max(128),
+  logicalRevision: z.number().int().nonnegative(),
+  playerUserId: z.number().int().positive(),
+  opponentEntityId: z.string().min(1).max(128),
+  opponentSpecies: z.string().min(1).max(128),
+  outcome: z.literal("victory"),
+  confirmed: z.literal(true),
+}).strict();
+
+export type AurionCombatVictoryEvidence = z.infer<typeof AurionCombatVictoryEvidenceSchema>;
 
 export const QuestActionEffectSchema = z.object({
   targetSubject: z.string(),

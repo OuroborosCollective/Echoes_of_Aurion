@@ -151,7 +151,9 @@ export class WorldFactEngine {
   }
 
   public getFacts(): WorldFact[] {
-    return Array.from(this.facts.values()).sort((a, b) => a.id.localeCompare(b.id));
+    const list: WorldFact[] = [];
+    for (const fact of this.facts.values()) list.push(fact);
+    return list.sort((a, b) => a.id.localeCompare(b.id));
   }
 
   public getFactsHash(): string {

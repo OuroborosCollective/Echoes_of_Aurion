@@ -1,0 +1,6 @@
+{
+  "schema": "aurion.release-retrigger.v1",
+  "requestedFor": "25dcf2a8fdbd32b18899a6b7414511de32bb80a5",
+  "reason": "Post-merge Memory.md advanced main during schema dispatch; retrigger exact production lane from stable main.",
+  "runtimeCodeEquivalent": true
+}

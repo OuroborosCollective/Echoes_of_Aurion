@@ -2,6 +2,13 @@ import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:cry
 const SCRYPT_COST = 16_384;
 const KEY_BYTES = 64;
 
+/** Fixed, structurally valid scrypt target-cost hash used only for nonexistent
+ * local accounts. It prevents a cheap early return from identifying handles.
+ * NEVER use it to authenticate any account; the caller always rejects.
+ */
+export const DUMMY_LOCAL_AUTH_HASH =
+  "scrypt$16384$kAOcLRUlpEYoNHYrg9WZmw==$0YJWaWKrNwhh1wR1AOQZ4ANzJ1XH4ORqa9OZD9oUXvge0CRpas7j4cpZVWK79dS0vQrY8oIO4ObLiITTabcoXw==";
+
 function deriveLocalPassword(password: string, salt: Buffer, cost: number) {
   return new Promise<Buffer>((resolve, reject) => {
     scryptCallback(password, salt, KEY_BYTES, { N: cost, r: 8, p: 1 }, (error, derived) => {

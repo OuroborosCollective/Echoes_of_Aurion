@@ -17,7 +17,7 @@ import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionGroupFinder } from "./AurionGroupFinder";
 import { AuthoredQuestJournal } from "@/components/AuthoredQuestJournal";
 import { projectPlayerReadback, projectReadback, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
-import { ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
+import { AURION_COMBAT_FEEDBACK_EVENT, ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import { CONFIRMED_COMBAT_PRESENTATION_EVENT, reduceConfirmedCombatMetrics, validConfirmedCombatPresentation, type ConfirmedCombatPresentationEvent } from "./combatPresentation";
 import "./ax1AuthorityHud.css";
@@ -57,6 +57,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [message, setMessage] = useState("");
+  const [combatFeedback, setCombatFeedback] = useState("");
+  const feedbackTimer = useRef<number | undefined>(undefined);
   const [expandedMenu, setExpandedMenu] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupMode, setGroupMode] = useState<"party" | "dungeon">("party");
@@ -65,10 +67,15 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const [autoActive, setAutoActive] = useState(false);
   const [startAfterClose, setStartAfterClose] = useState(false);
   const [combatEvents, setCombatEvents] = useState<readonly ConfirmedCombatPresentationEvent[]>([]);
+  const [selfHealth, setSelfHealth] = useState<{ hp: number; maxHp: number } | null>(null);
+  const [lifeStatus, setLifeStatus] = useState<"alive" | "dead" | "respawn">("alive");
+  const previousConfirmedHealth = useRef<number | null>(null);
   const busy = useRef(false);
   const utils = trpc.useUtils();
   const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
   const playerQuery = trpc.player.me.useQuery(undefined, options);
+  const statWalletQuery = trpc.player.statWallet.useQuery(undefined, { ...options, enabled: userId > 0 && panel === "character" });
+  const spendStat = trpc.player.allocateStatPoint.useMutation();
   const worldQuery = trpc.gameplay.openWorld.useQuery(undefined, options);
   const uiQuery = trpc.player.ui.useQuery(undefined, options);
   const groupQuery = trpc.groups.read.useQuery(undefined, options);
@@ -93,11 +100,23 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   permitted.current = connected && panel === null && !groupOpen && !expandedMenu && !pending;
   const action = useRef(onAction);
   action.current = onAction;
+  const publishCombatFeedback = useCallback((next: string) => {
+    window.clearTimeout(feedbackTimer.current);
+    setCombatFeedback(next);
+    feedbackTimer.current = window.setTimeout(() => {
+      setCombatFeedback("");
+      feedbackTimer.current = undefined;
+    }, 4_000);
+  }, []);
   const auto = useMemo(() => new ConfirmedAutoAttack(
     () => action.current("F", true),
     () => permitted.current && !document.hidden && !document.querySelector(WORLD_PANEL_SELECTOR),
-    (active, note) => { setAutoActive(active); if (note) setMessage(note); },
-  ), [userId]);
+    (active, note) => { setAutoActive(active); if (note) publishCombatFeedback(note); },
+  ), [userId, publishCombatFeedback]);
+  const runAction = useCallback(async (command: AurionGameplayCommand) => {
+    const outcome = await onAction(command);
+    publishCombatFeedback(outcome.message);
+  }, [onAction, publishCombatFeedback]);
   const openPanel = useCallback((value: Panel) => {
     auto.stop();
     onMove(0, 0);
@@ -106,12 +125,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     setPanel(value);
   }, [auto, onMove]);
   const refresh = useCallback(async () => {
-    const results = await Promise.all([playerQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch(), manipulationQuery.refetch()]);
+    const results = await Promise.all([playerQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch(), manipulationQuery.refetch(), statWalletQuery.refetch()]);
     if (results.some(result => result.isError)) throw new Error("UI_READBACK_UNAVAILABLE");
     const parsed = playerUiReadbackSchema.parse(results[1].data);
     if (parsed.userId !== userId) throw new Error("UI_READBACK_OWNER_MISMATCH");
     await utils.gameplay.relationshipStanding.invalidate();
-  }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, manipulationQuery.refetch, utils, userId]);
+  }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, manipulationQuery.refetch, statWalletQuery.refetch, utils, userId]);
   const act = async (operation: () => Promise<unknown>, ready = fresh) => {
     if (!ready || busy.current) return;
     busy.current = true;
@@ -155,6 +174,20 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     void act(() => saveControls.mutateAsync({ ...settings, autoLoot: !settings.autoLoot }), uiFresh);
   };
   useEffect(() => {
+    const receiveFeedback = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== "object") return;
+      const next = (detail as { message?: unknown }).message;
+      if (typeof next !== "string" || next.length === 0 || next.length > 240) return;
+      publishCombatFeedback(next);
+    };
+    window.addEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+    return () => {
+      window.clearTimeout(feedbackTimer.current);
+      window.removeEventListener(AURION_COMBAT_FEEDBACK_EVENT, receiveFeedback);
+    };
+  }, [publishCombatFeedback]);
+  useEffect(() => {
     if (!permitted.current) auto.stop();
     if (startAfterClose && permitted.current) {
       setStartAfterClose(false);
@@ -164,10 +197,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   useEffect(() => {
     const update = () => { 
       void refresh().catch(() => setMessage("Aktuelle Daten sind nicht verfügbar."));
-      // Notify about causal backup on significant actions
-      window.dispatchEvent(new CustomEvent("aurion:causal-backup-confirmed", { 
-        detail: { message: "Sitzung serverseitig gesichert" } 
-      }));
     };
     const contacts = () => { setQuestTab("contacts"); openPanel("quests"); };
     const crafting = () => openPanel("crafting");
@@ -186,6 +215,35 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       document.removeEventListener("visibilitychange", stop);
     };
   }, [refresh, openPanel, auto, autoActive]);
+  useEffect(() => {
+    if (!connected) { previousConfirmedHealth.current = null; setSelfHealth(null); setLifeStatus("alive"); }
+  }, [connected]);
+  useEffect(() => {
+    const receiveHealth = (event: Event) => {
+      const value = (event as CustomEvent<unknown>).detail;
+      if (!value || typeof value !== "object") return;
+      const health = value as { entityId?: unknown; health?: unknown; maxHealth?: unknown; alive?: unknown };
+      if (health.entityId !== `player:${userId}`) return;
+      if (health.health === null && health.maxHealth === null && health.alive === null) {
+        previousConfirmedHealth.current = null;
+        setSelfHealth(null);
+        setLifeStatus("alive");
+        return;
+      }
+      if (!Number.isSafeInteger(health.health) || !Number.isSafeInteger(health.maxHealth)
+        || (health.maxHealth as number) < 1 || (health.health as number) < 0
+        || (health.health as number) > (health.maxHealth as number)
+        || health.alive !== ((health.health as number) > 0)) return;
+      const hp = health.health as number;
+      const maxHp = health.maxHealth as number;
+      const prior = previousConfirmedHealth.current;
+      previousConfirmedHealth.current = hp;
+      setLifeStatus(hp === 0 ? "dead" : prior === 0 ? "respawn" : "alive");
+      setSelfHealth({ hp, maxHp });
+    };
+    window.addEventListener("aurion:confirmed-self-health", receiveHealth);
+    return () => window.removeEventListener("aurion:confirmed-self-health", receiveHealth);
+  }, [userId]);
   useEffect(() => {
     const receive = (event: Event) => {
       const value = (event as CustomEvent<unknown>).detail;
@@ -289,6 +347,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       progressionCount={player.data?.progression.tracks.length}
       mastery={mastery ? { name: mastery.trackId, level: mastery.levelExact } : undefined}
       playerState={player.state}
+      selfHealth={selfHealth ?? undefined}
+      lifeStatus={selfHealth ? lifeStatus : undefined}
       playerStateLabel={readbackLabels[player.state]}
       connected={connected}
       remotePlayerCount={remotePlayers.length}
@@ -313,7 +373,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       }}
       miniMap={<MiniMap world={worldProjection} position={position} remotePlayers={remotePlayers} state={world.state} onOpen={() => openPanel("map")} />}
       movementControl={<MobileMovementController mode={ui.data?.settings.movementMode ?? "joystick"} onMove={onMove} onDestination={({ screenX, screenY }) => onTouchMoveDestination(screenX, screenY)} enabled={panel === null && !groupOpen && !pending && connected} />}
-      feedback={panel === null ? message : undefined}
+      feedback={panel === null ? combatFeedback || message : undefined}
       onMenuOpenChange={setExpandedMenu}
       onOpenCharacter={() => openPanel("character")}
       onOpenInventory={() => openPanel("inventory")}
@@ -337,8 +397,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       onToggleAutoLoot={toggleLoot}
       onInteract={() => { if (onInteract) onInteract(); else void onAction("E"); }}
       onToggleAutoAttack={() => { if (autoActive) auto.stop(); else auto.start(); }}
-      onAttack={() => { void onAction("F"); }}
-      onCastSkill={command => { void onAction(command as AurionGameplayCommand); }}
+      onAttack={() => { void runAction("F"); }}
+      onCastSkill={command => { void runAction(command as AurionGameplayCommand); }}
       pending={pending}
       context={panel === "dialogue" ? "dialogue" : panel !== null ? "management" : autoActive ? "combat" : "exploration"}
     />
@@ -365,6 +425,15 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       isOpen={panel === "character"}
       onClose={() => openPanel(null)}
       player={player.data}
+      statWallet={!statWalletQuery.isError && !statWalletQuery.isStale ? statWalletQuery.data : undefined}
+      statPending={!fresh || statWalletQuery.isFetching || pending}
+      onSpendStat={attribute => {
+        const wallet = statWalletQuery.data;
+        if (!wallet || statWalletQuery.isError || statWalletQuery.isStale || !connected || pending) return;
+        const nonce = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
+        if (!nonce) return;
+        void act(() => spendStat.mutateAsync({ attribute, idempotencyKey: `stat:${nonce}`, expectedAvailableExact: wallet.availableExact }), fresh);
+      }}
       settings={ui.data?.settings}
       uiPending={!uiFresh}
       groupPending={!groupFresh}
