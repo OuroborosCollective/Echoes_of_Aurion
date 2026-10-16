@@ -31,6 +31,3 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
-## 2026-10-09 - Avoid spreading arrays in high-frequency getters
-**Learning:** Found a performance regression when replacing array allocations. In an attempt to prevent corrupting snapshots that held a reference to `this.sortedPresences`, `[...this.presences()]` was used in `snapshot()`. Because `snapshot()` is a very hot path called repeatedly on every tick, this moved the array allocation from the rare `refreshPeerOrder` to the highly frequent `snapshot` method, increasing garbage collection pressure.
-**Action:** Keep array reallocations in the cold path (`refreshPeerOrder`). Instead of mutating a cached array and spreading it, re-assign `this.sortedPresences = new Array(length)` in the cold path and populate it using a `for` loop. This allows `this.presences()` to return the array directly and `snapshot()` to safely reference it without creating new arrays on every tick.

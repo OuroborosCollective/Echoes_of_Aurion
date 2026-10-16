@@ -861,6 +861,8 @@ export class AuthoritativeMovementZone {
     }
     this.sortedPeers.sort((a, b) => compareBinary(a.connectionId, b.connectionId));
     this.sortedPeersByEntityId.sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
+
+    // Allocate a new array to prevent corrupting snapshots that retain the previous array reference
     this.sortedPresences = new Array<ZonePresence>(this.sortedPeersByEntityId.length);
     for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
       this.sortedPresences[i] = this.sortedPeersByEntityId[i].presence;
