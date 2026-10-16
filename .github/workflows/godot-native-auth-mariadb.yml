@@ -1,0 +1,58 @@
+name: Godot Native Auth MariaDB
+on:
+  pull_request:
+    paths:
+      - "server/nativeAuth*"
+      - "shared/nativeAuthContract.ts"
+      - "drizzle/**"
+      - "drizzle.config.ts"
+      - ".github/workflows/godot-native-auth-mariadb.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: godot-native-auth-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-native-auth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-native-auth-test
+          MARIADB_DATABASE: aurion_native_auth_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-native-auth-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-native-auth-test@127.0.0.1:3306/aurion_native_auth_test
+      AURION_NATIVE_AUTH_E2E: "1"
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install pinned dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify and apply isolated MariaDB migrations
+        run: |
+          set -euo pipefail
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Native auth session and replay regressions
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run server/nativeAuthProtocol.test.ts server/nativeAuthPersistenceMariaDb.test.ts --reporter=verbose
+      - name: Typecheck and diff
+        run: |
+          pnpm check
+          git diff --check
