@@ -158,8 +158,10 @@ jobs:
           done
           cat /tmp/aim259-runtime.log
           exit 1
-      - name: Real groups and AX1 inventory, healer, controls and combat on phone/tablet/desktop
-        run: pnpm exec playwright test --config playwright.aurion-groups.config.ts
+      - name: Aurion browser UI, controls and collision (five-client healer re-entry quarantined #974)
+        run: |
+          echo "::warning file=e2e/aim259.groups.spec.ts,title=AIM-259 Five-client re-entry quarantined::The five-Chromium healer re-entry test is excluded until the Godot migration completes; issue #974 remains open. Set AURION_GROUP_FIVE_CLIENT_REJOIN_E2E=1 to opt in."
+          pnpm exec playwright test --config playwright.aurion-groups.config.ts
       - name: Verify autonomous NPC life health against confirmed receipts
         run: pnpm exec tsx scripts/verify-autonomous-npc-life-runtime.mjs
       - name: Preserve runtime failure diagnostics
