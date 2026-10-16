@@ -2392,3 +2392,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-16 — Archive refresh feedback isolated from #979
+Status: PENDING exact-head CI and independent readback
+Task: Retain useful archive-dashboard refresh loading/accessibility behavior from stale PR #979 without unrelated AIM-296 performance receipt changes.
+Decisions: Port only `client/src/components/ArchiveDashboard.tsx` UI to fresh branch from main `2f956f926d31fa98359c91dceb8746fa229b78d0`; disable repeated refetch while fetching, expose aria-busy/title and visible loading text. No changes to server authority, databases or game state.
+Evidence: Source PR #979 head `77b5060eabb519bf0b9dda684977cc04713f2dd9`; no new-head success claim before CI. Exact proof pending.
+Learned: Preserve narrow presentational benefit; never merge unrelated benchmark receipts as accidental collateral.
+Open: Exact-head unit/type/build/browser/readback before merge.
