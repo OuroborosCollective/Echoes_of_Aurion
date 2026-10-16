@@ -11,6 +11,11 @@ if (url.protocol !== "mysql:" || url.hostname !== "127.0.0.1" || url.port !== "3
     !/^[a-z0-9_]+_test$/.test(databaseName)) {
   throw new Error("NATIVE_AUTH_NON_ISOLATED_DATABASE_REJECTED");
 }
+// A candidate table model may be imported by test code but must not enter
+// drizzle-kit generate/db:push before the owner-approved production wave.
+if (fs.readFileSync("drizzle.config.ts", "utf8").includes('"./drizzle/nativeAuthSchema.ts"')) {
+  throw new Error("NATIVE_AUTH_SCHEMA_RELEASE_WAVE_NOT_APPROVED");
+}
 const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
 if (journal.entries.some(entry => entry.tag === "0075_aurion_native_auth_sessions")) {
   throw new Error("NATIVE_AUTH_SCHEMA_ALREADY_JOURNALED");
