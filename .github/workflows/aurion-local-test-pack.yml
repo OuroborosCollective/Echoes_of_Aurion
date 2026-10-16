@@ -90,6 +90,13 @@ jobs:
           pnpm verify:migrations | tee .aurion-local-test-pack/evidence/migrations-verify.log
           node --test scripts/dispatch-aurion-schema-plan.test.mjs 2>&1 | tee .aurion-local-test-pack/evidence/schema-dispatch-contract.log
           pnpm exec drizzle-kit migrate 2>&1 | tee .aurion-local-test-pack/evidence/migrations-apply.log
+      - name: RED-GREEN native auth isolated MariaDB regression
+        shell: bash
+        env:
+          AURION_NATIVE_AUTH_E2E: "1"
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run server/nativeAuthProtocol.test.ts server/nativeAuthPersistenceMariaDb.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-mariadb.log
       - name: Verify archive, atomic outbox and combat on separate MariaDB databases
         env:
           NODE_ENV: test
