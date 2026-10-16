@@ -99,6 +99,11 @@ jobs:
           set -euo pipefail
           node scripts/prepare-native-auth-test-schema.mjs 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-schema-readback.log
           pnpm exec vitest run server/nativeAuthProtocol.test.ts server/nativeAuthPersistenceMariaDb.test.ts server/nativeAuthSchemaIsolation.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-mariadb.log
+      - name: Native HTTP authentication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run server/nativeAuthHttp.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-http.log
       - name: Verify archive, atomic outbox and combat on separate MariaDB databases
         env:
           NODE_ENV: test
