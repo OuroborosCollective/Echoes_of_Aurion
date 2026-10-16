@@ -2421,3 +2421,29 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-16 — PR #989 — feat(godot): isolated native session persistence and replay tests (#967)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=989 merge=56efc77a49dd48d4bede228ae3dd9e29789fb37c -->
+Task: Merge PR #989 into `main` — feat(godot): isolated native session persistence and replay tests (#967).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-local-test-pack.yml`
+- `drizzle/nativeAuthSchema.ts`
+- `fixtures/native-auth/0075_native_auth_candidate.sql`
+- `scripts/prepare-native-auth-test-schema.mjs`
+- `server/nativeAuthPersistence.ts`
+- `server/nativeAuthPersistenceMariaDb.test.ts`
+- `server/nativeAuthProtocol.test.ts`
+- `server/nativeAuthProtocol.ts`
+- `server/nativeAuthSchemaIsolation.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/989
+- Merge commit: `56efc77a49dd48d4bede228ae3dd9e29789fb37c`
+- PR head: `cc5d1d51f75dc2263305cf142a3bc407fbf73c73`
+- Merged at: 2026-10-16T22:18:14Z
+- Post-merge workflow run: 38974929708
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
