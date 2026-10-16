@@ -126,6 +126,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify Chromium software renderer contract
+        run: pnpm exec vitest run playwright.aurion-groups.config.test.ts --reporter=verbose
       - name: Verify source, types and pure queue rules
         run: |
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
