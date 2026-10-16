@@ -30,7 +30,7 @@ async function clickLiveGroupButton(locator: Locator) {
   await locator.evaluate((element: HTMLButtonElement) => element.click());
 }
 
-async function launchAx1AndOpenGroups(page: Page) {
+async function launchAurionAndOpenGroups(page: Page) {
   await page.goto("/");
   const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
   await expect(launch).toBeVisible({ timeout: 30_000 });
@@ -70,7 +70,7 @@ async function launchAx1AndOpenGroups(page: Page) {
   return { runtime, hud, dialog };
 }
 
-test("five authenticated sessions share one revision-bound group while AX1 proves combat, heal and rejoin", async ({ browser, baseURL }, info) => {
+test("five authenticated Aurion sessions share one revision-bound group with skill-qualified healer and rejoin", async ({ browser, baseURL }, info) => {
   test.setTimeout(300_000);
   expect(baseURL).toBe("http://127.0.0.1:3000");
   const url = new URL(process.env.DATABASE_URL!);
@@ -96,7 +96,7 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
 
     // Asset governance is exercised through the real authenticated upload route.
     // Only this disposable CI database promotes one fixture account to admin; every
-    // participant still performs the actual one-time player selection through AX1 UI.
+    // participant still performs the actual one-time player selection through the canonical Aurion public-character picker.
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='aim259_real_0'");
     const publicBytes = testAnimatedPlayerGlb("AIM259_Public_Player");
     const publicSha256 = createHash("sha256").update(publicBytes).digest("hex");
@@ -111,7 +111,7 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     expect(publicBody).toMatchObject({ accepted: true, purpose: "player-public", classification: { assetType: "character" }, receipt: { sha256: publicSha256, targetKey: null, status: "catalog" } });
 
     const launched = [];
-    for (const page of pages) launched.push(await launchAx1AndOpenGroups(page));
+    for (const page of pages) launched.push(await launchAurionAndOpenGroups(page));
     const healerPage = pages[1]!;
     const { runtime, dialog } = launched[1]!;
 
@@ -124,6 +124,9 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     await command(pages[0]!, { kind: "equip", skills: ["guardian_stance"] });
     await dialog.getByLabel(/Heilendes Licht/).click();
     await expect(dialog.getByLabel(/Heilendes Licht/)).toBeChecked();
+    const qualifiedHealer = await read(healerPage);
+    expect(qualifiedHealer.player.skills).toContain("mending_light");
+    expect(qualifiedHealer.qualification.roles).toContain("healer");
     await expect(dialog.getByRole("radio", { name: "Heiler", exact: true })).toBeEnabled();
     await dialog.getByRole("radio", { name: "Heiler", exact: true }).check();
     expect((await read(healerPage)).qualification.roles).toContain("healer");
@@ -181,9 +184,9 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     await expect.poll(async () => (await read(healerPage)).player.status).toBe("formed");
     await healerPage.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await runtime.locator("button.xaurion-runtime__return").click();
     await expect(healerPage).toHaveURL(/\/$/, { timeout: 15_000 });
-    const relaunched = await launchAx1AndOpenGroups(healerPage);
+    const relaunched = await launchAurionAndOpenGroups(healerPage);
     await clickLiveGroupButton(relaunched.dialog.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }));
     await expect.poll(async () => (await read(healerPage)).player.status, { timeout: 15_000 }).toBe("entered");
     await expect(relaunched.dialog.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id);
@@ -208,9 +211,9 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
       runtime: "isolated-real-http-mariadb",
       sourceRevision: health.revision,
       sessionUserIds: admitted.map(state => state.player.userId),
-      renderedAx1UserId: finalReadback.player.userId,
+      renderedAurionUserId: finalReadback.player.userId,
       publicPlayerAssetSha256: publicSha256,
-      publicPlayerSelectedThroughAx1: true,
+      publicPlayerSelectedThroughAurion: true,
       partyId,
       ticketId: ticket.id,
       ticketHash: ticket.hash,
@@ -220,7 +223,7 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
       sharedDamageConfirmed: true,
       sharedHealingConfirmed: true,
       rejoinConfirmed: true,
-      rejoinRoute: "portal-confirmed-public-character-ax1-launch",
+      rejoinRoute: "aurion-portal-confirmed-public-character-launch",
       legacyGameplaySessions: 0,
       legacyGameplayActions: 0,
       production: false,
