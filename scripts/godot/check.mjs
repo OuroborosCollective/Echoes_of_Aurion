@@ -46,6 +46,7 @@ await scripts(project);
 await stage('parity', 'static', process.execPath, ['scripts/godot/verify-contract-parity.mjs'], 'zone-v5 contract parity verified');
 for (const [id, script, marker] of [
   ['contract', 'contracts/test_zone_contract.gd', 'zone-v5 Godot contract verified'],
+  ['native-auth', 'test_native_auth_flow.gd', 'Godot native-auth pre-login contract verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
