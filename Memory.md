@@ -2372,3 +2372,23 @@ Evidence: Issue https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/9
 Learned: A five-browser SwiftShader healer re-entry timeout is a failure of that specific end-to-end claim, not proof of a broken game or corrupted database. Aurion has no fixed group-role classes: `mending_light` must be actively equipped and verified by the authoritative server to qualify and label a healer.
 Open: Full five-concurrent-client healer re-entry remains UNVERIFIED. Do not close issue #974 until a native Godot client parity test or equivalent real integration reproduction covers healer skill qualification, all five authenticated members, entry, combat/heal, exit, rejoin, and revision-bound DB/readback, including a real negative case without the equipped skill.
 Next safe step: Complete native Godot migration, implement and run the full re-entry parity test, remove quarantine, and require all repository gates plus a complete exact-SHA readback before claiming a fix.
+
+
+### 2026-10-16 — PR #981 — test(aurion): quarantine five-client healer re-entry until Godot parity (#974)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=981 merge=9e9e9ab06e531db2042775767e06bb5ea55f17b6 -->
+Task: Merge PR #981 into `main` — test(aurion): quarantine five-client healer re-entry until Godot parity (#974).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aim259-group-instances.yml`
+- `Memory.md`
+- `e2e/aim259.groups.spec.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/981
+- Merge commit: `9e9e9ab06e531db2042775767e06bb5ea55f17b6`
+- PR head: `f138b01902d84dc349053fb6f5d61ee392e7574d`
+- Merged at: 2026-10-16T21:26:07Z
+- Post-merge workflow run: 38969355246
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
