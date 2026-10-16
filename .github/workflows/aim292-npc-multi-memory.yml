@@ -79,6 +79,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Prove selective CI impact contract
+        run: node --test scripts/ci/workflow-impact.test.mjs
       - run: pnpm install --frozen-lockfile
       - name: Apply the complete journal to actual MariaDB
         run: |

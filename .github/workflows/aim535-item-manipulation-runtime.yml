@@ -47,6 +47,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Prove selective CI impact contract
+        run: node --test scripts/ci/workflow-impact.test.mjs
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile
       - name: Prove exact head and migration chain
