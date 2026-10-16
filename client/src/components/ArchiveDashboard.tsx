@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Archive, Clock, History, Search, FileText, Database, ShieldCheck, Download } from "lucide-react";
+import { Archive, Clock, History, Search, FileText, Database, ShieldCheck, Download, Loader2 } from "lucide-react";
 
 export default function ArchiveDashboard() {
   const [zoneId, setZoneId] = useState("aurion-nexus-01");
@@ -37,8 +37,8 @@ export default function ArchiveDashboard() {
                     className="bg-slate-950 border-cyan-200/20 text-cyan-100"
                   />
                 </div>
-                <Button variant="outline" className="border-cyan-300/20" onClick={() => archivesQuery.refetch()}>
-                  <Search className="h-4 w-4 mr-2" /> Refresh
+                <Button variant="outline" className="border-cyan-300/20" disabled={archivesQuery.isFetching} aria-busy={archivesQuery.isFetching} title={archivesQuery.isFetching ? "Refreshing..." : "Refresh archives"} onClick={() => archivesQuery.refetch()}>
+                  {archivesQuery.isFetching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />} Refresh
                 </Button>
               </div>
 

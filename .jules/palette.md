@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2026-10-16 - Add Loading and ARIA to Data Refresh Buttons
+**Learning:** When using React Query for dynamic dashboards, always destructure `isFetching` and apply it to refresh buttons with `disabled`, `aria-busy`, a loading spinner (`Loader2`), and a descriptive `title`. This provides immediate explicit visual feedback and prevents redundant submissions.
+**Action:** Apply this pattern to all dashboard manual refresh triggers.
