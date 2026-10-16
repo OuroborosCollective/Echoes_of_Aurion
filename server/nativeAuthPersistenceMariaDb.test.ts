@@ -44,7 +44,7 @@ suite("Aurion native auth in isolated MariaDB", () => {
       requestState, codeChallenge: nativeAuthCodeChallengeFor(VERIFIER), codeChallengeMethod: "S256",
     }, at);
     const issued = await issueNativeAuthHandoffAfterVerifiedBrowserLogin(start.transactionId, USER, requestState, at + 100);
-    return { start, issued, exchange: { version: NATIVE_AUTH_CONTRACT_VERSION, transactionId: start.transactionId, code: issued.handoffCode, codeVerifier: VERIFIER, appBuild: APP_BUILD } };
+    return { start, issued, requestState, exchange: { version: NATIVE_AUTH_CONTRACT_VERSION, transactionId: start.transactionId, code: issued.handoffCode, codeVerifier: VERIFIER, appBuild: APP_BUILD } };
   }
 
   it("exchanges once and stores only digests; resolves the verified server user", async () => {
@@ -78,6 +78,13 @@ suite("Aurion native auth in isolated MariaDB", () => {
     await expect(exchangeNativeAuthHandoff(exchange, NOW + 100 + NATIVE_AUTH_HANDOFF_TTL_SECONDS * 1000 + 1)).rejects.toThrow("NATIVE_AUTH_CODE_EXPIRED");
     const [sessions] = await pool.query<RowDataPacket[]>("SELECT id FROM aurionNativeAuthSessions WHERE appBuild = ?", [APP_BUILD]);
     expect(sessions).toHaveLength(0);
+  });
+
+  it("rejects an app build mismatch without burning the legitimate one-time code", async () => {
+    const { exchange } = await handoff();
+    await expect(exchangeNativeAuthHandoff({ ...exchange, appBuild: "other-client" }, NOW + 200))
+      .rejects.toThrow("NATIVE_AUTH_BUILD_UNSUPPORTED");
+    expect((await exchangeNativeAuthHandoff(exchange, NOW + 300)).refreshToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
   it("serializes parallel exchanges to one successful issue", async () => {
@@ -114,6 +121,13 @@ suite("Aurion native auth in isolated MariaDB", () => {
     expect(successes).toHaveLength(1);
     expect(outcomes.filter(result => result.status === "rejected")).toHaveLength(1);
     expect(await authenticateNativeAuthAccess(successes[0].value.accessToken, NOW + 600)).toBeNull();
+  });
+
+  it("enforces refresh idle timeout by server time", async () => {
+    const { exchange } = await handoff();
+    const tokens = await exchangeNativeAuthHandoff(exchange, NOW + 200);
+    await expect(refreshNativeAuthSession(tokens.refreshToken, NOW + 200 + 7 * 24 * 60 * 60 * 1000 + 1))
+      .rejects.toThrow("NATIVE_AUTH_SESSION_EXPIRED");
   });
 
   it("rejects expired access and revokes all access immediately after logout", async () => {
