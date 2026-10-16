@@ -42,7 +42,13 @@ on:
       - "client/src/xaurion/integration/aurionGroupFinder.css"
       - "client/src/xaurion/integration/AurionAuthorityHud.tsx"
       - "client/src/App.tsx"
-      - "drizzle/**"
+      - "drizzle/*.sql"
+      - "drizzle/meta/_journal.json"
+      - "drizzle/schema.ts"
+      - "drizzle/groupInstanceSchema.ts"
+      - "drizzle/playerUiSchema.ts"
+      - "drizzle/aurionWorldFoundationSchema.ts"
+      - "drizzle.config.ts"
       - "e2e/aim259.groups.spec.ts"
       - "e2e/ax1.ui.spec.ts"
       - "playwright.aurion-groups.config.ts"
@@ -85,7 +91,13 @@ on:
       - "shared/groupInstanceProtocol.ts"
       - "server/routers.ts"
       - "client/src/xaurion/integration/AurionGroupFinder.tsx"
-      - "drizzle/**"
+      - "drizzle/*.sql"
+      - "drizzle/meta/_journal.json"
+      - "drizzle/schema.ts"
+      - "drizzle/groupInstanceSchema.ts"
+      - "drizzle/playerUiSchema.ts"
+      - "drizzle/aurionWorldFoundationSchema.ts"
+      - "drizzle.config.ts"
       - ".github/workflows/aim259-group-instances.yml"
 permissions:
   contents: read
@@ -125,6 +137,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Prove selective CI impact contract
+        run: node --test scripts/ci/workflow-impact.test.mjs
       - run: pnpm install --frozen-lockfile
       - name: Verify source, types and pure queue rules
         run: |

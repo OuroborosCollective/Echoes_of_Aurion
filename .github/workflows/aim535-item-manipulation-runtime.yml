@@ -2,10 +2,10 @@ name: AIM-535 Item Manipulation Runtime
 
 on:
   pull_request:
-    paths: ["server/**", "shared/**", "drizzle/**", "scripts/aurionProductionSchema*", ".github/workflows/aim535-item-manipulation-runtime.yml"]
+    paths: ["server/aurionItemManipulation*", "server/aurionInventory*", "server/confirmedEquipmentVisual*", "server/crafting*", "server/aurionLoot*", "server/playerUi*", "server/routers.ts", "server/db.ts", "server/_core/context.ts", "server/_core/sdk.ts", "server/_core/oauth.ts", "shared/playerUi*", "shared/aurionInventory*", "shared/crafting*", "drizzle/*.sql", "drizzle/meta/_journal.json", "drizzle/schema.ts", "drizzle/aurionWorldFoundationSchema.ts", "drizzle.config.ts", "scripts/aurionProductionSchema*", ".github/workflows/aim535-item-manipulation-runtime.yml"]
   push:
     branches: [main]
-    paths: ["server/aurionItemManipulation*", "drizzle/**"]
+    paths: ["server/aurionItemManipulation*", "server/aurionInventory*", "server/confirmedEquipmentVisual*", "server/crafting*", "server/aurionLoot*", "server/playerUi*", "server/routers.ts", "server/db.ts", "server/_core/context.ts", "server/_core/sdk.ts", "server/_core/oauth.ts", "shared/playerUi*", "shared/aurionInventory*", "shared/crafting*", "drizzle/*.sql", "drizzle/meta/_journal.json", "drizzle/schema.ts", "drizzle/aurionWorldFoundationSchema.ts", "drizzle.config.ts", "scripts/aurionProductionSchema*", ".github/workflows/aim535-item-manipulation-runtime.yml"]
 
 permissions:
   contents: read
@@ -47,6 +47,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Prove selective CI impact contract
+        run: node --test scripts/ci/workflow-impact.test.mjs
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile
       - name: Prove exact head and migration chain
