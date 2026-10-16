@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import groupConfig from "./playwright.aurion-groups.config";
-import migrationConfig from "./playwright.aurion-migration.config";
+import groupConfig from "../playwright.aurion-groups.config";
+import migrationConfig from "../playwright.aurion-migration.config";
 
 describe("AIM-259 five-session browser render contract", () => {
   it("uses the repository's pinned SwiftShader path for real software WebGL", () => {
