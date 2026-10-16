@@ -216,6 +216,10 @@ describe("open world session ownership", () => {
     const dispose = vi.fn();
     await act(async () => fixture.rendererRequests[0]!.resolve({ handle: { dispose }, evidence: { protocol: "ax1-renderer.v1", requested: "webgl2", backend: "webgl2", fallback: "disabled" } }));
     expect(fixture.engines).toHaveLength(1);
+    // The preceding welcome could not start graphics before a renderer existed;
+    // the NEXT server snapshot starts graphics, never an invented local snapshot.
+    expect(fixture.engines[0]!.start).not.toHaveBeenCalled();
+    act(() => fixture.snapshots[0]!({ ...confirmed, snapshotSeq: 8, tick: 102 }));
     expect(fixture.engines[0]!.start).toHaveBeenCalled();
   });
 
