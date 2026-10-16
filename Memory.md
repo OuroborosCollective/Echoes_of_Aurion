@@ -2401,3 +2401,23 @@ Decisions: Port only `client/src/components/ArchiveDashboard.tsx` UI to fresh br
 Evidence: Source PR #979 head `77b5060eabb519bf0b9dda684977cc04713f2dd9`; no new-head success claim before CI. Exact proof pending.
 Learned: Preserve narrow presentational benefit; never merge unrelated benchmark receipts as accidental collateral.
 Open: Exact-head unit/type/build/browser/readback before merge.
+
+
+### 2026-10-16 — PR #986 — fix(ui): isolated Archive Dashboard refresh feedback (from #979)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=986 merge=f38eafbb543805cda04878dc41e6ce0b7fd07690 -->
+Task: Merge PR #986 into `main` — fix(ui): isolated Archive Dashboard refresh feedback (from #979).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/components/ArchiveDashboard.test.tsx`
+- `client/src/components/ArchiveDashboard.tsx`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/986
+- Merge commit: `f38eafbb543805cda04878dc41e6ce0b7fd07690`
+- PR head: `9806b3eef7a15daec6625ff76dfafcd7ec3f66dd`
+- Merged at: 2026-10-16T21:58:46Z
+- Post-merge workflow run: 38972899060
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
