@@ -2447,3 +2447,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-16 — PR #990 — ci: restrict unrelated heavyweight Aurion specialty suites by change impact
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=990 merge=97e9522fc85b45f8f7f1ca108fb09ab1797f18db -->
+Task: Merge PR #990 into `main` — ci: restrict unrelated heavyweight Aurion specialty suites by change impact.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aim259-group-instances.yml`
+- `.github/workflows/aim292-npc-multi-memory.yml`
+- `.github/workflows/aim535-item-manipulation-runtime.yml`
+- `scripts/ci/workflow-impact.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/990
+- Merge commit: `97e9522fc85b45f8f7f1ca108fb09ab1797f18db`
+- PR head: `c704a9bd1b8e6ecae2578819235b4587ae51b7d7`
+- Merged at: 2026-10-16T22:33:56Z
+- Post-merge workflow run: 38976510420
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
