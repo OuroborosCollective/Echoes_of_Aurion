@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2024-11-20 - Performance Improvements in Wolfram CAG Probes
+**Learning:** Wolfram Language `Differences` automatically handles vectorization. Passing the transposed matrix to `Differences` is vastly more efficient than mapping `Differences` over the rows, and mapping strings over arrays and joining them sequentially leads to poor V8 garbage collection behavior compared to pre-allocating an array and populating it with a simple `for` loop.
+**Action:** When constructing strings from very large arrays or computing horizontal matrix bounds in CAG, use pre-allocated JS arrays (`new Array(length)`) with explicit loops, and leverage Wolfram vectorized functions like `Differences[Transpose[m]]` rather than mapping functions in closures.

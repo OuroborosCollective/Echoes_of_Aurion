@@ -135,7 +135,11 @@ export function summarizeWorldChunkTerrain(chunk: BaseWorldChunk): AurionTerrain
 export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
   const matrix = canonicalTerrainMatrix(chunk);
   const summary = summarizeWorldChunkTerrain(chunk);
-  const rows = matrix.map(row => `{${row.join(",")}}`).join(",");
+  const matrixRows = new Array(matrix.length);
+  for (let i = 0; i < matrix.length; i++) {
+    matrixRows[i] = `{${matrix[i]!.join(",")}}`;
+  }
+  const rows = matrixRows.join(",");
   const code = [
     `m={${rows}}`,
     "dx=Abs[Differences[Transpose[m]]]",
@@ -189,17 +193,20 @@ export function summarizeWorldChunkTexturization(chunk: BaseWorldChunk): AurionT
  */
 export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
   const summary = summarizeWorldChunkTexturization(chunk);
-  const surfaces = chunk.tiles.map(t => {
+  const mappedSurfaces = new Array(chunk.tiles.length);
+  for (let i = 0; i < chunk.tiles.length; i++) {
+    const t = chunk.tiles[i]!;
     switch(t.surface) {
-        case "grass": return 1;
-        case "riverbank": return 2;
-        case "stone": return 3;
-        case "forest_floor": return 4;
-        case "ash": return 5;
-        case "ruin_path": return 6;
+        case "grass": mappedSurfaces[i] = 1; break;
+        case "riverbank": mappedSurfaces[i] = 2; break;
+        case "stone": mappedSurfaces[i] = 3; break;
+        case "forest_floor": mappedSurfaces[i] = 4; break;
+        case "ash": mappedSurfaces[i] = 5; break;
+        case "ruin_path": mappedSurfaces[i] = 6; break;
         default: throw new Error(`unmapped surface: ${t.surface}`);
     }
-  }).join(",");
+  }
+  const surfaces = mappedSurfaces.join(",");
   const code = [
     `surfaces={${surfaces}}`,
     `{Length[surfaces], Count[surfaces, 1], Count[surfaces, 2], Count[surfaces, 3], Count[surfaces, 4], Count[surfaces, 5], Count[surfaces, 6]}`
@@ -303,14 +310,21 @@ export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk):
   const surfaceMatrix = canonicalSurfaceMatrix(chunk);
   const summary = summarizeWorldChunkTerrainContinuity(chunk);
 
-  const hRows = heightMatrix.map(row => `{${row.join(",")}}`).join(",");
-  const sRows = surfaceMatrix.map(row => `{${row.join(",")}}`).join(",");
+  const heightRows = new Array(heightMatrix.length);
+  const surfaceRows = new Array(surfaceMatrix.length);
+  for (let i = 0; i < heightMatrix.length; i++) {
+    heightRows[i] = `{${heightMatrix[i]!.join(",")}}`;
+    surfaceRows[i] = `{${surfaceMatrix[i]!.join(",")}}`;
+  }
+
+  const hRows = heightRows.join(",");
+  const sRows = surfaceRows.join(",");
 
   const code = [
     `h={${hRows}}`,
     `s={${sRows}}`,
     "var=Round[Variance[Flatten[h]]]",
-    "sdx=Flatten[Map[Differences,s]]",
+    "sdx=Flatten[Differences[Transpose[s]]]",
     "sdz=Flatten[Differences[s]]",
     "trans=Count[sdx,x_/;x!=0]+Count[sdz,x_/;x!=0]",
     "{var,trans}"
