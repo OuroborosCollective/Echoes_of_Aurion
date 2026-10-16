@@ -2324,3 +2324,41 @@ Task: Build the isolated ARM64 Aurion Preview APK without owner SDK/Inspector wo
 Evidence: Local source `05bdc82c37fc6b0bdaa784b458a1b1c35710edc0`, tree `ba5090eefd408b039ec115af1db4b2d21059ce40`; 10 Node regressions and 15 Godot/static checks passed. Actual APK export and independent hash/package/signature readback passed; APK SHA256 `00fab14080b0e2a6e1bc6fd7795f98cfd18142192958445ab8769a4a1e2454d1`. A deliberately modified APK was rejected by apksigner. Editor SHA256 `8d106cbe6144c2dc7e881d61d2429c1a8a76e6b22ef48bd5e48dcf934953f71e`; toolchain lock SHA256 `d44944e3b0d6f9c9b5801c19ba13b1c5030be873a109e1318ce183ab8d438adf`. Final revision-bound CI APK and all repository gates are read back in https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/965 before merge; this local binary is a separate diagnostic build.
 Learned: Android export needs ETC2/ASTC import and an app icon. Classic export cannot override template SDK via Gradle options. The pinned 4.7.2 template actually declares minSdk 24 / targetSdk 36; aapt 35 omits launchable-activity for its valid exported activity-alias, so the concrete MAIN/LAUNCHER alias and target are verified from the manifest. Regressions cover these boundaries. Immutable SDK receipt survives export.
 Open: Physical Tab-A9 installation/start, Android download usability, device performance and native login remain unverified. Debug keys stay outside git; different fresh runners may require a Preview reinstall because signatures differ. Final distributed APK must carry the final CI source revision and its own hash. SDK license acceptance is not claimed; no sdkmanager or Gradle build ran. Next: deliver the independently verified CI APK and obtain a real device screenshot/build ID; G09 login and G34 stable signing follow separately.
+
+
+### 2026-10-15 — PR #969 — feat(auth): define the native session wire contract
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=969 merge=fd85b56d6a65f652c8463567f6ca76a5c888952f -->
+Task: Merge PR #969 into `main` — feat(auth): define the native session wire contract.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `shared/nativeAuthContract.test.ts`
+- `shared/nativeAuthContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/969
+- Merge commit: `fd85b56d6a65f652c8463567f6ca76a5c888952f`
+- PR head: `a1e3e987d632d3877d6467268fb7571b6a0f4999`
+- Merged at: 2026-10-15T21:56:16Z
+- Post-merge workflow run: 38813575814
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-15 — PR #972 — fix(godot): verify launcher target activity name
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=972 merge=c46bd567750ed52ceab8aa4a005e7c195b73c71e -->
+Task: Merge PR #972 into `main` — fix(godot): verify launcher target activity name.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `scripts/godot/apk-readback.mjs`
+- `scripts/godot/apk-readback.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/972
+- Merge commit: `c46bd567750ed52ceab8aa4a005e7c195b73c71e`
+- PR head: `0f7c38379d563601637a5b325d9a0e5f8d0d8647`
+- Merged at: 2026-10-15T22:30:40Z
+- Post-merge workflow run: 38817603429
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.

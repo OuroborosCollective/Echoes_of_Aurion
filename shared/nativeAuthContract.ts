@@ -1,17 +1,121 @@
 import { z } from "zod";
 
-export const NATIVE_AUTH_PROTOCOL_VERSION = "aurion.native-auth.v1" as const;
-export const NATIVE_AUTH_PLATFORM = "android" as const;
-export const NATIVE_AUTH_RETURN_ID = "arelogic.space/app/auth/callback" as const;
-export const NATIVE_AUTH_PKCE_METHOD = "S256" as const;
+export const NATIVE_AUTH_CONTRACT_VERSION = "aurion.native-auth.v1" as const;
+export const NATIVE_AUTH_RETURN_ID = "aurion.android.app-link.v1" as const;
+export const NATIVE_AUTH_ACCESS_TTL_SECONDS = 15 * 60;
+export const NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const NATIVE_AUTH_HANDOFF_TTL_SECONDS = 60;
+export const NATIVE_AUTH_TRANSACTION_TTL_SECONDS = 10 * 60;
 
-export const NATIVE_AUTH_TRANSACTION_TTL_MS = 10 * 60 * 1_000;
-export const NATIVE_AUTH_HANDOFF_CODE_TTL_MS = 60 * 1_000;
-export const NATIVE_AUTH_ACCESS_TOKEN_TTL_MS = 15 * 60 * 1_000;
-export const NATIVE_AUTH_REFRESH_TOKEN_ABSOLUTE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
-export const NATIVE_AUTH_REFRESH_TOKEN_IDLE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+const base64Url = /^[A-Za-z0-9_-]+$/;
+const opaqueSecretSchema = z.string().min(43).max(256).regex(base64Url);
+const transactionIdSchema = z.string().min(32).max(128).regex(base64Url);
+const requestStateSchema = z.string().min(43).max(128).regex(base64Url);
+const appBuildSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(120)
+  .regex(/^[A-Za-z0-9._-]+$/);
+const pkceChallengeSchema = z.string().length(43).regex(base64Url);
+const pkceVerifierSchema = z
+  .string()
+  .min(43)
+  .max(128)
+  .regex(/^[A-Za-z0-9._~-]+$/);
 
-export const nativeAuthErrorCodeValues = [
+const httpsBrowserUrlSchema = z.string().url().superRefine((value, ctx) => {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    ctx.addIssue({ code: "custom", message: "HTTPS_BROWSER_URL_REQUIRED" });
+    return;
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.origin !== "https://arelogic.space" ||
+    !/^\/api\/native-auth\/browser\/[A-Za-z0-9_-]{32,128}$/.test(
+      parsed.pathname,
+    ) ||
+    parsed.search !== "" ||
+    parsed.username !== "" ||
+    parsed.password !== "" ||
+    parsed.hash !== ""
+  ) {
+    ctx.addIssue({ code: "custom", message: "HTTPS_BROWSER_URL_REQUIRED" });
+  }
+});
+
+export const nativeAuthStartRequestSchema = z.strictObject({
+  version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+  codeChallenge: pkceChallengeSchema,
+  codeChallengeMethod: z.literal("S256"),
+  requestState: requestStateSchema,
+  appBuild: appBuildSchema,
+  platform: z.literal("android"),
+  returnId: z.literal(NATIVE_AUTH_RETURN_ID),
+});
+
+export const nativeAuthStartResponseSchema = z.strictObject({
+  version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+  transactionId: transactionIdSchema,
+  browserUrl: httpsBrowserUrlSchema,
+  expiresInSeconds: z.literal(NATIVE_AUTH_TRANSACTION_TTL_SECONDS),
+}).superRefine((value, ctx) => {
+  try {
+    if (new URL(value.browserUrl).pathname.split("/").at(-1) !== value.transactionId) {
+      ctx.addIssue({ code: "custom", message: "TRANSACTION_URL_MISMATCH" });
+    }
+  } catch {
+    // The field-level schema owns malformed URL reporting.
+  }
+});
+
+export const nativeAuthCallbackQuerySchema = z.strictObject({
+  code: opaqueSecretSchema,
+  state: requestStateSchema,
+});
+
+export const nativeAuthExchangeRequestSchema = z.strictObject({
+  version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+  transactionId: transactionIdSchema,
+  code: opaqueSecretSchema,
+  codeVerifier: pkceVerifierSchema,
+  appBuild: appBuildSchema,
+});
+
+export const nativeAuthTokenPairSchema = z
+  .strictObject({
+    version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+    tokenType: z.literal("Bearer"),
+    accessToken: opaqueSecretSchema,
+    accessExpiresInSeconds: z.literal(NATIVE_AUTH_ACCESS_TTL_SECONDS),
+    refreshToken: opaqueSecretSchema,
+    refreshAbsoluteRemainingSeconds: z
+      .number()
+      .int()
+      .positive()
+      .max(NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS),
+    refreshIdleExpiresInSeconds: z.literal(NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS),
+  })
+  .refine((value) => value.accessToken !== value.refreshToken, {
+    message: "NATIVE_AUTH_TOKENS_MUST_DIFFER",
+  });
+
+export const nativeAuthRefreshRequestSchema = z.strictObject({
+  version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+  refreshToken: opaqueSecretSchema,
+});
+
+export const nativeAuthRevokeRequestSchema = z.strictObject({
+  version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+  refreshToken: opaqueSecretSchema,
+  scope: z.enum(["session", "all_sessions"]),
+});
+
+export const nativeAuthErrorCodes = [
   "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE",
   "NATIVE_AUTH_TRANSACTION_INVALID",
   "NATIVE_AUTH_STATE_MISMATCH",
@@ -25,57 +129,15 @@ export const nativeAuthErrorCodeValues = [
   "NATIVE_AUTH_RATE_LIMITED",
 ] as const;
 
-export const nativeAuthErrorCodeSchema = z.enum(nativeAuthErrorCodeValues);
-export type NativeAuthErrorCode = z.infer<typeof nativeAuthErrorCodeSchema>;
+export const nativeAuthErrorSchema = z.strictObject({
+  version: z.literal(NATIVE_AUTH_CONTRACT_VERSION),
+  error: z.enum(nativeAuthErrorCodes),
+});
 
-const nativeAuthOpaqueValueSchema = z.string().regex(/^aurion_native_[A-Za-z0-9_-]{43}$/);
-const nativeAuthBuildSchema = z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/);
-const nativeAuthVerifierSchema = z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/);
-const nativeAuthChallengeSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-
-export const nativeAuthStartRequestSchema = z.object({
-  protocolVersion: z.literal(NATIVE_AUTH_PROTOCOL_VERSION),
-  platform: z.literal(NATIVE_AUTH_PLATFORM),
-  appBuild: nativeAuthBuildSchema,
-  returnId: z.literal(NATIVE_AUTH_RETURN_ID),
-  requestState: nativeAuthOpaqueValueSchema,
-  codeChallenge: nativeAuthChallengeSchema,
-  codeChallengeMethod: z.literal(NATIVE_AUTH_PKCE_METHOD),
-}).strict();
 export type NativeAuthStartRequest = z.infer<typeof nativeAuthStartRequestSchema>;
-
-export const nativeAuthStartResponseSchema = z.object({
-  browserUrl: z.string().url(),
-  expiresAt: z.string().datetime({ offset: true }),
-}).strict();
 export type NativeAuthStartResponse = z.infer<typeof nativeAuthStartResponseSchema>;
-
-export const nativeAuthExchangeRequestSchema = z.object({
-  handoffCode: nativeAuthOpaqueValueSchema,
-  requestState: nativeAuthOpaqueValueSchema,
-  codeVerifier: nativeAuthVerifierSchema,
-}).strict();
 export type NativeAuthExchangeRequest = z.infer<typeof nativeAuthExchangeRequestSchema>;
-
-export const nativeAuthTokenResponseSchema = z.object({
-  accessToken: nativeAuthOpaqueValueSchema,
-  accessExpiresAt: z.string().datetime({ offset: true }),
-  refreshToken: nativeAuthOpaqueValueSchema,
-  refreshExpiresAt: z.string().datetime({ offset: true }),
-}).strict();
-export type NativeAuthTokenResponse = z.infer<typeof nativeAuthTokenResponseSchema>;
-
-export const nativeAuthRefreshRequestSchema = z.object({
-  refreshToken: nativeAuthOpaqueValueSchema,
-}).strict();
+export type NativeAuthTokenPair = z.infer<typeof nativeAuthTokenPairSchema>;
 export type NativeAuthRefreshRequest = z.infer<typeof nativeAuthRefreshRequestSchema>;
-
-export const nativeAuthRevokeRequestSchema = z.object({
-  refreshToken: nativeAuthOpaqueValueSchema,
-}).strict();
 export type NativeAuthRevokeRequest = z.infer<typeof nativeAuthRevokeRequestSchema>;
-
-export const nativeAuthErrorResponseSchema = z.object({
-  error: nativeAuthErrorCodeSchema,
-}).strict();
-export type NativeAuthErrorResponse = z.infer<typeof nativeAuthErrorResponseSchema>;
+export type NativeAuthError = z.infer<typeof nativeAuthErrorSchema>;
