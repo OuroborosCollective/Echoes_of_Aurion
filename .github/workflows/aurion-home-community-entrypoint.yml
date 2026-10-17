@@ -8,6 +8,7 @@ on:
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
+      - "client/src/components/CommunityOverlay.test.tsx"
       - "e2e/guest-smoke.spec.ts"
       - ".github/workflows/aurion-home-community-entrypoint.yml"
   push:
@@ -18,6 +19,7 @@ on:
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
+      - "client/src/components/CommunityOverlay.test.tsx"
       - "e2e/guest-smoke.spec.ts"
       - ".github/workflows/aurion-home-community-entrypoint.yml"
 
@@ -44,7 +46,7 @@ jobs:
       - run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
       - run: pnpm install --frozen-lockfile
       - name: Focused component contract
-        run: pnpm exec vitest run client/src/pages/Home.test.tsx --reporter=verbose
+        run: pnpm exec vitest run client/src/pages/Home.test.tsx client/src/components/CommunityOverlay.test.tsx --reporter=verbose
       - name: TypeScript and production build
         run: pnpm check && pnpm build
       - name: Install Chromium
@@ -71,14 +73,14 @@ jobs:
             timeout: 30_000,
             workers: 1,
             retries: 0,
-            reporter: "list",
+            reporter: [["list"], ["json", { outputFile: "test-results/home-community-results.json" }]],
             use: {
               baseURL: "http://127.0.0.1:3000",
               browserName: "chromium",
               headless: true,
               launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-dev-shm-usage"] },
               screenshot: "only-on-failure",
-              trace: "retain-on-failure",
+              trace: "on",
             },
           });
           EOF
