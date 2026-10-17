@@ -28,8 +28,37 @@ describe("native HTTP session boundary",()=>{
  it("fails closed on consumed handoff without returning input secrets",async()=>{const x=await setup({ready:async()=>true,exchange:async()=>{throw Error("NATIVE_AUTH_CODE_CONSUMED")}});try{
  const r=await post(x.url+"/exchange",request);expect(r.status).toBe(409);const txt=await r.text();expect(txt).not.toContain(request.code);expect(txt).not.toContain(request.codeVerifier);expect(JSON.parse(txt).error).toBe("NATIVE_AUTH_CODE_CONSUMED");
  }finally{await x.close()}});
- it("does not enable browser handoff before trusted login integration",async()=>{const x=await setup({ready:async()=>true});try{
- expect((await post(x.url+"/start",{version:VERSION})).status).toBe(503);
- expect((await fetch(x.url+"/browser/"+request.transactionId)).status).toBe(503);
+ it("creates a PKCE-bound start response only for the existing strict contract",async()=>{
+ const startRequest={version:VERSION,codeChallenge:"c".repeat(43),codeChallengeMethod:"S256",requestState:secret("s"),appBuild:"godot-android.1",platform:"android",returnId:"aurion.android.app-link.v1"};
+ const start=vi.fn(async()=>({transactionId:secret("t"),expiresAtMs:Date.now()+600_000}));
+ const browserTransaction=vi.fn(async()=>true);
+ const x=await setup({ready:async()=>true,start,browserTransaction});
+ try {
+  const ok=await post(x.url+"/start",startRequest);
+  expect(ok.status).toBe(200);
+  expect(await ok.json()).toEqual({version:VERSION,transactionId:secret("t"),browserUrl:"https://arelogic.space/api/native-auth/browser/"+secret("t"),expiresInSeconds:600});
+  expect(ok.headers.get("set-cookie")).toBeNull();
+  expect(start).toHaveBeenCalledWith(startRequest);
+  for(const bad of [{...startRequest,returnId:"https://evil.example/callback"},{...startRequest,codeChallengeMethod:"plain"},{...startRequest,extra:"inject"},{...startRequest,codeChallenge:"short"},{...startRequest,appBuild:"untrusted/app"}]){
+   const result=await post(x.url+"/start",bad);
+   expect(result.status).toBe(400);
+   expect(await result.json()).toEqual({version:VERSION,error:"NATIVE_AUTH_REQUEST_INVALID"});
+  }
+  expect(start).toHaveBeenCalledTimes(1);
+  const browser=await fetch(x.url+"/browser/"+secret("t"));
+  expect(browser.status).toBe(200);
+  expect(browser.headers.get("content-type")).toContain("text/html");
+  const page=await browser.text();
+  expect(page).not.toContain(startRequest.requestState);
+  expect(page).not.toContain("accessToken");
+  expect(page).not.toContain("refreshToken");
+  expect(browserTransaction).toHaveBeenCalledWith(secret("t"));
+  const absent=await fetch(x.url+"/browser/"+"invalid");
+  expect(absent.status).toBe(401);
+ }finally{await x.close()}
+ });
+ it("fails closed for all browser-start surfaces without release configuration",async()=>{const x=await setup();try{
+  expect((await post(x.url+"/start",{version:VERSION})).status).toBe(503);
+  expect((await fetch(x.url+"/browser/"+request.transactionId)).status).toBe(503);
  }finally{await x.close()}});
 });
