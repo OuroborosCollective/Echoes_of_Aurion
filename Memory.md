@@ -2575,3 +2575,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-17 — Material-aware blade silhouettes (draft integration)
+Status: PARTIAL
+Task: Integrate useful Gemini-inspired silhouettes into the canonical Aurion visual pipeline.
+Decisions: Preserve ACEG, server-owned Loot V2, receipts and confirmed VisualItemDescriptor; implement five deterministic presentation-only profiles from confirmed material and morphology seed; bound blade triangles at LOD0/1/2 to 1600/800/300; avoid economy substitutions and gameplay mutations.
+Touched surfaces: client/src/xaurion/core/VisualBladeProfile.ts, VisualBladeProfile.test.ts, VisualItemGeometryCompiler.ts, VisualItemGeometryCompiler.test.ts.
+Evidence: Focused standalone TypeScript shape/profile assertions passed locally; repository Vitest/TypeScript, CI, Godot/runtime, and native device readbacks remain pending.
+Learned: New visual variation belongs downstream of the confirmed descriptor, not in a parallel loot or capability engine.
+Open: Check TS/build, geometry runtime and CI against exact PR SHA; implement a separate server-evidence-bound resource provenance slice only with authoritative material receipts.
+Next safe step: Verify focused tests, TypeScript and geometry LOD limits; preserve draft status until green gates.
