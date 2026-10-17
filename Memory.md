@@ -2595,3 +2595,13 @@ Evidence: GitHub Actions jobs 117298577243, 117298577448, 117298577441 on PR hea
 Learned: New Aurion-owned visual sources need their own source identity outside historical donor inventory roots, not a fabricated donor entry.
 Open: Exact-head CI, build/runtime and merge verification.
 Next safe step: Run relevant tests, typecheck and runtime candidate; merge only after readback.
+
+### 2026-10-17 — PR #996 confirmed chunk resource source evidence
+Status: PARTIAL
+Task: Extend the regional economy safely without duplicating Loot V2, ACEG or authoritative chunk state.
+Decisions: Project a SHA-256-bound, read-only resource source summary from Aurion's already-materialized chunk read model; treat generic ore solely as ore, and do not infer iron, steel, refined inventories or imported supplies. Database readback fails closed when DB is unavailable. No reward, material entitlement or gameplay state mutation.
+Touched surfaces: server/aurionChunkResourceEvidence.ts, server/aurionChunkResourceEvidence.test.ts, server/db.ts.
+Evidence: Draft PR #996 head 4580328356f25afa77899e934e07079de8a79d6e; GitHub workflow checks for exact head pending. Source tests assert replay, depletion, zero-resource and tampering/ingredient fail-closed conditions; not yet certified by green CI.
+Learned: Base chunk sources represent possible raw-resource collection points, not authoritative stocks of processed materials. A mined or traded item needs its own receipt and ownership before becoming an ingredient.
+Open: Verify typecheck, focused regression, donor/build and runtime readbacks. Separate later integration must bind crafting to verified item/material provenance.
+Next safe step: Read back focused CI on PR #996, repair any regression, then review stacked PR dependencies before merge.
