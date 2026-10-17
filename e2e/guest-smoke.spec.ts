@@ -28,7 +28,11 @@ test("guest opens Home Events through the accessible community overlay", async (
   await expect(eventsButton).toHaveAttribute("aria-haspopup", "dialog");
   await eventsButton.click();
   const community = page.getByLabel("Aurion Gemeinschaft");
-  await expect(community.getByRole("dialog", { name: "Community-Events", exact: true })).toBeVisible();
+  const eventsDialog = community.getByRole("dialog", { name: "Community-Events", exact: true });
+  await expect(eventsDialog).toBeVisible();
+  await expect(eventsDialog).toBeFocused();
+  await community.getByRole("button", { name: "Community-Konsole schließen", exact: true }).click();
+  await expect(eventsButton).toBeFocused();
   await expect(page.locator("canvas")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
