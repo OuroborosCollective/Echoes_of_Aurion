@@ -2870,3 +2870,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #1033 — fix(auth): revoke all native sessions for confirmed user (#967)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1033 merge=b1842d22ba5b96e6836c8944150d38b089e16c3c -->
+Task: Merge PR #1033 into `main` — fix(auth): revoke all native sessions for confirmed user (#967).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `server/nativeAuthHttp.test.ts`
+- `server/nativeAuthHttp.ts`
+- `server/nativeAuthPersistence.ts`
+- `server/nativeAuthPersistenceMariaDb.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1033
+- Merge commit: `b1842d22ba5b96e6836c8944150d38b089e16c3c`
+- PR head: `eceaaad2fb51e7741e0e87749a9d8c1b9d8ed797`
+- Merged at: 2026-10-17T23:40:23Z
+- Post-merge workflow run: 39079924730
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
