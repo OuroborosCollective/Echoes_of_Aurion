@@ -3,6 +3,7 @@ import {
   NATIVE_AUTH_ACCESS_TTL_SECONDS,
   NATIVE_AUTH_CONTRACT_VERSION,
   NATIVE_AUTH_HANDOFF_TTL_SECONDS,
+  NATIVE_AUTH_RETURN_ID,
   NATIVE_AUTH_REFRESH_ABSOLUTE_TTL_SECONDS,
   NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS,
   NATIVE_AUTH_TRANSACTION_TTL_SECONDS,
@@ -22,6 +23,7 @@ import {
 import {
   createNativeAuthSecret, digestNativeAuthSecret, nativeAuthPkceMatches, nativeAuthSecretMatches,
 } from "./nativeAuthProtocol";
+import { openNativeAuthRequestState, sealNativeAuthRequestState } from "./nativeAuthStateSeal";
 import { getDb } from "./db";
 
 function effectiveNow(nowMs?: number): number {
@@ -56,12 +58,55 @@ export async function startNativeAuthTransaction(raw: NativeAuthStartRequest, no
   await db.insert(aurionNativeAuthTransactions).values({
     id: transactionId,
     requestStateDigest: digestNativeAuthSecret(request.requestState),
+    requestStateSealed: sealNativeAuthRequestState(request.requestState, transactionId, request.appBuild, request.returnId),
+    returnId: request.returnId,
     codeChallenge: request.codeChallenge,
     appBuild: request.appBuild,
     createdAtMs: now,
     expiresAtMs,
   });
   return { transactionId, expiresAtMs };
+}
+
+/**
+ * Read a pending browser transaction from the real MariaDB authority.
+ * Missing, expired, issued and consumed transactions are intentionally indistinguishable.
+ */
+export async function isNativeAuthBrowserTransactionPending(transactionId: string, nowMs?: number): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(transactionId)) return false;
+  const now = effectiveNow(nowMs);
+  const db = await requireNativeAuthDb();
+  const rows = await db.select({
+    expiresAtMs: aurionNativeAuthTransactions.expiresAtMs,
+    issuedAtMs: aurionNativeAuthTransactions.issuedAtMs,
+    consumedAtMs: aurionNativeAuthTransactions.consumedAtMs,
+  }).from(aurionNativeAuthTransactions).where(eq(aurionNativeAuthTransactions.id, transactionId)).limit(1);
+  const row = rows[0];
+  return !!row && row.expiresAtMs > now && row.issuedAtMs === null && row.consumedAtMs === null;
+}
+
+/**
+ * Return decrypted State ONLY within the server's authenticated browser-confirmation
+ * handler. This never enters a normal API body, cookie or log.
+ */
+export async function readNativeAuthRequestStateForBrowser(transactionId: string, nowMs?: number): Promise<string> {
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(transactionId)) throw new Error("NATIVE_AUTH_TRANSACTION_INVALID");
+  const now = effectiveNow(nowMs);
+  const db = await requireNativeAuthDb();
+  const rows = await db.select().from(aurionNativeAuthTransactions)
+    .where(eq(aurionNativeAuthTransactions.id, transactionId)).limit(1);
+  const row = rows[0];
+  if (!row || row.expiresAtMs <= now || row.returnId !== NATIVE_AUTH_RETURN_ID) {
+    throw new Error("NATIVE_AUTH_TRANSACTION_INVALID");
+  }
+  if (row.issuedAtMs !== null || row.consumedAtMs !== null) {
+    throw new Error("NATIVE_AUTH_CODE_CONSUMED");
+  }
+  const state = openNativeAuthRequestState(row.requestStateSealed, row.id, row.appBuild, row.returnId);
+  if (!nativeAuthSecretMatches(state, row.requestStateDigest)) {
+    throw new Error("NATIVE_AUTH_TRANSACTION_INVALID");
+  }
+  return state;
 }
 
 /** Call ONLY after Aurion's trusted browser-login/OIDC boundary authenticated userId. */
@@ -82,6 +127,10 @@ export async function issueNativeAuthHandoffAfterVerifiedBrowserLogin(
       .where(eq(aurionNativeAuthTransactions.id, transactionId)).for("update"))[0];
     if (!row || row.expiresAtMs <= now) throw new Error("NATIVE_AUTH_TRANSACTION_INVALID");
     if (!nativeAuthSecretMatches(requestState, row.requestStateDigest)) throw new Error("NATIVE_AUTH_STATE_MISMATCH");
+    if (row.returnId !== NATIVE_AUTH_RETURN_ID ||
+        !nativeAuthSecretMatches(requestState, digestNativeAuthSecret(openNativeAuthRequestState(row.requestStateSealed, row.id, row.appBuild, row.returnId)))) {
+      throw new Error("NATIVE_AUTH_TRANSACTION_INVALID");
+    }
     if (row.issuedAtMs !== null || row.handoffCodeDigest !== null) throw new Error("NATIVE_AUTH_CODE_CONSUMED");
     const handoffCode = createNativeAuthSecret();
     const expiresAtMs = Math.min(row.expiresAtMs, deadlineAfter(now, NATIVE_AUTH_HANDOFF_TTL_SECONDS * 1000));

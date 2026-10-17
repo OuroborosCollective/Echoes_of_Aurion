@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { NATIVE_AUTH_ACCESS_TTL_SECONDS, NATIVE_AUTH_HANDOFF_TTL_SECONDS, NATIVE_AUTH_CONTRACT_VERSION, NATIVE_AUTH_RETURN_ID } from "../shared/nativeAuthContract";
 import { createNativeAuthSecret, nativeAuthCodeChallengeFor } from "./nativeAuthProtocol";
 import {
-  authenticateNativeAuthAccess, exchangeNativeAuthHandoff,
+  authenticateNativeAuthAccess, exchangeNativeAuthHandoff, isNativeAuthBrowserTransactionPending,
   issueNativeAuthHandoffAfterVerifiedBrowserLogin, refreshNativeAuthSession,
   revokeNativeAuthSession, startNativeAuthTransaction,
 } from "./nativeAuthPersistence";
@@ -12,6 +12,7 @@ const suite = process.env.AURION_NATIVE_AUTH_E2E === "1" && !!process.env.DATABA
 const NOW = 1_792_000_000_000;
 const USER = 9671001;
 const APP_BUILD = "godot-native-auth-e2e";
+const nativeSealKeyBeforeTests = process.env.NATIVE_AUTH_STATE_SEAL_KEY;
 const VERIFIER = "v".repeat(43);
 
 suite("Aurion native auth in isolated MariaDB", () => {
@@ -28,6 +29,7 @@ suite("Aurion native auth in isolated MariaDB", () => {
     await pool.query("DELETE FROM aurionNativeAuthTransactions WHERE appBuild = ?", [APP_BUILD]);
   }
   beforeAll(async () => {
+    process.env.NATIVE_AUTH_STATE_SEAL_KEY = Buffer.alloc(32, 17).toString("base64url");
     pool = createPool(process.env.DATABASE_URL!);
     const [rows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS dbName");
     if (!String(rows[0]?.dbName ?? "").endsWith("_test")) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
@@ -35,7 +37,11 @@ suite("Aurion native auth in isolated MariaDB", () => {
     await cleanup();
   });
   afterEach(async () => { if (isolated) await cleanup(); });
-  afterAll(async () => { if (pool) { if (isolated) await cleanup(); await pool.end(); } });
+  afterAll(async () => {
+    if (pool) { if (isolated) await cleanup(); await pool.end(); }
+    if (nativeSealKeyBeforeTests === undefined) delete process.env.NATIVE_AUTH_STATE_SEAL_KEY;
+    else process.env.NATIVE_AUTH_STATE_SEAL_KEY = nativeSealKeyBeforeTests;
+  });
   async function handoff(at = NOW) {
     const requestState = createNativeAuthSecret();
     const start = await startNativeAuthTransaction({
@@ -46,6 +52,25 @@ suite("Aurion native auth in isolated MariaDB", () => {
     const issued = await issueNativeAuthHandoffAfterVerifiedBrowserLogin(start.transactionId, USER, requestState, at + 100);
     return { start, issued, requestState, exchange: { version: NATIVE_AUTH_CONTRACT_VERSION, transactionId: start.transactionId, code: issued.handoffCode, codeVerifier: VERIFIER, appBuild: APP_BUILD } };
   }
+
+  it("reads a real pending browser transaction and rejects expiry and issuance", async () => {
+    const requestState = createNativeAuthSecret();
+    const created = await startNativeAuthTransaction({
+      version: NATIVE_AUTH_CONTRACT_VERSION, platform: "android",
+      appBuild: APP_BUILD, returnId: NATIVE_AUTH_RETURN_ID, requestState,
+      codeChallenge: nativeAuthCodeChallengeFor(VERIFIER), codeChallengeMethod: "S256",
+    }, NOW);
+    expect(await isNativeAuthBrowserTransactionPending(created.transactionId, NOW + 10)).toBe(true);
+    expect(await isNativeAuthBrowserTransactionPending(created.transactionId, created.expiresAtMs)).toBe(false);
+    expect(await isNativeAuthBrowserTransactionPending("x".repeat(43), NOW + 10)).toBe(false);
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT * FROM aurionNativeAuthTransactions WHERE id = ?", [created.transactionId]);
+    expect(rows).toHaveLength(1);
+    expect(JSON.stringify(rows)).not.toContain(requestState);
+    expect(rows[0].returnId).toBe(NATIVE_AUTH_RETURN_ID);
+    expect(rows[0].requestStateSealed).toMatch(/^[A-Za-z0-9_-]{90,256}$/);
+    await issueNativeAuthHandoffAfterVerifiedBrowserLogin(created.transactionId, USER, requestState, NOW + 100);
+    expect(await isNativeAuthBrowserTransactionPending(created.transactionId, NOW + 200)).toBe(false);
+  });
 
   it("exchanges once and stores only digests; resolves the verified server user", async () => {
     const { issued, exchange, start, requestState } = await handoff();
@@ -95,6 +120,58 @@ suite("Aurion native auth in isolated MariaDB", () => {
     expect(outcomes.filter(result => result.status === "fulfilled")).toHaveLength(1);
     const [sessions] = await pool.query<RowDataPacket[]>("SELECT id FROM aurionNativeAuthSessions WHERE appBuild = ?", [APP_BUILD]);
     expect(sessions).toHaveLength(1);
+  });
+
+  it("serializes parallel handoff issuance to one MariaDB code with no sessions", async () => {
+    const requestState = createNativeAuthSecret();
+    const started = await startNativeAuthTransaction({
+      version: NATIVE_AUTH_CONTRACT_VERSION, platform: "android", appBuild: APP_BUILD,
+      returnId: NATIVE_AUTH_RETURN_ID, requestState,
+      codeChallenge: nativeAuthCodeChallengeFor(VERIFIER), codeChallengeMethod: "S256",
+    }, NOW);
+    const outcomes = await Promise.allSettled([
+      issueNativeAuthHandoffAfterVerifiedBrowserLogin(started.transactionId, USER, requestState, NOW + 10),
+      issueNativeAuthHandoffAfterVerifiedBrowserLogin(started.transactionId, USER, requestState, NOW + 10),
+    ]);
+    const success = outcomes.filter(result => result.status === "fulfilled");
+    const rejected = outcomes.filter(result => result.status === "rejected");
+    expect(success).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    const [transactions] = await pool.query<RowDataPacket[]>(
+      "SELECT handoffCodeDigest, issuedAtMs, verifiedUserId FROM aurionNativeAuthTransactions WHERE id = ?",
+      [started.transactionId],
+    );
+    const [sessions] = await pool.query<RowDataPacket[]>(
+      "SELECT id FROM aurionNativeAuthSessions WHERE appBuild = ?", [APP_BUILD],
+    );
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0].handoffCodeDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(transactions[0].issuedAtMs).toBe(NOW + 10);
+    expect(transactions[0].verifiedUserId).toBe(USER);
+    expect(sessions).toHaveLength(0);
+    expect(JSON.stringify(transactions)).not.toContain(requestState);
+  });
+
+  it("rejects tampered encrypted State and leaves the transaction unissued", async () => {
+    const requestState = createNativeAuthSecret();
+    const started = await startNativeAuthTransaction({
+      version: NATIVE_AUTH_CONTRACT_VERSION, platform: "android", appBuild: APP_BUILD,
+      returnId: NATIVE_AUTH_RETURN_ID, requestState,
+      codeChallenge: nativeAuthCodeChallengeFor(VERIFIER), codeChallengeMethod: "S256",
+    }, NOW);
+    await pool.query("UPDATE aurionNativeAuthTransactions SET requestStateSealed = ? WHERE id = ?",
+      ["tampered", started.transactionId]);
+    await expect(issueNativeAuthHandoffAfterVerifiedBrowserLogin(
+      started.transactionId, USER, requestState, NOW + 20,
+    )).rejects.toThrow("NATIVE_AUTH_TRANSACTION_INVALID");
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT issuedAtMs, verifiedUserId, handoffCodeDigest FROM aurionNativeAuthTransactions WHERE id = ?",
+      [started.transactionId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].issuedAtMs).toBeNull();
+    expect(rows[0].verifiedUserId).toBeNull();
+    expect(rows[0].handoffCodeDigest).toBeNull();
   });
 
   it("rotates refresh once and revokes the full family on old-token replay", async () => {

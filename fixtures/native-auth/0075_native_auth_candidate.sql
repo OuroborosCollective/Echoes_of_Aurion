@@ -1,6 +1,8 @@
 CREATE TABLE `aurionNativeAuthTransactions` (
   `id` varchar(64) NOT NULL PRIMARY KEY,
   `requestStateDigest` varchar(64) NOT NULL,
+  `requestStateSealed` varchar(256) NOT NULL,
+  `returnId` varchar(64) NOT NULL,
   `codeChallenge` varchar(43) NOT NULL,
   `appBuild` varchar(120) NOT NULL,
   `createdAtMs` bigint NOT NULL,

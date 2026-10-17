@@ -117,6 +117,7 @@ export const nativeAuthRevokeRequestSchema = z.strictObject({
 
 export const nativeAuthErrorCodes = [
   "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE",
+  "NATIVE_AUTH_REQUEST_INVALID",
   "NATIVE_AUTH_TRANSACTION_INVALID",
   "NATIVE_AUTH_STATE_MISMATCH",
   "NATIVE_AUTH_CODE_EXPIRED",

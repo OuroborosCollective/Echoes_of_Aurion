@@ -26,8 +26,16 @@ function digest(value: string): string {
 }
 
 export function redactTelemetryRoute(path: string): string {
-  return path
-    .split("/")
+  // Request paths are untrusted telemetry input. Strip any query/fragment before
+  // naming spans, even if a future adapter mistakenly supplies req.originalUrl.
+  const segments = path.split(/[?#]/, 1)[0].split("/");
+  // Browser transaction IDs are random base64url, not hex or decimal. They
+  // grant correlation to an outstanding login and must never enter traces.
+  if (segments[1] === "api" && segments[2] === "native-auth" &&
+      segments[3] === "browser" && segments[4]) {
+    segments[4] = ":opaque";
+  }
+  return segments
     .map(segment => {
       if (!segment) return segment;
       if (/^[0-9a-f]{16,}$/i.test(segment)) return ":opaque";
