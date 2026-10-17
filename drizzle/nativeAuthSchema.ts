@@ -1,9 +1,11 @@
 import { bigint, index, int, mysqlTable, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
-/** Server-owned native login transaction. No browser cookie, state secret or handoff code is stored. */
+/** Server-owned login transaction. State is AES-GCM sealed; only handoff digests are stored. */
 export const aurionNativeAuthTransactions = mysqlTable("aurionNativeAuthTransactions", {
   id: varchar("id", { length: 64 }).primaryKey(),
   requestStateDigest: varchar("requestStateDigest", { length: 64 }).notNull(),
+  requestStateSealed: varchar("requestStateSealed", { length: 256 }).notNull(),
+  returnId: varchar("returnId", { length: 64 }).notNull(),
   codeChallenge: varchar("codeChallenge", { length: 43 }).notNull(),
   appBuild: varchar("appBuild", { length: 120 }).notNull(),
   createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
