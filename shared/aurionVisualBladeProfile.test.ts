@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bladeProfileOutline, resolveBladeProfile, type VisualBladeProfile } from "./VisualBladeProfile";
+import { bladeProfileOutline, resolveBladeProfile, type VisualBladeProfile } from "./aurionVisualBladeProfile";
 
 describe("confirmed visual blade profiles", () => {
   it("selects stable metal, organic and lithic silhouettes without changing gameplay", () => {

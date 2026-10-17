@@ -6,7 +6,7 @@ import {
   type VisualMorphologyCacheContext,
   type VisualMorphologyRecipe,
 } from "./VisualItemMorphologyCompiler";
-import { bladeProfileOutline, resolveBladeProfile, VISUAL_BLADE_PROFILE_RULESET, type VisualBladeProfile } from "./VisualBladeProfile";
+import { bladeProfileOutline, resolveBladeProfile, VISUAL_BLADE_PROFILE_RULESET, type VisualBladeProfile } from "@shared/aurionVisualBladeProfile";
 
 export type VisualItemLod = 0 | 1 | 2;
 export const visualWeaponFamilies = ["blade", "axe", "mace", "spear", "dagger", "bow", "staff", "wand", "hammer", "scythe", "shield", "focus"] as const;

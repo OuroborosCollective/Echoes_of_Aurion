@@ -2585,3 +2585,13 @@ Evidence: Focused standalone TypeScript shape/profile assertions passed locally;
 Learned: New visual variation belongs downstream of the confirmed descriptor, not in a parallel loot or capability engine.
 Open: Check TS/build, geometry runtime and CI against exact PR SHA; implement a separate server-evidence-bound resource provenance slice only with authoritative material receipts.
 Next safe step: Verify focused tests, TypeScript and geometry LOD limits; preserve draft status until green gates.
+
+### 2026-10-17 — PR #995 donor-inventory gate repair
+Status: PARTIAL
+Task: Resolve DONOR_SURFACE_UNINVENTORIED preventing focused visual integration and exact-head build.
+Decisions: Move the new presentation-only Aurion profile module and its tests into shared/ (Aurion-owned); keep existing donor inventory unchanged rather than falsely marking new Aurion code as historically donated. Preserve visual contract and ACEG authority.
+Touched surfaces: shared/aurionVisualBladeProfile.ts, shared/aurionVisualBladeProfile.test.ts, client/src/xaurion/core/VisualItemGeometryCompiler.ts; retired initial client-local profile source/tests.
+Evidence: GitHub Actions jobs 117298577243, 117298577448, 117298577441 on PR head 6a64e1b777f57d542db9b4aee37a7d78be721719 report the same DONOR_SURFACE_UNINVENTORIED for new client-local profile. Focused CI rerun after revision pending.
+Learned: New Aurion-owned visual sources need their own source identity outside historical donor inventory roots, not a fabricated donor entry.
+Open: Exact-head CI, build/runtime and merge verification.
+Next safe step: Run relevant tests, typecheck and runtime candidate; merge only after readback.
