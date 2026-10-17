@@ -112,6 +112,6 @@ if (process.argv[1]?.endsWith('/aurion-live-schema-observation.mjs')) {
   let rawReceipt = '';
   try { rawReceipt = fs.readFileSync(inputFile, 'utf8'); } catch { /* Explicit no-receipt state. */ }
   const summary = summarizeLiveSchemaObservation({ rawReceipt, expectedSha, installedSha, runnerStatus, runId });
-  process.stdout.write(${JSON.stringify(summary, null, 2)} + '\n');
+  process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
   if (!summary.databaseReadbackVerified || summary.verdict !== 'SCHEMA_0075_MATCH') process.exitCode = 1;
 }
