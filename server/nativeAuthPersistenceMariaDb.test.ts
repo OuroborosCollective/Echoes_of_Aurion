@@ -5,12 +5,13 @@ import { createNativeAuthSecret, nativeAuthCodeChallengeFor } from "./nativeAuth
 import {
   authenticateNativeAuthAccess, exchangeNativeAuthHandoff, isNativeAuthBrowserTransactionPending,
   issueNativeAuthHandoffAfterVerifiedBrowserLogin, refreshNativeAuthSession,
-  revokeNativeAuthSession, startNativeAuthTransaction,
+  revokeNativeAuthSession, revokeNativeAuthSessions, startNativeAuthTransaction,
 } from "./nativeAuthPersistence";
 
 const suite = process.env.AURION_NATIVE_AUTH_E2E === "1" && !!process.env.DATABASE_URL ? describe : describe.skip;
 const NOW = 1_792_000_000_000;
 const USER = 9671001;
+const OTHER_USER = 9671002;
 const APP_BUILD = "godot-native-auth-e2e";
 const nativeSealKeyBeforeTests = process.env.NATIVE_AUTH_STATE_SEAL_KEY;
 const VERIFIER = "v".repeat(43);
@@ -42,14 +43,14 @@ suite("Aurion native auth in isolated MariaDB", () => {
     if (nativeSealKeyBeforeTests === undefined) delete process.env.NATIVE_AUTH_STATE_SEAL_KEY;
     else process.env.NATIVE_AUTH_STATE_SEAL_KEY = nativeSealKeyBeforeTests;
   });
-  async function handoff(at = NOW) {
+  async function handoff(at = NOW, userId = USER) {
     const requestState = createNativeAuthSecret();
     const start = await startNativeAuthTransaction({
       version: NATIVE_AUTH_CONTRACT_VERSION, platform: "android",
       appBuild: APP_BUILD, returnId: NATIVE_AUTH_RETURN_ID,
       requestState, codeChallenge: nativeAuthCodeChallengeFor(VERIFIER), codeChallengeMethod: "S256",
     }, at);
-    const issued = await issueNativeAuthHandoffAfterVerifiedBrowserLogin(start.transactionId, USER, requestState, at + 100);
+    const issued = await issueNativeAuthHandoffAfterVerifiedBrowserLogin(start.transactionId, userId, requestState, at + 100);
     return { start, issued, requestState, exchange: { version: NATIVE_AUTH_CONTRACT_VERSION, transactionId: start.transactionId, code: issued.handoffCode, codeVerifier: VERIFIER, appBuild: APP_BUILD } };
   }
 
@@ -205,6 +206,35 @@ suite("Aurion native auth in isolated MariaDB", () => {
     const tokens = await exchangeNativeAuthHandoff(exchange, NOW + 200);
     await expect(refreshNativeAuthSession(tokens.refreshToken, NOW + 200 + 7 * 24 * 60 * 60 * 1000 + 1))
       .rejects.toThrow("NATIVE_AUTH_SESSION_EXPIRED");
+  });
+
+  it("revokes every native session for the credential user and preserves other users", async () => {
+    const first = await handoff(NOW, USER);
+    const second = await handoff(NOW + 1_000, USER);
+    const other = await handoff(NOW + 2_000, OTHER_USER);
+    const firstTokens = await exchangeNativeAuthHandoff(first.exchange, NOW + 200);
+    const secondTokens = await exchangeNativeAuthHandoff(second.exchange, NOW + 1_200);
+    const otherTokens = await exchangeNativeAuthHandoff(other.exchange, NOW + 2_200);
+
+    expect(await revokeNativeAuthSessions(firstTokens.refreshToken, "all_sessions", NOW + 3_000)).toBe(true);
+    expect(await authenticateNativeAuthAccess(firstTokens.accessToken, NOW + 3_001)).toBeNull();
+    expect(await authenticateNativeAuthAccess(secondTokens.accessToken, NOW + 3_001)).toBeNull();
+    expect(await authenticateNativeAuthAccess(otherTokens.accessToken, NOW + 3_001))
+      .toMatchObject({ userId: OTHER_USER });
+    await expect(refreshNativeAuthSession(firstTokens.refreshToken, NOW + 3_001))
+      .rejects.toThrow("NATIVE_AUTH_REVOKED");
+    await expect(refreshNativeAuthSession(secondTokens.refreshToken, NOW + 3_001))
+      .rejects.toThrow("NATIVE_AUTH_REVOKED");
+    expect((await refreshNativeAuthSession(otherTokens.refreshToken, NOW + 3_001)).accessToken)
+      .toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT userId, revokedAtMs FROM aurionNativeAuthSessions WHERE appBuild = ? ORDER BY userId, createdAtMs",
+      [APP_BUILD],
+    );
+    expect(rows.filter(row => row.userId === USER).map(row => row.revokedAtMs))
+      .toEqual([NOW + 3_000, NOW + 3_000]);
+    expect(rows.find(row => row.userId === OTHER_USER)?.revokedAtMs).toBeNull();
   });
 
   it("rejects expired access and revokes all access immediately after logout", async () => {
