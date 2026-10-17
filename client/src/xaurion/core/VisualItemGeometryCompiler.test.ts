@@ -69,6 +69,43 @@ describe("VisualItemGeometryCompiler", () => {
     }
   });
 
+  it("integrates distinct material-aware blade silhouettes into measured LOD geometry", () => {
+    const materials = ["star_iron", "verdant_fiber", "obsidian"] as const;
+    const fingerprints = new Set<string>();
+    for (const materialId of materials) {
+      const input = descriptor({
+        itemDefinitionId: "weapon-blade-v2",
+        familyId: "blade",
+        visual: {
+          itemDefinitionId: "weapon-blade-v2",
+          materialId,
+          appearanceId: null,
+          materialVariant: null,
+          variantTheme: null,
+          glbAssetId: null,
+        },
+      });
+      const counts: number[] = [];
+      for (const lod of lods) {
+        const generated = expectGenerated(compileVisualItemGeometry(input, lod));
+        counts.push(generated.triangleCount);
+        expect(generated.triangleCount).toBeLessThanOrEqual(([1600, 800, 300] as const)[lod]);
+        const shape = generated.root.getObjectByName("blade") as THREE.Mesh;
+        expect(shape).toBeInstanceOf(THREE.Mesh);
+        expect(shape.geometry).toBeInstanceOf(THREE.ExtrudeGeometry);
+        expect(generated.root.getObjectByName("tip")).toBeUndefined();
+        if (lod === 0) fingerprints.add(generated.structuralFingerprint);
+        const replay = expectGenerated(compileVisualItemGeometry(input, lod));
+        expect(replay.structuralFingerprint).toBe(generated.structuralFingerprint);
+        generated.dispose();
+        replay.dispose();
+      }
+      expect(counts[0]).toBeGreaterThanOrEqual(counts[1]!);
+      expect(counts[1]).toBeGreaterThanOrEqual(counts[2]!);
+    }
+    expect(fingerprints.size).toBe(materials.length);
+  });
+
   it("generates supported armor slots across LODs without using item stats", () => {
     for (const slot of generatedArmorSlots) {
       const counts: number[] = [];
