@@ -72,10 +72,17 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	if absolute_remaining <= 0 or absolute_remaining > REFRESH_ABSOLUTE_MAX_SECONDS:
 		clear()
 		return false
+	# A refresh may shorten the absolute limit, never extend the first confirmed session.
+	var new_absolute: int = now + absolute_remaining * 1000
+	if _refresh_in_flight and _absolute_deadline_ms >= 0:
+		new_absolute = mini(new_absolute, _absolute_deadline_ms)
+	if new_absolute <= now:
+		clear()
+		return false
 	_access_token = access
 	_refresh_token = refresh
 	_issued_at_ms = now
-	_absolute_deadline_ms = now + absolute_remaining * 1000
+	_absolute_deadline_ms = new_absolute
 	_access_deadline_ms = mini(now + ACCESS_TTL_SECONDS * 1000, _absolute_deadline_ms)
 	_idle_deadline_ms = mini(now + REFRESH_IDLE_SECONDS * 1000, _absolute_deadline_ms)
 	_refresh_in_flight = false

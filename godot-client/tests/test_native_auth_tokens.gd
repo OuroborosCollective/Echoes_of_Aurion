@@ -36,6 +36,15 @@ func verify() -> void:
 	require(session.begin_refresh(901001).is_empty(), "parallel refresh was allowed")
 	require(session.accept_token_response(pair("b", "s"), 902000), "valid refresh rotation rejected")
 	require(session.access_token(902000) == "b".repeat(43), "rotated access not installed")
+	# The server's refreshed absolute-remaining field cannot lengthen the original session.
+	var first_absolute_test = Session.new()
+	var short_pair := pair()
+	short_pair["refreshAbsoluteRemainingSeconds"] = 5
+	require(first_absolute_test.accept_token_response(short_pair, 100000), "short absolute setup")
+	require(first_absolute_test.begin_refresh(101000).size() == 2, "refresh before absolute deadline")
+	require(first_absolute_test.accept_token_response(pair("b", "s"), 102000), "rotated short session rejected")
+	require(first_absolute_test.access_token(105000).is_empty(), "refresh extended original absolute deadline")
+	require(first_absolute_test.begin_refresh(105000).is_empty(), "refresh extended absolute session authority")
 	require(session.begin_logout().get("refreshToken") == "s".repeat(43), "logout did not use latest refresh")
 	require(session.access_token(902001).is_empty(), "logout retained access")
 	require(session.begin_refresh(902001).is_empty(), "logout retained refresh")
