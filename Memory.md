@@ -2828,3 +2828,25 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #1030 — fix(community): expose and verify Events dialog
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1030 merge=98fb5f1d45cf212947c2e76319985e9e039f72f1 -->
+Task: Merge PR #1030 into `main` — fix(community): expose and verify Events dialog.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-home-community-entrypoint.yml`
+- `client/src/components/CommunityOverlay.test.tsx`
+- `client/src/components/CommunityOverlay.tsx`
+- `client/src/pages/Home.test.tsx`
+- `e2e/guest-smoke.spec.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1030
+- Merge commit: `98fb5f1d45cf212947c2e76319985e9e039f72f1`
+- PR head: `04aca28ec46c91d8cfd479881792c723359aa879`
+- Merged at: 2026-10-17T22:01:13Z
+- Post-merge workflow run: 39073341139
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
