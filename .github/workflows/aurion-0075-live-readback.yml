@@ -1,0 +1,83 @@
+name: Aurion 0075 independent live schema observation
+
+# A diagnostic entrypoint, deliberately independent of the release control-plane
+# bootstrap, OIDC authorization and every production write-capable release job.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact current main revision to compare with the installed read-only reconciler.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-live-schema-observation
+  cancel-in-progress: false
+
+jobs:
+  observe-production-schema:
+    name: Observe installed Aurion schema without applying a migration
+    if: github.repository == 'OuroborosCollective/Echoes_of_Aurion' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Bind requested main revision and discover installed root-owned release
+        id: installed
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]]
+          [[ "${GITHUB_SHA}" == "${EXPECTED_SHA}" ]]
+          [[ "${GITHUB_REPOSITORY}" == 'OuroborosCollective/Echoes_of_Aurion' ]]
+          [[ "${GITHUB_REF}" == 'refs/heads/main' ]]
+          current=/opt/echoes-of-aurion-schema-reconcile/current
+          [[ -L "$current" ]] || { echo 'READBACK_INSTALLED_RELEASE_MISSING' >&2; exit 69; }
+          resolved="$(readlink -f -- "$current")"
+          [[ "$resolved" =~ ^/opt/echoes-of-aurion-schema-reconcile/releases/([a-f0-9]{40})$ ]] || {
+            echo 'READBACK_INSTALLED_RELEASE_PATH_INVALID' >&2
+            exit 70
+          }
+          # No privilege escalation to inspect the symlink. The audited root
+          # reconciler independently verifies ownership, manifest and digests.
+          printf 'sha=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+      - name: Execute trusted read-only MariaDB reconciler and sanitize receipt
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          OBSERVED_SHA: ${{ steps.installed.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          runner=/usr/local/sbin/aurion-production-schema-reconcile
+          raw="${RUNNER_TEMP}/aurion-live-schema-${GITHUB_RUN_ID}.raw.json"
+          stderr_file="${RUNNER_TEMP}/aurion-live-schema-${GITHUB_RUN_ID}.stderr"
+          summary="${GITHUB_WORKSPACE}/aurion-live-schema-observation.json"
+          trap 'rm -f "$raw" "$stderr_file"' EXIT
+          rm -f "$raw" "$stderr_file" "$summary"
+          # The installed runner uses a read-only Docker root and DB metadata
+          # queries; its only host write is a private root-owned evidence receipt.
+          set +e
+          sudo -n "$runner" "$OBSERVED_SHA" > "$raw" 2> "$stderr_file"
+          status=$?
+          set -e
+          node scripts/aurion-live-schema-observation.mjs \
+            "$raw" "$EXPECTED_SHA" "$OBSERVED_SHA" "$status" "$GITHUB_RUN_ID" > "$summary"
+          # The sanitizer deliberately exits non-zero for any unproven state.
+      - name: Preserve sanitized, SHA-bound observation even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-live-schema-observation-${{ github.sha }}-${{ github.run_id }}
+          path: aurion-live-schema-observation.json
+          if-no-files-found: warn
+          retention-days: 30
