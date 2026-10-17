@@ -11,7 +11,25 @@ const STATES = new Set(['PRESENT_SCHEMA_MATCH', 'RECONCILIATION_REQUIRED', 'PRES
 const MIGRATION_STATES = new Set(['PRESENT_SCHEMA_MATCH', 'ABSENT_APPLY_REQUIRED', 'PRESENT_SCHEMA_DRIFT']);
 const MIGRATION_0075 = '0075_aurion_native_auth_sessions';
 
-export function summarizeLiveSchemaObservation({ rawReceipt, expectedSha, installedSha, runnerStatus, runId }) {
+// The root-owned reconciler emits fixed, non-secret preflight diagnostics.
+// Match the entire line, never emit or interpolate the original stderr.
+const ROOT_PRECONDITION_FAILURES = new Map([
+  ['reconciliation release is not installed', 'RECONCILE_RELEASE_MISSING'],
+  ['production environment file is absent', 'PRODUCTION_ENV_MISSING'],
+  ['runtime image contract is absent', 'RUNTIME_IMAGE_CONTRACT_MISSING'],
+  ['runtime network contract is absent', 'RUNTIME_NETWORK_CONTRACT_MISSING'],
+  ['pinned runtime image is not available locally', 'PINNED_RUNTIME_IMAGE_MISSING'],
+  ['runtime database network is unavailable', 'RUNTIME_DB_NETWORK_MISSING'],
+]);
+
+export function classifyRootRunnerFailure(runnerStderr, runnerStatus) {
+  if (runnerStatus === 0) return null;
+  if (runnerStatus !== 69 || typeof runnerStderr !== 'string' || runnerStderr.length > 4096)
+    return 'UNCLASSIFIED_RUNNER_FAILURE';
+  return ROOT_PRECONDITION_FAILURES.get(runnerStderr.trim()) ?? 'UNCLASSIFIED_RUNNER_FAILURE';
+}
+
+export function summarizeLiveSchemaObservation({ rawReceipt, expectedSha, installedSha, runnerStatus, runId, runnerStderr }) {
   const basic = {
     recordType: 'aurion_live_schema_observation',
     schemaVersion: 1,
@@ -19,6 +37,7 @@ export function summarizeLiveSchemaObservation({ rawReceipt, expectedSha, instal
     installedRevision: installedSha,
     workflowRunId: runId,
     runnerStatus,
+    runnerFailureClass: classifyRootRunnerFailure(runnerStderr, runnerStatus),
     databaseReadbackVerified: false,
     productionApplyExecuted: false,
     migration0075State: 'UNVERIFIED',
@@ -107,11 +126,17 @@ export function summarizeLiveSchemaObservation({ rawReceipt, expectedSha, instal
 }
 
 if (process.argv[1]?.endsWith('/aurion-live-schema-observation.mjs')) {
-  const [inputFile, expectedSha, installedSha, statusText, runId] = process.argv.slice(2);
+  const [inputFile, expectedSha, installedSha, statusText, runId, stderrFile] = process.argv.slice(2);
   const runnerStatus = Number(statusText);
   let rawReceipt = '';
   try { rawReceipt = fs.readFileSync(inputFile, 'utf8'); } catch { /* Explicit no-receipt state. */ }
-  const summary = summarizeLiveSchemaObservation({ rawReceipt, expectedSha, installedSha, runnerStatus, runId });
+  let runnerStderr = '';
+  if (stderrFile) {
+    try {
+      if (fs.statSync(stderrFile).size <= 4096) runnerStderr = fs.readFileSync(stderrFile, 'utf8');
+    } catch { /* Inaccessible stderr is an unclassified failure, never a success. */ }
+  }
+  const summary = summarizeLiveSchemaObservation({ rawReceipt, expectedSha, installedSha, runnerStatus, runId, runnerStderr });
   process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
   if (!summary.databaseReadbackVerified || summary.verdict !== 'SCHEMA_0075_MATCH') process.exitCode = 1;
 }
