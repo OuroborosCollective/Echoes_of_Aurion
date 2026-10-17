@@ -325,7 +325,7 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect(runner).toContain("environmentMountedReadOnly:true");
   });
 
-  it("keeps the backup/recovery/apply core migration allowlists aligned through 0074", () => {
+  it("keeps the backup/recovery/apply core migration allowlists aligned through 0075", () => {
     const core = read("deploy/aurion-production-schema-apply-core");
     const migrationCount = JSON.parse(read("config/aurion-migration-wave-manifest.json")).migrations.length;
     // Retry receipts and promotion/rehearsal gates must describe the same closed wave.
