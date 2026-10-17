@@ -17,6 +17,7 @@ import {
   verifyOidcIdToken,
   buildAuthorizationUrl,
 } from "./oidcProtocol";
+import { nativeBrowserContinuePath } from "../nativeAuthBrowser";
 import { sdk } from "./sdk";
 
 const OIDC_TRANSACTION_COOKIE = "__Host-aurion_oidc_tx";
@@ -72,7 +73,9 @@ async function handleOidcCallback(req: Request, res: Response): Promise<void> {
       expiresInMs: ONE_YEAR_MS,
     });
     res.cookie(COOKIE_NAME, sessionToken, { ...getSessionCookieOptions(req), maxAge: ONE_YEAR_MS });
-    res.redirect(302, "/");
+    // Continue only a browser-cookie-bound native transaction. The verified
+    // user must still explicitly confirm on the consent page.
+    res.redirect(302, nativeBrowserContinuePath(req.headers.cookie));
   } catch (error) {
     console.error("[OIDC] Callback failed", error instanceof Error ? error.message : "unknown error");
     res.status(500).json({ error: "OIDC callback failed" });
