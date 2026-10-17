@@ -66,7 +66,7 @@ const specs = [
     workflow: ".github/workflows/issue-502-inventory-mariadb.yml",
     changed: [
       "server/aurionInventoryBackendAdapter.ts",
-      "server/playerUiMariaDb.test.ts",
+      "server/playerUiPersistence.ts",
       "drizzle/0066_aurion_inventory_transaction_kernel.sql",
       "drizzle/0068_aurion_item_manipulation_runtime.sql",
     ],
