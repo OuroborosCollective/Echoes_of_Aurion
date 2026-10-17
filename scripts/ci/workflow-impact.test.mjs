@@ -5,18 +5,100 @@ import { test } from "node:test";
 const specs = [
   {
     workflow: ".github/workflows/aim292-npc-multi-memory.yml",
-    changed: ["server/aim292NpcMultiMemoryMariaDb.test.ts", "server/db.ts", "drizzle/0076_auth.sql", "drizzle/meta/_journal.json", "server/_core/context.ts", "package.json"],
-    unchanged: ["server/nativeAuthPersistence.ts", "drizzle/nativeAuthSchema.ts", "server/nativeAuthProtocol.test.ts", "godot-client/project.godot"],
+    changed: [
+      "server/aim292NpcMultiMemoryMariaDb.test.ts", "server/db.ts",
+      "drizzle/0042_aurion_npc_multi_memory.sql",
+      "drizzle/0054_aurion_semantic_memory_graph_v2.sql",
+      "server/_core/context.ts", "package.json",
+    ],
+    unchanged: [
+      "server/nativeAuthPersistence.ts",
+      "drizzle/nativeAuthSchema.ts",
+      "server/nativeAuthProtocol.test.ts",
+      "godot-client/project.godot",
+      "drizzle/0075_aurion_native_auth_sessions.sql",
+      "drizzle/0076_auth.sql",
+      "drizzle/meta/_journal.json",
+      "drizzle.config.ts",
+    ],
   },
   {
     workflow: ".github/workflows/aim535-item-manipulation-runtime.yml",
-    changed: ["server/aurionItemManipulationMariaDb.test.ts", "server/aurionInventoryBackendAdapter.ts", "server/db.ts", "drizzle/0076_auth.sql", "drizzle/meta/_journal.json", "server/routers.ts"],
-    unchanged: ["server/nativeAuthPersistence.ts", "drizzle/nativeAuthSchema.ts", "server/nativeAuthProtocol.test.ts", "godot-client/project.godot"],
+    changed: [
+      "server/aurionItemManipulationMariaDb.test.ts",
+      "server/aurionInventoryBackendAdapter.ts", "server/db.ts",
+      "drizzle/0066_aurion_inventory_transaction_kernel.sql",
+      "drizzle/0068_aurion_item_manipulation_runtime.sql", "server/routers.ts",
+    ],
+    unchanged: [
+      ...[
+      "server/nativeAuthPersistence.ts",
+      "drizzle/nativeAuthSchema.ts",
+      "server/nativeAuthProtocol.test.ts",
+      "godot-client/project.godot",
+      "drizzle/0075_aurion_native_auth_sessions.sql",
+      "drizzle/0076_auth.sql",
+      "drizzle/meta/_journal.json",
+      "drizzle.config.ts",
+    ],
+      "scripts/aurionProductionSchemaReconciliation.ts",
+    ],
   },
   {
     workflow: ".github/workflows/aim259-group-instances.yml",
-    changed: ["server/groupInstanceService.ts", "server/db.ts", "drizzle/0076_auth.sql", "drizzle/meta/_journal.json", "server/zoneGateway.ts"],
-    unchanged: ["server/nativeAuthPersistence.ts", "drizzle/nativeAuthSchema.ts", "server/nativeAuthProtocol.test.ts", "godot-client/project.godot"],
+    changed: [
+      "server/groupInstanceService.ts", "server/db.ts",
+      "drizzle/0032_aurion_group_instances.sql",
+      "drizzle/groupInstanceSchema.ts", "server/zoneGateway.ts",
+    ],
+    unchanged: [
+      "server/nativeAuthPersistence.ts",
+      "drizzle/nativeAuthSchema.ts",
+      "server/nativeAuthProtocol.test.ts",
+      "godot-client/project.godot",
+      "drizzle/0075_aurion_native_auth_sessions.sql",
+      "drizzle/0076_auth.sql",
+      "drizzle/meta/_journal.json",
+      "drizzle.config.ts",
+    ],
+  },
+  {
+    workflow: ".github/workflows/issue-502-inventory-mariadb.yml",
+    changed: [
+      "server/aurionInventoryBackendAdapter.ts",
+      "server/playerUiMariaDb.test.ts",
+      "drizzle/0066_aurion_inventory_transaction_kernel.sql",
+      "drizzle/0068_aurion_item_manipulation_runtime.sql",
+    ],
+    unchanged: [
+      "server/nativeAuthPersistence.ts",
+      "drizzle/nativeAuthSchema.ts",
+      "server/nativeAuthProtocol.test.ts",
+      "godot-client/project.godot",
+      "drizzle/0075_aurion_native_auth_sessions.sql",
+      "drizzle/0076_auth.sql",
+      "drizzle/meta/_journal.json",
+      "drizzle.config.ts",
+    ],
+  },
+  {
+    workflow: ".github/workflows/starter-village-pilot.yml",
+    changed: [
+      "server/starterVillagePilotHttp.test.ts",
+      "server/zoneGateway.ts",
+      "drizzle/0064_aurion_world_entity_foundation.sql",
+      "drizzle/aurionWorldFoundationSchema.ts",
+    ],
+    unchanged: [
+      "server/nativeAuthPersistence.ts",
+      "drizzle/nativeAuthSchema.ts",
+      "server/nativeAuthProtocol.test.ts",
+      "godot-client/project.godot",
+      "drizzle/0075_aurion_native_auth_sessions.sql",
+      "drizzle/0076_auth.sql",
+      "drizzle/meta/_journal.json",
+      "drizzle.config.ts",
+    ],
   },
 ];
 
@@ -39,7 +121,7 @@ function matches(pattern, path) {
   return new RegExp("^" + escaped + "$").test(path);
 }
 for (const spec of specs) {
-  test(spec.workflow + ": change-impact routes PR and main only to relevant lanes", () => {
+  test(spec.workflow + ": change-impact routes only domain changes to its PR/push lanes", () => {
     const source = readFileSync(spec.workflow, "utf8");
     for (const event of ["pull_request", "push"]) {
       const paths = pathsForEvent(source, event);
@@ -53,3 +135,17 @@ for (const spec of specs) {
     }
   });
 }
+
+test("native-auth migrations are still covered by the dedicated core schema pack", () => {
+  const source = readFileSync(".github/workflows/aurion-local-test-pack.yml", "utf8");
+  for (const event of ["pull_request", "push"]) {
+    const paths = pathsForEvent(source, event);
+    for (const file of [
+      "drizzle/0075_aurion_native_auth_sessions.sql",
+      "drizzle/meta/_journal.json",
+    ]) {
+      assert.ok(paths.some(pattern => matches(pattern, file)),
+        event + " core pack must run on " + file);
+    }
+  }
+});
