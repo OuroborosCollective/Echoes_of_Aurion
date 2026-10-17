@@ -2724,3 +2724,47 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #1022 — chore(auth-db): 0075 production migration preflight and owner-approved release boundary (#973)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1022 merge=82e3320a7e5614ffbe1cdef4f1bce4733cfa55d2 -->
+Task: Merge PR #1022 into `main` — chore(auth-db): 0075 production migration preflight and owner-approved release boundary (#973).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-local-test-pack.yml`
+- `.github/workflows/aurion-production-schema-readback.yml`
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `config/aurion-migration-wave-manifest.json`
+- `deploy/aurion-production-schema-apply-core`
+- `deploy/promote-aurion-zone-runtime.sh`
+- `deploy/verify-aurion-production-schema-apply-artifact.mjs`
+- `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`
+- `docs/godot-migration/native-auth-0075-production-preflight.md`
+- `drizzle.config.ts`
+- `drizzle/0075_aurion_native_auth_sessions.sql`
+- `drizzle/meta/_journal.json`
+- `scripts/aurionProductionSchemaReconciliation.ts`
+- `scripts/aurionSchemaRepairPlan.ts`
+- `scripts/build-aurion-production-apply-artifact.mjs`
+- `scripts/build-aurion-production-reconcile-artifact.mjs`
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `scripts/native-auth-0075-wave-preflight.mjs`
+- `scripts/native-auth-0075-wave-preflight.test.mjs`
+- `scripts/prepare-native-auth-test-schema.mjs`
+- `scripts/schema-repair-proof-fixture.mjs`
+- `server/aurionProductionSchemaApplyDockerRunner.test.ts`
+- `server/aurionProductionSchemaReconcileDockerRunner.test.ts`
+- `server/aurionSchemaRepairPlan.test.ts`
+- `server/aurionSchemaReviewedRecovery.test.ts`
+- `server/blocker3Compliance.test.ts`
+- `server/nativeAuthSchemaIsolation.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1022
+- Merge commit: `82e3320a7e5614ffbe1cdef4f1bce4733cfa55d2`
+- PR head: `638256dd37f9e3fbac2633a14fabf3b0326677eb`
+- Merged at: 2026-10-17T12:27:29Z
+- Post-merge workflow run: 39032595555
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
