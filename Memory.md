@@ -2850,3 +2850,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #1032 — fix(world): report settled chunk projection evidence
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1032 merge=01ae1d33c6f00499e71c1d04c25b6dc6edb02a73 -->
+Task: Merge PR #1032 into `main` — fix(world): report settled chunk projection evidence.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/src/xaurion/integration/ConfirmedChunkProjection.ts`
+- `e2e/aim290.rendererRecovery.spec.ts`
+- `server/worldChunkProjectionRuntime.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1032
+- Merge commit: `01ae1d33c6f00499e71c1d04c25b6dc6edb02a73`
+- PR head: `53bfab13b7944e67d94ddeae2020de58fcc323f8`
+- Merged at: 2026-10-17T22:36:47Z
+- Post-merge workflow run: 39075784689
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
