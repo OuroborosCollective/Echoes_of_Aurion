@@ -42,6 +42,9 @@ describe("CommunityOverlay", () => {
 
     await user.click(forum);
     expect(screen.getByRole("button", { name: "Forum öffnen" }).getAttribute("aria-pressed")).toBe("true");
+    expect(document.activeElement).toBe(await screen.findByRole("dialog", { name: "Sternwartenforum" }));
+    await user.click(screen.getByRole("button", { name: "Community-Events öffnen" }));
+    expect(document.activeElement).toBe(await screen.findByRole("dialog", { name: "Community-Events" }));
     expect(screen.getByRole("button", { name: "Community-Konsole schließen" }).getAttribute("title")).toBe("Community-Konsole schließen");
   });
 
