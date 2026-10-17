@@ -148,7 +148,7 @@ Die Darstellung enthält Protokollversion, Generatorversion, Weltidentität, Rev
 `buildWorldChunkTerrainCagProbe` erzeugt aus dem bereits kanonischen Chunk eine begrenzte Wolfram-Language-Anfrage. CAG generiert kein zweites Terrain und wählt keinen Seed. Es berechnet nur erneut:
 
 ```
-{Min[flat], Max[flat], Max[Join[dx, dz]]}
+{Min[m], Max[m], Max[dx, dz]}
 ```
 
 Der CAG-Receipt enthält `inputSha256`, `resultSha256`, `verdict` (`SUPPORTED`, `CONTRADICTED`, `INCONCLUSIVE`) und `rulesetPromotion` (`eligible`, `blocked`).
