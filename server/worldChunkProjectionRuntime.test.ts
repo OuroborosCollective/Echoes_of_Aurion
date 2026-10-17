@@ -108,12 +108,14 @@ describe("active projection adapter boundaries (synthetic unit input, not author
 
   it("pauses authority-unprovable chunks immediately and bounds repeated transient failures", async () => {
     const denied = vi.fn(async () => ({ status: "UNPROVABLE", reason: "WORLD_ROOT_EVIDENCE_MISSING" }));
-    const terminal = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, denied, vi.fn());
+    const terminalReport = vi.fn();
+    const terminal = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, denied, terminalReport);
     terminal.update({ x: 0, z: 0 });
     await vi.waitFor(() => expect(denied).toHaveBeenCalledTimes(9));
     terminal.update({ x: 0, z: 0 }, 60);
     await Promise.resolve();
     expect(denied).toHaveBeenCalledTimes(9);
+    expect(terminalReport).toHaveBeenLastCalledWith(expect.objectContaining({ status: "UNPROVABLE", pendingCount: 0, failedCount: 9 }));
     terminal.dispose();
 
     const failed = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });
