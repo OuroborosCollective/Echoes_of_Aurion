@@ -15,7 +15,13 @@ on:
       - "server/routers.ts"
       - "server/db.ts"
       - "shared/playerUiProtocol.ts"
-      - "drizzle/**"
+      - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
+      - "drizzle/0034_ax1_starter_equipment_receipts.sql"
+      - "drizzle/0066_aurion_inventory_transaction_kernel.sql"
+      - "drizzle/0068_aurion_item_manipulation_runtime.sql"
+      - "drizzle/schema.ts"
+      - "drizzle/playerUiSchema.ts"
+      - "drizzle/aurionWorldFoundationSchema.ts"
       - ".github/workflows/issue-502-inventory-mariadb.yml"
   push:
     branches: [main]
@@ -26,7 +32,13 @@ on:
       - "server/aurionInventoryStackIdentity.ts"
       - "server/playerUiPersistence.ts"
       - "e2e/issue502.inventory.spec.ts"
-      - "drizzle/**"
+      - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
+      - "drizzle/0034_ax1_starter_equipment_receipts.sql"
+      - "drizzle/0066_aurion_inventory_transaction_kernel.sql"
+      - "drizzle/0068_aurion_item_manipulation_runtime.sql"
+      - "drizzle/schema.ts"
+      - "drizzle/playerUiSchema.ts"
+      - "drizzle/aurionWorldFoundationSchema.ts"
       - ".github/workflows/issue-502-inventory-mariadb.yml"
 
 permissions:
