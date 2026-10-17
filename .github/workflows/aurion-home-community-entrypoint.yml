@@ -1,0 +1,97 @@
+name: Aurion Home community entrypoint
+
+on:
+  pull_request:
+    paths:
+      - "client/src/pages/Home.tsx"
+      - "client/src/pages/Home.test.tsx"
+      - "client/src/components/CommunityOverlay.tsx"
+      - "e2e/guest-smoke.spec.ts"
+      - ".github/workflows/aurion-home-community-entrypoint.yml"
+  push:
+    branches: [main]
+    paths:
+      - "client/src/pages/Home.tsx"
+      - "client/src/pages/Home.test.tsx"
+      - "client/src/components/CommunityOverlay.tsx"
+      - "e2e/guest-smoke.spec.ts"
+      - ".github/workflows/aurion-home-community-entrypoint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-home-community:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      VITE_APP_ID: aurion-home-community-regression
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.AURION_RELEASE_SHA }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+      - run: pnpm install --frozen-lockfile
+      - name: Focused component contract
+        run: pnpm exec vitest run client/src/pages/Home.test.tsx --reporter=verbose
+      - name: TypeScript and production build
+        run: pnpm check && pnpm build
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start exact built portal
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/aurion-home-community.log 2>&1 &
+          echo $! >/tmp/aurion-home-community.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aurion-home-community.log
+          exit 1
+      - name: Exercise guest Events entrypoint
+        shell: bash
+        run: |
+          cat > playwright.home-community.config.ts <<'EOF'
+          import { defineConfig } from "@playwright/test";
+          export default defineConfig({
+            testDir: "./e2e",
+            timeout: 30_000,
+            workers: 1,
+            retries: 0,
+            reporter: "list",
+            use: {
+              baseURL: "http://127.0.0.1:3000",
+              browserName: "chromium",
+              headless: true,
+              launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-dev-shm-usage"] },
+              screenshot: "only-on-failure",
+              trace: "retain-on-failure",
+            },
+          });
+          EOF
+          pnpm exec playwright test e2e/guest-smoke.spec.ts --grep "guest opens Home Events" --config=playwright.home-community.config.ts
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-home-community-${{ env.AURION_RELEASE_SHA }}
+          path: |
+            test-results/
+            /tmp/aurion-home-community.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Stop portal
+        if: always()
+        run: |
+          if test -f /tmp/aurion-home-community.pid; then
+            kill "$(cat /tmp/aurion-home-community.pid)" 2>/dev/null || true
+          fi
