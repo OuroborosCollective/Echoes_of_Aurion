@@ -228,12 +228,18 @@ suite("Aurion native auth in isolated MariaDB", () => {
     expect((await refreshNativeAuthSession(otherTokens.refreshToken, NOW + 3_001)).accessToken)
       .toMatch(/^[A-Za-z0-9_-]{43}$/);
 
+    const later = await handoff(NOW + 4_000, USER);
+    const laterTokens = await exchangeNativeAuthHandoff(later.exchange, NOW + 4_200);
+    expect(await revokeNativeAuthSessions(firstTokens.refreshToken, "all_sessions", NOW + 5_000)).toBe(false);
+    expect(await authenticateNativeAuthAccess(laterTokens.accessToken, NOW + 5_001))
+      .toMatchObject({ userId: USER });
+
     const [rows] = await pool.query<RowDataPacket[]>(
       "SELECT userId, revokedAtMs FROM aurionNativeAuthSessions WHERE appBuild = ? ORDER BY userId, createdAtMs",
       [APP_BUILD],
     );
     expect(rows.filter(row => row.userId === USER).map(row => row.revokedAtMs))
-      .toEqual([NOW + 3_000, NOW + 3_000]);
+      .toEqual([NOW + 3_000, NOW + 3_000, null]);
     expect(rows.find(row => row.userId === OTHER_USER)?.revokedAtMs).toBeNull();
   });
 
