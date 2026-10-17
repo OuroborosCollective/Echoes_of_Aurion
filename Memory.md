@@ -2575,3 +2575,76 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-17 — Material-aware blade silhouettes (draft integration)
+Status: PARTIAL
+Task: Integrate useful Gemini-inspired silhouettes into the canonical Aurion visual pipeline.
+Decisions: Preserve ACEG, server-owned Loot V2, receipts and confirmed VisualItemDescriptor; implement five deterministic presentation-only profiles from confirmed material and morphology seed; bound blade triangles at LOD0/1/2 to 1600/800/300; avoid economy substitutions and gameplay mutations.
+Touched surfaces: client/src/xaurion/core/VisualBladeProfile.ts, VisualBladeProfile.test.ts, VisualItemGeometryCompiler.ts, VisualItemGeometryCompiler.test.ts.
+Evidence: Focused standalone TypeScript shape/profile assertions passed locally; repository Vitest/TypeScript, CI, Godot/runtime, and native device readbacks remain pending.
+Learned: New visual variation belongs downstream of the confirmed descriptor, not in a parallel loot or capability engine.
+Open: Check TS/build, geometry runtime and CI against exact PR SHA; implement a separate server-evidence-bound resource provenance slice only with authoritative material receipts.
+Next safe step: Verify focused tests, TypeScript and geometry LOD limits; preserve draft status until green gates.
+
+### 2026-10-17 — PR #995 donor-inventory gate repair
+Status: PARTIAL
+Task: Resolve DONOR_SURFACE_UNINVENTORIED preventing focused visual integration and exact-head build.
+Decisions: Move the new presentation-only Aurion profile module and its tests into shared/ (Aurion-owned); keep existing donor inventory unchanged rather than falsely marking new Aurion code as historically donated. Preserve visual contract and ACEG authority.
+Touched surfaces: shared/aurionVisualBladeProfile.ts, shared/aurionVisualBladeProfile.test.ts, client/src/xaurion/core/VisualItemGeometryCompiler.ts; retired initial client-local profile source/tests.
+Evidence: GitHub Actions jobs 117298577243, 117298577448, 117298577441 on PR head 6a64e1b777f57d542db9b4aee37a7d78be721719 report the same DONOR_SURFACE_UNINVENTORIED for new client-local profile. Focused CI rerun after revision pending.
+Learned: New Aurion-owned visual sources need their own source identity outside historical donor inventory roots, not a fabricated donor entry.
+Open: Exact-head CI, build/runtime and merge verification.
+Next safe step: Run relevant tests, typecheck and runtime candidate; merge only after readback.
+
+
+### 2026-10-17 — PR #995 — feat(visual): deterministic material-aware blade silhouettes
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=995 merge=e84383fb8f31a4bd9ec4076e0207b4407204a294 -->
+Task: Merge PR #995 into `main` — feat(visual): deterministic material-aware blade silhouettes.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/xaurion/core/VisualItemGeometryCompiler.test.ts`
+- `client/src/xaurion/core/VisualItemGeometryCompiler.ts`
+- `shared/aurionVisualBladeProfile.test.ts`
+- `shared/aurionVisualBladeProfile.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/995
+- Merge commit: `e84383fb8f31a4bd9ec4076e0207b4407204a294`
+- PR head: `88484539d51ad9a9bcbc79a1176fa1f732ee4ca7`
+- Merged at: 2026-10-17T04:46:29Z
+- Post-merge workflow run: 39003825351
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-17 — PR #996 confirmed chunk resource source evidence
+Status: PARTIAL
+Task: Extend the regional economy safely without duplicating Loot V2, ACEG or authoritative chunk state.
+Decisions: Project a SHA-256-bound, read-only resource source summary from Aurion's already-materialized chunk read model; treat generic ore solely as ore, and do not infer iron, steel, refined inventories or imported supplies. Database readback fails closed when DB is unavailable. No reward, material entitlement or gameplay state mutation.
+Touched surfaces: server/aurionChunkResourceEvidence.ts, server/aurionChunkResourceEvidence.test.ts, server/db.ts.
+Evidence: Draft PR #996 head 4580328356f25afa77899e934e07079de8a79d6e; GitHub workflow checks for exact head pending. Source tests assert replay, depletion, zero-resource and tampering/ingredient fail-closed conditions; not yet certified by green CI.
+Learned: Base chunk sources represent possible raw-resource collection points, not authoritative stocks of processed materials. A mined or traded item needs its own receipt and ownership before becoming an ingredient.
+Open: Verify typecheck, focused regression, donor/build and runtime readbacks. Separate later integration must bind crafting to verified item/material provenance.
+Next safe step: Read back focused CI on PR #996, repair any regression, then review stacked PR dependencies before merge.
+
+
+### 2026-10-17 — PR #996 — feat(economy): authoritative chunk resource availability evidence
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=996 merge=8a983eb49c02caa6a6ddfc9b7473dae1a3c8500f -->
+Task: Merge PR #996 into `main` — feat(economy): authoritative chunk resource availability evidence.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `server/aurionChunkResourceEvidence.test.ts`
+- `server/aurionChunkResourceEvidence.ts`
+- `server/db.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/996
+- Merge commit: `8a983eb49c02caa6a6ddfc9b7473dae1a3c8500f`
+- PR head: `8dbe5d5b3bc06a66eca83e958b29157991f613b2`
+- Merged at: 2026-10-17T05:17:05Z
+- Post-merge workflow run: 39005695867
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.

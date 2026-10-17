@@ -44,6 +44,7 @@ import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
 import { aurionEthosAxes, aurionMasteryDisciplineIds, aurionMasterySources, resolveEthosAura, resolveMasteryReadmodel, type AurionEthosAxis, type AurionMasteryDisciplineId, type AurionMasterySource } from "./aurionMasteryEthosProtocol";
 import { aurionLootCatalogV2 } from "./aurionLootCatalog";
+import { projectChunkResourceEvidence } from "./aurionChunkResourceEvidence";
 import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aurionLootProtocol";
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
@@ -1375,6 +1376,12 @@ export async function getWorldChunkReadModel(coordinate: WorldChunkCoordinate) {
     eq(aurionWorldChunkDeltas.chunkZ, coordinate.z),
   )).orderBy(aurionWorldChunkDeltas.sequence, aurionWorldChunkDeltas.id);
   return materializeWorldChunk(base, rows.map(parseWorldChunkDelta));
+}
+
+/** Read-only material source evidence from the actual persisted chunk deltas; no synthetic DB fallback. */
+export async function getWorldChunkResourceEvidence(coordinate: WorldChunkCoordinate) {
+  if (!(await getDb())) throw new Error("CHUNK_RESOURCE_DATABASE_UNAVAILABLE");
+  return projectChunkResourceEvidence(await getWorldChunkReadModel(coordinate));
 }
 
 function canonicalChunkDeltaReceiptId(actorUserId: number, idempotencyKey: string): string {
