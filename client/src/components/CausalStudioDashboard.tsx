@@ -161,7 +161,7 @@ export default function CausalStudioDashboard() {
             </div>
             <div className="max-h-72 overflow-auto rounded border border-white/5">
               {checkpoints.map(checkpoint => (
-                <button key={checkpoint.id} type="button" onClick={() => { setTickNumber(checkpoint.tick + 1); setRequestedReplay(null); }} className="grid w-full grid-cols-[70px_100px_1fr] gap-2 border-b border-white/5 px-3 py-2 text-left text-xs hover:bg-white/5">
+                <button key={checkpoint.id} type="button" aria-label={`Load checkpoint at tick ${checkpoint.tick}`} onClick={() => { setTickNumber(checkpoint.tick + 1); setRequestedReplay(null); }} className="grid w-full grid-cols-[70px_100px_1fr] gap-2 border-b border-white/5 px-3 py-2 text-left text-xs hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
                   <span className="font-mono text-slate-300">{checkpoint.tick}</span>
                   <span className={checkpoint.reconciled === 1 ? "text-emerald-400" : checkpoint.reconciled === -1 ? "text-red-400" : "text-amber-300"}>
                     {checkpoint.reconciled === 1 ? "MATCH" : checkpoint.reconciled === -1 ? "DIVERGED" : "UNVERIFIED"}
