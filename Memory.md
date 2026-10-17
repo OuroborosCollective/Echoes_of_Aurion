@@ -2648,3 +2648,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #998 — Optimize Wolfram CAG terrain analysis queries
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=998 merge=d7ec339e02886fb9d5d6da493c6a40763361e531 -->
+Task: Merge PR #998 into `main` — Optimize Wolfram CAG terrain analysis queries.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `aim-599-deterministische-terrain-pipeline.md`
+- `docs/aurion-deterministic-terrain-pipeline-aim599.md`
+- `shared/aurionCagDesignProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/998
+- Merge commit: `d7ec339e02886fb9d5d6da493c6a40763361e531`
+- PR head: `3d33238b93945a1c98e6beb7931171637a156a93`
+- Merged at: 2026-10-17T05:58:09Z
+- Post-merge workflow run: 39008166725
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
