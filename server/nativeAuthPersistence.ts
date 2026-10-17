@@ -64,6 +64,23 @@ export async function startNativeAuthTransaction(raw: NativeAuthStartRequest, no
   return { transactionId, expiresAtMs };
 }
 
+/**
+ * Read a pending browser transaction from the real MariaDB authority.
+ * Missing, expired, issued and consumed transactions are intentionally indistinguishable.
+ */
+export async function isNativeAuthBrowserTransactionPending(transactionId: string, nowMs?: number): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(transactionId)) return false;
+  const now = effectiveNow(nowMs);
+  const db = await requireNativeAuthDb();
+  const rows = await db.select({
+    expiresAtMs: aurionNativeAuthTransactions.expiresAtMs,
+    issuedAtMs: aurionNativeAuthTransactions.issuedAtMs,
+    consumedAtMs: aurionNativeAuthTransactions.consumedAtMs,
+  }).from(aurionNativeAuthTransactions).where(eq(aurionNativeAuthTransactions.id, transactionId)).limit(1);
+  const row = rows[0];
+  return !!row && row.expiresAtMs > now && row.issuedAtMs === null && row.consumedAtMs === null;
+}
+
 /** Call ONLY after Aurion's trusted browser-login/OIDC boundary authenticated userId. */
 export async function issueNativeAuthHandoffAfterVerifiedBrowserLogin(
   transactionId: string,
