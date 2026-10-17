@@ -24,3 +24,4 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2026-10-16 - Consistent Community Entry Points on Landing Page\n**Learning:** When community features are accessible via a dedicated Community page, ensuring the exact same entry points are surfaced on the core Landing page (Home) improves user discoverability and provides a consistent UX.\n**Action:** When adding or discovering modular features on secondary pages, evaluate structural entry pages (like Home) to ensure those features are consistently represented using identical interactive components and types.
