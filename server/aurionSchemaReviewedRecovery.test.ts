@@ -64,12 +64,12 @@ describe("reviewed recovery preserves provenance and requires canonical postflig
     expect(replacement).toBeGreaterThan(p.operations.findIndex(o=>o.sql.includes("ADD `craftingReceiptId`")));
     expect(p.operations[replacement].sourceStatementIndexes).toEqual([4,5]);
     expect(p.operations.findIndex(o=>o.kind==="DROP_REVIEWED_INDEX")).toBeGreaterThan(p.operations.findIndex(o=>o.sql.includes("CREATE INDEX `craftingReceipts_input_item_idx`")));
-    expect(p.journalInsertions).toHaveLength(9);
+    expect(p.journalInsertions).toHaveLength(REPAIR_POLICY.absent.length + 3); // approved absent migrations + 0068 + two reviewed provenance rows
   });
   it("requires all canonical journal identities while retaining both original provenance rows", () => {
     const o=full();o.drizzleJournal[0].rows!.push(...REVIEWED_JOURNAL.map(e=>({hash:e.hash,createdAt:String(e.when)})));
     const p=plan(o);
-    expect(o.drizzleJournal[0].rows).toHaveLength(76);
+    expect(o.drizzleJournal[0].rows).toHaveLength(journal.length + REVIEWED_JOURNAL.length);
     expect(p.decision).toBe("ALREADY_MATCHED");
     expect(p.journalInsertions).toEqual([]);
     expect(p.reviewedRecovery!.preservedJournalRows).toHaveLength(2);
