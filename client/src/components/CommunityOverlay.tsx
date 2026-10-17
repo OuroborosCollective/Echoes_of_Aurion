@@ -79,6 +79,8 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
     setMessage("");
   };
 
+  const panelTitle = panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : "Öffentlicher Asset-Katalog";
+
   const overlay = <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18}/><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
     <div id="aurion-community-dock" className="community-dock">
@@ -115,9 +117,11 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
         className={`community-panel ${panel}-panel`}
+        role="dialog"
+        aria-labelledby={`aurion-community-panel-title-${panel}`}
         aria-live="polite"
       >
-        <header className="community-panel-header"><div><p>AURION // COMMUNITY</p><h2>{panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : "Öffentlicher Asset-Katalog"}</h2></div><button type="button" onClick={close} title="Community-Konsole schließen" aria-label="Community-Konsole schließen"><X size={18}/></button></header>
+        <header className="community-panel-header"><div><p>AURION // COMMUNITY</p><h2 id={`aurion-community-panel-title-${panel}`}>{panelTitle}</h2></div><button type="button" onClick={close} title="Community-Konsole schließen" aria-label="Community-Konsole schließen"><X size={18}/></button></header>
         {message && <p className="community-feedback"><BellRing size={13}/>{message}</p>}
 
         {panel === "chat" && <div className="community-chat"><div className="community-feed">{chat.data?.map(entry => <article key={entry.id} className={entry.userId === currentUserId ? "community-message own" : "community-message"}><header><b>{participantName(entry.authorName, entry.userId)}</b><time>{localTime(entry.createdAt)}</time></header><p>{entry.body}</p></article>)}{!chat.data?.length && <p className="community-empty">Noch keine Funksprüche.</p>}</div><form className="community-compose" onSubmit={event => { event.preventDefault(); if (chatBody.trim()) sendChat.mutate({ body: chatBody }); }}><input value={chatBody} maxLength={500} onChange={event => setChatBody(event.target.value)} placeholder="Kurzer Funkspruch…"/><button type="submit" disabled={!chatBody.trim() || sendChat.isPending} aria-busy={sendChat.isPending} title="Chatnachricht senden" aria-label="Chatnachricht senden"><Send size={16}/></button></form></div>}
