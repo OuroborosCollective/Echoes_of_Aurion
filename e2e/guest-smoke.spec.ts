@@ -24,7 +24,7 @@ test("guest sees Aurion website and a read-only public asset catalog", async ({ 
 test("guest opens Home Events through the accessible community overlay", async ({ page }) => {
   const errors = recordUnexpectedConsoleErrors(page);
   await page.goto("/");
-  const eventsButton = page.getByRole("button", { name: "Events", exact: true });
+  const eventsButton = page.getByRole("button", { name: "Events", exact: true, description: "Events öffnen" });
   await expect(eventsButton).toHaveAttribute("aria-haspopup", "dialog");
   await eventsButton.click();
   const community = page.getByLabel("Aurion Gemeinschaft");
