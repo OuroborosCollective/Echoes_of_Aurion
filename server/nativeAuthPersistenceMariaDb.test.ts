@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { NATIVE_AUTH_ACCESS_TTL_SECONDS, NATIVE_AUTH_HANDOFF_TTL_SECONDS, NATIVE_AUTH_CONTRACT_VERSION, NATIVE_AUTH_RETURN_ID } from "../shared/nativeAuthContract";
 import { createNativeAuthSecret, nativeAuthCodeChallengeFor } from "./nativeAuthProtocol";
 import {
-  authenticateNativeAuthAccess, exchangeNativeAuthHandoff,
+  authenticateNativeAuthAccess, exchangeNativeAuthHandoff, isNativeAuthBrowserTransactionPending,
   issueNativeAuthHandoffAfterVerifiedBrowserLogin, refreshNativeAuthSession,
   revokeNativeAuthSession, startNativeAuthTransaction,
 } from "./nativeAuthPersistence";
@@ -46,6 +46,23 @@ suite("Aurion native auth in isolated MariaDB", () => {
     const issued = await issueNativeAuthHandoffAfterVerifiedBrowserLogin(start.transactionId, USER, requestState, at + 100);
     return { start, issued, requestState, exchange: { version: NATIVE_AUTH_CONTRACT_VERSION, transactionId: start.transactionId, code: issued.handoffCode, codeVerifier: VERIFIER, appBuild: APP_BUILD } };
   }
+
+  it("reads a real pending browser transaction and rejects expiry and issuance", async () => {
+    const requestState = createNativeAuthSecret();
+    const created = await startNativeAuthTransaction({
+      version: NATIVE_AUTH_CONTRACT_VERSION, platform: "android",
+      appBuild: APP_BUILD, returnId: NATIVE_AUTH_RETURN_ID, requestState,
+      codeChallenge: nativeAuthCodeChallengeFor(VERIFIER), codeChallengeMethod: "S256",
+    }, NOW);
+    expect(await isNativeAuthBrowserTransactionPending(created.transactionId, NOW + 10)).toBe(true);
+    expect(await isNativeAuthBrowserTransactionPending(created.transactionId, created.expiresAtMs)).toBe(false);
+    expect(await isNativeAuthBrowserTransactionPending("x".repeat(43), NOW + 10)).toBe(false);
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT * FROM aurionNativeAuthTransactions WHERE id = ?", [created.transactionId]);
+    expect(rows).toHaveLength(1);
+    expect(JSON.stringify(rows)).not.toContain(requestState);
+    await issueNativeAuthHandoffAfterVerifiedBrowserLogin(created.transactionId, USER, requestState, NOW + 100);
+    expect(await isNativeAuthBrowserTransactionPending(created.transactionId, NOW + 200)).toBe(false);
+  });
 
   it("exchanges once and stores only digests; resolves the verified server user", async () => {
     const { issued, exchange, start, requestState } = await handoff();
