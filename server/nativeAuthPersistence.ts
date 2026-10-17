@@ -96,9 +96,11 @@ export async function readNativeAuthRequestStateForBrowser(transactionId: string
   const rows = await db.select().from(aurionNativeAuthTransactions)
     .where(eq(aurionNativeAuthTransactions.id, transactionId)).limit(1);
   const row = rows[0];
-  if (!row || row.expiresAtMs <= now || row.issuedAtMs !== null ||
-      row.consumedAtMs !== null || row.returnId !== NATIVE_AUTH_RETURN_ID) {
+  if (!row || row.expiresAtMs <= now || row.returnId !== NATIVE_AUTH_RETURN_ID) {
     throw new Error("NATIVE_AUTH_TRANSACTION_INVALID");
+  }
+  if (row.issuedAtMs !== null || row.consumedAtMs !== null) {
+    throw new Error("NATIVE_AUTH_CODE_CONSUMED");
   }
   const state = openNativeAuthRequestState(row.requestStateSealed, row.id, row.appBuild, row.returnId);
   if (!nativeAuthSecretMatches(state, row.requestStateDigest)) {
