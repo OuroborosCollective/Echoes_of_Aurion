@@ -1,5 +1,5 @@
 import express from "express";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { NATIVE_AUTH_CONTRACT_VERSION as VERSION, NATIVE_AUTH_ACCESS_TTL_SECONDS, NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS } from "../shared/nativeAuthContract";
 import { registerNativeAuthHttpRoutes } from "./nativeAuthHttp";
 import type { Server } from "node:http";
@@ -8,12 +8,15 @@ const secret=(x:string)=>x.repeat(43);
 const request={version:VERSION,transactionId:secret("t"),code:secret("c"),codeVerifier:secret("v"),appBuild:"godot-android.1"};
 const token={version:VERSION,tokenType:"Bearer" as const,accessToken:secret("a"),refreshToken:secret("r"),accessExpiresInSeconds:NATIVE_AUTH_ACCESS_TTL_SECONDS,refreshAbsoluteRemainingSeconds:3600,refreshIdleExpiresInSeconds:NATIVE_AUTH_REFRESH_IDLE_TTL_SECONDS};
 async function setup(deps: Parameters<typeof registerNativeAuthHttpRoutes>[1]={}) {
- const app=express();app.use(express.json({limit:"8kb"}));registerNativeAuthHttpRoutes(app,deps);
+ const app=express();app.use(express.json({limit:"8kb"}));app.use(express.urlencoded({extended:false,limit:"2kb"}));registerNativeAuthHttpRoutes(app,deps);
  const srv=await new Promise<Server>(resolve=>{const s=app.listen(0,"127.0.0.1",()=>resolve(s));});
  return {url:"http://127.0.0.1:"+(srv.address() as AddressInfo).port+"/api/native-auth", close:()=>new Promise<void>(r=>srv.close(()=>r()))};
 }
 const post=(url:string,body:unknown,headers:Record<string,string>={})=>fetch(url,{method:"POST",headers:{"content-type":"application/json",...headers},body:JSON.stringify(body)});
 describe("native HTTP session boundary",()=>{
+ const previousSealKey=process.env.NATIVE_AUTH_STATE_SEAL_KEY;
+ beforeAll(()=>{process.env.NATIVE_AUTH_STATE_SEAL_KEY=Buffer.alloc(32,23).toString("base64url")});
+ afterAll(()=>{if(previousSealKey===undefined)delete process.env.NATIVE_AUTH_STATE_SEAL_KEY;else process.env.NATIVE_AUTH_STATE_SEAL_KEY=previousSealKey});
  it("stays disabled without approval",async()=>{const x=await setup();try{const r=await post(x.url+"/exchange",request);expect(r.status).toBe(503);expect(r.headers.get("cache-control")).toContain("no-store");}finally{await x.close()}});
  it("exchanges only strict versioned payload and does not set cookies",async()=>{const exchange=vi.fn(async()=>token);const x=await setup({ready:async()=>true,exchange});try{
  const r=await post(x.url+"/exchange",request);expect(r.status).toBe(200);expect(await r.json()).toEqual(token);expect(r.headers.get("set-cookie")).toBeNull();expect(exchange).toHaveBeenCalledWith(request);
