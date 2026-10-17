@@ -2,6 +2,7 @@ import {
   createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual,
 } from "node:crypto";
 import { NATIVE_AUTH_TRANSACTION_TTL_SECONDS } from "@shared/nativeAuthContract";
+import { operationalNow } from "@shared/operationalClock";
 
 // Only a separately configured 256-bit server key can decrypt client State.
 // This secret is not a client secret, not the web JWT key, and never leaves the server.
@@ -63,7 +64,7 @@ export function openNativeAuthRequestState(
 
 /** A browser-only CSRF pairing, not a device credential or login permission. */
 export function createNativeBrowserBinding(
-  transactionId: string, issuedAtMs: number = Date.now(),
+  transactionId: string, issuedAtMs: number = operationalNow(),
 ): { cookie: string; csrf: string } {
   if (!/^[A-Za-z0-9_-]{32,128}$/.test(transactionId) ||
       !Number.isSafeInteger(issuedAtMs) || issuedAtMs <= 0) {
@@ -78,7 +79,7 @@ export function createNativeBrowserBinding(
 }
 
 export function readNativeBrowserBinding(
-  cookie: string | undefined, nowMs: number = Date.now(),
+  cookie: string | undefined, nowMs: number = operationalNow(),
 ): { transactionId: string; csrf: string } | null {
   if (!cookie) return null;
   const match = /^([A-Za-z0-9_-]{32,128})\.([A-Za-z0-9_-]{43})\.([a-z0-9]{1,12})\.([A-Za-z0-9_-]{43})$/.exec(cookie);
