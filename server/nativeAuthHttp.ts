@@ -13,6 +13,7 @@ import {
   type NativeAuthStartRequest,
   type NativeAuthExchangeRequest,
   type NativeAuthTokenPair,
+  type NativeAuthRevokeRequest,
 } from "@shared/nativeAuthContract";
 import {
   startNativeAuthTransaction,
@@ -21,7 +22,7 @@ import {
   issueNativeAuthHandoffAfterVerifiedBrowserLogin,
   exchangeNativeAuthHandoff,
   refreshNativeAuthSession,
-  revokeNativeAuthSession,
+  revokeNativeAuthSessions,
 } from "./nativeAuthPersistence";
 import { parse as parseCookieHeader } from "cookie";
 import { createNativeBrowserBinding, nativeBrowserCsrfMatches, readNativeBrowserBinding } from "./nativeAuthStateSeal";
@@ -37,7 +38,7 @@ export interface NativeAuthHttpDependencies {
   issueHandoff: (transactionId: string, userId: number, state: string) => Promise<{ handoffCode: string; expiresAtMs: number }>;
   exchange: (request: NativeAuthExchangeRequest) => Promise<NativeAuthTokenPair>;
   refresh: (token: string) => Promise<NativeAuthTokenPair>;
-  revoke: (token: string) => Promise<boolean>;
+  revoke: (token: string, scope: NativeAuthRevokeRequest["scope"]) => Promise<boolean>;
 }
 const DEFAULTS: NativeAuthHttpDependencies = {
   // Production stays fail-closed until native schema 0075, OIDC/browser handoff
@@ -48,7 +49,7 @@ const DEFAULTS: NativeAuthHttpDependencies = {
   issueHandoff: issueNativeAuthHandoffAfterVerifiedBrowserLogin,
   exchange: exchangeNativeAuthHandoff,
   refresh: refreshNativeAuthSession,
-  revoke: revokeNativeAuthSession,
+  revoke: revokeNativeAuthSessions,
 };
 const BASE_PATH = "/api/native-auth";
 const CANONICAL_BROWSER_ORIGIN = "https://arelogic.space";
@@ -228,8 +229,7 @@ export function registerNativeAuthHttpRoutes(app: Express, options: Partial<Nati
       if (hostile(req)) return response(res, 403, "NATIVE_AUTH_REQUEST_INVALID");
       const parsed = nativeAuthRevokeRequestSchema.safeParse(req.body);
       if (!parsed.success) return response(res, 400, "NATIVE_AUTH_REQUEST_INVALID");
-      if (parsed.data.scope !== "session") return response(res, 503, "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE");
-      await deps.revoke(parsed.data.refreshToken);
+      await deps.revoke(parsed.data.refreshToken, parsed.data.scope);
       return res.status(204).end();
     } catch (error) {
       return fail(res, error);
