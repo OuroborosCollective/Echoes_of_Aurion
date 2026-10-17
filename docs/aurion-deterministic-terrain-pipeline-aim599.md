@@ -168,14 +168,14 @@ Nicht kanonisch sind:
 Der bestehende `buildWorldChunkTerrainCagProbe` erzeugt aus dem bereits kanonisch berechneten Chunk eine begrenzte Wolfram-Language-Anfrage. CAG generiert kein zweites Terrain und wählt keinen Seed. Es berechnet nur die Geometrie-Zusammenfassung erneut:
 
 ```text
-{Min[flat], Max[flat], Max[Join[dx, dz]]}
+{Min[m], Max[m], Max[dx, dz]}
 ```
 
 Dabei entsprechen:
 
-- `Min[flat]` der minimalen Chunk-Höhe;
-- `Max[flat]` der maximalen Chunk-Höhe;
-- `Max[Join[dx, dz]]` der maximalen horizontalen oder vertikalen Nachbar-Differenz.
+- `Min[m]` der minimalen Chunk-Höhe;
+- `Max[m]` der maximalen Chunk-Höhe;
+- `Max[dx, dz]` der maximalen horizontalen oder vertikalen Nachbar-Differenz.
 
 Der CAG-Receipt enthält jetzt zusätzlich:
 
