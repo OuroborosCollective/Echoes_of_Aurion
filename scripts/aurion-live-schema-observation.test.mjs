@@ -94,3 +94,15 @@ test('completed Aurion dispatch automatically triggers read-only observation, no
   assert.match(workflow, /GITHUB_SHA/);
   assert.doesNotMatch(workflow, /id-token: write|actions: write|gh workflow run/);
 });
+
+
+test('main-only diagnostic patch receives an immediate independent readback after merge', () => {
+  const workflow = fs.readFileSync(new URL('../.github/workflows/aurion-0075-live-readback.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /push:\s*\n\s*branches:\s*\[main\]/);
+  assert.match(workflow, /paths:\s*\n\s*-\s*["']?\.github\/workflows\/aurion-0075-live-readback\.yml/);
+  assert.match(workflow, /github\.event_name == 'push'/);
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch'.*inputs\.expected_sha/);
+  assert.match(workflow, /github\.event_name == 'workflow_run'.*github\.event\.workflow_run\.head_sha/);
+  assert.match(workflow, /github\.event_name == 'push' \|\| "\$GITHUB_EVENT_NAME" == "workflow_dispatch"/);
+  assert.doesNotMatch(workflow, /id-token: write|actions: write|gh workflow run/);
+});
