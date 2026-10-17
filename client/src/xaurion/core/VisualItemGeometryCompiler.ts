@@ -6,6 +6,7 @@ import {
   type VisualMorphologyCacheContext,
   type VisualMorphologyRecipe,
 } from "./VisualItemMorphologyCompiler";
+import { bladeProfileOutline, resolveBladeProfile, VISUAL_BLADE_PROFILE_RULESET, type VisualBladeProfile } from "./VisualBladeProfile";
 
 export type VisualItemLod = 0 | 1 | 2;
 export const visualWeaponFamilies = ["blade", "axe", "mace", "spear", "dagger", "bow", "staff", "wand", "hammer", "scythe", "shield", "focus"] as const;
@@ -150,18 +151,32 @@ function primitiveGeometry(recipe: PartRecipe, lod: VisualItemLod): THREE.Buffer
   }
 }
 
-function buildRecipe(parts: readonly PartRecipe[], lod: VisualItemLod, material: THREE.Material, morphology: VisualMorphologyRecipe): THREE.Group {
+function buildBladeProfileGeometry(profile: VisualBladeProfile): THREE.ExtrudeGeometry {
+  const outline = bladeProfileOutline(profile);
+  const shape = new THREE.Shape();
+  shape.moveTo(outline[0]![0], outline[0]![1]);
+  for (const [x, y] of outline.slice(1)) shape.lineTo(x, y);
+  shape.closePath();
+  return new THREE.ExtrudeGeometry(shape, { depth: 0.045, steps: 1, bevelEnabled: false, curveSegments: 1 });
+}
+
+function buildRecipe(parts: readonly PartRecipe[], lod: VisualItemLod, material: THREE.Material, morphology: VisualMorphologyRecipe, bladeProfile?: VisualBladeProfile): THREE.Group {
   const root = new THREE.Group();
   for (const part of parts) {
     if ((part.maxLod ?? 2) < lod) continue;
-    const mesh = new THREE.Mesh(primitiveGeometry(part, lod), material);
+    if (bladeProfile && part.name === "tip") continue; // Silhouette itself owns the tip.
+    const geometry = bladeProfile && part.name === "blade"
+      ? buildBladeProfileGeometry(bladeProfile)
+      : primitiveGeometry(part, lod);
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.name = part.name;
     const transform = visualMorphologyTransform(part.name, morphology);
-    if (part.position) {
+    const position = bladeProfile && part.name === "blade" ? v(0, 0.01, 0) : part.position;
+    if (position) {
       mesh.position.set(
-        part.position[0] * transform.positionScale[0],
-        part.position[1] * transform.positionScale[1],
-        part.position[2] * transform.positionScale[2],
+        position[0] * transform.positionScale[0],
+        position[1] * transform.positionScale[1],
+        position[2] * transform.positionScale[2],
       );
     }
     mesh.scale.set(
@@ -284,13 +299,20 @@ export function compileVisualItemGeometry(
   const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
   let root: THREE.Group;
   let geometryKey: string;
+  let bladeProfile: VisualBladeProfile | undefined;
   if (descriptor.category === "weapon") {
     if (!weaponFamilySet.has(descriptor.familyId)) {
       material.dispose();
       return Object.freeze({ kind: "unsupported", lod, reason: "WEAPON_FAMILY_UNSUPPORTED" });
     }
     const family = descriptor.familyId as VisualWeaponFamily;
-    root = buildRecipe(weaponRecipes[family], lod, material, morphology);
+    if (family === "blade") {
+      bladeProfile = resolveBladeProfile({
+        materialId: descriptor.visual?.materialId ?? null,
+        silhouetteVariant: morphology.silhouetteVariant,
+      });
+    }
+    root = buildRecipe(weaponRecipes[family], lod, material, morphology, bladeProfile);
     geometryKey = `weapon:${family}`;
   } else {
     const slot = descriptor.equipmentSlot;
@@ -303,12 +325,18 @@ export function compileVisualItemGeometry(
   }
   root.name = `aurion-generated-item:${geometryKey}:lod${lod}`;
   const triangleCount = countObjectTriangles(root);
+  if (bladeProfile && triangleCount > ({ 0: 1600, 1: 800, 2: 300 } as const)[lod]) {
+    disposeGenerated(root);
+    throw new Error("VISUAL_BLADE_LOD_TRIANGLE_BUDGET");
+  }
   const structuralFingerprint = visualGeometryFingerprint(root, geometryKey, lod, morphology.recipeHash);
   root.userData.visualItem = Object.freeze({
     version: descriptor.version,
     itemDefinitionId: descriptor.itemDefinitionId,
     geometryKey,
     lod,
+    bladeProfile: bladeProfile ?? null,
+    bladeProfileRuleset: bladeProfile ? VISUAL_BLADE_PROFILE_RULESET : null,
     structuralFingerprint,
     morphologyRecipeHash: morphology.recipeHash,
     morphologyGrammarVersion: morphology.grammarVersion,
