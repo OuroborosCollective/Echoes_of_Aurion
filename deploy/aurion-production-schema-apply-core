@@ -614,7 +614,7 @@ apply_raw="$(mktemp "${state_dir}/.apply.XXXXXX")"
 set +e
 if [[ "$preflight_mode" == "complete" ]]; then
   APPLY_SOURCE_REVISION="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
-    console.log(JSON.stringify({recordType:"aurion_production_schema_apply_execution",schemaVersion:1,sourceRevision:process.env.APPLY_SOURCE_REVISION,planSha256:process.env.APPLY_PLAN_SHA256,mode:"apply",databaseCredentialReturned:false,state:"ALREADY_APPLIED",appliedMigrationTags:[],postflight:{migrationCount:53,matchCount:53,absentCount:0,driftCount:0}}));
+    console.log(JSON.stringify({recordType:"aurion_production_schema_apply_execution",schemaVersion:1,sourceRevision:process.env.APPLY_SOURCE_REVISION,planSha256:process.env.APPLY_PLAN_SHA256,mode:"apply",databaseCredentialReturned:false,state:"ALREADY_APPLIED",appliedMigrationTags:[],postflight:{migrationCount:54,matchCount:54,absentCount:0,driftCount:0}}));
   ' >"$apply_raw"
   apply_status=$?
 elif [[ "$preflight_mode" == "repair" ]]; then
