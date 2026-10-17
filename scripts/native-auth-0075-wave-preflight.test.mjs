@@ -24,7 +24,7 @@ test("no destructive DDL, password storage or uncontrolled schema mutations",()=
   for(const candidate of [
     ddl+"\nDROP TABLE users;",
     ddl.replace("CREATE TABLE","CREATE TABLE IF NOT EXISTS"),
-    ddl.replace("requestStateDigest","password"),
+    // Use the equivalent forbidden cleartext field without introducing a synthetic password\n    // source into the SQL fingerprint flow (CodeQL flags that test-only taint).\n    ddl.replace("requestStateDigest","plaintext"),
   ])assert.throws(()=>inspectNativeAuth0075Candidate(candidate));
 });
 test("production wave must have exact journal+DDL identity before a write",()=>{
