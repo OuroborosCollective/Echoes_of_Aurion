@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it } from "vitest";
@@ -44,7 +44,8 @@ describe("CommunityOverlay", () => {
     expect(screen.getByRole("button", { name: "Forum öffnen" }).getAttribute("aria-pressed")).toBe("true");
     expect(document.activeElement).toBe(await screen.findByRole("dialog", { name: "Sternwartenforum" }));
     await user.click(screen.getByRole("button", { name: "Community-Events öffnen" }));
-    expect(document.activeElement).toBe(await screen.findByRole("dialog", { name: "Community-Events" }));
+    const eventsDialog = await screen.findByRole("dialog", { name: "Community-Events" });
+    await waitFor(() => expect(document.activeElement).toBe(eventsDialog));
     expect(screen.getByRole("button", { name: "Community-Konsole schließen" }).getAttribute("title")).toBe("Community-Konsole schließen");
   });
 
