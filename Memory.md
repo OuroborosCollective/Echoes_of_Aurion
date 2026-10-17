@@ -2627,3 +2627,24 @@ Evidence: Draft PR #996 head 4580328356f25afa77899e934e07079de8a79d6e; GitHub wo
 Learned: Base chunk sources represent possible raw-resource collection points, not authoritative stocks of processed materials. A mined or traded item needs its own receipt and ownership before becoming an ingredient.
 Open: Verify typecheck, focused regression, donor/build and runtime readbacks. Separate later integration must bind crafting to verified item/material provenance.
 Next safe step: Read back focused CI on PR #996, repair any regression, then review stacked PR dependencies before merge.
+
+
+### 2026-10-17 — PR #996 — feat(economy): authoritative chunk resource availability evidence
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=996 merge=8a983eb49c02caa6a6ddfc9b7473dae1a3c8500f -->
+Task: Merge PR #996 into `main` — feat(economy): authoritative chunk resource availability evidence.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `server/aurionChunkResourceEvidence.test.ts`
+- `server/aurionChunkResourceEvidence.ts`
+- `server/db.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/996
+- Merge commit: `8a983eb49c02caa6a6ddfc9b7473dae1a3c8500f`
+- PR head: `8dbe5d5b3bc06a66eca83e958b29157991f613b2`
+- Merged at: 2026-10-17T05:17:05Z
+- Post-merge workflow run: 39005695867
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
