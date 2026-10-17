@@ -79,3 +79,18 @@ test('workflow is manual, owner-scoped, read-only and has no migration apply act
   assert.match(workflow, /sudo -n "\$runner" "\$OBSERVED_SHA"/);
   assert.doesNotMatch(workflow, /id-token: write|actions: write|workflow_call:|gh workflow run|schema-apply|promote-aurion-zone-runtime/);
 });
+
+
+test('completed Aurion dispatch automatically triggers read-only observation, not a new release', () => {
+  const workflow = fs.readFileSync(new URL('../.github/workflows/aurion-0075-live-readback.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /workflow_run:\s*\n\s*workflows:\s*\n\s*-\s*["']?Deploy Aurion Traefik runtime["']?/);
+  assert.match(workflow, /types:\s*\[completed\]/);
+  assert.match(workflow, /github\.event_name == 'workflow_run'/);
+  assert.match(workflow, /github\.event\.workflow_run\.event == 'workflow_dispatch'/);
+  assert.match(workflow, /github\.event\.workflow_run\.head_branch == 'main'/);
+  assert.match(workflow, /github\.event\.workflow_run\.head_repository\.full_name == 'OuroborosCollective\/Echoes_of_Aurion'/);
+  assert.match(workflow, /EXPECTED_SHA: \$\{\{ github\.event_name == 'workflow_run' && github\.event\.workflow_run\.head_sha \|\| inputs\.expected_sha \}\}/);
+  assert.match(workflow, /GITHUB_EVENT_NAME/);
+  assert.match(workflow, /GITHUB_SHA/);
+  assert.doesNotMatch(workflow, /id-token: write|actions: write|gh workflow run/);
+});
