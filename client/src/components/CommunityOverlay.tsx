@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
 import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, UsersRound, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { soundSynth } from "../xaurion/audio/SoundSynthesizer";
 
@@ -27,7 +27,24 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
   const [questionBody, setQuestionBody] = useState("");
   const [replyBody, setReplyBody] = useState("");
   const [message, setMessage] = useState("");
+  const panelRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const utils = trpc.useUtils();
+
+  const restoreFocus = () => {
+    const target = returnFocusRef.current;
+    returnFocusRef.current = null;
+    if (target?.isConnected) target.focus();
+  };
+  const openPanel = (nextPanel: Exclude<CommunityPanel, null>) => {
+    const active = document.activeElement;
+    if (!returnFocusRef.current && active instanceof HTMLElement) returnFocusRef.current = active;
+    setPanel(nextPanel);
+  };
+  const mountPanel = useCallback((node: HTMLElement | null) => {
+    panelRef.current = node;
+    node?.focus();
+  }, []);
 
   useEffect(() => {
     const open = (event: Event) => {
@@ -39,7 +56,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         setMessage("Diese Funktion gehört nicht zur Aurion-Communityfläche und wird hier nicht ausgeführt.");
         return;
       }
-      setPanel(mapped);
+      openPanel(mapped);
       setOpenedFromWorld(Boolean(document.querySelector('[data-testid="xaurion-open-world-runtime"]')));
       setMobileMenuOpen(false);
       setSelectedThreadId(null);
@@ -52,7 +69,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         setQuestionBody(String(requested.body));
       }
     };
-    const reset = () => { setOpenedFromWorld(false); setPanel(null); };
+    const reset = () => { setOpenedFromWorld(false); setPanel(null); restoreFocus(); };
     window.addEventListener("aurion:open-community", open);
     window.addEventListener("aurion:return-to-tower", reset);
     return () => { window.removeEventListener("aurion:open-community", open); window.removeEventListener("aurion:return-to-tower", reset); };
@@ -77,32 +94,35 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
     setOpenedFromWorld(false);
     setSelectedThreadId(null);
     setMessage("");
+    restoreFocus();
   };
+
+  const panelTitle = panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : "Öffentlicher Asset-Katalog";
 
   const overlay = <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18}/><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
     <div id="aurion-community-dock" className="community-dock">
       <button type="button" aria-pressed={panel === "chat"} className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
-        isAuthenticated ? setPanel("chat") : setMessage("Bitte anmelden, um den Signalraum zu verwenden.");
+        isAuthenticated ? openPanel("chat") : setMessage("Bitte anmelden, um den Signalraum zu verwenden.");
       }} aria-label="Expeditionschat öffnen"><MessageCircle size={16}/><span>CHAT</span></button>
       <button type="button" aria-pressed={panel === "forum"} className={panel === "forum" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
-        setPanel("forum");
+        openPanel("forum");
         setForumCategory("announcements");
       }} aria-label="Forum öffnen"><FileText size={16}/><span>FORUM</span></button>
       <button type="button" aria-pressed={panel === "events"} className={panel === "events" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
-        setPanel("events");
+        openPanel("events");
         setForumCategory("events");
       }} aria-label="Community-Events öffnen"><CalendarDays size={16}/><span>EVENTS</span></button>
       <button type="button" aria-pressed={panel === "guild"} className={panel === "guild" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
-        isAuthenticated ? setPanel("guild") : setMessage("Bitte anmelden, um deine Gildenzugehörigkeit zu lesen.");
+        isAuthenticated ? openPanel("guild") : setMessage("Bitte anmelden, um deine Gildenzugehörigkeit zu lesen.");
       }} aria-label="Gildenzugehörigkeit öffnen"><UsersRound size={16}/><span>GILDE</span></button>
       <button type="button" aria-pressed={panel === "assets"} className={panel === "assets" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
-        setPanel("assets");
+        openPanel("assets");
       }} aria-label="Asset-Katalog öffnen"><Box size={16}/><span>ASSETS</span></button>
     </div>
 
@@ -115,9 +135,13 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
         className={`community-panel ${panel}-panel`}
+        ref={mountPanel}
+        tabIndex={-1}
+        role="dialog"
+        aria-labelledby={`aurion-community-panel-title-${panel}`}
         aria-live="polite"
       >
-        <header className="community-panel-header"><div><p>AURION // COMMUNITY</p><h2>{panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : "Öffentlicher Asset-Katalog"}</h2></div><button type="button" onClick={close} title="Community-Konsole schließen" aria-label="Community-Konsole schließen"><X size={18}/></button></header>
+        <header className="community-panel-header"><div><p>AURION // COMMUNITY</p><h2 id={`aurion-community-panel-title-${panel}`}>{panelTitle}</h2></div><button type="button" onClick={close} title="Community-Konsole schließen" aria-label="Community-Konsole schließen"><X size={18}/></button></header>
         {message && <p className="community-feedback"><BellRing size={13}/>{message}</p>}
 
         {panel === "chat" && <div className="community-chat"><div className="community-feed">{chat.data?.map(entry => <article key={entry.id} className={entry.userId === currentUserId ? "community-message own" : "community-message"}><header><b>{participantName(entry.authorName, entry.userId)}</b><time>{localTime(entry.createdAt)}</time></header><p>{entry.body}</p></article>)}{!chat.data?.length && <p className="community-empty">Noch keine Funksprüche.</p>}</div><form className="community-compose" onSubmit={event => { event.preventDefault(); if (chatBody.trim()) sendChat.mutate({ body: chatBody }); }}><input value={chatBody} maxLength={500} onChange={event => setChatBody(event.target.value)} placeholder="Kurzer Funkspruch…"/><button type="submit" disabled={!chatBody.trim() || sendChat.isPending} aria-busy={sendChat.isPending} title="Chatnachricht senden" aria-label="Chatnachricht senden"><Send size={16}/></button></form></div>}

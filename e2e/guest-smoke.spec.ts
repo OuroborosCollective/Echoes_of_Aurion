@@ -21,6 +21,22 @@ test("guest sees Aurion website and a read-only public asset catalog", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("guest opens Home Events through the accessible community overlay", async ({ page }) => {
+  const errors = recordUnexpectedConsoleErrors(page);
+  await page.goto("/");
+  const eventsButton = page.getByRole("button", { name: "Events", exact: true, description: "Events öffnen" });
+  await expect(eventsButton).toHaveAttribute("aria-haspopup", "dialog");
+  await eventsButton.click();
+  const community = page.getByLabel("Aurion Gemeinschaft");
+  const eventsDialog = community.getByRole("dialog", { name: "Community-Events", exact: true });
+  await expect(eventsDialog).toBeVisible();
+  await expect(eventsDialog).toBeFocused();
+  await community.getByRole("button", { name: "Community-Konsole schließen", exact: true }).click();
+  await expect(eventsButton).toBeFocused();
+  await expect(page.locator("canvas")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("guest cannot start AX1 before authentication", async ({ page }) => {
   const errors = recordUnexpectedConsoleErrors(page);
   await page.goto("/");
