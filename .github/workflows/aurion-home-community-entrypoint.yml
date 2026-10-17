@@ -3,6 +3,8 @@ name: Aurion Home community entrypoint
 on:
   pull_request:
     paths:
+      - "client/src/App.tsx"
+      - "client/src/components/AurionCommunityHost.tsx"
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
@@ -11,6 +13,8 @@ on:
   push:
     branches: [main]
     paths:
+      - "client/src/App.tsx"
+      - "client/src/components/AurionCommunityHost.tsx"
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
