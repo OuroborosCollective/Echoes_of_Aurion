@@ -12,6 +12,7 @@ const suite = process.env.AURION_NATIVE_AUTH_E2E === "1" && !!process.env.DATABA
 const NOW = 1_792_000_000_000;
 const USER = 9671001;
 const APP_BUILD = "godot-native-auth-e2e";
+const nativeSealKeyBeforeTests = process.env.NATIVE_AUTH_STATE_SEAL_KEY;
 const VERIFIER = "v".repeat(43);
 
 suite("Aurion native auth in isolated MariaDB", () => {
@@ -28,6 +29,7 @@ suite("Aurion native auth in isolated MariaDB", () => {
     await pool.query("DELETE FROM aurionNativeAuthTransactions WHERE appBuild = ?", [APP_BUILD]);
   }
   beforeAll(async () => {
+    process.env.NATIVE_AUTH_STATE_SEAL_KEY = Buffer.alloc(32, 17).toString("base64url");
     pool = createPool(process.env.DATABASE_URL!);
     const [rows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS dbName");
     if (!String(rows[0]?.dbName ?? "").endsWith("_test")) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
@@ -35,7 +37,11 @@ suite("Aurion native auth in isolated MariaDB", () => {
     await cleanup();
   });
   afterEach(async () => { if (isolated) await cleanup(); });
-  afterAll(async () => { if (pool) { if (isolated) await cleanup(); await pool.end(); } });
+  afterAll(async () => {
+    if (pool) { if (isolated) await cleanup(); await pool.end(); }
+    if (nativeSealKeyBeforeTests === undefined) delete process.env.NATIVE_AUTH_STATE_SEAL_KEY;
+    else process.env.NATIVE_AUTH_STATE_SEAL_KEY = nativeSealKeyBeforeTests;
+  });
   async function handoff(at = NOW) {
     const requestState = createNativeAuthSecret();
     const start = await startNativeAuthTransaction({
@@ -60,6 +66,8 @@ suite("Aurion native auth in isolated MariaDB", () => {
     const [rows] = await pool.query<RowDataPacket[]>("SELECT * FROM aurionNativeAuthTransactions WHERE id = ?", [created.transactionId]);
     expect(rows).toHaveLength(1);
     expect(JSON.stringify(rows)).not.toContain(requestState);
+    expect(rows[0].returnId).toBe(NATIVE_AUTH_RETURN_ID);
+    expect(rows[0].requestStateSealed).toMatch(/^[A-Za-z0-9_-]{90,256}$/);
     await issueNativeAuthHandoffAfterVerifiedBrowserLogin(created.transactionId, USER, requestState, NOW + 100);
     expect(await isNativeAuthBrowserTransactionPending(created.transactionId, NOW + 200)).toBe(false);
   });
