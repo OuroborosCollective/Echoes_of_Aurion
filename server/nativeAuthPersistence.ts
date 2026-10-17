@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   NATIVE_AUTH_ACCESS_TTL_SECONDS,
   NATIVE_AUTH_CONTRACT_VERSION,
@@ -12,6 +12,7 @@ import {
   type NativeAuthExchangeRequest,
   type NativeAuthStartRequest,
   type NativeAuthTokenPair,
+  type NativeAuthRevokeRequest,
 } from "@shared/nativeAuthContract";
 import { deadlineAfter, operationalNow, validEpochMilliseconds } from "@shared/operationalClock";
 import {
@@ -253,8 +254,12 @@ export async function authenticateNativeAuthAccess(accessToken: string, nowMs?: 
   return { userId: row.userId, sessionId: row.sessionId };
 }
 
-/** Session logout is server-side revocation; unknown refresh credentials grant no authority. */
-export async function revokeNativeAuthSession(refreshToken: string, nowMs?: number): Promise<boolean> {
+/** Revocation derives its user solely from a locked, confirmed refresh credential. */
+export async function revokeNativeAuthSessions(
+  refreshToken: string,
+  scope: NativeAuthRevokeRequest["scope"],
+  nowMs?: number,
+): Promise<boolean> {
   const now = effectiveNow(nowMs);
   if (!/^[A-Za-z0-9_-]{43,256}$/.test(refreshToken)) return false;
   const db = await requireNativeAuthDb();
@@ -265,10 +270,19 @@ export async function revokeNativeAuthSession(refreshToken: string, nowMs?: numb
     const session = (await tx.select().from(aurionNativeAuthSessions)
       .where(eq(aurionNativeAuthSessions.id, record.sessionId)).for("update"))[0];
     if (!session) return false;
-    if (session.revokedAtMs === null) {
-      await tx.update(aurionNativeAuthSessions).set({ revokedAtMs: now })
-        .where(eq(aurionNativeAuthSessions.id, session.id));
-    }
+    if (scope === "all_sessions" && (record.consumedAtMs !== null ||
+        session.currentRefreshDigest !== record.tokenDigest || session.revokedAtMs !== null ||
+        session.absoluteExpiresAtMs <= now || session.idleExpiresAtMs <= now)) return false;
+    const target = scope === "all_sessions"
+      ? eq(aurionNativeAuthSessions.userId, session.userId)
+      : eq(aurionNativeAuthSessions.id, session.id);
+    await tx.update(aurionNativeAuthSessions).set({ revokedAtMs: now })
+      .where(and(target, isNull(aurionNativeAuthSessions.revokedAtMs)));
     return true;
   });
+}
+
+/** Backward-compatible single-session logout for existing server call sites. */
+export async function revokeNativeAuthSession(refreshToken: string, nowMs?: number): Promise<boolean> {
+  return revokeNativeAuthSessions(refreshToken, "session", nowMs);
 }

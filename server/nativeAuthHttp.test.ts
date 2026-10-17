@@ -25,8 +25,8 @@ describe("native HTTP session boundary",()=>{
  }finally{await x.close()}});
  it("rotates refresh and revokes only one session",async()=>{const refresh=vi.fn(async()=>token),revoke=vi.fn(async()=>true);const x=await setup({ready:async()=>true,refresh,revoke});try{
  const body={version:VERSION,refreshToken:secret("r")};expect((await post(x.url+"/refresh",body)).status).toBe(200);expect(refresh).toHaveBeenCalledWith(body.refreshToken);
- expect((await post(x.url+"/revoke",{...body,scope:"session"})).status).toBe(204);expect(revoke).toHaveBeenCalledWith(body.refreshToken);
- expect((await post(x.url+"/revoke",{...body,scope:"all_sessions"})).status).toBe(503);
+ expect((await post(x.url+"/revoke",{...body,scope:"session"})).status).toBe(204);expect(revoke).toHaveBeenCalledWith(body.refreshToken,"session");
+ expect((await post(x.url+"/revoke",{...body,scope:"all_sessions"})).status).toBe(204);expect(revoke).toHaveBeenLastCalledWith(body.refreshToken,"all_sessions");
  }finally{await x.close()}});
  it("fails closed on consumed handoff without returning input secrets",async()=>{const x=await setup({ready:async()=>true,exchange:async()=>{throw Error("NATIVE_AUTH_CODE_CONSUMED")}});try{
  const r=await post(x.url+"/exchange",request);expect(r.status).toBe(409);const txt=await r.text();expect(txt).not.toContain(request.code);expect(txt).not.toContain(request.codeVerifier);expect(JSON.parse(txt).error).toBe("NATIVE_AUTH_CODE_CONSUMED");
