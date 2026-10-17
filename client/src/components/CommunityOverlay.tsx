@@ -34,7 +34,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
   const restoreFocus = () => {
     const target = returnFocusRef.current;
     returnFocusRef.current = null;
-    if (target?.isConnected) requestAnimationFrame(() => target.focus());
+    if (target?.isConnected) target.focus();
   };
 
   useEffect(() => {
