@@ -19,7 +19,7 @@ async function packet(value: unknown = payload) {
   const manifest = await createWorldChunkProjectionManifestV2({
     version: WORLD_CHUNK_PROJECTION_VERSION_V2, worldId: GLOBAL_WORLD_ID,
     worldSeedDigest: hash("a"), worldRuleSetVersion: "aurion-world-chunk.v1", generatorVersion: "fixture",
-    contentVersion: CHUNK_ASSET_PROJECTION_POLICY, coordinate: payload.coordinate, layer: "world-assets", baseRevision: 1,
+    contentVersion: CHUNK_ASSET_PROJECTION_POLICY, coordinate: (value as ChunkAssetPayload).coordinate, layer: "world-assets", baseRevision: 1,
     sourceHash: hash("b"), authorityReceiptHash: hash("c"), authorityStateHash: hash("d"), worldCausalRoot: hash("e"),
     projectionSchemaVersion: "aurion.chunk-payload.v2", projectionPolicy: CHUNK_ASSET_PROJECTION_POLICY,
     payloadHash: await hashWorldChunkProjectionPayload(bytes), byteLength: bytes.length,
@@ -65,6 +65,35 @@ describe("active projection adapter boundaries (synthetic unit input, not author
     await expect(caller.gameplay.worldChunkProjectionV2({ epoch: 2, chunkX: 0, chunkZ: 0 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
+
+  it("reports zero pending workers after all confirmed chunks settle", async () => {
+    const reports: Array<{ status: string; count: number; desiredCount: number; pendingCount: number; failedCount: number }> = [];
+    class ImmediateProjectionWorker {
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      postMessage(message: { job: Parameters<typeof decodeChunkAssetWorkerPayload>[0]; payload: Uint8Array }) {
+        void decodeChunkAssetWorkerPayload(message.job, message.payload).then(({ result }) => {
+          this.onmessage?.(new MessageEvent("message", { data: { status: "DECODED", result } }));
+        });
+      }
+      terminate() {}
+    }
+    vi.stubGlobal("Worker", ImmediateProjectionWorker);
+    try {
+      const fetch = vi.fn(async ({ chunkX, chunkZ }: { chunkX: number; chunkZ: number }) =>
+        packet({ ...payload, coordinate: { x: chunkX, z: chunkZ } }));
+      const projection = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, fetch, evidence => reports.push(evidence));
+      projection.update({ x: 0, z: 0 });
+      await vi.waitFor(() => expect(reports.at(-1)).toMatchObject({
+        status: "APPLIED", count: 9, desiredCount: 9, pendingCount: 0, failedCount: 0,
+      }));
+      expect(fetch).toHaveBeenCalledTimes(9);
+      projection.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("retries transient chunk failures while the player remains in the same chunk", async () => {
     const fetch = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });
     const projection = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, fetch, vi.fn());
@@ -79,12 +108,14 @@ describe("active projection adapter boundaries (synthetic unit input, not author
 
   it("pauses authority-unprovable chunks immediately and bounds repeated transient failures", async () => {
     const denied = vi.fn(async () => ({ status: "UNPROVABLE", reason: "WORLD_ROOT_EVIDENCE_MISSING" }));
-    const terminal = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, denied, vi.fn());
+    const terminalReport = vi.fn();
+    const terminal = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, denied, terminalReport);
     terminal.update({ x: 0, z: 0 });
     await vi.waitFor(() => expect(denied).toHaveBeenCalledTimes(9));
     terminal.update({ x: 0, z: 0 }, 60);
     await Promise.resolve();
     expect(denied).toHaveBeenCalledTimes(9);
+    expect(terminalReport).toHaveBeenLastCalledWith(expect.objectContaining({ status: "UNPROVABLE", pendingCount: 0, failedCount: 9 }));
     terminal.dispose();
 
     const failed = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });

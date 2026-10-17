@@ -147,6 +147,7 @@ export class ConfirmedChunkProjection {
         const group = buildConfirmedChunkMeshes(prepared.decoded, this.terrain);
         this.groups.set(key, group); this.failures.delete(key); this.scene.add(group);
         const meshCount = [...this.groups.values()].reduce((total, item) => total + item.children.length, 0);
+        this.pending.delete(key);
         this.report({ status: "APPLIED", count: this.groups.size, desiredCount: this.desired.length, pendingCount: this.pending.size, failedCount: [...this.failures.values()].filter(value => value.terminal).length, meshCount, projectionHash: prepared.job.manifest.projectionHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
         if (this.onVerifiedApplied) void this.onVerifiedApplied({ job: prepared.job, observedAtLogicalFrame: this.logicalFrame }).catch(() => {});
         if (prepared.observation && this.onApplied) {
@@ -158,6 +159,7 @@ export class ConfirmedChunkProjection {
           const attempts = (this.failures.get(key)?.attempts ?? 0) + 1;
           this.failures.set(key, { attempts, terminal: terminal || attempts >= MAX_TRANSIENT_ATTEMPTS,
             retryAt: this.clockMs + Math.min(500 * 2 ** (attempts - 1), 10_000) });
+          this.pending.delete(key);
           this.report({ status: "UNPROVABLE", count: this.groups.size, desiredCount: this.desired.length, pendingCount: this.pending.size, failedCount: [...this.failures.values()].filter(value => value.terminal).length });
         }
       })

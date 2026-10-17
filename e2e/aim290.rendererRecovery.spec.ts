@@ -54,6 +54,7 @@ async function expectChunkProjection(page: Page, worldRootHash: string) {
   await expect.poll(async () => (await chunks(page))?.meshCount, { timeout: 45_000 }).toBeGreaterThan(0);
   expect((await chunks(page)).worldRootHash).toBe(worldRootHash);
   await expect.poll(async () => (await chunks(page))?.count, { timeout: 45_000 }).toBe(9);
+  expect((await chunks(page)).pendingCount).toBe(0);
   await expect.poll(async () => (await clientObservation(page))?.status, { timeout: 30_000 }).toBe("CLIENT_VERIFIED");
   expect(await clientObservation(page)).toMatchObject({ trust: "untrusted-client-observation", mutationAuthority: "none" });
 }
