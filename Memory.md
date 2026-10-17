@@ -2668,3 +2668,36 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #997 — feat(auth): G09.A strict server browser start (staged; not deployable) (#967)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=997 merge=edcf045fa94557984564c390ae0f002b8b6f7b10 -->
+Task: Merge PR #997 into `main` — feat(auth): G09.A strict server browser start (staged; not deployable) (#967).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-local-test-pack.yml`
+- `client/src/components/LocalAuthPanel.tsx`
+- `drizzle/nativeAuthSchema.ts`
+- `fixtures/native-auth/0075_native_auth_candidate.sql`
+- `server/_core/oauth.ts`
+- `server/nativeAuthBrowser.ts`
+- `server/nativeAuthBrowserMariaDb.test.ts`
+- `server/nativeAuthHttp.test.ts`
+- `server/nativeAuthHttp.ts`
+- `server/nativeAuthPersistence.ts`
+- `server/nativeAuthPersistenceMariaDb.test.ts`
+- `server/nativeAuthStateSeal.test.ts`
+- `server/nativeAuthStateSeal.ts`
+- `server/observability/otelBoundary.test.ts`
+- `server/observability/otelBoundary.ts`
+- `shared/nativeAuthContract.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/997
+- Merge commit: `edcf045fa94557984564c390ae0f002b8b6f7b10`
+- PR head: `1b129b4d256c5fee105fc433bad34ca80292d821`
+- Merged at: 2026-10-17T06:13:58Z
+- Post-merge workflow run: 39009139860
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
