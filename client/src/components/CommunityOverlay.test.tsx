@@ -49,7 +49,7 @@ describe("CommunityOverlay", () => {
     const user = userEvent.setup();
     render(<RealClientHarness><CommunityOverlay isAuthenticated={false} /></RealClientHarness>);
     await user.click(screen.getByRole("button", { name: "Community-Events öffnen" }));
-    expect(await screen.findByRole("heading", { name: "Community-Events" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Community-Events" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Events" }).getAttribute("aria-pressed")).toBe("true");
   });
 });
