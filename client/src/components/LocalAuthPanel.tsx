@@ -30,7 +30,14 @@ export default function LocalAuthPanel() {
     try {
       if (mode === "register") await register.mutateAsync({ handle, password });
       else await login.mutateAsync({ handle, password });
-      window.location.reload();
+      // Only first-party, same-origin web login may continue a pending native
+      // browser transaction. Other embedded/cross-origin clients keep reload.
+      const next = aurionApiUrl("/api/native-auth/continue");
+      if (new URL(next, window.location.href).origin === window.location.origin) {
+        navigateBrowser(next);
+      } else {
+        window.location.reload();
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Die Aurion-Anmeldung ist fehlgeschlagen.");
     }
