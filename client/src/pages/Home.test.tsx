@@ -41,6 +41,25 @@ describe("Home", () => {
     }
   });
 
+  it("opens Events through the exact accessible community dialog contract", async () => {
+    const user = userEvent.setup();
+    const requests: unknown[] = [];
+    const onOpen = (event: Event) => {
+      requests.push((event as CustomEvent).detail);
+    };
+    window.addEventListener("aurion:open-community", onOpen);
+    try {
+      render(<RealClientHarness><Home /></RealClientHarness>);
+      const eventsButton = screen.getByRole("button", { name: "Events", exact: true });
+      expect(eventsButton.getAttribute("aria-haspopup")).toBe("dialog");
+      await user.click(eventsButton);
+      expect(requests).toEqual([{ panel: "events" }]);
+      expect(document.querySelector("canvas")).toBeNull();
+    } finally {
+      window.removeEventListener("aurion:open-community", onOpen);
+    }
+  });
+
   it("owns neither AX1 return nor legacy gameplay action handlers", () => {
     render(<RealClientHarness><Home /></RealClientHarness>);
     let returns = 0;
