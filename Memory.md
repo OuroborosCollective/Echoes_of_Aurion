@@ -2808,3 +2808,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #1026 — fix(godot/g09): classify live reconciler exit 69 without leaking stderr
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1026 merge=f545d906cdf3af0ebdec57211ae027f400b210c7 -->
+Task: Merge PR #1026 into `main` — fix(godot/g09): classify live reconciler exit 69 without leaking stderr.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-0075-live-readback.yml`
+- `scripts/aurion-live-schema-observation.mjs`
+- `scripts/aurion-live-schema-observation.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1026
+- Merge commit: `f545d906cdf3af0ebdec57211ae027f400b210c7`
+- PR head: `fd06cc6baee8ace1199ce88cb16741edd2d4f13d`
+- Merged at: 2026-10-17T17:20:07Z
+- Post-merge workflow run: 39053299946
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
