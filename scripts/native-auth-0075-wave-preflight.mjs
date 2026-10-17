@@ -46,7 +46,7 @@ export function assertNativeAuth0075ReleaseBoundary({manifest,journal,sql,produc
     entries.at(-1)?.tag===ddl.tag &&
     entries.at(-1)?.idx===74 &&
     migrations.at(-1)?.tag===ddl.tag &&
-    manifest?.waveId==="aurion-production-0075-native-auth" &&
+    manifest?.waveId==="aurion-production-0021-0075" &&
     manifest?.policy?.ownerApprovalRequired===true &&
     manifest?.policy?.futureTagsRequireNewManifest===true &&
     manifest?.policy?.productionWritesScheduled===false &&

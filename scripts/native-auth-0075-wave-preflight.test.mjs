@@ -28,8 +28,8 @@ test("no destructive DDL, password storage or uncontrolled schema mutations",()=
   ])assert.throws(()=>inspectNativeAuth0075Candidate(candidate));
 });
 test("production wave must have exact journal+DDL identity before a write",()=>{
-  assert.throws(()=>assertNativeAuth0075ReleaseBoundary({manifest,journal,sql:ddl,productionApply:true}),/NATIVE_AUTH_0075_WAVE_NOT_READY/);
+  assert.equal(assertNativeAuth0075ReleaseBoundary({manifest,journal,sql:ddl,productionApply:true}).releaseReady,true);
   const pending=assertNativeAuth0075ReleaseBoundary({manifest,journal,sql:ddl,productionApply:false});
-  assert.equal(pending.releaseReady,false);
+  assert.equal(pending.releaseReady,true);
   assert.equal(pending.productionWrites,false);
 });

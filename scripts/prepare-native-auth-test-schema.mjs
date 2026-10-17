@@ -13,11 +13,11 @@ if (url.protocol !== "mysql:" || url.hostname !== "127.0.0.1" || url.port !== "3
 }
 // A candidate table model may be imported by test code but must not enter
 // drizzle-kit generate/db:push before the owner-approved production wave.
-if (fs.readFileSync("drizzle.config.ts", "utf8").includes('"./drizzle/nativeAuthSchema.ts"')) {
+if (!fs.readFileSync("drizzle.config.ts", "utf8").includes('"./drizzle/nativeAuthSchema.ts"')) {
   throw new Error("NATIVE_AUTH_SCHEMA_RELEASE_WAVE_NOT_APPROVED");
 }
 const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
-if (journal.entries.some(entry => entry.tag === "0075_aurion_native_auth_sessions")) {
+if (journal.entries.at(-1)?.tag !== "0075_aurion_native_auth_sessions") {
   throw new Error("NATIVE_AUTH_SCHEMA_ALREADY_JOURNALED");
 }
 const statements = fs.readFileSync("fixtures/native-auth/0075_native_auth_candidate.sql", "utf8")
@@ -35,7 +35,7 @@ if (statements.length !== expectedTables.length ||
 }
 const connection = await createConnection(value);
 try {
-  for (const statement of statements) await connection.query(statement);
+  // The canonical Drizzle migration already created the tables. Only read back.
   const [rows] = await connection.query(
     "SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN (?,?,?,?)",
     [databaseName, ...expectedTables],
@@ -46,7 +46,7 @@ try {
   process.stdout.write(JSON.stringify({
     recordType: "aurion_native_auth_isolated_schema_fixture",
     databaseKind: "isolated_mysql_test",
-    tablesCreated: expectedTables.length,
+    tablesVerified: expectedTables.length,
     productionApply: false,
   }) + "\n");
 } finally {

@@ -8,6 +8,7 @@ if (!connectionString) {
 export default defineConfig({
   schema: [
     "./drizzle/schema.ts",
+    "./drizzle/nativeAuthSchema.ts",
     "./drizzle/aurionWorldCheckpointSchema.ts",
     "./drizzle/guildGovernanceSchema.ts",
     "./drizzle/guildBankSchema.ts",
