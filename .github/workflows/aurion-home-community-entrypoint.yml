@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "client/src/App.tsx"
+      - "client/src/index.css"
       - "client/src/components/AurionCommunityHost.tsx"
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
@@ -15,6 +16,7 @@ on:
     branches: [main]
     paths:
       - "client/src/App.tsx"
+      - "client/src/index.css"
       - "client/src/components/AurionCommunityHost.tsx"
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
