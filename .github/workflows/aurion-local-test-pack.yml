@@ -98,7 +98,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/prepare-native-auth-test-schema.mjs 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-schema-readback.log
-          pnpm exec vitest run server/nativeAuthProtocol.test.ts server/nativeAuthPersistenceMariaDb.test.ts server/nativeAuthSchemaIsolation.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-mariadb.log
+          pnpm exec vitest run server/nativeAuthProtocol.test.ts server/nativeAuthStateSeal.test.ts server/nativeAuthPersistenceMariaDb.test.ts server/nativeAuthBrowserMariaDb.test.ts server/nativeAuthSchemaIsolation.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-mariadb.log
       - name: Native HTTP authentication boundary
         shell: bash
         run: |
