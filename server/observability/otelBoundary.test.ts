@@ -7,6 +7,21 @@ describe("Issue #142: OpenTelemetry side-channel boundary", () => {
     expect(redactTelemetryRoute("/api/player/123/profile/abcdef1234567890")).toBe("/api/player/:id/profile/:opaque");
   });
 
+  it("redacts native browser transaction and strips App Link code from any telemetry path", () => {
+    const transactionId = "t".repeat(43);
+    const handoffCode = "c".repeat(43);
+    const state = "s".repeat(43);
+    const route = `/api/native-auth/browser/${transactionId}/confirm?code=${handoffCode}`;
+    expect(redactTelemetryRoute(route)).toBe("/api/native-auth/browser/:opaque/confirm");
+    expect(redactTelemetryRoute(`/app/auth/callback?code=${handoffCode}&state=${state}`))
+      .toBe("/app/auth/callback");
+    const span = JSON.stringify(buildOtlpTracePayload({
+      method: "POST", route, statusCode: 403, durationMs: 4, sourceRevision: "a".repeat(40),
+    }));
+    expect(span).toContain("/api/native-auth/browser/:opaque/confirm");
+    for (const secret of [transactionId, handoffCode, state]) expect(span).not.toContain(secret);
+  });
+
   it("emits only bounded telemetry metadata and never request payloads", () => {
     const payload = JSON.stringify(buildOtlpTracePayload({
       method: "POST", route: "/api/player/123/profile", statusCode: 200, durationMs: 4, sourceRevision: "a".repeat(40),
