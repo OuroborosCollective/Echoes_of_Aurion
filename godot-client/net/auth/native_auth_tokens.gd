@@ -72,6 +72,11 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	if absolute_remaining <= 0 or absolute_remaining > REFRESH_ABSOLUTE_MAX_SECONDS:
 		clear()
 		return false
+	# A rotation must replace the previous refresh secret, not replay it.
+	if _refresh_in_flight:
+		if now < _issued_at_ms or refresh == _refresh_token:
+			clear()
+			return false
 	# A refresh may shorten the absolute limit, never extend the first confirmed session.
 	var new_absolute: int = now + absolute_remaining * 1000
 	if _refresh_in_flight and _absolute_deadline_ms >= 0:
@@ -95,7 +100,11 @@ func access_token(now_ms: int = -1) -> String:
 	if now < _issued_at_ms:
 		clear()
 		return ""
-	if now >= _access_deadline_ms or now >= _idle_deadline_ms or now >= _absolute_deadline_ms:
+	if now >= _idle_deadline_ms or now >= _absolute_deadline_ms:
+		clear()
+		return ""
+	if now >= _access_deadline_ms:
+		_access_token = ""
 		return ""
 	return _access_token
 
