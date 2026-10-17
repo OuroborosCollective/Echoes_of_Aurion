@@ -118,4 +118,12 @@ describe("Aurion production schema apply boundary", () => {
     expect(installer).toContain("visudo -cf");
     expect(installer).toContain("root:root:600");
   });
+  it("keeps no-op retry receipts aligned with the canonical journaled migration count", () => {
+    const journal = JSON.parse(read("drizzle/meta/_journal.json"));
+    const wave = JSON.parse(read("config/aurion-migration-wave-manifest.json"));
+    const count = journal.entries.filter((entry: { idx: number }) => entry.idx >= 21).length;
+    expect(wave.migrations).toHaveLength(count);
+    expect(core).toContain(`postflight:{migrationCount:${count},matchCount:${count},absentCount:0,driftCount:0}`);
+  });
+
 });

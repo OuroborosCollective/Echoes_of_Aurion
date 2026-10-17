@@ -7,7 +7,7 @@ import { proposeReviewed0068Transitions } from "./aurionSchemaReviewedTransition
 import { REVIEWED_JOURNAL, reviewedDialogueTable, type ReviewedJournalContract } from "./aurionSchemaReviewedJournal";
 
 export const REPAIR_POLICY = {
-  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts"],
+  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions"],
   drift: ["0025_aurion_loot_mastery_ethos", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0033_aurion_ax1_ui_controls", "0066_aurion_inventory_transaction_kernel", "0068_aurion_item_manipulation_runtime"],
 } as const;
 export const REPAIR_MAX_AGE_MS = 15 * 60 * 1000;

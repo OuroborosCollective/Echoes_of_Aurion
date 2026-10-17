@@ -82,6 +82,8 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify Native Auth 0075 production-wave safety gate
+        run: node --test scripts/native-auth-0075-wave-preflight.test.mjs
       - name: Verify migration chain and apply schema
         shell: bash
         run: |

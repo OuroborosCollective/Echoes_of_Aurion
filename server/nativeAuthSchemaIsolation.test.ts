@@ -29,12 +29,12 @@ describe("Native session schema can only be staged in an isolated test DB", () =
       expect(guardRun(url, "1")).toContain("NATIVE_AUTH_NON_ISOLATED_DATABASE_REJECTED");
     }
   });
-  it("does not expose candidate schema to regular migrations or generator", () => {
+  it("requires the canonical 0075 schema to be exactly journaled", () => {
     const config = readFileSync("drizzle.config.ts", "utf8");
     const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8"));
-    expect(config).not.toContain('"./drizzle/nativeAuthSchema.ts"');
-    expect(journal.entries.at(-1)?.tag).toBe("0074_aurion_stat_allocation_receipts");
+    expect(config).toContain('"./drizzle/nativeAuthSchema.ts"');
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 74, tag: "0075_aurion_native_auth_sessions" });
     expect(journal.entries.some((entry: { tag: string }) =>
-      entry.tag === "0075_aurion_native_auth_sessions")).toBe(false);
+      entry.tag === "0075_aurion_native_auth_sessions")).toBe(true);
   });
 });
