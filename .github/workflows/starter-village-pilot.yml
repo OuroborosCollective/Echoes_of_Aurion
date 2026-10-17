@@ -31,7 +31,11 @@ on:
       - "server/routers.ts"
       - "server/zone**"
       - "client/src/xaurion/**"
-      - "drizzle/**"
+      - "drizzle/0035_aurion_npc_memory_quest_offers.sql"
+      - "drizzle/0061_aurion_exploration_memory.sql"
+      - "drizzle/0064_aurion_world_entity_foundation.sql"
+      - "drizzle/schema.ts"
+      - "drizzle/aurionWorldFoundationSchema.ts"
   pull_request:
     paths:
       - ".github/workflows/starter-village-pilot.yml"
@@ -61,7 +65,11 @@ on:
       - "server/routers.ts"
       - "server/zone**"
       - "client/src/xaurion/**"
-      - "drizzle/**"
+      - "drizzle/0035_aurion_npc_memory_quest_offers.sql"
+      - "drizzle/0061_aurion_exploration_memory.sql"
+      - "drizzle/0064_aurion_world_entity_foundation.sql"
+      - "drizzle/schema.ts"
+      - "drizzle/aurionWorldFoundationSchema.ts"
   workflow_dispatch:
 
 permissions:
