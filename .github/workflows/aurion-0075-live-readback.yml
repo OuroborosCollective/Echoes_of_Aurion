@@ -104,7 +104,7 @@ jobs:
           status=$?
           set -e
           node scripts/aurion-live-schema-observation.mjs \
-            "$raw" "$EXPECTED_SHA" "$OBSERVED_SHA" "$status" "$GITHUB_RUN_ID" > "$summary"
+            "$raw" "$EXPECTED_SHA" "$OBSERVED_SHA" "$status" "$GITHUB_RUN_ID" "$stderr_file" > "$summary"
           # The sanitizer deliberately exits non-zero for any unproven state.
       - name: Preserve sanitized, SHA-bound observation even on failure
         if: always()

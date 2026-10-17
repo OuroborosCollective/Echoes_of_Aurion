@@ -106,3 +106,45 @@ test('main-only diagnostic patch receives an immediate independent readback afte
   assert.match(workflow, /\[\[ "\$GITHUB_EVENT_NAME" == "push" \|\| "\$GITHUB_EVENT_NAME" == "workflow_dispatch" \]\]/);
   assert.doesNotMatch(workflow, /id-token: write|actions: write|gh workflow run/);
 });
+
+
+test('maps only exact root-runner preflight failures to a fixed non-secret diagnostic code', () => {
+  const safe = [
+    ['reconciliation release is not installed\n', 'RECONCILE_RELEASE_MISSING'],
+    ['production environment file is absent\n', 'PRODUCTION_ENV_MISSING'],
+    ['runtime image contract is absent\n', 'RUNTIME_IMAGE_CONTRACT_MISSING'],
+    ['runtime network contract is absent\n', 'RUNTIME_NETWORK_CONTRACT_MISSING'],
+    ['pinned runtime image is not available locally\n', 'PINNED_RUNTIME_IMAGE_MISSING'],
+    ['runtime database network is unavailable\n', 'RUNTIME_DB_NETWORK_MISSING'],
+  ];
+  for (const [rootError, code] of safe) {
+    const result = summarizeLiveSchemaObservation({
+      ...p, rawReceipt: '', runnerStatus: 69, runnerStderr: rootError,
+    });
+    assert.equal(result.verdict, 'READBACK_UNAVAILABLE');
+    assert.equal(result.runnerFailureClass, code);
+    assert.equal(result.databaseReadbackVerified, false);
+    assert.ok(!JSON.stringify(result).includes(rootError.trim()));
+  }
+  for (const dangerous of [
+    'production environment file is absent; URL=mysql://user:secret@host/db',
+    'secret:123\nruntime image contract is absent',
+    'any unexpected exception containing credential text',
+  ]) {
+    const result = summarizeLiveSchemaObservation({
+      ...p, rawReceipt: '', runnerStatus: 69, runnerStderr: dangerous,
+    });
+    assert.equal(result.runnerFailureClass, 'UNCLASSIFIED_RUNNER_FAILURE');
+    assert.equal(result.databaseReadbackVerified, false);
+    assert.ok(!JSON.stringify(result).includes('secret'));
+    assert.ok(!JSON.stringify(result).includes('credential text'));
+  }
+});
+
+test('workflow classifies root stderr privately and publishes only sanitized JSON', () => {
+  const workflow = fs.readFileSync(new URL('../.github/workflows/aurion-0075-live-readback.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /"\$GITHUB_RUN_ID" "\$stderr_file" > "\$summary"/);
+  assert.match(workflow, /2> "\$stderr_file"/);
+  assert.match(workflow, /trap 'rm -f "\$raw" "\$stderr_file"'/);
+  assert.doesNotMatch(workflow, /cat "\$stderr_file"|tee "\$stderr_file"|echo "\$stderr_file"/);
+});
