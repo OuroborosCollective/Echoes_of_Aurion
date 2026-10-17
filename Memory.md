@@ -2596,6 +2596,28 @@ Learned: New Aurion-owned visual sources need their own source identity outside 
 Open: Exact-head CI, build/runtime and merge verification.
 Next safe step: Run relevant tests, typecheck and runtime candidate; merge only after readback.
 
+
+### 2026-10-17 — PR #995 — feat(visual): deterministic material-aware blade silhouettes
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=995 merge=e84383fb8f31a4bd9ec4076e0207b4407204a294 -->
+Task: Merge PR #995 into `main` — feat(visual): deterministic material-aware blade silhouettes.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `client/src/xaurion/core/VisualItemGeometryCompiler.test.ts`
+- `client/src/xaurion/core/VisualItemGeometryCompiler.ts`
+- `shared/aurionVisualBladeProfile.test.ts`
+- `shared/aurionVisualBladeProfile.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/995
+- Merge commit: `e84383fb8f31a4bd9ec4076e0207b4407204a294`
+- PR head: `88484539d51ad9a9bcbc79a1176fa1f732ee4ca7`
+- Merged at: 2026-10-17T04:46:29Z
+- Post-merge workflow run: 39003825351
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
 ### 2026-10-17 — PR #996 confirmed chunk resource source evidence
 Status: PARTIAL
 Task: Extend the regional economy safely without duplicating Loot V2, ACEG or authoritative chunk state.
