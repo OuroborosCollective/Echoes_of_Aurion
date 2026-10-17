@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
 import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, UsersRound, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { soundSynth } from "../xaurion/audio/SoundSynthesizer";
 
@@ -27,7 +27,15 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
   const [questionBody, setQuestionBody] = useState("");
   const [replyBody, setReplyBody] = useState("");
   const [message, setMessage] = useState("");
+  const panelRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const utils = trpc.useUtils();
+
+  const restoreFocus = () => {
+    const target = returnFocusRef.current;
+    returnFocusRef.current = null;
+    if (target?.isConnected) requestAnimationFrame(() => target.focus());
+  };
 
   useEffect(() => {
     const open = (event: Event) => {
@@ -52,11 +60,18 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         setQuestionBody(String(requested.body));
       }
     };
-    const reset = () => { setOpenedFromWorld(false); setPanel(null); };
+    const reset = () => { setOpenedFromWorld(false); setPanel(null); restoreFocus(); };
     window.addEventListener("aurion:open-community", open);
     window.addEventListener("aurion:return-to-tower", reset);
     return () => { window.removeEventListener("aurion:open-community", open); window.removeEventListener("aurion:return-to-tower", reset); };
   }, []);
+
+  useEffect(() => {
+    if (!panel) return;
+    const active = document.activeElement;
+    if (!returnFocusRef.current && active instanceof HTMLElement) returnFocusRef.current = active;
+    panelRef.current?.focus();
+  }, [panel]);
 
   const chat = trpc.community.chat.list.useQuery(undefined, { enabled: isAuthenticated && panel === "chat", refetchInterval: panel === "chat" ? 5000 : false });
   const forumMode = panel === "forum" || panel === "events";
@@ -77,6 +92,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
     setOpenedFromWorld(false);
     setSelectedThreadId(null);
     setMessage("");
+    restoreFocus();
   };
 
   const panelTitle = panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : "Öffentlicher Asset-Katalog";
@@ -117,6 +133,8 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
         className={`community-panel ${panel}-panel`}
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-labelledby={`aurion-community-panel-title-${panel}`}
         aria-live="polite"
