@@ -2533,3 +2533,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #988 — 🎨 Palette: Consistent Community Entry Points on Landing Page
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=988 merge=68c25146d30ffd96650e96d280ceed2938554cb7 -->
+Task: Merge PR #988 into `main` — 🎨 Palette: Consistent Community Entry Points on Landing Page.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.jules/palette.md`
+- `aim296-bvh-performance-receipt.json`
+- `client/src/pages/Home.tsx`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/988
+- Merge commit: `68c25146d30ffd96650e96d280ceed2938554cb7`
+- PR head: `30e78b280f5bd1aa718b0d465f79be1924eeeb42`
+- Merged at: 2026-10-17T02:21:04Z
+- Post-merge workflow run: 38994577442
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
