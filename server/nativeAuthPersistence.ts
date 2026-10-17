@@ -270,6 +270,9 @@ export async function revokeNativeAuthSessions(
     const session = (await tx.select().from(aurionNativeAuthSessions)
       .where(eq(aurionNativeAuthSessions.id, record.sessionId)).for("update"))[0];
     if (!session) return false;
+    if (scope === "all_sessions" && (record.consumedAtMs !== null ||
+        session.currentRefreshDigest !== record.tokenDigest || session.revokedAtMs !== null ||
+        session.absoluteExpiresAtMs <= now || session.idleExpiresAtMs <= now)) return false;
     const target = scope === "all_sessions"
       ? eq(aurionNativeAuthSessions.userId, session.userId)
       : eq(aurionNativeAuthSessions.id, session.id);
