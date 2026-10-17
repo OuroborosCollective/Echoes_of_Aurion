@@ -50,7 +50,7 @@ describe("Home", () => {
     window.addEventListener("aurion:open-community", onOpen);
     try {
       render(<RealClientHarness><Home /></RealClientHarness>);
-      const eventsButton = screen.getByRole("button", { name: "Events", exact: true });
+      const eventsButton = screen.getByRole("button", { name: "Events" });
       expect(eventsButton.getAttribute("aria-haspopup")).toBe("dialog");
       await user.click(eventsButton);
       expect(requests).toEqual([{ panel: "events" }]);
