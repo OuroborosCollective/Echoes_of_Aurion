@@ -14,6 +14,11 @@ on:
       - "Deploy Aurion Traefik runtime"
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aurion-0075-live-readback.yml"
+      - "scripts/aurion-live-schema-observation.mjs"
 
 permissions:
   contents: read
@@ -29,6 +34,7 @@ jobs:
       github.repository == 'OuroborosCollective/Echoes_of_Aurion' &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'push' ||
         (github.event_name == 'workflow_run' &&
          github.event.workflow_run.event == 'workflow_dispatch' &&
          github.event.workflow_run.head_branch == 'main' &&
@@ -44,7 +50,7 @@ jobs:
       - name: Bind requested main revision and discover installed root-owned release
         id: installed
         env:
-          EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           RELEASE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           RELEASE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
           RELEASE_SOURCE_EVENT: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event || github.event_name }}
@@ -54,12 +60,13 @@ jobs:
           [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]]
           [[ "${RELEASE_HEAD_SHA}" == "${EXPECTED_SHA}" ]]
           [[ "${RELEASE_HEAD_REF}" == 'main' ]]
-          [[ "${RELEASE_SOURCE_EVENT}" == 'workflow_dispatch' ]]
           [[ "$(git rev-parse HEAD)" == "${EXPECTED_SHA}" ]]
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            [[ "${GITHUB_SHA}" == "${EXPECTED_SHA}" ]]
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            [[ "${RELEASE_SOURCE_EVENT}" == 'workflow_dispatch' ]]
           else
-            [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]
+            [[ "$GITHUB_EVENT_NAME" == "push" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
+            [[ "${RELEASE_SOURCE_EVENT}" == "${GITHUB_EVENT_NAME}" ]]
+            [[ "${GITHUB_SHA}" == "${EXPECTED_SHA}" ]]
           fi
           [[ "${GITHUB_REPOSITORY}" == 'OuroborosCollective/Echoes_of_Aurion' ]]
           [[ "${GITHUB_REF}" == 'refs/heads/main' ]]
@@ -75,7 +82,7 @@ jobs:
           printf 'sha=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
       - name: Execute trusted read-only MariaDB reconciler and sanitize receipt
         env:
-          EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           RELEASE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           RELEASE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
           RELEASE_SOURCE_EVENT: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event || github.event_name }}
