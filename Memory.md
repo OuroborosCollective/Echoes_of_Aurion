@@ -2701,3 +2701,26 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-17 — PR #1023 — ci: prevent native-auth schema migrations from triggering unrelated gameplay suites
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1023 merge=f3e14d7eda152473bc060992804ce57ddf89ecbe -->
+Task: Merge PR #1023 into `main` — ci: prevent native-auth schema migrations from triggering unrelated gameplay suites.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aim259-group-instances.yml`
+- `.github/workflows/aim292-npc-multi-memory.yml`
+- `.github/workflows/aim535-item-manipulation-runtime.yml`
+- `.github/workflows/issue-502-inventory-mariadb.yml`
+- `.github/workflows/starter-village-pilot.yml`
+- `scripts/ci/workflow-impact.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1023
+- Merge commit: `f3e14d7eda152473bc060992804ce57ddf89ecbe`
+- PR head: `84c3cbdee8de898fb097982f50ed0f489891e91c`
+- Merged at: 2026-10-17T11:14:48Z
+- Post-merge workflow run: 39027960553
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
