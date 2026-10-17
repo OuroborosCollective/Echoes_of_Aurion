@@ -3,8 +3,8 @@ extends SceneTree
 const Flow = preload("res://net/auth/native_auth_flow.gd")
 const Callback = preload("res://platform/android/native_app_link_callback.gd")
 const CALLBACK := "https://arelogic.space/app/auth/callback?"
-const ID := "t".repeat(43)
-const CODE := "c".repeat(43)
+var ID: String = "t".repeat(43)
+var CODE: String = "c".repeat(43)
 var failures: Array[String] = []
 
 func require(value: bool, label: String) -> void:
