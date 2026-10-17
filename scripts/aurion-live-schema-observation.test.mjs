@@ -89,7 +89,7 @@ test('completed Aurion dispatch automatically triggers read-only observation, no
   assert.match(workflow, /github\.event\.workflow_run\.event == 'workflow_dispatch'/);
   assert.match(workflow, /github\.event\.workflow_run\.head_branch == 'main'/);
   assert.match(workflow, /github\.event\.workflow_run\.head_repository\.full_name == 'OuroborosCollective\/Echoes_of_Aurion'/);
-  assert.match(workflow, /EXPECTED_SHA: \$\{\{ github\.event_name == 'workflow_run' && github\.event\.workflow_run\.head_sha \|\| inputs\.expected_sha \}\}/);
+  assert.match(workflow, /EXPECTED_SHA: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.expected_sha \|\| github\.event_name == 'workflow_run' && github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/);
   assert.match(workflow, /GITHUB_EVENT_NAME/);
   assert.match(workflow, /GITHUB_SHA/);
   assert.doesNotMatch(workflow, /id-token: write|actions: write|gh workflow run/);
@@ -103,6 +103,6 @@ test('main-only diagnostic patch receives an immediate independent readback afte
   assert.match(workflow, /github\.event_name == 'push'/);
   assert.match(workflow, /github\.event_name == 'workflow_dispatch'.*inputs\.expected_sha/);
   assert.match(workflow, /github\.event_name == 'workflow_run'.*github\.event\.workflow_run\.head_sha/);
-  assert.match(workflow, /github\.event_name == 'push' \|\| "\$GITHUB_EVENT_NAME" == "workflow_dispatch"/);
+  assert.match(workflow, /\[\[ "\$GITHUB_EVENT_NAME" == "push" \|\| "\$GITHUB_EVENT_NAME" == "workflow_dispatch" \]\]/);
   assert.doesNotMatch(workflow, /id-token: write|actions: write|gh workflow run/);
 });
