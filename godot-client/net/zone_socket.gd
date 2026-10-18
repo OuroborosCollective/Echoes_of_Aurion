@@ -68,7 +68,11 @@ func _process(_delta: float) -> void:
 				if bytes.size() > MAX_PACKET_BYTES:
 					_finish("oversized_frame")
 					return
-				var decoded: Variant = JSON.parse_string(bytes.get_string_from_utf8())
+				var wire := bytes.get_string_from_utf8()
+				if not Codec.wire_numbers_are_integers(wire):
+					_finish("invalid_welcome")
+					return
+				var decoded: Variant = JSON.parse_string(wire)
 				if _state == "authenticating":
 					if _accept_welcome(decoded):
 						return
