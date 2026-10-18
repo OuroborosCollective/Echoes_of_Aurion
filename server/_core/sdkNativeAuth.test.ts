@@ -2,6 +2,7 @@ import type { AxiosInstance } from "axios";
 import type { Request } from "express";
 import { describe, expect, it, vi } from "vitest";
 import type { getUserById } from "../db";
+import { COOKIE_NAME } from "../../shared/const";
 import { SDKServer } from "./sdk";
 
 const nativeAccessToken = "n".repeat(43);
@@ -51,4 +52,35 @@ describe("native bearer authentication boundary", () => {
     expect(verifySession).not.toHaveBeenCalled();
     expect(readUserById).not.toHaveBeenCalled();
   });
+  it("keeps Preview JWT bearers on the existing session verifier", async () => {
+    const authenticateNativeAccess = vi.fn(async () => null);
+    const readUserById = vi.fn(async () => user);
+    const server = new SDKServer({} as AxiosInstance, undefined, {
+      authenticateNativeAccess,
+      readUserById,
+    });
+    const verifySession = vi.spyOn(server, "verifySession").mockResolvedValue(null);
+
+    await expect(server.authenticateRequest(request("Bearer preview.jwt.value")))
+      .rejects.toThrow("Invalid session cookie");
+    expect(verifySession).toHaveBeenCalledWith("preview.jwt.value");
+    expect(authenticateNativeAccess).not.toHaveBeenCalled();
+  });
+
+  it("keeps the browser session cookie ahead of a native bearer", async () => {
+    const authenticateNativeAccess = vi.fn(async () => null);
+    const readUserById = vi.fn(async () => user);
+    const server = new SDKServer({} as AxiosInstance, undefined, {
+      authenticateNativeAccess,
+      readUserById,
+    });
+    const verifySession = vi.spyOn(server, "verifySession").mockResolvedValue(null);
+    const req = request(`Bearer ${nativeAccessToken}`);
+    req.headers.cookie = `${COOKIE_NAME}=browser.jwt.value`;
+
+    await expect(server.authenticateRequest(req)).rejects.toThrow("Invalid session cookie");
+    expect(verifySession).toHaveBeenCalledWith("browser.jwt.value");
+    expect(authenticateNativeAccess).not.toHaveBeenCalled();
+  });
+
 });
