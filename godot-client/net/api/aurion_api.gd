@@ -20,6 +20,7 @@ var _client_build := ""
 var _active := false
 var _retried_after_refresh := false
 var _sent_access_token := ""
+var _sent_session_generation := -1
 
 func _init(auth_client: Node) -> void:
 	_auth = auth_client
@@ -57,6 +58,7 @@ func cancel() -> void:
 	_active = false
 	_retried_after_refresh = false
 	_sent_access_token = ""
+	_sent_session_generation = -1
 
 func _exit_tree() -> void:
 	cancel()
@@ -67,6 +69,7 @@ func _send_zone_ticket() -> bool:
 		_fail(AUTH_REQUIRED)
 		return false
 	_sent_access_token = access
+	_sent_session_generation = _auth.session_generation()
 	var payload := {
 		"0": {
 			"json": {
@@ -96,16 +99,14 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if result != HTTPRequest.RESULT_SUCCESS:
 		_fail(REQUEST_FAILED)
 		return
-	var current_access: String = _auth.access_token()
-	if current_access != _sent_access_token:
-		# The same session may cross its local access deadline while HTTP is in flight.
-		if response_code == 401 and current_access.is_empty() and not _retried_after_refresh:
-			_retried_after_refresh = true
-			_begin_refresh()
-			return
+	if _auth.session_generation() != _sent_session_generation:
 		_fail(RESPONSE_INVALID)
 		return
+	var current_access: String = _auth.access_token()
 	if response_code == 401:
+		if not current_access.is_empty() and current_access != _sent_access_token:
+			_fail(RESPONSE_INVALID)
+			return
 		if _retried_after_refresh:
 			_auth.logout()
 			if _active:
@@ -127,6 +128,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	_active = false
 	_retried_after_refresh = false
 	_sent_access_token = ""
+	_sent_session_generation = -1
 	emit_signal("zone_ticket_succeeded", receipt)
 
 func _begin_refresh() -> bool:
@@ -160,6 +162,7 @@ func _fail(error_code: String) -> void:
 	_active = false
 	_retried_after_refresh = false
 	_sent_access_token = ""
+	_sent_session_generation = -1
 	emit_signal("request_failed", error_code)
 
 static func _parse_zone_ticket(raw: Variant) -> Dictionary:

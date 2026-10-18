@@ -76,6 +76,9 @@ func complete_callback(raw_url: Variant) -> bool:
 func access_token(now_ms: int = -1) -> String:
 	return _tokens.access_token(now_ms)
 
+func session_generation() -> int:
+	return _tokens.session_generation()
+
 ## Rotate the in-memory pair through Aurion. The token store rejects a second
 ## request while rotation is in flight, preventing server replay revocation.
 func refresh(now_ms: int = -1) -> bool:

@@ -13,6 +13,7 @@ var _access_deadline_ms := -1
 var _idle_deadline_ms := -1
 var _absolute_deadline_ms := -1
 var _refresh_in_flight := false
+var _session_generation := 0
 
 static func _json_integer(value: Variant) -> bool:
 	return typeof(value) == TYPE_INT or (
@@ -30,6 +31,7 @@ static func _opaque(value: Variant) -> bool:
 	return pattern.search(token) != null
 
 func clear() -> void:
+	var had_session := not _access_token.is_empty() or not _refresh_token.is_empty() or _refresh_in_flight
 	_access_token = ""
 	_refresh_token = ""
 	_issued_at_ms = -1
@@ -37,10 +39,13 @@ func clear() -> void:
 	_idle_deadline_ms = -1
 	_absolute_deadline_ms = -1
 	_refresh_in_flight = false
+	if had_session:
+		_session_generation += 1
 
 ## On invalid response, refuse the whole session; never retain an old refresh.
 func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	var now: int = now_ms if now_ms >= 0 else Time.get_ticks_msec()
+	var rotating := _refresh_in_flight
 	if not _refresh_token.is_empty() and not _refresh_in_flight:
 		clear()
 		return false
@@ -96,7 +101,12 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	_access_deadline_ms = mini(now + ACCESS_TTL_SECONDS * 1000, _absolute_deadline_ms)
 	_idle_deadline_ms = mini(now + REFRESH_IDLE_SECONDS * 1000, _absolute_deadline_ms)
 	_refresh_in_flight = false
+	if not rotating:
+		_session_generation += 1
 	return true
+
+func session_generation() -> int:
+	return _session_generation
 
 func access_token(now_ms: int = -1) -> String:
 	if _access_token.is_empty():

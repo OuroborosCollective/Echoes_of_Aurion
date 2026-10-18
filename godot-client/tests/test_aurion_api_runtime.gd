@@ -28,9 +28,13 @@ class FakeAuth:
 	var refresh_calls := 0
 	var refresh_behavior := "reject"
 	var refresh_pending := false
+	var generation := 1
 
 	func access_token(_now_ms: int = -1) -> String:
 		return current_access
+
+	func session_generation() -> int:
+		return generation
 
 	func refresh(_now_ms: int = -1) -> bool:
 		refresh_calls += 1
@@ -51,6 +55,7 @@ class FakeAuth:
 		logout_calls += 1
 		current_access = ""
 		refresh_pending = false
+		generation += 1
 		emit_signal("logout_succeeded")
 		return true
 
@@ -278,6 +283,7 @@ func verify() -> void:
 	request_failure_count = 0
 	boundary_api._active = true
 	boundary_api._sent_access_token = "expired-session-access"
+	boundary_api._sent_session_generation = boundary_auth.session_generation()
 	boundary_api._on_request_completed(
 		HTTPRequest.RESULT_SUCCESS,
 		401,
@@ -303,6 +309,7 @@ func verify() -> void:
 	request_failure_count = 0
 	logout_api._active = true
 	logout_api._sent_access_token = logout_auth.current_access
+	logout_api._sent_session_generation = logout_auth.session_generation()
 	logout_auth.logout()
 	require(request_completed, "logout did not terminate initial protected request")
 	require(request_error == "AURION_API_AUTH_REQUIRED", "initial logout did not require auth")
@@ -310,6 +317,41 @@ func verify() -> void:
 	require(not logout_api._active, "initial logout left protected request active")
 	logout_api.queue_free()
 	logout_auth.queue_free()
+
+	var success_auth := FakeAuth.new()
+	success_auth.current_access = ""
+	root.add_child(success_auth)
+	var success_api := AurionApi.new(success_auth)
+	success_api.zone_ticket_succeeded.connect(_on_zone_ticket)
+	success_api.request_failed.connect(_on_request_failure)
+	root.add_child(success_api)
+	await process_frame
+	request_completed = false
+	request_succeeded = false
+	request_error = ""
+	request_failure_count = 0
+	receipt = {}
+	success_api._active = true
+	success_api._sent_access_token = "expired-session-access"
+	success_api._sent_session_generation = success_auth.session_generation()
+	var success_body := JSON.stringify([{
+		"result": {"data": {"json": {
+			"ticket": "q".repeat(48),
+			"zoneId": "observatory_threshold",
+			"expiresAt": "2026-10-18T11:00:00.000Z",
+		}}},
+	}]).to_utf8_buffer()
+	success_api._on_request_completed(
+		HTTPRequest.RESULT_SUCCESS,
+		200,
+		PackedStringArray(["Content-Type: application/json"]),
+		success_body
+	)
+	require(request_completed and request_succeeded, "deadline-crossing 200 was rejected")
+	require(receipt.get("ticket") == "q".repeat(48), "deadline-crossing 200 lost confirmed ticket")
+	require(request_failure_count == 0, "deadline-crossing 200 emitted failure")
+	success_api.queue_free()
+	success_auth.queue_free()
 
 	api.queue_free()
 	auth.queue_free()
