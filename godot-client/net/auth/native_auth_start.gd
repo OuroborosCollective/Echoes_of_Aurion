@@ -188,7 +188,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_fail_logout(FALLBACK_ERROR)
 		return
 	if phase == "exchange" or phase == "refresh":
-		if not _tokens.accept_token_response(payload, request_started_at_ms):
+		if not _tokens.accept_token_response(payload, request_started_at_ms, Time.get_ticks_msec()):
 			_fail_request(phase, FALLBACK_ERROR)
 			return
 		if phase == "exchange" and _logout_after_exchange:
