@@ -11,7 +11,7 @@ export function validateEvidence(evidence, revision, toolchainHash) {
   assert.equal(evidence.toolchainHash, toolchainHash, 'toolchain lock changed');
   assert.match(evidence.editorHash, /^[a-f0-9]{64}$/);
   assert.equal(evidence.result, 'passed');
-  const required = { doctor: 'static', import: 'headless', parity: 'static', contract: 'headless', startup: 'headless', boot: 'headless', 'negative-broken-scene': 'headless', 'negative-missing-asset': 'headless', 'negative-wrong-contract': 'static' };
+  const required = { doctor: 'static', import: 'headless', parity: 'static', contract: 'headless', startup: 'headless', boot: 'headless', 'negative-broken-scene': 'headless', 'negative-missing-asset': 'headless', 'native-auth-client': 'headless', 'negative-wrong-contract': 'static' };
   assert.ok(Array.isArray(evidence.testRuns));
   assert.equal(new Set(evidence.testRuns.map(run => run.id)).size, evidence.testRuns.length);
   for (const [id, layer] of Object.entries(required)) {
