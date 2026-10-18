@@ -19,6 +19,7 @@ var _server_base_url := ""
 var _client_build := ""
 var _active := false
 var _retried_after_refresh := false
+var _sent_access_token := ""
 
 func _init(auth_client: Node) -> void:
 	_auth = auth_client
@@ -50,6 +51,7 @@ func cancel() -> void:
 		_http.cancel_request()
 	_active = false
 	_retried_after_refresh = false
+	_sent_access_token = ""
 
 func _exit_tree() -> void:
 	cancel()
@@ -59,6 +61,7 @@ func _send_zone_ticket() -> bool:
 	if access.is_empty():
 		_fail(AUTH_REQUIRED)
 		return false
+	_sent_access_token = access
 	var payload := {
 		"0": {
 			"json": {
@@ -102,7 +105,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if response_code != 200:
 		_fail(REQUEST_FAILED)
 		return
-	if _auth.access_token().is_empty() or not _json_content_type(headers):
+	if _auth.access_token() != _sent_access_token or not _json_content_type(headers):
 		_fail(RESPONSE_INVALID)
 		return
 	var receipt := _parse_zone_ticket(JSON.parse_string(body.get_string_from_utf8()))
@@ -111,6 +114,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		return
 	_active = false
 	_retried_after_refresh = false
+	_sent_access_token = ""
 	emit_signal("zone_ticket_succeeded", receipt)
 
 func _on_refresh_succeeded() -> void:
@@ -124,6 +128,7 @@ func _on_refresh_failed(_error_code: String) -> void:
 func _fail(error_code: String) -> void:
 	_active = false
 	_retried_after_refresh = false
+	_sent_access_token = ""
 	emit_signal("request_failed", error_code)
 
 static func _parse_zone_ticket(raw: Variant) -> Dictionary:
