@@ -47,6 +47,11 @@ const server = createServer((request, response) => {
     response.end(`https://arelogic.space/app/auth/callback?code=${handoffCode}&state=${currentState}`);
     return;
   }
+  if (request.method === 'GET' && request.url === '/test-refresh-arrived') {
+    response.statusCode = refreshCount >= 2 ? 204 : 425;
+    response.end();
+    return;
+  }
   const chunks = [];
   request.on('data', chunk => chunks.push(chunk));
   request.on('end', () => {
