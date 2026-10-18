@@ -60,11 +60,11 @@ await stage(
   'Godot native-auth start, exchange, refresh and logout HTTP runtime verified',
 );
 await stage(
-  'aurion-api-runtime',
-  'headless',
+  'aurion-api-client-regression',
+  'headless-client',
   process.execPath,
   ['scripts/godot/aurion-api-runtime.mjs', executable, project],
-  'Godot protected zone ticket refresh runtime verified',
+  'Godot protected zone ticket client regression verified',
 );
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
