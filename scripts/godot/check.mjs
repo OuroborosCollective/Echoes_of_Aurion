@@ -52,6 +52,13 @@ for (const [id, script, marker] of [
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
+await stage(
+  'native-auth-start-runtime',
+  'headless',
+  process.execPath,
+  ['scripts/godot/native-auth-start-runtime.mjs', executable, project],
+  'Godot native-auth start HTTP runtime verified',
+);
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
