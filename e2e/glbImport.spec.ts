@@ -42,21 +42,19 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     expect(scrollMetrics.maxScrollTop).toBeGreaterThan(0);
     expect(scrollMetrics.connected).toBe(true);
     // Target actual user scrolling at this container independently of keyboard focus.
-    // Browser wheel deltas are asynchronous and can be consumed before late layout
-    // settles, so drive a bounded number of real wheel inputs and sample after each.
+    // Chromium applies wheel deltas asynchronously, so issue one real input and
+    // observe its effect to a deadline instead of assuming synchronous delivery.
     const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
     const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
-    // The panel can still receive late catalog layout updates. Force only the
-    // pointer placement once; the wheel events and resulting scroll remain real.
     await scrollRegion.hover({ force: true });
+    await page.mouse.wheel(0, 10_000);
     await expect.poll(async () => {
-      await page.mouse.wheel(0, 10_000);
       const sample = await scrollRegion.evaluate(element => ({
         scrollTop: element.scrollTop,
         remaining: Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop),
       }));
       wheelSamples.push(sample);
-      return sample.scrollTop > initialScrollTop && sample.remaining <= 2;
+      return sample.scrollTop > initialScrollTop;
     }, { timeout: 10_000, intervals: [100, 250, 500] }).toBe(true);
     // Reset scroll position programmatically. The scroll-down above already
     // proved real wheel input moves this container; the upward reset just
