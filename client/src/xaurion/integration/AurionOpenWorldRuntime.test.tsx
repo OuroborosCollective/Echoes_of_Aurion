@@ -100,10 +100,11 @@ describe("open world session ownership", () => {
     fixture.deferRenderer = false; fixture.rendererRequests = []; fixture.worldLoading = false;
     fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = [];
     fixture.appearanceData = { assetId: "glb_standard_male", displayName: "Aurion Standard Male", storageUrl: fixture.selectedUrl, visibility: "public" };
-    fixture.worldData = null;
+    fixture.worldData = { globalWorld: { worldSeed: "fixture", epoch: 0 }, serviceNpcs: [] };
   });
 
   it("awaits and freezes the newest initial world while periodic readback advances", async () => {
+    fixture.worldData = null;
     fixture.worldLoading = true;
     const view = render(<AurionOpenWorldRuntime />); await enter();
     expect(fixture.engines).toHaveLength(0);
