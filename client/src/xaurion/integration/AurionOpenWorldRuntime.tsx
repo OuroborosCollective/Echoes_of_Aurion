@@ -268,7 +268,7 @@ export default function AurionOpenWorldRuntime() {
 
   useEffect(() => {
     if (!activation || !containerRef.current || !selectedCharacterUrl ||
-      (worldSnapshot.isLoading && !worldSnapshot.data?.globalWorld)) return;
+      (worldSnapshot.isLoading && !worldSnapshot.data)) return;
     const support = MMOEngine.checkWebGLSupport();
     if (!support.supported) {
       setWebglError(support.error ?? "WebGL ist nicht verfügbar.");
