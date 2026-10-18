@@ -74,6 +74,11 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 					if hello_received:
 						welcome_sent = remote.send_text(wire) == OK
 						if welcome_sent and server_close_after_send:
+							# Godot's loopback WebSocketPeer can drop its own queued
+							# outbound text if close() is called before poll().
+							# Flush the reject frame and then immediately queue 1008
+							# in the SAME server iteration (client has not polled).
+							remote.poll()
 							remote.close(1008, "zone authorization rejected")
 					else:
 						errors.append("loopback server received an invalid hello")
