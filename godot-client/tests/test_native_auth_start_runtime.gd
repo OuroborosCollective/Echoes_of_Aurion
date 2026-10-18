@@ -106,7 +106,9 @@ func run_refresh(assert_single_flight: bool = false) -> void:
 	refresh_completed = false
 	refresh_succeeded = false
 	refresh_error = ""
-	require(client.refresh(), "refresh request did not begin")
+	var began := client.refresh()
+	print("native-auth-runtime: refresh began=", began, " completed=", refresh_completed)
+	require(began, "refresh request did not begin")
 	if assert_single_flight:
 		require(not client.refresh(), "parallel refresh request was allowed")
 	while not refresh_completed:
