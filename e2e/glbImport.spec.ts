@@ -46,19 +46,16 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // settles, so drive a bounded number of real wheel inputs and sample after each.
     const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
     const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    await expect.poll(async () => {
       await scrollRegion.hover();
       await page.mouse.wheel(0, 10_000);
-      await page.waitForTimeout(50);
       const sample = await scrollRegion.evaluate(element => ({
         scrollTop: element.scrollTop,
         remaining: Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop),
       }));
       wheelSamples.push(sample);
-      if (sample.scrollTop > initialScrollTop && sample.remaining <= 2) break;
-    }
-    expect(wheelSamples.some(sample => sample.scrollTop > initialScrollTop)).toBe(true);
-    expect(wheelSamples.at(-1)?.remaining).toBeLessThanOrEqual(2);
+      return sample.scrollTop > initialScrollTop && sample.remaining <= 2;
+    }, { timeout: 10_000, intervals: [100, 250, 500] }).toBe(true);
     // Reset scroll position programmatically. The scroll-down above already
     // proved real wheel input moves this container; the upward reset just
     // restores the viewport for the upload steps that follow.
