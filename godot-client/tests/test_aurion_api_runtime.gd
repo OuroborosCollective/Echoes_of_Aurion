@@ -51,6 +51,9 @@ func _on_request_failure(value: String) -> void:
 	request_succeeded = false
 	request_error = value
 
+func _on_logout_terminal(_error_code: String = "") -> void:
+	logout_completed = true
+
 func callback_url() -> String:
 	var fetch := HTTPRequest.new()
 	fetch.timeout = 5.0
@@ -101,6 +104,8 @@ func verify() -> void:
 	auth.start_failed.connect(_on_start_failure)
 	auth.session_succeeded.connect(_on_session_success)
 	auth.session_failed.connect(_on_session_failure)
+	auth.logout_succeeded.connect(_on_logout_terminal)
+	auth.logout_failed.connect(_on_logout_terminal)
 	root.add_child(auth)
 	await process_frame
 	api = AurionApi.new(auth)
@@ -120,11 +125,13 @@ func verify() -> void:
 	require(receipt.get("ticket") == "z".repeat(48), "confirmed zone ticket missing")
 	require(receipt.get("zoneId") == "observatory_threshold", "confirmed zone identity missing")
 
+	logout_completed = false
 	await request_ticket()
 	require(not request_succeeded, "second 401 retry was accepted")
 	require(request_error == "AURION_API_AUTH_REQUIRED", "second 401 did not require auth")
 	require(auth.access_token().is_empty(), "second 401 retained local authority")
-	await process_frame
+	while not logout_completed:
+		await process_frame
 
 	await login()
 	require(auth.access_token() == "d".repeat(43), "second exchange access missing")
