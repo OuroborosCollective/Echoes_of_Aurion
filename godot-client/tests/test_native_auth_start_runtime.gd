@@ -112,12 +112,14 @@ func run_refresh(assert_single_flight: bool = false) -> void:
 	while not refresh_completed:
 		await process_frame
 
-func run_logout() -> void:
+func run_logout(assert_single_flight: bool = false) -> void:
 	logout_completed = false
 	logout_succeeded = false
 	logout_error = ""
 	require(client.logout(), "logout request did not begin")
 	require(client.access_token().is_empty(), "logout retained local access during transport")
+	if assert_single_flight:
+		require(not client.logout(), "parallel logout request was allowed")
 	while not logout_completed:
 		await process_frame
 
@@ -147,7 +149,7 @@ func verify() -> void:
 	await run_refresh(true)
 	require(refresh_succeeded, "valid refresh rotation failed")
 	require(client.access_token() == "b".repeat(43), "rotated access was not installed in memory")
-	await run_logout()
+	await run_logout(true)
 	require(logout_succeeded, "valid session revoke failed")
 	require(client.access_token().is_empty(), "successful logout retained local authority")
 	require(client.logout(), "idempotent local logout was rejected")
