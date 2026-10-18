@@ -1,0 +1,32 @@
+name: Quest receipt iteration proof
+
+on:
+  pull_request:
+    paths:
+      - "server/questCompiler/persistence.ts"
+      - "server/questCompiler/receiptIteration.ts"
+      - "server/questCompiler/receiptIteration.test.ts"
+      - "scripts/benchmark-quest-receipt-iteration.ts"
+      - ".github/workflows/quest-receipt-iteration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  parity-and-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Differential and runtime regression
+        run: pnpm exec vitest run server/questCompiler/receiptIteration.test.ts server/questCompiler/persistence.test.ts
+      - name: Same-workload allocation and latency benchmark
+        run: node --expose-gc --import tsx scripts/benchmark-quest-receipt-iteration.ts

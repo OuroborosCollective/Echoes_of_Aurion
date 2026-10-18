@@ -27,6 +27,7 @@ import { type QuestCausalClosure } from "./causalClosure";
 import { createQuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
 import { appendTemporalEventInTransaction, verifyTemporalEventSource } from "../history/aurionTemporalEventPersistence";
 import { globalAurionEffectJournal } from "../effects/aurionEffectJournal";
+import { findQuestReceiptReplay, maxQuestReceiptSequence } from "./receiptIteration";
 
 async function persistCausalClosure(tx: Parameters<Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]>[0], closure: QuestCausalClosure): Promise<void> {
   const [causalReceipt] = await tx.select().from(aurionCausalTickReceipts)
@@ -405,8 +406,10 @@ export class QuestPersistenceEngine {
       const db = await getDb();
       if (!db) {
         if (input.causalClosure) throw new Error("QUEST_CAUSAL_DATABASE_REQUIRED_FOR_CLOSURE");
-        const replay = [...this.receipts.values()].find(receipt =>
-          receipt.instanceId === input.instanceId && receipt.idempotencyKey === input.idempotencyKey
+        const replay = findQuestReceiptReplay(
+          this.receipts.values(),
+          input.instanceId,
+          input.idempotencyKey,
         );
         if (replay) {
           if (
@@ -438,9 +441,7 @@ export class QuestPersistenceEngine {
         if (computeQuestStateHash(input.updatedInstance) !== input.receipt.resultStateHash) {
           throw new Error("QUEST_RESULT_STATE_HASH_MISMATCH");
         }
-        const lastSequence = [...this.receipts.values()]
-          .filter(receipt => receipt.instanceId === input.instanceId)
-          .reduce((max, receipt) => Math.max(max, receipt.eventSequence), 0);
+        const lastSequence = maxQuestReceiptSequence(this.receipts.values(), input.instanceId);
         if (input.receipt.eventSequence !== lastSequence + 1) throw new Error("QUEST_RUNTIME_SEQUENCE_CONFLICT");
         this.instances.set(input.instanceId, input.updatedInstance);
         this.receipts.set(input.receipt.id, input.receipt);
