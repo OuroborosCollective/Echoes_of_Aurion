@@ -146,6 +146,18 @@ func request_ticket(assert_single_flight: bool = false) -> void:
 	while not request_completed:
 		await process_frame
 
+func request_ticket_with_overlapping_refresh() -> void:
+	request_completed = false
+	request_succeeded = false
+	request_error = ""
+	receipt = {}
+	require(api.issue_zone_ticket(SERVER, BUILD, true), "zone ticket request did not begin")
+	require(not api.issue_zone_ticket(SERVER, BUILD, true), "parallel protected request was allowed")
+	await create_timer(0.25).timeout
+	require(auth.refresh(), "competing refresh did not begin during protected retry")
+	while not request_completed:
+		await process_frame
+
 func verify() -> void:
 	auth = NativeAuthStart.new()
 	auth.browser_opener = Callable(self, "_opened")
@@ -169,9 +181,9 @@ func verify() -> void:
 	await login()
 	require(auth.access_token() == "a".repeat(43), "first exchange access missing")
 	require(auth.refresh(), "external refresh did not begin")
-	await request_ticket(true)
+	await request_ticket_with_overlapping_refresh()
 	require(request_succeeded, "401 refresh retry did not recover")
-	require(auth.access_token() == "b".repeat(43), "rotated access was not installed")
+	require(auth.access_token() == "c".repeat(43), "competing rotated access was not installed")
 	require(receipt.get("ticket") == "z".repeat(48), "confirmed zone ticket missing")
 	require(receipt.get("zoneId") == "observatory_threshold", "confirmed zone identity missing")
 
