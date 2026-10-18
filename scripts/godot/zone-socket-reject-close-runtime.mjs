@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { WebSocketServer } from 'ws';
 
 const [executable, project] = process.argv.slice(2);
 assert.ok(executable && project, 'usage: zone-socket-reject-close-runtime.mjs <godot> <project>');
+// Reuse the canonical gateway's committed flush window, rather than writing an
+// independently tuned fake delay. This loopback remains Node ws evidence only.
+const gatewaySource = readFileSync(new URL('../../server/zoneGateway.ts', import.meta.url), 'utf8');
+const graceMatch = gatewaySource.match(/const PROTOCOL_REJECT_GRACE_MS=(\d+);/);
+assert.ok(graceMatch, 'canonical zone protocol reject grace window not found');
+const graceMs = Number(graceMatch[1]);
+assert.ok(Number.isSafeInteger(graceMs) && graceMs >= 100 && graceMs <= 1000, 'invalid zone protocol reject grace window');
 
 const server = new WebSocketServer({ host: '127.0.0.1', port: 0, maxPayload: 2048 });
 let helloCount = 0;
@@ -21,10 +29,13 @@ server.on('connection', socket => {
       assert.equal(hello.zoneId, 'observatory_threshold');
       assert.equal(hello.protocolVersion, 5);
       assert.match(hello.ticket, /^z{43}$/);
-      // Mirror server/zoneGateway.ts:34: send the typed reject and immediately
-      // initiate the 1008 policy close, with Node ws' actual send/close queue.
+      // Mirror the actual Aurion gateway: reject text first, with a bounded
+      // delivery window before 1008 so Godot's polling loop can observe it.
       socket.send(JSON.stringify({ type: 'reject', code: 'PROTOCOL_VERSION_UNSUPPORTED' }));
-      socket.close(1008, 'zone authorization rejected');
+      const timer = setTimeout(() => {
+        if (socket.readyState === socket.OPEN) socket.close(1008, 'zone authorization rejected');
+      }, graceMs);
+      timer.unref();
     } catch (error) {
       serverError ??= error;
       socket.terminate();
