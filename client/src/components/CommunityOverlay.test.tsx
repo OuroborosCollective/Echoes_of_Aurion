@@ -52,4 +52,12 @@ describe("CommunityOverlay", () => {
     expect(await screen.findByRole("heading", { name: "Community-Events" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Events" }).getAttribute("aria-pressed")).toBe("true");
   });
+
+  it("renders the actual issue forum and composer when the Home bug-report entry opens it", async () => {
+    render(<RealClientHarness><CommunityOverlay isAuthenticated currentUserId={42} /></RealClientHarness>);
+    fireEvent(window, new CustomEvent("aurion:open-community", { detail: { panel: "issues" } }));
+    expect(await screen.findByRole("dialog", { name: "Fehlerberichte" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Fehler melden" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Veröffentlichen" })).toBeTruthy();
+  });
 });
