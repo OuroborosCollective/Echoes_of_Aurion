@@ -7,6 +7,7 @@ import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
+import { authenticateNativeAuthAccess } from "../nativeAuthPersistence";
 import { ENV } from "./env";
 import type {
   ExchangeTokenRequest,
@@ -76,6 +77,17 @@ class OAuthService {
   }
 }
 
+export interface SDKRequestAuthDependencies {
+  authenticateNativeAccess: typeof authenticateNativeAuthAccess;
+  readUserById: typeof db.getUserById;
+}
+
+const DEFAULT_REQUEST_AUTH_DEPENDENCIES: SDKRequestAuthDependencies = {
+  authenticateNativeAccess: authenticateNativeAuthAccess,
+  readUserById: db.getUserById,
+};
+const NATIVE_ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43,256}$/;
+
 const createOAuthHttpClient = (): AxiosInstance =>
   axios.create({
     baseURL: ENV.oAuthServerUrl,
@@ -86,7 +98,11 @@ export class SDKServer {
   private readonly client: AxiosInstance;
   private readonly oauthService: OAuthService;
 
-  constructor(client: AxiosInstance = createOAuthHttpClient(), private readonly clock: OperationalClock = hostOperationalClock) {
+  constructor(
+    client: AxiosInstance = createOAuthHttpClient(),
+    private readonly clock: OperationalClock = hostOperationalClock,
+    private readonly requestAuth: SDKRequestAuthDependencies = DEFAULT_REQUEST_AUTH_DEPENDENCIES,
+  ) {
     this.client = client;
     this.oauthService = new OAuthService(this.client);
   }
@@ -261,13 +277,22 @@ export class SDKServer {
     const cookies = this.parseCookies(req.headers.cookie);
     let sessionToken = cookies.get(COOKIE_NAME);
 
-    // 2. Fallback to the Authorization header (Preview auto-login via
-    //    sessionStorage), used when the browser blocks iframe cookies such as
-    //    Safari ITP, private browsing, or iOS/Android WebView.
+    // 2. Native access tokens are opaque digest-backed credentials. Their
+    //    strict shape keeps them out of the legacy Preview JWT verifier.
     if (!sessionToken) {
       const authHeader = req.headers.authorization;
       if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-        sessionToken = authHeader.slice(7);
+        const bearer = authHeader.slice(7);
+        if (NATIVE_ACCESS_TOKEN_PATTERN.test(bearer)) {
+          const nativeSession = await this.requestAuth.authenticateNativeAccess(bearer);
+          if (!nativeSession) throw ForbiddenError("Invalid native access token");
+          const nativeUser = await this.requestAuth.readUserById(nativeSession.userId);
+          if (!nativeUser) throw ForbiddenError("Native session user not found");
+          return nativeUser;
+        }
+        // Preview auto-login remains a JWT-only fallback for iframe cookie
+        // restrictions. Native-shaped credentials never reach this path.
+        sessionToken = bearer;
       }
     }
 
