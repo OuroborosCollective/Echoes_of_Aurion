@@ -237,7 +237,7 @@ export async function authenticateNativeAuthAccess(accessToken: string, nowMs?: 
   const now = effectiveNow(nowMs);
   if (!/^[A-Za-z0-9_-]{43,256}$/.test(accessToken)) return null;
   const db = await getDb();
-  if (!db) return null;
+  if (!db) throw new Error("NATIVE_AUTH_CONFIGURATION_UNAVAILABLE");
   const rows = await db.select({
     userId: aurionNativeAuthSessions.userId,
     sessionId: aurionNativeAuthSessions.id,

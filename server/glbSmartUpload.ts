@@ -1,6 +1,7 @@
 import { issueGlbAgentSession, verifyGlbAgentSession } from "./glbAgentSession";
 import type { Express, Request, Response } from "express";
 import { sdk } from "./_core/sdk";
+import { isNativeAuthSessionExpired, isNativeAuthUnavailable } from "./_core/nativeAuthHttpError";
 import * as db from "./db";
 import { classifyGlbBase64, type GlbAssetClassification, type GlbAssetType } from "./glbAssetClassifier";
 import { authenticateAdminGlbBearer } from "./adminMcp";
@@ -121,7 +122,8 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
     let user: AuthenticatedUploader | null = null;
     try {
       user = await dependencies.authenticate(request);
-    } catch {
+    } catch (error) {
+      if (isNativeAuthUnavailable(error)) { response.status(503).json({ error: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" }); return; }
       response.status(401).json({ error: "Authentication required" });
       return;
     }
@@ -188,7 +190,7 @@ export function registerGlbSmartUpload(app: Express): void {
   const adminRoute = (operation: (request: Request, user: AuthenticatedUploader) => Promise<unknown>) => async (request: Request, response: Response) => {
     let user: AuthenticatedUploader | null;
     try { user = await defaultDependencies().authenticate(request); }
-    catch { response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" }); return; }
+    catch (error) { if (isNativeAuthUnavailable(error)) { response.status(503).json({ error: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" }); return; } response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" }); return; }
     if (!user || user.role !== "admin") { response.status(user ? 403 : 401).json({ error: "GLB_ADMIN_REQUIRED" }); return; }
     try { response.setHeader("Cache-Control", "no-store"); response.json(await operation(request, user)); }
     catch (error) { const code = error instanceof Error && /^GLB_[A-Z0-9_]+$/.test(error.message) ? error.message : "GLB_OPERATION_FAILED"; response.status(code.includes("CHANGED") || code.includes("BUSY") ? 409 : 422).json({ error: code }); }
@@ -196,7 +198,12 @@ export function registerGlbSmartUpload(app: Express): void {
   const playerRoute = (operation: (request: Request, user: AuthenticatedUploader) => Promise<unknown>) => async (request: Request, response: Response) => {
     let rawUser: Awaited<ReturnType<typeof sdk.authenticateRequest>>;
     try { rawUser = await sdk.authenticateRequest(request); }
-    catch { response.status(401).json({ error: "GLB_PLAYER_AUTHENTICATION_REQUIRED" }); return; }
+    catch (error) {
+      if (isNativeAuthUnavailable(error)) { response.status(503).json({ error: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" }); return; }
+      if (isNativeAuthSessionExpired(error)) { response.status(401).json({ error: "NATIVE_AUTH_SESSION_EXPIRED" }); return; }
+      response.status(401).json({ error: "GLB_PLAYER_AUTHENTICATION_REQUIRED" });
+      return;
+    }
     if (!rawUser) { response.status(401).json({ error: "GLB_PLAYER_AUTHENTICATION_REQUIRED" }); return; }
     const user: AuthenticatedUploader = { id: rawUser.id, role: rawUser.role };
     try {
