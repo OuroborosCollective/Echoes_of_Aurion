@@ -7,6 +7,7 @@ assert.ok(executable && project, 'usage: native-auth-start-runtime.mjs <godot> <
 
 let startCount = 0;
 let exchangeCount = 0;
+let refreshCount = 0;
 let redirectFollowed = false;
 let currentState = '';
 const transactionId = 't'.repeat(43);
@@ -19,6 +20,11 @@ const tokenPair = {
   refreshToken: 'r'.repeat(43),
   refreshAbsoluteRemainingSeconds: 2592000,
   refreshIdleExpiresInSeconds: 604800,
+};
+const rotatedTokenPair = {
+  ...tokenPair,
+  accessToken: 'b'.repeat(43),
+  refreshToken: 's'.repeat(43),
 };
 const json = (response, status, payload) => {
   response.statusCode = status;
@@ -63,14 +69,14 @@ const server = createServer((request, response) => {
         assert.equal(payload.platform, 'android');
         assert.equal(payload.returnId, 'aurion.android.app-link.v1');
         currentState = payload.requestState;
-        if (startCount <= 5) {
+        if (startCount <= 6) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
             browserUrl: `https://arelogic.space/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 6) {
+        } else if (startCount === 8) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
@@ -89,6 +95,27 @@ const server = createServer((request, response) => {
         }
         return;
       }
+      if (request.url === '/api/native-auth/refresh') {
+        refreshCount += 1;
+        assert.deepEqual(Object.keys(payload).sort(), ['refreshToken', 'version']);
+        assert.equal(payload.version, 'aurion.native-auth.v1');
+        if (refreshCount === 1) {
+          assert.equal(payload.refreshToken, tokenPair.refreshToken);
+          json(response, 200, rotatedTokenPair);
+        } else if (refreshCount === 2) {
+          assert.equal(payload.refreshToken, rotatedTokenPair.refreshToken);
+          json(response, 409, {
+            version: 'aurion.native-auth.v1',
+            error: 'NATIVE_AUTH_REFRESH_REUSED',
+          });
+        } else {
+          assert.equal(payload.refreshToken, tokenPair.refreshToken);
+          response.statusCode = 302;
+          response.setHeader('Location', 'http://127.0.0.1:3000/leak');
+          response.end();
+        }
+        return;
+      }
       assert.equal(request.url, '/api/native-auth/exchange');
       exchangeCount += 1;
       assert.deepEqual(Object.keys(payload).sort(), [
@@ -99,13 +126,13 @@ const server = createServer((request, response) => {
       assert.equal(payload.code, handoffCode);
       assert.match(payload.codeVerifier, /^[A-Za-z0-9_-]{43}$/);
       assert.equal(payload.appBuild, 'aurion-godot-g09b-runtime');
-      if (exchangeCount === 1) {
+      if (exchangeCount <= 2) {
         json(response, 200, tokenPair);
-      } else if (exchangeCount === 2) {
+      } else if (exchangeCount === 3) {
         response.statusCode = 302;
         response.setHeader('Location', 'http://127.0.0.1:3000/leak');
         response.end();
-      } else if (exchangeCount === 3) {
+      } else if (exchangeCount === 4) {
         json(response, 401, {
           version: 'aurion.native-auth.v1',
           error: 'NATIVE_AUTH_STATE_MISMATCH',
@@ -140,7 +167,8 @@ clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
 process.stdout.write(output);
 assert.equal(exitCode, 0, 'Godot native-auth runtime failed');
-assert.equal(startCount, 8, 'Godot did not exercise all start outcomes');
-assert.equal(exchangeCount, 4, 'Godot did not exercise all exchange outcomes');
+assert.equal(startCount, 9, 'Godot did not exercise all start outcomes');
+assert.equal(exchangeCount, 5, 'Godot did not exercise all exchange outcomes');
+assert.equal(refreshCount, 3, 'Godot did not exercise all refresh outcomes');
 assert.equal(redirectFollowed, false, 'Godot followed a native-auth redirect');
-assert.match(output, /Godot native-auth start and exchange HTTP runtime verified/);
+assert.match(output, /Godot native-auth start, exchange and refresh HTTP runtime verified/);
