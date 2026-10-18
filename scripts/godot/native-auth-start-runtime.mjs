@@ -115,7 +115,7 @@ const server = createServer((request, response) => {
         assert.equal(payload.refreshToken, revokeCount === 1
           ? rotatedTokenPair.refreshToken
           : tokenPair.refreshToken);
-        if (revokeCount <= 2) {
+        if (revokeCount <= 3) {
           response.statusCode = 204;
           response.end();
         } else {
