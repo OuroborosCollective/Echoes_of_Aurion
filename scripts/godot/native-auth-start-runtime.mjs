@@ -81,14 +81,14 @@ const server = createServer((request, response) => {
         assert.equal(payload.platform, 'android');
         assert.equal(payload.returnId, 'aurion.android.app-link.v1');
         currentState = payload.requestState;
-        if (startCount <= 9) {
+        if (startCount <= 10) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
             browserUrl: `https://arelogic.space/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 10) {
+        } else if (startCount === 12) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
