@@ -3096,3 +3096,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-18 — PR #1045 — Offline quest receipt direct iteration
+Status: VERIFIED candidate
+Task: Remove intermediate arrays from the offline quest replay and sequence scans without changing receipt semantics.
+Decisions: Directly iterate the existing ordered receipt map; preserve first-match replay, maximum sequence, conflicts and Aurion ownership; gate the proof workflow with immutable action pins and no persisted checkout credentials.
+Touched surfaces: `server/questCompiler/persistence.ts`, focused iteration helpers/tests, reproducible benchmark workflow.
+Evidence: Exact tested head `e7ba21d493714e33eadf4ca26a0e578227ddffef`; differential/runtime proof `39132483280` passed 10/10 tests and a 75,000-receipt workload with parity, median 151.92 ms → 66.35 ms and measured median heap delta 10,720,096 → 8,608 bytes; Local Test Pack `39132483309` passed 449 files / 2,257 tests; Runtime Candidate `39132483283` and Container Proof `39132483278` passed; exact-head code/security reviews clear.
+Learned: Direct iterable scans preserve Map insertion semantics while removing measurable allocation pressure; allocation claims must be asserted from measured same-run evidence, not hard-coded structural expectations.
+Open: Merge and main readback only.
+Next safe step: Merge PR #1045 only if the Memory-bearing final head retains green exact-head gates and clean reviews.
