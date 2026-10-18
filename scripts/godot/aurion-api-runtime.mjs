@@ -70,7 +70,7 @@ const server = createServer((request, response) => {
           assert.equal(payload.refreshToken, 's'.repeat(43));
           json(response, 200, pair('c', 'v'));
         } else if (refreshCount === 3) {
-          assert.equal(payload.refreshToken, 'w'.repeat(43));
+          assert.equal(payload.refreshToken, 'v'.repeat(43));
           json(response, 200, pair('e', 'w'));
         } else {
           assert.equal(payload.refreshToken, 'u'.repeat(43));
@@ -84,7 +84,7 @@ const server = createServer((request, response) => {
       if (request.url === '/api/native-auth/revoke') {
         revokeCount += 1;
         assert.equal(request.headers.authorization, undefined);
-        assert.equal(payload.refreshToken, 'v'.repeat(43));
+        assert.equal(payload.refreshToken, 'w'.repeat(43));
         response.statusCode = 204;
         response.end();
         return;
