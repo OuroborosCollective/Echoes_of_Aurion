@@ -40,9 +40,16 @@ func verify() -> void:
 		require(card.size.x <= viewport_size.x - 32, "launch card overflows width")
 		require(button.size.y >= 48, "touch target too small")
 		require(scene.get_node("%BuildIdentity").text == "Build · " + Config.current().client_build, "visible build identity missing")
-		require(not button.disabled, "verified native login start must be available")
+		require(button.disabled, "production-unready native login must stay disabled")
 		require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "offline status missing")
 	scene.queue_free()
+	await process_frame
+	ProjectSettings.set_setting("aurion/native_auth_start_enabled", true)
+	var enabled_scene := packed.instantiate()
+	root.add_child(enabled_scene)
+	await process_frame
+	require(not enabled_scene.get_node("%Login").disabled, "verified native login start was not enabled")
+	enabled_scene.queue_free()
 	await process_frame
 	ProjectSettings.set_setting("aurion/server_base_url", "https://attacker.test")
 	var invalid_scene := packed.instantiate()
