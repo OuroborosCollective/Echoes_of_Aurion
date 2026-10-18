@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { guildGovernanceOperations, type GuildGovernanceOperation } from "@shared/guildGovernanceContract";
 import { sdk } from "./_core/sdk";
+import { HttpError } from "@shared/_core/errors";
 import { GuildGovernanceStore } from "./guildGovernanceStore";
 
 export type GuildGovernanceRouteDependencies = Readonly<{
@@ -28,6 +29,8 @@ function dependencies(): GuildGovernanceRouteDependencies {
 }
 
 function statusFor(error: unknown): number {
+  if (error instanceof HttpError && error.message === "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" && error.statusCode === 503) return 503;
+  if (error instanceof HttpError && error.message === "NATIVE_AUTH_SESSION_EXPIRED" && error.statusCode === 401) return 401;
   const message = error instanceof Error ? error.message : "UNKNOWN_GUILD_GOVERNANCE_ERROR";
   if (/AUTH|MEMBERSHIP_REQUIRED|PLAN_NOT_FOUND/.test(message)) return 401;
   if (/CAPABILITY_REQUIRED/.test(message)) return 403;
@@ -38,7 +41,7 @@ function statusFor(error: unknown): number {
 
 function fail(response: Response, error: unknown): void {
   const message = error instanceof Error ? error.message : "UNKNOWN_GUILD_GOVERNANCE_ERROR";
-  response.status(statusFor(error)).json({ success: false, error: message });
+  response.status(statusFor(error)).json({ success: false, error: error instanceof HttpError && error.statusCode === 503 ? "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" : message });
 }
 
 function rejectUnknown(body: Record<string, unknown>, allowed: readonly string[]): void {
