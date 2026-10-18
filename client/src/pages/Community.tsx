@@ -103,7 +103,8 @@ export default function Community() {
           <button
             type="button"
             aria-haspopup="dialog"
-            title="Fehler melden"
+            title={!isAuthenticated ? "Zum Fehler melden bitte anmelden" : "Fehler melden"}
+            disabled={loading || !isAuthenticated}
             onClick={() => openCommunity("issues")}
             className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
           >
