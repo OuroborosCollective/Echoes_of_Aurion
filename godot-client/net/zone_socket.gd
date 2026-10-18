@@ -13,12 +13,13 @@ var _state := "closed"
 var _hello := ""
 var _connected_at := -1
 var _received_welcome := false
+var _reject_notifications_in_flight := false
 
 func state_name() -> String:
 	return _state
 
 func connect_zone(base_url: String, ticket: String) -> bool:
-	if _state != "closed" or not is_inside_tree():
+	if _state != "closed" or _reject_notifications_in_flight or not is_inside_tree():
 		return false
 	if base_url != "https://arelogic.space" and base_url != "https://arelogic.space/":
 		return false
@@ -81,9 +82,13 @@ func _process(_delta: float) -> void:
 					# Tear down before callbacks; otherwise a synchronous close
 					# overrides the server reason or destroys a successor peer.
 					var reject_code: String = decoded["code"]
-					_finish("server_reject")
-					emit_signal("zone_rejected", reject_code)
+					_report_reject(reject_code)
 					return
+				# The server currently broadcasts a snapshot during join, before
+				# emitting welcome. No snapshot state may be projected until
+				# a verified welcome makes the session authoritative.
+				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "snapshot":
+					continue
 				if _accept_welcome(decoded):
 					return
 				_finish("invalid_welcome")
@@ -97,6 +102,15 @@ func _process(_delta: float) -> void:
 	if _peer == active_peer and active_peer.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 		_finish("closed")
 
+func _report_reject(code: String) -> void:
+	# No new connection may begin until the old reject + close notifications
+	# finish, even if a synchronous signal listener attempts to reconnect.
+	_reject_notifications_in_flight = true
+	_finish("server_reject", false)
+	emit_signal("zone_rejected", code)
+	emit_signal("zone_closed", "server_reject")
+	_reject_notifications_in_flight = false
+
 func _accept_welcome(raw: Variant) -> bool:
 	if not Codec.is_valid_welcome(raw):
 		return false
@@ -105,7 +119,7 @@ func _accept_welcome(raw: Variant) -> bool:
 	emit_signal("zone_connected")
 	return true
 
-func _finish(reason: String) -> void:
+func _finish(reason: String, notify: bool = true) -> void:
 	var old := _state
 	if _peer != null:
 		_peer.close()
@@ -114,7 +128,7 @@ func _finish(reason: String) -> void:
 	_state = "closed"
 	_received_welcome = false
 	set_process(false)
-	if old != "closed":
+	if old != "closed" and notify:
 		emit_signal("zone_closed", reason)
 
 func close_zone() -> void:
