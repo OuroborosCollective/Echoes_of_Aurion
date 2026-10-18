@@ -53,7 +53,7 @@ func verify() -> void:
 	require(late_rotation.access_token(205000).is_empty(), "absolute expiry retained access during rotation")
 	require(not late_rotation.protected_response_allowed(205000), "absolute-expired rotation accepted protected response")
 	require(late_rotation.session_generation() == late_generation, "absolute expiry erased committed rotation identity")
-	require(not late_rotation.accept_token_response(pair("b", "s"), 205001), "late rotation resurrected an expired session")
+	require(not late_rotation.accept_token_response(pair("b", "s"), 204999, 205001), "late rotation resurrected an expired session")
 	require(late_rotation.session_generation() == late_generation + 1, "terminal late rotation did not clear the expired session")
 	require(late_rotation.access_token(205001).is_empty(), "late rotation retained expired access")
 	require(late_rotation.begin_refresh(205001).is_empty(), "late rotation retained expired refresh authority")
