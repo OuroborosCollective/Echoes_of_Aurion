@@ -13,6 +13,7 @@ var _access_deadline_ms := -1
 var _idle_deadline_ms := -1
 var _absolute_deadline_ms := -1
 var _refresh_in_flight := false
+var _session_generation := 0
 
 static func _json_integer(value: Variant) -> bool:
 	return typeof(value) == TYPE_INT or (
@@ -30,6 +31,7 @@ static func _opaque(value: Variant) -> bool:
 	return pattern.search(token) != null
 
 func clear() -> void:
+	var had_session := not _access_token.is_empty() or not _refresh_token.is_empty() or _refresh_in_flight
 	_access_token = ""
 	_refresh_token = ""
 	_issued_at_ms = -1
@@ -37,10 +39,14 @@ func clear() -> void:
 	_idle_deadline_ms = -1
 	_absolute_deadline_ms = -1
 	_refresh_in_flight = false
+	if had_session:
+		_session_generation += 1
 
 ## On invalid response, refuse the whole session; never retain an old refresh.
-func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
+func accept_token_response(raw: Variant, now_ms: int = -1, received_at_ms: int = -1) -> bool:
 	var now: int = now_ms if now_ms >= 0 else Time.get_ticks_msec()
+	var received_at: int = received_at_ms if received_at_ms >= 0 else now
+	var rotating := _refresh_in_flight
 	if not _refresh_token.is_empty() and not _refresh_in_flight:
 		clear()
 		return false
@@ -86,7 +92,7 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	var new_absolute: int = now + absolute_remaining * 1000
 	if _refresh_in_flight and _absolute_deadline_ms >= 0:
 		new_absolute = mini(new_absolute, _absolute_deadline_ms)
-	if new_absolute <= now:
+	if new_absolute <= received_at:
 		clear()
 		return false
 	_access_token = access
@@ -96,6 +102,28 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	_access_deadline_ms = mini(now + ACCESS_TTL_SECONDS * 1000, _absolute_deadline_ms)
 	_idle_deadline_ms = mini(now + REFRESH_IDLE_SECONDS * 1000, _absolute_deadline_ms)
 	_refresh_in_flight = false
+	if not rotating:
+		_session_generation += 1
+	return true
+
+func session_generation() -> int:
+	return _session_generation
+
+func protected_response_allowed(now_ms: int = -1) -> bool:
+	if _refresh_token.is_empty():
+		return false
+	var now: int = now_ms if now_ms >= 0 else Time.get_ticks_msec()
+	if now < _issued_at_ms:
+		clear()
+		return false
+	if now >= _idle_deadline_ms or now >= _absolute_deadline_ms:
+		# Keep committed rotation metadata for its terminal response, but never
+		# accept protected gameplay data after the session boundary.
+		if _refresh_in_flight:
+			_access_token = ""
+		else:
+			clear()
+		return false
 	return true
 
 func access_token(now_ms: int = -1) -> String:
@@ -106,6 +134,11 @@ func access_token(now_ms: int = -1) -> String:
 		clear()
 		return ""
 	if now >= _idle_deadline_ms or now >= _absolute_deadline_ms:
+		# Keep a committed rotation bound to its original deadline until its response
+		# arrives; otherwise a late response could be mistaken for a fresh session.
+		if _refresh_in_flight:
+			_access_token = ""
+			return ""
 		clear()
 		return ""
 	if now >= _access_deadline_ms:

@@ -42,6 +42,7 @@ var _tokens := Tokens.new()
 var _http: HTTPRequest
 var _request_active := false
 var _request_phase := ""
+var _request_started_at_ms := -1
 var _server_base_url := ""
 var _logout_after_exchange := false
 
@@ -76,6 +77,12 @@ func complete_callback(raw_url: Variant) -> bool:
 func access_token(now_ms: int = -1) -> String:
 	return _tokens.access_token(now_ms)
 
+func session_generation() -> int:
+	return _tokens.session_generation()
+
+func protected_response_allowed(now_ms: int = -1) -> bool:
+	return _tokens.protected_response_allowed(now_ms)
+
 ## Rotate the in-memory pair through Aurion. The token store rejects a second
 ## request while rotation is in flight, preventing server replay revocation.
 func refresh(now_ms: int = -1) -> bool:
@@ -84,7 +91,10 @@ func refresh(now_ms: int = -1) -> bool:
 	var request := _tokens.begin_refresh(now_ms)
 	if request.is_empty():
 		return false
-	return _send_json(REFRESH_PATH, request, "refresh")
+	return _send_json(REFRESH_PATH, request, "refresh", now_ms)
+
+func refresh_in_flight() -> bool:
+	return _request_active and _request_phase == "refresh"
 
 ## Revoke the current server session. begin_logout clears local authority before
 ## transport starts, so network failure or a hostile redirect cannot keep access.
@@ -108,6 +118,7 @@ func logout() -> bool:
 		_install_http()
 		_request_active = false
 		_request_phase = ""
+		_request_started_at_ms = -1
 	var request := _tokens.begin_logout()
 	if request.is_empty():
 		emit_signal("logout_succeeded")
@@ -121,6 +132,7 @@ func cancel() -> void:
 		_tokens.clear()
 	_request_active = false
 	_request_phase = ""
+	_request_started_at_ms = -1
 	_logout_after_exchange = false
 	_flow.clear()
 
@@ -136,9 +148,10 @@ func _install_http() -> void:
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
 
-func _send_json(path: String, payload: Dictionary, phase: String) -> bool:
+func _send_json(path: String, payload: Dictionary, phase: String, started_at_ms: int = -1) -> bool:
 	_request_active = true
 	_request_phase = phase
+	_request_started_at_ms = started_at_ms if started_at_ms >= 0 else Time.get_ticks_msec()
 	var error := _http.request(
 		_server_base_url + path,
 		PackedStringArray(["Content-Type: application/json", "Accept: application/json"]),
@@ -154,8 +167,10 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if not _request_active:
 		return
 	var phase := _request_phase
+	var request_started_at_ms := _request_started_at_ms
 	_request_active = false
 	_request_phase = ""
+	_request_started_at_ms = -1
 	if result != HTTPRequest.RESULT_SUCCESS:
 		_fail_request(phase, FALLBACK_ERROR)
 		return
@@ -173,7 +188,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_fail_logout(FALLBACK_ERROR)
 		return
 	if phase == "exchange" or phase == "refresh":
-		if not _tokens.accept_token_response(payload):
+		if not _tokens.accept_token_response(payload, request_started_at_ms, Time.get_ticks_msec()):
 			_fail_request(phase, FALLBACK_ERROR)
 			return
 		if phase == "exchange" and _logout_after_exchange:
