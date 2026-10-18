@@ -75,7 +75,7 @@ describe("native bearer authentication boundary", () => {
     const verifySession = vi.spyOn(server, "verifySession");
 
     await expect(server.authenticateRequest(request(`Bearer ${nativeAccessToken}`)))
-      .rejects.toBe(unavailable);
+      .rejects.toMatchObject({ statusCode: 503, message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
     expect(verifySession).not.toHaveBeenCalled();
     expect(dependencies.readUserById).not.toHaveBeenCalled();
   });
