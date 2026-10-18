@@ -6,3 +6,10 @@ export function isNativeAuthUnavailable(error: unknown): boolean {
     error.statusCode === 503 &&
     error.message === "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE";
 }
+
+/** Only the native access-token boundary can request a client refresh. */
+export function isNativeAuthSessionExpired(error: unknown): boolean {
+  return error instanceof HttpError &&
+    error.statusCode === 401 &&
+    error.message === "NATIVE_AUTH_SESSION_EXPIRED";
+}
