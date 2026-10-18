@@ -83,7 +83,7 @@ const server = createServer((request, response) => {
             browserUrl: `https://evil.example/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 7) {
+        } else if (startCount === 8) {
           response.statusCode = 302;
           response.setHeader('Location', 'http://127.0.0.1:3000/leak');
           response.end();
