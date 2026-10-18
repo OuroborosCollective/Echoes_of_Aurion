@@ -6,9 +6,15 @@ var callback_transport: Node
 var connected_callbacks := 0
 var last_close_reason := ""
 var last_reject_code := ""
+var close_callbacks := 0
+var reject_callbacks := 0
 
 func remember_rejection(code: String) -> void:
 	last_reject_code = code
+	reject_callbacks += 1
+	# The callback is synchronous: closing here must never override the server reason.
+	if code == "PROTOCOL_VERSION_UNSUPPORTED":
+		callback_transport.close_zone()
 
 func close_during_connected_signal() -> void:
 	connected_callbacks += 1
@@ -16,10 +22,11 @@ func close_during_connected_signal() -> void:
 
 func remember_close_reason(reason: String) -> void:
 	last_close_reason = reason
+	close_callbacks += 1
 
 ## Exercise the actual WebSocketPeer.packet -> _process() path over loopback TCP.
 ## No synthetic gameplay/server evidence; this is a local headless regression only.
-func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reject_code: String = "") -> void:
+func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reject_code: String = "", server_close_after_send: bool = false) -> void:
 	var server := TCPServer.new()
 	var listen_result := server.listen(0, "127.0.0.1")
 	require(listen_result == OK, "loopback websocket server could not listen")
@@ -28,6 +35,8 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	connected_callbacks = 0
 	last_close_reason = ""
 	last_reject_code = ""
+	close_callbacks = 0
+	reject_callbacks = 0
 	callback_transport = Socket.new()
 	root.add_child(callback_transport)
 	await process_frame
@@ -64,6 +73,8 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 					hello_received = remote.was_string_packet() and typeof(hello) == TYPE_DICTIONARY and hello.get("type") == "hello" and hello.get("protocolVersion") == 5
 					if hello_received:
 						welcome_sent = remote.send_text(wire) == OK
+						if welcome_sent and server_close_after_send:
+							remote.close(1008, "zone authorization rejected")
 					else:
 						errors.append("loopback server received an invalid hello")
 		await process_frame
@@ -77,6 +88,8 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	else:
 		require(last_close_reason == "invalid_welcome", "malformed wire frame was accepted")
 	require(last_reject_code == expected_reject_code, "server reject signal lost or invented a rejection code")
+	require(reject_callbacks == (1 if not expected_reject_code.is_empty() else 0), "server reject callback was duplicated")
+	require(close_callbacks == 1, "terminal close callback was duplicated")
 	if remote != null:
 		remote.close()
 	server.stop()
@@ -147,6 +160,8 @@ func verify() -> void:
 	require(not Codec.wire_numbers_are_integers(bad_wire), "fractional wire token rounded to an accepted integer")
 	await verify_socket_packet_loop(bad_wire, false)
 	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), false, "PROTOCOL_VERSION_UNSUPPORTED")
+	# Production zone gateway sends reject and immediately starts a 1008 close.
+	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), false, "PROTOCOL_VERSION_UNSUPPORTED", true)
 	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"FAKE_CODE"}), false)
 	var invalid_entity_wire: Dictionary = welcome.duplicate(true)
 	invalid_entity_wire["selfEntityId"] = "player:0"
