@@ -56,9 +56,14 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
       wheelSamples.push(sample);
       return sample.scrollTop > initialScrollTop;
     }, { timeout: 10_000, intervals: [100, 250, 500] }).toBe(true);
-    // Reset scroll position programmatically. The scroll-down above already
-    // proved real wheel input moves this container; the upward reset just
-    // restores the viewport for the upload steps that follow.
+    // Independently prove that a control in the lower section remains reachable
+    // in the mobile layout, without sending another compositor wheel command.
+    const lowerSessionControl = page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true });
+    await lowerSessionControl.scrollIntoViewIfNeeded();
+    await expect(lowerSessionControl).toBeVisible();
+    const lowerSessionControlReachable = await lowerSessionControl.isVisible();
+    // Reset scroll position programmatically. The checks above proved both real
+    // wheel movement and access to the lower controls; this restores the upload.
     await scrollRegion.evaluate(element => element.scrollTo({ top: 0 }));
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
       .toBeLessThanOrEqual(2);
@@ -163,6 +168,6 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await expect(page.getByTestId(`admin-glb-asset-${publicReceipt.assetId}`)).toBeVisible();
     await page.getByTestId(`admin-glb-asset-${receipt.assetId}`).click();
     await expect(page.getByText('Katalog serverbestätigt', { exact: true })).toBeVisible();
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, movementLayouts, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: { ...scrollMetrics, wheelSamples }, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, movementLayouts, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: { ...scrollMetrics, wheelSamples, lowerSessionControlReachable }, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
