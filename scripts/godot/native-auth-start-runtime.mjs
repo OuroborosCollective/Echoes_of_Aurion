@@ -189,12 +189,18 @@ const child = spawn(executable, [
 ], { stdio: ['ignore', 'pipe', 'pipe'] });
 child.stdout.on('data', chunk => { output += chunk; });
 child.stderr.on('data', chunk => { output += chunk; });
-const timer = setTimeout(() => child.kill('SIGKILL'), 30_000);
+let timedOut = false;
+const timer = setTimeout(() => {
+  timedOut = true;
+  child.kill('SIGKILL');
+}, 30_000);
 const exitCode = await new Promise(resolve => child.once('exit', code => resolve(code ?? 1)));
 clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
 process.stdout.write(output);
 assert.ifError(handlerFailure);
+assert.equal(timedOut, false,
+  `Godot native-auth runtime timed out: start=${startCount}, exchange=${exchangeCount}, refresh=${refreshCount}, revoke=${revokeCount}`);
 assert.equal(exitCode, 0, 'Godot native-auth runtime failed');
 assert.equal(startCount, 12, 'Godot did not exercise all start outcomes');
 assert.equal(exchangeCount, 8, 'Godot did not exercise all exchange outcomes');
