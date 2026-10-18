@@ -43,6 +43,7 @@ var _http: HTTPRequest
 var _request_active := false
 var _request_phase := ""
 var _server_base_url := ""
+var _logout_after_exchange := false
 
 func _ready() -> void:
 	_install_http()
@@ -92,8 +93,13 @@ func logout() -> bool:
 		_tokens.clear()
 		_flow.clear()
 		return false
-	if _request_active and _request_phase == "logout":
+	_flow.clear()
+	if _request_active and (_request_phase == "logout" or _logout_after_exchange):
 		return false
+	if _request_active and _request_phase == "exchange":
+		_logout_after_exchange = true
+		_tokens.clear()
+		return true
 	if _request_active:
 		_http.request_completed.disconnect(_on_request_completed)
 		_http.cancel_request()
@@ -102,7 +108,6 @@ func logout() -> bool:
 		_install_http()
 		_request_active = false
 		_request_phase = ""
-		_flow.clear()
 	var request := _tokens.begin_logout()
 	if request.is_empty():
 		emit_signal("logout_succeeded")
@@ -116,6 +121,7 @@ func cancel() -> void:
 		_tokens.clear()
 	_request_active = false
 	_request_phase = ""
+	_logout_after_exchange = false
 	_flow.clear()
 
 func _exit_tree() -> void:
@@ -170,6 +176,12 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		if not _tokens.accept_token_response(payload):
 			_fail_request(phase, FALLBACK_ERROR)
 			return
+		if phase == "exchange" and _logout_after_exchange:
+			_logout_after_exchange = false
+			var revoke := _tokens.begin_logout()
+			if revoke.is_empty() or not _send_json(REVOKE_PATH, revoke, "logout"):
+				_fail_logout(FALLBACK_ERROR)
+			return
 		emit_signal("session_succeeded" if phase == "exchange" else "refresh_succeeded")
 		return
 	if phase != "start" or not _flow.accept_start_response(payload):
@@ -183,7 +195,10 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	emit_signal("start_succeeded")
 
 func _fail_request(phase: String, error_code: String) -> void:
-	if phase == "logout":
+	if phase == "exchange" and _logout_after_exchange:
+		_logout_after_exchange = false
+		_fail_logout(error_code)
+	elif phase == "logout":
 		_fail_logout(error_code)
 	elif phase == "refresh":
 		_fail_refresh(error_code)
