@@ -29,12 +29,16 @@ class FakeAuth:
 	var refresh_behavior := "reject"
 	var refresh_pending := false
 	var generation := 1
+	var response_allowed := true
 
 	func access_token(_now_ms: int = -1) -> String:
 		return current_access
 
 	func session_generation() -> int:
 		return generation
+
+	func protected_response_allowed(_now_ms: int = -1) -> bool:
+		return response_allowed
 
 	func refresh(_now_ms: int = -1) -> bool:
 		refresh_calls += 1
@@ -317,6 +321,42 @@ func verify() -> void:
 	require(not logout_api._active, "initial logout left protected request active")
 	logout_api.queue_free()
 	logout_auth.queue_free()
+
+	var absolute_auth := FakeAuth.new()
+	absolute_auth.current_access = ""
+	absolute_auth.refresh_pending = true
+	absolute_auth.response_allowed = false
+	root.add_child(absolute_auth)
+	var absolute_api := AurionApi.new(absolute_auth)
+	absolute_api.zone_ticket_succeeded.connect(_on_zone_ticket)
+	absolute_api.request_failed.connect(_on_request_failure)
+	root.add_child(absolute_api)
+	await process_frame
+	request_completed = false
+	request_succeeded = false
+	request_error = ""
+	request_failure_count = 0
+	absolute_api._active = true
+	absolute_api._sent_access_token = "expired-session-access"
+	absolute_api._sent_session_generation = absolute_auth.session_generation()
+	var expired_body := JSON.stringify([{
+		"result": {"data": {"json": {
+			"ticket": "x".repeat(48),
+			"zoneId": "observatory_threshold",
+			"expiresAt": "2026-10-18T11:00:00.000Z",
+		}}},
+	}]).to_utf8_buffer()
+	absolute_api._on_request_completed(
+		HTTPRequest.RESULT_SUCCESS,
+		200,
+		PackedStringArray(["Content-Type: application/json"]),
+		expired_body
+	)
+	require(request_completed and not request_succeeded, "absolute-expired 200 was accepted")
+	require(request_error == "AURION_API_AUTH_REQUIRED", "absolute-expired 200 did not require auth")
+	require(request_failure_count == 1, "absolute-expired 200 emitted more than one failure")
+	absolute_api.queue_free()
+	absolute_auth.queue_free()
 
 	var success_auth := FakeAuth.new()
 	success_auth.current_access = ""
