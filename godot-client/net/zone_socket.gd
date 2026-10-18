@@ -74,6 +74,11 @@ func _process(_delta: float) -> void:
 					return
 				var decoded: Variant = JSON.parse_string(wire)
 				if _state == "authenticating":
+					if Codec.is_valid_reject(decoded):
+						var reject_code: String = decoded["code"]
+						emit_signal("zone_rejected", reject_code)
+						_finish("server_reject")
+						return
 					if _accept_welcome(decoded):
 						return
 					else:
