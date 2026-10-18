@@ -95,7 +95,11 @@ const server = createServer((request, response) => {
         : ticketCount < 4 ? (ticketCount === 2 || ticketCount === 3 ? 'b' : 'c')
         : ticketCount === 4 ? 'c' : 'd';
       assert.equal(request.headers.authorization, `Bearer ${expectedBearer.repeat(43)}`);
-      if (ticketCount === 1 || ticketCount === 3 || ticketCount === 4 || ticketCount === 5) {
+      if (ticketCount === 1) {
+        // Let the concurrent refresh install its bearer before this old-bearer
+        // 401 arrives, proving the adapter's same-session race recovery.
+        setTimeout(() => json(response, 401, { error: { json: { message: 'UNAUTHORIZED' } } }), 200);
+      } else if (ticketCount === 3 || ticketCount === 4 || ticketCount === 5) {
         json(response, 401, { error: { json: { message: 'UNAUTHORIZED' } } });
       } else {
         setTimeout(() => json(response, 200, [{
