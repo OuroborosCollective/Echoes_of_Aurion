@@ -79,6 +79,10 @@ func verify() -> void:
 	})
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher verbunden", "confirmed ticket state missing")
 	require(enabled_scene.get_node("%Login").text == "Verbunden", "confirmed ticket action state missing")
+	enabled_scene._on_zone_ticket_failed("AURION_API_REQUEST_FAILED")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "ticket failure state missing")
+	require(not enabled_scene.get_node("%Login").disabled, "terminal logout did not restore login")
+	require(enabled_scene.get_node("%Login").text == "Anmelden", "terminal logout action state missing")
 	enabled_scene.queue_free()
 	await process_frame
 	ProjectSettings.set_setting("aurion/server_base_url", "https://attacker.test")
