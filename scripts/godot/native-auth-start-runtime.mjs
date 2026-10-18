@@ -88,14 +88,14 @@ const server = createServer((request, response) => {
             browserUrl: `https://arelogic.space/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 12) {
+        } else if (startCount === 11) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
             browserUrl: `https://evil.example/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 11) {
+        } else if (startCount === 12) {
           response.statusCode = 302;
           response.setHeader('Location', 'http://127.0.0.1:3000/leak');
           response.end();
