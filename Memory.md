@@ -3209,6 +3209,6 @@ Next safe step: Use the new main revision as the canonical baseline for the next
 ### 2026-10-18 — PR #1049 — Native login zone-ticket handoff
 Status: VERIFIED candidate
 Task: Connect the running Godot launch scene's confirmed native session to the existing Aurion zone-ticket client and keep relogin closed until terminal logout after failure.
-Evidence: Tested code head `4a102e9536a88d490e09a793c087e6143d1c52f4`; Godot run 39153875742 passed import, scene runtime, real native-auth/ticket HTTP runtimes, negative controls and Android toolchain; APK run 39153875703 attempt 2 passed independent APK readback with artifact 12145888297 (`sha256:667082e0e385f42150de0a1cca5888d199cd020b862b360b191b8a64888a6bb3`).
-Learned: The protected ticket client was runtime-verified but unused by the game scene; session success must advance through the canonical ticket request before the UI claims a secure connection.
+Evidence: Corrected code head `1cfea3ee92c9777b76f21dba223e544d22d8a890`; Godot run 39155066764 passed import, scene runtime, real native-auth/ticket HTTP runtimes, negative controls and Android toolchain with evidence artifact 12146870998 (`sha256:757913852feebabdb3541cb5338d87098ea978e720a2ad490ac1f8c5675db47e`); APK run 39155066823 passed independent readback with artifact 12145939004 (`sha256:b9beb2c9210d40c69be65e8da36e3c6bf2b32ff63b06f11e125611c982e2d3bb`).
+Learned: The protected ticket client was runtime-verified but unused by the game scene; ticket success proves authentication and ticket acquisition, while only a later WSS welcome may claim a live connection.
 Next safe step: Require green exact-head gates and clean review on the Memory-bearing head, then merge and read back main.
