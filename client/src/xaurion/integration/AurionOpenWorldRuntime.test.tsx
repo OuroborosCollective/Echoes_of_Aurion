@@ -102,17 +102,24 @@ describe("open world session ownership", () => {
     fixture.worldData = null;
   });
 
-  it("keeps the activation world stable while periodic readback advances", async () => {
+  it("freezes the newest initial world while periodic readback advances", async () => {
+    fixture.worldData = { globalWorld: { worldSeed: "confirmed-world", epoch: 1 }, serviceNpcs: [] };
     const view = render(<AurionOpenWorldRuntime />); await enter();
     expect(fixture.engines).toHaveLength(1);
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({
+      worldSeed: "confirmed-world",
+      epoch: 1,
+      status: "rendering",
+    });
+
     fixture.worldData = { globalWorld: { worldSeed: "advanced-world", epoch: 2 }, serviceNpcs: [] };
     await act(async () => view.rerender(<AurionOpenWorldRuntime />));
     expect(fixture.engines[0].stop).not.toHaveBeenCalled();
     expect(fixture.engines).toHaveLength(1);
     expect(fixture.tickets).toHaveLength(1);
     expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({
-      worldSeed: "fixture",
-      epoch: 0,
+      worldSeed: "confirmed-world",
+      epoch: 1,
       status: "rendering",
     });
   });
