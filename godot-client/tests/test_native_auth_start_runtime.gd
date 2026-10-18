@@ -47,6 +47,9 @@ func verify() -> void:
 	client.start_failed.connect(_on_failure)
 	root.add_child(client)
 	await process_frame
+	var request: HTTPRequest = client.get_child(0)
+	require(request.timeout == 15.0, "native auth start has no bounded timeout")
+	require(request.max_redirects == 0, "native auth start can follow redirects")
 
 	await run_start()
 	require(succeeded, "valid local HTTP start failed")
