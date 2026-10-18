@@ -2954,3 +2954,33 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-18 — PR #1036 — feat(godot): stage readiness-gated native auth start (#968)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1036 merge=c5a3ce1075613604ea0281e3068772fab29847d9 -->
+Task: Merge PR #1036 into `main` — feat(godot): stage readiness-gated native auth start (#968).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/README.md`
+- `godot-client/app/main.gd`
+- `godot-client/config/runtime_config.gd`
+- `godot-client/net/auth/native_auth_start.gd`
+- `godot-client/net/auth/native_auth_start.gd.uid`
+- `godot-client/project.godot`
+- `godot-client/tests/test_native_auth_start_runtime.gd`
+- `godot-client/tests/test_native_auth_start_runtime.gd.uid`
+- `godot-client/tests/test_startup.gd`
+- `scripts/godot/check.mjs`
+- `scripts/godot/check.test.mjs`
+- `scripts/godot/native-auth-start-runtime.mjs`
+- `scripts/godot/verify-evidence.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1036
+- Merge commit: `c5a3ce1075613604ea0281e3068772fab29847d9`
+- PR head: `70a1d7ff13f399b826403c02fab26760c4f89f11`
+- Merged at: 2026-10-18T02:41:41Z
+- Post-merge workflow run: 39091003117
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
