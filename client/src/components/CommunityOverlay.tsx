@@ -115,6 +115,8 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
         className={`community-panel ${panel}-panel`}
+        role="dialog"
+        aria-label={panel === "issues" ? "Fehlerberichte" : "Aurion Community"}
         aria-live="polite"
       >
         <header className="community-panel-header"><div><p>AURION // COMMUNITY</p><h2>{panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : panel === "issues" ? "Fehlerberichte" : "Öffentlicher Asset-Katalog"}</h2></div><button type="button" onClick={close} title="Community-Konsole schließen" aria-label="Community-Konsole schließen"><X size={18}/></button></header>
