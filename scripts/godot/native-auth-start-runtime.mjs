@@ -76,7 +76,7 @@ const server = createServer((request, response) => {
             browserUrl: `https://arelogic.space/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 8) {
+        } else if (startCount === 7) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
