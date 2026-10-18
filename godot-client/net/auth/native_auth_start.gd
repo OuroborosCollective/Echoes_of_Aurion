@@ -179,8 +179,10 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		if phase == "exchange" and _logout_after_exchange:
 			_logout_after_exchange = false
 			var revoke := _tokens.begin_logout()
-			if revoke.is_empty() or not _send_json(REVOKE_PATH, revoke, "logout"):
+			if revoke.is_empty():
 				_fail_logout(FALLBACK_ERROR)
+				return
+			_send_json(REVOKE_PATH, revoke, "logout")
 			return
 		emit_signal("session_succeeded" if phase == "exchange" else "refresh_succeeded")
 		return
