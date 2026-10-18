@@ -97,13 +97,21 @@ function refuseBrowser(res: Response) {
 }
 export function registerNativeAuthHttpRoutes(app: Express, options: Partial<NativeAuthHttpDependencies> = {}): void {
   const deps = { ...DEFAULTS, ...options };
-  app.use(BASE_PATH, rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: "draft-7", legacyHeaders: false }));
   app.use(BASE_PATH, (_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Referrer-Policy", "no-referrer");
     next();
   });
+  app.use(BASE_PATH, rateLimit({
+    windowMs: 60_000,
+    limit: 20,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      response(res, 429, "NATIVE_AUTH_RATE_LIMITED");
+    },
+  }));
   app.post(BASE_PATH + "/start", async (req, res) => {
     try {
       if (!await deps.ready()) return response(res, 503, "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE");
