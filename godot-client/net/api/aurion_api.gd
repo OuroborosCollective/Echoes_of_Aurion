@@ -91,6 +91,9 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if result != HTTPRequest.RESULT_SUCCESS:
 		_fail(REQUEST_FAILED)
 		return
+	if _auth.access_token() != _sent_access_token:
+		_fail(RESPONSE_INVALID)
+		return
 	if response_code == 401:
 		if _retried_after_refresh:
 			_auth.logout()
@@ -107,7 +110,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if response_code != 200:
 		_fail(REQUEST_FAILED)
 		return
-	if _auth.access_token() != _sent_access_token or not _json_content_type(headers):
+	if not _json_content_type(headers):
 		_fail(RESPONSE_INVALID)
 		return
 	var receipt := _parse_zone_ticket(JSON.parse_string(body.get_string_from_utf8()))
