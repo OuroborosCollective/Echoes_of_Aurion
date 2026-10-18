@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { sdk } from "./_core/sdk";
+import { isNativeAuthUnavailable } from "./_core/nativeAuthHttpError";
 import * as db from "./db";
 import { authenticateAdminGlbBearer } from "./adminMcp";
 import { verifyGlbAgentSession } from "./glbAgentSession";
@@ -185,7 +186,7 @@ async function requireAdmin(request: Request, response: Response): Promise<Reado
 
   let user: Awaited<ReturnType<typeof sdk.authenticateRequest>>;
   try { user = await sdk.authenticateRequest(request); }
-  catch { response.status(401).json({ error: "GAME_DEV_AUTHENTICATION_REQUIRED" }); return null; }
+  catch (error) { if (isNativeAuthUnavailable(error)) { response.status(503).json({ error: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" }); return null; } response.status(401).json({ error: "GAME_DEV_AUTHENTICATION_REQUIRED" }); return null; }
   if (!user) { response.status(401).json({ error: "GAME_DEV_AUTHENTICATION_REQUIRED" }); return null; }
   if (user.role !== "admin") { response.status(403).json({ error: "GAME_DEV_ADMIN_REQUIRED" }); return null; }
   return Object.freeze({ id: user.id });
