@@ -18,7 +18,7 @@ func state_name() -> String:
 	return _state
 
 func connect_zone(base_url: String, ticket: String) -> bool:
-	if _state != "closed":
+	if _state != "closed" or not is_inside_tree():
 		return false
 	if base_url != "https://arelogic.space" and base_url != "https://arelogic.space/":
 		return false
@@ -42,7 +42,7 @@ func connect_zone(base_url: String, ticket: String) -> bool:
 	return true
 
 func _ready() -> void:
-	set_process(false)
+	set_process(_state != "closed")
 
 func _process(_delta: float) -> void:
 	if _peer == null:
@@ -70,10 +70,8 @@ func _process(_delta: float) -> void:
 					return
 				var decoded: Variant = JSON.parse_string(bytes.get_string_from_utf8())
 				if _state == "authenticating":
-					if Codec.is_valid_welcome(decoded):
-						_received_welcome = true
-						_state = "connected"
-						emit_signal("zone_connected")
+					if _accept_welcome(decoded):
+						return
 					else:
 						_finish("invalid_welcome")
 						return
@@ -87,6 +85,14 @@ func _process(_delta: float) -> void:
 			pass
 		WebSocketPeer.STATE_CLOSED:
 			_finish("closed")
+
+func _accept_welcome(raw: Variant) -> bool:
+	if not Codec.is_valid_welcome(raw):
+		return false
+	_received_welcome = true
+	_state = "connected"
+	emit_signal("zone_connected")
+	return true
 
 func _finish(reason: String) -> void:
 	var old := _state
