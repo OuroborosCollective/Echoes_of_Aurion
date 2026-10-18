@@ -95,9 +95,10 @@ func logout() -> bool:
 	if _request_active and _request_phase == "logout":
 		return false
 	if _request_active:
+		_http.request_completed.disconnect(_on_request_completed)
 		_http.cancel_request()
 		remove_child(_http)
-		_http.queue_free()
+		_http.free()
 		_install_http()
 		_request_active = false
 		_request_phase = ""
