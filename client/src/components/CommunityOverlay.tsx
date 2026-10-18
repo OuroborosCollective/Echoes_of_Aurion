@@ -59,7 +59,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
   }, []);
 
   const chat = trpc.community.chat.list.useQuery(undefined, { enabled: isAuthenticated && panel === "chat", refetchInterval: panel === "chat" ? 5000 : false });
-  const forumMode = panel === "forum" || panel === "events";
+  const forumMode = panel === "forum" || panel === "events" || panel === "issues";
   const threads = trpc.community.forum.list.useQuery({ category: forumCategory }, { enabled: forumMode, refetchInterval: forumMode ? 12000 : false });
   const thread = trpc.community.forum.get.useQuery({ threadId: selectedThreadId ?? "thread_unselected" }, { enabled: Boolean(selectedThreadId) });
   const publicAssets = trpc.assetSubmissions.publicCatalog.useQuery(undefined, { enabled: panel === "assets" });
@@ -117,7 +117,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         className={`community-panel ${panel}-panel`}
         aria-live="polite"
       >
-        <header className="community-panel-header"><div><p>AURION // COMMUNITY</p><h2>{panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : "Öffentlicher Asset-Katalog"}</h2></div><button type="button" onClick={close} title="Community-Konsole schließen" aria-label="Community-Konsole schließen"><X size={18}/></button></header>
+        <header className="community-panel-header"><div><p>AURION // COMMUNITY</p><h2>{panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : panel === "issues" ? "Fehlerberichte" : "Öffentlicher Asset-Katalog"}</h2></div><button type="button" onClick={close} title="Community-Konsole schließen" aria-label="Community-Konsole schließen"><X size={18}/></button></header>
         {message && <p className="community-feedback"><BellRing size={13}/>{message}</p>}
 
         {panel === "chat" && <div className="community-chat"><div className="community-feed">{chat.data?.map(entry => <article key={entry.id} className={entry.userId === currentUserId ? "community-message own" : "community-message"}><header><b>{participantName(entry.authorName, entry.userId)}</b><time>{localTime(entry.createdAt)}</time></header><p>{entry.body}</p></article>)}{!chat.data?.length && <p className="community-empty">Noch keine Funksprüche.</p>}</div><form className="community-compose" onSubmit={event => { event.preventDefault(); if (chatBody.trim()) sendChat.mutate({ body: chatBody }); }}><input value={chatBody} maxLength={500} onChange={event => setChatBody(event.target.value)} placeholder="Kurzer Funkspruch…"/><button type="submit" disabled={!chatBody.trim() || sendChat.isPending} aria-busy={sendChat.isPending} title="Chatnachricht senden" aria-label="Chatnachricht senden"><Send size={16}/></button></form></div>}
