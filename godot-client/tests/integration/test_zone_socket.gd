@@ -5,6 +5,10 @@ var errors: Array[String] = []
 var callback_transport: Node
 var connected_callbacks := 0
 var last_close_reason := ""
+var last_reject_code := ""
+
+func remember_rejection(code: String) -> void:
+	last_reject_code = code
 
 func close_during_connected_signal() -> void:
 	connected_callbacks += 1
@@ -15,7 +19,7 @@ func remember_close_reason(reason: String) -> void:
 
 ## Exercise the actual WebSocketPeer.packet -> _process() path over loopback TCP.
 ## No synthetic gameplay/server evidence; this is a local headless regression only.
-func verify_socket_packet_loop(wire: String, expect_welcome: bool) -> void:
+func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reject_code: String = "") -> void:
 	var server := TCPServer.new()
 	var listen_result := server.listen(0, "127.0.0.1")
 	require(listen_result == OK, "loopback websocket server could not listen")
@@ -23,11 +27,13 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool) -> void:
 		return
 	connected_callbacks = 0
 	last_close_reason = ""
+	last_reject_code = ""
 	callback_transport = Socket.new()
 	root.add_child(callback_transport)
 	await process_frame
 	callback_transport.zone_connected.connect(close_during_connected_signal)
 	callback_transport.zone_closed.connect(remember_close_reason)
+	callback_transport.zone_rejected.connect(remember_rejection)
 	callback_transport._peer = WebSocketPeer.new()
 	callback_transport._hello = Codec.serialized_hello("a".repeat(43))
 	callback_transport._state = "connecting"
@@ -66,8 +72,11 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool) -> void:
 	require(connected_callbacks == (1 if expect_welcome else 0), "unexpected zone_connected callback after wire welcome")
 	if expect_welcome:
 		require(last_close_reason == "client_close", "synchronous zone_connected close failed")
+	elif not expected_reject_code.is_empty():
+		require(last_close_reason == "server_reject", "server reject did not terminate the handshake")
 	else:
 		require(last_close_reason == "invalid_welcome", "malformed wire frame was accepted")
+	require(last_reject_code == expected_reject_code, "server reject signal lost or invented a rejection code")
 	if remote != null:
 		remote.close()
 	server.stop()
@@ -119,6 +128,15 @@ func verify() -> void:
 	var invalid_revision: Dictionary = wire.duplicate(true)
 	invalid_revision["resources"]["revision"] = 9007199254740992.0
 	require(not Codec.is_valid_welcome(invalid_revision), "unsafe resource revision accepted")
+	var zero_revision: Dictionary = wire.duplicate(true)
+	zero_revision["resources"]["revision"] = 0
+	require(not Codec.is_valid_welcome(zero_revision), "resource revision zero violated canonical v5 schema")
+	for bad_id in ["player:0", "player:01", "player:-1", "player:abc", "player:1a"]:
+		var invalid_entity: Dictionary = wire.duplicate(true)
+		invalid_entity["selfEntityId"] = bad_id
+		require(not Codec.is_valid_welcome(invalid_entity), "invalid v5 selfEntityId accepted: " + bad_id)
+	require(Codec.is_valid_reject({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), "known v5 reject code missing")
+	require(not Codec.is_valid_reject({"type":"reject","code":"FABRICATED_CODE"}), "unknown v5 reject code accepted")
 	# P2: test through a real packet loop, not a direct helper invocation.
 	var welcome_wire := JSON.stringify(welcome)
 	require(Codec.wire_numbers_are_integers(welcome_wire), "valid integer wire numbers rejected")
@@ -128,6 +146,14 @@ func verify() -> void:
 	require(bad_wire != welcome_wire, "rounded-number test could not locate wire snapshotSeq")
 	require(not Codec.wire_numbers_are_integers(bad_wire), "fractional wire token rounded to an accepted integer")
 	await verify_socket_packet_loop(bad_wire, false)
+	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), false, "PROTOCOL_VERSION_UNSUPPORTED")
+	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"FAKE_CODE"}), false)
+	var invalid_entity_wire: Dictionary = welcome.duplicate(true)
+	invalid_entity_wire["selfEntityId"] = "player:0"
+	await verify_socket_packet_loop(JSON.stringify(invalid_entity_wire), false)
+	var invalid_resource_wire: Dictionary = welcome.duplicate(true)
+	invalid_resource_wire["resources"]["revision"] = 0
+	await verify_socket_packet_loop(JSON.stringify(invalid_resource_wire), false)
 	var string_with_decimals := welcome_wire.replace("zone_peer_abcdefghijklmnop", "zone_peer_1.0000000000000001")
 	require(Codec.wire_numbers_are_integers(string_with_decimals), "number-like characters inside JSON strings were rejected")
 	transport.close_zone()
