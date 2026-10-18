@@ -10,6 +10,7 @@ let exchangeCount = 0;
 let refreshCount = 0;
 let revokeCount = 0;
 let redirectFollowed = false;
+let handlerFailure;
 let currentState = '';
 const transactionId = 't'.repeat(43);
 const handoffCode = 'c'.repeat(43);
@@ -163,10 +164,15 @@ const server = createServer((request, response) => {
         json(response, 200, { ...tokenPair, refreshToken: tokenPair.accessToken });
       }
     } catch (error) {
-      json(response, 500, {
-        version: 'aurion.native-auth.v1',
-        error: 'NATIVE_AUTH_CONFIGURATION_UNAVAILABLE',
-      });
+      handlerFailure ??= error;
+      if (!response.headersSent) {
+        json(response, 500, {
+          version: 'aurion.native-auth.v1',
+          error: 'NATIVE_AUTH_CONFIGURATION_UNAVAILABLE',
+        });
+      } else {
+        response.destroy();
+      }
       console.error(error);
     }
   });
@@ -188,6 +194,7 @@ const exitCode = await new Promise(resolve => child.once('exit', code => resolve
 clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
 process.stdout.write(output);
+assert.ifError(handlerFailure);
 assert.equal(exitCode, 0, 'Godot native-auth runtime failed');
 assert.equal(startCount, 12, 'Godot did not exercise all start outcomes');
 assert.equal(exchangeCount, 8, 'Godot did not exercise all exchange outcomes');
