@@ -17,6 +17,9 @@ var session_error := ""
 var refresh_completed := false
 var refresh_succeeded := false
 var refresh_error := ""
+var logout_completed := false
+var logout_succeeded := false
+var logout_error := ""
 
 func require(condition: bool, message: String) -> void:
 	if not condition:
@@ -55,6 +58,15 @@ func _on_refresh_failure(value: String) -> void:
 	refresh_completed = true
 	refresh_succeeded = false
 	refresh_error = value
+
+func _on_logout_success() -> void:
+	logout_completed = true
+	logout_succeeded = true
+
+func _on_logout_failure(value: String) -> void:
+	logout_completed = true
+	logout_succeeded = false
+	logout_error = value
 
 func run_start() -> void:
 	start_completed = false
@@ -100,6 +112,15 @@ func run_refresh(assert_single_flight: bool = false) -> void:
 	while not refresh_completed:
 		await process_frame
 
+func run_logout() -> void:
+	logout_completed = false
+	logout_succeeded = false
+	logout_error = ""
+	require(client.logout(), "logout request did not begin")
+	require(client.access_token().is_empty(), "logout retained local access during transport")
+	while not logout_completed:
+		await process_frame
+
 func verify() -> void:
 	client = NativeAuthStart.new()
 	client.browser_opener = Callable(self, "_opened")
@@ -109,6 +130,8 @@ func verify() -> void:
 	client.session_failed.connect(_on_session_failure)
 	client.refresh_succeeded.connect(_on_refresh_success)
 	client.refresh_failed.connect(_on_refresh_failure)
+	client.logout_succeeded.connect(_on_logout_success)
+	client.logout_failed.connect(_on_logout_failure)
 	root.add_child(client)
 	await process_frame
 	var request: HTTPRequest = client.get_child(0)
@@ -124,6 +147,25 @@ func verify() -> void:
 	await run_refresh(true)
 	require(refresh_succeeded, "valid refresh rotation failed")
 	require(client.access_token() == "b".repeat(43), "rotated access was not installed in memory")
+	await run_logout()
+	require(logout_succeeded, "valid session revoke failed")
+	require(client.access_token().is_empty(), "successful logout retained local authority")
+	require(client.logout(), "idempotent local logout was rejected")
+	require(logout_succeeded, "idempotent local logout did not succeed")
+
+	await run_start()
+	require(start_succeeded, "logout redirect setup failed")
+	await run_exchange()
+	require(session_succeeded, "logout redirect session setup failed")
+	await run_logout()
+	require(not logout_succeeded, "logout redirect was accepted")
+	require(logout_error == "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE", "logout redirect was not sanitized")
+	require(client.access_token().is_empty(), "logout redirect retained local authority")
+
+	await run_start()
+	require(start_succeeded, "typed refresh setup failed")
+	await run_exchange()
+	require(session_succeeded, "typed refresh session setup failed")
 	await run_refresh()
 	require(not refresh_succeeded, "typed refresh failure succeeded")
 	require(refresh_error == "NATIVE_AUTH_REFRESH_REUSED", "typed refresh error was not preserved")
@@ -180,7 +222,7 @@ func verify() -> void:
 	client.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("Godot native-auth start, exchange and refresh HTTP runtime verified")
+		print("Godot native-auth start, exchange, refresh and logout HTTP runtime verified")
 		quit(0)
 	else:
 		for failure in failures:
