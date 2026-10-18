@@ -103,33 +103,33 @@ describe("open world session ownership", () => {
     fixture.worldData = { globalWorld: { worldSeed: "fixture", epoch: 0 }, serviceNpcs: [] };
   });
 
-  it("awaits and freezes the newest initial world while periodic readback advances", async () => {
-    fixture.worldData = null;
-    fixture.worldLoading = true;
+  it("rebuilds a ready projection once when the authenticated world epoch advances", async () => {
     const view = render(<AurionOpenWorldRuntime />); await enter();
-    expect(fixture.engines).toHaveLength(0);
-    expect(fixture.tickets).toHaveLength(0);
-
-    fixture.worldData = { globalWorld: { worldSeed: "confirmed-world", epoch: 1 }, serviceNpcs: [] };
-    fixture.worldLoading = false;
-    await act(async () => view.rerender(<AurionOpenWorldRuntime />));
     expect(fixture.engines).toHaveLength(1);
+    fixture.worldData = { globalWorld: { worldSeed: "advanced-world", epoch: 2 }, serviceNpcs: [] };
+    await act(async () => view.rerender(<AurionOpenWorldRuntime />));
+    expect(fixture.engines[0].stop).toHaveBeenCalled();
+    expect(fixture.engines).toHaveLength(2);
+    expect(fixture.tickets).toHaveLength(2);
     expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({
-      worldSeed: "confirmed-world",
-      epoch: 1,
+      worldSeed: "refreshed-world",
+      epoch: 7,
       status: "rendering",
     });
+  });
+
+  it("does not retire an initializing renderer when world readback advances", async () => {
+    fixture.deferRenderer = true;
+    const view = render(<AurionOpenWorldRuntime />); await enter();
+    expect(fixture.rendererRequests).toHaveLength(1);
+    expect(fixture.rendererRequests[0].signal.aborted).toBe(false);
 
     fixture.worldData = { globalWorld: { worldSeed: "advanced-world", epoch: 2 }, serviceNpcs: [] };
     await act(async () => view.rerender(<AurionOpenWorldRuntime />));
-    expect(fixture.engines[0].stop).not.toHaveBeenCalled();
-    expect(fixture.engines).toHaveLength(1);
-    expect(fixture.tickets).toHaveLength(1);
-    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({
-      worldSeed: "confirmed-world",
-      epoch: 1,
-      status: "rendering",
-    });
+    expect(fixture.rendererRequests).toHaveLength(1);
+    expect(fixture.rendererRequests[0].signal.aborted).toBe(false);
+    expect(fixture.engines).toHaveLength(0);
+    expect(fixture.tickets).toHaveLength(0);
   });
 
   it("does not start the renderer or zone before a confirmed standard character and then loads exactly that GLB", async () => {
