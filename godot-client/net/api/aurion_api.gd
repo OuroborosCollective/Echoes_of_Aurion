@@ -33,17 +33,22 @@ func _ready() -> void:
 	_http.request_completed.connect(_on_request_completed)
 	_auth.refresh_succeeded.connect(_on_refresh_succeeded)
 	_auth.refresh_failed.connect(_on_refresh_failed)
+	_auth.logout_succeeded.connect(_on_logout_terminal)
+	_auth.logout_failed.connect(_on_logout_terminal)
 
 func issue_zone_ticket(server_base_url: String, client_build: String, allow_local: bool = false) -> bool:
 	if _active or not is_inside_tree():
 		return false
 	_server_base_url = RuntimeConfig.validated_server_url(server_base_url, allow_local)
 	_client_build = RuntimeConfig.validated_build(client_build)
-	if _server_base_url.is_empty() or _client_build.is_empty() or _auth.access_token().is_empty():
+	if _server_base_url.is_empty() or _client_build.is_empty():
 		_fail(AUTH_REQUIRED)
 		return false
 	_active = true
 	_retried_after_refresh = false
+	if _auth.access_token().is_empty():
+		_retried_after_refresh = true
+		return _begin_refresh()
 	return _send_zone_ticket()
 
 func cancel() -> void:
@@ -97,15 +102,11 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if response_code == 401:
 		if _retried_after_refresh:
 			_auth.logout()
-			_fail(AUTH_REQUIRED)
+			if _active:
+				_fail(AUTH_REQUIRED)
 			return
 		_retried_after_refresh = true
-		if not _auth.refresh():
-			if _auth.refresh_in_flight():
-				return
-			_auth.logout()
-			_fail(AUTH_REQUIRED)
-			return
+		_begin_refresh()
 		return
 	if response_code != 200:
 		_fail(REQUEST_FAILED)
@@ -122,11 +123,27 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	_sent_access_token = ""
 	emit_signal("zone_ticket_succeeded", receipt)
 
+func _begin_refresh() -> bool:
+	var started: bool = _auth.refresh()
+	if started or _auth.refresh_in_flight():
+		return true
+	# A synchronous refresh setup failure may already have emitted refresh_failed.
+	if not _active:
+		return false
+	_auth.logout()
+	if _active:
+		_fail(AUTH_REQUIRED)
+	return false
+
 func _on_refresh_succeeded() -> void:
 	if _active and _retried_after_refresh:
 		_send_zone_ticket()
 
 func _on_refresh_failed(_error_code: String) -> void:
+	if _active and _retried_after_refresh:
+		_fail(AUTH_REQUIRED)
+
+func _on_logout_terminal(_error_code: String = "") -> void:
 	if _active and _retried_after_refresh:
 		_fail(AUTH_REQUIRED)
 

@@ -13,6 +13,7 @@ var auth_succeeded := false
 var request_completed := false
 var request_succeeded := false
 var request_error := ""
+var request_failure_count := 0
 var receipt: Dictionary = {}
 var logout_completed := false
 
@@ -20,23 +21,37 @@ class FakeAuth:
 	extends Node
 	signal refresh_succeeded
 	signal refresh_failed(error_code: String)
+	signal logout_succeeded
+	signal logout_failed(error_code: String)
 	var current_access := "new-session-access"
 	var logout_calls := 0
 	var refresh_calls := 0
+	var refresh_behavior := "reject"
+	var refresh_pending := false
 
 	func access_token(_now_ms: int = -1) -> String:
 		return current_access
 
 	func refresh(_now_ms: int = -1) -> bool:
 		refresh_calls += 1
+		if refresh_behavior == "sync_fail":
+			emit_signal("refresh_failed", "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE")
+			return false
+		if refresh_pending:
+			return false
+		if refresh_behavior == "start":
+			refresh_pending = true
+			return true
 		return false
 
 	func refresh_in_flight() -> bool:
-		return false
+		return refresh_pending
 
 	func logout() -> bool:
 		logout_calls += 1
 		current_access = ""
+		refresh_pending = false
+		emit_signal("logout_succeeded")
 		return true
 
 func require(condition: bool, message: String) -> void:
@@ -74,6 +89,7 @@ func _on_request_failure(value: String) -> void:
 	request_completed = true
 	request_succeeded = false
 	request_error = value
+	request_failure_count += 1
 
 func _on_logout_terminal(_error_code: String = "") -> void:
 	logout_completed = true
@@ -189,6 +205,65 @@ func verify() -> void:
 	require(replacement_auth.access_token() == "new-session-access", "stale 401 changed replacement authority")
 	stale_api.queue_free()
 	replacement_auth.queue_free()
+
+	var expired_auth := FakeAuth.new()
+	expired_auth.current_access = ""
+	expired_auth.refresh_behavior = "start"
+	root.add_child(expired_auth)
+	var expired_api := AurionApi.new(expired_auth)
+	expired_api.request_failed.connect(_on_request_failure)
+	root.add_child(expired_api)
+	await process_frame
+	request_failure_count = 0
+	require(expired_api.issue_zone_ticket(SERVER, BUILD, true), "expired access did not begin refresh")
+	require(expired_auth.refresh_calls == 1, "expired access did not call refresh exactly once")
+	require(expired_auth.refresh_in_flight(), "expired access did not retain refresh authority")
+	require(expired_api._active, "expired access did not keep protected request active")
+	expired_api.cancel()
+	expired_api.queue_free()
+	expired_auth.queue_free()
+
+	var joined_auth := FakeAuth.new()
+	joined_auth.current_access = ""
+	joined_auth.refresh_behavior = "start"
+	joined_auth.refresh_pending = true
+	root.add_child(joined_auth)
+	var joined_api := AurionApi.new(joined_auth)
+	joined_api.request_failed.connect(_on_request_failure)
+	root.add_child(joined_api)
+	await process_frame
+	require(joined_api.issue_zone_ticket(SERVER, BUILD, true), "expired access did not join in-flight refresh")
+	require(joined_auth.refresh_calls == 1, "refresh join did not consult auth lifecycle exactly once")
+	require(joined_api._active, "refresh join did not keep protected request active")
+	request_completed = false
+	request_error = ""
+	request_failure_count = 0
+	joined_auth.logout()
+	require(request_completed, "logout did not terminate refresh waiter")
+	require(request_error == "AURION_API_AUTH_REQUIRED", "logout waiter did not require auth")
+	require(request_failure_count == 1, "logout waiter emitted more than one failure")
+	require(not joined_api._active, "logout left protected request active")
+	joined_api.queue_free()
+	joined_auth.queue_free()
+
+	var failing_auth := FakeAuth.new()
+	failing_auth.current_access = ""
+	failing_auth.refresh_behavior = "sync_fail"
+	root.add_child(failing_auth)
+	var failing_api := AurionApi.new(failing_auth)
+	failing_api.request_failed.connect(_on_request_failure)
+	root.add_child(failing_api)
+	await process_frame
+	request_completed = false
+	request_error = ""
+	request_failure_count = 0
+	require(not failing_api.issue_zone_ticket(SERVER, BUILD, true), "synchronous refresh failure reported request start")
+	require(request_completed, "synchronous refresh failure did not terminate request")
+	require(request_error == "AURION_API_AUTH_REQUIRED", "synchronous refresh failure did not require auth")
+	require(request_failure_count == 1, "synchronous refresh failure emitted more than once")
+	require(failing_auth.logout_calls == 0, "synchronous refresh failure triggered duplicate logout")
+	failing_api.queue_free()
+	failing_auth.queue_free()
 
 	api.queue_free()
 	auth.queue_free()
