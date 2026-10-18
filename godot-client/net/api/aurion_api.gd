@@ -149,6 +149,10 @@ static func _parse_zone_ticket(raw: Variant) -> Dictionary:
 	var expires_at: Variant = receipt.get("expiresAt")
 	if typeof(ticket) != TYPE_STRING or ticket.length() < 32 or ticket.length() > 128:
 		return {}
+	var ticket_pattern := RegEx.new()
+	ticket_pattern.compile("^[A-Za-z0-9_-]+$")
+	if ticket_pattern.search(ticket) == null:
+		return {}
 	if typeof(expires_at) != TYPE_STRING or expires_at.length() < 20 or expires_at.length() > 64:
 		return {}
 	return {
