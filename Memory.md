@@ -3233,3 +3233,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-18 — PR #1028 — ⚡ Bolt: Replace dynamic array mapping in ZoneRegistry tick
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1028 merge=a36183eb7609c18c76440026aea57c23436f69e5 -->
+Task: Merge PR #1028 into `main` — ⚡ Bolt: Replace dynamic array mapping in ZoneRegistry tick.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.jules/bolt.md`
+- `server/zoneRuntime.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1028
+- Merge commit: `a36183eb7609c18c76440026aea57c23436f69e5`
+- PR head: `138c798e41ac3437029e32d346df25496e20579f`
+- Merged at: 2026-10-18T20:00:27Z
+- Post-merge workflow run: 39161318865
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
