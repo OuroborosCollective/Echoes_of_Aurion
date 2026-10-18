@@ -77,8 +77,8 @@ func verify() -> void:
 		"zoneId": "observatory_threshold",
 		"expiresAt": "2026-10-18T19:00:00.000Z",
 	})
-	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher verbunden", "confirmed ticket state missing")
-	require(enabled_scene.get_node("%Login").text == "Verbunden", "confirmed ticket action state missing")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher angemeldet · Zonenticket bestätigt", "confirmed ticket state missing")
+	require(enabled_scene.get_node("%Login").text == "Angemeldet", "confirmed ticket action state missing")
 	enabled_scene._on_zone_ticket_failed("AURION_API_REQUEST_FAILED")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "ticket failure state missing")
 	require(not enabled_scene.get_node("%Login").disabled, "terminal logout did not restore login")
