@@ -102,4 +102,48 @@ describe("native bearer authentication boundary", () => {
     expect(verifySession).toHaveBeenCalledWith("browser.jwt.value");
     expect(dependencies.authenticateNativeAccess).not.toHaveBeenCalled();
   });
+
+  it("preserves a safe HTTP 503 instead of treating an unavailable database as expired access", async () => {
+    for (const failure of [
+      new Error("NATIVE_AUTH_CONFIGURATION_UNAVAILABLE"),
+      new Error("mysql://database-account:do-not-echo@db:3306/aurion"),
+    ]) {
+      const dependencies = authDependencies({
+        authenticateNativeAccess: vi.fn(async () => { throw failure; }),
+      });
+      const server = new SDKServer({} as AxiosInstance, undefined, dependencies);
+      const verifySession = vi.spyOn(server, "verifySession");
+      await expect(server.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+        .rejects.toMatchObject({ statusCode: 503, message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
+      expect(verifySession).not.toHaveBeenCalled();
+      expect(dependencies.readUserById).not.toHaveBeenCalled();
+      expect(dependencies.recordUserActivity).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not confuse failed user lookup with a deleted native account", async () => {
+    const native = { userId: user!.id, sessionId: "s".repeat(43) };
+    const queryFailure = new Error("driver-private-reason");
+    const failed = new SDKServer({} as AxiosInstance, undefined, authDependencies({
+      authenticateNativeAccess: vi.fn(async () => native),
+      readUserById: vi.fn(async () => { throw queryFailure; }),
+    }));
+    await expect(failed.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+      .rejects.toMatchObject({ statusCode: 503, message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
+    const missing = new SDKServer({} as AxiosInstance, undefined, authDependencies({
+      authenticateNativeAccess: vi.fn(async () => native),
+      readUserById: vi.fn(async () => undefined),
+    }));
+    await expect(missing.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+      .rejects.toMatchObject({ statusCode: 401, message: "NATIVE_AUTH_SESSION_EXPIRED" });
+  });
+
+  it("does not leak persistence exceptions when recording confirmed native activity fails", async () => {
+    const server = new SDKServer({} as AxiosInstance, undefined, authDependencies({
+      authenticateNativeAccess: vi.fn(async () => ({ userId: user!.id, sessionId: "s".repeat(43) })),
+      recordUserActivity: vi.fn(async () => { throw new Error("database-private-detail"); }),
+    }));
+    await expect(server.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+      .rejects.toMatchObject({ statusCode: 503, message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
+  });
 });
