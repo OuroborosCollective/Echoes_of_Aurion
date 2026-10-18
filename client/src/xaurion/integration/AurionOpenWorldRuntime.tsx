@@ -81,6 +81,7 @@ export default function AurionOpenWorldRuntime() {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
   const rendererGeneration = useRef(0);
+  const rendererWorldEpochRef = useRef<number | null>(null);
   const recoveryAttempts = useRef(0);
   const recoveryCause = useRef<string | null>(null);
   const [recoveryEpoch, setRecoveryEpoch] = useState(0);
@@ -235,6 +236,7 @@ export default function AurionOpenWorldRuntime() {
       // activating the new world generation; the new generation then issues a
       // fresh one-time zone ticket.
       retireZoneTransport();
+      rendererWorldEpochRef.current = null;
       setZoneRetryEpoch(0);
       recoveryAttempts.current = 0;
       recoveryCause.current = null;
@@ -248,6 +250,7 @@ export default function AurionOpenWorldRuntime() {
     const onReturn = () => {
       soundSynth.stopAmbient();
       retireZoneTransport();
+      rendererWorldEpochRef.current = null;
       setReadyGeneration(null);
       setRendererEvidence(null);
       setActivation(null);
@@ -348,6 +351,7 @@ export default function AurionOpenWorldRuntime() {
         : initialWorld;
       if (disposed) return;
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
+      rendererWorldEpochRef.current = world.epoch;
       const confirmedWorldEpoch = world.epoch;
       let preference = new URLSearchParams(window.location.search).get("renderer");
       if (!preference) { try { preference = sessionStorage.getItem("aurion:renderer"); } catch { /* Default WebGL2 remains available. */ } }
@@ -475,8 +479,15 @@ export default function AurionOpenWorldRuntime() {
       virtualInputRef.current = { forward: 0, right: 0 };
     };
   }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount, recoveryEpoch,
-    Boolean(worldSnapshot.data), activation?.globalWorld ? undefined : worldSnapshot.data?.globalWorld?.epoch,
-    activation?.globalWorld ? undefined : worldSnapshot.data?.globalWorld?.worldSeed]);
+    Boolean(worldSnapshot.data)]);
+
+  useEffect(() => {
+    const observedEpoch = worldSnapshot.data?.globalWorld.epoch;
+    const rendererEpoch = rendererWorldEpochRef.current;
+    if (!readyGeneration || typeof observedEpoch !== "number" || rendererEpoch === null || observedEpoch <= rendererEpoch) return;
+    rendererWorldEpochRef.current = observedEpoch;
+    setRecoveryEpoch(value => value + 1);
+  }, [readyGeneration, worldSnapshot.data?.globalWorld.epoch]);
 
   useEffect(() => {
     const engine = engineRef.current;
