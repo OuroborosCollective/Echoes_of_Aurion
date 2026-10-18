@@ -90,8 +90,8 @@ func _on_auth_session_succeeded() -> void:
 	_api.issue_zone_ticket(_config.server_base_url, _config.client_build)
 
 func _on_zone_ticket_succeeded(_receipt: Dictionary) -> void:
-	status.text = "Sicher verbunden"
-	login.text = "Verbunden"
+	status.text = "Sicher angemeldet · Zonenticket bestätigt"
+	login.text = "Angemeldet"
 	login.disabled = true
 
 func _on_zone_ticket_failed(_error_code: String) -> void:
