@@ -121,6 +121,11 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 			_fail(RESPONSE_INVALID)
 			return
 		if _retried_after_refresh:
+			# A concurrent rotation owns the session now; this old-bearer request
+			# has exhausted its retry, but must not cancel that canonical refresh.
+			if _auth.refresh_in_flight():
+				_fail(AUTH_REQUIRED)
+				return
 			_auth.logout()
 			if _active:
 				_fail(AUTH_REQUIRED)
