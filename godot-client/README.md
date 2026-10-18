@@ -16,6 +16,8 @@ Godot 4.7.2/GDScript, derzeit eine offline Startansicht. `project.godot` enthäl
 
 Die leeren Modulordner sind ausdrücklich vorbereitete Grenzen und enthalten noch keine Funktion. Aurion bleibt alleinige Gameplay-, Welt- und Datenbankautorität. Kein Clientmodul importiert Servercode oder erhält Datenbankzugang.
 
+Die Startansicht enthält den ersten nativen Anmeldeschritt hinter `aurion/native_auth_start_enabled`. Der Standard bleibt `false`, solange Aurions Produktionsroute absichtlich nicht bereit ist. Nur ein freigegebener Build sendet den flüchtigen State/PKCE-Startvertrag einmalig an Aurion und öffnet ausschließlich die streng validierte `arelogic.space`-Browser-URL; HTTP-, JSON-, Vertrags-, Redirect-, Timeout- und Browserfehler schließen den lokalen Vorgang. Token-Exchange, sicherer Refresh-Speicher und verifizierte Android-App-Link-Zustellung bleiben getrennte, noch nicht belegte Schritte.
+
 `runtime_config.gd` akzeptiert die genaue HTTPS-Produktbasis `https://arelogic.space`. Lokale Testadressen sind nur bei expliziter Übergabe des Testparameters erlaubt. Benutzerinfo, fremde Hosts, HTTP-Produktion, Pfade und Querytokens werden abgewiesen. Buildidentitäten entsprechen dem bestehenden Zonenticket-Zeichensatz. Ungültige Konfiguration sperrt die Startansicht; es wird kein Verbindungsversuch simuliert.
 
 Compatibility ist der Ausgangsrenderer. Die Oberfläche verwendet Container und Fenstermaße, damit ein schmales Display keine feste 1280er-Oberfläche verkleinert. Die Startansicht begrenzt die Framerate auf 30 und zeichnet den statischen Hintergrund nur bei Größenänderungen neu. Diese Einstellung ist kein FPS-Nachweis.

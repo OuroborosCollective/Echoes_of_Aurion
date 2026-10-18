@@ -35,3 +35,4 @@ primary_action={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode"
 server_base_url="https://arelogic.space"
 client_build="aurion-godot-g06-dev"
 renderer_profile="compatibility"
+native_auth_start_enabled=false

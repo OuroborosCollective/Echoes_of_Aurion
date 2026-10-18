@@ -1,6 +1,7 @@
 extends Control
 
 const RuntimeConfig = preload("res://config/runtime_config.gd")
+const NativeAuthStart = preload("res://net/auth/native_auth_start.gd")
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
 
 @onready var card: PanelContainer = %LaunchCard
@@ -8,20 +9,60 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var status: Label = %ConnectionStatus
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
+@onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
+
+var _config: Dictionary
+var _auth_start: Node
+var _awaiting_callback := false
 
 func _ready() -> void:
 	Engine.max_fps = 30
-	var config := RuntimeConfig.current()
-	%BuildIdentity.text = "Build · " + config.client_build
+	_config = RuntimeConfig.current()
+	%BuildIdentity.text = "Build · " + _config.client_build
+	_auth_start = NativeAuthStart.new()
+	add_child(_auth_start)
+	_auth_start.start_succeeded.connect(_on_auth_start_succeeded)
+	_auth_start.start_failed.connect(_on_auth_start_failed)
+	login.pressed.connect(_on_login_pressed)
 	login.disabled = true
-	if config.server_base_url.is_empty() or config.client_build.is_empty() or config.renderer_profile != "compatibility":
+	if _config.server_base_url.is_empty() or _config.client_build.is_empty() or _config.renderer_profile != "compatibility":
 		status.text = "Konfiguration ungültig"
 		destination.text = "Die Verbindung ist gesperrt. Bitte verwende einen geprüften Client-Build."
 	else:
 		status.text = "Nicht verbunden"
 		destination.text = "Aurion · arelogic.space"
+		if _config.native_auth_start_enabled:
+			development_notice.text = "Die Anmeldung wird sicher im Systembrowser fortgesetzt."
+			login.disabled = false
 	resized.connect(_fit_layout)
 	_fit_layout()
+
+func _on_login_pressed() -> void:
+	if _awaiting_callback:
+		_auth_start.cancel()
+		_awaiting_callback = false
+		status.text = "Anmeldung abgebrochen"
+		login.text = "Anmelden"
+		return
+	login.disabled = true
+	status.text = "Anmeldung wird vorbereitet"
+	if not _auth_start.begin(_config.server_base_url, _config.client_build):
+		login.disabled = false
+
+func _on_auth_start_succeeded() -> void:
+	_awaiting_callback = true
+	status.text = "Systembrowser geöffnet"
+	login.text = "Abbrechen"
+	login.disabled = false
+
+func _on_auth_start_failed(error_code: String) -> void:
+	_awaiting_callback = false
+	login.text = "Anmelden"
+	login.disabled = not _config.native_auth_start_enabled
+	if error_code == "NATIVE_AUTH_BUILD_UNSUPPORTED":
+		status.text = "Client-Aktualisierung erforderlich"
+	else:
+		status.text = "Anmeldung derzeit nicht verfügbar"
 
 func _fit_layout() -> void:
 	if not is_node_ready():

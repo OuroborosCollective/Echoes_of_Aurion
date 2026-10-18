@@ -25,4 +25,5 @@ static func current() -> Dictionary:
 		"server_base_url": validated_server_url(str(ProjectSettings.get_setting("aurion/server_base_url", PRODUCT_SERVER))),
 		"client_build": validated_build(str(ProjectSettings.get_setting("aurion/client_build", DEFAULT_BUILD))),
 		"renderer_profile": str(ProjectSettings.get_setting("aurion/renderer_profile", "compatibility")),
+		"native_auth_start_enabled": ProjectSettings.get_setting("aurion/native_auth_start_enabled", false) == true,
 	}
