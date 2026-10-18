@@ -1,4 +1,8 @@
+import express from "express";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { NATIVE_AUTH_ACCESS_TTL_SECONDS, NATIVE_AUTH_HANDOFF_TTL_SECONDS, NATIVE_AUTH_CONTRACT_VERSION, NATIVE_AUTH_RETURN_ID } from "../shared/nativeAuthContract";
 import { createNativeAuthSecret, nativeAuthCodeChallengeFor } from "./nativeAuthProtocol";
@@ -7,6 +11,9 @@ import {
   issueNativeAuthHandoffAfterVerifiedBrowserLogin, refreshNativeAuthSession,
   revokeNativeAuthSession, revokeNativeAuthSessions, startNativeAuthTransaction,
 } from "./nativeAuthPersistence";
+import { createContext } from "./_core/context";
+import { appRouter } from "./routers";
+import { consumeZoneConnectionTicket } from "./db";
 
 const suite = process.env.AURION_NATIVE_AUTH_E2E === "1" && !!process.env.DATABASE_URL ? describe : describe.skip;
 const NOW = 1_792_000_000_000;
@@ -241,6 +248,68 @@ suite("Aurion native auth in isolated MariaDB", () => {
     expect(rows.filter(row => row.userId === USER).map(row => row.revokedAtMs))
       .toEqual([NOW + 3_000, NOW + 3_000, null]);
     expect(rows.find(row => row.userId === OTHER_USER)?.revokedAtMs).toBeNull();
+  });
+
+  it("carries a real native bearer through tRPC zone-ticket persistence and consumption", async () => {
+    const now = Date.now();
+    await pool.query(
+      "INSERT INTO users (id, openId, name, loginMethod, role) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)",
+      [USER, "native:9671001", "Native zone tester", "native", "user"],
+    );
+    const native = await handoff(now, USER);
+    const tokens = await exchangeNativeAuthHandoff(native.exchange, now + 200);
+    const app = express();
+    app.use(express.json({ limit: "8kb" }));
+    app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
+    const server = await new Promise<Server>(resolve => {
+      const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+    });
+    try {
+      const address = server.address() as AddressInfo;
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/trpc/gameplay.issueZoneTicket?batch=1`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${tokens.accessToken}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            0: { json: { zoneId: "observatory_threshold", clientBuild: APP_BUILD } },
+          }),
+        },
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json() as Array<{
+        result?: { data?: { json?: { ticket?: string; zoneId?: string } } };
+      }>;
+      const receipt = body[0]?.result?.data?.json;
+      expect(receipt).toMatchObject({
+        ticket: expect.stringMatching(/^[A-Za-z0-9_-]{32,128}$/),
+        zoneId: "observatory_threshold",
+      });
+      const [persisted] = await pool.query<RowDataPacket[]>(
+        "SELECT userId, zoneId, ticketDigest, consumedAt FROM zoneConnectionTickets WHERE userId = ? AND clientBuild = ?",
+        [USER, APP_BUILD],
+      );
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0].ticketDigest).not.toBe(receipt!.ticket);
+      expect(persisted[0].consumedAt).toBeNull();
+      await expect(consumeZoneConnectionTicket({
+        ticket: receipt!.ticket!,
+        zoneId: "observatory_threshold",
+      })).resolves.toMatchObject({ userId: USER, clientBuild: APP_BUILD });
+      await expect(consumeZoneConnectionTicket({
+        ticket: receipt!.ticket!,
+        zoneId: "observatory_threshold",
+      })).resolves.toBeUndefined();
+    } finally {
+      await new Promise<void>(resolve => server.close(() => resolve()));
+      await pool.query(
+        "DELETE FROM zoneConnectionTickets WHERE userId = ? AND clientBuild = ?",
+        [USER, APP_BUILD],
+      );
+    }
   });
 
   it("rejects expired access and revokes all access immediately after logout", async () => {
