@@ -3179,3 +3179,11 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-18 — PR #1048 — Bounded mobile GLB wheel evidence
+Status: VERIFIED candidate
+Task: Replace the flaky one-shot exact-bottom wheel predicate with at most six real wheel inputs while retaining movement and bottom-reach assertions.
+Evidence: Exact code head `7a72baee2bd710e04929d0de2b5109b933db00d9`; AIM-240 run 39149041935 passed GLB/MariaDB regressions, TypeScript, production build and both authenticated Chromium upload/readback/render tests; artifact 12144462632.
+Learned: Chromium wheel delivery is asynchronous, so bounded input-and-sample evidence is stable without weakening the user-scroll contract.
+Next safe step: Re-run AIM-240 on the Memory-bearing final head, obtain clean exact-head review, then merge and read back main.
