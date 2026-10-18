@@ -119,7 +119,7 @@ text = "Anmelden"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.65, 0.73, 0.75, 1)
 theme_override_font_sizes/font_size = 16
-text = "Entwicklungsversion · Die Online-Anmeldung ist noch nicht verfügbar."
+text = "Entwicklungsversion · Die Anmeldung wird sicher im Systembrowser fortgesetzt."
 autowrap_mode = 3
 
 [node name="BuildIdentity" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
