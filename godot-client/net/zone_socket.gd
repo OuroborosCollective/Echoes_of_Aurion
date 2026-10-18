@@ -47,53 +47,55 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _peer == null:
 		return
-	_peer.poll()
+	var active_peer := _peer
+	active_peer.poll()
 	if _state == "connecting" or _state == "authenticating":
 		if Time.get_ticks_msec() - _connected_at > TIMEOUT_MS:
 			_finish("hello_timeout")
 			return
-	match _peer.get_ready_state():
-		WebSocketPeer.STATE_OPEN:
-			if _state == "connecting":
-				_state = "authenticating"
-				if _peer.send_text(_hello) != OK:
-					_finish("hello_send_failed")
+	var ready := active_peer.get_ready_state()
+	if ready == WebSocketPeer.STATE_OPEN and _state == "connecting":
+		_state = "authenticating"
+		if active_peer.send_text(_hello) != OK:
+			_finish("hello_send_failed")
+			return
+		_hello = ""
+	# Server may send reject and immediately start a 1008 close; drain queued
+	# text frames during CLOSING/CLOSED as well as OPEN before reporting closure.
+	if ready in [WebSocketPeer.STATE_OPEN, WebSocketPeer.STATE_CLOSING, WebSocketPeer.STATE_CLOSED]:
+		while _peer == active_peer and active_peer.get_available_packet_count() > 0:
+			var bytes := active_peer.get_packet()
+			if not active_peer.was_string_packet():
+				_finish("binary_frame_rejected")
+				return
+			if bytes.size() > MAX_PACKET_BYTES:
+				_finish("oversized_frame")
+				return
+			var wire := bytes.get_string_from_utf8()
+			if not Codec.wire_numbers_are_integers(wire):
+				_finish("invalid_welcome")
+				return
+			var decoded: Variant = JSON.parse_string(wire)
+			if _state == "authenticating":
+				if Codec.is_valid_reject(decoded):
+					# Tear down before callbacks; otherwise a synchronous close
+					# overrides the server reason or destroys a successor peer.
+					var reject_code: String = decoded["code"]
+					_finish("server_reject")
+					emit_signal("zone_rejected", reject_code)
 					return
-				_hello = ""
-			while _peer.get_available_packet_count() > 0:
-				var bytes := _peer.get_packet()
-				if not _peer.was_string_packet():
-					_finish("binary_frame_rejected")
+				if _accept_welcome(decoded):
 					return
-				if bytes.size() > MAX_PACKET_BYTES:
-					_finish("oversized_frame")
+				_finish("invalid_welcome")
+				return
+			elif _state == "connected":
+				if Codec.is_valid_reject(decoded):
+					var reject_code: String = decoded["code"]
+					_finish("server_reject")
+					emit_signal("zone_rejected", reject_code)
 					return
-				var wire := bytes.get_string_from_utf8()
-				if not Codec.wire_numbers_are_integers(wire):
-					_finish("invalid_welcome")
-					return
-				var decoded: Variant = JSON.parse_string(wire)
-				if _state == "authenticating":
-					if Codec.is_valid_reject(decoded):
-						var reject_code: String = decoded["code"]
-						emit_signal("zone_rejected", reject_code)
-						_finish("server_reject")
-						return
-					if _accept_welcome(decoded):
-						return
-					else:
-						_finish("invalid_welcome")
-						return
-				elif _state == "connected":
-					# No game projection until the complete v5 nested decoder ships.
-					if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "reject":
-						emit_signal("zone_rejected", "server_reject")
-						_finish("server_reject")
-						return
-		WebSocketPeer.STATE_CLOSING:
-			pass
-		WebSocketPeer.STATE_CLOSED:
-			_finish("closed")
+	if _peer == active_peer and active_peer.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+		_finish("closed")
 
 func _accept_welcome(raw: Variant) -> bool:
 	if not Codec.is_valid_welcome(raw):
