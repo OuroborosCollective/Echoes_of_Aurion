@@ -86,6 +86,9 @@ func refresh(now_ms: int = -1) -> bool:
 		return false
 	return _send_json(REFRESH_PATH, request, "refresh")
 
+func refresh_in_flight() -> bool:
+	return _request_active and _request_phase == "refresh"
+
 ## Revoke the current server session. begin_logout clears local authority before
 ## transport starts, so network failure or a hostile redirect cannot keep access.
 func logout() -> bool:
