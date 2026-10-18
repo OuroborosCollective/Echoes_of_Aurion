@@ -3205,3 +3205,10 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-18 — PR #1049 — Native login zone-ticket handoff
+Status: VERIFIED candidate
+Task: Connect the running Godot launch scene's confirmed native session to the existing Aurion zone-ticket client and keep relogin closed until terminal logout after failure.
+Evidence: Corrected code head `dbc4939322b22ef21927e814e009321045b04bd4`; Godot run 39155535324 passed import, scene runtime, real native-auth/ticket HTTP runtimes, logout-race regression, negative controls and Android toolchain with evidence artifact 12146439072 (`sha256:9280ea38928921507aa1f5f027688a2f1f68f17492d7491439e7a10f53701186`); APK run 39155535303 passed independent readback with artifact 12147116598 (`sha256:39ddd7ab7230bbe6f0b8919fb162d54f4d52c74b69d710240b0fe7a90db75ead`).
+Learned: Ticket success proves authentication and ticket acquisition, not WSS connection; an API-started revocation must keep relogin closed until its terminal signal.
+Next safe step: Require green exact-head gates and clean review on the Memory-bearing head, then merge and read back main.

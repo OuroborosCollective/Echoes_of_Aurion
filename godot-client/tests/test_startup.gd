@@ -3,6 +3,32 @@ extends SceneTree
 const Config = preload("res://config/runtime_config.gd")
 var failures: Array[String] = []
 
+class FakeLogoutAuth:
+	extends Node
+	signal logout_succeeded
+	signal logout_failed(error_code: String)
+	var in_flight := false
+	var logout_calls := 0
+
+	func logout_in_flight() -> bool:
+		return in_flight
+
+	func logout() -> bool:
+		logout_calls += 1
+		return false
+
+class FakeApi:
+	extends Node
+	var calls := 0
+	var server := ""
+	var build := ""
+
+	func issue_zone_ticket(server_base_url: String, client_build: String, _allow_local: bool = false) -> bool:
+		calls += 1
+		server = server_base_url
+		build = client_build
+		return true
+
 func require(condition: bool, message: String) -> void:
 	if not condition:
 		failures.append(message)
@@ -49,6 +75,35 @@ func verify() -> void:
 	root.add_child(enabled_scene)
 	await process_frame
 	require(not enabled_scene.get_node("%Login").disabled, "verified native login start was not enabled")
+	var live_api: Node = enabled_scene._api
+	live_api.cancel()
+	live_api.queue_free()
+	var fake_api := FakeApi.new()
+	enabled_scene.add_child(fake_api)
+	enabled_scene._api = fake_api
+	enabled_scene._on_auth_session_succeeded()
+	require(fake_api.calls == 1, "confirmed session did not request one zone ticket")
+	require(fake_api.server == Config.PRODUCT_SERVER, "zone ticket used the wrong server")
+	require(fake_api.build == Config.current().client_build, "zone ticket used the wrong build")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenticket wird angefordert", "ticket pending state missing")
+	enabled_scene._on_zone_ticket_succeeded({
+		"ticket": "z".repeat(48),
+		"zoneId": "observatory_threshold",
+		"expiresAt": "2026-10-18T19:00:00.000Z",
+	})
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher angemeldet · Zonenticket bestätigt", "confirmed ticket state missing")
+	require(enabled_scene.get_node("%Login").text == "Angemeldet", "confirmed ticket action state missing")
+	var fake_logout := FakeLogoutAuth.new()
+	fake_logout.in_flight = true
+	enabled_scene.add_child(fake_logout)
+	enabled_scene._auth_start = fake_logout
+	enabled_scene._on_zone_ticket_failed("AURION_API_AUTH_REQUIRED")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "ticket failure state missing")
+	require(enabled_scene.get_node("%Login").disabled, "in-flight logout restored login early")
+	require(fake_logout.logout_calls == 0, "in-flight logout was started twice")
+	enabled_scene._on_auth_logout_terminal()
+	require(not enabled_scene.get_node("%Login").disabled, "terminal logout did not restore login")
+	require(enabled_scene.get_node("%Login").text == "Anmelden", "terminal logout action state missing")
 	enabled_scene.queue_free()
 	await process_frame
 	ProjectSettings.set_setting("aurion/server_base_url", "https://attacker.test")
