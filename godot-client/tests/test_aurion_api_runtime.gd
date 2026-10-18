@@ -120,6 +120,7 @@ func verify() -> void:
 
 	await login()
 	require(auth.access_token() == "a".repeat(43), "first exchange access missing")
+	require(auth.refresh(), "external refresh did not begin")
 	await request_ticket(true)
 	require(request_succeeded, "401 refresh retry did not recover")
 	require(auth.access_token() == "b".repeat(43), "rotated access was not installed")
@@ -145,7 +146,7 @@ func verify() -> void:
 	auth.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("Godot protected zone ticket refresh runtime verified")
+		print("Godot protected zone ticket client regression verified")
 		quit(0)
 	else:
 		for failure in failures:
