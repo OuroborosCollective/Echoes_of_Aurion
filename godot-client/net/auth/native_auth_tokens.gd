@@ -14,6 +14,11 @@ var _idle_deadline_ms := -1
 var _absolute_deadline_ms := -1
 var _refresh_in_flight := false
 
+static func _json_integer(value: Variant) -> bool:
+	return typeof(value) == TYPE_INT or (
+		typeof(value) == TYPE_FLOAT and is_finite(value) and value == floor(value)
+	)
+
 static func _opaque(value: Variant) -> bool:
 	if typeof(value) != TYPE_STRING:
 		return false
@@ -57,18 +62,18 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	if access == refresh:
 		clear()
 		return false
-	if typeof(payload.get("accessExpiresInSeconds")) != TYPE_INT or \
+	if not _json_integer(payload.get("accessExpiresInSeconds")) or \
 			payload.get("accessExpiresInSeconds") != ACCESS_TTL_SECONDS:
 		clear()
 		return false
-	if typeof(payload.get("refreshIdleExpiresInSeconds")) != TYPE_INT or \
+	if not _json_integer(payload.get("refreshIdleExpiresInSeconds")) or \
 			payload.get("refreshIdleExpiresInSeconds") != REFRESH_IDLE_SECONDS:
 		clear()
 		return false
-	if typeof(payload.get("refreshAbsoluteRemainingSeconds")) != TYPE_INT:
+	if not _json_integer(payload.get("refreshAbsoluteRemainingSeconds")):
 		clear()
 		return false
-	var absolute_remaining: int = payload.get("refreshAbsoluteRemainingSeconds")
+	var absolute_remaining := int(payload.get("refreshAbsoluteRemainingSeconds"))
 	if absolute_remaining <= 0 or absolute_remaining > REFRESH_ABSOLUTE_MAX_SECONDS:
 		clear()
 		return false
