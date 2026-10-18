@@ -1,6 +1,6 @@
 import { operationalNow, operationalDate, deadlineAfter, hostOperationalClock, type OperationalClock } from "../../shared/operationalClock";
 import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS, decodeOAuthState } from "@shared/const";
-import { ForbiddenError, UnauthorizedError } from "@shared/_core/errors";
+import { ForbiddenError, HttpError, UnauthorizedError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
@@ -286,14 +286,28 @@ export class SDKServer {
       if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
         const bearer = authHeader.slice(7);
         if (NATIVE_ACCESS_TOKEN_PATTERN.test(bearer)) {
-          const nativeSession = await this.requestAuth.authenticateNativeAccess(bearer);
+          let nativeSession: Awaited<ReturnType<SDKRequestAuthDependencies["authenticateNativeAccess"]>>;
+          try {
+            nativeSession = await this.requestAuth.authenticateNativeAccess(bearer);
+          } catch {
+            throw new HttpError(503, "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE");
+          }
           if (!nativeSession) throw UnauthorizedError("NATIVE_AUTH_SESSION_EXPIRED");
-          const nativeUser = await this.requestAuth.readUserById(nativeSession.userId);
+          let nativeUser: Awaited<ReturnType<SDKRequestAuthDependencies["readUserById"]>>;
+          try {
+            nativeUser = await this.requestAuth.readUserById(nativeSession.userId);
+          } catch {
+            throw new HttpError(503, "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE");
+          }
           if (!nativeUser) throw UnauthorizedError("NATIVE_AUTH_SESSION_EXPIRED");
-          await this.requestAuth.recordUserActivity({
-            openId: nativeUser.openId,
-            lastSignedIn: operationalDate(this.clock),
-          });
+          try {
+            await this.requestAuth.recordUserActivity({
+              openId: nativeUser.openId,
+              lastSignedIn: operationalDate(this.clock),
+            });
+          } catch {
+            throw new HttpError(503, "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE");
+          }
           return nativeUser;
         }
         // Preview auto-login remains a JWT-only fallback for iframe cookie
