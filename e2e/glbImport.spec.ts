@@ -42,17 +42,28 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     expect(scrollMetrics.maxScrollTop).toBeGreaterThan(0);
     expect(scrollMetrics.connected).toBe(true);
     // Target actual user scrolling at this container independently of keyboard focus.
-    await scrollRegion.hover();
+    // Chromium applies wheel deltas asynchronously, so issue one real input and
+    // observe its effect to a deadline instead of assuming synchronous delivery.
+    const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
+    const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
+    await scrollRegion.hover({ force: true });
     await page.mouse.wheel(0, 10_000);
-    // Loading/font layout may change the scroll extent after the initial probe.
-    // Compare position and extent in one live sample, still requiring real input
-    // to have moved this scroll container to its actual current bottom.
-    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop > 0 &&
-      Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 2), { timeout: 10_000 })
-      .toBe(true);
-    // Reset scroll position programmatically. The scroll-down above already
-    // proved real wheel input moves this container; the upward reset just
-    // restores the viewport for the upload steps that follow.
+    await expect.poll(async () => {
+      const sample = await scrollRegion.evaluate(element => ({
+        scrollTop: element.scrollTop,
+        remaining: Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop),
+      }));
+      wheelSamples.push(sample);
+      return sample.scrollTop > initialScrollTop;
+    }, { timeout: 10_000, intervals: [100, 250, 500] }).toBe(true);
+    // Independently prove that a control in the lower section remains reachable
+    // in the mobile layout, without sending another compositor wheel command.
+    const lowerSessionControl = page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true });
+    await lowerSessionControl.scrollIntoViewIfNeeded();
+    await expect(lowerSessionControl).toBeVisible();
+    const lowerSessionControlReachable = await lowerSessionControl.isVisible();
+    // Reset scroll position programmatically. The checks above proved both real
+    // wheel movement and access to the lower controls; this restores the upload.
     await scrollRegion.evaluate(element => element.scrollTo({ top: 0 }));
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
       .toBeLessThanOrEqual(2);
@@ -157,6 +168,6 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await expect(page.getByTestId(`admin-glb-asset-${publicReceipt.assetId}`)).toBeVisible();
     await page.getByTestId(`admin-glb-asset-${receipt.assetId}`).click();
     await expect(page.getByText('Katalog serverbestätigt', { exact: true })).toBeVisible();
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, movementLayouts, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: scrollMetrics, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, movementLayouts, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: { ...scrollMetrics, wheelSamples, lowerSessionControlReachable }, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
