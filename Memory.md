@@ -2915,9 +2915,9 @@ Next safe step: Use the new main revision as the canonical baseline for the next
 ### 2026-10-18 — Native bearer HTTP failure semantics (#967)
 Status: VERIFIED candidate
 Task: Close the native access-bearer review gaps after PR #1034 by preserving expiry and persistence-availability semantics through every active HTTP consumer.
-Decisions: Native-shaped expired/revoked credentials return stable 401 without Preview-JWT fallback; persistence/user/activity unavailability remains a sanitized retryable 503; confirmed access alone updates lastSignedIn.
-Touched surfaces: Native Auth persistence, shared HTTP error mapping, tRPC context, authenticated SDK/upload/guild/studio routes, focused regressions and Local Test Pack coverage.
-Evidence: Implementation candidate `a07f5ec582d4dfde5947078da06211f9368f01c5`; Local Test Pack `39084423144` passed isolated MariaDB 24/24, focused HTTP/SDK/availability 15/15, TypeScript and 447 files / 2,250 tests; all nine runtime/integration workflows passed; exact-head code/security reviews completed clear and the P2 thread is resolved.
-Learned: Native bearer availability must remain typed across every HTTP boundary; collapsing persistence failures into anonymous or unauthorized responses hides a retryable server condition.
+Decisions: Native-shaped expired/revoked credentials remain a stable 401 through tRPC and direct Equipment/GLB HTTP consumers without Preview-JWT fallback; persistence/user/activity unavailability remains a sanitized retryable 503; confirmed access alone updates lastSignedIn.
+Touched surfaces: Native Auth persistence, shared HTTP error classification, tRPC context, authenticated SDK/upload/equipment/guild/studio routes, focused route regressions and Local Test Pack coverage.
+Evidence: Implementation candidate `a07f5ec582d4dfde5947078da06211f9368f01c5`; Local Test Pack `39084423144` passed isolated MariaDB 24/24, focused HTTP/SDK/availability 15/15, TypeScript and 447 files / 2,250 tests; all nine runtime/integration workflows passed. Final direct-route correction requires fresh exact-head gates and review before merge.
+Learned: Native bearer availability and refresh signals must remain typed across every active HTTP boundary; collapsing them into generic authentication responses hides retryable server state or prevents one-time refresh.
 Open: Production Native Auth schema deployment and device-login proof remain separately gated.
 Next safe step: Merge the reviewed candidate and confirm source, tests and this entry on main.
