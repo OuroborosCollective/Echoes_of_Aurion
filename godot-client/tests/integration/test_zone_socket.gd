@@ -3,9 +3,76 @@ const Socket = preload("res://net/zone_socket.gd")
 const Codec = preload("res://net/zone_codec.gd")
 var errors: Array[String] = []
 var callback_transport: Node
+var connected_callbacks := 0
+var last_close_reason := ""
 
 func close_during_connected_signal() -> void:
+	connected_callbacks += 1
 	callback_transport.close_zone()
+
+func remember_close_reason(reason: String) -> void:
+	last_close_reason = reason
+
+## Exercise the actual WebSocketPeer.packet -> _process() path over loopback TCP.
+## No synthetic gameplay/server evidence; this is a local headless regression only.
+func verify_socket_packet_loop(wire: String, expect_welcome: bool) -> void:
+	var server := TCPServer.new()
+	var listen_result := server.listen(0, "127.0.0.1")
+	require(listen_result == OK, "loopback websocket server could not listen")
+	if listen_result != OK:
+		return
+	connected_callbacks = 0
+	last_close_reason = ""
+	callback_transport = Socket.new()
+	root.add_child(callback_transport)
+	await process_frame
+	callback_transport.zone_connected.connect(close_during_connected_signal)
+	callback_transport.zone_closed.connect(remember_close_reason)
+	callback_transport._peer = WebSocketPeer.new()
+	callback_transport._hello = Codec.serialized_hello("a".repeat(43))
+	callback_transport._state = "connecting"
+	callback_transport._connected_at = Time.get_ticks_msec()
+	var connect_result: int = callback_transport._peer.connect_to_url("ws://127.0.0.1:%d" % server.get_local_port())
+	require(connect_result == OK, "loopback WebSocketPeer could not initiate a socket")
+	if connect_result != OK:
+		callback_transport.close_zone()
+		callback_transport.queue_free()
+		server.stop()
+		await process_frame
+		return
+	callback_transport.set_process(true)
+	var remote: WebSocketPeer
+	var hello_received := false
+	var welcome_sent := false
+	var started := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - started < 4000 and callback_transport.state_name() != "closed":
+		if remote == null and server.is_connection_available():
+			remote = WebSocketPeer.new()
+			require(remote.accept_stream(server.take_connection()) == OK, "loopback WebSocket accept failed")
+		if remote != null:
+			remote.poll()
+			if remote.get_ready_state() == WebSocketPeer.STATE_OPEN:
+				if remote.get_available_packet_count() > 0 and not welcome_sent:
+					var hello_bytes := remote.get_packet()
+					var hello: Variant = JSON.parse_string(hello_bytes.get_string_from_utf8())
+					hello_received = remote.was_string_packet() and typeof(hello) == TYPE_DICTIONARY and hello.get("type") == "hello" and hello.get("protocolVersion") == 5
+					if hello_received:
+						welcome_sent = remote.send_text(wire) == OK
+					else:
+						errors.append("loopback server received an invalid hello")
+		await process_frame
+	require(hello_received and welcome_sent, "actual WebSocket hello/welcome exchange was not exercised")
+	require(callback_transport.state_name() == "closed", "WebSocket processing did not reach a terminal state")
+	require(connected_callbacks == (1 if expect_welcome else 0), "unexpected zone_connected callback after wire welcome")
+	if expect_welcome:
+		require(last_close_reason == "client_close", "synchronous zone_connected close failed")
+	else:
+		require(last_close_reason == "invalid_welcome", "malformed wire frame was accepted")
+	if remote != null:
+		remote.close()
+	server.stop()
+	callback_transport.queue_free()
+	await process_frame
 
 func require(ok: bool, description: String) -> void:
 	if not ok:
@@ -52,16 +119,17 @@ func verify() -> void:
 	var invalid_revision: Dictionary = wire.duplicate(true)
 	invalid_revision["resources"]["revision"] = 9007199254740992.0
 	require(not Codec.is_valid_welcome(invalid_revision), "unsafe resource revision accepted")
-	# P2: synchronous zone_connected callbacks may close the transport.
-	callback_transport = Socket.new()
-	root.add_child(callback_transport)
-	await process_frame
-	callback_transport.zone_connected.connect(close_during_connected_signal)
-	callback_transport._state = "authenticating"
-	require(callback_transport._accept_welcome(wire), "valid welcome did not trigger connected signal")
-	require(callback_transport.state_name() == "closed", "callback close resurrected connected state")
-	callback_transport.queue_free()
-	await process_frame
+	# P2: test through a real packet loop, not a direct helper invocation.
+	var welcome_wire := JSON.stringify(welcome)
+	require(Codec.wire_numbers_are_integers(welcome_wire), "valid integer wire numbers rejected")
+	await verify_socket_packet_loop(welcome_wire, true)
+	# P2: the lexical token must remain integral BEFORE Godot rounds a JSON float.
+	var bad_wire := welcome_wire.replace('"snapshotSeq":0', '"snapshotSeq":1.0000000000000001')
+	require(bad_wire != welcome_wire, "rounded-number test could not locate wire snapshotSeq")
+	require(not Codec.wire_numbers_are_integers(bad_wire), "fractional wire token rounded to an accepted integer")
+	await verify_socket_packet_loop(bad_wire, false)
+	var string_with_decimals := welcome_wire.replace("zone_peer_abcdefghijklmnop", "zone_peer_1.0000000000000001")
+	require(Codec.wire_numbers_are_integers(string_with_decimals), "number-like characters inside JSON strings were rejected")
 	transport.close_zone()
 	require(transport.state_name() == "closed", "close failed")
 	transport.queue_free()
