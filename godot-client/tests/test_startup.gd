@@ -40,7 +40,7 @@ func verify() -> void:
 		require(card.size.x <= viewport_size.x - 32, "launch card overflows width")
 		require(button.size.y >= 48, "touch target too small")
 		require(scene.get_node("%BuildIdentity").text == "Build · " + Config.current().client_build, "visible build identity missing")
-		require(button.disabled, "unimplemented login must stay disabled")
+		require(not button.disabled, "verified native login start must be available")
 		require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "offline status missing")
 	scene.queue_free()
 	await process_frame
@@ -48,6 +48,7 @@ func verify() -> void:
 	var invalid_scene := packed.instantiate()
 	root.add_child(invalid_scene)
 	await process_frame
+	require(invalid_scene.get_node("%Login").disabled, "bad configuration enabled login")
 	require(invalid_scene.get_node("%ConnectionStatus").text == "Konfiguration ungültig", "bad configuration not blocked")
 	invalid_scene.queue_free()
 	await process_frame
