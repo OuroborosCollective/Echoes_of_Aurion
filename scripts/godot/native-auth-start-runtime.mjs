@@ -8,6 +8,7 @@ assert.ok(executable && project, 'usage: native-auth-start-runtime.mjs <godot> <
 let startCount = 0;
 let exchangeCount = 0;
 let refreshCount = 0;
+let revokeCount = 0;
 let redirectFollowed = false;
 let currentState = '';
 const transactionId = 't'.repeat(43);
@@ -69,21 +70,21 @@ const server = createServer((request, response) => {
         assert.equal(payload.platform, 'android');
         assert.equal(payload.returnId, 'aurion.android.app-link.v1');
         currentState = payload.requestState;
-        if (startCount <= 6) {
+        if (startCount <= 8) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
             browserUrl: `https://arelogic.space/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 7) {
+        } else if (startCount === 9) {
           json(response, 200, {
             version: 'aurion.native-auth.v1',
             transactionId,
             browserUrl: `https://evil.example/api/native-auth/browser/${transactionId}`,
             expiresInSeconds: 600,
           });
-        } else if (startCount === 8) {
+        } else if (startCount === 10) {
           response.statusCode = 302;
           response.setHeader('Location', 'http://127.0.0.1:3000/leak');
           response.end();
@@ -95,6 +96,24 @@ const server = createServer((request, response) => {
         }
         return;
       }
+      if (request.url === '/api/native-auth/revoke') {
+        revokeCount += 1;
+        assert.deepEqual(Object.keys(payload).sort(), ['refreshToken', 'scope', 'version']);
+        assert.equal(payload.version, 'aurion.native-auth.v1');
+        assert.equal(payload.scope, 'session');
+        assert.equal(payload.refreshToken, revokeCount === 1
+          ? rotatedTokenPair.refreshToken
+          : tokenPair.refreshToken);
+        if (revokeCount === 1) {
+          response.statusCode = 204;
+          response.end();
+        } else {
+          response.statusCode = 302;
+          response.setHeader('Location', 'http://127.0.0.1:3000/leak');
+          response.end();
+        }
+        return;
+      }
       if (request.url === '/api/native-auth/refresh') {
         refreshCount += 1;
         assert.deepEqual(Object.keys(payload).sort(), ['refreshToken', 'version']);
@@ -103,7 +122,7 @@ const server = createServer((request, response) => {
           assert.equal(payload.refreshToken, tokenPair.refreshToken);
           json(response, 200, rotatedTokenPair);
         } else if (refreshCount === 2) {
-          assert.equal(payload.refreshToken, rotatedTokenPair.refreshToken);
+          assert.equal(payload.refreshToken, tokenPair.refreshToken);
           json(response, 409, {
             version: 'aurion.native-auth.v1',
             error: 'NATIVE_AUTH_REFRESH_REUSED',
@@ -126,13 +145,13 @@ const server = createServer((request, response) => {
       assert.equal(payload.code, handoffCode);
       assert.match(payload.codeVerifier, /^[A-Za-z0-9_-]{43}$/);
       assert.equal(payload.appBuild, 'aurion-godot-g09b-runtime');
-      if (exchangeCount <= 2) {
+      if (exchangeCount <= 4) {
         json(response, 200, tokenPair);
-      } else if (exchangeCount === 3) {
+      } else if (exchangeCount === 5) {
         response.statusCode = 302;
         response.setHeader('Location', 'http://127.0.0.1:3000/leak');
         response.end();
-      } else if (exchangeCount === 4) {
+      } else if (exchangeCount === 6) {
         json(response, 401, {
           version: 'aurion.native-auth.v1',
           error: 'NATIVE_AUTH_STATE_MISMATCH',
@@ -167,8 +186,9 @@ clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
 process.stdout.write(output);
 assert.equal(exitCode, 0, 'Godot native-auth runtime failed');
-assert.equal(startCount, 9, 'Godot did not exercise all start outcomes');
-assert.equal(exchangeCount, 5, 'Godot did not exercise all exchange outcomes');
+assert.equal(startCount, 11, 'Godot did not exercise all start outcomes');
+assert.equal(exchangeCount, 7, 'Godot did not exercise all exchange outcomes');
 assert.equal(refreshCount, 3, 'Godot did not exercise all refresh outcomes');
+assert.equal(revokeCount, 2, 'Godot did not exercise all logout outcomes');
 assert.equal(redirectFollowed, false, 'Godot followed a native-auth redirect');
-assert.match(output, /Godot native-auth start, exchange and refresh HTTP runtime verified/);
+assert.match(output, /Godot native-auth start, exchange, refresh and logout HTTP runtime verified/);
