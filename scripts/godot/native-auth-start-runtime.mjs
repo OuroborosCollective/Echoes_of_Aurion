@@ -6,8 +6,15 @@ const [executable, project] = process.argv.slice(2);
 assert.ok(executable && project, 'usage: native-auth-start-runtime.mjs <godot> <project>');
 
 let requestCount = 0;
+let redirectFollowed = false;
 const transactionId = 't'.repeat(43);
 const server = createServer((request, response) => {
+  if (request.url === '/leak') {
+    redirectFollowed = true;
+    response.statusCode = 500;
+    response.end();
+    return;
+  }
   requestCount += 1;
   const chunks = [];
   request.on('data', chunk => chunks.push(chunk));
@@ -47,6 +54,10 @@ const server = createServer((request, response) => {
           browserUrl: `https://evil.example/api/native-auth/browser/${transactionId}`,
           expiresInSeconds: 600,
         }));
+      } else if (requestCount === 3) {
+        response.statusCode = 302;
+        response.setHeader('Location', 'http://127.0.0.1:3000/leak');
+        response.end();
       } else {
         response.statusCode = 503;
         response.end(JSON.stringify({
@@ -80,5 +91,6 @@ clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
 process.stdout.write(output);
 assert.equal(exitCode, 0, 'Godot native-auth runtime failed');
-assert.equal(requestCount, 3, 'Godot did not exercise all start outcomes');
+assert.equal(requestCount, 4, 'Godot did not exercise all start outcomes');
+assert.equal(redirectFollowed, false, 'Godot followed a native-auth start redirect');
 assert.match(output, /Godot native-auth start HTTP runtime verified/);
