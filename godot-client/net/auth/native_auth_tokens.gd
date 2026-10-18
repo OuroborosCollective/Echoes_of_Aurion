@@ -116,6 +116,11 @@ func access_token(now_ms: int = -1) -> String:
 		clear()
 		return ""
 	if now >= _idle_deadline_ms or now >= _absolute_deadline_ms:
+		# Keep a committed rotation bound to its original deadline until its response
+		# arrives; otherwise a late response could be mistaken for a fresh session.
+		if _refresh_in_flight:
+			_access_token = ""
+			return ""
 		clear()
 		return ""
 	if now >= _access_deadline_ms:
