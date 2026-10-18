@@ -265,6 +265,52 @@ func verify() -> void:
 	failing_api.queue_free()
 	failing_auth.queue_free()
 
+	var boundary_auth := FakeAuth.new()
+	boundary_auth.current_access = ""
+	boundary_auth.refresh_behavior = "start"
+	root.add_child(boundary_auth)
+	var boundary_api := AurionApi.new(boundary_auth)
+	boundary_api.request_failed.connect(_on_request_failure)
+	root.add_child(boundary_api)
+	await process_frame
+	request_completed = false
+	request_error = ""
+	request_failure_count = 0
+	boundary_api._active = true
+	boundary_api._sent_access_token = "expired-session-access"
+	boundary_api._on_request_completed(
+		HTTPRequest.RESULT_SUCCESS,
+		401,
+		PackedStringArray(),
+		PackedByteArray()
+	)
+	require(boundary_auth.refresh_calls == 1, "deadline-crossing 401 did not start refresh")
+	require(boundary_auth.refresh_in_flight(), "deadline-crossing 401 lost refresh authority")
+	require(boundary_api._active, "deadline-crossing 401 terminated a refreshable request")
+	require(request_failure_count == 0, "deadline-crossing 401 emitted premature failure")
+	boundary_api.cancel()
+	boundary_api.queue_free()
+	boundary_auth.queue_free()
+
+	var logout_auth := FakeAuth.new()
+	root.add_child(logout_auth)
+	var logout_api := AurionApi.new(logout_auth)
+	logout_api.request_failed.connect(_on_request_failure)
+	root.add_child(logout_api)
+	await process_frame
+	request_completed = false
+	request_error = ""
+	request_failure_count = 0
+	logout_api._active = true
+	logout_api._sent_access_token = logout_auth.current_access
+	logout_auth.logout()
+	require(request_completed, "logout did not terminate initial protected request")
+	require(request_error == "AURION_API_AUTH_REQUIRED", "initial logout did not require auth")
+	require(request_failure_count == 1, "initial logout emitted more than one failure")
+	require(not logout_api._active, "initial logout left protected request active")
+	logout_api.queue_free()
+	logout_auth.queue_free()
+
 	api.queue_free()
 	auth.queue_free()
 	await process_frame

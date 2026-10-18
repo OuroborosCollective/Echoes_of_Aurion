@@ -96,7 +96,13 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if result != HTTPRequest.RESULT_SUCCESS:
 		_fail(REQUEST_FAILED)
 		return
-	if _auth.access_token() != _sent_access_token:
+	var current_access: String = _auth.access_token()
+	if current_access != _sent_access_token:
+		# The same session may cross its local access deadline while HTTP is in flight.
+		if response_code == 401 and current_access.is_empty() and not _retried_after_refresh:
+			_retried_after_refresh = true
+			_begin_refresh()
+			return
 		_fail(RESPONSE_INVALID)
 		return
 	if response_code == 401:
@@ -144,8 +150,11 @@ func _on_refresh_failed(_error_code: String) -> void:
 		_fail(AUTH_REQUIRED)
 
 func _on_logout_terminal(_error_code: String = "") -> void:
-	if _active and _retried_after_refresh:
-		_fail(AUTH_REQUIRED)
+	if not _active:
+		return
+	if is_instance_valid(_http):
+		_http.cancel_request()
+	_fail(AUTH_REQUIRED)
 
 func _fail(error_code: String) -> void:
 	_active = false
