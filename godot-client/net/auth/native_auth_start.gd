@@ -9,6 +9,8 @@ signal session_succeeded
 signal session_failed(error_code: String)
 signal refresh_succeeded
 signal refresh_failed(error_code: String)
+signal logout_succeeded
+signal logout_failed(error_code: String)
 
 const RuntimeConfig = preload("res://config/runtime_config.gd")
 const Flow = preload("res://net/auth/native_auth_flow.gd")
@@ -17,6 +19,7 @@ const Tokens = preload("res://net/auth/native_auth_tokens.gd")
 const START_PATH := "/api/native-auth/start"
 const EXCHANGE_PATH := "/api/native-auth/exchange"
 const REFRESH_PATH := "/api/native-auth/refresh"
+const REVOKE_PATH := "/api/native-auth/revoke"
 const FALLBACK_ERROR := "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE"
 const ERROR_CODES := [
 	"NATIVE_AUTH_CONFIGURATION_UNAVAILABLE",
@@ -87,6 +90,17 @@ func refresh(now_ms: int = -1) -> bool:
 		return false
 	return _send_json(REFRESH_PATH, request, "refresh")
 
+## Revoke the current server session. begin_logout clears local authority before
+## transport starts, so network failure or a hostile redirect cannot keep access.
+func logout() -> bool:
+	if _request_active or _server_base_url.is_empty() or not is_inside_tree():
+		return false
+	var request := _tokens.begin_logout()
+	if request.is_empty():
+		emit_signal("logout_succeeded")
+		return true
+	return _send_json(REVOKE_PATH, request, "logout")
+
 func cancel() -> void:
 	if _request_active and is_instance_valid(_http):
 		_http.cancel_request()
@@ -120,12 +134,21 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	var phase := _request_phase
 	_request_active = false
 	_request_phase = ""
-	if result != HTTPRequest.RESULT_SUCCESS or not _json_content_type(headers):
+	if result != HTTPRequest.RESULT_SUCCESS:
+		_fail_request(phase, FALLBACK_ERROR)
+		return
+	if phase == "logout" and response_code == 204:
+		emit_signal("logout_succeeded")
+		return
+	if not _json_content_type(headers):
 		_fail_request(phase, FALLBACK_ERROR)
 		return
 	var payload: Variant = JSON.parse_string(body.get_string_from_utf8())
 	if response_code != 200:
 		_fail_request(phase, _validated_error(payload))
+		return
+	if phase == "logout":
+		_fail_logout(FALLBACK_ERROR)
 		return
 	if phase == "exchange" or phase == "refresh":
 		if not _tokens.accept_token_response(payload):
@@ -144,7 +167,9 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	emit_signal("start_succeeded")
 
 func _fail_request(phase: String, error_code: String) -> void:
-	if phase == "refresh":
+	if phase == "logout":
+		_fail_logout(error_code)
+	elif phase == "refresh":
 		_fail_refresh(error_code)
 	elif phase == "exchange":
 		_fail_session(error_code)
@@ -169,6 +194,12 @@ func _fail_refresh(error_code: String) -> void:
 	_request_phase = ""
 	_tokens.clear()
 	emit_signal("refresh_failed", error_code)
+
+func _fail_logout(error_code: String) -> void:
+	_request_active = false
+	_request_phase = ""
+	_tokens.clear()
+	emit_signal("logout_failed", error_code)
 
 static func _validated_error(payload: Variant) -> String:
 	if typeof(payload) != TYPE_DICTIONARY:
