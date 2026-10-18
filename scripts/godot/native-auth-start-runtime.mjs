@@ -47,6 +47,11 @@ const server = createServer((request, response) => {
     response.end(`https://arelogic.space/app/auth/callback?code=${handoffCode}&state=${currentState}`);
     return;
   }
+  if (request.method === 'GET' && request.url === '/test-exchange-arrived') {
+    response.statusCode = exchangeCount >= 2 ? 204 : 425;
+    response.end();
+    return;
+  }
   if (request.method === 'GET' && request.url === '/test-refresh-arrived') {
     response.statusCode = refreshCount >= 2 ? 204 : 425;
     response.end();
@@ -154,13 +159,15 @@ const server = createServer((request, response) => {
       assert.equal(payload.code, handoffCode);
       assert.match(payload.codeVerifier, /^[A-Za-z0-9_-]{43}$/);
       assert.equal(payload.appBuild, 'aurion-godot-g09b-runtime');
-      if (exchangeCount <= 5) {
+      if (exchangeCount === 2) {
+        setTimeout(() => json(response, 200, tokenPair), 150);
+      } else if (exchangeCount <= 6) {
         json(response, 200, tokenPair);
-      } else if (exchangeCount === 6) {
+      } else if (exchangeCount === 7) {
         response.statusCode = 302;
         response.setHeader('Location', 'http://127.0.0.1:3000/leak');
         response.end();
-      } else if (exchangeCount === 7) {
+      } else if (exchangeCount === 8) {
         json(response, 401, {
           version: 'aurion.native-auth.v1',
           error: 'NATIVE_AUTH_STATE_MISMATCH',
@@ -207,9 +214,9 @@ assert.ifError(handlerFailure);
 assert.equal(timedOut, false,
   `Godot native-auth runtime timed out: start=${startCount}, exchange=${exchangeCount}, refresh=${refreshCount}, revoke=${revokeCount}`);
 assert.equal(exitCode, 0, 'Godot native-auth runtime failed');
-assert.equal(startCount, 12, 'Godot did not exercise all start outcomes');
-assert.equal(exchangeCount, 8, 'Godot did not exercise all exchange outcomes');
+assert.equal(startCount, 13, 'Godot did not exercise all start outcomes');
+assert.equal(exchangeCount, 9, 'Godot did not exercise all exchange outcomes');
 assert.equal(refreshCount, 4, 'Godot did not exercise all refresh outcomes');
-assert.equal(revokeCount, 3, 'Godot did not exercise all logout outcomes');
+assert.equal(revokeCount, 4, 'Godot did not exercise all logout outcomes');
 assert.equal(redirectFollowed, false, 'Godot followed a native-auth redirect');
 assert.match(output, /Godot native-auth start, exchange, refresh and logout HTTP runtime verified/);
