@@ -3135,3 +3135,26 @@ Task: Replace duplicate full-map cache scans with one ordered background partiti
 Evidence: Exact code head `e726184f49c75ebefa158ea1fa98a01d413567ca`; proof run `39136341199` passed 13/13 focused tests and parity for 9/25 visible chunks, reducing traced allocations 550,300,952→438,583,584 bytes (phone) and 676,194,216→544,503,936 bytes (desktop), with median/p95 also lower; Full Pack `39136341128` passed 449 files / 2,258 tests; seven neighboring runtime/integration workflows and exact-head code/security reviews passed.
 Learned: Partitioning the already deduplicated background entries once preserves canonical cache ordering and avoids both the second Map materialization and retained-key scan; allocation claims need an isolated same-workload readback that fails on regression.
 Next safe step: Merge only if this Memory-bearing final head retains green exact-head gates and clean reviews.
+
+
+### 2026-10-18 — PR #1046 — perf(world): reduce chunk cache plan allocations (#982)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1046 merge=e04a0fa1c09b04a2edb4d3cfd845c7438e4790d2 -->
+Task: Merge PR #1046 into `main` — perf(world): reduce chunk cache plan allocations (#982).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/world-chunk-cache-iteration.yml`
+- `Memory.md`
+- `docs/balancing/aim265-candidate.json`
+- `scripts/benchmark-world-chunk-cache-iteration.ts`
+- `server/worldChunkStreamingProtocol.test.ts`
+- `shared/worldChunkStreamingProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1046
+- Merge commit: `e04a0fa1c09b04a2edb4d3cfd845c7438e4790d2`
+- PR head: `8b756a1b9390cfa6798561fbe880a9d32539a954`
+- Merged at: 2026-10-18T14:55:12Z
+- Post-merge workflow run: 39138142108
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
