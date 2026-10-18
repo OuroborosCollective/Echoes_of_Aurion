@@ -98,9 +98,11 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 			return
 		_retried_after_refresh = true
 		if not _auth.refresh():
+			if _auth.refresh_in_flight():
+				return
 			_auth.logout()
 			_fail(AUTH_REQUIRED)
-		return
+			return
 		return
 	if response_code != 200:
 		_fail(REQUEST_FAILED)
