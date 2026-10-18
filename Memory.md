@@ -2921,3 +2921,36 @@ Evidence: Implementation candidate `a07f5ec582d4dfde5947078da06211f9368f01c5`; L
 Learned: Native bearer availability and refresh signals must remain typed across every active HTTP boundary; collapsing them into generic authentication responses hides retryable server state or prevents one-time refresh.
 Open: Production Native Auth schema deployment and device-login proof remain separately gated.
 Next safe step: Merge the reviewed candidate and confirm source, tests and this entry on main.
+
+
+### 2026-10-18 — PR #1035 — fix(auth): close native bearer review gaps (#967)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1035 merge=f6f689f840c78912b96d8eec738ae24da645afc2 -->
+Task: Merge PR #1035 into `main` — fix(auth): close native bearer review gaps (#967).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-local-test-pack.yml`
+- `Memory.md`
+- `server/_core/context.ts`
+- `server/_core/nativeAuthHttpError.test.ts`
+- `server/_core/nativeAuthHttpError.ts`
+- `server/_core/sdk.ts`
+- `server/_core/sdkNativeAuth.test.ts`
+- `server/confirmedEquipmentVisualRoutes.ts`
+- `server/gameDevelopmentStudioRuntime.ts`
+- `server/glbSmartUpload.ts`
+- `server/glbZipUpload.ts`
+- `server/guildBankRoutes.ts`
+- `server/guildGovernanceRoutes.ts`
+- `server/nativeAuthDirectHttpRoutes.test.ts`
+- `server/nativeAuthPersistence.ts`
+- `server/nativeAuthPersistenceUnavailable.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1035
+- Merge commit: `f6f689f840c78912b96d8eec738ae24da645afc2`
+- PR head: `6895cbb432fa199ee4bf4292e28676b0998d9864`
+- Merged at: 2026-10-18T01:49:01Z
+- Post-merge workflow run: 39087842805
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
