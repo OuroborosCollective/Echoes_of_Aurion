@@ -3183,7 +3183,7 @@ Next safe step: Use the new main revision as the canonical baseline for the next
 
 ### 2026-10-18 — PR #1048 — Deadline-bound mobile GLB wheel evidence
 Status: VERIFICATION PENDING
-Task: Replace the flaky exact-bottom predicate with one real wheel input and deadline-bound observation of actual container movement.
-Evidence: AIM-240 run 39150442681 passed the full MariaDB/browser lane; trace artifact 12145531495 from run 39151163259 showed a repeated wheel command hanging in Chromium after the first completed input.
-Learned: A wheel regression should observe the asynchronous result of one user input; repeating compositor input inside a poll can itself stall and is not a valid wait mechanism.
-Next safe step: Run AIM-240 on code head `2c83f390f00d78ac197f5ca45e5ea6a69efb25dc`, obtain clean exact-head review, then merge and read back main.
+Task: Replace the flaky exact-bottom predicate with one real wheel input, deadline-bound movement observation, and an independent reachability check for the lower mobile controls.
+Evidence: AIM-240 run 39151553433 passed the full MariaDB/browser lane on head `9238e139afb5d80da85595b5ad2cd56dc3fb40bb`; failure trace artifact 12145531495 showed repeated wheel input could hang Chromium.
+Learned: Observe one asynchronous wheel result, then verify lower content reachability separately instead of repeating compositor input as a wait mechanism.
+Next safe step: Run AIM-240 on the Memory-bearing PR head, obtain clean exact-head review, then merge and read back main.
