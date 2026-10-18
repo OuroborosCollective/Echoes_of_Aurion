@@ -112,6 +112,21 @@ func run_refresh(assert_single_flight: bool = false) -> void:
 	while not refresh_completed:
 		await process_frame
 
+func run_refresh_then_logout() -> void:
+	refresh_completed = false
+	refresh_succeeded = false
+	refresh_error = ""
+	logout_completed = false
+	logout_succeeded = false
+	logout_error = ""
+	require(client.refresh(), "preempted refresh request did not begin")
+	await process_frame
+	require(client.logout(), "logout did not preempt refresh")
+	require(client.access_token().is_empty(), "preempting logout retained local access")
+	while not logout_completed:
+		await process_frame
+	require(not refresh_completed, "cancelled refresh published a terminal result")
+
 func run_logout(assert_single_flight: bool = false) -> void:
 	logout_completed = false
 	logout_succeeded = false
@@ -154,6 +169,14 @@ func verify() -> void:
 	require(client.access_token().is_empty(), "successful logout retained local authority")
 	require(client.logout(), "idempotent local logout was rejected")
 	require(logout_succeeded, "idempotent local logout did not succeed")
+
+	await run_start()
+	require(start_succeeded, "refresh preemption setup failed")
+	await run_exchange()
+	require(session_succeeded, "refresh preemption session setup failed")
+	await run_refresh_then_logout()
+	require(logout_succeeded, "refresh-preempting logout failed")
+	require(client.access_token().is_empty(), "refresh-preempting logout retained authority")
 
 	await run_start()
 	require(start_succeeded, "logout redirect setup failed")
