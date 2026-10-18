@@ -267,7 +267,8 @@ export default function AurionOpenWorldRuntime() {
   }, []);
 
   useEffect(() => {
-    if (!activation || !containerRef.current || !selectedCharacterUrl) return;
+    if (!activation || !containerRef.current || !selectedCharacterUrl ||
+      (worldSnapshot.isLoading && !worldSnapshot.data?.globalWorld)) return;
     const support = MMOEngine.checkWebGLSupport();
     if (!support.supported) {
       setWebglError(support.error ?? "WebGL ist nicht verfügbar.");
@@ -475,7 +476,7 @@ export default function AurionOpenWorldRuntime() {
       virtualInputRef.current = { forward: 0, right: 0 };
     };
   }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount, recoveryEpoch,
-    activation?.globalWorld ? undefined : worldSnapshot.data?.globalWorld?.epoch,
+    worldSnapshot.isLoading, activation?.globalWorld ? undefined : worldSnapshot.data?.globalWorld?.epoch,
     activation?.globalWorld ? undefined : worldSnapshot.data?.globalWorld?.worldSeed]);
 
   useEffect(() => {
