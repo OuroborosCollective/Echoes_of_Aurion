@@ -3181,9 +3181,9 @@ Open: Runtime, deployment and independent readback claims remain governed by the
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
 
-### 2026-10-18 — PR #1048 — Bounded mobile GLB wheel evidence
+### 2026-10-18 — PR #1048 — Deadline-bound mobile GLB wheel evidence
 Status: VERIFIED candidate
-Task: Replace the flaky one-shot exact-bottom wheel predicate with at most six real wheel inputs while retaining movement and bottom-reach assertions.
-Evidence: Exact code head `7a72baee2bd710e04929d0de2b5109b933db00d9`; AIM-240 run 39149041935 passed GLB/MariaDB regressions, TypeScript, production build and both authenticated Chromium upload/readback/render tests; artifact 12144462632.
-Learned: Chromium wheel delivery is asynchronous, so bounded input-and-sample evidence is stable without weakening the user-scroll contract.
-Next safe step: Re-run AIM-240 on the Memory-bearing final head, obtain clean exact-head review, then merge and read back main.
+Task: Replace the flaky one-shot exact-bottom predicate with real wheel input and live extent sampling under a 10-second deadline while retaining movement and bottom-reach assertions.
+Evidence: Exact code head `c86bd25d7889a7e972ab7f943df77c825030679d`; AIM-240 run 39150442681 passed GLB/MariaDB regressions, TypeScript, production build and both authenticated Chromium upload/readback/render tests; artifact 12145121138.
+Learned: Target the already-visible region once without waiting for late layout stability, then poll real wheel outcomes to a deadline instead of assuming synchronous compositor delivery.
+Next safe step: Re-run AIM-240 on this corrected Memory-bearing head, obtain clean exact-head review, then merge and read back main.
