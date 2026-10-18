@@ -6,6 +6,7 @@ const MAX_CLIENT_BYTES := 2048
 const MAX_BROWSER_SNAPSHOT_CODE_UNITS := 65536
 const FIXED_CONTENT := "286c575d3d0050ffa77b794d5b7a7e24858acee8"
 const NODE_IDS := ["node_beast_1","node_copper_1","node_cotton_1","node_iron_1","node_steel_1"]
+const REJECT_CODES := ["INVALID_MESSAGE", "STALE_CLIENT_SEQUENCE", "UNSUPPORTED_ZONE_COMMAND", "PROTOCOL_VERSION_UNSUPPORTED", "INVALID_COMBAT_TARGET", "COMBAT_TARGET_OUT_OF_RANGE", "COMBATANT_DEAD", "INVALID_COMBAT_SKILL", "COMBAT_SKILL_COOLDOWN"]
 
 static func valid_hello(ticket: String) -> Dictionary:
 	if ticket.length() < 24 or ticket.length() > 160:
@@ -59,6 +60,23 @@ static func wire_numbers_are_integers(wire: String) -> bool:
 		index += 1
 	return not inside_string
 
+static func is_valid_reject(raw: Variant) -> bool:
+	return typeof(raw) == TYPE_DICTIONARY and raw.get("type") == "reject" and typeof(raw.get("code")) == TYPE_STRING and raw.get("code") in REJECT_CODES
+
+static func _valid_player_entity_id(value: Variant) -> bool:
+	if typeof(value) != TYPE_STRING:
+		return false
+	var entity_id: String = value
+	if not entity_id.begins_with("player:"):
+		return false
+	var digits := entity_id.substr(7)
+	if digits.is_empty() or digits[0] < "1" or digits[0] > "9":
+		return false
+	for index in range(1, digits.length()):
+		if digits[index] < "0" or digits[index] > "9":
+			return false
+	return true
+
 static func _safe_nonnegative(value: Variant) -> bool:
 	return (typeof(value) == TYPE_INT or (typeof(value) == TYPE_FLOAT and is_finite(value) and value == floor(value))) and value >= 0 and value <= 9007199254740991
 
@@ -70,7 +88,7 @@ static func _valid_position(value: Variant) -> bool:
 static func _valid_resources(value: Variant) -> bool:
 	if typeof(value) != TYPE_DICTIONARY:
 		return false
-	if value.get("contractVersion") != 1 or value.get("contentSourceRevision") != FIXED_CONTENT or not _safe_nonnegative(value.get("revision")):
+	if value.get("contractVersion") != 1 or value.get("contentSourceRevision") != FIXED_CONTENT or not _safe_nonnegative(value.get("revision")) or value.get("revision") == 0:
 		return false
 	var nodes: Variant = value.get("nodes")
 	if typeof(nodes) != TYPE_ARRAY or nodes.size() != 5:
@@ -96,7 +114,7 @@ static func is_valid_welcome(raw: Variant) -> bool:
 	var entity: Variant = raw.get("selfEntityId")
 	if typeof(conn) != TYPE_STRING or conn.length() < 12 or conn.length() > 96 or typeof(entity) != TYPE_STRING:
 		return false
-	if not conn.begins_with("zone_peer_") or not entity.begins_with("player:") or entity.length() <= 7:
+	if not conn.begins_with("zone_peer_") or not _valid_player_entity_id(entity):
 		return false
 	if not _safe_nonnegative(raw.get("snapshotSeq")) or not _safe_nonnegative(raw.get("tick")):
 		return false
