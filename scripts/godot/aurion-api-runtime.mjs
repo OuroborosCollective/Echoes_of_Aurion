@@ -146,4 +146,4 @@ assert.equal(refreshCount, 3, 'Godot did not exercise bounded refresh outcomes')
 assert.equal(ticketCount, 5, 'Godot did not exercise protected ticket retry outcomes');
 assert.equal(revokeCount, 1, 'Godot did not revoke after a second 401');
 assert.match(output, /Godot protected zone ticket refresh runtime verified/);
-\n
+
