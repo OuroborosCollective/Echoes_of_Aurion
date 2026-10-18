@@ -57,7 +57,9 @@ const server = createServer((request, response) => {
       if (request.url === '/api/native-auth/exchange') {
         exchangeCount += 1;
         assert.equal(request.headers.authorization, undefined);
-        json(response, 200, exchangeCount === 1 ? pair('a', 'r') : pair('d', 'u'));
+        const exchangePair = exchangeCount === 1 ? pair('a', 'r') : pair('d', 'u');
+        if (exchangeCount === 1) setTimeout(() => json(response, 200, exchangePair), 100);
+        else json(response, 200, exchangePair);
         return;
       }
       if (request.url === '/api/native-auth/refresh') {
