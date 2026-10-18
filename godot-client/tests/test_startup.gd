@@ -3,6 +3,20 @@ extends SceneTree
 const Config = preload("res://config/runtime_config.gd")
 var failures: Array[String] = []
 
+class FakeLogoutAuth:
+	extends Node
+	signal logout_succeeded
+	signal logout_failed(error_code: String)
+	var in_flight := false
+	var logout_calls := 0
+
+	func logout_in_flight() -> bool:
+		return in_flight
+
+	func logout() -> bool:
+		logout_calls += 1
+		return false
+
 class FakeApi:
 	extends Node
 	var calls := 0
@@ -79,8 +93,15 @@ func verify() -> void:
 	})
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher angemeldet · Zonenticket bestätigt", "confirmed ticket state missing")
 	require(enabled_scene.get_node("%Login").text == "Angemeldet", "confirmed ticket action state missing")
-	enabled_scene._on_zone_ticket_failed("AURION_API_REQUEST_FAILED")
+	var fake_logout := FakeLogoutAuth.new()
+	fake_logout.in_flight = true
+	enabled_scene.add_child(fake_logout)
+	enabled_scene._auth_start = fake_logout
+	enabled_scene._on_zone_ticket_failed("AURION_API_AUTH_REQUIRED")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "ticket failure state missing")
+	require(enabled_scene.get_node("%Login").disabled, "in-flight logout restored login early")
+	require(fake_logout.logout_calls == 0, "in-flight logout was started twice")
+	enabled_scene._on_auth_logout_terminal()
 	require(not enabled_scene.get_node("%Login").disabled, "terminal logout did not restore login")
 	require(enabled_scene.get_node("%Login").text == "Anmelden", "terminal logout action state missing")
 	enabled_scene.queue_free()
