@@ -43,8 +43,9 @@ func clear() -> void:
 		_session_generation += 1
 
 ## On invalid response, refuse the whole session; never retain an old refresh.
-func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
+func accept_token_response(raw: Variant, now_ms: int = -1, received_at_ms: int = -1) -> bool:
 	var now: int = now_ms if now_ms >= 0 else Time.get_ticks_msec()
+	var received_at: int = received_at_ms if received_at_ms >= 0 else now
 	var rotating := _refresh_in_flight
 	if not _refresh_token.is_empty() and not _refresh_in_flight:
 		clear()
@@ -91,7 +92,7 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 	var new_absolute: int = now + absolute_remaining * 1000
 	if _refresh_in_flight and _absolute_deadline_ms >= 0:
 		new_absolute = mini(new_absolute, _absolute_deadline_ms)
-	if new_absolute <= now:
+	if new_absolute <= received_at:
 		clear()
 		return false
 	_access_token = access
