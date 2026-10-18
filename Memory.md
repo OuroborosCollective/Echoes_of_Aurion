@@ -3048,3 +3048,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-18 — PR #1043 — fix(godot): revoke native session on logout (#968)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1043 merge=adc01a28dafcaef0dd275e2ad3dadd3a82f8fc34 -->
+Task: Merge PR #1043 into `main` — fix(godot): revoke native session on logout (#968).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/net/auth/native_auth_start.gd`
+- `godot-client/tests/test_native_auth_start_runtime.gd`
+- `scripts/godot/check.mjs`
+- `scripts/godot/native-auth-start-runtime.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1043
+- Merge commit: `adc01a28dafcaef0dd275e2ad3dadd3a82f8fc34`
+- PR head: `b5d7bcc36f4ad7b0864c7f6a76ebf434034d57c2`
+- Merged at: 2026-10-18T08:57:48Z
+- Post-merge workflow run: 39113467170
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
