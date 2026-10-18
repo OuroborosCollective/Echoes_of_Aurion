@@ -110,10 +110,15 @@ export function planWorldChunkCache(input: { center: WorldChunkCoordinate; tier:
     if (!previous || entry.lastAccess > previous.lastAccess) byKey.set(key, Object.freeze({ coordinate: Object.freeze({ ...entry.coordinate }), lastAccess: entry.lastAccess }));
   }
   const request = visible.filter(coordinate => !byKey.has(worldChunkCoordinateKey(coordinate)));
-  const retainedBackground = Array.from(byKey.values()).filter(entry => !visibleKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => right.lastAccess - left.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).slice(0, Math.max(0, budget.maxCachedChunks - visible.length));
+  const backgroundCandidates: WorldChunkCacheEntry[] = [];
+  for (const entry of byKey.values()) {
+    if (!visibleKeys.has(worldChunkCoordinateKey(entry.coordinate))) backgroundCandidates.push(entry);
+  }
+  backgroundCandidates.sort((left, right) => right.lastAccess - left.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x);
+  const retainedBackgroundCount = Math.max(0, budget.maxCachedChunks - visible.length);
+  const retainedBackground = backgroundCandidates.slice(0, retainedBackgroundCount);
   const retain = Object.freeze([...visible, ...retainedBackground.map(entry => entry.coordinate)]);
-  const retainKeys = new Set(retain.map(worldChunkCoordinateKey));
-  const evict = Object.freeze(Array.from(byKey.values()).filter(entry => !retainKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => left.lastAccess - right.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).map(entry => entry.coordinate));
+  const evict = Object.freeze(backgroundCandidates.slice(retainedBackgroundCount).sort((left, right) => left.lastAccess - right.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).map(entry => entry.coordinate));
   return Object.freeze({ visible, request: Object.freeze(request), retain, evict });
 }
 

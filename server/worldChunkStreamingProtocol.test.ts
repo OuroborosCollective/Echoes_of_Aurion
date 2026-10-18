@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   WORLD_CHUNK_STREAM_PAGE_LIMIT,
+  type WorldChunkCacheEntry,
+  type WorldChunkCachePlan,
+  type WorldChunkStreamingTier,
   matchesWorldChunkStreamSelection,
   planWorldChunkCache,
   orderedWorldChunkWindow,
@@ -8,6 +11,36 @@ import {
   worldChunkHorizonProfile,
   worldChunkStreamingBudget,
 } from "../shared/worldChunkStreamingProtocol";
+
+function referencePlanWorldChunkCache(input: { center: { x: number; z: number }; tier: WorldChunkStreamingTier; cached: readonly WorldChunkCacheEntry[] }): WorldChunkCachePlan {
+  const budget = worldChunkStreamingBudget(input.tier);
+  const visible = orderedWorldChunkWindow(input.center, budget.visibleRadius);
+  const visibleKeys = new Set(visible.map(worldChunkCoordinateKey));
+  const byKey = new Map<string, WorldChunkCacheEntry>();
+  for (const entry of input.cached) {
+    const key = worldChunkCoordinateKey(entry.coordinate);
+    const previous = byKey.get(key);
+    if (!previous || entry.lastAccess > previous.lastAccess) byKey.set(key, Object.freeze({ coordinate: Object.freeze({ ...entry.coordinate }), lastAccess: entry.lastAccess }));
+  }
+  const request = visible.filter(coordinate => !byKey.has(worldChunkCoordinateKey(coordinate)));
+  const retainedBackground = Array.from(byKey.values()).filter(entry => !visibleKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => right.lastAccess - left.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).slice(0, Math.max(0, budget.maxCachedChunks - visible.length));
+  const retain = Object.freeze([...visible, ...retainedBackground.map(entry => entry.coordinate)]);
+  const retainKeys = new Set(retain.map(worldChunkCoordinateKey));
+  const evict = Object.freeze(Array.from(byKey.values()).filter(entry => !retainKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => left.lastAccess - right.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).map(entry => entry.coordinate));
+  return Object.freeze({ visible, request: Object.freeze(request), retain, evict });
+}
+
+function seededCacheEntries(seed: number, count: number): WorldChunkCacheEntry[] {
+  let state = seed >>> 0;
+  const next = () => {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    return state;
+  };
+  return Array.from({ length: count }, (_, index) => ({
+    coordinate: { x: (next() % 17) - 8, z: (next() % 17) - 8 },
+    lastAccess: index % 5 === 0 ? 7 : next() % 32,
+  }));
+}
 
 describe("worldChunkStreamingProtocol", () => {
   it("returns a stable center-first 3×3 window for mobile tiers", () => {
@@ -49,6 +82,20 @@ describe("worldChunkStreamingProtocol", () => {
     const overflow = planWorldChunkCache({ center: { x: 0, z: 0 }, tier: "phone", cached: Array.from({ length: 14 }, (_, index) => ({ coordinate: { x: 50 + index, z: 0 }, lastAccess: index })) });
     expect(overflow.retain).toHaveLength(12);
     expect(overflow.evict.map(worldChunkCoordinateKey)).toEqual(["50:0", "51:0", "52:0", "53:0", "54:0", "55:0", "56:0", "57:0", "58:0", "59:0", "60:0"]);
+  });
+
+  it("matches the allocation-heavy reference for ties, duplicates, visible pins and budget overflow without mutating input", () => {
+    const tiers: readonly WorldChunkStreamingTier[] = ["phone", "tablet", "desktop"];
+    for (let seed = 1; seed <= 128; seed += 1) {
+      const input = {
+        center: { x: (seed % 7) - 3, z: ((seed * 3) % 7) - 3 },
+        tier: tiers[seed % tiers.length]!,
+        cached: seededCacheEntries(seed, 48 + (seed % 37)),
+      };
+      const before = structuredClone(input);
+      expect(planWorldChunkCache(input)).toEqual(referencePlanWorldChunkCache(input));
+      expect(input).toEqual(before);
+    }
   });
 
   it("accepts only a response matching the latest viewport selection", () => {
