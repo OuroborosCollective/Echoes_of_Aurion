@@ -73,20 +73,27 @@ for (let sample = 0; sample < samples; sample += 1) {
   }
 }
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+const legacyMedianHeapDeltaBytes = median(legacySamples.map(sample => sample.heapDeltaBytes));
+const candidateMedianHeapDeltaBytes = median(candidateSamples.map(sample => sample.heapDeltaBytes));
 const result = {
   workload: { receipts: size, rounds, samples, replay: "full miss", sequence: "full scan" },
   parity: true,
+  allocationMetric: "median process.heapUsed delta after forced pre-sample GC",
   legacy: {
     medianMs: median(legacySamples.map(sample => sample.durationMs)),
-    medianHeapDeltaBytes: median(legacySamples.map(sample => sample.heapDeltaBytes)),
-    intermediateArrayEntriesPerRound: size * 2 + Math.ceil(size / 5),
+    medianHeapDeltaBytes: legacyMedianHeapDeltaBytes,
   },
   candidate: {
     medianMs: median(candidateSamples.map(sample => sample.durationMs)),
-    medianHeapDeltaBytes: median(candidateSamples.map(sample => sample.heapDeltaBytes)),
-    intermediateArrayEntriesPerRound: 0,
+    medianHeapDeltaBytes: candidateMedianHeapDeltaBytes,
   },
 };
 assert.ok(result.candidate.medianMs < result.legacy.medianMs,
   `direct iteration did not improve median latency: ${JSON.stringify(result)}`);
+assert.ok(
+  candidateMedianHeapDeltaBytes >= 0 &&
+    legacyMedianHeapDeltaBytes > 0 &&
+    candidateMedianHeapDeltaBytes < legacyMedianHeapDeltaBytes * 0.05,
+  `direct iteration did not reduce measured heap allocation by at least 95%: ${JSON.stringify(result)}`,
+);
 process.stdout.write(JSON.stringify(result, null, 2) + "\n");
