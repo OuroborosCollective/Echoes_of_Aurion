@@ -98,6 +98,8 @@ func _on_zone_ticket_failed(_error_code: String) -> void:
 	status.text = "Verbindung derzeit nicht verfügbar"
 	login.text = "Anmelden"
 	login.disabled = true
+	if _auth_start.logout_in_flight():
+		return
 	if not _auth_start.logout():
 		_on_auth_logout_terminal()
 
