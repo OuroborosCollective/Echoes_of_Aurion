@@ -14,6 +14,7 @@ var request_completed := false
 var request_succeeded := false
 var request_error := ""
 var receipt: Dictionary = {}
+var logout_completed := false
 
 func require(condition: bool, message: String) -> void:
 	if not condition:
