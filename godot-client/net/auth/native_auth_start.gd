@@ -79,6 +79,9 @@ func access_token(now_ms: int = -1) -> String:
 func session_generation() -> int:
 	return _tokens.session_generation()
 
+func protected_response_allowed(now_ms: int = -1) -> bool:
+	return _tokens.protected_response_allowed(now_ms)
+
 ## Rotate the in-memory pair through Aurion. The token store rejects a second
 ## request while rotation is in flight, preventing server replay revocation.
 func refresh(now_ms: int = -1) -> bool:
