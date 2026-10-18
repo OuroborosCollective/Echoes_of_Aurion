@@ -65,7 +65,7 @@ const server = createServer((request, response) => {
         assert.equal(request.headers.authorization, undefined);
         if (refreshCount === 1) {
           assert.equal(payload.refreshToken, 'r'.repeat(43));
-          json(response, 200, pair('b', 's'));
+          setTimeout(() => json(response, 200, pair('b', 's')), 100);
         } else if (refreshCount === 2) {
           assert.equal(payload.refreshToken, 's'.repeat(43));
           json(response, 200, pair('c', 'v'));
@@ -145,5 +145,5 @@ assert.equal(exchangeCount, 2, 'Godot did not exchange both callbacks');
 assert.equal(refreshCount, 3, 'Godot did not exercise bounded refresh outcomes');
 assert.equal(ticketCount, 5, 'Godot did not exercise protected ticket retry outcomes');
 assert.equal(revokeCount, 1, 'Godot did not revoke after a second 401');
-assert.match(output, /Godot protected zone ticket refresh runtime verified/);
+assert.match(output, /Godot protected zone ticket client regression verified/);
 
