@@ -23,6 +23,8 @@ func _ready() -> void:
 	add_child(_auth_start)
 	_auth_start.start_succeeded.connect(_on_auth_start_succeeded)
 	_auth_start.start_failed.connect(_on_auth_start_failed)
+	_auth_start.session_succeeded.connect(_on_auth_session_succeeded)
+	_auth_start.session_failed.connect(_on_auth_session_failed)
 	login.pressed.connect(_on_login_pressed)
 	login.disabled = true
 	if _config.server_base_url.is_empty() or _config.client_build.is_empty() or _config.renderer_profile != "compatibility":
@@ -63,6 +65,26 @@ func _on_auth_start_failed(error_code: String) -> void:
 		status.text = "Client-Aktualisierung erforderlich"
 	else:
 		status.text = "Anmeldung derzeit nicht verfügbar"
+
+## Called only by the verified Android App-Link delivery boundary.
+func handle_native_auth_callback(raw_url: Variant) -> bool:
+	if not _awaiting_callback:
+		return false
+	status.text = "Anmeldung wird bestätigt"
+	login.disabled = true
+	return _auth_start.complete_callback(raw_url)
+
+func _on_auth_session_succeeded() -> void:
+	_awaiting_callback = false
+	status.text = "Sicher angemeldet"
+	login.text = "Angemeldet"
+	login.disabled = true
+
+func _on_auth_session_failed(_error_code: String) -> void:
+	_awaiting_callback = false
+	status.text = "Anmeldung derzeit nicht verfügbar"
+	login.text = "Anmelden"
+	login.disabled = not _config.native_auth_start_enabled
 
 func _fit_layout() -> void:
 	if not is_node_ready():

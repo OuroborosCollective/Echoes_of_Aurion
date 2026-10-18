@@ -57,7 +57,7 @@ await stage(
   'headless',
   process.execPath,
   ['scripts/godot/native-auth-start-runtime.mjs', executable, project],
-  'Godot native-auth start HTTP runtime verified',
+  'Godot native-auth start and exchange HTTP runtime verified',
 );
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
