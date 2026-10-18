@@ -3187,3 +3187,21 @@ Task: Replace the flaky exact-bottom predicate with one real wheel input, deadli
 Evidence: AIM-240 run 39151553433 passed the full MariaDB/browser lane on head `9238e139afb5d80da85595b5ad2cd56dc3fb40bb`; failure trace artifact 12145531495 showed repeated wheel input could hang Chromium.
 Learned: Observe one asynchronous wheel result, then verify lower content reachability separately instead of repeating compositor input as a wait mechanism.
 Next safe step: Run AIM-240 on the Memory-bearing PR head, obtain clean exact-head review, then merge and read back main.
+
+### 2026-10-18 — PR #1048 — test(glb): make mobile wheel evidence deterministic
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1048 merge=e499e704bf57f331250b4b2326d0b116d57635e5 -->
+Task: Merge PR #1048 into `main` — test(glb): make mobile wheel evidence deterministic.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `e2e/glbImport.spec.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1048
+- Merge commit: `e499e704bf57f331250b4b2326d0b116d57635e5`
+- PR head: `f27fd69fd00c77f7bdd6f380f27577efe95d4f29`
+- Merged at: 2026-10-18T18:09:37Z
+- Post-merge workflow run: 39152876717
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
