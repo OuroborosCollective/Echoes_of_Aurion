@@ -7,6 +7,8 @@ signal start_succeeded
 signal start_failed(error_code: String)
 signal session_succeeded
 signal session_failed(error_code: String)
+signal refresh_succeeded
+signal refresh_failed(error_code: String)
 
 const RuntimeConfig = preload("res://config/runtime_config.gd")
 const Flow = preload("res://net/auth/native_auth_flow.gd")
@@ -14,6 +16,7 @@ const Callback = preload("res://platform/android/native_app_link_callback.gd")
 const Tokens = preload("res://net/auth/native_auth_tokens.gd")
 const START_PATH := "/api/native-auth/start"
 const EXCHANGE_PATH := "/api/native-auth/exchange"
+const REFRESH_PATH := "/api/native-auth/refresh"
 const FALLBACK_ERROR := "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE"
 const ERROR_CODES := [
 	"NATIVE_AUTH_CONFIGURATION_UNAVAILABLE",
@@ -58,7 +61,7 @@ func begin(server_base_url: String, app_build: String, allow_local: bool = false
 		emit_signal("start_failed", FALLBACK_ERROR)
 		return false
 	_server_base_url = server
-	return _send_json(START_PATH, request, "start", false)
+	return _send_json(START_PATH, request, "start")
 
 ## The platform adapter forwards the raw HTTPS App Link here. URL validation,
 ## state/PKCE consumption and the exchange request are one fail-closed boundary.
@@ -69,14 +72,26 @@ func complete_callback(raw_url: Variant) -> bool:
 	if request.is_empty():
 		_fail_session(FALLBACK_ERROR)
 		return false
-	return _send_json(EXCHANGE_PATH, request, "exchange", true)
+	return _send_json(EXCHANGE_PATH, request, "exchange")
 
 func access_token(now_ms: int = -1) -> String:
 	return _tokens.access_token(now_ms)
 
+## Rotate the in-memory pair through Aurion. The token store rejects a second
+## request while rotation is in flight, preventing server replay revocation.
+func refresh(now_ms: int = -1) -> bool:
+	if _request_active or _server_base_url.is_empty() or not is_inside_tree():
+		return false
+	var request := _tokens.begin_refresh(now_ms)
+	if request.is_empty():
+		return false
+	return _send_json(REFRESH_PATH, request, "refresh")
+
 func cancel() -> void:
 	if _request_active and is_instance_valid(_http):
 		_http.cancel_request()
+	if _request_phase == "refresh":
+		_tokens.clear()
 	_request_active = false
 	_request_phase = ""
 	_flow.clear()
@@ -85,7 +100,7 @@ func _exit_tree() -> void:
 	cancel()
 	_tokens.clear()
 
-func _send_json(path: String, payload: Dictionary, phase: String, session_phase: bool) -> bool:
+func _send_json(path: String, payload: Dictionary, phase: String) -> bool:
 	_request_active = true
 	_request_phase = phase
 	var error := _http.request(
@@ -95,10 +110,7 @@ func _send_json(path: String, payload: Dictionary, phase: String, session_phase:
 		JSON.stringify(payload)
 	)
 	if error != OK:
-		if session_phase:
-			_fail_session(FALLBACK_ERROR)
-		else:
-			_fail_start(FALLBACK_ERROR)
+		_fail_request(phase, FALLBACK_ERROR)
 		return false
 	return true
 
@@ -109,23 +121,17 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	_request_active = false
 	_request_phase = ""
 	if result != HTTPRequest.RESULT_SUCCESS or not _json_content_type(headers):
-		if phase == "exchange":
-			_fail_session(FALLBACK_ERROR)
-		else:
-			_fail_start(FALLBACK_ERROR)
+		_fail_request(phase, FALLBACK_ERROR)
 		return
 	var payload: Variant = JSON.parse_string(body.get_string_from_utf8())
 	if response_code != 200:
-		if phase == "exchange":
-			_fail_session(_validated_error(payload))
-		else:
-			_fail_start(_validated_error(payload))
+		_fail_request(phase, _validated_error(payload))
 		return
-	if phase == "exchange":
+	if phase == "exchange" or phase == "refresh":
 		if not _tokens.accept_token_response(payload):
-			_fail_session(FALLBACK_ERROR)
+			_fail_request(phase, FALLBACK_ERROR)
 			return
-		emit_signal("session_succeeded")
+		emit_signal("session_succeeded" if phase == "exchange" else "refresh_succeeded")
 		return
 	if phase != "start" or not _flow.accept_start_response(payload):
 		_fail_start(FALLBACK_ERROR)
@@ -136,6 +142,14 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_fail_start(FALLBACK_ERROR)
 		return
 	emit_signal("start_succeeded")
+
+func _fail_request(phase: String, error_code: String) -> void:
+	if phase == "refresh":
+		_fail_refresh(error_code)
+	elif phase == "exchange":
+		_fail_session(error_code)
+	else:
+		_fail_start(error_code)
 
 func _fail_start(error_code: String) -> void:
 	_request_active = false
@@ -149,6 +163,12 @@ func _fail_session(error_code: String) -> void:
 	_flow.clear()
 	_tokens.clear()
 	emit_signal("session_failed", error_code)
+
+func _fail_refresh(error_code: String) -> void:
+	_request_active = false
+	_request_phase = ""
+	_tokens.clear()
+	emit_signal("refresh_failed", error_code)
 
 static func _validated_error(payload: Variant) -> String:
 	if typeof(payload) != TYPE_DICTIONARY:
