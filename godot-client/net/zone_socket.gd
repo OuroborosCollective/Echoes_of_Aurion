@@ -61,10 +61,10 @@ func _process(_delta: float) -> void:
 					return
 				_hello = ""
 			while _peer.get_available_packet_count() > 0:
+				var bytes := _peer.get_packet()
 				if not _peer.was_string_packet():
 					_finish("binary_frame_rejected")
 					return
-				var bytes := _peer.get_packet()
 				if bytes.size() > MAX_PACKET_BYTES:
 					_finish("oversized_frame")
 					return
