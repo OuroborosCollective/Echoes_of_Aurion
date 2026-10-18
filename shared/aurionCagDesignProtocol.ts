@@ -202,7 +202,7 @@ export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): Aurion
   }).join(",");
   const code = [
     `surfaces={${surfaces}}`,
-    `{Length[surfaces], Count[surfaces, 1], Count[surfaces, 2], Count[surfaces, 3], Count[surfaces, 4], Count[surfaces, 5], Count[surfaces, 6]}`
+    `Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]`
   ].join(";");
 
   return Object.freeze({
@@ -310,9 +310,9 @@ export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk):
     `h={${hRows}}`,
     `s={${sRows}}`,
     "var=Round[Variance[Flatten[h]]]",
-    "sdx=Flatten[Differences[Transpose[s]]]",
-    "sdz=Flatten[Differences[s]]",
-    "trans=Count[sdx,x_/;x!=0]+Count[sdz,x_/;x!=0]",
+    "sdx=Differences[Transpose[s]]",
+    "sdz=Differences[s]",
+    "trans=Total[Unitize[sdx], 2]+Total[Unitize[sdz], 2]",
     "{var,trans}"
   ].join(";");
 

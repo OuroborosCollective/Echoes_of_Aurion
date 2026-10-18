@@ -31,3 +31,6 @@
 ## 2026-09-26 - Remove dynamic array mapping in high-frequency game loop
 **Learning:** Using `.map()` inside high-frequency game tick methods (like `getCanonicalZoneState()` and `orderedStates()`) causes unnecessary array creations and dynamic allocations, increasing garbage collection latency.
 **Action:** Replaced `.map()` calls with pre-allocated arrays and `for` loops, and maintained synchronized cached arrays using an `entityIdToIndex` map to eliminate mapping overhead per tick.
+## 2026-10-18 - Optimize Wolfram CAG terrain analysis queries
+**Learning:** When constructing Wolfram Language queries for CAG, avoid flattening matrices to count non-zero elements. Instead, use `Total[Unitize[matrix], 2]`. To count occurrences of integer ranges in lists, `Prepend[BinCounts[list, {start, end, step}], Length[list]]` is much faster than running `Count` multiple times.
+**Action:** Use `BinCounts` for sequence tallying and `Total[Unitize[m], 2]` for counting non-zeros in matrices to optimize terrain analysis queries without breaking deterministic outputs.
