@@ -1,7 +1,7 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
-import { HttpError } from "@shared/_core/errors";
+import { isNativeAuthSessionExpired, isNativeAuthUnavailable } from "./nativeAuthHttpError";
 import { TRPCError } from "@trpc/server";
 
 export type TrpcContext = {
@@ -18,10 +18,13 @@ export async function createContext(
   try {
     user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
-    if (error instanceof HttpError && error.statusCode === 503 && error.message === "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE") {
+    if (isNativeAuthUnavailable(error)) {
       throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
     }
-    // Authentication is optional for public procedures, but infrastructure failure is not invalid credentials.
+    if (isNativeAuthSessionExpired(error)) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "NATIVE_AUTH_SESSION_EXPIRED" });
+    }
+    // Authentication is optional for public procedures, but typed native failures must remain actionable.
     user = null;
   }
 
