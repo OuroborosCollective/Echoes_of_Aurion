@@ -28,6 +28,18 @@ describe("native HTTP session boundary",()=>{
  expect((await post(x.url+"/revoke",{...body,scope:"session"})).status).toBe(204);expect(revoke).toHaveBeenCalledWith(body.refreshToken,"session");
  expect((await post(x.url+"/revoke",{...body,scope:"all_sessions"})).status).toBe(204);expect(revoke).toHaveBeenLastCalledWith(body.refreshToken,"all_sessions");
  }finally{await x.close()}});
+ it("returns the typed no-store contract when the native auth limiter rejects a request",async()=>{
+  const exchange=vi.fn(async()=>token);const x=await setup({ready:async()=>true,exchange});
+  try {
+   for(let i=0;i<20;i++) expect((await post(x.url+"/exchange",request)).status).toBe(200);
+   const limited=await post(x.url+"/exchange",request);
+   expect(limited.status).toBe(429);
+   expect(limited.headers.get("content-type")).toContain("application/json");
+   expect(limited.headers.get("cache-control")).toContain("no-store");
+   expect(await limited.json()).toEqual({version:VERSION,error:"NATIVE_AUTH_RATE_LIMITED"});
+   expect(exchange).toHaveBeenCalledTimes(20);
+  }finally{await x.close()}
+ });
  it("fails closed on consumed handoff without returning input secrets",async()=>{const x=await setup({ready:async()=>true,exchange:async()=>{throw Error("NATIVE_AUTH_CODE_CONSUMED")}});try{
  const r=await post(x.url+"/exchange",request);expect(r.status).toBe(409);const txt=await r.text();expect(txt).not.toContain(request.code);expect(txt).not.toContain(request.codeVerifier);expect(JSON.parse(txt).error).toBe("NATIVE_AUTH_CODE_CONSUMED");
  }finally{await x.close()}});
