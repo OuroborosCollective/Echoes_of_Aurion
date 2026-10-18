@@ -27,6 +27,8 @@ func _ready() -> void:
 	_auth_start.start_failed.connect(_on_auth_start_failed)
 	_auth_start.session_succeeded.connect(_on_auth_session_succeeded)
 	_auth_start.session_failed.connect(_on_auth_session_failed)
+	_auth_start.logout_succeeded.connect(_on_auth_logout_terminal)
+	_auth_start.logout_failed.connect(_on_auth_logout_terminal)
 	_api = AurionApi.new(_auth_start)
 	add_child(_api)
 	_api.zone_ticket_succeeded.connect(_on_zone_ticket_succeeded)
@@ -95,8 +97,13 @@ func _on_zone_ticket_succeeded(_receipt: Dictionary) -> void:
 func _on_zone_ticket_failed(_error_code: String) -> void:
 	status.text = "Verbindung derzeit nicht verfügbar"
 	login.text = "Anmelden"
+	login.disabled = true
+	if not _auth_start.logout():
+		_on_auth_logout_terminal()
+
+func _on_auth_logout_terminal(_error_code: String = "") -> void:
+	login.text = "Anmelden"
 	login.disabled = not _config.native_auth_start_enabled
-	_auth_start.logout()
 
 func _on_auth_session_failed(_error_code: String) -> void:
 	_awaiting_callback = false
