@@ -87,7 +87,7 @@ func _process(_delta: float) -> void:
 				# The server currently broadcasts a snapshot during join, before
 				# emitting welcome. No snapshot state may be projected until
 				# a verified welcome makes the session authoritative.
-				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "snapshot":
+				if _is_pre_welcome_snapshot(decoded):
 					continue
 				if _accept_welcome(decoded):
 					return
@@ -101,6 +101,11 @@ func _process(_delta: float) -> void:
 					return
 	if _peer == active_peer and active_peer.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 		_finish("closed")
+
+func _is_pre_welcome_snapshot(raw: Variant) -> bool:
+	# Never project pre-auth gameplay data. The gateway sends a snapshot
+	# while joining, before the final authenticated welcome frame.
+	return typeof(raw) == TYPE_DICTIONARY and raw.get("type") == "snapshot"
 
 func _report_reject(code: String) -> void:
 	# No new connection may begin until the old reject + close notifications
