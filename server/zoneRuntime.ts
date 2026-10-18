@@ -950,7 +950,13 @@ export class ZoneRegistry {
 
   tick(): void {
     if (this.sortedZonesDirty) {
-      this.sortedZones = Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).map(([, zone]) => zone);
+      // ⚡ Bolt: Populate cached array with for...of and sort in place to prevent intermediate array allocation and GC overhead
+      this.sortedZones.length = this.zones.size;
+      let i = 0;
+      for (const zone of this.zones.values()) {
+        this.sortedZones[i++] = zone;
+      }
+      this.sortedZones.sort((a, b) => compareBinary(a.zoneId, b.zoneId));
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) zone.tick();
