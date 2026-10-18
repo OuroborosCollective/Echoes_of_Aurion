@@ -171,6 +171,7 @@ func verify() -> void:
 	logout_succeeded = false
 	require(client.logout(), "idempotent local logout was rejected")
 	require(logout_completed and logout_succeeded, "idempotent local logout did not emit success")
+	print("native-auth-runtime: initial logout complete")
 
 	await run_start()
 	require(start_succeeded, "refresh preemption setup failed")
@@ -179,6 +180,7 @@ func verify() -> void:
 	await run_refresh_then_logout()
 	require(logout_succeeded, "refresh-preempting logout failed")
 	require(client.access_token().is_empty(), "refresh-preempting logout retained authority")
+	print("native-auth-runtime: preempting logout complete")
 
 	await run_start()
 	require(start_succeeded, "logout redirect setup failed")
@@ -188,20 +190,24 @@ func verify() -> void:
 	require(not logout_succeeded, "logout redirect was accepted")
 	require(logout_error == "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE", "logout redirect was not sanitized")
 	require(client.access_token().is_empty(), "logout redirect retained local authority")
+	print("native-auth-runtime: logout redirect complete")
 
 	await run_start()
 	require(start_succeeded, "typed refresh setup failed")
 	await run_exchange()
 	require(session_succeeded, "typed refresh session setup failed")
+	print("native-auth-runtime: typed refresh session ready")
 	await run_refresh()
 	require(not refresh_succeeded, "typed refresh failure succeeded")
 	require(refresh_error == "NATIVE_AUTH_REFRESH_REUSED", "typed refresh error was not preserved")
 	require(client.access_token().is_empty(), "typed refresh failure retained authority")
+	print("native-auth-runtime: typed refresh failure complete")
 
 	await run_start()
 	require(start_succeeded, "refresh redirect setup failed")
 	await run_exchange()
 	require(session_succeeded, "refresh redirect session setup failed")
+	print("native-auth-runtime: refresh redirect session ready")
 	await run_refresh()
 	require(not refresh_succeeded, "refresh redirect was accepted")
 	require(refresh_error == "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE", "refresh redirect was not sanitized")
