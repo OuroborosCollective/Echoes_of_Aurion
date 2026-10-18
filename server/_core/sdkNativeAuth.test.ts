@@ -113,7 +113,7 @@ describe("native bearer authentication boundary", () => {
       });
       const server = new SDKServer({} as AxiosInstance, undefined, dependencies);
       const verifySession = vi.spyOn(server, "verifySession");
-      await expect(server.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+      await expect(server.authenticateRequest(request(`Bearer ${nativeAccessToken}`)))
         .rejects.toMatchObject({ statusCode: 503, message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
       expect(verifySession).not.toHaveBeenCalled();
       expect(dependencies.readUserById).not.toHaveBeenCalled();
@@ -128,13 +128,13 @@ describe("native bearer authentication boundary", () => {
       authenticateNativeAccess: vi.fn(async () => native),
       readUserById: vi.fn(async () => { throw queryFailure; }),
     }));
-    await expect(failed.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+    await expect(failed.authenticateRequest(request(`Bearer ${nativeAccessToken}`)))
       .rejects.toMatchObject({ statusCode: 503, message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
     const missing = new SDKServer({} as AxiosInstance, undefined, authDependencies({
       authenticateNativeAccess: vi.fn(async () => native),
       readUserById: vi.fn(async () => undefined),
     }));
-    await expect(missing.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+    await expect(missing.authenticateRequest(request(`Bearer ${nativeAccessToken}`)))
       .rejects.toMatchObject({ statusCode: 401, message: "NATIVE_AUTH_SESSION_EXPIRED" });
   });
 
@@ -143,7 +143,7 @@ describe("native bearer authentication boundary", () => {
       authenticateNativeAccess: vi.fn(async () => ({ userId: user!.id, sessionId: "s".repeat(43) })),
       recordUserActivity: vi.fn(async () => { throw new Error("database-private-detail"); }),
     }));
-    await expect(server.authenticateRequest(request(`Bearer `{nativeAccessToken}`)))
+    await expect(server.authenticateRequest(request(`Bearer ${nativeAccessToken}`)))
       .rejects.toMatchObject({ statusCode: 503, message: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
   });
 });
