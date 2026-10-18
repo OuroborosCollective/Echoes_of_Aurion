@@ -31,8 +31,9 @@ func _ready() -> void:
 	else:
 		status.text = "Nicht verbunden"
 		destination.text = "Aurion · arelogic.space"
-		development_notice.text = "Die Anmeldung wird sicher im Systembrowser fortgesetzt."
-		login.disabled = false
+		if _config.native_auth_start_enabled:
+			development_notice.text = "Die Anmeldung wird sicher im Systembrowser fortgesetzt."
+			login.disabled = false
 	resized.connect(_fit_layout)
 	_fit_layout()
 
@@ -57,10 +58,8 @@ func _on_auth_start_succeeded() -> void:
 func _on_auth_start_failed(error_code: String) -> void:
 	_awaiting_callback = false
 	login.text = "Anmelden"
-	login.disabled = false
-	if error_code == "NATIVE_AUTH_RATE_LIMITED":
-		status.text = "Zu viele Versuche. Bitte warte kurz."
-	elif error_code == "NATIVE_AUTH_BUILD_UNSUPPORTED":
+	login.disabled = not _config.native_auth_start_enabled
+	if error_code == "NATIVE_AUTH_BUILD_UNSUPPORTED":
 		status.text = "Client-Aktualisierung erforderlich"
 	else:
 		status.text = "Anmeldung derzeit nicht verfügbar"
