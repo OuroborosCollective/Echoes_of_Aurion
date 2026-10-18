@@ -22,12 +22,12 @@ static func serialized_hello(ticket: String) -> String:
 	return encoded
 
 static func _safe_nonnegative(value: Variant) -> bool:
-	return typeof(value) == TYPE_INT and value >= 0 and value <= 9007199254740991
+	return (typeof(value) == TYPE_INT or (typeof(value) == TYPE_FLOAT and is_finite(value) and value == floor(value))) and value >= 0 and value <= 9007199254740991
 
 static func _valid_position(value: Variant) -> bool:
 	if typeof(value) != TYPE_DICTIONARY:
 		return false
-	return typeof(value.get("x")) == TYPE_INT and typeof(value.get("z")) == TYPE_INT and abs(value["x"]) <= 64000032000 and abs(value["z"]) <= 64000032000
+	return _safe_nonnegative(abs(value.get("x", -1))) and _safe_nonnegative(abs(value.get("z", -1))) and abs(value["x"]) <= 64000032000 and abs(value["z"]) <= 64000032000
 
 static func _valid_resources(value: Variant) -> bool:
 	if typeof(value) != TYPE_DICTIONARY:
