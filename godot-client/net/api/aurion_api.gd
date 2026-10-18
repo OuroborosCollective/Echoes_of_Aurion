@@ -19,6 +19,7 @@ var _server_base_url := ""
 var _client_build := ""
 var _active := false
 var _retried_after_refresh := false
+var _waiting_for_refresh := false
 var _sent_access_token := ""
 var _sent_session_generation := -1
 
@@ -47,6 +48,7 @@ func issue_zone_ticket(server_base_url: String, client_build: String, allow_loca
 		return false
 	_active = true
 	_retried_after_refresh = false
+	_waiting_for_refresh = false
 	if _auth.access_token().is_empty():
 		_retried_after_refresh = true
 		return _begin_refresh()
@@ -57,6 +59,7 @@ func cancel() -> void:
 		_http.cancel_request()
 	_active = false
 	_retried_after_refresh = false
+	_waiting_for_refresh = false
 	_sent_access_token = ""
 	_sent_session_generation = -1
 
@@ -103,6 +106,12 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_fail(RESPONSE_INVALID)
 		return
 	var current_access: String = _auth.access_token()
+	if _auth.session_generation() != _sent_session_generation:
+		_fail(RESPONSE_INVALID)
+		return
+	if not _auth.protected_response_allowed():
+		_fail(AUTH_REQUIRED)
+		return
 	if response_code == 401:
 		if not current_access.is_empty() and current_access != _sent_access_token:
 			if not _retried_after_refresh:
@@ -131,28 +140,33 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		return
 	_active = false
 	_retried_after_refresh = false
+	_waiting_for_refresh = false
 	_sent_access_token = ""
 	_sent_session_generation = -1
 	emit_signal("zone_ticket_succeeded", receipt)
 
 func _begin_refresh() -> bool:
+	_waiting_for_refresh = true
 	var started: bool = _auth.refresh()
 	if started or _auth.refresh_in_flight():
 		return true
 	# A synchronous refresh setup failure may already have emitted refresh_failed.
 	if not _active:
 		return false
+	_waiting_for_refresh = false
 	_auth.logout()
 	if _active:
 		_fail(AUTH_REQUIRED)
 	return false
 
 func _on_refresh_succeeded() -> void:
-	if _active and _retried_after_refresh:
+	if _active and _waiting_for_refresh:
+		_waiting_for_refresh = false
 		_send_zone_ticket()
 
 func _on_refresh_failed(_error_code: String) -> void:
-	if _active and _retried_after_refresh:
+	if _active and _waiting_for_refresh:
+		_waiting_for_refresh = false
 		_fail(AUTH_REQUIRED)
 
 func _on_logout_terminal(_error_code: String = "") -> void:
