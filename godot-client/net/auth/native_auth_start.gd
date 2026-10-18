@@ -93,8 +93,17 @@ func refresh(now_ms: int = -1) -> bool:
 ## Revoke the current server session. begin_logout clears local authority before
 ## transport starts, so network failure or a hostile redirect cannot keep access.
 func logout() -> bool:
-	if _request_active or _server_base_url.is_empty() or not is_inside_tree():
+	if _server_base_url.is_empty() or not is_inside_tree():
+		_tokens.clear()
+		_flow.clear()
 		return false
+	if _request_active and _request_phase == "logout":
+		return false
+	if _request_active:
+		_http.cancel_request()
+		_request_active = false
+		_request_phase = ""
+		_flow.clear()
 	var request := _tokens.begin_logout()
 	if request.is_empty():
 		emit_signal("logout_succeeded")
