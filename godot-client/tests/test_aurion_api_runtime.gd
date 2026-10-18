@@ -130,10 +130,14 @@ func login() -> void:
 	auth_succeeded = false
 	var callback := await callback_url()
 	require(not callback.is_empty(), "callback URL unavailable")
+	var exchange_started_at := Time.get_ticks_msec()
 	require(auth.complete_callback(callback), "native exchange did not begin")
 	while not auth_completed:
 		await process_frame
 	require(auth_succeeded, "native exchange failed")
+	var token_anchor: int = auth._tokens._issued_at_ms
+	require(token_anchor >= exchange_started_at, "token lifetime predates exchange request")
+	require(token_anchor - exchange_started_at < 50, "token lifetime was extended by response transit")
 
 func request_ticket(assert_single_flight: bool = false) -> void:
 	request_completed = false
