@@ -336,12 +336,16 @@ export default function AurionOpenWorldRuntime() {
     void (async () => { try {
       // A replacement generation obtains the current authenticated world context;
       // it never advances the previous local projection to invent a recovery state.
-      // Bind one renderer generation to the world confirmed by its activation.
-      // Periodic readbacks may advance while a constrained renderer is still
-      // starting; restarting for each one can starve zone-ticket issuance.
+      // Bind one renderer generation to the newest world confirmed when it
+      // starts. Later polling may advance while a constrained renderer is still
+      // starting; restarting for each readback can starve zone-ticket issuance.
+      const observedWorld = worldSnapshot.data?.globalWorld;
+      const activationWorld = activation.globalWorld;
+      const initialWorld = observedWorld && typeof observedWorld.epoch === "number" &&
+        observedWorld.epoch >= (activationWorld?.epoch ?? 0) ? observedWorld : activationWorld;
       const world = recoveryEpoch > 0
         ? (await rpcUtils.gameplay.openWorld.fetch(undefined, { staleTime: 0 })).globalWorld
-        : activation.globalWorld ?? worldSnapshot.data?.globalWorld;
+        : initialWorld;
       if (disposed) return;
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
       const confirmedWorldEpoch = world.epoch;
