@@ -92,13 +92,13 @@ func callback_url() -> String:
 	fetch.queue_free()
 	return value
 
-func wait_for_preempted_refresh() -> bool:
+func wait_for_server(path: String) -> bool:
 	for _attempt in range(50):
 		var fetch := HTTPRequest.new()
 		fetch.timeout = 1.0
 		fetch.max_redirects = 0
 		root.add_child(fetch)
-		var error := fetch.request(SERVER + "/test-refresh-arrived")
+		var error := fetch.request(SERVER + path)
 		var arrived := false
 		if error == OK:
 			var response: Array = await fetch.request_completed
@@ -129,6 +129,23 @@ func run_refresh(assert_single_flight: bool = false) -> void:
 	while not refresh_completed:
 		await process_frame
 
+func run_exchange_then_logout() -> void:
+	session_completed = false
+	session_succeeded = false
+	session_error = ""
+	logout_completed = false
+	logout_succeeded = false
+	logout_error = ""
+	var callback := await callback_url()
+	require(not callback.is_empty(), "preempted exchange callback unavailable")
+	require(client.complete_callback(callback), "preempted exchange did not begin")
+	require(await wait_for_server("/test-exchange-arrived"), "preempted exchange did not reach Aurion")
+	require(client.logout(), "logout did not await committed exchange")
+	require(client.access_token().is_empty(), "exchange-preempting logout exposed local access")
+	while not logout_completed:
+		await process_frame
+	require(not session_completed, "preempted exchange published a session result")
+
 func run_refresh_then_logout() -> void:
 	refresh_completed = false
 	refresh_succeeded = false
@@ -137,7 +154,7 @@ func run_refresh_then_logout() -> void:
 	logout_succeeded = false
 	logout_error = ""
 	require(client.refresh(), "preempted refresh request did not begin")
-	require(await wait_for_preempted_refresh(), "preempted refresh did not reach Aurion")
+	require(await wait_for_server("/test-refresh-arrived"), "preempted refresh did not reach Aurion")
 	require(client.logout(), "logout did not preempt refresh")
 	require(client.access_token().is_empty(), "preempting logout retained local access")
 	while not logout_completed:
@@ -188,6 +205,12 @@ func verify() -> void:
 	logout_succeeded = false
 	require(client.logout(), "idempotent local logout was rejected")
 	require(logout_completed and logout_succeeded, "idempotent local logout did not emit success")
+
+	await run_start()
+	require(start_succeeded, "exchange preemption setup failed")
+	await run_exchange_then_logout()
+	require(logout_succeeded, "exchange-preempting logout failed")
+	require(client.access_token().is_empty(), "exchange-preempting logout retained authority")
 
 	await run_start()
 	require(start_succeeded, "refresh preemption setup failed")
