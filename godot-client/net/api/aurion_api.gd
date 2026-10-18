@@ -105,6 +105,10 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	var current_access: String = _auth.access_token()
 	if response_code == 401:
 		if not current_access.is_empty() and current_access != _sent_access_token:
+			if not _retried_after_refresh:
+				_retried_after_refresh = true
+				_send_zone_ticket()
+				return
 			_fail(RESPONSE_INVALID)
 			return
 		if _retried_after_refresh:
