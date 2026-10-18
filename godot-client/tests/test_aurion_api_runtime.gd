@@ -16,6 +16,29 @@ var request_error := ""
 var receipt: Dictionary = {}
 var logout_completed := false
 
+class FakeAuth:
+	extends Node
+	signal refresh_succeeded
+	signal refresh_failed(error_code: String)
+	var current_access := "new-session-access"
+	var logout_calls := 0
+	var refresh_calls := 0
+
+	func access_token(_now_ms: int = -1) -> String:
+		return current_access
+
+	func refresh(_now_ms: int = -1) -> bool:
+		refresh_calls += 1
+		return false
+
+	func refresh_in_flight() -> bool:
+		return false
+
+	func logout() -> bool:
+		logout_calls += 1
+		current_access = ""
+		return true
+
 func require(condition: bool, message: String) -> void:
 	if not condition:
 		failures.append(message)
@@ -141,6 +164,31 @@ func verify() -> void:
 	require(not request_succeeded, "failed refresh recovered protected request")
 	require(request_error == "AURION_API_AUTH_REQUIRED", "refresh failure did not require auth")
 	require(auth.access_token().is_empty(), "refresh failure retained local authority")
+
+	var replacement_auth := FakeAuth.new()
+	root.add_child(replacement_auth)
+	var stale_api := AurionApi.new(replacement_auth)
+	stale_api.request_failed.connect(_on_request_failure)
+	root.add_child(stale_api)
+	await process_frame
+	request_completed = false
+	request_error = ""
+	stale_api._active = true
+	stale_api._retried_after_refresh = true
+	stale_api._sent_access_token = "old-session-access"
+	stale_api._on_request_completed(
+		HTTPRequest.RESULT_SUCCESS,
+		401,
+		PackedStringArray(),
+		PackedByteArray()
+	)
+	require(request_completed, "stale 401 did not terminate its request")
+	require(request_error == "AURION_API_RESPONSE_INVALID", "stale 401 was not rejected")
+	require(replacement_auth.logout_calls == 0, "stale 401 logged out the replacement session")
+	require(replacement_auth.refresh_calls == 0, "stale 401 refreshed the replacement session")
+	require(replacement_auth.access_token() == "new-session-access", "stale 401 changed replacement authority")
+	stale_api.queue_free()
+	replacement_auth.queue_free()
 
 	api.queue_free()
 	auth.queue_free()
