@@ -46,8 +46,10 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // settles, so drive a bounded number of real wheel inputs and sample after each.
     const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
     const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
+    // The panel can still receive late catalog layout updates. Force only the
+    // pointer placement once; the wheel events and resulting scroll remain real.
+    await scrollRegion.hover({ force: true });
     await expect.poll(async () => {
-      await scrollRegion.hover();
       await page.mouse.wheel(0, 10_000);
       const sample = await scrollRegion.evaluate(element => ({
         scrollTop: element.scrollTop,
