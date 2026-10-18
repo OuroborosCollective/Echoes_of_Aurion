@@ -54,6 +54,13 @@ for (const [id, script, marker] of [
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
 await stage(
+  'zone-socket-node-ws-reject-close',
+  'headless',
+  process.execPath,
+  ['scripts/godot/zone-socket-reject-close-runtime.mjs', executable, project],
+  'Godot G10 Node ws reject-then-1008-close regression verified',
+);
+await stage(
   'native-auth-start-runtime',
   'headless',
   process.execPath,

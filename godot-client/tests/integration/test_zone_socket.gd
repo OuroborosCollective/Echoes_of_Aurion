@@ -26,7 +26,7 @@ func remember_close_reason(reason: String) -> void:
 
 ## Exercise the actual WebSocketPeer.packet -> _process() path over loopback TCP.
 ## No synthetic gameplay/server evidence; this is a local headless regression only.
-func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reject_code: String = "", server_close_after_send: bool = false) -> void:
+func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reject_code: String = "") -> void:
 	var server := TCPServer.new()
 	var listen_result := server.listen(0, "127.0.0.1")
 	require(listen_result == OK, "loopback websocket server could not listen")
@@ -73,13 +73,6 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 					hello_received = remote.was_string_packet() and typeof(hello) == TYPE_DICTIONARY and hello.get("type") == "hello" and hello.get("protocolVersion") == 5
 					if hello_received:
 						welcome_sent = remote.send_text(wire) == OK
-						if welcome_sent and server_close_after_send:
-							# Godot's loopback WebSocketPeer can drop its own queued
-							# outbound text if close() is called before poll().
-							# Flush the reject frame and then immediately queue 1008
-							# in the SAME server iteration (client has not polled).
-							remote.poll()
-							remote.close(1008, "zone authorization rejected")
 					else:
 						errors.append("loopback server received an invalid hello")
 		await process_frame
@@ -166,7 +159,6 @@ func verify() -> void:
 	await verify_socket_packet_loop(bad_wire, false)
 	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), false, "PROTOCOL_VERSION_UNSUPPORTED")
 	# Production zone gateway sends reject and immediately starts a 1008 close.
-	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), false, "PROTOCOL_VERSION_UNSUPPORTED", true)
 	await verify_socket_packet_loop(JSON.stringify({"type":"reject","code":"FAKE_CODE"}), false)
 	var invalid_entity_wire: Dictionary = welcome.duplicate(true)
 	invalid_entity_wire["selfEntityId"] = "player:0"
