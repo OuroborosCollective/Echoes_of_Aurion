@@ -1,5 +1,6 @@
 import express, { type Express, type Request, type Response } from "express";
 import { sdk } from "./_core/sdk";
+import { isNativeAuthUnavailable } from "./_core/nativeAuthHttpError";
 import * as db from "./db";
 import { authenticateAdminGlbBearer } from "./adminMcp";
 import { verifyGlbAgentSession } from "./glbAgentSession";
@@ -88,7 +89,8 @@ export function createGlbZipUploadHandler(
     let user: AuthenticatedUploader | null = null;
     try {
       user = await dependencies.authenticate(request);
-    } catch {
+    } catch (error) {
+      if (isNativeAuthUnavailable(error)) { response.status(503).json({ error: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" }); return; }
       response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" });
       return;
     }
