@@ -126,6 +126,40 @@ func verify() -> void:
 	welcome["resources"]["nodes"] = nodes
 	var wire: Dictionary = JSON.parse_string(JSON.stringify(welcome))
 	require(Codec.is_valid_welcome(wire), "valid round-tripped wire welcome was rejected")
+	# Gateway joins emit snapshot before welcome; it must not terminate auth.
+	var early_snapshot: Dictionary = wire.duplicate(true)
+	early_snapshot["type"] = "snapshot"
+	early_snapshot.erase("connectionId")
+	early_snapshot.erase("protocolVersion")
+	early_snapshot.erase("selfEntityId")
+	var transient = Socket.new()
+	root.add_child(transient)
+	await process_frame
+	transient._state = "authenticating"
+	require(transient._is_pre_welcome_snapshot(early_snapshot), "gateway pre-welcome snapshot should be ignored without projection")
+	require(not transient._is_pre_welcome_snapshot({"type":"attack"}), "unknown pre-welcome message permitted")
+	transient._state = "closed"
+	transient.queue_free()
+	await process_frame
+	var rejecting = Socket.new()
+	root.add_child(rejecting)
+	await process_frame
+	var order: Array[String] = []
+	rejecting.zone_rejected.connect(func(_code: String) -> void:
+		order.append("reject")
+		require(not rejecting.connect_zone("https://arelogic.space", "a".repeat(43)), "reconnect allowed during rejection callback")
+		rejecting.close_zone()
+	)
+	rejecting.zone_closed.connect(func(reason: String) -> void:
+		order.append("close:" + reason)
+		require(not rejecting.connect_zone("https://arelogic.space", "a".repeat(43)), "reconnect allowed before terminal callback")
+	)
+	rejecting._state = "authenticating"
+	rejecting._report_reject("PROTOCOL_VERSION_UNSUPPORTED")
+	require(order == ["reject", "close:server_reject"], "rejection callback order or close reason invalid")
+	require(rejecting.state_name() == "closed", "reject did not terminate transport")
+	rejecting.queue_free()
+	await process_frame
 	require(Codec._safe_nonnegative(1.0), "integral wire float rejected")
 	require(not Codec._safe_nonnegative(1.5), "fractional wire number accepted")
 	require(not Codec._safe_nonnegative(-1.0), "negative wire number accepted")
