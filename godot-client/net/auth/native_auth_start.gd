@@ -34,6 +34,7 @@ var _request_active := false
 func _ready() -> void:
 	_http = HTTPRequest.new()
 	_http.body_size_limit = 16384
+	_http.max_redirects = 0
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
 	if not browser_opener.is_valid():
