@@ -138,7 +138,7 @@ clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
 process.stdout.write(output);
 assert.ifError(handlerFailure);
-assert.equal(timedOut, false, 'Godot protected API runtime timed out');
+assert.equal(timedOut, false, `Godot protected API runtime timed out: start=${startCount}, exchange=${exchangeCount}, refresh=${refreshCount}, ticket=${ticketCount}, revoke=${revokeCount}`);
 assert.equal(exitCode, 0, 'Godot protected API runtime failed');
 assert.equal(startCount, 2, 'Godot did not establish both native sessions');
 assert.equal(exchangeCount, 2, 'Godot did not exchange both callbacks');
