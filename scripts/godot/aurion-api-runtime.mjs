@@ -69,6 +69,9 @@ const server = createServer((request, response) => {
         } else if (refreshCount === 2) {
           assert.equal(payload.refreshToken, 's'.repeat(43));
           json(response, 200, pair('c', 'v'));
+        } else if (refreshCount === 3) {
+          assert.equal(payload.refreshToken, 'w'.repeat(43));
+          json(response, 200, pair('e', 'w'));
         } else {
           assert.equal(payload.refreshToken, 'u'.repeat(43));
           json(response, 409, {
@@ -92,8 +95,9 @@ const server = createServer((request, response) => {
         0: { json: { zoneId: 'observatory_threshold', clientBuild: 'aurion-godot-g09b-api-runtime' } },
       });
       const expectedBearer = ticketCount === 1 ? 'a'
-        : ticketCount < 4 ? (ticketCount === 2 || ticketCount === 3 ? 'b' : 'c')
-        : ticketCount === 4 ? 'c' : 'd';
+        : ticketCount === 2 ? 'b'
+        : ticketCount === 3 ? 'c'
+        : ticketCount === 4 ? 'e' : 'd';
       assert.equal(request.headers.authorization, `Bearer ${expectedBearer.repeat(43)}`);
       if (ticketCount === 1) {
         // Let the concurrent refresh install its bearer before this old-bearer
@@ -112,7 +116,7 @@ const server = createServer((request, response) => {
               },
             },
           },
-        }]), 100);
+        }]), ticketCount === 2 ? 300 : 100);
       }
     } catch (error) {
       handlerFailure ??= error;
@@ -146,7 +150,7 @@ assert.equal(timedOut, false, `Godot protected API runtime timed out: start=${st
 assert.equal(exitCode, 0, 'Godot protected API runtime failed');
 assert.equal(startCount, 2, 'Godot did not establish both native sessions');
 assert.equal(exchangeCount, 2, 'Godot did not exchange both callbacks');
-assert.equal(refreshCount, 3, 'Godot did not exercise bounded refresh outcomes');
+assert.equal(refreshCount, 4, 'Godot did not exercise bounded refresh outcomes');
 assert.equal(ticketCount, 5, 'Godot did not exercise protected ticket retry outcomes');
 assert.equal(revokeCount, 1, 'Godot did not revoke after a second 401');
 assert.match(output, /Godot protected zone ticket client regression verified/);
