@@ -143,4 +143,4 @@ func verify() -> void:
 		for failure in failures:
 			push_error(failure)
 		quit(1)
-\n
+
