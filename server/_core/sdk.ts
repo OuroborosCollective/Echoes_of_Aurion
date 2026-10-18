@@ -1,6 +1,6 @@
 import { operationalNow, operationalDate, deadlineAfter, hostOperationalClock, type OperationalClock } from "../../shared/operationalClock";
 import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS, decodeOAuthState } from "@shared/const";
-import { ForbiddenError } from "@shared/_core/errors";
+import { ForbiddenError, UnauthorizedError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
@@ -80,11 +80,13 @@ class OAuthService {
 export interface SDKRequestAuthDependencies {
   authenticateNativeAccess: typeof authenticateNativeAuthAccess;
   readUserById: typeof db.getUserById;
+  recordUserActivity: typeof db.upsertUser;
 }
 
 const DEFAULT_REQUEST_AUTH_DEPENDENCIES: SDKRequestAuthDependencies = {
   authenticateNativeAccess: authenticateNativeAuthAccess,
   readUserById: db.getUserById,
+  recordUserActivity: db.upsertUser,
 };
 const NATIVE_ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43,256}$/;
 
@@ -285,9 +287,13 @@ export class SDKServer {
         const bearer = authHeader.slice(7);
         if (NATIVE_ACCESS_TOKEN_PATTERN.test(bearer)) {
           const nativeSession = await this.requestAuth.authenticateNativeAccess(bearer);
-          if (!nativeSession) throw ForbiddenError("Invalid native access token");
+          if (!nativeSession) throw UnauthorizedError("NATIVE_AUTH_SESSION_EXPIRED");
           const nativeUser = await this.requestAuth.readUserById(nativeSession.userId);
-          if (!nativeUser) throw ForbiddenError("Native session user not found");
+          if (!nativeUser) throw UnauthorizedError("NATIVE_AUTH_SESSION_EXPIRED");
+          await this.requestAuth.recordUserActivity({
+            openId: nativeUser.openId,
+            lastSignedIn: operationalDate(this.clock),
+          });
           return nativeUser;
         }
         // Preview auto-login remains a JWT-only fallback for iframe cookie
