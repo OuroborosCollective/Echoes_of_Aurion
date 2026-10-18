@@ -167,8 +167,10 @@ func verify() -> void:
 	await run_logout(true)
 	require(logout_succeeded, "valid session revoke failed")
 	require(client.access_token().is_empty(), "successful logout retained local authority")
+	logout_completed = false
+	logout_succeeded = false
 	require(client.logout(), "idempotent local logout was rejected")
-	require(logout_succeeded, "idempotent local logout did not succeed")
+	require(logout_completed and logout_succeeded, "idempotent local logout did not emit success")
 
 	await run_start()
 	require(start_succeeded, "refresh preemption setup failed")
