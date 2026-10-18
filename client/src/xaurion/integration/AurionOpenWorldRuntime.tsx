@@ -81,6 +81,8 @@ export default function AurionOpenWorldRuntime() {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
   const rendererGeneration = useRef(0);
+  const rendererWorldEpochRef = useRef<number | null>(null);
+  const pendingWorldRefreshRef = useRef<{ worldSeed: string; epoch: number } | null>(null);
   const recoveryAttempts = useRef(0);
   const recoveryCause = useRef<string | null>(null);
   const [recoveryEpoch, setRecoveryEpoch] = useState(0);
@@ -235,6 +237,8 @@ export default function AurionOpenWorldRuntime() {
       // activating the new world generation; the new generation then issues a
       // fresh one-time zone ticket.
       retireZoneTransport();
+      rendererWorldEpochRef.current = null;
+      pendingWorldRefreshRef.current = null;
       setZoneRetryEpoch(0);
       recoveryAttempts.current = 0;
       recoveryCause.current = null;
@@ -248,6 +252,8 @@ export default function AurionOpenWorldRuntime() {
     const onReturn = () => {
       soundSynth.stopAmbient();
       retireZoneTransport();
+      rendererWorldEpochRef.current = null;
+      pendingWorldRefreshRef.current = null;
       setReadyGeneration(null);
       setRendererEvidence(null);
       setActivation(null);
@@ -267,7 +273,7 @@ export default function AurionOpenWorldRuntime() {
   }, []);
 
   useEffect(() => {
-    if (!activation || !containerRef.current || !selectedCharacterUrl) return;
+    if (!activation || !containerRef.current || !selectedCharacterUrl || !worldSnapshot.data) return;
     const support = MMOEngine.checkWebGLSupport();
     if (!support.supported) {
       setWebglError(support.error ?? "WebGL ist nicht verfügbar.");
@@ -276,6 +282,8 @@ export default function AurionOpenWorldRuntime() {
 
     let disposed = false;
     const generation = ++rendererGeneration.current;
+    const epochRefreshWorld = pendingWorldRefreshRef.current;
+    pendingWorldRefreshRef.current = null;
     const abort = new AbortController();
     let rendererHandle: RendererHandle | undefined;
     setReadyGeneration(null);
@@ -336,19 +344,23 @@ export default function AurionOpenWorldRuntime() {
     void (async () => { try {
       // A replacement generation obtains the current authenticated world context;
       // it never advances the previous local projection to invent a recovery state.
+      // Bind one renderer generation to the newest world confirmed when it
+      // starts. Later polling may advance while a constrained renderer is still
+      // starting; restarting for each readback can starve zone-ticket issuance.
       const observedWorld = worldSnapshot.data?.globalWorld;
       const activationWorld = activation.globalWorld;
-      const currentWorld = observedWorld && typeof observedWorld.epoch === "number" &&
+      const initialWorld = observedWorld && typeof observedWorld.epoch === "number" &&
         observedWorld.epoch >= (activationWorld?.epoch ?? 0) ? observedWorld : activationWorld;
-      const world = recoveryEpoch > 0
+      const world = epochRefreshWorld ?? (recoveryEpoch > 0
         ? (await rpcUtils.gameplay.openWorld.fetch(undefined, { staleTime: 0 })).globalWorld
-        : currentWorld;
+        : initialWorld);
       if (disposed) return;
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
+      rendererWorldEpochRef.current = world.epoch;
       const confirmedWorldEpoch = world.epoch;
       let preference = new URLSearchParams(window.location.search).get("renderer");
       if (!preference) { try { preference = sessionStorage.getItem("aurion:renderer"); } catch { /* Default WebGL2 remains available. */ } }
-      const requested = recoveryEpoch > 0 ? "webgl2" : preference === "webgpu" ? "webgpu" : "webgl2";
+      const requested = recoveryEpoch > 0 && !epochRefreshWorld ? "webgl2" : preference === "webgpu" ? "webgpu" : "webgl2";
       const initialized = await createRuntimeRenderer(requested, abort.signal);
       rendererHandle = initialized.handle;
       if (disposed || !containerRef.current || rendererGeneration.current !== generation) { rendererHandle.dispose(); return; }
@@ -472,7 +484,17 @@ export default function AurionOpenWorldRuntime() {
       virtualInputRef.current = { forward: 0, right: 0 };
     };
   }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount, recoveryEpoch,
-    worldSnapshot.data?.globalWorld?.epoch, worldSnapshot.data?.globalWorld?.worldSeed]);
+    Boolean(worldSnapshot.data)]);
+
+  useEffect(() => {
+    const observedEpoch = worldSnapshot.data?.globalWorld.epoch;
+    const rendererEpoch = rendererWorldEpochRef.current;
+    if (!readyGeneration || typeof observedEpoch !== "number" || rendererEpoch === null || observedEpoch <= rendererEpoch) return;
+    const observedWorld = worldSnapshot.data!.globalWorld;
+    rendererWorldEpochRef.current = observedEpoch;
+    pendingWorldRefreshRef.current = observedWorld;
+    setRecoveryEpoch(value => value + 1);
+  }, [readyGeneration, worldSnapshot.data?.globalWorld.epoch]);
 
   useEffect(() => {
     const engine = engineRef.current;

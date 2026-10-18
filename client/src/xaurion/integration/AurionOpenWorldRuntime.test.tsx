@@ -39,7 +39,10 @@ const fixture = vi.hoisted(() => {
     tickets: [] as Array<{ onSuccess: (value: { ticket: string }) => void; onError: () => void }>,
     connections: [] as Array<{ connect: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; sendMovement: ReturnType<typeof vi.fn> }>,
     rendererRequests: [] as Array<{ resolve: (value: any) => void; signal: AbortSignal }>,
+    requestedRenderers: [] as string[],
+    worldFetches: 0,
     deferRenderer: false,
+    worldLoading: false,
     appearanceData: null as null | { assetId: string; displayName: string; storageUrl: string; visibility: "public" },
     worldData: null as null | { globalWorld: { worldSeed: string; epoch: number }; serviceNpcs: unknown[] },
   };
@@ -51,19 +54,23 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
     assign: { useMutation: () => ({ mutateAsync: vi.fn() }) },
     upload: { useMutation: () => ({ mutateAsync: vi.fn() }) },
   } },
-  useUtils: () => ({ gameplay: { openWorld: { fetch: vi.fn(async () => ({ globalWorld: { worldSeed: "refreshed-world", epoch: 7 } })) } }, worldAssets: { regionV2: { fetch: vi.fn() } } }),
+  useUtils: () => ({ gameplay: { openWorld: { fetch: vi.fn(async () => {
+    fixture.worldFetches++;
+    return { globalWorld: { worldSeed: "refreshed-world", epoch: 7 } };
+  }) } }, worldAssets: { regionV2: { fetch: vi.fn() } } }),
   player: { ui: { useQuery: () => ({}) }, me: { useQuery: () => ({}) }, chooseClass: { useMutation: () => ({}) } },
   assetSubmissions: { characterAppearance: { useQuery: () => ({ data: fixture.appearanceData, refetch: vi.fn() }) } },
   gameplay: {
-    openWorld: { useQuery: () => ({ data: fixture.worldData }) },
+    openWorld: { useQuery: () => ({ data: fixture.worldData, isLoading: fixture.worldLoading }) },
     issueZoneTicket: { useMutation: () => ({ mutate: (_: unknown, reply: typeof fixture.tickets[number]) => fixture.tickets.push(reply) }) },
     recordExplorationDiscovery: { useMutation: () => ({ mutateAsync: vi.fn(async () => ({ status: "VERIFIED", memory: null })) }) },
     acceptQuest: { useMutation: () => ({}) },
   },
 } }));
 vi.mock("../components/PublicCharacterPicker", () => ({ PublicCharacterPicker: ({ onSelected }: { onSelected?: (selection: { assetId: string; displayName: string; storageUrl: string; visibility: "public" }) => void }) => <button type="button" onClick={() => onSelected?.({ assetId: "glb_standard_female", displayName: "Aurion Standard Female", storageUrl: fixture.selectedUrl, visibility: "public" })}>Standardfigur wählen</button> }));
-vi.mock("../core/RendererFactory", () => ({ createRuntimeRenderer: vi.fn((_requested: string, signal: AbortSignal) => {
-  const value = { handle: { dispose: vi.fn() }, evidence: { protocol: "ax1-renderer.v1", requested: "webgl2", backend: "webgl2", fallback: "disabled" } };
+vi.mock("../core/RendererFactory", () => ({ createRuntimeRenderer: vi.fn((requested: string, signal: AbortSignal) => {
+  fixture.requestedRenderers.push(requested);
+  const value = { handle: { dispose: vi.fn() }, evidence: { protocol: "ax1-renderer.v1", requested, backend: requested, fallback: "disabled" } };
   return fixture.deferRenderer ? new Promise(resolve => fixture.rendererRequests.push({ resolve, signal })) : Promise.resolve(value);
 }) }));
 vi.mock("../core/MMOEngine", () => ({ MMOEngine: Object.assign(vi.fn(() => {
@@ -96,19 +103,45 @@ vi.mock("../components/PartyModal", () => ({ PartyModal: () => null }));
 const enter = async () => { await act(async () => { fireEvent(window, new CustomEvent("aurion:load-open-world", { detail: { displayName: "Aurion", globalWorld: { epoch: 0, worldSeed: "fixture" } } })); }); };
 describe("open world session ownership", () => {
   beforeEach(() => {
-    fixture.deferRenderer = false; fixture.rendererRequests = [];
+    fixture.deferRenderer = false; fixture.rendererRequests = []; fixture.requestedRenderers = []; fixture.worldFetches = 0; fixture.worldLoading = false;
     fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = [];
+    window.history.replaceState({}, "", "/");
     fixture.appearanceData = { assetId: "glb_standard_male", displayName: "Aurion Standard Male", storageUrl: fixture.selectedUrl, visibility: "public" };
-    fixture.worldData = null;
+    fixture.worldData = { globalWorld: { worldSeed: "fixture", epoch: 0 }, serviceNpcs: [] };
   });
 
-  it("rebuilds the active projection when the authenticated world epoch advances", async () => {
+  it("rebuilds a ready WebGPU projection from the observed world epoch without a recovery fetch", async () => {
+    window.history.replaceState({}, "", "/?renderer=webgpu");
     const view = render(<AurionOpenWorldRuntime />); await enter();
     expect(fixture.engines).toHaveLength(1);
     fixture.worldData = { globalWorld: { worldSeed: "advanced-world", epoch: 2 }, serviceNpcs: [] };
     await act(async () => view.rerender(<AurionOpenWorldRuntime />));
     expect(fixture.engines[0].stop).toHaveBeenCalled();
     expect(fixture.engines).toHaveLength(2);
+    expect(fixture.tickets).toHaveLength(2);
+    expect(fixture.worldFetches).toBe(0);
+    expect(fixture.requestedRenderers).toEqual(["webgpu", "webgpu"]);
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({
+      requested: "webgpu",
+      backend: "webgpu",
+      worldSeed: "advanced-world",
+      epoch: 2,
+      status: "rendering",
+    });
+  });
+
+  it("does not retire an initializing renderer when world readback advances", async () => {
+    fixture.deferRenderer = true;
+    const view = render(<AurionOpenWorldRuntime />); await enter();
+    expect(fixture.rendererRequests).toHaveLength(1);
+    expect(fixture.rendererRequests[0].signal.aborted).toBe(false);
+
+    fixture.worldData = { globalWorld: { worldSeed: "advanced-world", epoch: 2 }, serviceNpcs: [] };
+    await act(async () => view.rerender(<AurionOpenWorldRuntime />));
+    expect(fixture.rendererRequests).toHaveLength(1);
+    expect(fixture.rendererRequests[0].signal.aborted).toBe(false);
+    expect(fixture.engines).toHaveLength(0);
+    expect(fixture.tickets).toHaveLength(0);
   });
 
   it("does not start the renderer or zone before a confirmed standard character and then loads exactly that GLB", async () => {
