@@ -21,6 +21,44 @@ static func serialized_hello(ticket: String) -> String:
 		return ""
 	return encoded
 
+## The original lexical wire representation must be checked before JSON.parse_string()
+## rounds fractional tokens into IEEE-754 integers. Strings and escapes are
+## skipped; JSON.parse_string remains responsible for structural validation.
+static func wire_numbers_are_integers(wire: String) -> bool:
+	var inside_string := false
+	var escaped := false
+	var index := 0
+	while index < wire.length():
+		var ch := wire[index]
+		if inside_string:
+			if escaped:
+				escaped = false
+			elif ch == "\\":
+				escaped = true
+			elif ch == "\"":
+				inside_string = false
+			index += 1
+			continue
+		if ch == "\"":
+			inside_string = true
+			index += 1
+			continue
+		if ch == "-" or (ch >= "0" and ch <= "9"):
+			var started := index
+			if ch == "-":
+				index += 1
+			while index < wire.length() and wire[index] >= "0" and wire[index] <= "9":
+				index += 1
+			if index == started or (index == started + 1 and ch == "-"):
+				return false
+			# Deny any fractional or exponential notation even when a float
+			# would round to an exact integer after parsing.
+			if index < wire.length() and wire[index] in [".", "e", "E"]:
+				return false
+			continue
+		index += 1
+	return not inside_string
+
 static func _safe_nonnegative(value: Variant) -> bool:
 	return (typeof(value) == TYPE_INT or (typeof(value) == TYPE_FLOAT and is_finite(value) and value == floor(value))) and value >= 0 and value <= 9007199254740991
 
