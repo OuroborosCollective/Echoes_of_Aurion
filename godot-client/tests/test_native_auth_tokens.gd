@@ -87,9 +87,9 @@ func verify() -> void:
 		else:
 			malformed[key] = 2592001
 		wrong.append(malformed)
-	var float_deadline := pair()
-	float_deadline["refreshAbsoluteRemainingSeconds"] = 3600.0
-	wrong.append(float_deadline)
+	var fractional_deadline := pair()
+	fractional_deadline["refreshAbsoluteRemainingSeconds"] = 3600.5
+	wrong.append(fractional_deadline)
 	var negative_deadline := pair()
 	negative_deadline["refreshAbsoluteRemainingSeconds"] = -1
 	wrong.append(negative_deadline)
@@ -100,6 +100,11 @@ func verify() -> void:
 		require(not session.accept_token_response(candidate, 12000), "invalid token payload accepted")
 		require(session.access_token(12000).is_empty(), "invalid response retained access")
 		require(session.begin_refresh(12000).is_empty(), "invalid response retained refresh")
+
+	var wire_session = Session.new()
+	var wire_pair: Variant = JSON.parse_string(JSON.stringify(pair()))
+	require(wire_session.accept_token_response(wire_pair, 19000), "integral JSON number lifetimes rejected")
+	require(wire_session.access_token(19000) == "a".repeat(43), "wire token pair was not installed")
 
 	require(session.accept_token_response(pair(), 20000), "fresh pair rejected after negative cases")
 	require(not session.accept_token_response(pair("b", "s"), 20001), "unsolicited rotation accepted")
