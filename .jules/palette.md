@@ -25,3 +25,6 @@
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
 ## 2026-10-16 - Consistent Community Entry Points on Landing Page\n**Learning:** When community features are accessible via a dedicated Community page, ensuring the exact same entry points are surfaced on the core Landing page (Home) improves user discoverability and provides a consistent UX.\n**Action:** When adding or discovering modular features on secondary pages, evaluate structural entry pages (like Home) to ensure those features are consistently represented using identical interactive components and types.
+## 2026-10-18 - Causal Studio Dashboard Contextual Tooltips
+**Learning:** The Causal Studio Dashboard contains a mix of English and German text for specific buttons, so tooltips added for disabled buttons should default to the contextually relevant language.
+**Action:** Verify the surrounding text language before injecting new translated strings to prevent jarring UX mismatch, even in internal administrative tools.

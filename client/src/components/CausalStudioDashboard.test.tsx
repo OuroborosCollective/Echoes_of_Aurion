@@ -17,11 +17,14 @@ describe("Causal Studio form accessibility", () => {
     }
     for (const button of screen.getAllByRole("button", { name: "Tick aus Checkpoint verifizieren" })) {
       expect(button.getAttribute("aria-busy")).toBe("false");
+      expect(button.className).toContain("disabled:cursor-not-allowed");
     }
   });
   it("offers evidence-bound single tick replay rather than direct prior-tick checkpoint guessing", () => {
     render(<RealClientHarness><CausalStudioDashboard /></RealClientHarness>);
-    expect(screen.getByRole("button", { name: "Tick aus Checkpoint verifizieren" })).toBeTruthy();
+    const verifyBtn = screen.getByRole("button", { name: "Tick aus Checkpoint verifizieren" });
+    expect(verifyBtn).toBeTruthy();
+    expect(verifyBtn.title).toBe("Zonenschlüssel und gültiger Tick erforderlich");
     expect(screen.getByLabelText("Tick").getAttribute("min")).toBe("1");
   });
 

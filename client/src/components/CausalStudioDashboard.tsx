@@ -90,7 +90,7 @@ export default function CausalStudioDashboard() {
               <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-xs">
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="font-semibold text-cyan-300">Runtime Identity</h4>
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={exportDiagnostics} aria-label="Export diagnostic JSON" title="Export diagnostic JSON">
+                  <Button variant="outline" size="icon" className="h-7 w-7 group transition-all motion-safe:hover:-translate-y-0.5 active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 disabled:opacity-60 disabled:cursor-not-allowed" onClick={exportDiagnostics} aria-label="Export diagnostic JSON" title="Export diagnostic JSON">
                     <Download className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -111,7 +111,7 @@ export default function CausalStudioDashboard() {
                   <Label htmlFor={`${inputId}-tick`} className="text-xs">Tick</Label>
                   <Input id={`${inputId}-tick`} type="number" min={1} value={tickNumber} onChange={event => { setTickNumber(Math.max(1, Number.parseInt(event.target.value, 10) || 1)); setRequestedReplay(null); }} className="mt-1 h-8 text-xs" />
                 </div>
-                <Button disabled={replayQuery.isFetching || tickNumber < 1 || !zoneId.trim()} aria-busy={replayQuery.isFetching} className="h-8 w-full text-xs" onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}>
+                <Button disabled={replayQuery.isFetching || tickNumber < 1 || !zoneId.trim()} aria-busy={replayQuery.isFetching} className="h-8 w-full text-xs group transition-all motion-safe:hover:-translate-y-0.5 active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 disabled:opacity-60 disabled:cursor-not-allowed" title={replayQuery.isFetching ? "Prüfe Checkpoint-Kette…" : tickNumber < 1 || !zoneId.trim() ? "Zonenschlüssel und gültiger Tick erforderlich" : "Tick aus Checkpoint verifizieren"} onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}>
                   {replayQuery.isFetching && <Loader2 aria-hidden="true" className="mr-2 h-3.5 w-3.5 motion-safe:animate-spin" />}
                   {replayQuery.isFetching ? "Prüfe Checkpoint-Kette…" : "Tick aus Checkpoint verifizieren"}
                 </Button>
