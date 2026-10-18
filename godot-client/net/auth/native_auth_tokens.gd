@@ -108,6 +108,23 @@ func accept_token_response(raw: Variant, now_ms: int = -1) -> bool:
 func session_generation() -> int:
 	return _session_generation
 
+func protected_response_allowed(now_ms: int = -1) -> bool:
+	if _refresh_token.is_empty():
+		return false
+	var now: int = now_ms if now_ms >= 0 else Time.get_ticks_msec()
+	if now < _issued_at_ms:
+		clear()
+		return false
+	if now >= _idle_deadline_ms or now >= _absolute_deadline_ms:
+		# Keep committed rotation metadata for its terminal response, but never
+		# accept protected gameplay data after the session boundary.
+		if _refresh_in_flight:
+			_access_token = ""
+		else:
+			clear()
+		return false
+	return true
+
 func access_token(now_ms: int = -1) -> String:
 	if _access_token.is_empty():
 		return ""
