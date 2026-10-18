@@ -105,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pnpm exec vitest run server/nativeAuthHttp.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-http.log
+          pnpm exec vitest run server/nativeAuthHttp.test.ts server/_core/sdkNativeAuth.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-http.log
       - name: Verify archive, atomic outbox and combat on separate MariaDB databases
         env:
           NODE_ENV: test
