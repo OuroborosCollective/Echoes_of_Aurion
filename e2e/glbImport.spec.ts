@@ -42,14 +42,23 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     expect(scrollMetrics.maxScrollTop).toBeGreaterThan(0);
     expect(scrollMetrics.connected).toBe(true);
     // Target actual user scrolling at this container independently of keyboard focus.
-    await scrollRegion.hover();
-    await page.mouse.wheel(0, 10_000);
-    // Loading/font layout may change the scroll extent after the initial probe.
-    // Compare position and extent in one live sample, still requiring real input
-    // to have moved this scroll container to its actual current bottom.
-    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop > 0 &&
-      Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 2), { timeout: 10_000 })
-      .toBe(true);
+    // Browser wheel deltas are asynchronous and can be consumed before late layout
+    // settles, so drive a bounded number of real wheel inputs and sample after each.
+    const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
+    const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await scrollRegion.hover();
+      await page.mouse.wheel(0, 10_000);
+      await page.waitForTimeout(50);
+      const sample = await scrollRegion.evaluate(element => ({
+        scrollTop: element.scrollTop,
+        remaining: Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop),
+      }));
+      wheelSamples.push(sample);
+      if (sample.scrollTop > initialScrollTop && sample.remaining <= 2) break;
+    }
+    expect(wheelSamples.some(sample => sample.scrollTop > initialScrollTop)).toBe(true);
+    expect(wheelSamples.at(-1)?.remaining).toBeLessThanOrEqual(2);
     // Reset scroll position programmatically. The scroll-down above already
     // proved real wheel input moves this container; the upward reset just
     // restores the viewport for the upload steps that follow.
@@ -157,6 +166,6 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await expect(page.getByTestId(`admin-glb-asset-${publicReceipt.assetId}`)).toBeVisible();
     await page.getByTestId(`admin-glb-asset-${receipt.assetId}`).click();
     await expect(page.getByText('Katalog serverbestätigt', { exact: true })).toBeVisible();
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, movementLayouts, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: scrollMetrics, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, movementLayouts, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: { ...scrollMetrics, wheelSamples }, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
