@@ -3,7 +3,7 @@ extends SceneTree
 const NativeAuthStart = preload("res://net/auth/native_auth_start.gd")
 const SERVER := "http://127.0.0.1:3000"
 const BUILD := "aurion-godot-g09b-runtime"
-const CANONICAL_BROWSER := "https://arelogic.space/api/native-auth/browser/" + "t".repeat(43)
+const CANONICAL_BROWSER := "https://arelogic.space/api/native-auth/browser/ttttttttttttttttttttttttttttttttttttttttttt"
 
 var failures: Array[String] = []
 var opened_urls: Array[String] = []
