@@ -58,6 +58,11 @@ func verify() -> void:
 	require(opened_urls.size() == 1, "invalid response opened a browser")
 
 	await run_start()
+	require(not succeeded, "redirect response was accepted")
+	require(error_code == "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE", "redirect response was not sanitized")
+	require(opened_urls.size() == 1, "redirect response opened a browser")
+
+	await run_start()
 	require(not succeeded, "typed unavailable response succeeded")
 	require(error_code == "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE", "typed server error was not preserved")
 	require(opened_urls.size() == 1, "server error opened a browser")
