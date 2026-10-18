@@ -102,13 +102,19 @@ describe("open world session ownership", () => {
     fixture.worldData = null;
   });
 
-  it("rebuilds the active projection when the authenticated world epoch advances", async () => {
+  it("keeps the activation world stable while periodic readback advances", async () => {
     const view = render(<AurionOpenWorldRuntime />); await enter();
     expect(fixture.engines).toHaveLength(1);
     fixture.worldData = { globalWorld: { worldSeed: "advanced-world", epoch: 2 }, serviceNpcs: [] };
     await act(async () => view.rerender(<AurionOpenWorldRuntime />));
-    expect(fixture.engines[0].stop).toHaveBeenCalled();
-    expect(fixture.engines).toHaveLength(2);
+    expect(fixture.engines[0].stop).not.toHaveBeenCalled();
+    expect(fixture.engines).toHaveLength(1);
+    expect(fixture.tickets).toHaveLength(1);
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({
+      worldSeed: "fixture",
+      epoch: 0,
+      status: "rendering",
+    });
   });
 
   it("does not start the renderer or zone before a confirmed standard character and then loads exactly that GLB", async () => {
