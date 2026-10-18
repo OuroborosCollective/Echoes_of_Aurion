@@ -286,6 +286,34 @@ func verify() -> void:
 	failing_api.queue_free()
 	failing_auth.queue_free()
 
+	var rotating_retry_auth := FakeAuth.new()
+	rotating_retry_auth.refresh_pending = true
+	root.add_child(rotating_retry_auth)
+	var rotating_retry_api := AurionApi.new(rotating_retry_auth)
+	rotating_retry_api.request_failed.connect(_on_request_failure)
+	root.add_child(rotating_retry_api)
+	await process_frame
+	request_completed = false
+	request_error = ""
+	request_failure_count = 0
+	rotating_retry_api._active = true
+	rotating_retry_api._retried_after_refresh = true
+	rotating_retry_api._sent_access_token = rotating_retry_auth.current_access
+	rotating_retry_api._sent_session_generation = rotating_retry_auth.session_generation()
+	rotating_retry_api._on_request_completed(
+		HTTPRequest.RESULT_SUCCESS,
+		401,
+		PackedStringArray(),
+		PackedByteArray()
+	)
+	require(request_completed, "retry 401 during rotation did not terminate")
+	require(request_error == "AURION_API_AUTH_REQUIRED", "retry 401 during rotation returned wrong error")
+	require(request_failure_count == 1, "retry 401 during rotation emitted more than one failure")
+	require(rotating_retry_auth.logout_calls == 0, "retry 401 cancelled concurrent rotation")
+	require(rotating_retry_auth.refresh_in_flight(), "retry 401 lost concurrent rotation")
+	rotating_retry_api.queue_free()
+	rotating_retry_auth.queue_free()
+
 	var boundary_auth := FakeAuth.new()
 	boundary_auth.current_access = ""
 	boundary_auth.refresh_behavior = "start"
