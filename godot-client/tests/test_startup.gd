@@ -3,6 +3,18 @@ extends SceneTree
 const Config = preload("res://config/runtime_config.gd")
 var failures: Array[String] = []
 
+class FakeApi:
+	extends Node
+	var calls := 0
+	var server := ""
+	var build := ""
+
+	func issue_zone_ticket(server_base_url: String, client_build: String, _allow_local: bool = false) -> bool:
+		calls += 1
+		server = server_base_url
+		build = client_build
+		return true
+
 func require(condition: bool, message: String) -> void:
 	if not condition:
 		failures.append(message)
@@ -49,6 +61,24 @@ func verify() -> void:
 	root.add_child(enabled_scene)
 	await process_frame
 	require(not enabled_scene.get_node("%Login").disabled, "verified native login start was not enabled")
+	var live_api: Node = enabled_scene._api
+	live_api.cancel()
+	live_api.queue_free()
+	var fake_api := FakeApi.new()
+	enabled_scene.add_child(fake_api)
+	enabled_scene._api = fake_api
+	enabled_scene._on_auth_session_succeeded()
+	require(fake_api.calls == 1, "confirmed session did not request one zone ticket")
+	require(fake_api.server == Config.PRODUCT_SERVER, "zone ticket used the wrong server")
+	require(fake_api.build == Config.current().client_build, "zone ticket used the wrong build")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenticket wird angefordert", "ticket pending state missing")
+	enabled_scene._on_zone_ticket_succeeded({
+		"ticket": "z".repeat(48),
+		"zoneId": "observatory_threshold",
+		"expiresAt": "2026-10-18T19:00:00.000Z",
+	})
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher verbunden", "confirmed ticket state missing")
+	require(enabled_scene.get_node("%Login").text == "Verbunden", "confirmed ticket action state missing")
 	enabled_scene.queue_free()
 	await process_frame
 	ProjectSettings.set_setting("aurion/server_base_url", "https://attacker.test")
