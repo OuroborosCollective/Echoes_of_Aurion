@@ -3106,3 +3106,26 @@ Evidence: Exact tested head `e7ba21d493714e33eadf4ca26a0e578227ddffef`; differen
 Learned: Direct iterable scans preserve Map insertion semantics while removing measurable allocation pressure; allocation claims must be asserted from measured same-run evidence, not hard-coded structural expectations.
 Open: Merge and main readback only.
 Next safe step: Merge PR #1045 only if the Memory-bearing final head retains green exact-head gates and clean reviews.
+
+
+### 2026-10-18 — PR #1045 — perf(quests): remove offline receipt iteration arrays
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1045 merge=c6fe6bd21861fb8804650f034c4bca979d71c16c -->
+Task: Merge PR #1045 into `main` — perf(quests): remove offline receipt iteration arrays.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/quest-receipt-iteration.yml`
+- `Memory.md`
+- `scripts/benchmark-quest-receipt-iteration.ts`
+- `server/questCompiler/persistence.ts`
+- `server/questCompiler/receiptIteration.test.ts`
+- `server/questCompiler/receiptIteration.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1045
+- Merge commit: `c6fe6bd21861fb8804650f034c4bca979d71c16c`
+- PR head: `359a8adcf49f68e6ef34d95e6a1bacd68fab1a3d`
+- Merged at: 2026-10-18T13:58:23Z
+- Post-merge workflow run: 39133892621
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
