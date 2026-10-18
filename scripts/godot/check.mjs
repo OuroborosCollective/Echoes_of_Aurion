@@ -61,7 +61,7 @@ await stage(
 );
 await stage(
   'aurion-api-client-regression',
-  'headless-client',
+  'headless',
   process.execPath,
   ['scripts/godot/aurion-api-runtime.mjs', executable, project],
   'Godot protected zone ticket client regression verified',
