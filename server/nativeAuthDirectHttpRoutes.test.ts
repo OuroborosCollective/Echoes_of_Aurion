@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { HttpError } from "@shared/_core/errors";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createContext } from "./_core/context";
 import { sdk } from "./_core/sdk";
 import {
   CONFIRMED_EQUIPMENT_VISUAL_V2_PATH,
@@ -45,6 +46,16 @@ describe("native access expiry at direct HTTP routes", () => {
     vi.mocked(sdk.authenticateRequest).mockRejectedValue(
       new HttpError(401, "NATIVE_AUTH_SESSION_EXPIRED"),
     );
+  });
+
+  it("preserves the refresh signal through tRPC context creation", async () => {
+    await expect(createContext({
+      req: {} as Request,
+      res: responseRecorder(),
+    } as Parameters<typeof createContext>[0])).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "NATIVE_AUTH_SESSION_EXPIRED",
+    });
   });
 
   it("preserves the refresh signal for confirmed equipment readback", async () => {
