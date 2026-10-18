@@ -45,12 +45,7 @@ var _request_phase := ""
 var _server_base_url := ""
 
 func _ready() -> void:
-	_http = HTTPRequest.new()
-	_http.body_size_limit = 16384
-	_http.max_redirects = 0
-	_http.timeout = 15.0
-	add_child(_http)
-	_http.request_completed.connect(_on_request_completed)
+	_install_http()
 	if not browser_opener.is_valid():
 		browser_opener = Callable(self, "_open_system_browser")
 
@@ -101,6 +96,9 @@ func logout() -> bool:
 		return false
 	if _request_active:
 		_http.cancel_request()
+		remove_child(_http)
+		_http.queue_free()
+		_install_http()
 		_request_active = false
 		_request_phase = ""
 		_flow.clear()
@@ -122,6 +120,14 @@ func cancel() -> void:
 func _exit_tree() -> void:
 	cancel()
 	_tokens.clear()
+
+func _install_http() -> void:
+	_http = HTTPRequest.new()
+	_http.body_size_limit = 16384
+	_http.max_redirects = 0
+	_http.timeout = 15.0
+	add_child(_http)
+	_http.request_completed.connect(_on_request_completed)
 
 func _send_json(path: String, payload: Dictionary, phase: String) -> bool:
 	_request_active = true
