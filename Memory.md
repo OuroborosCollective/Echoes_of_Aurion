@@ -3069,3 +3069,30 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-18 — PR #1044 — fix(godot): retry protected zone ticket after native refresh (#968)
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1044 merge=b5bda7dbcc87acdae0d23d35bc8c94eaeebd49ce -->
+Task: Merge PR #1044 into `main` — fix(godot): retry protected zone ticket after native refresh (#968).
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/net/api/aurion_api.gd`
+- `godot-client/net/api/aurion_api.gd.uid`
+- `godot-client/net/auth/native_auth_start.gd`
+- `godot-client/net/auth/native_auth_tokens.gd`
+- `godot-client/tests/test_aurion_api_runtime.gd`
+- `godot-client/tests/test_aurion_api_runtime.gd.uid`
+- `godot-client/tests/test_native_auth_tokens.gd`
+- `scripts/godot/aurion-api-runtime.mjs`
+- `scripts/godot/check.mjs`
+- `server/nativeAuthPersistenceMariaDb.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1044
+- Merge commit: `b5bda7dbcc87acdae0d23d35bc8c94eaeebd49ce`
+- PR head: `de66c0da16554ca46e9842964215ebdeccaa808f`
+- Merged at: 2026-10-18T12:21:45Z
+- Post-merge workflow run: 39126962496
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
