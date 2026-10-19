@@ -209,6 +209,15 @@ func verify() -> void:
 	require(Codec.valid_move(2147483648, 0, 0).is_empty(), "oversized move sequence accepted")
 	require(Codec.valid_move(1, -2, 0).is_empty(), "invalid move axis accepted")
 	require(not transport.send_move(0, 0), "move sent before verified welcome")
+	require(Codec.valid_attack(1, "mob_12") == {"type":"attack","clientSeq":1,"targetEntityId":"mob_12"}, "attack intent schema mismatch")
+	require(Codec.valid_attack(0, "mob_12").is_empty(), "zero-sequence attack allowed")
+	require(Codec.valid_attack(1, "mob_0").is_empty(), "invalid target allowed")
+	require(Codec.valid_skill(2, "k_strike", "mob_12") == {"type":"skill","clientSeq":2,"skillId":"k_strike","targetEntityId":"mob_12"}, "skill intent schema mismatch")
+	require(Codec.valid_skill(2, "k_shield", "").is_empty(), "unsupported targetless skill allowed")
+	require(Codec.valid_skill(2, "unknown", "mob_12").is_empty(), "unregistered skill allowed")
+	require(not transport.send_attack("mob_12"), "attack sent before verified welcome")
+	require(not transport.send_skill("k_strike", "mob_12"), "skill sent before verified welcome")
+
 	var welcome = {"type":"welcome","protocolVersion":5,"zoneId":"observatory_threshold","connectionId":"zone_peer_abcdefghijklmnop","selfEntityId":"player:1","snapshotSeq":0,"tick":0,"presences":[],"mobs":[],"combatants":[],"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":[]}}
 	require(not Codec.is_valid_welcome(welcome), "incomplete resources accepted as authoritative welcome")
 	# P1: real wire JSON is parsed through JSON.parse_string, not hand-built integer variants.

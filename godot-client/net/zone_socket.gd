@@ -32,6 +32,24 @@ func send_move(input_x: int, input_z: int) -> bool:
 	_next_client_seq += 1
 	return true
 
+func send_attack(target_id: String) -> bool:
+	if _state != "connected" or _peer == null or _peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return false
+	var wire := Codec.serialized_attack(_next_client_seq, target_id)
+	if wire.is_empty() or _peer.send_text(wire) != OK:
+		return false
+	_next_client_seq += 1
+	return true
+
+func send_skill(skill_id: String, target_id: String) -> bool:
+	if _state != "connected" or _peer == null or _peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return false
+	var wire := Codec.serialized_skill(_next_client_seq, skill_id, target_id)
+	if wire.is_empty() or _peer.send_text(wire) != OK:
+		return false
+	_next_client_seq += 1
+	return true
+
 func connect_zone(base_url: String, ticket: String) -> bool:
 	if _state != "closed" or _reject_notifications_in_flight or not is_inside_tree():
 		return false
