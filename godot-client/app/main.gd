@@ -115,6 +115,10 @@ func _on_zone_connected() -> void:
 	login.disabled = true
 
 func _on_zone_rejected(code: String) -> void:
+	# Command-level rejection is recoverable after a verified welcome.
+	if _zone_socket.state_name() == "connected":
+		status.text = "Sicher mit Aurion verbunden"
+		return
 	_zone_reject_code = code
 	status.text = "Zonenverbindung abgelehnt"
 
