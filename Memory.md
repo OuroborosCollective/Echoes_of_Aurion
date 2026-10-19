@@ -3402,3 +3402,35 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1057 — test(godot/g11): prove confirmed state projection lifecycle
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1057 merge=465c954571c425485d380d71f1c33c14ccc47a6c -->
+Task: Merge PR #1057 into `main` — test(godot/g11): prove confirmed state projection lifecycle.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/app/main.gd`
+- `godot-client/net/zone_socket.gd`
+- `godot-client/projection/entity_registry.gd`
+- `godot-client/projection/entity_registry.gd.uid`
+- `godot-client/projection/snapshot_interpolator.gd`
+- `godot-client/projection/snapshot_interpolator.gd.uid`
+- `godot-client/projection/zone_state.gd`
+- `godot-client/projection/zone_state.gd.uid`
+- `godot-client/tests/integration/test_zone_socket.gd`
+- `godot-client/tests/test_startup.gd`
+- `godot-client/tests/test_zone_entities.gd`
+- `godot-client/tests/test_zone_entities.gd.uid`
+- `godot-client/tests/test_zone_projection.gd`
+- `godot-client/tests/test_zone_projection.gd.uid`
+- `scripts/godot/check.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1057
+- Merge commit: `465c954571c425485d380d71f1c33c14ccc47a6c`
+- PR head: `633ba73545019e7158a2b9910a6d1af5b514c981`
+- Merged at: 2026-10-19T05:52:27Z
+- Post-merge workflow run: 39206780522
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
