@@ -24,7 +24,7 @@ test('manifest adds only exact https verified callback to exported launcher alia
 });
 test('fails closed if expected Godot launcher alias is missing or ambiguous',()=>{
  assert.throws(()=>insertVerifiedLink('<manifest/>'));
- assert.throws(()=>insertVerifiedLink(base.replace('</application>',base.match(/<activity-alias[\\s\\S]*?<\\/activity-alias>/)[0]+'</application>')));
+  assert.throws(()=>insertVerifiedLink(base.replace('</application>',base.slice(base.indexOf('<activity-alias'),base.indexOf('</activity-alias>')+17)+'</application>')));
 });
 test('requires exact package, SHA-256 and delegate permission on Digital Asset Links',()=>{
  assert.equal(validateDomainAssociation(statement,packageName,fp),true);
