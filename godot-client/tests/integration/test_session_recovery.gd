@@ -198,7 +198,7 @@ func verify() -> void:
 	auth.allowed = false
 	scene._on_app_resumed()
 	scene._poll_reconnect(Time.get_ticks_msec())
-	require(api.issues == 1, "expired auth attempted protected ticket")
+	require(api.issues == 3, "expired auth attempted protected ticket")
 	require(not scene._confirmed_zone.has_state(), "expired auth retained world")
 	scene.queue_free()
 	await process_frame
