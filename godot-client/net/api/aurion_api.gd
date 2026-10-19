@@ -22,6 +22,8 @@ var _retried_after_refresh := false
 var _waiting_for_refresh := false
 var _sent_access_token := ""
 var _sent_session_generation := -1
+var _request_epoch := 0
+var _wire_bound := false
 
 func _init(auth_client: Node) -> void:
 	_auth = auth_client
@@ -32,7 +34,7 @@ func _ready() -> void:
 	_http.max_redirects = 0
 	_http.timeout = 15.0
 	add_child(_http)
-	_http.request_completed.connect(_on_request_completed)
+	# Each HTTP send receives its own epoch-bound completion handler.
 	_auth.refresh_succeeded.connect(_on_refresh_succeeded)
 	_auth.refresh_failed.connect(_on_refresh_failed)
 	_auth.logout_succeeded.connect(_on_logout_terminal)
@@ -55,6 +57,7 @@ func issue_zone_ticket(server_base_url: String, client_build: String, allow_loca
 	return _send_zone_ticket()
 
 func cancel() -> void:
+	_request_epoch += 1
 	if _active and is_instance_valid(_http):
 		_http.cancel_request()
 	_active = false
@@ -73,6 +76,20 @@ func _send_zone_ticket() -> bool:
 		return false
 	_sent_access_token = access
 	_sent_session_generation = _auth.session_generation()
+	# Do not reuse an HTTPRequest whose cancelled response could still
+	# arrive after a new protected ticket request has been initiated.
+	if _wire_bound:
+		_http.cancel_request()
+		_http.queue_free()
+		_http = HTTPRequest.new()
+		_http.body_size_limit = 16384
+		_http.max_redirects = 0
+		_http.timeout = 15.0
+		add_child(_http)
+	_request_epoch += 1
+	var wire_epoch: int = _request_epoch
+	_http.request_completed.connect(_on_wire_request_completed.bind(wire_epoch))
+	_wire_bound = true
 	var payload := {
 		"0": {
 			"json": {
@@ -95,6 +112,11 @@ func _send_zone_ticket() -> bool:
 		_fail(REQUEST_FAILED)
 		return false
 	return true
+
+func _on_wire_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, epoch: int) -> void:
+	if epoch != _request_epoch or not _active:
+		return
+	_on_request_completed(result, response_code, headers, body)
 
 func _on_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
 	if not _active:
