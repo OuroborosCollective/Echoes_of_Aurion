@@ -26,7 +26,7 @@ func remember_close_reason(reason: String) -> void:
 
 ## Exercise the actual WebSocketPeer.packet -> _process() path over loopback TCP.
 ## No synthetic gameplay/server evidence; this is a local headless regression only.
-func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reject_code: String = "") -> void:
+func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reject_code: String = "", pre_welcome_wire: String = "") -> void:
 	var server := TCPServer.new()
 	var listen_result := server.listen(0, "127.0.0.1")
 	require(listen_result == OK, "loopback websocket server could not listen")
@@ -59,6 +59,9 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	var remote: WebSocketPeer
 	var hello_received := false
 	var welcome_sent := false
+	var pre_snapshot_sent := false
+	var pre_snapshot_frames := 0
+	var pre_snapshot_checked := false
 	var started := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - started < 4000 and callback_transport.state_name() != "closed":
 		if remote == null and server.is_connection_available():
@@ -67,16 +70,29 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 		if remote != null:
 			remote.poll()
 			if remote.get_ready_state() == WebSocketPeer.STATE_OPEN:
-				if remote.get_available_packet_count() > 0 and not welcome_sent:
+				# Send the welcome only after Godot has had several actual
+				# process frames to observe the server's pre-welcome snapshot.
+				if pre_snapshot_sent and not welcome_sent:
+					pre_snapshot_frames += 1
+					if pre_snapshot_frames >= 3:
+						require(callback_transport.state_name() == "authenticating", "pre-welcome snapshot terminated or authenticated the zone")
+						pre_snapshot_checked = true
+						welcome_sent = remote.send_text(wire) == OK
+				if remote.get_available_packet_count() > 0 and not hello_received:
 					var hello_bytes := remote.get_packet()
 					var hello: Variant = JSON.parse_string(hello_bytes.get_string_from_utf8())
 					hello_received = remote.was_string_packet() and typeof(hello) == TYPE_DICTIONARY and hello.get("type") == "hello" and hello.get("protocolVersion") == 5
 					if hello_received:
-						welcome_sent = remote.send_text(wire) == OK
+						if pre_welcome_wire.is_empty():
+							welcome_sent = remote.send_text(wire) == OK
+						else:
+							pre_snapshot_sent = remote.send_text(pre_welcome_wire) == OK
 					else:
 						errors.append("loopback server received an invalid hello")
 		await process_frame
 	require(hello_received and welcome_sent, "actual WebSocket hello/welcome exchange was not exercised")
+	if not pre_welcome_wire.is_empty():
+		require(pre_snapshot_sent and pre_snapshot_checked, "gateway snapshot-first ordering was not exercised")
 	require(callback_transport.state_name() == "closed", "WebSocket processing did not reach a terminal state")
 	require(connected_callbacks == (1 if expect_welcome else 0), "unexpected zone_connected callback after wire welcome")
 	if expect_welcome:
@@ -186,6 +202,10 @@ func verify() -> void:
 	var welcome_wire := JSON.stringify(welcome)
 	require(Codec.wire_numbers_are_integers(welcome_wire), "valid integer wire numbers rejected")
 	await verify_socket_packet_loop(welcome_wire, true)
+	# Real Aurion zone.join broadcasts a snapshot before the server sends
+	# welcome. This uses two wire packets with intervening Godot process frames.
+	early_snapshot["presences"] = [{"entityId":"player:1","userId":1,"position":{"x":0,"z":0},"lastAcceptedClientSeq":0}]
+	await verify_socket_packet_loop(welcome_wire, true, "", JSON.stringify(early_snapshot))
 	# P2: the lexical token must remain integral BEFORE Godot rounds a JSON float.
 	var bad_wire := welcome_wire.replace('"snapshotSeq":0', '"snapshotSeq":1.0000000000000001')
 	require(bad_wire != welcome_wire, "rounded-number test could not locate wire snapshotSeq")
