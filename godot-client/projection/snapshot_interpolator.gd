@@ -30,7 +30,13 @@ func capture(world: Variant, now_ms: int) -> bool:
 	var same_session := connection == _connection
 	var previous: Dictionary = {}
 	for id in next:
-		previous[id] = _positions.get(id, next[id]).duplicate(true) if same_session else next[id].duplicate(true)
+		# Preserve the currently displayed position when a newer confirmed
+		# snapshot arrives mid-transition. The new target stays server-owned.
+		var current_visual: Variant = visual_mm(id, now_ms) if same_session else null
+		if current_visual is Vector2:
+			previous[id] = {"x": current_visual.x, "z": current_visual.y}
+		else:
+			previous[id] = next[id].duplicate(true)
 	_positions = next
 	_start_positions = previous
 	_connection = connection
