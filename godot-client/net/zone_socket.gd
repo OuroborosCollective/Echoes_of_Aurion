@@ -1,6 +1,7 @@
 extends Node
 ## G10 handshake transport only. No gameplay authority, no production proof.
 signal zone_connected
+signal zone_welcome(welcome: Dictionary)
 signal zone_snapshot(snapshot: Dictionary)
 signal zone_rejected(code: String)
 signal zone_closed(reason: String)
@@ -154,6 +155,9 @@ func _accept_welcome(raw: Variant) -> bool:
 	_last_snapshot_seq = int(raw["snapshotSeq"])
 	_last_tick = int(raw["tick"])
 	_state = "connected"
+	emit_signal("zone_welcome", raw.duplicate(true))
+	if _state != "connected":
+		return true
 	emit_signal("zone_connected")
 	return true
 
