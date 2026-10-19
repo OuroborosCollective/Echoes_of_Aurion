@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Config = preload("res://config/runtime_config.gd")
+const ZoneCodec = preload("res://net/zone_codec.gd")
 var failures: Array[String] = []
 
 class FakeLogoutAuth:
@@ -127,7 +128,7 @@ func verify() -> void:
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung wird aufgebaut", "ticket prematurely reported a connected zone")
 	require(enabled_scene.get_node("%Login").text == "Verbinden", "handshake action state missing")
 	var nodes: Array = []
-	for id in preload("res://net/zone_codec.gd").NODE_IDS:
+	for id in ZoneCodec.NODE_IDS:
 		nodes.append({"nodeId":id, "remaining":5, "depleted":false, "respawnAtTick":null})
 	var confirmed_welcome := {
 		"type":"welcome", "protocolVersion":5, "zoneId":"observatory_threshold",
