@@ -52,6 +52,7 @@ for (const [id, script, marker] of [
   ['android-app-link-callback', 'test_native_app_link_callback.gd', 'Godot Android callback URI contract verified'],
   ['zone-projection', 'test_zone_projection.gd', 'Godot G11 confirmed zone state projection contract verified (headless)'],
   ['zone-entities', 'test_zone_entities.gd', 'Godot G11 confirmed entity registry and visual interpolation verified (headless)'],
+  ['session-recovery', 'integration/test_session_recovery.gd', 'Godot G12 pause/resume, fresh-ticket recovery and bounded retry verified (headless)'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
