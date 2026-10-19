@@ -40,6 +40,10 @@ class FakeZone:
 	var ticket_length := 0
 	var last_server := ""
 	var allow_connect := true
+	var active_state := "closed"
+
+	func state_name() -> String:
+		return active_state
 
 	func connect_zone(base_url: String, ticket: String) -> bool:
 		connect_calls += 1
@@ -122,12 +126,14 @@ func verify() -> void:
 	require(fake_zone.last_server == Config.PRODUCT_SERVER, "zone socket used the wrong origin")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung wird aufgebaut", "ticket prematurely reported a connected zone")
 	require(enabled_scene.get_node("%Login").text == "Verbinden", "handshake action state missing")
+	fake_zone.active_state = "connected"
 	enabled_scene._on_zone_connected()
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher mit Aurion verbunden", "validated welcome did not mark zone connected")
 	require(enabled_scene.get_node("%Login").text == "Verbunden", "validated welcome action state missing")
 	var fake_logout := FakeLogoutAuth.new()
 	fake_logout.in_flight = true
 	enabled_scene.add_child(fake_logout)
+	fake_zone.active_state = "authenticating"
 	enabled_scene._on_zone_rejected("PROTOCOL_VERSION_UNSUPPORTED")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung abgelehnt", "server rejection not displayed")
 	enabled_scene._on_zone_closed("server_reject")
