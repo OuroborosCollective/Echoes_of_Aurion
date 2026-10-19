@@ -175,6 +175,38 @@ func verify() -> void:
 	snapshot_wire.erase("selfEntityId")
 	snapshot_wire.erase("protocolVersion")
 	require(Codec.is_valid_snapshot(JSON.parse_string(JSON.stringify(snapshot_wire))), "valid nested snapshot rejected")
+
+	var mismatch_presence: Dictionary = populated.duplicate(true)
+	mismatch_presence["presences"][0]["userId"] = 2
+	require(not Codec.is_valid_welcome(mismatch_presence), "presence identity/entity mismatch accepted")
+	var invalid_health: Dictionary = populated.duplicate(true)
+	invalid_health["combatants"][0]["health"] = 0
+	require(not Codec.is_valid_welcome(invalid_health), "alive combatant with zero health accepted")
+	var invalid_stamina: Dictionary = populated.duplicate(true)
+	invalid_stamina["combatants"][0]["stamina"] = 11
+	require(not Codec.is_valid_welcome(invalid_stamina), "combatant stamina above capacity accepted")
+	var invalid_mob_state: Dictionary = populated.duplicate(true)
+	invalid_mob_state["mobs"][0]["state"] = "dead"
+	require(not Codec.is_valid_welcome(invalid_mob_state), "dead mob with positive health accepted")
+	var invalid_boss: Dictionary = populated.duplicate(true)
+	invalid_boss["mobs"][0]["isBoss"] = true
+	require(not Codec.is_valid_welcome(invalid_boss), "non-elite boss accepted")
+	var invalid_idle_target: Dictionary = populated.duplicate(true)
+	invalid_idle_target["mobs"][0]["targetEntityId"] = "player:1"
+	require(not Codec.is_valid_welcome(invalid_idle_target), "idle mob with combat target accepted")
+	var depleted_live: Dictionary = populated.duplicate(true)
+	depleted_live["resources"]["nodes"][0]["depleted"] = true
+	require(not Codec.is_valid_welcome(depleted_live), "depleted resource with remaining inventory accepted")
+	var stale_respawn: Dictionary = populated.duplicate(true)
+	stale_respawn["resources"]["nodes"][0]["remaining"] = 0
+	stale_respawn["resources"]["nodes"][0]["depleted"] = true
+	stale_respawn["resources"]["nodes"][0]["respawnAtTick"] = 1
+	stale_respawn["tick"] = 1
+	require(not Codec.is_valid_welcome(stale_respawn), "expired resource respawn accepted")
+	var valid_respawn: Dictionary = stale_respawn.duplicate(true)
+	valid_respawn["resources"]["nodes"][0]["respawnAtTick"] = 2
+	require(Codec.is_valid_welcome(valid_respawn), "future depleted resource respawn rejected")
+
 	snapshot_wire["presences"].append(snapshot_wire["presences"][0].duplicate())
 	require(not Codec.is_valid_snapshot(snapshot_wire), "duplicate presence entity accepted")
 
@@ -233,6 +265,16 @@ func verify() -> void:
 		invalid_entity["selfEntityId"] = bad_id
 		require(not Codec.is_valid_welcome(invalid_entity), "invalid v5 selfEntityId accepted: " + bad_id)
 	require(Codec.is_valid_reject({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), "known v5 reject code missing")
+	var command_peer = Socket.new()
+	root.add_child(command_peer)
+	await process_frame
+	command_peer._state = "connected"
+	command_peer._last_snapshot_seq = 8
+	command_peer._last_tick = 12
+	require(command_peer._last_tick == 12, "snapshot tick watermark unavailable")
+	command_peer.close_zone()
+	command_peer.queue_free()
+	await process_frame
 	require(not Codec.is_valid_reject({"type":"reject","code":"FABRICATED_CODE"}), "unknown v5 reject code accepted")
 	# P2: test through a real packet loop, not a direct helper invocation.
 	var welcome_wire := JSON.stringify(welcome)
