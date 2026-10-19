@@ -157,7 +157,11 @@ static func _valid_mob(raw: Variant) -> bool:
 		return false
 	if raw["state"] == "dead" and (raw["health"] != 0 or raw["targetEntityId"] != null):
 		return false
+	if raw["state"] == "combat" and raw["targetEntityId"] == null:
+		return false
 	if raw["state"] != "combat" and raw["targetEntityId"] != null:
+		return false
+	if raw["state"] != "dead" and raw["health"] == 0:
 		return false
 	return true
 
