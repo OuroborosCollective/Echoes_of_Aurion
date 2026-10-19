@@ -89,7 +89,7 @@ static func _valid_position(value: Variant) -> bool:
 		return false
 	return _safe_nonnegative(abs(x)) and _safe_nonnegative(abs(z)) and x >= -64000032000 and x <= 64000031999 and z >= -64000032000 and z <= 64000031999
 
-static func _valid_resources(value: Variant) -> bool:
+static func _valid_resources(value: Variant, tick: Variant) -> bool:
 	if typeof(value) != TYPE_DICTIONARY:
 		return false
 	if value.get("contractVersion") != 1 or value.get("contentSourceRevision") != FIXED_CONTENT or not _safe_nonnegative(value.get("revision")) or value.get("revision") == 0:
@@ -105,6 +105,12 @@ static func _valid_resources(value: Variant) -> bool:
 			return false
 		var respawn: Variant = node.get("respawnAtTick", "missing")
 		if respawn != null and (not _safe_nonnegative(respawn) or respawn == 0):
+			return false
+		if node["depleted"] != (node["remaining"] == 0):
+			return false
+		if node["depleted"] and (respawn == null or respawn <= tick):
+			return false
+		if not node["depleted"] and respawn != null:
 			return false
 		found.append(node["nodeId"])
 	return true
@@ -132,7 +138,7 @@ static func _valid_entity_id(value: Variant) -> bool:
 static func _valid_presence(raw: Variant) -> bool:
 	if typeof(raw) != TYPE_DICTIONARY:
 		return false
-	return _valid_player_entity_id(raw.get("entityId")) and _positive(raw.get("userId")) and _valid_position(raw.get("position")) and _safe_nonnegative(raw.get("lastAcceptedClientSeq")) and raw.get("lastAcceptedClientSeq") <= 2147483647
+	return _valid_player_entity_id(raw.get("entityId")) and _positive(raw.get("userId")) and raw.get("entityId") == "player:" + str(int(raw.get("userId"))) and _valid_position(raw.get("position")) and _safe_nonnegative(raw.get("lastAcceptedClientSeq")) and raw.get("lastAcceptedClientSeq") <= 2147483647
 
 static func _valid_mob(raw: Variant) -> bool:
 	if typeof(raw) != TYPE_DICTIONARY:
@@ -145,14 +151,22 @@ static func _valid_mob(raw: Variant) -> bool:
 		return false
 	if raw["targetEntityId"] != null and not _valid_player_entity_id(raw["targetEntityId"]):
 		return false
-	return typeof(raw.get("isBoss")) == TYPE_BOOL and typeof(raw.get("isElite")) == TYPE_BOOL and _safe_nonnegative(raw.get("health")) and _positive(raw.get("maxHealth"))
+	if typeof(raw.get("isBoss")) != TYPE_BOOL or typeof(raw.get("isElite")) != TYPE_BOOL or not _safe_nonnegative(raw.get("health")) or not _positive(raw.get("maxHealth")):
+		return false
+	if raw["health"] > raw["maxHealth"] or (raw["isBoss"] and not raw["isElite"]):
+		return false
+	if raw["state"] == "dead" and (raw["health"] != 0 or raw["targetEntityId"] != null):
+		return false
+	if raw["state"] != "combat" and raw["targetEntityId"] != null:
+		return false
+	return true
 
 static func _valid_combatant(raw: Variant) -> bool:
 	if typeof(raw) != TYPE_DICTIONARY or not _valid_entity_id(raw.get("entityId")):
 		return false
 	if not _safe_nonnegative(raw.get("health")) or not _positive(raw.get("maxHealth")) or not _safe_nonnegative(raw.get("stamina")) or not _positive(raw.get("maxStamina")):
 		return false
-	return typeof(raw.get("alive")) == TYPE_BOOL and _positive(raw.get("combatLevel")) and raw.get("combatLevel") <= 10000 and _safe_nonnegative(raw.get("lastCombatSequence"))
+	return typeof(raw.get("alive")) == TYPE_BOOL and raw["health"] <= raw["maxHealth"] and raw["stamina"] <= raw["maxStamina"] and raw["alive"] == (raw["health"] > 0) and _positive(raw.get("combatLevel")) and raw.get("combatLevel") <= 10000 and _safe_nonnegative(raw.get("lastCombatSequence"))
 
 static func is_valid_zone_state(raw: Variant) -> bool:
 	if typeof(raw) != TYPE_DICTIONARY or raw.get("zoneId") != ZONE:
@@ -164,7 +178,7 @@ static func is_valid_zone_state(raw: Variant) -> bool:
 			return false
 	if raw["presences"].size() > 128 or raw["mobs"].size() > 32 or raw["combatants"].size() > 160:
 		return false
-	if not _valid_resources(raw.get("resources")):
+	if not _valid_resources(raw.get("resources"), raw["tick"]):
 		return false
 	var seen: Dictionary = {}
 	for item in raw["presences"]:
