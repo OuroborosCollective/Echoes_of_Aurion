@@ -169,6 +169,7 @@ func verify() -> void:
 	require(enabled_scene.get_node("%Login").text == "Anmelden", "terminal logout action state missing")
 	# A connected callback without a projected server welcome must terminate
 	# the pending login UI, not leave an unusable "connecting" screen.
+	enabled_scene._reset_projection()
 	enabled_scene.get_node("%ConnectionStatus").text = "Zonenverbindung wird aufgebaut"
 	fake_zone.active_state = "connected"
 	enabled_scene._on_zone_connected()
