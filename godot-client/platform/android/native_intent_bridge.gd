@@ -14,7 +14,7 @@ func _ready() -> void:
 	_android_runtime = Engine.get_singleton("AndroidRuntime")
 	if _android_runtime == null or not _android_runtime.has_method("getActivity"):
 		return
-	_activity = _android_runtime.getJavaGodotActivity()
+	_activity = _android_runtime.getActivity()
 
 func poll_for_callback(pending_login: bool) -> bool:
 	if not pending_login or OS.get_name() != "Android" or _activity == null:
