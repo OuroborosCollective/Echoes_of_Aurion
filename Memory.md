@@ -3434,3 +3434,28 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1059 — feat(godot/g12): fail-closed Android pause and fresh-ticket recovery
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1059 merge=d8eb526334a04ed26ab609b3f6a2788a32da43c8 -->
+Task: Merge PR #1059 into `main` — feat(godot/g12): fail-closed Android pause and fresh-ticket recovery.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/app/main.gd`
+- `godot-client/app/session_lifecycle.gd`
+- `godot-client/app/session_lifecycle.gd.uid`
+- `godot-client/net/reconnect_policy.gd`
+- `godot-client/net/reconnect_policy.gd.uid`
+- `godot-client/tests/integration/test_session_recovery.gd`
+- `godot-client/tests/integration/test_session_recovery.gd.uid`
+- `scripts/godot/check.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1059
+- Merge commit: `d8eb526334a04ed26ab609b3f6a2788a32da43c8`
+- PR head: `7a651955e122ace9344b7889bb01b98efca6f7fb`
+- Merged at: 2026-10-19T06:12:55Z
+- Post-merge workflow run: 39208626813
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
