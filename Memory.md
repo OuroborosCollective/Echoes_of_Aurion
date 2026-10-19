@@ -3537,3 +3537,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1064 — fix(g09): add explicit fail-closed native-login release gate
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1064 merge=998294131a4440ee38cad0804fe60eec8e23d397 -->
+Task: Merge PR #1064 into `main` — fix(g09): add explicit fail-closed native-login release gate.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `server/nativeAuthHttp.test.ts`
+- `server/nativeAuthHttp.ts`
+- `server/nativeAuthReleaseGate.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1064
+- Merge commit: `998294131a4440ee38cad0804fe60eec8e23d397`
+- PR head: `c651d3fe8ace45424e11495f394cf24157845524`
+- Merged at: 2026-10-19T08:56:06Z
+- Post-merge workflow run: 39226321263
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
