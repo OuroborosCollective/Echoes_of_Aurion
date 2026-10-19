@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: '22'
       - name: APK readback regression
-        run: node --test scripts/godot/apk-readback.test.mjs
+        run: node --test scripts/godot/apk-readback.test.mjs scripts/godot/android-app-link.test.mjs
       - name: Install pinned build tools
         run: |
           node scripts/godot/bootstrap.mjs
