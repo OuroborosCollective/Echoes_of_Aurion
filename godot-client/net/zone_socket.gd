@@ -1,6 +1,7 @@
 extends Node
 ## G10 handshake transport only. No gameplay authority, no production proof.
 signal zone_connected
+signal zone_snapshot(snapshot: Dictionary)
 signal zone_rejected(code: String)
 signal zone_closed(reason: String)
 
@@ -14,6 +15,8 @@ var _hello := ""
 var _connected_at := -1
 var _received_welcome := false
 var _reject_notifications_in_flight := false
+var _last_snapshot_seq := -1
+var _last_tick := -1
 
 func state_name() -> String:
 	return _state
@@ -38,6 +41,8 @@ func connect_zone(base_url: String, ticket: String) -> bool:
 		_hello = ""
 		return false
 	_state = "connecting"
+	_last_snapshot_seq = -1
+	_last_tick = -1
 	_connected_at = Time.get_ticks_msec()
 	set_process(true)
 	return true
@@ -88,17 +93,32 @@ func _process(_delta: float) -> void:
 				# emitting welcome. No snapshot state may be projected until
 				# a verified welcome makes the session authoritative.
 				if _is_pre_welcome_snapshot(decoded):
+					if not Codec.is_valid_snapshot(decoded):
+						_finish("invalid_snapshot")
+						return
 					continue
 				if _accept_welcome(decoded):
 					return
 				_finish("invalid_welcome")
 				return
 			elif _state == "connected":
+				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "snapshot":
+					if not Codec.is_valid_snapshot(decoded):
+						_finish("invalid_snapshot")
+						return
+					if decoded["snapshotSeq"] > _last_snapshot_seq and decoded["tick"] >= _last_tick:
+						_last_snapshot_seq = int(decoded["snapshotSeq"])
+						_last_tick = int(decoded["tick"])
+						emit_signal("zone_snapshot", decoded)
+						if _peer != active_peer:
+							return
+					continue
 				if Codec.is_valid_reject(decoded):
-					var reject_code: String = decoded["code"]
-					_finish("server_reject")
-					emit_signal("zone_rejected", reject_code)
-					return
+					# Post-welcome rejects are per-command feedback, not an auth failure.
+					emit_signal("zone_rejected", str(decoded["code"]))
+					if _peer != active_peer:
+						return
+					continue
 	if _peer == active_peer and active_peer.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 		_finish("closed")
 
@@ -120,6 +140,8 @@ func _accept_welcome(raw: Variant) -> bool:
 	if not Codec.is_valid_welcome(raw):
 		return false
 	_received_welcome = true
+	_last_snapshot_seq = int(raw["snapshotSeq"])
+	_last_tick = int(raw["tick"])
 	_state = "connected"
 	emit_signal("zone_connected")
 	return true
@@ -132,6 +154,8 @@ func _finish(reason: String, notify: bool = true) -> void:
 	_hello = ""
 	_state = "closed"
 	_received_welcome = false
+	_last_snapshot_seq = -1
+	_last_tick = -1
 	set_process(false)
 	if old != "closed" and notify:
 		emit_signal("zone_closed", reason)

@@ -20,6 +20,10 @@ class FakeLogoutAuth:
 class FakeApi:
 	extends Node
 	var calls := 0
+	var cancelled := 0
+
+	func cancel() -> void:
+		cancelled += 1
 	var server := ""
 	var build := ""
 
@@ -28,6 +32,27 @@ class FakeApi:
 		server = server_base_url
 		build = client_build
 		return true
+
+class FakeZone:
+	extends Node
+	var connect_calls := 0
+	var close_calls := 0
+	var ticket_length := 0
+	var last_server := ""
+	var allow_connect := true
+	var active_state := "closed"
+
+	func state_name() -> String:
+		return active_state
+
+	func connect_zone(base_url: String, ticket: String) -> bool:
+		connect_calls += 1
+		last_server = base_url
+		ticket_length = ticket.length()
+		return allow_connect
+
+	func close_zone() -> void:
+		close_calls += 1
 
 func require(condition: bool, message: String) -> void:
 	if not condition:
@@ -81,6 +106,11 @@ func verify() -> void:
 	var fake_api := FakeApi.new()
 	enabled_scene.add_child(fake_api)
 	enabled_scene._api = fake_api
+	var real_zone: Node = enabled_scene._zone_socket
+	real_zone.queue_free()
+	var fake_zone := FakeZone.new()
+	enabled_scene.add_child(fake_zone)
+	enabled_scene._zone_socket = fake_zone
 	enabled_scene._on_auth_session_succeeded()
 	require(fake_api.calls == 1, "confirmed session did not request one zone ticket")
 	require(fake_api.server == Config.PRODUCT_SERVER, "zone ticket used the wrong server")
@@ -91,17 +121,34 @@ func verify() -> void:
 		"zoneId": "observatory_threshold",
 		"expiresAt": "2026-10-18T19:00:00.000Z",
 	})
-	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher angemeldet · Zonenticket bestätigt", "confirmed ticket state missing")
-	require(enabled_scene.get_node("%Login").text == "Angemeldet", "confirmed ticket action state missing")
+	require(fake_zone.connect_calls == 1, "confirmed ticket did not open a zone socket")
+	require(fake_zone.ticket_length == 48, "zone socket received an incorrect ticket length")
+	require(fake_zone.last_server == Config.PRODUCT_SERVER, "zone socket used the wrong origin")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung wird aufgebaut", "ticket prematurely reported a connected zone")
+	require(enabled_scene.get_node("%Login").text == "Verbinden", "handshake action state missing")
+	fake_zone.active_state = "connected"
+	enabled_scene._on_zone_connected()
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher mit Aurion verbunden", "validated welcome did not mark zone connected")
+	require(enabled_scene.get_node("%Login").text == "Verbunden", "validated welcome action state missing")
+	enabled_scene._on_zone_rejected("COMBAT_SKILL_COOLDOWN")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher mit Aurion verbunden", "recoverable command rejection changed connected UI")
+	require(enabled_scene.get_node("%Login").text == "Verbunden", "recoverable command rejection changed action state")
 	var fake_logout := FakeLogoutAuth.new()
 	fake_logout.in_flight = true
 	enabled_scene.add_child(fake_logout)
+	fake_zone.active_state = "authenticating"
+	enabled_scene._on_zone_rejected("PROTOCOL_VERSION_UNSUPPORTED")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung abgelehnt", "server rejection not displayed")
+	enabled_scene._on_zone_closed("server_reject")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung abgelehnt", "server reject overwritten by socket close")
 	enabled_scene._auth_start = fake_logout
 	enabled_scene._on_zone_ticket_failed("AURION_API_AUTH_REQUIRED")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "ticket failure state missing")
 	require(enabled_scene.get_node("%Login").disabled, "in-flight logout restored login early")
 	require(fake_logout.logout_calls == 0, "in-flight logout was started twice")
 	enabled_scene._on_auth_logout_terminal()
+	require(fake_zone.close_calls >= 2, "logout did not terminate zone socket")
+	require(fake_api.cancelled > 0, "logout did not clear pending ticket API")
 	require(not enabled_scene.get_node("%Login").disabled, "terminal logout did not restore login")
 	require(enabled_scene.get_node("%Login").text == "Anmelden", "terminal logout action state missing")
 	enabled_scene.queue_free()
