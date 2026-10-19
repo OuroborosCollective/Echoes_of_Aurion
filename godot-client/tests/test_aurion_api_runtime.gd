@@ -206,6 +206,35 @@ func verify() -> void:
 	require(request_error == "AURION_API_AUTH_REQUIRED", "refresh failure did not require auth")
 	require(auth.access_token().is_empty(), "refresh failure retained local authority")
 
+	# A cancelled HTTPRequest can complete after another ticket attempt begins.
+	# Only the epoch attached to the originating HTTPRequest may be delivered.
+	var epoch_auth := FakeAuth.new()
+	root.add_child(epoch_auth)
+	var epoch_api := AurionApi.new(epoch_auth)
+	epoch_api.zone_ticket_succeeded.connect(_on_zone_ticket)
+	epoch_api.request_failed.connect(_on_request_failure)
+	root.add_child(epoch_api)
+	await process_frame
+	epoch_api._active = true
+	epoch_api._sent_access_token = epoch_auth.current_access
+	epoch_api._sent_session_generation = epoch_auth.session_generation()
+	var old_epoch: int = epoch_api._request_epoch
+	epoch_api.cancel()
+	epoch_api._active = true
+	epoch_api._sent_access_token = epoch_auth.current_access
+	epoch_api._sent_session_generation = epoch_auth.session_generation()
+	request_completed = false
+	request_succeeded = false
+	request_failure_count = 0
+	var stale_ticket_body := JSON.stringify([{"result":{"data":{"json":{"ticket":"q".repeat(48),"zoneId":"observatory_threshold","expiresAt":"2026-10-19T10:30:00.000Z"}}}}]).to_utf8_buffer()
+	epoch_api._on_wire_request_completed(old_epoch, HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(["Content-Type: application/json"]), stale_ticket_body)
+	require(not request_completed, "old HTTP epoch delivered a ticket into replacement request")
+	require(request_failure_count == 0, "old HTTP epoch failed replacement request")
+	require(epoch_api._active, "old HTTP epoch terminated replacement request")
+	epoch_api.cancel()
+	epoch_api.queue_free()
+	epoch_auth.queue_free()
+
 	var replacement_auth := FakeAuth.new()
 	root.add_child(replacement_auth)
 	var stale_api := AurionApi.new(replacement_auth)
