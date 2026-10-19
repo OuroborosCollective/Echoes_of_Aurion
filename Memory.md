@@ -3381,3 +3381,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1056 — test(godot/g13): run real Godot process against isolated Aurion MariaDB gateway
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1056 merge=a74cf99f299e31aae365788235c168eebd2bd44f -->
+Task: Merge PR #1056 into `main` — test(godot/g13): run real Godot process against isolated Aurion MariaDB gateway.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-local-test-pack.yml`
+- `godot-client/tests/integration/test_zone_gateway_real.gd`
+- `godot-client/tests/integration/test_zone_gateway_real.gd.uid`
+- `server/zoneGateway.godot.e2e.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1056
+- Merge commit: `a74cf99f299e31aae365788235c168eebd2bd44f`
+- PR head: `00aa2ac961b310359d260197c53b3672302cea2d`
+- Merged at: 2026-10-19T05:51:35Z
+- Post-merge workflow run: 39206706452
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
