@@ -17,6 +17,8 @@ func verify() -> void:
 	check(received.size() == 1 and received[0] == valid, "callback not forwarded exactly once")
 	check(not bridge.deliver_for_test(valid, true), "same callback replay forwarded")
 	check(received.size() == 1, "replayed callback emitted")
+	bridge.free()
+	await process_frame
 	if failures.is_empty():
 		print("Godot native Android intent bridge verified (headless injection only)")
 		quit(0)
