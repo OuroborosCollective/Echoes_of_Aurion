@@ -111,6 +111,18 @@ describe("Aurion CAG deterministic design oracle", () => {
     expect(probe.truthNotice).toContain("does not assign textures or modify world state");
   });
 
+  it("fails closed on an empty or partial canonical chunk before sending Wolfram BinCounts", () => {
+    const valid = generateBaseWorldChunk({
+      worldId: "echoes-of-aurion-global",
+      worldSeed: "echoes-of-aurion-v1",
+      coordinate: { x: 0, z: 0 },
+    });
+    for (const tiles of [[], valid.tiles.slice(0, 255)]) {
+      expect(() => buildTerrainTexturizationCagProbe({ ...valid, tiles }))
+        .toThrow("terrain tile count does not match the canonical world chunk grid");
+    }
+  });
+
   it("recomputes every current world-asset scale from measured bounds and category targets", () => {
     for (const asset of worldAssetCatalog.assets) {
       expect(WORLD_ASSET_TARGET_MAX_EXTENT[asset.category]).toBeDefined();
