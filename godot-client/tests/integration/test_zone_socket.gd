@@ -273,6 +273,34 @@ func verify() -> void:
 	valid_respawn["resources"]["nodes"][0]["respawnAtTick"] = 2
 	require(Codec.is_valid_welcome(valid_respawn), "future depleted resource respawn rejected")
 
+	# Canonical Aurion validators enforce increasing wire identity order for
+	# mobs, combatants and resource nodes. A client must not bless a shuffled
+	# array as server-confirmed truth even if every element is individually valid.
+	var ordered_multi: Dictionary = populated.duplicate(true)
+	var extra_presence: Dictionary = ordered_multi["presences"][0].duplicate(true)
+	extra_presence["entityId"] = "player:2"
+	extra_presence["userId"] = 2
+	ordered_multi["presences"].append(extra_presence)
+	var extra_mob: Dictionary = ordered_multi["mobs"][0].duplicate(true)
+	extra_mob["entityId"] = "mob_2"
+	ordered_multi["mobs"].append(extra_mob)
+	var extra_combatant: Dictionary = ordered_multi["combatants"][0].duplicate(true)
+	extra_combatant["entityId"] = "player:2"
+	ordered_multi["combatants"].append(extra_combatant)
+	require(Codec.is_valid_welcome(ordered_multi), "valid ordered two-entity snapshot rejected")
+	var shuffled_resources: Dictionary = ordered_multi.duplicate(true)
+	var shuffled_resource_nodes: Array = shuffled_resources["resources"]["nodes"]
+	shuffled_resource_nodes.reverse()
+	require(not Codec.is_valid_welcome(shuffled_resources), "unordered resource list accepted contrary to canonical server contract")
+	var shuffled_mobs: Dictionary = ordered_multi.duplicate(true)
+	var shuffled_mob_nodes: Array = shuffled_mobs["mobs"]
+	shuffled_mob_nodes.reverse()
+	require(not Codec.is_valid_welcome(shuffled_mobs), "unordered mob list accepted contrary to canonical server contract")
+	var shuffled_combatants: Dictionary = ordered_multi.duplicate(true)
+	var shuffled_combatant_nodes: Array = shuffled_combatants["combatants"]
+	shuffled_combatant_nodes.reverse()
+	require(not Codec.is_valid_welcome(shuffled_combatants), "unordered combatant list accepted contrary to canonical server contract")
+
 	snapshot_wire["presences"].append(snapshot_wire["presences"][0].duplicate())
 	require(not Codec.is_valid_snapshot(snapshot_wire), "duplicate presence entity accepted")
 
