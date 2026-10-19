@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createLoginPreset,validateSignerConfig,validateLoginArtifact,verifySignerOnDisk } from './login-gradle-export.mjs';
-const preset='[preset.0]\nname="Android Preview"\nplatform="Android"\ninclude_filter="net/contracts/*.json,override.cfg"\n[preset.0.options]\ngradle_build/use_gradle_build=false\npackage/unique_name="org.ouroboroscollective.aurion.godot.preview"\npackage/signed=true\narchitectures/arm64-v8a=true\n';
+const preset='[preset.0]\nname="Android Preview"\nplatform="Android"\ninclude_filter="net/contracts/*.json,override.cfg"\n[preset.0.options]\ngradle_build/use_gradle_build=false\nversion/name="0.1.0-preview"\npackage/unique_name="org.ouroboroscollective.aurion.godot.preview"\npackage/name="Aurion Preview"\npackage/signed=true\narchitectures/arm64-v8a=true\n';
 const fp='A1:'.repeat(31)+'A1';
 const signer={AURION_LOGIN_KEYSTORE_PATH:'/secured/aurion.jks',AURION_LOGIN_KEY_ALIAS:'aurion',AURION_LOGIN_KEYSTORE_PASSWORD:'test123456',AURION_LOGIN_KEY_PASSWORD:'test123456',AURION_LOGIN_SIGNER_SHA256:fp};
 test('Gradle login preset is separate, classic Preview unchanged',()=>{
@@ -13,6 +13,10 @@ test('Gradle login preset is separate, classic Preview unchanged',()=>{
  assert.equal(changed.slice(0,preset.length),preset);
  assert.match(changed,/\[preset\.1\]\nname="Android Login"/);
  assert.match(changed,/gradle_build\/use_gradle_build=true/);
+ const loginPreset=changed.slice(changed.indexOf('[preset.1]'));
+ assert.match(loginPreset,/package\/unique_name="org\.ouroboroscollective\.aurion\.godot\.login"/);
+ assert.match(loginPreset,/package\/name="Aurion Login"/);
+ assert.match(loginPreset,/version\/name="0\.1\.0-login"/);
  assert.throws(()=>createLoginPreset(changed));
 });
 test('tampered Preview config and mismatched signer fail closed',()=>{
@@ -20,15 +24,16 @@ test('tampered Preview config and mismatched signer fail closed',()=>{
  assert.equal(validateSignerConfig(signer).expectedFingerprint,fp);
  assert.throws(()=>validateSignerConfig({...signer,AURION_LOGIN_KEY_PASSWORD:'different'}),/same password/);
 });
-const badge="package: name='org.ouroboroscollective.aurion.godot.preview' versionCode='1' versionName='0.1.0-preview'\napplication-label:'Aurion Preview'\nuses-permission: name='android.permission.INTERNET'\nnative-code: 'arm64-v8a'\nsdkVersion:'24'\ntargetSdkVersion:'36'";
+const badge="package: name='org.ouroboroscollective.aurion.godot.login' versionCode='1' versionName='0.1.0-login'\napplication-label:'Aurion Login'\nuses-permission: name='android.permission.INTERNET'\nnative-code: 'arm64-v8a'\nsdkVersion:'24'\ntargetSdkVersion:'36'";
 const signature="Verified using v2 scheme (APK Signature Scheme v2): true\nSigner #1 certificate SHA-256 digest: "+'a1'.repeat(32);
 const manifest='      E: activity (line=1)\n        A: android:name="org.godotengine.godot.GodotApp"\n      E: activity-alias (line=2)\n        A: android:exported=(type 0x12)0xffffffff\n        A: android:targetActivity="org.godotengine.godot.GodotApp"\n        E: intent-filter (line=3)\n          A: android:name="android.intent.action.MAIN"\n          A: android:name="android.intent.category.LAUNCHER"\n        E: intent-filter (line=4)\n          A: android:autoVerify=(type 0x12)0xffffffff\n          A: android:name="android.intent.action.VIEW"\n          A: android:name="android.intent.category.DEFAULT"\n          A: android:name="android.intent.category.BROWSABLE"\n          A: android:scheme="https"\n          A: android:host="arelogic.space"\n          A: android:path="/app/auth/callback"';
 const entries=['lib/arm64-v8a/libgodot_android.so','assets/override.cfg'];
 const inspect=(m=manifest,s=signature,b=badge,e=entries)=>validateLoginArtifact({manifest:m,signature:s,badging:b,entries:e,expectedFingerprint:fp});
-test('valid package cert and OS intent contract',()=>{assert.equal(inspect().certificateSha256,fp);});
+test('valid package cert and OS intent contract',()=>{assert.equal(inspect().certificateSha256,fp);assert.equal(inspect().packageName,'org.ouroboroscollective.aurion.godot.login');});
 test('wrong signer package or unwanted permission rejected',()=>{
  assert.throws(()=>inspect(manifest,signature.replace('a1','ff')));
- assert.throws(()=>inspect(manifest,signature,badge.replace('godot.preview','godot.fake')));
+ assert.throws(()=>inspect(manifest,signature,badge.replace('godot.login','godot.preview').replace('Aurion Login','Aurion Preview').replace('0.1.0-login','0.1.0-preview')));
+ assert.throws(()=>inspect(manifest,signature,badge.replace('godot.login','godot.fake')));
  assert.throws(()=>inspect(manifest,signature,badge+"\nuses-permission: name='android.permission.CAMERA'"));
 });
 test('missing callback verification and wrong host/path rejected',()=>{

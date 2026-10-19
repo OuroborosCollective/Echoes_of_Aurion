@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { lstat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { previewPackage, validateApk } from './apk-readback.mjs';
+import { previewPackage, loginPackage, loginIdentity, validateApk } from './apk-readback.mjs';
+export { loginPackage };
 import { requireLoginSigner } from './android-gradle-link.mjs';
 
 export const callbackUrl='https://arelogic.space/app/auth/callback';
@@ -13,14 +14,17 @@ export function createLoginPreset(preview) {
  assert.ok(!preview.includes('[preset.1]'),'Android Login preset already exists');
  for (const required of [
   '[preset.0.options]', 'gradle_build/use_gradle_build=false',
-  'package/unique_name="'+previewPackage+'"', 'package/signed=true',
+  'package/unique_name="'+previewPackage+'"', 'package/name="Aurion Preview"', 'version/name="0.1.0-preview"', 'package/signed=true',
   'include_filter="net/contracts/*.json,override.cfg"',
   'architectures/arm64-v8a=true',
  ]) assert.ok(preview.includes(required),'Preview input missing '+required);
  const replacement=preview.replaceAll('[preset.0]','[preset.1]')
   .replaceAll('[preset.0.options]','[preset.1.options]')
   .replace('name="Android Preview"','name="Android Login"')
-  .replace('gradle_build/use_gradle_build=false','gradle_build/use_gradle_build=true');
+  .replace('gradle_build/use_gradle_build=false','gradle_build/use_gradle_build=true')
+  .replace('package/unique_name="'+previewPackage+'"','package/unique_name="'+loginPackage+'"')
+  .replace('package/name="Aurion Preview"','package/name="Aurion Login"')
+  .replace('version/name="0.1.0-preview"','version/name="0.1.0-login"');
  assert.ok(!replacement.includes('gradle_build/use_gradle_build=false'));
  return preview+(preview.endsWith('\n')?'':'\n')+'\n'+replacement;
 }
@@ -51,7 +55,7 @@ export async function verifySignerOnDisk(env, keytoolPath) {
 /** aapt/apksigner readback from the actual APK; OS and live domain still unverified. */
 export function validateLoginArtifact({badging,manifest,signature,entries,expectedFingerprint}) {
  assert.match(expectedFingerprint,/^(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$/);
- const identity=validateApk(badging,signature,entries,manifest);
+ const identity=validateApk(badging,signature,entries,manifest,loginIdentity);
  const expectedHex=expectedFingerprint.replaceAll(':','').toLowerCase();
  assert.equal(identity.certificateSha256,expectedHex,'APK signer differs from persisted identity');
  assert.ok(entries.includes('assets/override.cfg'),'source revision asset missing');
