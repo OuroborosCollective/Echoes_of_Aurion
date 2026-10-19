@@ -12,7 +12,7 @@ func _ready() -> void:
 	if not Engine.has_singleton("AndroidRuntime"):
 		return
 	_android_runtime = Engine.get_singleton("AndroidRuntime")
-	if _android_runtime == null or not _android_runtime.has_method("getJavaGodotActivity"):
+	if _android_runtime == null or not _android_runtime.has_method("getActivity"):
 		return
 	_activity = _android_runtime.getJavaGodotActivity()
 
