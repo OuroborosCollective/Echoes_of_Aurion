@@ -116,6 +116,24 @@ func verify() -> void:
 	check(visual.visual_mm("player:2", 1150) == null, "despawned player reappeared during interpolation")
 	check(not visual.capture(world, 1200), "visual replay accepted duplicate sequence")
 
+	# Network bursts can deliver a new confirmed tick while the last visual
+	# transition is only halfway rendered. The next transition must start at
+	# the currently displayed point, never jump to the old confirmed endpoint.
+	var burst: Dictionary = next.duplicate(true)
+	burst["snapshotSeq"] = 4
+	burst["tick"] = 12
+	burst["resources"]["revision"] = 3
+	burst["presences"][0]["position"]["x"] = 3000
+	check(Codec.is_valid_snapshot(burst), "G11 burst fixture violates zone contract")
+	check(world.apply_snapshot(burst), "new confirmed burst snapshot rejected")
+	check(registry.sync(world), "registry dropped confirmed burst")
+	check(visual.capture(world, 1150), "visual dropped confirmed burst")
+	check(visual.confirmed_mm("player:1") == {"x":3000,"z":-2000}, "burst changed canonical position")
+	check(visual.visual_mm("player:1", 1150) == Vector2(1500,-2000), "new visual snapshot jumped during an unfinished transition")
+	check(visual.visual_mm("player:1", 1200) == Vector2(2250,-2000), "bursty interpolation midpoint ignored prior visual position")
+	check(visual.visual_mm("player:1", 1250) == Vector2(3000,-2000), "bursty interpolation did not converge to server-confirmed endpoint")
+	check(visual.visual_mm("player:1", 8000) == Vector2(3000,-2000), "burst caused extrapolated position after confirmation")
+
 	world.reset()
 	registry.reset()
 	visual.reset()
