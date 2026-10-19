@@ -1,4 +1,6 @@
 import type { Express, Request, Response } from "express";
+import { canConnectToDatabase } from "./db";
+import { nativeAuthProductionReady } from "./nativeAuthReleaseGate";
 import { rateLimit } from "express-rate-limit";
 import {
   NATIVE_AUTH_CONTRACT_VERSION as VERSION,
@@ -43,7 +45,7 @@ export interface NativeAuthHttpDependencies {
 const DEFAULTS: NativeAuthHttpDependencies = {
   // Production stays fail-closed until native schema 0075, OIDC/browser handoff
   // and owner release evidence have been independently approved.
-  ready: async () => false,
+  ready: async () => nativeAuthProductionReady(process.env, await canConnectToDatabase(1000)),
   start: startNativeAuthTransaction,
   browserTransaction: isNativeAuthBrowserTransactionPending,
   issueHandoff: issueNativeAuthHandoffAfterVerifiedBrowserLogin,

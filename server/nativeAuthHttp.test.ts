@@ -17,6 +17,15 @@ describe("native HTTP session boundary",()=>{
  const previousSealKey=process.env.NATIVE_AUTH_STATE_SEAL_KEY;
  beforeAll(()=>{process.env.NATIVE_AUTH_STATE_SEAL_KEY=Buffer.alloc(32,23).toString("base64url")});
  afterAll(()=>{if(previousSealKey===undefined)delete process.env.NATIVE_AUTH_STATE_SEAL_KEY;else process.env.NATIVE_AUTH_STATE_SEAL_KEY=previousSealKey});
+ it("requires explicit server release gate and valid seal key before native auth is enabled",async()=>{
+  const { nativeAuthProductionReady }=await import("./nativeAuthReleaseGate");
+  const goodSeal=Buffer.alloc(32,23).toString("base64url");
+  expect(nativeAuthProductionReady({ NATIVE_AUTH_RELEASE_ENABLED:"true", NATIVE_AUTH_STATE_SEAL_KEY:goodSeal },true)).toBe(true);
+  expect(nativeAuthProductionReady({ NATIVE_AUTH_RELEASE_ENABLED:"true", NATIVE_AUTH_STATE_SEAL_KEY:goodSeal },false)).toBe(false);
+  expect(nativeAuthProductionReady({ NATIVE_AUTH_RELEASE_ENABLED:"false", NATIVE_AUTH_STATE_SEAL_KEY:goodSeal },true)).toBe(false);
+  expect(nativeAuthProductionReady({ NATIVE_AUTH_RELEASE_ENABLED:"true", NATIVE_AUTH_STATE_SEAL_KEY:"invalid" },true)).toBe(false);
+  expect(nativeAuthProductionReady({ NATIVE_AUTH_RELEASE_ENABLED:"true" },true)).toBe(false);
+ });
  it("stays disabled without approval",async()=>{const x=await setup();try{const r=await post(x.url+"/exchange",request);expect(r.status).toBe(503);expect(r.headers.get("cache-control")).toContain("no-store");}finally{await x.close()}});
  it("exchanges only strict versioned payload and does not set cookies",async()=>{const exchange=vi.fn(async()=>token);const x=await setup({ready:async()=>true,exchange});try{
  const r=await post(x.url+"/exchange",request);expect(r.status).toBe(200);expect(await r.json()).toEqual(token);expect(r.headers.get("set-cookie")).toBeNull();expect(exchange).toHaveBeenCalledWith(request);
