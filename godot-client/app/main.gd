@@ -138,7 +138,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 
 func _on_zone_connected() -> void:
 	if not _confirmed_zone.has_state():
-		_zone_socket.close_zone()
+		_on_zone_ticket_failed("AURION_ZONE_WELCOME_PROJECTION_MISSING")
 		return
 	status.text = "Sicher mit Aurion verbunden"
 	login.text = "Verbunden"
