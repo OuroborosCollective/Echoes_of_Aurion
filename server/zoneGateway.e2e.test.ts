@@ -8,6 +8,7 @@ import { consumeZoneConnectionTicket, getDb } from "./db";
 import { registerZoneGateway } from "./zoneGateway";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { ZONE_PROTOCOL_VERSION } from "../shared/zonePresenceContract";
 
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
@@ -67,7 +68,7 @@ function openWithTicket(url: string, ticket: string): Promise<{ socket: WebSocke
     const socket = new WebSocket(url, { headers: { Origin: "http://127.0.0.1" } });
     const timeout = setTimeout(() => reject(new Error("Timed out while joining the read-only zone.")), 5_000);
     socket.once("error", reject);
-    socket.once("open", () => socket.send(JSON.stringify({ type: "hello", ticket, zoneId: "observatory_threshold", protocolVersion: 2 })));
+    socket.once("open", () => socket.send(JSON.stringify({ type: "hello", ticket, zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION })));
     socket.on("message", raw => {
       const message = JSON.parse(raw.toString("utf8")) as ZoneMessage;
       if (message.type !== "welcome") return;
@@ -139,7 +140,7 @@ describeWithDatabase("zone gateway e2e", () => {
 
       const reused = new WebSocket(runtime.url, { headers: { Origin: "http://127.0.0.1" } });
       await once(reused, "open");
-      reused.send(JSON.stringify({ type: "hello", ticket: issued.ticket, zoneId: "observatory_threshold", protocolVersion: 2 }));
+      reused.send(JSON.stringify({ type: "hello", ticket: issued.ticket, zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION }));
       const [closeCode] = await once(reused, "close") as [number];
       expect(closeCode).toBe(1008);
     } finally {
