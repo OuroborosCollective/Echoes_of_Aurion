@@ -4,6 +4,8 @@ const RuntimeConfig = preload("res://config/runtime_config.gd")
 const NativeAuthStart = preload("res://net/auth/native_auth_start.gd")
 const AurionApi = preload("res://net/api/aurion_api.gd")
 const ZoneSocket = preload("res://net/zone_socket.gd")
+const SessionLifecycle = preload("res://app/session_lifecycle.gd")
+const ReconnectPolicy = preload("res://net/reconnect_policy.gd")
 const ZoneState = preload("res://projection/zone_state.gd")
 const EntityRegistry = preload("res://projection/entity_registry.gd")
 const SnapshotInterpolator = preload("res://projection/snapshot_interpolator.gd")
@@ -25,6 +27,9 @@ var _zone_reject_code := ""
 var _confirmed_zone = ZoneState.new()
 var _entities = EntityRegistry.new()
 var _visuals = SnapshotInterpolator.new()
+var _lifecycle = SessionLifecycle.new()
+var _reconnect = ReconnectPolicy.new()
+var _recovering_ticket := false
 
 func _ready() -> void:
 	Engine.max_fps = 30
@@ -60,6 +65,7 @@ func _ready() -> void:
 		if _config.native_auth_start_enabled:
 			development_notice.text = "Die Anmeldung wird sicher im Systembrowser fortgesetzt."
 			login.disabled = false
+	set_process(true)
 	resized.connect(_fit_layout)
 	_fit_layout()
 
@@ -109,6 +115,9 @@ func _on_auth_session_succeeded() -> void:
 	_api.issue_zone_ticket(_config.server_base_url, _config.client_build)
 
 func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
+	if _lifecycle.is_suspended():
+		return
+	_recovering_ticket = false
 	login.disabled = true
 	if receipt.get("zoneId") != "observatory_threshold" or typeof(receipt.get("ticket")) != TYPE_STRING:
 		_on_zone_ticket_failed("AURION_API_RESPONSE_INVALID")
@@ -124,6 +133,9 @@ func _reset_projection() -> void:
 	_visuals.reset()
 
 func _on_zone_welcome(welcome: Dictionary) -> void:
+	if _lifecycle.is_suspended():
+		return
+	_reconnect.reset()
 	_reset_projection()
 	if not _confirmed_zone.apply_welcome(welcome):
 		_zone_socket.close_zone()
@@ -132,6 +144,8 @@ func _on_zone_welcome(welcome: Dictionary) -> void:
 	_visuals.capture(_confirmed_zone, Time.get_ticks_msec())
 
 func _on_zone_snapshot(snapshot: Dictionary) -> void:
+	if _lifecycle.is_suspended():
+		return
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
 		_visuals.capture(_confirmed_zone, Time.get_ticks_msec())
@@ -165,6 +179,11 @@ func _on_zone_closed(_reason: String) -> void:
 		_on_auth_logout_terminal()
 
 func _on_zone_ticket_failed(_error_code: String) -> void:
+	if _reconnect.active() and not _lifecycle.is_suspended():
+		_recovering_ticket = false
+		if _reconnect.retry_after_failure(Time.get_ticks_msec()):
+			status.text = "Verbindung wird erneut versucht"
+			return
 	_reset_projection()
 	_zone_socket.close_zone()
 	status.text = "Verbindung derzeit nicht verfügbar"
@@ -176,6 +195,8 @@ func _on_zone_ticket_failed(_error_code: String) -> void:
 		_on_auth_logout_terminal()
 
 func _on_auth_logout_terminal(_error_code: String = "") -> void:
+	_reconnect.reset()
+	_recovering_ticket = false
 	_reset_projection()
 	_api.cancel()
 	_zone_socket.close_zone()
@@ -190,6 +211,51 @@ func _on_auth_session_failed(_error_code: String) -> void:
 	status.text = "Anmeldung derzeit nicht verfügbar"
 	login.text = "Anmelden"
 	login.disabled = not _config.native_auth_start_enabled
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		_on_app_suspended()
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		_on_app_resumed()
+
+func _process(_delta: float) -> void:
+	if _reconnect.active() and not _lifecycle.is_suspended():
+		_poll_reconnect(Time.get_ticks_msec())
+
+func _on_app_suspended() -> void:
+	if not _lifecycle.suspend(_confirmed_zone.has_state() or _zone_socket.state_name() == "connected"):
+		return
+	_reconnect.reset()
+	_recovering_ticket = false
+	_api.cancel()
+	_zone_socket.close_zone()
+	_reset_projection()
+	if not _awaiting_callback:
+		status.text = "App pausiert – Verbindung getrennt"
+		login.disabled = true
+
+func _on_app_resumed() -> void:
+	if not _lifecycle.is_suspended():
+		return
+	if _lifecycle.resume():
+		_reconnect.begin(Time.get_ticks_msec())
+		status.text = "Sitzung wird neu bestätigt"
+
+func _poll_reconnect(now_ms: int) -> void:
+	if not _reconnect.active() or _lifecycle.is_suspended() or _recovering_ticket:
+		return
+	if not _reconnect.take_if_due(now_ms):
+		return
+	if not _auth_start.protected_response_allowed():
+		_reconnect.reset()
+		_on_auth_session_failed("NATIVE_AUTH_SESSION_EXPIRED")
+		return
+	_recovering_ticket = true
+	status.text = "Neues Zonenticket wird angefordert"
+	if not _api.issue_zone_ticket(_config.server_base_url, _config.client_build):
+		_recovering_ticket = false
+		if _reconnect.active():
+			_reconnect.retry_after_failure(now_ms)
 
 func _fit_layout() -> void:
 	if not is_node_ready():
