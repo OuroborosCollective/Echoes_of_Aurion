@@ -139,6 +139,45 @@ func verify() -> void:
 	welcome["resources"]["nodes"] = nodes
 	var wire: Dictionary = JSON.parse_string(JSON.stringify(welcome))
 	require(Codec.is_valid_welcome(wire), "valid round-tripped wire welcome was rejected")
+
+	# Actual zone joins normally include the authenticated player, mobs and
+	# combatants. The client must accept their checked shapes, not empty-only.
+	var populated: Dictionary = welcome.duplicate(true)
+	populated["presences"] = [{
+		"entityId": "player:1", "userId": 1,
+		"position": {"x": 1000, "z": -2000},
+		"lastAcceptedClientSeq": 0,
+	}]
+	populated["mobs"] = [{
+		"entityId": "mob_1", "archetype": "clockwork_stalker",
+		"level": 1, "state": "idle", "position": {"x": 1000, "z": 2000},
+		"targetEntityId": null, "isBoss": false, "isElite": false,
+		"health": 10, "maxHealth": 10,
+	}]
+	populated["combatants"] = [{
+		"entityId": "player:1", "health": 20, "maxHealth": 20,
+		"stamina": 10, "maxStamina": 10, "alive": true,
+		"combatLevel": 1, "lastCombatSequence": 0,
+	}]
+	require(Codec.is_valid_welcome(JSON.parse_string(JSON.stringify(populated))), "real nested welcome state rejected")
+	var wrong_presence: Dictionary = populated.duplicate(true)
+	wrong_presence["presences"][0]["userId"] = -2
+	require(not Codec.is_valid_welcome(wrong_presence), "invalid presence userId accepted")
+	var wrong_mob: Dictionary = populated.duplicate(true)
+	wrong_mob["mobs"][0]["targetEntityId"] = "mob_1"
+	require(not Codec.is_valid_welcome(wrong_mob), "invalid mob target accepted")
+	var wrong_combatant: Dictionary = populated.duplicate(true)
+	wrong_combatant["combatants"][0]["maxHealth"] = 0
+	require(not Codec.is_valid_welcome(wrong_combatant), "invalid combatant maxHealth accepted")
+	var snapshot_wire: Dictionary = populated.duplicate(true)
+	snapshot_wire["type"] = "snapshot"
+	snapshot_wire.erase("connectionId")
+	snapshot_wire.erase("selfEntityId")
+	snapshot_wire.erase("protocolVersion")
+	require(Codec.is_valid_snapshot(JSON.parse_string(JSON.stringify(snapshot_wire))), "valid nested snapshot rejected")
+	snapshot_wire["presences"].append(snapshot_wire["presences"][0].duplicate())
+	require(not Codec.is_valid_snapshot(snapshot_wire), "duplicate presence entity accepted")
+
 	# Gateway joins emit snapshot before welcome; it must not terminate auth.
 	var early_snapshot: Dictionary = welcome.duplicate(true)
 	early_snapshot["type"] = "snapshot"
