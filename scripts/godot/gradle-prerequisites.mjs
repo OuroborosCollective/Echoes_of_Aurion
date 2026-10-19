@@ -11,7 +11,7 @@ export function parseGodotGradleVersions(config) {
  for (const key of KEYS) {
   const candidates = config.split(/\r?\n/).filter(line => new RegExp('^\\s*'+key+'\\s*:').test(line));
   assert.equal(candidates.length, 1, key+' must occur exactly once');
-  const match = candidates[0].match(new RegExp('^\\s*'+key+'\\s*:\\s*(?:'+" '([^']+)'|\"([^\"]+)\"|([0-9]+)"+')\\s*,?\\s*(?://.*)?$'.replace(/^ /, ''));
+  const match = candidates[0].match(new RegExp(String.raw`^\s*${key}\s*:\s*(?:'([^']+)'|"([^"]+)"|([0-9]+))\s*,?\s*(?://.*)?$`));
   assert.ok(match, key+' invalid declaration');
   const value = match[1] ?? match[2] ?? match[3];
   if (key === 'compileSdk') {
