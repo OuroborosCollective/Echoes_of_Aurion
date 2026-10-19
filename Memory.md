@@ -3343,3 +3343,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1053 — test(godot/g13): enforce canonical v5 ticket-to-gateway MariaDB evidence
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1053 merge=8cea90b9a9ab996aae276c1f18c65777db1709d8 -->
+Task: Merge PR #1053 into `main` — test(godot/g13): enforce canonical v5 ticket-to-gateway MariaDB evidence.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-local-test-pack.yml`
+- `server/zoneGateway.e2e.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1053
+- Merge commit: `8cea90b9a9ab996aae276c1f18c65777db1709d8`
+- PR head: `90a1912f1949e7da993083310fb2bc935c24c1ff`
+- Merged at: 2026-10-19T02:36:18Z
+- Post-merge workflow run: 39190757184
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
