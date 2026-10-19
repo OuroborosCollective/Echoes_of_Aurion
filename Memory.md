@@ -3642,3 +3642,25 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1069 — test(g09): verify real Godot Gradle SDK prerequisites before login export
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1069 merge=0e6fe3303c86ba79bf568b43429bad1f00de7d3f -->
+Task: Merge PR #1069 into `main` — test(g09): verify real Godot Gradle SDK prerequisites before login export.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/godot-android-build.yml`
+- `config/godot-toolchain.lock.json`
+- `scripts/godot/gradle-prerequisites.mjs`
+- `scripts/godot/gradle-prerequisites.test.mjs`
+- `scripts/godot/verify-gradle-template.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1069
+- Merge commit: `0e6fe3303c86ba79bf568b43429bad1f00de7d3f`
+- PR head: `71445723455c7e185633e29b6ff3a433a9e6de4e`
+- Merged at: 2026-10-19T21:03:29Z
+- Post-merge workflow run: 39324442469
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
