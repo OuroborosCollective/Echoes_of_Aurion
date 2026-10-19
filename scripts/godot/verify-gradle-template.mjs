@@ -3,13 +3,24 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { androidReport } from './android-toolchain.mjs';
-import { lock } from './toolchain.mjs';
+import { lock, run } from './toolchain.mjs';
 import { prepareGradleLinkManifest, stageGodotGradleBuild } from './android-gradle-link.mjs';
+import { verifyGodotGradleVersions, inspectLoginGradleSdk } from './gradle-prerequisites.mjs';
 
 const report = await androidReport();
 assert.equal(report.status, 'ready', 'pinned Godot Android tools required');
 const version = lock.engine.version.split('.stable.official')[0] + '.stable';
 const zip = join(report.installation, 'data/godot/export_templates', version, 'android_source.zip');
+const gradleConfig = run('unzip', ['-p', zip, 'config.gradle']);
+const versions = verifyGodotGradleVersions(gradleConfig, lock.android.gradleRequirements);
+console.log('Pinned Godot Gradle source version contract PASS:', JSON.stringify(versions));
+if (process.env.AURION_LOGIN_GRADLE_SDK_ROOT) {
+ const proof = await inspectLoginGradleSdk(process.env.AURION_LOGIN_GRADLE_SDK_ROOT, versions);
+ assert.equal(proof.status, 'ready');
+ console.log('Separate Gradle SDK version readback PASS (licenses, signer and device unverified)');
+} else {
+ console.log('Separate Gradle SDK NOT VERIFIED (provide AURION_LOGIN_GRADLE_SDK_ROOT for readback)');
+}
 const project = await mkdtemp(join(tmpdir(), 'aurion-g09-gradle-'));
 try {
   const staged = await stageGodotGradleBuild({ archive: zip, project, version });
