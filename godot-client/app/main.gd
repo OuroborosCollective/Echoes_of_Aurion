@@ -243,7 +243,7 @@ func _process(_delta: float) -> void:
 		_poll_reconnect(Time.get_ticks_msec())
 
 func _on_app_suspended() -> void:
-	var must_restore := _confirmed_zone.has_state() or _zone_socket.state_name() == "connected" or _ticket_pending or _reconnect.active()
+	var must_restore: bool = _confirmed_zone.has_state() or _zone_socket.state_name() == "connected" or _ticket_pending or _reconnect.active()
 	if not _lifecycle.suspend(must_restore):
 		return
 	_reconnect.reset()
