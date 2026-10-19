@@ -138,7 +138,7 @@ describe("AIM-599 deterministic terrain pipeline", () => {
     expect(probe.code).toMatch(/^h=\{\{/);
     expect(probe.code).toMatch(/s=\{\{/);
     expect(probe.code).toContain("var=Round[Variance[Flatten[h]]]");
-    expect(probe.code).toContain("trans=Count[sdx,x_/;x!=0]+Count[sdz,x_/;x!=0]");
+    expect(probe.code).toContain("trans=Total[Unitize[sdx], 2]+Total[Unitize[sdz], 2]");
     expect(probe.expectedExact).toMatch(/^\{[0-9]+,[0-9]+\}$/);
   });
 

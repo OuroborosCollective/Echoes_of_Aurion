@@ -107,7 +107,7 @@ describe("Aurion CAG deterministic design oracle", () => {
     expect(probe.expectedExact).toBe(
       `{${summary.totalTiles},${summary.grassTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.forestFloorTiles},${summary.ashTiles},${summary.ruinPathTiles}}`
     );
-    expect(probe.code).toContain("Count[surfaces");
+    expect(probe.code).toContain("Prepend[BinCounts[surfaces");
     expect(probe.truthNotice).toContain("does not assign textures or modify world state");
   });
 
