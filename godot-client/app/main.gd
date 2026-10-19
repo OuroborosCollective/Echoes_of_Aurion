@@ -4,6 +4,9 @@ const RuntimeConfig = preload("res://config/runtime_config.gd")
 const NativeAuthStart = preload("res://net/auth/native_auth_start.gd")
 const AurionApi = preload("res://net/api/aurion_api.gd")
 const ZoneSocket = preload("res://net/zone_socket.gd")
+const ZoneState = preload("res://projection/zone_state.gd")
+const EntityRegistry = preload("res://projection/entity_registry.gd")
+const SnapshotInterpolator = preload("res://projection/snapshot_interpolator.gd")
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
 
 @onready var card: PanelContainer = %LaunchCard
@@ -19,6 +22,9 @@ var _api: Node
 var _zone_socket: Node
 var _awaiting_callback := false
 var _zone_reject_code := ""
+var _confirmed_zone = ZoneState.new()
+var _entities = EntityRegistry.new()
+var _visuals = SnapshotInterpolator.new()
 
 func _ready() -> void:
 	Engine.max_fps = 30
@@ -38,6 +44,8 @@ func _ready() -> void:
 	_api.request_failed.connect(_on_zone_ticket_failed)
 	_zone_socket = ZoneSocket.new()
 	add_child(_zone_socket)
+	_zone_socket.zone_welcome.connect(_on_zone_welcome)
+	_zone_socket.zone_snapshot.connect(_on_zone_snapshot)
 	_zone_socket.zone_connected.connect(_on_zone_connected)
 	_zone_socket.zone_rejected.connect(_on_zone_rejected)
 	_zone_socket.zone_closed.connect(_on_zone_closed)
@@ -92,6 +100,7 @@ func handle_native_auth_callback(raw_url: Variant) -> bool:
 
 func _on_auth_session_succeeded() -> void:
 	_zone_socket.close_zone()
+	_reset_projection()
 	_zone_reject_code = ""
 	_awaiting_callback = false
 	status.text = "Zonenticket wird angefordert"
@@ -109,7 +118,28 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 	if not _zone_socket.connect_zone(_config.server_base_url, receipt["ticket"]):
 		_on_zone_ticket_failed("AURION_ZONE_SOCKET_UNAVAILABLE")
 
+func _reset_projection() -> void:
+	_confirmed_zone.reset()
+	_entities.reset()
+	_visuals.reset()
+
+func _on_zone_welcome(welcome: Dictionary) -> void:
+	_reset_projection()
+	if not _confirmed_zone.apply_welcome(welcome):
+		_zone_socket.close_zone()
+		return
+	_entities.sync(_confirmed_zone)
+	_visuals.capture(_confirmed_zone, Time.get_ticks_msec())
+
+func _on_zone_snapshot(snapshot: Dictionary) -> void:
+	if _confirmed_zone.apply_snapshot(snapshot):
+		_entities.sync(_confirmed_zone)
+		_visuals.capture(_confirmed_zone, Time.get_ticks_msec())
+
 func _on_zone_connected() -> void:
+	if not _confirmed_zone.has_state():
+		_on_zone_ticket_failed("AURION_ZONE_WELCOME_PROJECTION_MISSING")
+		return
 	status.text = "Sicher mit Aurion verbunden"
 	login.text = "Verbunden"
 	login.disabled = true
@@ -123,6 +153,7 @@ func _on_zone_rejected(code: String) -> void:
 	status.text = "Zonenverbindung abgelehnt"
 
 func _on_zone_closed(_reason: String) -> void:
+	_reset_projection()
 	if _reason == "client_close":
 		return
 	if _zone_reject_code.is_empty():
@@ -134,6 +165,7 @@ func _on_zone_closed(_reason: String) -> void:
 		_on_auth_logout_terminal()
 
 func _on_zone_ticket_failed(_error_code: String) -> void:
+	_reset_projection()
 	_zone_socket.close_zone()
 	status.text = "Verbindung derzeit nicht verfügbar"
 	login.text = "Anmelden"
@@ -144,12 +176,14 @@ func _on_zone_ticket_failed(_error_code: String) -> void:
 		_on_auth_logout_terminal()
 
 func _on_auth_logout_terminal(_error_code: String = "") -> void:
+	_reset_projection()
 	_api.cancel()
 	_zone_socket.close_zone()
 	login.text = "Anmelden"
 	login.disabled = not _config.native_auth_start_enabled
 
 func _on_auth_session_failed(_error_code: String) -> void:
+	_reset_projection()
 	_api.cancel()
 	_zone_socket.close_zone()
 	_awaiting_callback = false

@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Config = preload("res://config/runtime_config.gd")
+const ZoneCodec = preload("res://net/zone_codec.gd")
 var failures: Array[String] = []
 
 class FakeLogoutAuth:
@@ -126,7 +127,22 @@ func verify() -> void:
 	require(fake_zone.last_server == Config.PRODUCT_SERVER, "zone socket used the wrong origin")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung wird aufgebaut", "ticket prematurely reported a connected zone")
 	require(enabled_scene.get_node("%Login").text == "Verbinden", "handshake action state missing")
+	var nodes: Array = []
+	for id in ZoneCodec.NODE_IDS:
+		nodes.append({"nodeId":id, "remaining":5, "depleted":false, "respawnAtTick":null})
+	var confirmed_welcome := {
+		"type":"welcome", "protocolVersion":5, "zoneId":"observatory_threshold",
+		"connectionId":"zone_peer_startupintegration123", "selfEntityId":"player:1",
+		"snapshotSeq":1, "tick":1,
+		"presences":[{"entityId":"player:1", "userId":1, "position":{"x":1000,"z":0},"lastAcceptedClientSeq":0}],
+		"mobs":[], "combatants":[],
+		"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":nodes}
+	}
 	fake_zone.active_state = "connected"
+	enabled_scene._on_zone_connected()
+	require(enabled_scene.get_node("%ConnectionStatus").text != "Sicher mit Aurion verbunden", "connected UI accepted without verified world projection")
+	enabled_scene._on_zone_welcome(confirmed_welcome)
+	require(enabled_scene._confirmed_zone.has_state(), "native scene failed to project confirmed welcome")
 	enabled_scene._on_zone_connected()
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher mit Aurion verbunden", "validated welcome did not mark zone connected")
 	require(enabled_scene.get_node("%Login").text == "Verbunden", "validated welcome action state missing")
@@ -151,6 +167,15 @@ func verify() -> void:
 	require(fake_api.cancelled > 0, "logout did not clear pending ticket API")
 	require(not enabled_scene.get_node("%Login").disabled, "terminal logout did not restore login")
 	require(enabled_scene.get_node("%Login").text == "Anmelden", "terminal logout action state missing")
+	# A connected callback without a projected server welcome must terminate
+	# the pending login UI, not leave an unusable "connecting" screen.
+	enabled_scene._reset_projection()
+	enabled_scene.get_node("%ConnectionStatus").text = "Zonenverbindung wird aufgebaut"
+	fake_zone.active_state = "connected"
+	enabled_scene._on_zone_connected()
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "missing world projection left the UI stuck connecting")
+	require(enabled_scene.get_node("%Login").disabled, "missing world projection enabled a new login before session termination")
+	require(not enabled_scene._confirmed_zone.has_state() and enabled_scene._entities.ids("presences").is_empty(), "failed projection retained a world after close")
 	enabled_scene.queue_free()
 	await process_frame
 	ProjectSettings.set_setting("aurion/server_base_url", "https://attacker.test")
