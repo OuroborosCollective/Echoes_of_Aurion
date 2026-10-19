@@ -22,6 +22,22 @@ static func serialized_hello(ticket: String) -> String:
 		return ""
 	return encoded
 
+static func valid_move(client_seq: int, input_x: int, input_z: int) -> Dictionary:
+	if client_seq < 1 or client_seq > 2147483647:
+		return {}
+	if input_x < -1 or input_x > 1 or input_z < -1 or input_z > 1:
+		return {}
+	return {"type": "move", "clientSeq": client_seq, "input": {"x": input_x, "z": input_z}}
+
+static func serialized_move(client_seq: int, input_x: int, input_z: int) -> String:
+	var data := valid_move(client_seq, input_x, input_z)
+	if data.is_empty():
+		return ""
+	var encoded := JSON.stringify(data)
+	if encoded.to_utf8_buffer().size() > MAX_CLIENT_BYTES:
+		return ""
+	return encoded
+
 ## The original lexical wire representation must be checked before JSON.parse_string()
 ## rounds fractional tokens into IEEE-754 integers. Strings and escapes are
 ## skipped; JSON.parse_string remains responsible for structural validation.

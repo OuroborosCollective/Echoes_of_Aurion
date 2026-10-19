@@ -17,9 +17,19 @@ var _received_welcome := false
 var _reject_notifications_in_flight := false
 var _last_snapshot_seq := -1
 var _last_tick := -1
+var _next_client_seq := 1
 
 func state_name() -> String:
 	return _state
+
+func send_move(input_x: int, input_z: int) -> bool:
+	if _state != "connected" or _peer == null or _peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return false
+	var wire := Codec.serialized_move(_next_client_seq, input_x, input_z)
+	if wire.is_empty() or _peer.send_text(wire) != OK:
+		return false
+	_next_client_seq += 1
+	return true
 
 func connect_zone(base_url: String, ticket: String) -> bool:
 	if _state != "closed" or _reject_notifications_in_flight or not is_inside_tree():
@@ -43,6 +53,7 @@ func connect_zone(base_url: String, ticket: String) -> bool:
 	_state = "connecting"
 	_last_snapshot_seq = -1
 	_last_tick = -1
+	_next_client_seq = 1
 	_connected_at = Time.get_ticks_msec()
 	set_process(true)
 	return true
@@ -156,6 +167,7 @@ func _finish(reason: String, notify: bool = true) -> void:
 	_received_welcome = false
 	_last_snapshot_seq = -1
 	_last_tick = -1
+	_next_client_seq = 1
 	set_process(false)
 	if old != "closed" and notify:
 		emit_signal("zone_closed", reason)
