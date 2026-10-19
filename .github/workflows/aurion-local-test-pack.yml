@@ -116,6 +116,15 @@ jobs:
           # Here it runs against the isolated MariaDB with real Aurion-owned
           # ticket issue/consumption and the actual registered zone gateway.
           pnpm exec vitest run server/zoneGateway.e2e.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/g13-zone-gateway-v5-mariadb.log
+      - name: Verify actual Godot process against real isolated Aurion gateway and MariaDB (G13)
+        shell: bash
+        env:
+          NODE_ENV: test
+          AURION_G13_GODOT_E2E: "1"
+        run: |
+          set -euo pipefail
+          node scripts/godot/bootstrap.mjs
+          pnpm exec vitest run server/zoneGateway.godot.e2e.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/g13-real-godot-gateway-mariadb.log
       - name: Verify archive, atomic outbox and combat on separate MariaDB databases
         env:
           NODE_ENV: test

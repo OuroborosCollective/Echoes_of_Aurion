@@ -1,6 +1,7 @@
 extends Node
 ## G10 handshake transport only. No gameplay authority, no production proof.
 signal zone_connected
+signal zone_welcome(welcome: Dictionary)
 signal zone_snapshot(snapshot: Dictionary)
 signal zone_rejected(code: String)
 signal zone_closed(reason: String)
@@ -26,6 +27,24 @@ func send_move(input_x: int, input_z: int) -> bool:
 	if _state != "connected" or _peer == null or _peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return false
 	var wire := Codec.serialized_move(_next_client_seq, input_x, input_z)
+	if wire.is_empty() or _peer.send_text(wire) != OK:
+		return false
+	_next_client_seq += 1
+	return true
+
+func send_attack(target_id: String) -> bool:
+	if _state != "connected" or _peer == null or _peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return false
+	var wire := Codec.serialized_attack(_next_client_seq, target_id)
+	if wire.is_empty() or _peer.send_text(wire) != OK:
+		return false
+	_next_client_seq += 1
+	return true
+
+func send_skill(skill_id: String, target_id: String) -> bool:
+	if _state != "connected" or _peer == null or _peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return false
+	var wire := Codec.serialized_skill(_next_client_seq, skill_id, target_id)
 	if wire.is_empty() or _peer.send_text(wire) != OK:
 		return false
 	_next_client_seq += 1
@@ -154,6 +173,9 @@ func _accept_welcome(raw: Variant) -> bool:
 	_last_snapshot_seq = int(raw["snapshotSeq"])
 	_last_tick = int(raw["tick"])
 	_state = "connected"
+	emit_signal("zone_welcome", raw.duplicate(true))
+	if _state != "connected":
+		return true
 	emit_signal("zone_connected")
 	return true
 

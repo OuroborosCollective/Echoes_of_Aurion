@@ -102,6 +102,11 @@
       }
     ],
     "jdkVersion": "17.0.20+8",
-    "sdkManifestSource": "https://dl.google.com/android/repository/repository2-3.xml"
+    "sdkManifestSource": "https://dl.google.com/android/repository/repository2-3.xml",
+    "gradleRequirements": {
+      "compileSdk": 36,
+      "buildTools": "36.1.0",
+      "ndkVersion": "29.0.14206865"
+    }
   }
 }
