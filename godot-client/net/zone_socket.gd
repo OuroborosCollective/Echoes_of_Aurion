@@ -78,10 +78,6 @@ func _process(_delta: float) -> void:
 				return
 			var decoded: Variant = JSON.parse_string(wire)
 			if _state == "authenticating":
-				# Temporary headless diagnosis: types only; never log tickets or payloads.
-				if OS.is_debug_build():
-					var observed_type := str(decoded.get("type", "<missing>")) if typeof(decoded) == TYPE_DICTIONARY else "<non-object>"
-					print("G10_DIAG authenticated=false incoming_type=", observed_type, " bytes=", bytes.size())
 				if Codec.is_valid_reject(decoded):
 					# Tear down before callbacks; otherwise a synchronous close
 					# overrides the server reason or destroys a successor peer.
