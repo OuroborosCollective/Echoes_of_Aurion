@@ -141,6 +141,9 @@ func verify() -> void:
 	fake_zone.active_state = "connected"
 	enabled_scene._on_zone_connected()
 	require(enabled_scene.get_node("%ConnectionStatus").text != "Sicher mit Aurion verbunden", "connected UI accepted without verified world projection")
+	# A failed handshake ends the ticket generation; an independent verified
+	# auth success must begin a new ticket generation before the next welcome.
+	enabled_scene._on_auth_session_succeeded()
 	enabled_scene._on_zone_welcome(confirmed_welcome)
 	require(enabled_scene._confirmed_zone.has_state(), "native scene failed to project confirmed welcome")
 	enabled_scene._on_zone_connected()
@@ -158,6 +161,7 @@ func verify() -> void:
 	enabled_scene._on_zone_closed("server_reject")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung abgelehnt", "server reject overwritten by socket close")
 	enabled_scene._auth_start = fake_logout
+	enabled_scene._on_auth_session_succeeded()
 	enabled_scene._on_zone_ticket_failed("AURION_API_AUTH_REQUIRED")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "ticket failure state missing")
 	require(enabled_scene.get_node("%Login").disabled, "in-flight logout restored login early")
@@ -170,6 +174,7 @@ func verify() -> void:
 	# A connected callback without a projected server welcome must terminate
 	# the pending login UI, not leave an unusable "connecting" screen.
 	enabled_scene._reset_projection()
+	enabled_scene._on_auth_session_succeeded()
 	enabled_scene.get_node("%ConnectionStatus").text = "Zonenverbindung wird aufgebaut"
 	fake_zone.active_state = "connected"
 	enabled_scene._on_zone_connected()
