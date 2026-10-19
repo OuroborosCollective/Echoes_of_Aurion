@@ -107,6 +107,65 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	callback_transport.queue_free()
 	await process_frame
 
+func verify_move_packet_loop(welcome_wire: String) -> void:
+	var server := TCPServer.new()
+	require(server.listen(0, "127.0.0.1") == OK, "move loopback server could not listen")
+	if not server.is_listening():
+		return
+	var transport = Socket.new()
+	root.add_child(transport)
+	await process_frame
+	transport._peer = WebSocketPeer.new()
+	transport._hello = Codec.serialized_hello("a".repeat(43))
+	transport._state = "connecting"
+	transport._connected_at = Time.get_ticks_msec()
+	require(transport._peer.connect_to_url("ws://127.0.0.1:%d" % server.get_local_port()) == OK, "move loopback client could not connect")
+	transport.set_process(true)
+	var remote: WebSocketPeer
+	var hello_received := false
+	var welcome_sent := false
+	var first_sent := false
+	var second_sent := false
+	var received: Array = []
+	var started := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - started < 4000 and received.size() < 2:
+		if remote == null and server.is_connection_available():
+			remote = WebSocketPeer.new()
+			require(remote.accept_stream(server.take_connection()) == OK, "move loopback WebSocket accept failed")
+		if remote != null:
+			remote.poll()
+			if remote.get_ready_state() == WebSocketPeer.STATE_OPEN:
+				while remote.get_available_packet_count() > 0:
+					var bytes := remote.get_packet()
+					var was_text := remote.was_string_packet()
+					var decoded: Variant = JSON.parse_string(bytes.get_string_from_utf8())
+					if not hello_received:
+						hello_received = was_text and typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "hello"
+						if hello_received:
+							welcome_sent = remote.send_text(welcome_wire) == OK
+					elif was_text and typeof(decoded) == TYPE_DICTIONARY:
+						received.append(decoded)
+		if transport.state_name() == "connected" and not first_sent:
+			require(transport.send_move(1, 0), "connected move was not queued")
+			require(not transport.send_move(2, 0), "out-of-contract move axis was queued")
+			first_sent = true
+		if received.size() == 1 and not second_sent:
+			require(transport.send_move(0, -1), "second connected move was not queued")
+			second_sent = true
+		await process_frame
+	require(hello_received and welcome_sent, "move test did not complete hello/welcome")
+	require(first_sent and second_sent, "move test did not exercise both sends")
+	require(received.size() == 2, "server did not receive exactly two move frames")
+	if received.size() == 2:
+		require(received[0] == {"type":"move","clientSeq":1,"input":{"x":1,"z":0}}, "first move wire shape or sequence drifted")
+		require(received[1] == {"type":"move","clientSeq":2,"input":{"x":0,"z":-1}}, "second move wire shape or sequence drifted")
+	transport.close_zone()
+	if remote != null:
+		remote.close()
+	server.stop()
+	transport.queue_free()
+	await process_frame
+
 func require(ok: bool, description: String) -> void:
 	if not ok:
 		errors.append(description)
@@ -130,6 +189,11 @@ func verify() -> void:
 	require(Codec.is_valid_welcome({"type": "welcome"}) == false, "incomplete welcome accepted")
 	require(Codec.valid_hello("a".repeat(43)).size() == 4, "hello shape incorrect")
 	require(Codec.valid_hello("short").is_empty(), "malformed hello accepted")
+	require(Codec.valid_move(1, -1, 1) == {"type":"move","clientSeq":1,"input":{"x":-1,"z":1}}, "move shape incorrect")
+	require(Codec.valid_move(0, 0, 0).is_empty(), "zero move sequence accepted")
+	require(Codec.valid_move(2147483648, 0, 0).is_empty(), "oversized move sequence accepted")
+	require(Codec.valid_move(1, -2, 0).is_empty(), "invalid move axis accepted")
+	require(not transport.send_move(0, 0), "move sent before verified welcome")
 	var welcome = {"type":"welcome","protocolVersion":5,"zoneId":"observatory_threshold","connectionId":"zone_peer_abcdefghijklmnop","selfEntityId":"player:1","snapshotSeq":0,"tick":0,"presences":[],"mobs":[],"combatants":[],"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":[]}}
 	require(not Codec.is_valid_welcome(welcome), "incomplete resources accepted as authoritative welcome")
 	# P1: real wire JSON is parsed through JSON.parse_string, not hand-built integer variants.
@@ -280,6 +344,7 @@ func verify() -> void:
 	var welcome_wire := JSON.stringify(welcome)
 	require(Codec.wire_numbers_are_integers(welcome_wire), "valid integer wire numbers rejected")
 	await verify_socket_packet_loop(welcome_wire, true)
+	await verify_move_packet_loop(welcome_wire)
 	# Real Aurion zone.join broadcasts a snapshot before the server sends
 	# welcome. This uses two wire packets with intervening Godot process frames.
 	early_snapshot["presences"] = [{"entityId":"player:1","userId":1,"position":{"x":0,"z":0},"lastAcceptedClientSeq":0}]
