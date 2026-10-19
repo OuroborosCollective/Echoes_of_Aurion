@@ -113,11 +113,12 @@ static func _valid_resources(value: Variant, tick: Variant) -> bool:
 	var nodes: Variant = value.get("nodes")
 	if typeof(nodes) != TYPE_ARRAY or nodes.size() != 5:
 		return false
-	var found: Array[String] = []
+	# Aurion's resource snapshot contract requires strictly increasing node IDs.
+	var previous_node_id := ""
 	for node in nodes:
 		if typeof(node) != TYPE_DICTIONARY or node.get("nodeId") not in NODE_IDS or not _safe_nonnegative(node.get("remaining")) or typeof(node.get("depleted")) != TYPE_BOOL:
 			return false
-		if node["remaining"] > 5 or node["nodeId"] in found:
+		if node["remaining"] > 5 or node["nodeId"] <= previous_node_id:
 			return false
 		var respawn: Variant = node.get("respawnAtTick", "missing")
 		if respawn != null and (not _safe_nonnegative(respawn) or respawn == 0):
@@ -128,7 +129,7 @@ static func _valid_resources(value: Variant, tick: Variant) -> bool:
 			return false
 		if not node["depleted"] and respawn != null:
 			return false
-		found.append(node["nodeId"])
+		previous_node_id = node["nodeId"]
 	return true
 
 static func _positive(value: Variant) -> bool:
@@ -208,22 +209,24 @@ static func is_valid_zone_state(raw: Variant) -> bool:
 		if seen.has(id):
 			return false
 		seen[id] = true
-	seen.clear()
+	# Mob/combatant wire arrays are canonical only in strictly increasing ID
+	# order; enforcing order also rejects duplicates without extra client state.
+	var previous_mob_id := ""
 	for item in raw["mobs"]:
 		if not _valid_mob(item):
 			return false
-		var id: String = item["entityId"]
-		if seen.has(id):
+		var mob_id: String = item["entityId"]
+		if mob_id <= previous_mob_id:
 			return false
-		seen[id] = true
-	seen.clear()
+		previous_mob_id = mob_id
+	var previous_combatant_id := ""
 	for item in raw["combatants"]:
 		if not _valid_combatant(item):
 			return false
-		var id: String = item["entityId"]
-		if seen.has(id):
+		var combatant_id: String = item["entityId"]
+		if combatant_id <= previous_combatant_id:
 			return false
-		seen[id] = true
+		previous_combatant_id = combatant_id
 	return true
 
 static func is_valid_snapshot(raw: Variant) -> bool:
