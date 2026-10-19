@@ -170,6 +170,12 @@ func _on_zone_closed(_reason: String) -> void:
 	_reset_projection()
 	if _reason == "client_close":
 		return
+	if _reason == "closed" and _zone_reject_code.is_empty() and not _lifecycle.is_suspended() and not _awaiting_callback and _auth_start.protected_response_allowed():
+		if _reconnect.begin(Time.get_ticks_msec()):
+			_recovering_ticket = false
+			status.text = "Verbindung wird erneut versucht"
+			login.disabled = true
+			return
 	if _zone_reject_code.is_empty():
 		status.text = "Zonenverbindung getrennt"
 	login.disabled = true

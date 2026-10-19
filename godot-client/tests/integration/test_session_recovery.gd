@@ -169,11 +169,36 @@ func verify() -> void:
 	require(not scene._reconnect.active(), "successful welcome left retry loop enabled")
 	require(auth.logout_calls == 0, "recoverable pause incorrectly revoked authenticated session")
 
+	# Re-establish a confirmed session for an unexpected network-drop test.
+	socket.connected = true
+	scene._on_zone_welcome(valid_welcome(2))
+	scene._on_zone_connected()
+	require(scene._confirmed_zone.has_state(), "network-drop setup did not establish a confirmed session")
+	scene._on_zone_closed("closed")
+	require(not scene._confirmed_zone.has_state(), "network drop left stale world projection")
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 2, "network drop did not request one fresh ticket")
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 2, "duplicate network poll produced second ticket")
+	scene._on_zone_ticket_failed("AURION_API_REQUEST_FAILED")
+	require(scene._reconnect.active(), "transient network failure did not preserve bounded retry")
+	scene._poll_reconnect(Time.get_ticks_msec() + 10000)
+	require(api.issues == 3, "bounded network retry did not request a fresh ticket")
+	scene._on_zone_ticket_succeeded({
+		"ticket":"z".repeat(48),
+		"zoneId":"observatory_threshold",
+		"expiresAt":"2026-10-19T06:00:00.000Z",
+	})
+	scene._on_zone_welcome(valid_welcome(3))
+	scene._on_zone_connected()
+	require(scene._confirmed_zone.has_state(), "network recovery lacked fresh validated welcome")
+	require(not scene._reconnect.active(), "network recovery left retry policy armed")
+
 	scene._on_app_suspended()
 	auth.allowed = false
 	scene._on_app_resumed()
 	scene._poll_reconnect(Time.get_ticks_msec())
-	require(api.issues == 1, "expired auth attempted protected ticket")
+	require(api.issues == 3, "expired auth attempted protected ticket")
 	require(not scene._confirmed_zone.has_state(), "expired auth retained world")
 	scene.queue_free()
 	await process_frame
