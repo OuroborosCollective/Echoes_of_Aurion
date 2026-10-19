@@ -130,6 +130,9 @@ func verify() -> void:
 	enabled_scene._on_zone_connected()
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher mit Aurion verbunden", "validated welcome did not mark zone connected")
 	require(enabled_scene.get_node("%Login").text == "Verbunden", "validated welcome action state missing")
+	enabled_scene._on_zone_rejected("COMBAT_SKILL_COOLDOWN")
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Sicher mit Aurion verbunden", "recoverable command rejection changed connected UI")
+	require(enabled_scene.get_node("%Login").text == "Verbunden", "recoverable command rejection changed action state")
 	var fake_logout := FakeLogoutAuth.new()
 	fake_logout.in_flight = true
 	enabled_scene.add_child(fake_logout)
