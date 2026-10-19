@@ -227,7 +227,7 @@ func verify() -> void:
 	request_succeeded = false
 	request_failure_count = 0
 	var stale_ticket_body := JSON.stringify([{"result":{"data":{"json":{"ticket":"q".repeat(48),"zoneId":"observatory_threshold","expiresAt":"2026-10-19T10:30:00.000Z"}}}}]).to_utf8_buffer()
-	epoch_api._on_wire_request_completed(old_epoch, HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(["Content-Type: application/json"]), stale_ticket_body)
+	epoch_api._on_wire_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(["Content-Type: application/json"]), stale_ticket_body, old_epoch)
 	require(not request_completed, "old HTTP epoch delivered a ticket into replacement request")
 	require(request_failure_count == 0, "old HTTP epoch failed replacement request")
 	require(epoch_api._active, "old HTTP epoch terminated replacement request")
