@@ -3517,3 +3517,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1063 — feat(godot/g13): validated attack and skill intents over real zone socket
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1063 merge=60e06231ca37a51c847aa9497ddfb32a1c501597 -->
+Task: Merge PR #1063 into `main` — feat(godot/g13): validated attack and skill intents over real zone socket.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/net/zone_codec.gd`
+- `godot-client/net/zone_socket.gd`
+- `godot-client/tests/integration/test_zone_socket.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1063
+- Merge commit: `60e06231ca37a51c847aa9497ddfb32a1c501597`
+- PR head: `239c7c86daf668e0f4f328923ffa325efd8b21cb`
+- Merged at: 2026-10-19T07:41:52Z
+- Post-merge workflow run: 39217656226
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
