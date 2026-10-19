@@ -3498,3 +3498,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1062 — fix(godot/g12): isolate HTTP ticket callbacks by transport generation
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1062 merge=9ee592769c743ad5c6f027911668dfd9095d93d2 -->
+Task: Merge PR #1062 into `main` — fix(godot/g12): isolate HTTP ticket callbacks by transport generation.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/net/api/aurion_api.gd`
+- `godot-client/tests/test_aurion_api_runtime.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1062
+- Merge commit: `9ee592769c743ad5c6f027911668dfd9095d93d2`
+- PR head: `924c3045d11613a4119dfe400559fb630370a70d`
+- Merged at: 2026-10-19T07:06:31Z
+- Post-merge workflow run: 39213868429
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
