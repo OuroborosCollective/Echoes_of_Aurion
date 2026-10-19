@@ -4,6 +4,8 @@ const Codec = preload("res://net/zone_codec.gd")
 var errors: Array[String] = []
 var callback_transport: Node
 var connected_callbacks := 0
+var welcome_callbacks := 0
+var welcome_before_connected := false
 var last_close_reason := ""
 var last_reject_code := ""
 var close_callbacks := 0
@@ -18,7 +20,13 @@ func remember_rejection(code: String) -> void:
 
 func close_during_connected_signal() -> void:
 	connected_callbacks += 1
+	welcome_before_connected = welcome_callbacks == 1
 	callback_transport.close_zone()
+
+func remember_verified_welcome(welcome: Dictionary) -> void:
+	welcome_callbacks += 1
+	require(Codec.is_valid_welcome(welcome), "transport emitted an invalid server welcome")
+
 
 func remember_close_reason(reason: String) -> void:
 	last_close_reason = reason
@@ -33,6 +41,8 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	if listen_result != OK:
 		return
 	connected_callbacks = 0
+	welcome_callbacks = 0
+	welcome_before_connected = false
 	last_close_reason = ""
 	last_reject_code = ""
 	close_callbacks = 0
@@ -41,6 +51,7 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	root.add_child(callback_transport)
 	await process_frame
 	callback_transport.zone_connected.connect(close_during_connected_signal)
+	callback_transport.zone_welcome.connect(remember_verified_welcome)
 	callback_transport.zone_closed.connect(remember_close_reason)
 	callback_transport.zone_rejected.connect(remember_rejection)
 	callback_transport._peer = WebSocketPeer.new()
@@ -92,6 +103,8 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 		require(pre_snapshot_sent and pre_snapshot_checked, "gateway snapshot-first ordering was not exercised")
 	require(callback_transport.state_name() == "closed", "WebSocket processing did not reach a terminal state")
 	require(connected_callbacks == (1 if expect_welcome else 0), "unexpected zone_connected callback after wire welcome (callbacks=%d, close_reason=%s, snapshot_sent=%s, welcome_sent=%s)" % [connected_callbacks, last_close_reason, str(pre_snapshot_sent), str(welcome_sent)])
+	require(welcome_callbacks == (1 if expect_welcome else 0), "verified welcome payload emitted before validation or missing after validation")
+	require(welcome_before_connected == expect_welcome, "welcome signal was not delivered before connected status")
 	if expect_welcome:
 		require(last_close_reason == "client_close", "synchronous zone_connected close failed (reason=%s, reject=%s)" % [last_close_reason, last_reject_code])
 	elif not expected_reject_code.is_empty():
