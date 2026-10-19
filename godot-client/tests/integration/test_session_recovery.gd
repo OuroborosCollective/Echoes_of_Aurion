@@ -200,6 +200,27 @@ func verify() -> void:
 	scene._poll_reconnect(Time.get_ticks_msec())
 	require(api.issues == 3, "expired auth attempted protected ticket")
 	require(not scene._confirmed_zone.has_state(), "expired auth retained world")
+
+	# G12: foregrounding during a pending HTTPS ticket must require a fresh
+	# request. A callback from the cancelled request cannot open the zone.
+	auth.allowed = true
+	scene._on_auth_session_succeeded()
+	require(api.issues == 4, "new session did not start pending ticket")
+	var opens_before: int = socket.opens
+	scene._on_app_suspended()
+	require(api.cancelled > 0, "pause did not cancel pending protected request")
+	scene._on_app_resumed()
+	scene._on_zone_ticket_succeeded({
+		"ticket":"o".repeat(48),
+		"zoneId":"observatory_threshold",
+		"expiresAt":"2026-10-19T06:00:00.000Z",
+	})
+	require(socket.opens == opens_before, "stale cancelled ticket opened a zone after resume")
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 5, "resume of pending ticket failed to issue a fresh ticket")
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 5, "pending-ticket recovery duplicated the ticket request")
+
 	scene.queue_free()
 	await process_frame
 	finish()
