@@ -36,7 +36,7 @@ func reset() -> void:
 	_last_delivered = ""
 
 func deliver_for_test(raw_url: String, pending_login: bool) -> bool:
-	if not pending_login or not raw_url.begins_with(PREFIX):
+	if not pending_login or not raw_url.begins_with(PREFIX) or raw_url.contains("#") or raw_url.contains("%") or raw_url.contains("+") or raw_url.contains(";") or raw_url.contains("\\") or raw_url.count("?") != 1:
 		return false
 	if raw_url == _last_delivered:
 		return false
