@@ -140,7 +140,7 @@ func verify() -> void:
 	var wire: Dictionary = JSON.parse_string(JSON.stringify(welcome))
 	require(Codec.is_valid_welcome(wire), "valid round-tripped wire welcome was rejected")
 	# Gateway joins emit snapshot before welcome; it must not terminate auth.
-	var early_snapshot: Dictionary = wire.duplicate(true)
+	var early_snapshot: Dictionary = welcome.duplicate(true)
 	early_snapshot["type"] = "snapshot"
 	early_snapshot.erase("connectionId")
 	early_snapshot.erase("protocolVersion")
@@ -202,6 +202,7 @@ func verify() -> void:
 	# Real Aurion zone.join broadcasts a snapshot before the server sends
 	# welcome. This uses two wire packets with intervening Godot process frames.
 	early_snapshot["presences"] = [{"entityId":"player:1","userId":1,"position":{"x":0,"z":0},"lastAcceptedClientSeq":0}]
+	require(Codec.wire_numbers_are_integers(JSON.stringify(early_snapshot)), "snapshot test fixture emitted fractional JSON numbers")
 	await verify_socket_packet_loop(welcome_wire, true, "", JSON.stringify(early_snapshot))
 	# P2: the lexical token must remain integral BEFORE Godot rounds a JSON float.
 	var bad_wire := welcome_wire.replace('"snapshotSeq":0', '"snapshotSeq":1.0000000000000001')
