@@ -38,6 +38,31 @@ static func serialized_move(client_seq: int, input_x: int, input_z: int) -> Stri
 		return ""
 	return encoded
 
+static func valid_attack(client_seq: int, target_id: String) -> Dictionary:
+	if client_seq < 1 or client_seq > 2147483647 or not _valid_mob_id(target_id):
+		return {}
+	return {"type":"attack","clientSeq":client_seq,"targetEntityId":target_id}
+
+static func valid_skill(client_seq: int, skill_id: String, target_id: String) -> Dictionary:
+	# Current Aurion server accepts only equipped blade k_strike with a mob target.
+	if client_seq < 1 or client_seq > 2147483647 or skill_id != "k_strike" or not _valid_mob_id(target_id):
+		return {}
+	return {"type":"skill","clientSeq":client_seq,"skillId":skill_id,"targetEntityId":target_id}
+
+static func serialized_attack(client_seq: int, target_id: String) -> String:
+	var data := valid_attack(client_seq, target_id)
+	if data.is_empty():
+		return ""
+	var wire := JSON.stringify(data)
+	return wire if wire.to_utf8_buffer().size() <= MAX_CLIENT_BYTES else ""
+
+static func serialized_skill(client_seq: int, skill_id: String, target_id: String) -> String:
+	var data := valid_skill(client_seq, skill_id, target_id)
+	if data.is_empty():
+		return ""
+	var wire := JSON.stringify(data)
+	return wire if wire.to_utf8_buffer().size() <= MAX_CLIENT_BYTES else ""
+
 ## The original lexical wire representation must be checked before JSON.parse_string()
 ## rounds fractional tokens into IEEE-754 integers. Strings and escapes are
 ## skipped; JSON.parse_string remains responsible for structural validation.
