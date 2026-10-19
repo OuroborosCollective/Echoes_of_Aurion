@@ -30,6 +30,8 @@ var _visuals = SnapshotInterpolator.new()
 var _lifecycle = SessionLifecycle.new()
 var _reconnect = ReconnectPolicy.new()
 var _recovering_ticket := false
+var _ticket_pending := false
+var _ticket_abandoned := false
 
 func _ready() -> void:
 	Engine.max_fps = 30
@@ -112,9 +114,14 @@ func _on_auth_session_succeeded() -> void:
 	status.text = "Zonenticket wird angefordert"
 	login.text = "Verbinden"
 	login.disabled = true
+	_ticket_pending = true
+	_ticket_abandoned = false
 	_api.issue_zone_ticket(_config.server_base_url, _config.client_build)
 
 func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
+	if _ticket_abandoned or not _ticket_pending:
+		return
+	_ticket_pending = false
 	if _lifecycle.is_suspended():
 		return
 	_recovering_ticket = false
@@ -185,6 +192,9 @@ func _on_zone_closed(_reason: String) -> void:
 		_on_auth_logout_terminal()
 
 func _on_zone_ticket_failed(_error_code: String) -> void:
+	if _ticket_abandoned:
+		return
+	_ticket_pending = false
 	if _reconnect.active() and not _lifecycle.is_suspended():
 		_recovering_ticket = false
 		if _reconnect.retry_after_failure(Time.get_ticks_msec()):
@@ -201,6 +211,8 @@ func _on_zone_ticket_failed(_error_code: String) -> void:
 		_on_auth_logout_terminal()
 
 func _on_auth_logout_terminal(_error_code: String = "") -> void:
+	_ticket_abandoned = true
+	_ticket_pending = false
 	_reconnect.reset()
 	_recovering_ticket = false
 	_reset_projection()
@@ -210,6 +222,8 @@ func _on_auth_logout_terminal(_error_code: String = "") -> void:
 	login.disabled = not _config.native_auth_start_enabled
 
 func _on_auth_session_failed(_error_code: String) -> void:
+	_ticket_abandoned = true
+	_ticket_pending = false
 	_reset_projection()
 	_api.cancel()
 	_zone_socket.close_zone()
@@ -229,11 +243,14 @@ func _process(_delta: float) -> void:
 		_poll_reconnect(Time.get_ticks_msec())
 
 func _on_app_suspended() -> void:
-	if not _lifecycle.suspend(_confirmed_zone.has_state() or _zone_socket.state_name() == "connected"):
+	var must_restore := _confirmed_zone.has_state() or _zone_socket.state_name() == "connected" or _ticket_pending or _reconnect.active()
+	if not _lifecycle.suspend(must_restore):
 		return
 	_reconnect.reset()
 	_recovering_ticket = false
 	_api.cancel()
+	_ticket_abandoned = true
+	_ticket_pending = false
 	_zone_socket.close_zone()
 	_reset_projection()
 	if not _awaiting_callback:
@@ -257,6 +274,8 @@ func _poll_reconnect(now_ms: int) -> void:
 		_on_auth_session_failed("NATIVE_AUTH_SESSION_EXPIRED")
 		return
 	_recovering_ticket = true
+	_ticket_abandoned = false
+	_ticket_pending = true
 	status.text = "Neues Zonenticket wird angefordert"
 	if not _api.issue_zone_ticket(_config.server_base_url, _config.client_build):
 		_recovering_ticket = false
