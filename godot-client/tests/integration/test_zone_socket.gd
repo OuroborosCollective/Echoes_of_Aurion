@@ -157,8 +157,10 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 	require(first_sent and second_sent, "move test did not exercise both sends")
 	require(received.size() == 2, "server did not receive exactly two move frames")
 	if received.size() == 2:
-		require(received[0] == {"type":"move","clientSeq":1,"input":{"x":1,"z":0}}, "first move wire shape or sequence drifted")
-		require(received[1] == {"type":"move","clientSeq":2,"input":{"x":0,"z":-1}}, "second move wire shape or sequence drifted")
+		var first: Dictionary = received[0]
+		var second: Dictionary = received[1]
+		require(first.size() == 3 and first.get("type") == "move" and first.get("clientSeq") == 1 and typeof(first.get("input")) == TYPE_DICTIONARY and first["input"].size() == 2 and first["input"].get("x") == 1 and first["input"].get("z") == 0, "first move wire shape or sequence drifted")
+		require(second.size() == 3 and second.get("type") == "move" and second.get("clientSeq") == 2 and typeof(second.get("input")) == TYPE_DICTIONARY and second["input"].size() == 2 and second["input"].get("x") == 0 and second["input"].get("z") == -1, "second move wire shape or sequence drifted")
 	transport.close_zone()
 	if remote != null:
 		remote.close()
