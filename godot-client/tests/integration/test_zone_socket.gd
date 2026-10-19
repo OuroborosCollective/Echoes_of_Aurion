@@ -60,7 +60,6 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	var hello_received := false
 	var welcome_sent := false
 	var pre_snapshot_sent := false
-	var pre_snapshot_frames := 0
 	var pre_snapshot_checked := false
 	var started := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - started < 4000 and callback_transport.state_name() != "closed":
@@ -70,14 +69,9 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 		if remote != null:
 			remote.poll()
 			if remote.get_ready_state() == WebSocketPeer.STATE_OPEN:
-				# Send the welcome only after Godot has had several actual
-				# process frames to observe the server's pre-welcome snapshot.
-				if pre_snapshot_sent and not welcome_sent:
-					pre_snapshot_frames += 1
-					if pre_snapshot_frames >= 3:
-						require(callback_transport.state_name() == "authenticating", "pre-welcome snapshot terminated or authenticated the zone")
-						pre_snapshot_checked = true
-						welcome_sent = remote.send_text(wire) == OK
+				# A single server-side join sends the snapshot and then
+				# welcome in FIFO WebSocket message order. Both packets must
+				# reach Godot's actual _process() decoder.
 				if remote.get_available_packet_count() > 0 and not hello_received:
 					var hello_bytes := remote.get_packet()
 					var hello: Variant = JSON.parse_string(hello_bytes.get_string_from_utf8())
@@ -87,6 +81,9 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 							welcome_sent = remote.send_text(wire) == OK
 						else:
 							pre_snapshot_sent = remote.send_text(pre_welcome_wire) == OK
+							if pre_snapshot_sent:
+								welcome_sent = remote.send_text(wire) == OK
+								pre_snapshot_checked = welcome_sent
 					else:
 						errors.append("loopback server received an invalid hello")
 		await process_frame
