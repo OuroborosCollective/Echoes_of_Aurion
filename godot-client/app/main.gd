@@ -9,6 +9,7 @@ const ReconnectPolicy = preload("res://net/reconnect_policy.gd")
 const ZoneState = preload("res://projection/zone_state.gd")
 const EntityRegistry = preload("res://projection/entity_registry.gd")
 const SnapshotInterpolator = preload("res://projection/snapshot_interpolator.gd")
+const NativeIntentBridge = preload("res://platform/android/native_intent_bridge.gd")
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
 
 @onready var card: PanelContainer = %LaunchCard
@@ -32,6 +33,7 @@ var _reconnect = ReconnectPolicy.new()
 var _recovering_ticket := false
 var _ticket_pending := false
 var _ticket_abandoned := false
+var _intent_bridge: Node
 
 func _ready() -> void:
 	Engine.max_fps = 30
@@ -56,6 +58,9 @@ func _ready() -> void:
 	_zone_socket.zone_connected.connect(_on_zone_connected)
 	_zone_socket.zone_rejected.connect(_on_zone_rejected)
 	_zone_socket.zone_closed.connect(_on_zone_closed)
+	_intent_bridge = NativeIntentBridge.new()
+	add_child(_intent_bridge)
+	_intent_bridge.callback_received.connect(handle_native_auth_callback)
 	login.pressed.connect(_on_login_pressed)
 	login.disabled = true
 	if _config.server_base_url.is_empty() or _config.client_build.is_empty() or _config.renderer_profile != "compatibility":
@@ -85,6 +90,7 @@ func _on_login_pressed() -> void:
 
 func _on_auth_start_succeeded() -> void:
 	_awaiting_callback = true
+	_intent_bridge.reset()
 	status.text = "Systembrowser geöffnet"
 	login.text = "Abbrechen"
 	login.disabled = false
@@ -239,6 +245,8 @@ func _notification(what: int) -> void:
 		_on_app_resumed()
 
 func _process(_delta: float) -> void:
+	if _awaiting_callback:
+		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
 		_poll_reconnect(Time.get_ticks_msec())
 
