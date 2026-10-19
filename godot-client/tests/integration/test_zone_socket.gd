@@ -91,9 +91,9 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	if not pre_welcome_wire.is_empty():
 		require(pre_snapshot_sent and pre_snapshot_checked, "gateway snapshot-first ordering was not exercised")
 	require(callback_transport.state_name() == "closed", "WebSocket processing did not reach a terminal state")
-	require(connected_callbacks == (1 if expect_welcome else 0), "unexpected zone_connected callback after wire welcome")
+	require(connected_callbacks == (1 if expect_welcome else 0), "unexpected zone_connected callback after wire welcome (callbacks=%d, close_reason=%s, snapshot_sent=%s, welcome_sent=%s)" % [connected_callbacks, last_close_reason, str(pre_snapshot_sent), str(welcome_sent)])
 	if expect_welcome:
-		require(last_close_reason == "client_close", "synchronous zone_connected close failed")
+		require(last_close_reason == "client_close", "synchronous zone_connected close failed (reason=%s, reject=%s)" % [last_close_reason, last_reject_code])
 	elif not expected_reject_code.is_empty():
 		require(last_close_reason == "server_reject", "server reject did not terminate the handshake")
 	else:
