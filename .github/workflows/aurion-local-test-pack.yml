@@ -106,6 +106,16 @@ jobs:
         run: |
           set -euo pipefail
           pnpm exec vitest run server/nativeAuthHttp.test.ts server/_core/sdkNativeAuth.test.ts server/nativeAuthPersistenceUnavailable.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/native-auth-http.log
+      - name: Verify real zone ticket admission, one-time consumption and two-client movement (v5)
+        shell: bash
+        env:
+          NODE_ENV: test
+        run: |
+          set -euo pipefail
+          # This suite is otherwise skipped when DATABASE_URL is absent.
+          # Here it runs against the isolated MariaDB with real Aurion-owned
+          # ticket issue/consumption and the actual registered zone gateway.
+          pnpm exec vitest run server/zoneGateway.e2e.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/g13-zone-gateway-v5-mariadb.log
       - name: Verify archive, atomic outbox and combat on separate MariaDB databases
         env:
           NODE_ENV: test
