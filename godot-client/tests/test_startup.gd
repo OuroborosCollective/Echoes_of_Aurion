@@ -167,6 +167,14 @@ func verify() -> void:
 	require(fake_api.cancelled > 0, "logout did not clear pending ticket API")
 	require(not enabled_scene.get_node("%Login").disabled, "terminal logout did not restore login")
 	require(enabled_scene.get_node("%Login").text == "Anmelden", "terminal logout action state missing")
+	# A connected callback without a projected server welcome must terminate
+	# the pending login UI, not leave an unusable "connecting" screen.
+	enabled_scene.get_node("%ConnectionStatus").text = "Zonenverbindung wird aufgebaut"
+	fake_zone.active_state = "connected"
+	enabled_scene._on_zone_connected()
+	require(enabled_scene.get_node("%ConnectionStatus").text == "Verbindung derzeit nicht verfügbar", "missing world projection left the UI stuck connecting")
+	require(enabled_scene.get_node("%Login").disabled, "missing world projection enabled a new login before session termination")
+	require(not enabled_scene._confirmed_zone.has_state() and enabled_scene._entities.ids("presences").is_empty(), "failed projection retained a world after close")
 	enabled_scene.queue_free()
 	await process_frame
 	ProjectSettings.set_setting("aurion/server_base_url", "https://attacker.test")
