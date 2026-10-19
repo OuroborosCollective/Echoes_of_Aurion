@@ -13,6 +13,7 @@ export function requireLoginSigner(env) {
  assert.ok(isAbsolute(env.AURION_LOGIN_KEYSTORE_PATH),'absolute operator keystore path required');
  assert.match(env.AURION_LOGIN_KEY_ALIAS,/^[A-Za-z0-9_.-]{2,80}$/);
  assert.match(env.AURION_LOGIN_SIGNER_SHA256,/^(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$/);
+ assert.equal(env.AURION_LOGIN_KEY_PASSWORD,env.AURION_LOGIN_KEYSTORE_PASSWORD,'Godot Gradle requires same password for store and key');
  return {keystorePath:env.AURION_LOGIN_KEYSTORE_PATH,alias:env.AURION_LOGIN_KEY_ALIAS,expectedFingerprint:env.AURION_LOGIN_SIGNER_SHA256};
 }
 import { mkdir, mkdtemp, lstat, readFile, rename, rm, writeFile } from 'node:fs/promises';
