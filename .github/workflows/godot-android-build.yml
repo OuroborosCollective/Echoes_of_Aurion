@@ -26,6 +26,8 @@ jobs:
         run: |
           node scripts/godot/bootstrap.mjs
           node scripts/godot/bootstrap-android.mjs
+      - name: Verify pinned Godot Gradle source App Link manifest
+        run: node scripts/godot/verify-gradle-template.mjs
       - name: Build and independently inspect APK
         env:
           AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
