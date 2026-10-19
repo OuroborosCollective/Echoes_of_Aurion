@@ -3271,3 +3271,33 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-19 — PR #1050 — feat(godot/g10): introduce fail-closed WebSocketPeer v5 handshake transport
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1050 merge=2f13fc3245f5a5ce284a89de9416d15f091e9398 -->
+Task: Merge PR #1050 into `main` — feat(godot/g10): introduce fail-closed WebSocketPeer v5 handshake transport.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/godot-headless.yml`
+- `godot-client/net/zone_codec.gd`
+- `godot-client/net/zone_codec.gd.uid`
+- `godot-client/net/zone_socket.gd`
+- `godot-client/net/zone_socket.gd.uid`
+- `godot-client/tests/integration/test_zone_socket.gd`
+- `godot-client/tests/integration/test_zone_socket.gd.uid`
+- `godot-client/tests/integration/test_zone_socket_reject_close.gd`
+- `godot-client/tests/integration/test_zone_socket_reject_close.gd.uid`
+- `scripts/godot/check.mjs`
+- `scripts/godot/zone-socket-reject-close-runtime.mjs`
+- `server/zoneGateway.ts`
+- `server/zoneGatewayPresence.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1050
+- Merge commit: `2f13fc3245f5a5ce284a89de9416d15f091e9398`
+- PR head: `21b5808295829657365fbf8ea88736d0aada8dbe`
+- Merged at: 2026-10-19T00:33:12Z
+- Post-merge workflow run: 39181290942
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
