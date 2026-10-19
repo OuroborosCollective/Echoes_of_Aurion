@@ -50,6 +50,7 @@ for (const [id, script, marker] of [
   ['native-auth-tokens', 'test_native_auth_tokens.gd', 'Godot native-auth ephemeral token contract verified'],
   ['zone-socket', 'integration/test_zone_socket.gd', 'Godot G10 WebSocket handshake contract verified (headless, no live server)'],
   ['android-app-link-callback', 'test_native_app_link_callback.gd', 'Godot Android callback URI contract verified'],
+  ['zone-projection', 'test_zone_projection.gd', 'Godot G11 confirmed zone state projection contract verified (headless)'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
