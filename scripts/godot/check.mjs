@@ -48,10 +48,18 @@ for (const [id, script, marker] of [
   ['contract', 'contracts/test_zone_contract.gd', 'zone-v5 Godot contract verified'],
   ['native-auth', 'test_native_auth_flow.gd', 'Godot native-auth pre-login contract verified'],
   ['native-auth-tokens', 'test_native_auth_tokens.gd', 'Godot native-auth ephemeral token contract verified'],
+  ['zone-socket', 'integration/test_zone_socket.gd', 'Godot G10 WebSocket handshake contract verified (headless, no live server)'],
   ['android-app-link-callback', 'test_native_app_link_callback.gd', 'Godot Android callback URI contract verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
+await stage(
+  'zone-socket-node-ws-reject-close',
+  'headless',
+  process.execPath,
+  ['scripts/godot/zone-socket-reject-close-runtime.mjs', executable, project],
+  'Godot G10 Node ws reject-then-1008-close regression verified',
+);
 await stage(
   'native-auth-start-runtime',
   'headless',

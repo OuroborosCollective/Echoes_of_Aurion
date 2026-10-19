@@ -21,9 +21,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: pnpm
+      - name: Install locked gateway WebSocket dependency
+        run: pnpm install --frozen-lockfile --prod --ignore-scripts
       - name: Bootstrap regression
         run: node --test scripts/godot/toolchain.test.mjs
       - name: Install and verify editor

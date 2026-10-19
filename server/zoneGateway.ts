@@ -9,6 +9,9 @@ import { ZonePresenceLifecycle } from "./zonePresenceLifecycle";
 import { ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 
 const HELLO_TIMEOUT_MS=5_000;const MAX_MESSAGE_BYTES=2_048;
+// Give the Godot WebSocketPeer event loop time to surface the typed version
+// rejection BEFORE sending the policy-close frame. No ticket is consumed here.
+const PROTOCOL_REJECT_GRACE_MS=250;
 export type ZoneTicketReceipt={userId:number;zoneId:"observatory_threshold";clientBuild:string;expiresAt:Date;combatProfile?:ZoneCombatProfile};
 export type ZoneTicketConsumer=(values:{ticket:string;zoneId:"observatory_threshold"})=>Promise<ZoneTicketReceipt|undefined>;
 export type WorldPresenceSink={upsert(values:{userId:number;connectionId:string;zoneId:"observatory_threshold";position:{x:number;z:number}}):Promise<unknown>;release(values:{connectionId:string}):Promise<unknown>;};
@@ -16,6 +19,11 @@ export type ZoneFixedTickSink={intervalTicks:number;observe(values:{tick:number}
 function closePolicyViolation(socket:WebSocket):void{socket.close(1008,"zone authorization rejected");}
 function parseMessage(data:WebSocket.RawData):unknown{if(typeof data==="string")return JSON.parse(data);if(Array.isArray(data))return JSON.parse(Buffer.concat(data).toString("utf8"));if(data instanceof ArrayBuffer)return JSON.parse(Buffer.from(new Uint8Array(data)).toString("utf8"));return JSON.parse(data.toString("utf8"));}
 function rejectZoneInput(socket:WebSocket,code:ZoneReject["code"]):void{socket.send(JSON.stringify({type:"reject",code} satisfies ZoneReject));}
+function rejectUnsupportedZoneVersion(socket:WebSocket):void{
+  rejectZoneInput(socket,"PROTOCOL_VERSION_UNSUPPORTED");
+  const grace=setTimeout(()=>{if(socket.readyState===WebSocket.OPEN)closePolicyViolation(socket);},PROTOCOL_REJECT_GRACE_MS);
+  grace.unref();
+}
 
 /** `/v1/ws` is the live AX1/WASD gameplay transport. tRPC/MCP legacy encounter routes are not consulted. */
 export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink){
@@ -31,7 +39,10 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
     if(fixedTick&&gatewayTick%fixedTick.intervalTicks===0){const tick=gatewayTick;const run=fixedTickChain.then(()=>fixedTick.observe({tick})).then(()=>undefined);fixedTickChain=run.catch(error=>console.error("[Aurion Zone] Fixed-tick sink failed",error));}},ZONE_TICK_MS);
   server.on("upgrade",(request,socket,head)=>{const pathname=new URL(request.url??"/","http://localhost").pathname;if(pathname!=="/v1/ws")return;if(!isAllowedZoneOrigin(request.headers.origin)){socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");socket.destroy();return;}wss.handleUpgrade(request,socket,head,webSocket=>wss.emit("connection",webSocket,request));});
   wss.on("connection",(socket:WebSocket,_request:IncomingMessage)=>{const helloTimeout=setTimeout(()=>closePolicyViolation(socket),HELLO_TIMEOUT_MS);socket.once("close",()=>clearTimeout(helloTimeout));socket.once("message",async(data,isBinary)=>{
-    clearTimeout(helloTimeout);if(isBinary)return closePolicyViolation(socket);let raw:unknown;try{raw=parseMessage(data);}catch{return closePolicyViolation(socket);}const hello=parseZoneHello(raw);if(!hello){if(raw&&typeof raw==="object"&&(raw as {type?:unknown}).type==="hello"&&(raw as {protocolVersion?:unknown}).protocolVersion!==ZONE_PROTOCOL_VERSION)rejectZoneInput(socket,"PROTOCOL_VERSION_UNSUPPORTED");return closePolicyViolation(socket);}
+    clearTimeout(helloTimeout);if(isBinary)return closePolicyViolation(socket);let raw:unknown;try{raw=parseMessage(data);}catch{return closePolicyViolation(socket);}const hello=parseZoneHello(raw);if(!hello){
+      if(raw&&typeof raw==="object"&&(raw as {type?:unknown}).type==="hello"&&(raw as {protocolVersion?:unknown}).protocolVersion!==ZONE_PROTOCOL_VERSION){rejectUnsupportedZoneVersion(socket);return;}
+      return closePolicyViolation(socket);
+    }
     try{const ticket=await consumeTicket({ticket:hello.ticket,zoneId:hello.zoneId});if(socket.readyState!==WebSocket.OPEN)return;if(!ticket)return closePolicyViolation(socket);const zone=registry.get(ticket.zoneId);const welcome=zone.join({userId:ticket.userId,socket,combatProfile:ticket.combatProfile});clientVerificationRegistry.open(ticket.userId,welcome.connectionId);observationConnections.add(welcome.connectionId);const presence=worldPresence?new ZonePresenceLifecycle(worldPresence,{userId:ticket.userId,connectionId:welcome.connectionId,zoneId:ticket.zoneId}):undefined;let refreshTimer:ReturnType<typeof setInterval>|undefined;
       const onPresenceFailure=(error:unknown)=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);};const observePresence=()=>{const position=zone.positionForConnection(welcome.connectionId);if(position)void presence?.observe(position)?.catch(onPresenceFailure);};
       socket.once("close",()=>{clientVerificationRegistry.close(welcome.connectionId);observationConnections.delete(welcome.connectionId);if(refreshTimer)clearInterval(refreshTimer);presenceObservers.delete(observePresence);zone.leave(welcome.connectionId);void presence?.close().catch(error=>console.error("[Aurion Zone] Presence lease release failed",error));});
