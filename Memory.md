@@ -3902,3 +3902,22 @@ Evidence: Candidate `51177d48fcc6c62bf704112ae97bbdd7dd889c4d`; Godot headless r
 Learned: Command rejection is recoverable transport feedback only when runtime evidence proves both callback delivery and subsequent same-peer command transmission.
 Open: Exact Memory-bearing final-head gates, shared code/security review, merge and main readback.
 Next safe step: Merge only after the final head is green and reviews are clear.
+
+
+### 2026-10-20 — PR #1081 — test(g10): prove command rejects keep zone session open
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1081 merge=41d480795507655af85ebde747511d62a763a974 -->
+Task: Merge PR #1081 into `main` — test(g10): prove command rejects keep zone session open.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/tests/integration/test_zone_socket.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1081
+- Merge commit: `41d480795507655af85ebde747511d62a763a974`
+- PR head: `2950e9ac8dc42b79cc371494c4041ff265b0afb3`
+- Merged at: 2026-10-20T13:39:04Z
+- Post-merge workflow run: 39432241069
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
