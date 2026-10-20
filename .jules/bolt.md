@@ -34,3 +34,6 @@
 ## 2026-10-17 - Optimize sorting map in ZoneRegistry
 **Learning:** Extracting map values using `Array.from(map.entries()).sort().map()` creates temporary arrays and causes GC pressure when regenerating sorted arrays. Even though it is guarded by a dirty flag, allocating intermediate arrays inside registries is suboptimal.
 **Action:** Replaced chained array mappings with an in-place mutation of the cached `sortedZones` array and a single `for...of` loop iterating over `map.values()`, then sorting it directly.
+## 2026-10-20 - Pre-allocating Maps and reusing arrays in hot loops
+**Learning:** In high-frequency ticks, avoid using Array methods (.filter, .map) or initializing new Maps inside the loop to minimize garbage collection.
+**Action:** Define a pre-allocated cache object, and populate/clear it dynamically instead of generating new instances.

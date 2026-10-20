@@ -151,6 +151,8 @@ export class AuthoritativeMovementZone {
   private sortedPresences: ZonePresence[] = [];
   private sortedPeersDirty = false;
   private pendingIntents: AurionZoneIntent[] = [];
+  private readonly actionSequenceWatermarks = new Map<number, number>();
+  private targetablePresences: ZonePresence[] = [];
   private arrivalSequence = 0;
   private previousReceiptHash: string | null = null;
   private lastReceipt: AurionCausalTickReceipt | null = null;
@@ -411,8 +413,15 @@ export class AuthoritativeMovementZone {
   nextClientSequenceForUser(userId: number): number {
     const peer = this.peersByEntityId.get(`player:${userId}`);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
-    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
-      ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
+    let maxPending = 0;
+    const targetEntityId = `player:${userId}`;
+    for (let i = 0; i < this.pendingIntents.length; i++) {
+      const intent = this.pendingIntents[i];
+      if (intent.entityId === targetEntityId && intent.clientSeq > maxPending) {
+        maxPending = intent.clientSeq;
+      }
+    }
+    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq, maxPending) + 1;
   }
 
   nextArrivalSequence(): number {
@@ -637,7 +646,11 @@ export class AuthoritativeMovementZone {
     captureAuthorityStage("MEMBERSHIP_REVIVAL");
 
     // Stage ordering must not invalidate an already admitted lower-sequence action.
-    const actionSequenceWatermarks = new Map(this.sortedPeers.map(peer => [peer.userId, peer.lastAcceptedClientSeq]));
+    this.actionSequenceWatermarks.clear();
+    for (let i = 0; i < this.sortedPeers.length; i++) {
+      const peer = this.sortedPeers[i];
+      this.actionSequenceWatermarks.set(peer.userId, peer.lastAcceptedClientSeq);
+    }
 
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {
@@ -660,8 +673,8 @@ export class AuthoritativeMovementZone {
     for (const intent of intentsToProcess) {
       if (intent.type === "move" || intent.type === "presence_join" || intent.type === "presence_leave") continue;
       const peer = this.peersByEntityId.get(intent.entityId);
-      if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
-      actionSequenceWatermarks.set(peer.userId, intent.clientSeq);
+      if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : this.actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
+      this.actionSequenceWatermarks.set(peer.userId, intent.clientSeq);
       peer.lastAcceptedClientSeq = Math.max(peer.lastAcceptedClientSeq, intent.clientSeq);
 
       if (intent.type === "attack") {
@@ -708,9 +721,15 @@ export class AuthoritativeMovementZone {
     // 05 mob FSM.
     // The reserved diagnostic actor participates in membership receipts, never
     // hostile targeting. Identity-based policy is identical during causal replay.
-    const mobsChanged = this.mobRuntime.tick(this.presences().filter(
-      presence => presence.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
-    ), this.tickNumber);
+    this.targetablePresences.length = 0;
+    const allPresences = this.presences();
+    for (let i = 0; i < allPresences.length; i++) {
+      const presence = allPresences[i];
+      if (presence.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID) {
+        this.targetablePresences.push(presence);
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.targetablePresences, this.tickNumber);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
