@@ -30,10 +30,13 @@ func poll_activity_intent_for_test(pending_login: bool) -> bool:
 	var data: Variant = intent.getDataString()
 	if data == null:
 		return false
-	var accepted := deliver_for_test(str(data), pending_login)
-	if accepted:
-		# Clear every delivered canonical URI, including malformed callbacks that
-		# the strict auth validator rejects, so app resume cannot retry it forever.
+	var raw_url := str(data)
+	var canonical := _is_callback_route(raw_url)
+	var accepted := deliver_for_test(raw_url, pending_login)
+	if canonical:
+		# Clear every observed canonical URI, including malformed or duplicate
+		# callbacks, so app resume cannot retry it forever. Dedupe still ensures
+		# that only the first delivery reaches the strict auth validator.
 		intent.setData(null)
 	return accepted
 

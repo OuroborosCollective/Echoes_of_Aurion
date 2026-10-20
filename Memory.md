@@ -3796,3 +3796,14 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-20 — G09 duplicate Android App Link consumption
+Status: VERIFIED candidate
+Task: Remove a redelivered canonical Android auth callback from the Activity intent without forwarding it to the in-flight exchange twice.
+Decisions: Keep route recognition and one-shot delivery in the native bridge; duplicate callbacks are consumed only while login is pending, and unrelated intents remain untouched.
+Touched surfaces: `godot-client/platform/android/native_intent_bridge.gd`, `godot-client/tests/test_native_intent_bridge.gd`.
+Evidence: Baseline `16845618d5e0ad9bbdc4a5dd672e3e916e5708f2` failed Godot run 39407378017 with the causal duplicate-intent assertion. Fixed code head `09d5e2724436c5dfc88938d2b7fba78bf7e7df81` passed Godot headless run 39407534089/artifact 12257078717 and Android Preview APK run 39407534018/artifact 12257159065.
+Learned: Signal deduplication does not consume a newly redelivered Android Activity intent; canonical transport cleanup must be independent from downstream delivery acceptance.
+Open: Exact final-head gates, shared review, merge and main readback.
+Next safe step: Merge only after final-head gates and reviews are clean, then read back main.
