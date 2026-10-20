@@ -4196,3 +4196,25 @@ Change: The active Godot scene now consumes its bounded interpolator for a visib
 Learned: Confirmed state and interpolation were active but unused by the scene; converting valid ±64-billion-mm coordinates through `Vector2` before formatting can lose metres, so the readout needs the precision-preserving path.
 Evidence: Regression-only `d13dc5cb768fe136b9f22f920014a3010aaf2948` failed causally in Godot run 39499325834/job 118892493698; review P2 on `12c8c48dac9b12195ff7bc77b6cb52544628fc2a` led to the ±60,000,000,123-mm regression; fixed `629e33d44f7e27530226e1d2df1579f48dd97cf2` passed Godot/runtime/render 39500720483, Android Preview 39500720495, determinism 39500720678 and Memory sync 39500720561.
 Open: Exact Memory-bearing head gates, fresh shared review, merge and main readback.
+
+
+### 2026-10-20 — PR #1094 — fix(g11): present confirmed self position
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1094 merge=cda7c1f4dd53a9575d31b478c6787239b15d521c -->
+Task: Merge PR #1094 into `main` — fix(g11): present confirmed self position.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/app/main.gd`
+- `godot-client/app/main.tscn`
+- `godot-client/projection/snapshot_interpolator.gd`
+- `godot-client/tests/test_startup.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1094
+- Merge commit: `cda7c1f4dd53a9575d31b478c6787239b15d521c`
+- PR head: `e709a5ed08085799bc425f5a8d1150d6b6ad3a46`
+- Merged at: 2026-10-20T21:38:01Z
+- Post-merge workflow run: 39501938903
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
