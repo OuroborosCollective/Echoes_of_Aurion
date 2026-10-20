@@ -4109,3 +4109,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-20 — G11 confirmed critical-hit feedback
+Status: VERIFIED candidate
+Task: Preserve Aurion's confirmed critical-hit result in the active Godot scene.
+Change: Self-involved combat notices now distinguish a validated critical hit from generic damage while retaining lethal priority, exact-event deduplication, projection reset and bounded expiry.
+Evidence: Regression-only head `d54a628d442d784663488d3421ae93e648ee13e7` failed causally in Godot run 39482189369/job 118833305518; candidate `8de444f6f9695824876debea00b3decb1c2ee227` passed Godot/runtime run 39482447312 with artifacts 12292445810 and 12292271116 plus Android Preview run 39482447235/artifact 12290569284.
+Learned: The strict combat contract already delivered `crit`; only the active presentation discarded it, so the fix remains downstream of Aurion authority.
+Open: Exact Memory-bearing head gates, shared review, merge and main readback.
+Next safe step: Merge only after the final head is green and both reviews are clear.

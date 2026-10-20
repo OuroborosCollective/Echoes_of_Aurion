@@ -133,9 +133,19 @@ func verify() -> void:
 	next_tick_combat["damage"] = 3
 	real_zone.emit_signal("zone_combat", next_tick_combat)
 	require(enabled_scene.get_node("%CombatNotice").text == "Treffer erhalten · 3 Schaden", "valid lower sequence from a later tick was discarded")
+	var critical_combat: Dictionary = combat.duplicate(true)
+	critical_combat["tick"] = 7
+	critical_combat["sequence"] = 2
+	critical_combat["attackerEntityId"] = "player:1"
+	critical_combat["defenderEntityId"] = "mob_1"
+	critical_combat["damage"] = 9
+	critical_combat["crit"] = true
+	require(ZoneCodec.is_valid_combat_event(critical_combat), "critical combat notice fixture violates Aurion v5")
+	real_zone.emit_signal("zone_combat", critical_combat)
+	require(enabled_scene.get_node("%CombatNotice").text == "Kritischer Treffer bestätigt · 9 Schaden", "confirmed critical result was reduced to generic damage")
 	var lethal_combat: Dictionary = combat.duplicate(true)
-	lethal_combat["tick"] = 7
-	lethal_combat["sequence"] = 2
+	lethal_combat["tick"] = 8
+	lethal_combat["sequence"] = 3
 	lethal_combat["attackerEntityId"] = "player:1"
 	lethal_combat["defenderEntityId"] = "mob_1"
 	lethal_combat["damage"] = 12
