@@ -3766,3 +3766,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G09 malformed Android App Link termination
+Status: VERIFIED candidate
+Task: Forward a malformed callback on the exact Aurion Android App-Link route once to the existing fail-closed auth validator instead of trapping it in the Activity intent.
+Decisions: Keep exact route recognition and intent consumption in the native bridge; keep URI, field and PKCE/state validation in the canonical callback parser; foreign URLs remain blocked.
+Touched surfaces: `godot-client/platform/android/native_intent_bridge.gd`, `godot-client/tests/test_native_intent_bridge.gd`.
+Evidence: Candidate `33cc6f69c9c69bdf936625e140c8ed9a6bd271e6`; Godot headless run 39400060245/artifact 12255081882 and Android Preview APK run 39400060244/artifact 12253882950 passed; exact-head code and security reviews completed without findings.
+Learned: Transport prefiltering must not prevent the canonical validator from terminating malformed callbacks, or the retained Android intent creates an endless pending-login loop.
+Open: Merge and main readback.
+Next safe step: Merge after final-head gates and reviews remain clean, then read back main.
