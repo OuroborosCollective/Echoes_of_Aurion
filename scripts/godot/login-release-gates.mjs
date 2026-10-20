@@ -22,7 +22,7 @@ export function requireLoginReleaseInputs(env) {
 
 export function assertPackagedBuildRevision(override, expectedRevision) {
  assert.match(expectedRevision,SHA);
- assert.equal(override, `[aurion]\nclient_build="${expectedRevision}"\n`,'packaged revision differs from exact source');
+ assert.equal(override, `[aurion]\nclient_build="${expectedRevision}"\nnative_auth_start_enabled=true\n`,'packaged Login config must bind exact source and enable native auth');
  return expectedRevision;
 }
 
