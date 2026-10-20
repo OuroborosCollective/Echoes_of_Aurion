@@ -1,7 +1,7 @@
 extends Node
 ## Native Android callback transport only. Authority remains with PKCE state and Aurion.
 signal callback_received(raw_url: String)
-const PREFIX := "https://arelogic.space/app/auth/callback?"
+const CALLBACK_ROUTE := "https://arelogic.space/app/auth/callback"
 var _last_delivered := ""
 var _android_runtime: Object
 var _activity: Object
@@ -45,7 +45,7 @@ func reset() -> void:
 	if intent == null:
 		return
 	var data: Variant = intent.getDataString()
-	if data != null and str(data).begins_with(PREFIX):
+	if data != null and _is_callback_route(str(data)):
 		# A callback may arrive after cancellation while polling is paused.
 		# Discard it before a fresh transaction can mistake it for its own.
 		intent.setData(null)
@@ -53,10 +53,13 @@ func reset() -> void:
 func deliver_for_test(raw_url: String, pending_login: bool) -> bool:
 	# This transport recognizes only the exact callback route. The downstream
 	# callback parser owns URI, field and PKCE/state validation and fails closed.
-	if not pending_login or not raw_url.begins_with(PREFIX):
+	if not pending_login or not _is_callback_route(raw_url):
 		return false
 	if raw_url == _last_delivered:
 		return false
 	_last_delivered = raw_url
 	callback_received.emit(raw_url)
 	return true
+
+func _is_callback_route(raw_url: String) -> bool:
+	return raw_url == CALLBACK_ROUTE or raw_url.begins_with(CALLBACK_ROUTE + "?")
