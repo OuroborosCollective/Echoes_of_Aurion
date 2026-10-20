@@ -18,6 +18,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var status: Label = %ConnectionStatus
 @onready var combat_notice: Label = %CombatNotice
 @onready var confirmed_position: Label = %ConfirmedPosition
+@onready var entity_summary: Label = %EntitySummary
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
 @onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
@@ -177,6 +178,8 @@ func _reset_projection() -> void:
 	combat_notice.visible = false
 	confirmed_position.text = ""
 	confirmed_position.visible = false
+	entity_summary.text = ""
+	entity_summary.visible = false
 
 func _on_zone_welcome(welcome: Dictionary) -> void:
 	if _lifecycle.is_suspended():
@@ -187,6 +190,7 @@ func _on_zone_welcome(welcome: Dictionary) -> void:
 		_zone_socket.close_zone()
 		return
 	_entities.sync(_confirmed_zone)
+	_update_entity_presentation()
 	var now_ms := Time.get_ticks_msec()
 	_visuals.capture(_confirmed_zone, now_ms)
 	_update_position_presentation(now_ms)
@@ -196,6 +200,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		return
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
+		_update_entity_presentation()
 		var now_ms := Time.get_ticks_msec()
 		_visuals.capture(_confirmed_zone, now_ms)
 		_update_position_presentation(now_ms)
@@ -334,6 +339,18 @@ func _process(_delta: float) -> void:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
 		_poll_reconnect(Time.get_ticks_msec())
+
+func _update_entity_presentation() -> void:
+	if not _confirmed_zone.has_state():
+		entity_summary.text = ""
+		entity_summary.visible = false
+		return
+	var travellers := maxi(_entities.ids("presences").size() - 1, 0)
+	var creatures := _entities.ids("mobs").size()
+	var traveller_word := "Reisender" if travellers == 1 else "Reisende"
+	var creature_word := "Kreatur" if creatures == 1 else "Kreaturen"
+	entity_summary.text = "In der Nähe · %d %s · %d %s" % [travellers, traveller_word, creatures, creature_word]
+	entity_summary.visible = true
 
 func _update_position_presentation(now_ms: int) -> void:
 	if not _confirmed_zone.has_state():
