@@ -50,6 +50,8 @@ jobs:
       - run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
       - run: pnpm check
       - run: node --test scripts/aurion-probe-bootstrap.test.mjs scripts/aurion-production-probe-client.test.mjs
+      - name: Approval UI feedback through real loopback HTTP
+        run: pnpm exec vitest run client/src/components/ProductionProbeApproval.test.tsx
       - name: Real MariaDB races, replay, revocation, roles and local signed-JWT contracts
         # These files deliberately share the real global probe lock and isolated DB.
         run: pnpm exec vitest run --no-file-parallelism server/aurionProductionProbeApprovalContract.test.ts server/aurionProductionProbeOidc.test.ts server/aurionProductionProbeMariaDb.test.ts server/aurionProductionProbeHttpMariaDb.test.ts server/aurionProductionGameplaySession.test.ts server/aurionProductionGameplayPersistenceMariaDb.test.ts server/aurionProductionGameplayReadback.test.ts server/aurionProductionProbeZone.test.ts server/zoneRegistry.test.ts

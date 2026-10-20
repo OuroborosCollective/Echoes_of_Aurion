@@ -12,6 +12,19 @@ const scopeDetails = {
 } as const;
 type ProbeScope = keyof typeof scopeDetails;
 const scopes = Object.keys(scopeDetails) as ProbeScope[];
+function isApproval(value: unknown): value is Approval {
+  if (!value || typeof value !== "object") return false;
+  const approval = value as Approval;
+  const timestamp = (time: unknown) => typeof time === "number" && Number.isSafeInteger(time) && time > 0;
+  return typeof approval.approvalId === "string" && /^[a-f0-9]{32}$/.test(approval.approvalId)
+    && scopes.includes(approval.scope as ProbeScope) && typeof approval.purpose === "string"
+    && timestamp(approval.expiresAtMs)
+    && (approval.consumedAtMs === null || timestamp(approval.consumedAtMs))
+    && (approval.revokedAtMs === null || timestamp(approval.revokedAtMs))
+    && !!approval.run && typeof approval.run.revision === "string" && /^[a-f0-9]{40}$/.test(approval.run.revision)
+    && typeof approval.run.runId === "string" && /^[1-9][0-9]{0,19}$/.test(approval.run.runId)
+    && Number.isSafeInteger(approval.run.runAttempt) && approval.run.runAttempt > 0;
+}
 export function ProductionProbeApproval() {
   const [revision, setRevision] = useState(""); const [runId, setRunId] = useState("");
   const [attempt, setAttempt] = useState(1); const [purpose, setPurpose] = useState("");
@@ -19,18 +32,40 @@ export function ProductionProbeApproval() {
   const [confirmed, setConfirmed] = useState(false); const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(""); const [approvals, setApprovals] = useState<Approval[]>([]);
   const request = async (operation: string, body: unknown) => {
-    const response = await fetch(`/api/production-probe/${operation}`, { method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-Requested-With": "AurionOps" }, body: JSON.stringify(body) });
-    if (!response.ok) throw new Error("Freigabe abgelehnt. Admin-Anmeldung, Passwort, Laufbindung und Infrastruktur prüfen.");
-    return response.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    let failure = "Server nicht erreichbar. Ergebnis unbestätigt; gespeicherte Freigaben erneut lesen.";
+    try {
+      const response = await fetch(`/api/production-probe/${operation}`, { method: "POST", credentials: "same-origin", signal: controller.signal,
+        headers: { "Content-Type": "application/json", "X-Requested-With": "AurionOps" }, body: JSON.stringify(body) });
+      if (!response.ok) {
+        failure = "Freigabe abgelehnt. Admin-Anmeldung, Passwort, Laufbindung und Infrastruktur prüfen.";
+        throw new Error();
+      }
+      failure = "Ungültige Serverantwort. Ergebnis unbestätigt; gespeicherte Freigaben erneut lesen.";
+      if (response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") throw new Error();
+      const result: unknown = await response.json();
+      if (operation === "list" && (!Array.isArray(result) || !result.every(isApproval))) throw new Error();
+      if (operation === "approve" && !isApproval(result)) throw new Error();
+      return result;
+    } catch {
+      throw new Error(controller.signal.aborted
+        ? "Zeitlimit erreicht. Ergebnis unbestätigt; gespeicherte Freigaben erneut lesen."
+        : failure);
+    } finally { clearTimeout(timeout); }
   };
-  const act = async (work: () => Promise<void>) => { setBusy(true); setMessage(""); try { await work(); } catch (error) { setMessage(error instanceof Error ? error.message : "Anfrage abgelehnt."); } finally { setBusy(false); setPassword(""); setConfirmed(false); } };
+  const readApprovals = async () => {
+    const saved = await request("list", {}) as Approval[];
+    setApprovals(saved);
+    setMessage(saved.length === 0 ? "Keine gespeicherten Freigaben für diese Admin-Anmeldung gefunden." : `${saved.length} gespeicherte Freigaben geladen.`);
+  };
+  const act = async (work: () => Promise<void>) => { setBusy(true); setMessage("Anfrage läuft …"); try { await work(); } catch (error) { setMessage(error instanceof Error ? error.message : "Anfrage abgelehnt."); } finally { setBusy(false); setPassword(""); setConfirmed(false); } };
   return <Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader>
     <CardTitle>Einmalfreigabe für Produktionsprüfungen</CardTitle>
     <CardDescription>Ein konkreter GitHub-Lauf, eine eng gebundene Berechtigung, maximal fünf Minuten. Schema- und Release-Freigaben bleiben separat. Der echte Gameplay-Join ist als effectful Probe ausdrücklich getrennt.</CardDescription>
   </CardHeader><CardContent className="space-y-4"><form className="space-y-3" onSubmit={event => { event.preventDefault(); void act(async () => {
     const run = { repository: "OuroborosCollective/Echoes_of_Aurion", workflow: ".github/workflows/deploy-aurion-zone-runtime.yml", ref: "refs/heads/main", revision, runId, runAttempt: attempt, environment: "production", audience: "aurion-production-probe" };
-    const approved: Approval = await request("approve", { run, scope, purpose, password, confirmed });
+    const approved = await request("approve", { run, scope, purpose, password, confirmed }) as Approval;
     setApprovals(current => [approved, ...current]); setMessage(`Gespeichert; Ablauf: ${new Date(approved.expiresAtMs).toLocaleString()}`);
   }); }}>
     <p className="break-all text-sm">OuroborosCollective/Echoes_of_Aurion · deploy-aurion-zone-runtime.yml · main · production</p>
@@ -42,8 +77,8 @@ export function ProductionProbeApproval() {
     <Label htmlFor="probe-password">Aurion-Passwort erneut bestätigen</Label><Input id="probe-password" type="password" autoComplete="current-password" value={password} maxLength={128} required onChange={event => setPassword(event.target.value)} />
     <label className="flex gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} required />Ich bestätige genau diese Revision, Run-ID, diesen Versuch und Zweck. Ablauf spätestens fünf Minuten nach Bestätigung; {scopeDetails[scope].confirmation}.</label>
     <Button type="submit" disabled={busy || !confirmed}>Einmalig freigeben</Button>
-  </form><Button variant="outline" disabled={busy} onClick={() => void act(async () => setApprovals(await request("list", {})))}>Gespeicherte Freigaben lesen</Button>
+  </form><Button type="button" variant="outline" disabled={busy} onClick={() => void act(readApprovals)}>Gespeicherte Freigaben lesen</Button>
     {message && <p role="status" className="text-sm">{message}</p>}
-    {approvals.map(approval => <div key={approval.approvalId} className="rounded border border-cyan-200/20 p-3 text-sm break-all"><p>{approval.run.revision} · Run {approval.run.runId}/{approval.run.runAttempt}</p><p>{approval.scope} · {approval.purpose}</p><p>Ablauf {new Date(approval.expiresAtMs).toLocaleString()} · {approval.revokedAtMs ? "widerrufen" : approval.consumedAtMs ? "verbraucht" : "unverbraucht"}</p>{!approval.consumedAtMs && !approval.revokedAtMs && <Button variant="outline" disabled={busy} onClick={() => void act(async () => { await request("revoke", { approvalId: approval.approvalId }); setApprovals(await request("list", {})); })}>Widerrufen</Button>}</div>)}
+    {approvals.map(approval => <div key={approval.approvalId} className="rounded border border-cyan-200/20 p-3 text-sm break-all"><p>{approval.run.revision} · Run {approval.run.runId}/{approval.run.runAttempt}</p><p>{approval.scope} · {approval.purpose}</p><p>Ablauf {new Date(approval.expiresAtMs).toLocaleString()} · {approval.revokedAtMs ? "widerrufen" : approval.consumedAtMs ? "verbraucht" : "unverbraucht"}</p>{!approval.consumedAtMs && !approval.revokedAtMs && <Button type="button" variant="outline" disabled={busy} onClick={() => void act(async () => { await request("revoke", { approvalId: approval.approvalId }); await readApprovals(); })}>Widerrufen</Button>}</div>)}
   </CardContent></Card>;
 }
