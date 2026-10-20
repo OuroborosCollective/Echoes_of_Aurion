@@ -3961,3 +3961,23 @@ Evidence: Baseline `81778ff2894958c198f631eadea79059f83737ea` failed causally in
 Learned: Full wire validation is insufficient for gameplay presentation when accepted server events are discarded before the client callback boundary.
 Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
 Next safe step: Connect these confirmed callbacks to a bounded combat/telegraph presentation in a separate G11 slice.
+
+
+### 2026-10-20 — PR #1083 — fix(g10): project validated zone server events
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1083 merge=f8a706c10671c8f894c53b011d16b6e1b3e0ae57 -->
+Task: Merge PR #1083 into `main` — fix(g10): project validated zone server events.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/net/zone_socket.gd`
+- `godot-client/tests/integration/test_zone_socket.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1083
+- Merge commit: `f8a706c10671c8f894c53b011d16b6e1b3e0ae57`
+- PR head: `5b25a6abc51da9b26e3922dbbdfbe9b5c42bba7d`
+- Merged at: 2026-10-20T15:35:42Z
+- Post-merge workflow run: 39449871667
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
