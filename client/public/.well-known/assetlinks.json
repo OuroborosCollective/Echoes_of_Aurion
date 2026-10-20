@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.ouroboroscollective.aurion.godot.login",
+      "sha256_cert_fingerprints": [
+        "F2:E8:FA:1E:81:FB:DA:E5:2E:94:00:AF:32:29:A0:47:79:8D:EB:BE:A0:CF:36:80:A0:4B:E6:54:0D:EF:72:0A"
+      ]
+    }
+  }
+]
