@@ -3807,3 +3807,23 @@ Evidence: Baseline `16845618d5e0ad9bbdc4a5dd672e3e916e5708f2` failed Godot run 3
 Learned: Signal deduplication does not consume a newly redelivered Android Activity intent; canonical transport cleanup must be independent from downstream delivery acceptance.
 Open: Exact final-head gates, shared review, merge and main readback.
 Next safe step: Merge only after final-head gates and reviews are clean, then read back main.
+
+
+### 2026-10-20 — PR #1078 — fix(g09): consume duplicate Android App Link intents
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1078 merge=6eed541e3a35a44c68cfde409ecccd4b684131f0 -->
+Task: Merge PR #1078 into `main` — fix(g09): consume duplicate Android App Link intents.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/platform/android/native_intent_bridge.gd`
+- `godot-client/tests/test_native_intent_bridge.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1078
+- Merge commit: `6eed541e3a35a44c68cfde409ecccd4b684131f0`
+- PR head: `1ce2b29a7f233cd34dd407e90ba6b8ef0671fb18`
+- Merged at: 2026-10-20T10:31:01Z
+- Post-merge workflow run: 39408497378
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
