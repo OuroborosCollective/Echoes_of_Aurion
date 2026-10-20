@@ -208,7 +208,9 @@ func _on_zone_combat(event: Dictionary) -> void:
 		_seen_combat_events.erase(_seen_combat_order.pop_front())
 	combat_notice.visible = true
 	_combat_notice_expires_at_ms = Time.get_ticks_msec() + COMBAT_NOTICE_DURATION_MS
-	if not event.get("hit", false):
+	if event.get("killed", false):
+		combat_notice.text = ("Du wurdest besiegt" if event.get("defenderEntityId") == self_id else "Gegner besiegt") + " · %d Schaden" % int(event.get("damage", 0))
+	elif not event.get("hit", false):
 		combat_notice.text = "Angriff verfehlt"
 	elif event.get("defenderEntityId") == self_id:
 		combat_notice.text = "Treffer erhalten · %d Schaden" % int(event.get("damage", 0))
