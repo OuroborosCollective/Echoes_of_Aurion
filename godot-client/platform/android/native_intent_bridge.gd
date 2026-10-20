@@ -17,7 +17,12 @@ func _ready() -> void:
 	_activity = _android_runtime.getActivity()
 
 func poll_for_callback(pending_login: bool) -> bool:
-	if not pending_login or OS.get_name() != "Android" or _activity == null:
+	if OS.get_name() != "Android":
+		return false
+	return poll_activity_intent_for_test(pending_login)
+
+func poll_activity_intent_for_test(pending_login: bool) -> bool:
+	if not pending_login or _activity == null:
 		return false
 	var intent: Variant = _activity.getIntent()
 	if intent == null:
@@ -25,10 +30,10 @@ func poll_for_callback(pending_login: bool) -> bool:
 	var data: Variant = intent.getDataString()
 	if data == null:
 		return false
-	var url := str(data)
-	var accepted := deliver_for_test(url, pending_login)
+	var accepted := deliver_for_test(str(data), pending_login)
 	if accepted:
-		# Clear only the delivered URI, preventing an app resume from replaying it.
+		# Clear every delivered canonical URI, including malformed callbacks that
+		# the strict auth validator rejects, so app resume cannot retry it forever.
 		intent.setData(null)
 	return accepted
 
@@ -46,7 +51,9 @@ func reset() -> void:
 		intent.setData(null)
 
 func deliver_for_test(raw_url: String, pending_login: bool) -> bool:
-	if not pending_login or not raw_url.begins_with(PREFIX) or raw_url.contains("#") or raw_url.contains("%") or raw_url.contains("+") or raw_url.contains(";") or raw_url.contains("\\") or raw_url.count("?") != 1:
+	# This transport recognizes only the exact callback route. The downstream
+	# callback parser owns URI, field and PKCE/state validation and fails closed.
+	if not pending_login or not raw_url.begins_with(PREFIX):
 		return false
 	if raw_url == _last_delivered:
 		return false
