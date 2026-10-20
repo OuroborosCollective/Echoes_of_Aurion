@@ -3827,3 +3827,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G09 pre-launch App Link reset ordering
+Status: VERIFIED candidate
+Task: Prevent a fast verified Android callback from being erased after the system browser opens.
+Change: The live login path now clears a stale Activity callback immediately before starting the auth request; a callback delivered during browser launch remains available for one-time polling and consumption.
+Evidence: Baseline `b960f5d8faf21d668039b76e98f5fc540dc39f1f` failed Godot run 39414331617 causally at the new launch-path regression; candidate `46f90bbca5e41accd39bc681aacd982c008e89cb` passed Godot run 39414619736/artifact 12260761560 and Android Preview APK run 39414619726/artifact 12261086305.
+Learned: Stale callback cleanup must precede browser launch; post-launch cleanup can race with Android App-Link delivery.
+Open: Exact final-head gates, shared review, merge and main readback.
+Next safe step: Merge only after the Memory-bearing final head is green and reviews are clear.
