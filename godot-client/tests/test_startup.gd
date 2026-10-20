@@ -144,8 +144,8 @@ func verify() -> void:
 	real_zone.emit_signal("zone_combat", critical_combat)
 	require(enabled_scene.get_node("%CombatNotice").text == "Kritischer Treffer bestätigt · 9 Schaden", "confirmed critical result was reduced to generic damage")
 	var lethal_combat: Dictionary = combat.duplicate(true)
-	lethal_combat["tick"] = 7
-	lethal_combat["sequence"] = 2
+	lethal_combat["tick"] = 8
+	lethal_combat["sequence"] = 3
 	lethal_combat["attackerEntityId"] = "player:1"
 	lethal_combat["defenderEntityId"] = "mob_1"
 	lethal_combat["damage"] = 12
