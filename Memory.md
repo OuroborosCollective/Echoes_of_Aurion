@@ -3829,10 +3829,10 @@ Open: Runtime, deployment and independent readback claims remain governed by the
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
 ### 2026-10-20 — G09 pre-launch App Link reset ordering
-Status: PARTIAL candidate
+Status: VERIFIED candidate
 Task: Preserve the current Android login across stale callback races without losing its fast post-launch callback.
 Change: The transport provides a synchronous pre-browser-open cleanup boundary, and the strict callback parser harmlessly consumes a well-formed mismatched stale state while malformed, expired and matching callbacks retain their fail-closed/one-time semantics.
-Evidence: Baseline `b960f5d8faf21d668039b76e98f5fc540dc39f1f` failed Godot run 39414331617; two exact-head reviews then exposed the asynchronous pre-launch and post-boundary stale windows, both covered by corrected regressions.
+Evidence: Baseline `b960f5d8faf21d668039b76e98f5fc540dc39f1f` failed Godot run 39414331617; review-corrected candidate `1905ee4038fd04f2d45eb0f4fecacb9595c4dc0d` passed Godot run 39416982340/artifact 12260969300 and Android Preview APK run 39416982369/artifact 12260709961.
 Learned: Timing cleanup narrows Android callback races, but transaction state must distinguish a valid old callback from malformed input so stale browser completion cannot cancel a newer PKCE attempt.
-Open: Corrected runtime/APK gates, refreshed exact-head reviews, merge and main readback.
+Open: Exact Memory-bearing final-head gates, refreshed reviews, merge and main readback.
 Next safe step: Merge only after the Memory-bearing final head is green and reviews are clear.
