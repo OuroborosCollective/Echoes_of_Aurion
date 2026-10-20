@@ -109,7 +109,7 @@ func _process(_delta: float) -> void:
 				return
 			var wire := bytes.get_string_from_utf8()
 			if not Codec.wire_numbers_are_integers(wire):
-				_finish("invalid_welcome")
+				_finish("invalid_welcome" if _state == "authenticating" else "invalid_server_message")
 				return
 			var decoded: Variant = JSON.parse_string(wire)
 			if _state == "authenticating":
@@ -150,10 +150,18 @@ func _process(_delta: float) -> void:
 						return
 					continue
 				# Combat and telegraph are known v5 event types whose presentation
-				# projection is integrated separately. Anything outside the wire union
-				# is a protocol violation and must not leave an authenticated peer open.
-				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") in ["combat", "telegraph"]:
-					continue
+				# projection is integrated separately. Validate their full wire shape
+				# before ignoring them here; malformed or unknown messages fail closed.
+				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "combat":
+					if Codec.is_valid_combat_event(decoded):
+						continue
+					_finish("invalid_server_message")
+					return
+				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "telegraph":
+					if Codec.is_valid_telegraph_event(decoded):
+						continue
+					_finish("invalid_server_message")
+					return
 				_finish("invalid_server_message")
 				return
 	if _peer == active_peer and active_peer.get_ready_state() == WebSocketPeer.STATE_CLOSED:
