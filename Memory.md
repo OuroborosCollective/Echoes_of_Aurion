@@ -4159,3 +4159,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-20 — G11 confirmed incoming-telegraph presentation
+Status: VERIFIED candidate
+Task: Preserve Aurion's validated self-targeted telegraph event in the active Godot scene.
+Change: The scene now subscribes to confirmed telegraphs, displays each self-targeted warning once, ignores other players, and bounds replay memory, expiry and projection reset.
+Evidence: Regression-only head `52b1f4749582ebd054156ed09ebfa6808a443765` failed causally in Godot run 39490785458/job 118863085489; candidate `592966e04a8561d050b9ece12337c2fa8e4bf44d` passed Godot/runtime run 39491032929 and Android Preview run 39491033214.
+Learned: The strict transport already emitted validated telegraphs, but the active scene discarded them because it never subscribed; presentation remains downstream of Aurion authority.
+Open: Exact Memory-bearing head gates, shared review, merge and main readback.
+Next safe step: Merge only after the final head is green and both reviews are clear.
