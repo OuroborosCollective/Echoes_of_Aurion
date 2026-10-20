@@ -3921,3 +3921,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G10 unknown post-welcome server-frame rejection
+Status: VERIFIED candidate
+Task: Close the authenticated Godot zone session when a post-welcome server frame lies outside the versioned v5 server-message union.
+Decisions: Preserve recoverable command rejects and known combat/telegraph event types; terminate only schema-unknown messages with one `invalid_server_message` callback.
+Touched surfaces: `godot-client/net/zone_socket.gd`, `godot-client/tests/integration/test_zone_socket.gd`.
+Evidence: Baseline `6deced4696362acea759971fe65624379c8cec77` failed causally in Godot run 39438524023/job 118681885806; candidate `ac5a3cbbb78b97e76e5f24770ab5f56e07e3c9f9` passed Godot run 39438815514 and Android Preview APK run 39438815265.
+Learned: A connected transport must distinguish recoverable command feedback from frames outside its negotiated server union; silently ignoring the latter leaves protocol drift undetected.
+Open: None for this bounded transport fix.
+Next safe step: Integrate validated combat/telegraph projection in a separate G10/G11 slice.
