@@ -3981,3 +3981,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G11 confirmed combat notice
+Status: VERIFIED candidate
+Task: Make validated Aurion combat and telegraph events visible in the active Godot scene.
+Change: The runtime now shows self-targeted telegraphs and confirmed combat results once, ignores stale sequences, and clears presentation with the authenticated zone projection.
+Evidence: Candidate `96d04095b27bc77872a39184af037a507bd689b0`; Godot headless run 39457130332/artifacts 12280623218 and 12279983580, plus Android Preview APK run 39457130263/artifact 12280777841, passed.
+Learned: A hidden inactive notice avoids adding layout gaps while retaining an event-driven, server-confirmed presentation boundary.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Merge only after the final head is green and reviews are clear.
