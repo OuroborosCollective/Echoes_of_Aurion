@@ -4189,3 +4189,10 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G11 confirmed self-position presentation
+Status: VERIFIED candidate
+Change: The active Godot scene now consumes its bounded interpolator for a visible self-position readout; welcome/new snapshots update it, stale snapshots cannot rewind it, reset removes it, and float64 presentation coordinates preserve large-world precision.
+Learned: Confirmed state and interpolation were active but unused by the scene; converting valid ±64-billion-mm coordinates through `Vector2` before formatting can lose metres, so the readout needs the precision-preserving path.
+Evidence: Regression-only `d13dc5cb768fe136b9f22f920014a3010aaf2948` failed causally in Godot run 39499325834/job 118892493698; review P2 on `12c8c48dac9b12195ff7bc77b6cb52544628fc2a` led to the ±60,000,000,123-mm regression; fixed `629e33d44f7e27530226e1d2df1579f48dd97cf2` passed Godot/runtime/render 39500720483, Android Preview 39500720495, determinism 39500720678 and Memory sync 39500720561.
+Open: Exact Memory-bearing head gates, fresh shared review, merge and main readback.

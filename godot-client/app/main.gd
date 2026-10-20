@@ -17,6 +17,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var title: Label = %Title
 @onready var status: Label = %ConnectionStatus
 @onready var combat_notice: Label = %CombatNotice
+@onready var confirmed_position: Label = %ConfirmedPosition
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
 @onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
@@ -174,6 +175,8 @@ func _reset_projection() -> void:
 	_combat_notice_expires_at_ms = -1
 	combat_notice.text = ""
 	combat_notice.visible = false
+	confirmed_position.text = ""
+	confirmed_position.visible = false
 
 func _on_zone_welcome(welcome: Dictionary) -> void:
 	if _lifecycle.is_suspended():
@@ -184,14 +187,18 @@ func _on_zone_welcome(welcome: Dictionary) -> void:
 		_zone_socket.close_zone()
 		return
 	_entities.sync(_confirmed_zone)
-	_visuals.capture(_confirmed_zone, Time.get_ticks_msec())
+	var now_ms := Time.get_ticks_msec()
+	_visuals.capture(_confirmed_zone, now_ms)
+	_update_position_presentation(now_ms)
 
 func _on_zone_snapshot(snapshot: Dictionary) -> void:
 	if _lifecycle.is_suspended():
 		return
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
-		_visuals.capture(_confirmed_zone, Time.get_ticks_msec())
+		var now_ms := Time.get_ticks_msec()
+		_visuals.capture(_confirmed_zone, now_ms)
+		_update_position_presentation(now_ms)
 
 func _on_zone_combat(event: Dictionary) -> void:
 	if not _confirmed_zone.has_state():
@@ -320,11 +327,26 @@ func _notification(what: int) -> void:
 		_on_app_resumed()
 
 func _process(_delta: float) -> void:
-	_expire_combat_notice(Time.get_ticks_msec())
+	var now_ms := Time.get_ticks_msec()
+	_expire_combat_notice(now_ms)
+	_update_position_presentation(now_ms)
 	if _awaiting_callback:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
 		_poll_reconnect(Time.get_ticks_msec())
+
+func _update_position_presentation(now_ms: int) -> void:
+	if not _confirmed_zone.has_state():
+		confirmed_position.text = ""
+		confirmed_position.visible = false
+		return
+	var visual: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
+	if visual.is_empty():
+		confirmed_position.text = ""
+		confirmed_position.visible = false
+		return
+	confirmed_position.text = "Position · X %.2f m · Z %.2f m" % [float(visual["x"]) / 1000.0, float(visual["z"]) / 1000.0]
+	confirmed_position.visible = true
 
 func _expire_combat_notice(now_ms: int) -> void:
 	if _combat_notice_expires_at_ms < 0 or now_ms < _combat_notice_expires_at_ms:

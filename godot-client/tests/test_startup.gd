@@ -113,6 +113,40 @@ func verify() -> void:
 		"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":nodes}
 	}
 	enabled_scene._on_zone_welcome(confirmed_welcome)
+	var position_label := enabled_scene.get_node_or_null("%ConfirmedPosition") as Label
+	require(position_label != null, "confirmed self position has no active scene presentation")
+	if position_label != null:
+		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
+		require(position_label.visible, "confirmed self position presentation stayed hidden")
+		require(position_label.text == "Position · X 1.00 m · Z 0.00 m", "welcome position presentation did not preserve confirmed millimetres")
+		var moved_snapshot: Dictionary = confirmed_welcome.duplicate(true)
+		moved_snapshot.erase("protocolVersion")
+		moved_snapshot.erase("connectionId")
+		moved_snapshot.erase("selfEntityId")
+		moved_snapshot["type"] = "snapshot"
+		moved_snapshot["snapshotSeq"] = 2
+		moved_snapshot["tick"] = 2
+		moved_snapshot["resources"]["revision"] = 2
+		moved_snapshot["presences"][0]["position"] = {"x":3000,"z":-2000}
+		require(ZoneCodec.is_valid_snapshot(moved_snapshot), "position presentation fixture violates Aurion v5")
+		enabled_scene._on_zone_snapshot(moved_snapshot)
+		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
+		require(position_label.text == "Position · X 3.00 m · Z -2.00 m", "new confirmed snapshot did not reach active position presentation")
+		var stale_snapshot: Dictionary = moved_snapshot.duplicate(true)
+		stale_snapshot["snapshotSeq"] = 1
+		stale_snapshot["presences"][0]["position"] = {"x":9000,"z":9000}
+		enabled_scene._on_zone_snapshot(stale_snapshot)
+		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
+		require(position_label.text == "Position · X 3.00 m · Z -2.00 m", "stale snapshot rewound active position presentation")
+		var large_snapshot: Dictionary = moved_snapshot.duplicate(true)
+		large_snapshot["snapshotSeq"] = 3
+		large_snapshot["tick"] = 3
+		large_snapshot["resources"]["revision"] = 3
+		large_snapshot["presences"][0]["position"] = {"x":60000000123,"z":-60000000123}
+		require(ZoneCodec.is_valid_snapshot(large_snapshot), "large position presentation fixture violates Aurion v5")
+		enabled_scene._on_zone_snapshot(large_snapshot)
+		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
+		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m", "large confirmed world position lost integer precision in presentation")
 	var real_zone: Node = enabled_scene._zone_socket
 	var telegraph := {
 		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
@@ -180,6 +214,9 @@ func verify() -> void:
 	enabled_scene._reset_projection()
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
 	require(not enabled_scene.get_node("%CombatNotice").visible, "combat presentation retained layout space after reset")
+	if position_label != null:
+		require(position_label.text.is_empty(), "confirmed position text survived projection reset")
+		require(not position_label.visible, "confirmed position retained layout space after projection reset")
 	var live_api: Node = enabled_scene._api
 	live_api.cancel()
 	live_api.queue_free()
