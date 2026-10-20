@@ -3984,9 +3984,9 @@ Next safe step: Use the new main revision as the canonical baseline for the next
 
 ### 2026-10-20 — G11 confirmed combat notice
 Status: VERIFIED candidate
-Task: Make validated Aurion combat and telegraph events visible in the active Godot scene.
-Change: The runtime now shows self-targeted telegraphs and confirmed combat results once, ignores stale sequences, and clears presentation with the authenticated zone projection.
+Task: Make validated Aurion combat results visible in the active Godot scene.
+Change: The runtime now shows self-involved confirmed combat results once, ignores stale global combat sequences, and clears presentation with the authenticated zone projection.
 Evidence: Candidate `96d04095b27bc77872a39184af037a507bd689b0`; Godot headless run 39457130332/artifacts 12280623218 and 12279983580, plus Android Preview APK run 39457130263/artifact 12280777841, passed.
-Learned: A hidden inactive notice avoids adding layout gaps while retaining an event-driven, server-confirmed presentation boundary.
-Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
-Next safe step: Merge only after the final head is green and reviews are clear.
+Learned: Combat events have a productive globally sequenced server broadcast, while telegraphs still lack a productive producer and must remain a separate integration slice.
+Open: Exact corrected-head gates, shared review, merge and main readback.
+Next safe step: Merge only after the corrected head is green and reviews are clear.
