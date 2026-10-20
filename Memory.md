@@ -3776,3 +3776,23 @@ Evidence: Candidate `d5c5939138af8b645f03b28da8522138c2e9cbf5`; Godot headless r
 Learned: Transport prefiltering must not prevent the canonical validator from terminating malformed callbacks, or the retained Android intent creates an endless pending-login loop.
 Open: Merge and main readback.
 Next safe step: Merge after final-head gates and reviews remain clean, then read back main.
+
+
+### 2026-10-20 — PR #1077 — fix(g09): terminate malformed canonical App Links
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1077 merge=7f1df7a09a6cf398adbaae647304afddaec56a2b -->
+Task: Merge PR #1077 into `main` — fix(g09): terminate malformed canonical App Links.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/platform/android/native_intent_bridge.gd`
+- `godot-client/tests/test_native_intent_bridge.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1077
+- Merge commit: `7f1df7a09a6cf398adbaae647304afddaec56a2b`
+- PR head: `90e1b36db8b046326596e1e7b5fdfcb9d9b1edab`
+- Merged at: 2026-10-20T09:49:07Z
+- Post-merge workflow run: 39403453736
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
