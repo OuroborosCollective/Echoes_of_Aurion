@@ -146,7 +146,7 @@ func verify() -> void:
 		require(ZoneCodec.is_valid_snapshot(large_snapshot), "large position presentation fixture violates Aurion v5")
 		enabled_scene._on_zone_snapshot(large_snapshot)
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
-		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m", "large confirmed position lost integer precision in presentation")
+		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m", "large confirmed world position lost integer precision in presentation")
 	var real_zone: Node = enabled_scene._zone_socket
 	var telegraph := {
 		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
