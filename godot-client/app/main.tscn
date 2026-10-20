@@ -99,6 +99,7 @@ autowrap_mode = 3
 
 [node name="CombatNotice" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.33, 0.27, 1)
 theme_override_font_sizes/font_size = 18
