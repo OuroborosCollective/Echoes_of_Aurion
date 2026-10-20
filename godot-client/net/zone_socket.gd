@@ -149,6 +149,13 @@ func _process(_delta: float) -> void:
 					if _peer != active_peer:
 						return
 					continue
+				# Combat and telegraph are known v5 event types whose presentation
+				# projection is integrated separately. Anything outside the wire union
+				# is a protocol violation and must not leave an authenticated peer open.
+				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") in ["combat", "telegraph"]:
+					continue
+				_finish("invalid_server_message")
+				return
 	if _peer == active_peer and active_peer.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 		_finish("closed")
 
