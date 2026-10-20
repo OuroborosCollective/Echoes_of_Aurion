@@ -3952,3 +3952,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G10 validated server-event callbacks
+Status: VERIFIED candidate
+Task: Deliver fully validated post-welcome combat and telegraph frames from the Godot zone transport instead of silently dropping them.
+Change: `zone_socket.gd` emits typed deep-copied callbacks only after existing v5 schema validation and preserves synchronous listener-close safety plus fail-closed invalid-frame handling.
+Evidence: Baseline `81778ff2894958c198f631eadea79059f83737ea` failed causally in Godot run 39448088162; candidate `5d120fc0824bcb76859be498c902155306107de5` passed the real WebSocketPeer loopback in Godot run 39448418274/artifact 12275574861 and Android Preview APK run 39448418215/artifact 12277053446.
+Learned: Full wire validation is insufficient for gameplay presentation when accepted server events are discarded before the client callback boundary.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Connect these confirmed callbacks to a bounded combat/telegraph presentation in a separate G11 slice.
