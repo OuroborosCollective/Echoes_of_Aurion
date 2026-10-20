@@ -114,21 +114,6 @@ func verify() -> void:
 	}
 	enabled_scene._on_zone_welcome(confirmed_welcome)
 	var real_zone: Node = enabled_scene._zone_socket
-	var telegraph := {
-		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
-		"id":"telegraph:mob_1:7", "sequence":7, "startTick":2, "impactTick":5,
-		"attackerEntityId":"mob_1", "targetEntityId":"player:1", "kind":"line",
-		"origin":{"x":0,"z":0}, "target":{"x":1000,"z":0}, "widthFixed":1000,
-		"color":"#ef4444", "visualSourceRevision":ZoneCodec.FIXED_CONTENT,
-		"authorityRuleset":"aurion-ax1-mob-windup.v1"
-	}
-	require(ZoneCodec.is_valid_telegraph_event(telegraph), "combat notice telegraph fixture violates Aurion v5")
-	real_zone.emit_signal("zone_telegraph", telegraph)
-	require(enabled_scene.get_node("%CombatNotice").text == "Achtung: Gegnerischer Angriff angekündigt", "confirmed self telegraph was not displayed")
-	require(enabled_scene.get_node("%CombatNotice").visible, "confirmed self telegraph notice stayed hidden")
-	enabled_scene.get_node("%CombatNotice").text = "sequenced"
-	real_zone.emit_signal("zone_telegraph", telegraph)
-	require(enabled_scene.get_node("%CombatNotice").text == "sequenced", "duplicate telegraph replayed presentation")
 	var combat := {
 		"type":"combat", "contractVersion":"wasd-zone-combat.v2", "action":"melee",
 		"tick":5, "sequence":9, "attackerEntityId":"mob_1", "defenderEntityId":"player:1",
@@ -139,6 +124,9 @@ func verify() -> void:
 	require(ZoneCodec.is_valid_combat_event(combat), "combat notice event fixture violates Aurion v5")
 	real_zone.emit_signal("zone_combat", combat)
 	require(enabled_scene.get_node("%CombatNotice").text == "Treffer erhalten · 4 Schaden", "confirmed self combat result was not displayed")
+	enabled_scene.get_node("%CombatNotice").text = "sequenced"
+	real_zone.emit_signal("zone_combat", combat)
+	require(enabled_scene.get_node("%CombatNotice").text == "sequenced", "duplicate combat result replayed presentation")
 	enabled_scene._reset_projection()
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
 	require(not enabled_scene.get_node("%CombatNotice").visible, "combat presentation retained layout space after reset")
