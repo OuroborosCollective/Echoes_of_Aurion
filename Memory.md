@@ -3836,3 +3836,28 @@ Evidence: Baseline `b960f5d8faf21d668039b76e98f5fc540dc39f1f` failed Godot run 3
 Learned: Timing cleanup narrows Android callback races, but transaction state must distinguish a valid old callback from malformed input so stale browser completion cannot cancel a newer PKCE attempt.
 Open: Exact Memory-bearing final-head gates, refreshed reviews, merge and main readback.
 Next safe step: Merge only after the Memory-bearing final head is green and reviews are clear.
+
+
+### 2026-10-20 — PR #1079 — fix(g09): preserve fast App Link after browser launch
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1079 merge=a5c3221f2f5a40ce5656abb27268222fc15f04b3 -->
+Task: Merge PR #1079 into `main` — fix(g09): preserve fast App Link after browser launch.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/app/main.gd`
+- `godot-client/net/auth/native_auth_flow.gd`
+- `godot-client/net/auth/native_auth_start.gd`
+- `godot-client/platform/android/native_app_link_callback.gd`
+- `godot-client/tests/test_native_app_link_callback.gd`
+- `godot-client/tests/test_native_auth_start_runtime.gd`
+- `godot-client/tests/test_native_intent_bridge.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1079
+- Merge commit: `a5c3221f2f5a40ce5656abb27268222fc15f04b3`
+- PR head: `5cab4fd9a99b81e3006ec489fc55f1afea928cf5`
+- Merged at: 2026-10-20T11:55:15Z
+- Post-merge workflow run: 39418415965
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
