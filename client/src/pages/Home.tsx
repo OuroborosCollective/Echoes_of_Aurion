@@ -11,6 +11,7 @@ import {
   Sparkles,
   Swords,
   UsersRound,
+  Bug,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/xaurion/integration/Ax1PlayNavigationBridge";
 import "./homeCinematic.css";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues";
 
 function openAccountAccess(): void {
   window.dispatchEvent(new Event("aurion:open-local-auth"));
@@ -409,6 +410,18 @@ export default function Home() {
           >
             <UsersRound className="mr-2 size-4 text-cyan-300" />
             Gilden
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            disabled={!isAuthenticated || loading}
+            aria-busy={loading}
+            title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Fehler melden"}
+            onClick={() => openCommunity("issues")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
+          >
+            <Bug className="mr-2 size-4 text-cyan-300" />
+            Fehler melden
           </button>
         </div>
       </section>

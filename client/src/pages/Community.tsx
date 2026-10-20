@@ -6,10 +6,11 @@ import {
   MessageCircle,
   ShieldCheck,
   UsersRound,
+  Bug,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues";
 const openCommunity = (panel: CommunityPanel) =>
   window.dispatchEvent(
     new CustomEvent("aurion:open-community", { detail: { panel } })
@@ -160,6 +161,30 @@ export default function Community() {
             <b>Gildenzugehörigkeit</b>
             <p className="mt-2 text-sm text-slate-400">
               Nur lesen: Name, Kürzel und Rolle.
+            </p>
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            disabled={!isAuthenticated || loading}
+            aria-busy={loading}
+            aria-describedby={
+              !isAuthenticated ? "community-auth-required" : undefined
+            }
+            onClick={() => openCommunity("issues")}
+            title={
+              loading
+                ? "Ladevorgang läuft..."
+                : !isAuthenticated
+                  ? "Nur für angemeldete Explorer verfügbar"
+                  : "Fehler melden"
+            }
+            className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
+          >
+            <Bug className="mb-3 size-5 text-cyan-300 transition-transform motion-safe:group-hover:scale-110 group-disabled:motion-safe:group-hover:scale-100" />
+            <b>Fehler melden</b>
+            <p className="mt-2 text-sm text-slate-400">
+              Technische Fehler und Bugs dokumentieren.
             </p>
           </button>
         </div>

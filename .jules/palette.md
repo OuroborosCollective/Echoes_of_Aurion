@@ -28,3 +28,6 @@
 ## 2024-10-17 - Checkpoint Button Keyboard Focus and Screen Reader Context
 **Learning:** List items mapped as buttons (like the checkpoint replay list in `CausalStudioDashboard`) often inherit basic layout classes but forget to define explicit focus states or aria labels, leaving keyboard users unaware of their focus position and screen readers without clear contextual action descriptions.
 **Action:** When adding interactive lists built with buttons, always ensure `focus-visible:ring-2`, `focus-visible:outline-none`, and an `aria-label` are present to make the action fully accessible to all users.
+## 2023-10-20 - Add missing issues panel support in Home and Community
+**Learning:** Found that `CommunityOverlay.tsx` supported an `"issues"` panel, but the `Home` and `Community` pages missed the type and buttons. Adding a button is an effective and minimal UX addition.
+**Action:** Always ensure frontend component interfaces (`CommunityPanel` union types) across different pages (e.g., Home, Community, and Overlay) remain synchronized so new features in one place are accessible from others.
