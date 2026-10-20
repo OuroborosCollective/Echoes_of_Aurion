@@ -34,6 +34,16 @@ func poll_for_callback(pending_login: bool) -> bool:
 
 func reset() -> void:
 	_last_delivered = ""
+	if _activity == null:
+		return
+	var intent: Variant = _activity.getIntent()
+	if intent == null:
+		return
+	var data: Variant = intent.getDataString()
+	if data != null and str(data).begins_with(PREFIX):
+		# A callback may arrive after cancellation while polling is paused.
+		# Discard it before a fresh transaction can mistake it for its own.
+		intent.setData(null)
 
 func deliver_for_test(raw_url: String, pending_login: bool) -> bool:
 	if not pending_login or not raw_url.begins_with(PREFIX) or raw_url.contains("#") or raw_url.contains("%") or raw_url.contains("+") or raw_url.contains(";") or raw_url.contains("\\") or raw_url.count("?") != 1:

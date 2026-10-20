@@ -1,6 +1,25 @@
 extends SceneTree
 const Bridge = preload("res://platform/android/native_intent_bridge.gd")
 var failures: Array[String] = []
+
+class FakeIntent:
+	extends RefCounted
+	var data: Variant
+	func _init(value: Variant) -> void:
+		data = value
+	func getDataString() -> Variant:
+		return data
+	func setData(value: Variant) -> void:
+		data = value
+
+class FakeActivity:
+	extends RefCounted
+	var intent: FakeIntent
+	func _init(value: FakeIntent) -> void:
+		intent = value
+	func getIntent() -> FakeIntent:
+		return intent
+
 func check(ok: bool, why: String) -> void:
 	if not ok: failures.append(why)
 func _init() -> void: call_deferred("verify")
@@ -19,6 +38,14 @@ func verify() -> void:
 	check(received.size() == 1 and received[0] == valid, "callback not forwarded exactly once")
 	check(not bridge.deliver_for_test(valid, true), "same callback replay forwarded")
 	check(received.size() == 1, "replayed callback emitted")
+	var stale_intent := FakeIntent.new(valid)
+	bridge._activity = FakeActivity.new(stale_intent)
+	bridge.reset()
+	check(stale_intent.data == null, "cancelled login callback survived reset into the next attempt")
+	var foreign_intent := FakeIntent.new("https://arelogic.space/game/invite?id=party")
+	bridge._activity = FakeActivity.new(foreign_intent)
+	bridge.reset()
+	check(foreign_intent.data == "https://arelogic.space/game/invite?id=party", "reset cleared an unrelated Android intent")
 	bridge.free()
 	await process_frame
 	if failures.is_empty():
