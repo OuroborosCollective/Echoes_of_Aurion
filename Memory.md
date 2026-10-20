@@ -3892,3 +3892,13 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G10 post-welcome command-reject runtime regression
+Status: VERIFIED candidate
+Task: Prove that a command-level reject after verified welcome does not terminate the authenticated Godot zone session.
+Decisions: Extend the existing real WebSocketPeer loopback movement path only; inject STALE_CLIENT_SEQUENCE after the first move, require one reject and no close, then send a second canonical move over the same peer.
+Touched surfaces: `godot-client/tests/integration/test_zone_socket.gd`.
+Evidence: Candidate `51177d48fcc6c62bf704112ae97bbdd7dd889c4d`; Godot headless run 39430690336/artifact 12268216433 and Android Preview APK run 39430690262/artifact 12268301144 passed.
+Learned: Command rejection is recoverable transport feedback only when runtime evidence proves both callback delivery and subsequent same-peer command transmission.
+Open: Exact Memory-bearing final-head gates, shared code/security review, merge and main readback.
+Next safe step: Merge only after the final head is green and reviews are clear.
