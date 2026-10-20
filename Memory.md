@@ -3772,7 +3772,7 @@ Status: VERIFIED candidate
 Task: Forward a malformed callback on the exact Aurion Android App-Link route once to the existing fail-closed auth validator instead of trapping it in the Activity intent.
 Decisions: Keep exact route recognition and intent consumption in the native bridge; keep URI, field and PKCE/state validation in the canonical callback parser; foreign URLs remain blocked.
 Touched surfaces: `godot-client/platform/android/native_intent_bridge.gd`, `godot-client/tests/test_native_intent_bridge.gd`.
-Evidence: Candidate `e5d3f747f2da8bb85236984aaf3eca9d6c9ff8c6`; Godot headless run 39401194410/artifact 12254318991 and Android Preview APK run 39401194413/artifact 12253879396 passed; the queryless callback regression addresses the exact-head P2 review finding.
+Evidence: Candidate `d5c5939138af8b645f03b28da8522138c2e9cbf5`; Godot headless run 39402371895/artifact 12255260920 and Android Preview APK run 39402371812/artifact 12256136104 passed; queryless and fragment callback regressions address both P2 review findings.
 Learned: Transport prefiltering must not prevent the canonical validator from terminating malformed callbacks, or the retained Android intent creates an endless pending-login loop.
 Open: Merge and main readback.
 Next safe step: Merge after final-head gates and reviews remain clean, then read back main.
