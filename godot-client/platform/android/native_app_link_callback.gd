@@ -37,6 +37,14 @@ static func consume(raw_url: Variant, flow: RefCounted, now_ms: int = -1) -> Dic
 	if not params.has(KEY_CODE) or not params.has(KEY_STATE):
 		flow.call("clear")
 		return {}
+	var state_status: String = flow.call("callback_state_status", params[KEY_STATE], now_ms)
+	if state_status == "mismatch":
+		# A cancelled browser can return during the next attempt. Consume its
+		# Activity intent without letting it destroy the current PKCE state.
+		return {}
+	if state_status != "match":
+		flow.call("clear")
+		return {}
 	# Only the transaction owner can accept a state and generate an exchange
 	# payload. This function never creates a local session.
 	return flow.call("consume_callback", params[KEY_CODE], params[KEY_STATE], now_ms)

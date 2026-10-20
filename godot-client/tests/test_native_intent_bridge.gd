@@ -1,5 +1,6 @@
 extends SceneTree
 const Bridge = preload("res://platform/android/native_intent_bridge.gd")
+const Main = preload("res://app/main.gd")
 var failures: Array[String] = []
 
 class FakeIntent:
@@ -19,6 +20,25 @@ class FakeActivity:
 		intent = value
 	func getIntent() -> FakeIntent:
 		return intent
+
+class FakeAuth:
+	extends Node
+	signal browser_opening
+	var bridge: Node
+	var fresh_url: String
+	var stale_was_cleared := false
+	func _init(value: Node, url: String) -> void:
+		bridge = value
+		fresh_url = url
+	func begin(_server_base_url: String, _app_build: String) -> bool:
+		var intent: Variant = bridge._activity.getIntent()
+		# Simulate a cancelled browser returning while /start is in flight.
+		intent.setData(fresh_url + "-stale")
+		browser_opening.emit()
+		stale_was_cleared = intent.getDataString() == null
+		# The new browser can now return immediately after the boundary.
+		intent.setData(fresh_url)
+		return true
 
 func check(ok: bool, why: String) -> void:
 	if not ok: failures.append(why)
@@ -66,6 +86,26 @@ func verify() -> void:
 	bridge._activity = FakeActivity.new(foreign_intent)
 	bridge.reset()
 	check(foreign_intent.data == "https://arelogic.space/game/invite?id=party", "reset cleared an unrelated Android intent")
+	# The launch path must discard a stale callback before begin(). A fresh App
+	# Link delivered after browser launch must remain available for polling.
+	var race_intent := FakeIntent.new(valid)
+	bridge._activity = FakeActivity.new(race_intent)
+	var fake_auth := FakeAuth.new(bridge, valid)
+	var app := Main.new()
+	app._intent_bridge = bridge
+	app._auth_start = fake_auth
+	fake_auth.browser_opening.connect(app._on_auth_browser_opening)
+	app._config = {
+		"server_base_url": "https://arelogic.space",
+		"client_build": "aurion-godot-g09b",
+	}
+	check(app._begin_native_login(), "native login did not begin")
+	check(fake_auth.stale_was_cleared, "stale callback survived the pre-browser-open boundary")
+	check(race_intent.data == valid, "fresh callback was erased after browser launch")
+	check(bridge.poll_activity_intent_for_test(true), "fresh callback was not delivered after browser launch")
+	check(race_intent.data == null, "delivered fresh callback remained in the Activity intent")
+	app.free()
+	fake_auth.free()
 	bridge.free()
 	await process_frame
 	if failures.is_empty():

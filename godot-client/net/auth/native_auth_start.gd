@@ -3,6 +3,7 @@ extends Node
 ## Active native auth browser handoff: strict start and exchange requests with
 ## ephemeral in-process credentials. Aurion remains the sole session authority.
 
+signal browser_opening
 signal start_succeeded
 signal start_failed(error_code: String)
 signal session_succeeded
@@ -208,6 +209,9 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_fail_start(FALLBACK_ERROR)
 		return
 	var url := _flow.browser_url()
+	# Give the Activity owner one synchronous pre-launch boundary to discard a
+	# callback left by an older browser before this attempt can return.
+	emit_signal("browser_opening")
 	var opened: Variant = browser_opener.call(url)
 	if typeof(opened) != TYPE_INT or opened != OK:
 		_fail_start(FALLBACK_ERROR)

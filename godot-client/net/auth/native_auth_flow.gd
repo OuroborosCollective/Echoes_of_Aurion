@@ -100,8 +100,20 @@ func browser_url() -> String:
 		return ""
 	return SERVER_BROWSER_PREFIX + _transaction_id
 
-## The future platform adapter must deliver parsed callback fields, never grant login.
-## A mismatched/expired/replayed callback destroys the pending local transaction.
+## A well-formed callback from an older browser transaction is untrusted but
+## harmless: the Android transport consumes it while the current attempt stays
+## pending. Malformed or expired state still fails closed in the parser.
+func callback_state_status(callback_state: Variant, now_ms: int = -1) -> String:
+	if not _browser_ready:
+		return "invalid"
+	var now: int = now_ms if now_ms >= 0 else Time.get_ticks_msec()
+	if now < _started_at_ms or now >= _started_at_ms + TRANSACTION_TTL_MS or not _valid_opaque(callback_state, 43, 128):
+		return "invalid"
+	return "match" if _same_secret(_state, str(callback_state)) else "mismatch"
+
+## The platform adapter must deliver parsed callback fields, never grant login.
+## An accepted callback or any malformed/expired payload consumes the pending
+## transaction; a well-formed mismatched stale state is filtered beforehand.
 func consume_callback(code: Variant, callback_state: Variant, now_ms: int = -1) -> Dictionary:
 	if not _browser_ready:
 		return {}

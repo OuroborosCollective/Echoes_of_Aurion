@@ -7,6 +7,7 @@ const CANONICAL_BROWSER := "https://arelogic.space/api/native-auth/browser/ttttt
 
 var failures: Array[String] = []
 var opened_urls: Array[String] = []
+var browser_opening_pending := false
 var client: Node
 var start_completed := false
 var start_succeeded := false
@@ -28,7 +29,12 @@ func require(condition: bool, message: String) -> void:
 func _init() -> void:
 	call_deferred("verify")
 
+func _on_browser_opening() -> void:
+	browser_opening_pending = true
+
 func _opened(url: String) -> int:
+	require(browser_opening_pending, "browser opened without the synchronous pre-launch boundary")
+	browser_opening_pending = false
 	opened_urls.append(url)
 	return OK
 
@@ -175,6 +181,7 @@ func run_logout(assert_single_flight: bool = false) -> void:
 func verify() -> void:
 	client = NativeAuthStart.new()
 	client.browser_opener = Callable(self, "_opened")
+	client.browser_opening.connect(_on_browser_opening)
 	client.start_succeeded.connect(_on_start_success)
 	client.start_failed.connect(_on_start_failure)
 	client.session_succeeded.connect(_on_session_success)
@@ -192,6 +199,7 @@ func verify() -> void:
 	await run_start()
 	require(start_succeeded, "valid local HTTP start failed")
 	require(opened_urls == [CANONICAL_BROWSER], "canonical browser URL was not opened exactly once")
+	require(not browser_opening_pending, "pre-launch boundary was not consumed by browser open")
 	await run_exchange()
 	require(session_succeeded, "valid callback exchange failed")
 	require(client.access_token() == "a".repeat(43), "verified exchange did not install access in memory")
