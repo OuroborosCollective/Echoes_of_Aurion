@@ -133,6 +133,17 @@ func verify() -> void:
 	next_tick_combat["damage"] = 3
 	real_zone.emit_signal("zone_combat", next_tick_combat)
 	require(enabled_scene.get_node("%CombatNotice").text == "Treffer erhalten · 3 Schaden", "valid lower sequence from a later tick was discarded")
+	var lethal_combat: Dictionary = combat.duplicate(true)
+	lethal_combat["tick"] = 7
+	lethal_combat["sequence"] = 2
+	lethal_combat["attackerEntityId"] = "player:1"
+	lethal_combat["defenderEntityId"] = "mob_1"
+	lethal_combat["damage"] = 12
+	lethal_combat["defenderHealth"] = 0
+	lethal_combat["killed"] = true
+	require(ZoneCodec.is_valid_combat_event(lethal_combat), "lethal combat notice fixture violates Aurion v5")
+	real_zone.emit_signal("zone_combat", lethal_combat)
+	require(enabled_scene.get_node("%CombatNotice").text == "Gegner besiegt · 12 Schaden", "confirmed lethal result was reduced to generic damage")
 	await create_timer(2.1).timeout
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "expired combat presentation retained stale text")
 	require(not enabled_scene.get_node("%CombatNotice").visible, "expired combat presentation retained layout space")
