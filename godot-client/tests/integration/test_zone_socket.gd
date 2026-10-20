@@ -140,15 +140,13 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 	var first_sent := false
 	var second_sent := false
 	var reject_sent := false
-	var rejection_count := 0
-	var rejection_code := ""
-	var closure_count := 0
+	var signals := {"reject_count": 0, "reject_code": "", "close_count": 0}
 	transport.zone_rejected.connect(func(code: String) -> void:
-		rejection_count += 1
-		rejection_code = code
+		signals["reject_count"] += 1
+		signals["reject_code"] = code
 	)
 	transport.zone_closed.connect(func(_reason: String) -> void:
-		closure_count += 1
+		signals["close_count"] += 1
 	)
 	var received: Array = []
 	var started := Time.get_ticks_msec()
@@ -175,7 +173,7 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 			require(transport.send_move(1, 0), "connected move was not queued")
 			require(not transport.send_move(2, 0), "out-of-contract move axis was queued")
 			first_sent = true
-		if received.size() == 1 and rejection_count == 1 and not second_sent:
+		if received.size() == 1 and signals["reject_count"] == 1 and not second_sent:
 			require(transport.state_name() == "connected", "command reject closed the authenticated session")
 			require(transport.send_move(0, -1), "move after command reject was not queued")
 			second_sent = true
@@ -183,8 +181,8 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 	require(hello_received and welcome_sent, "move test did not complete hello/welcome")
 	require(first_sent and second_sent, "move test did not exercise both sends")
 	require(reject_sent, "server did not send the post-welcome command reject")
-	require(rejection_count == 1 and rejection_code == "STALE_CLIENT_SEQUENCE", "post-welcome command reject was lost or duplicated")
-	require(closure_count == 0, "command reject emitted a terminal close callback")
+	require(signals["reject_count"] == 1 and signals["reject_code"] == "STALE_CLIENT_SEQUENCE", "post-welcome command reject was lost or duplicated")
+	require(signals["close_count"] == 0, "command reject emitted a terminal close callback")
 	require(transport.state_name() == "connected", "command reject terminated the authenticated session")
 	require(received.size() == 2, "server did not receive exactly two move frames")
 	if received.size() == 2:
