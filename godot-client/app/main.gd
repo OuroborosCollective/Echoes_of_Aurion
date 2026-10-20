@@ -26,7 +26,8 @@ var _api: Node
 var _zone_socket: Node
 var _awaiting_callback := false
 var _zone_reject_code := ""
-var _last_combat_sequence := -1
+var _seen_combat_events: Dictionary = {}
+var _seen_combat_order: Array[String] = []
 var _confirmed_zone = ZoneState.new()
 var _entities = EntityRegistry.new()
 var _visuals = SnapshotInterpolator.new()
@@ -161,7 +162,8 @@ func _reset_projection() -> void:
 	_confirmed_zone.reset()
 	_entities.reset()
 	_visuals.reset()
-	_last_combat_sequence = -1
+	_seen_combat_events.clear()
+	_seen_combat_order.clear()
 	combat_notice.text = ""
 	combat_notice.visible = false
 
@@ -189,10 +191,18 @@ func _on_zone_combat(event: Dictionary) -> void:
 	var self_id := _confirmed_zone.self_entity_id()
 	if event.get("attackerEntityId") != self_id and event.get("defenderEntityId") != self_id:
 		return
-	var sequence := int(event.get("sequence", -1))
-	if sequence <= _last_combat_sequence:
+	var event_id := "%d:%d:%s:%s" % [
+		int(event.get("tick", -1)),
+		int(event.get("sequence", -1)),
+		str(event.get("attackerEntityId")),
+		str(event.get("defenderEntityId")),
+	]
+	if _seen_combat_events.has(event_id):
 		return
-	_last_combat_sequence = sequence
+	_seen_combat_events[event_id] = true
+	_seen_combat_order.append(event_id)
+	if _seen_combat_order.size() > 128:
+		_seen_combat_events.erase(_seen_combat_order.pop_front())
 	combat_notice.visible = true
 	if not event.get("hit", false):
 		combat_notice.text = "Angriff verfehlt"
