@@ -4138,3 +4138,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-20 — PR #1090 — fix(android): serve Login app association with verified Sovereign certificate
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1090 merge=7ac274ba1305f155e10fdb9223de874e93fb6f5e -->
+Task: Merge PR #1090 into `main` — fix(android): serve Login app association with verified Sovereign certificate.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `client/public/.well-known/assetlinks.json`
+- `server/_core/vite.ts`
+- `server/androidAssetLinks.test.ts`
+- `server/androidAssetLinks.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1090
+- Merge commit: `7ac274ba1305f155e10fdb9223de874e93fb6f5e`
+- PR head: `615450ccf7b7aca6191048595d7e66898e38797d`
+- Merged at: 2026-10-20T20:01:11Z
+- Post-merge workflow run: 39488394933
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
