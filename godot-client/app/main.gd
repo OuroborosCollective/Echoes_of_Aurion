@@ -15,6 +15,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var card: PanelContainer = %LaunchCard
 @onready var title: Label = %Title
 @onready var status: Label = %ConnectionStatus
+@onready var combat_notice: Label = %CombatNotice
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
 @onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
@@ -25,6 +26,8 @@ var _api: Node
 var _zone_socket: Node
 var _awaiting_callback := false
 var _zone_reject_code := ""
+var _seen_combat_events: Dictionary = {}
+var _seen_combat_order: Array[String] = []
 var _confirmed_zone = ZoneState.new()
 var _entities = EntityRegistry.new()
 var _visuals = SnapshotInterpolator.new()
@@ -56,6 +59,7 @@ func _ready() -> void:
 	add_child(_zone_socket)
 	_zone_socket.zone_welcome.connect(_on_zone_welcome)
 	_zone_socket.zone_snapshot.connect(_on_zone_snapshot)
+	_zone_socket.zone_combat.connect(_on_zone_combat)
 	_zone_socket.zone_connected.connect(_on_zone_connected)
 	_zone_socket.zone_rejected.connect(_on_zone_rejected)
 	_zone_socket.zone_closed.connect(_on_zone_closed)
@@ -158,6 +162,10 @@ func _reset_projection() -> void:
 	_confirmed_zone.reset()
 	_entities.reset()
 	_visuals.reset()
+	_seen_combat_events.clear()
+	_seen_combat_order.clear()
+	combat_notice.text = ""
+	combat_notice.visible = false
 
 func _on_zone_welcome(welcome: Dictionary) -> void:
 	if _lifecycle.is_suspended():
@@ -176,6 +184,32 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
 		_visuals.capture(_confirmed_zone, Time.get_ticks_msec())
+
+func _on_zone_combat(event: Dictionary) -> void:
+	if not _confirmed_zone.has_state():
+		return
+	var self_id := _confirmed_zone.self_entity_id()
+	if event.get("attackerEntityId") != self_id and event.get("defenderEntityId") != self_id:
+		return
+	var event_id := "%d:%d:%s:%s" % [
+		int(event.get("tick", -1)),
+		int(event.get("sequence", -1)),
+		str(event.get("attackerEntityId")),
+		str(event.get("defenderEntityId")),
+	]
+	if _seen_combat_events.has(event_id):
+		return
+	_seen_combat_events[event_id] = true
+	_seen_combat_order.append(event_id)
+	if _seen_combat_order.size() > 128:
+		_seen_combat_events.erase(_seen_combat_order.pop_front())
+	combat_notice.visible = true
+	if not event.get("hit", false):
+		combat_notice.text = "Angriff verfehlt"
+	elif event.get("defenderEntityId") == self_id:
+		combat_notice.text = "Treffer erhalten · %d Schaden" % int(event.get("damage", 0))
+	else:
+		combat_notice.text = "Treffer bestätigt · %d Schaden" % int(event.get("damage", 0))
 
 func _on_zone_connected() -> void:
 	if not _confirmed_zone.has_state():
