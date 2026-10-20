@@ -38,6 +38,13 @@ func verify() -> void:
 	check(received.size() == 1 and received[0] == valid, "callback not forwarded exactly once")
 	check(not bridge.deliver_for_test(valid, true), "same callback replay forwarded")
 	check(received.size() == 1, "replayed callback emitted")
+	# Android may redeliver the same callback while the first exchange is in flight.
+	# It must be consumed from the Activity even though no second signal is emitted.
+	var duplicate_intent := FakeIntent.new(valid)
+	bridge._activity = FakeActivity.new(duplicate_intent)
+	check(not bridge.poll_activity_intent_for_test(true), "duplicate callback emitted twice")
+	check(duplicate_intent.data == null, "duplicate canonical callback remained in the Activity intent")
+	check(received.size() == 1, "duplicate callback reached the auth validator twice")
 	# Android path matching can deliver the registered route without a query.
 	var malformed := "https://arelogic.space/app/auth/callback"
 	var malformed_intent := FakeIntent.new(malformed)
