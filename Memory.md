@@ -3727,3 +3727,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-20 — PR #1075 — fix(g09): enable native auth in signed Login APK
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1075 merge=cd08e1e2dc043d76da209aa27752b25c257e1a7d -->
+Task: Merge PR #1075 into `main` — fix(g09): enable native auth in signed Login APK.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `scripts/godot/export-login-android.mjs`
+- `scripts/godot/login-release-gates.mjs`
+- `scripts/godot/login-release-gates.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1075
+- Merge commit: `cd08e1e2dc043d76da209aa27752b25c257e1a7d`
+- PR head: `a07d3e4605b7f14c357b88b40e0a52c0febd4bfc`
+- Merged at: 2026-10-20T07:37:03Z
+- Post-merge workflow run: 39387692513
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
