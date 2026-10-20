@@ -205,6 +205,9 @@ func verify() -> void:
 	enabled_scene._reset_projection()
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
 	require(not enabled_scene.get_node("%CombatNotice").visible, "combat presentation retained layout space after reset")
+	if position_label != null:
+		require(position_label.text.is_empty(), "confirmed position text survived projection reset")
+		require(not position_label.visible, "confirmed position retained layout space after projection reset")
 	var live_api: Node = enabled_scene._api
 	live_api.cancel()
 	live_api.queue_free()
