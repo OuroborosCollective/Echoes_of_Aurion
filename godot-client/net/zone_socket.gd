@@ -3,6 +3,8 @@ extends Node
 signal zone_connected
 signal zone_welcome(welcome: Dictionary)
 signal zone_snapshot(snapshot: Dictionary)
+signal zone_combat(event: Dictionary)
+signal zone_telegraph(event: Dictionary)
 signal zone_rejected(code: String)
 signal zone_closed(reason: String)
 
@@ -149,16 +151,21 @@ func _process(_delta: float) -> void:
 					if _peer != active_peer:
 						return
 					continue
-				# Combat and telegraph are known v5 event types whose presentation
-				# projection is integrated separately. Validate their full wire shape
-				# before ignoring them here; malformed or unknown messages fail closed.
+				# Combat and telegraph remain server-confirmed presentation events.
+				# Emit only after full v5 validation; malformed shapes fail closed.
 				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "combat":
 					if Codec.is_valid_combat_event(decoded):
+						emit_signal("zone_combat", decoded.duplicate(true))
+						if _peer != active_peer:
+							return
 						continue
 					_finish("invalid_server_message")
 					return
 				if typeof(decoded) == TYPE_DICTIONARY and decoded.get("type") == "telegraph":
 					if Codec.is_valid_telegraph_event(decoded):
+						emit_signal("zone_telegraph", decoded.duplicate(true))
+						if _peer != active_peer:
+							return
 						continue
 					_finish("invalid_server_message")
 					return
