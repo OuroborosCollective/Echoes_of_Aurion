@@ -11,6 +11,7 @@ const EntityRegistry = preload("res://projection/entity_registry.gd")
 const SnapshotInterpolator = preload("res://projection/snapshot_interpolator.gd")
 const NativeIntentBridge = preload("res://platform/android/native_intent_bridge.gd")
 const COMBAT_NOTICE_DURATION_MS := 2000
+const WORLD_STALE_AFTER_MS := 1000
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
 
 @onready var card: PanelContainer = %LaunchCard
@@ -34,6 +35,8 @@ var _seen_combat_order: Array[String] = []
 var _seen_telegraph_events: Dictionary = {}
 var _seen_telegraph_order: Array[String] = []
 var _combat_notice_expires_at_ms := -1
+var _last_world_update_ms := -1
+var _world_is_stale := false
 var _confirmed_zone = ZoneState.new()
 var _entities = EntityRegistry.new()
 var _visuals = SnapshotInterpolator.new()
@@ -174,6 +177,8 @@ func _reset_projection() -> void:
 	_seen_telegraph_events.clear()
 	_seen_telegraph_order.clear()
 	_combat_notice_expires_at_ms = -1
+	_last_world_update_ms = -1
+	_world_is_stale = false
 	combat_notice.text = ""
 	combat_notice.visible = false
 	confirmed_position.text = ""
@@ -190,9 +195,11 @@ func _on_zone_welcome(welcome: Dictionary) -> void:
 		_zone_socket.close_zone()
 		return
 	_entities.sync(_confirmed_zone)
-	_update_entity_presentation()
 	var now_ms := Time.get_ticks_msec()
+	_last_world_update_ms = now_ms
+	_world_is_stale = false
 	_visuals.capture(_confirmed_zone, now_ms)
+	_update_entity_presentation()
 	_update_position_presentation(now_ms)
 
 func _on_zone_snapshot(snapshot: Dictionary) -> void:
@@ -200,9 +207,11 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		return
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
-		_update_entity_presentation()
 		var now_ms := Time.get_ticks_msec()
+		_last_world_update_ms = now_ms
+		_world_is_stale = false
 		_visuals.capture(_confirmed_zone, now_ms)
+		_update_entity_presentation()
 		_update_position_presentation(now_ms)
 
 func _on_zone_combat(event: Dictionary) -> void:
@@ -335,6 +344,7 @@ func _process(_delta: float) -> void:
 	var now_ms := Time.get_ticks_msec()
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
+	_update_world_freshness(now_ms)
 	if _awaiting_callback:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
@@ -349,8 +359,21 @@ func _update_entity_presentation() -> void:
 	var creatures := _entities.ids("mobs").size()
 	var traveller_word := "Reisender" if travellers == 1 else "Reisende"
 	var creature_word := "Kreatur" if creatures == 1 else "Kreaturen"
-	entity_summary.text = "In der Nähe · %d %s · %d %s" % [travellers, traveller_word, creatures, creature_word]
+	entity_summary.text = "In der Nähe · %d %s · %d %s%s" % [travellers, traveller_word, creatures, creature_word, _world_freshness_suffix()]
 	entity_summary.visible = true
+
+func _update_world_freshness(now_ms: int) -> void:
+	if not _confirmed_zone.has_state() or _last_world_update_ms < 0:
+		return
+	var stale := now_ms - _last_world_update_ms >= WORLD_STALE_AFTER_MS
+	if stale == _world_is_stale:
+		return
+	_world_is_stale = stale
+	_update_entity_presentation()
+	_update_position_presentation(now_ms)
+
+func _world_freshness_suffix() -> String:
+	return " · Stand veraltet" if _world_is_stale else ""
 
 func _update_position_presentation(now_ms: int) -> void:
 	if not _confirmed_zone.has_state():
@@ -362,7 +385,7 @@ func _update_position_presentation(now_ms: int) -> void:
 		confirmed_position.text = ""
 		confirmed_position.visible = false
 		return
-	confirmed_position.text = "Position · X %.2f m · Z %.2f m" % [float(visual["x"]) / 1000.0, float(visual["z"]) / 1000.0]
+	confirmed_position.text = "Position · X %.2f m · Z %.2f m%s" % [float(visual["x"]) / 1000.0, float(visual["z"]) / 1000.0, _world_freshness_suffix()]
 	confirmed_position.visible = true
 
 func _expire_combat_notice(now_ms: int) -> void:
