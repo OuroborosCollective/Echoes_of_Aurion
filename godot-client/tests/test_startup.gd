@@ -101,13 +101,51 @@ func verify() -> void:
 	root.add_child(enabled_scene)
 	await process_frame
 	require(not enabled_scene.get_node("%Login").disabled, "verified native login start was not enabled")
+	var nodes: Array = []
+	for id in ZoneCodec.NODE_IDS:
+		nodes.append({"nodeId":id, "remaining":5, "depleted":false, "respawnAtTick":null})
+	var confirmed_welcome := {
+		"type":"welcome", "protocolVersion":5, "zoneId":"observatory_threshold",
+		"connectionId":"zone_peer_startupintegration123", "selfEntityId":"player:1",
+		"snapshotSeq":1, "tick":1,
+		"presences":[{"entityId":"player:1", "userId":1, "position":{"x":1000,"z":0},"lastAcceptedClientSeq":0}],
+		"mobs":[], "combatants":[],
+		"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":nodes}
+	}
+	enabled_scene._on_zone_welcome(confirmed_welcome)
+	var real_zone: Node = enabled_scene._zone_socket
+	var telegraph := {
+		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
+		"id":"telegraph:mob_1:7", "sequence":7, "startTick":2, "impactTick":5,
+		"attackerEntityId":"mob_1", "targetEntityId":"player:1", "kind":"line",
+		"origin":{"x":0,"z":0}, "target":{"x":1000,"z":0}, "widthFixed":1000,
+		"color":"#ef4444", "visualSourceRevision":ZoneCodec.FIXED_CONTENT,
+		"authorityRuleset":"aurion-ax1-mob-windup.v1"
+	}
+	require(ZoneCodec.is_valid_telegraph_event(telegraph), "combat notice telegraph fixture violates Aurion v5")
+	real_zone.emit_signal("zone_telegraph", telegraph)
+	require(enabled_scene.get_node("%CombatNotice").text == "Achtung: Gegnerischer Angriff angekündigt", "confirmed self telegraph was not displayed")
+	enabled_scene.get_node("%CombatNotice").text = "sequenced"
+	real_zone.emit_signal("zone_telegraph", telegraph)
+	require(enabled_scene.get_node("%CombatNotice").text == "sequenced", "duplicate telegraph replayed presentation")
+	var combat := {
+		"type":"combat", "contractVersion":"wasd-zone-combat.v2", "action":"melee",
+		"tick":5, "sequence":9, "attackerEntityId":"mob_1", "defenderEntityId":"player:1",
+		"skillId":null, "skillSourceRevision":null, "hit":true, "crit":false, "killed":false,
+		"damage":4, "defenderHealth":16, "attackerStamina":10,
+		"gameplaySourceRevision":"a".repeat(40)
+	}
+	require(ZoneCodec.is_valid_combat_event(combat), "combat notice event fixture violates Aurion v5")
+	real_zone.emit_signal("zone_combat", combat)
+	require(enabled_scene.get_node("%CombatNotice").text == "Treffer erhalten · 4 Schaden", "confirmed self combat result was not displayed")
+	enabled_scene._reset_projection()
+	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
 	var live_api: Node = enabled_scene._api
 	live_api.cancel()
 	live_api.queue_free()
 	var fake_api := FakeApi.new()
 	enabled_scene.add_child(fake_api)
 	enabled_scene._api = fake_api
-	var real_zone: Node = enabled_scene._zone_socket
 	real_zone.queue_free()
 	var fake_zone := FakeZone.new()
 	enabled_scene.add_child(fake_zone)
@@ -127,17 +165,6 @@ func verify() -> void:
 	require(fake_zone.last_server == Config.PRODUCT_SERVER, "zone socket used the wrong origin")
 	require(enabled_scene.get_node("%ConnectionStatus").text == "Zonenverbindung wird aufgebaut", "ticket prematurely reported a connected zone")
 	require(enabled_scene.get_node("%Login").text == "Verbinden", "handshake action state missing")
-	var nodes: Array = []
-	for id in ZoneCodec.NODE_IDS:
-		nodes.append({"nodeId":id, "remaining":5, "depleted":false, "respawnAtTick":null})
-	var confirmed_welcome := {
-		"type":"welcome", "protocolVersion":5, "zoneId":"observatory_threshold",
-		"connectionId":"zone_peer_startupintegration123", "selfEntityId":"player:1",
-		"snapshotSeq":1, "tick":1,
-		"presences":[{"entityId":"player:1", "userId":1, "position":{"x":1000,"z":0},"lastAcceptedClientSeq":0}],
-		"mobs":[], "combatants":[],
-		"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":nodes}
-	}
 	fake_zone.active_state = "connected"
 	enabled_scene._on_zone_connected()
 	require(enabled_scene.get_node("%ConnectionStatus").text != "Sicher mit Aurion verbunden", "connected UI accepted without verified world projection")
