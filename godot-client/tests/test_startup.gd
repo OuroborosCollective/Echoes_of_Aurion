@@ -114,6 +114,26 @@ func verify() -> void:
 	}
 	enabled_scene._on_zone_welcome(confirmed_welcome)
 	var real_zone: Node = enabled_scene._zone_socket
+	var telegraph := {
+		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
+		"id":"telegraph:mob_1:1", "sequence":1, "startTick":2, "impactTick":3,
+		"attackerEntityId":"mob_1", "targetEntityId":"player:1", "kind":"line",
+		"origin":{"x":0,"z":0}, "target":{"x":1000,"z":0}, "widthFixed":500,
+		"color":"#ef4444", "visualSourceRevision":ZoneCodec.FIXED_CONTENT,
+		"authorityRuleset":"aurion-ax1-mob-windup.v1"
+	}
+	require(ZoneCodec.is_valid_telegraph_event(telegraph), "telegraph notice fixture violates Aurion v5")
+	real_zone.emit_signal("zone_telegraph", telegraph)
+	require(enabled_scene.get_node("%CombatNotice").text == "Angriff angekündigt", "confirmed self telegraph was discarded before presentation")
+	enabled_scene.get_node("%CombatNotice").text = "sequenced"
+	real_zone.emit_signal("zone_telegraph", telegraph)
+	require(enabled_scene.get_node("%CombatNotice").text == "sequenced", "duplicate telegraph replayed presentation")
+	var foreign_telegraph: Dictionary = telegraph.duplicate(true)
+	foreign_telegraph["id"] = "telegraph:mob_1:2"
+	foreign_telegraph["sequence"] = 2
+	foreign_telegraph["targetEntityId"] = "player:2"
+	real_zone.emit_signal("zone_telegraph", foreign_telegraph)
+	require(enabled_scene.get_node("%CombatNotice").text == "sequenced", "foreign telegraph leaked into self presentation")
 	var combat := {
 		"type":"combat", "contractVersion":"wasd-zone-combat.v2", "action":"melee",
 		"tick":5, "sequence":9, "attackerEntityId":"mob_1", "defenderEntityId":"player:1",
