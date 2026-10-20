@@ -41,6 +41,7 @@ func _ready() -> void:
 	%BuildIdentity.text = "Build · " + _config.client_build
 	_auth_start = NativeAuthStart.new()
 	add_child(_auth_start)
+	_auth_start.browser_opening.connect(_on_auth_browser_opening)
 	_auth_start.start_succeeded.connect(_on_auth_start_succeeded)
 	_auth_start.start_failed.connect(_on_auth_start_failed)
 	_auth_start.session_succeeded.connect(_on_auth_session_succeeded)
@@ -89,11 +90,13 @@ func _on_login_pressed() -> void:
 		login.disabled = false
 
 func _begin_native_login() -> bool:
-	# Discard an App Link left by a cancelled attempt before the new request.
-	# Once begin() opens the browser, its callback belongs to this attempt and
-	# must remain available for the Activity polling path.
-	_intent_bridge.reset()
 	return _auth_start.begin(_config.server_base_url, _config.client_build)
+
+func _on_auth_browser_opening() -> void:
+	# The start request is asynchronous: a cancelled browser can return while it
+	# is in flight. Clear that stale callback at the last boundary before the new
+	# browser opens; anything delivered afterwards belongs to the new attempt.
+	_intent_bridge.reset()
 
 func _on_auth_start_succeeded() -> void:
 	_awaiting_callback = true
