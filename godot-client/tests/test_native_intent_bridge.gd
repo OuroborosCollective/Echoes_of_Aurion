@@ -27,6 +27,7 @@ class FakeAuth:
 	var bridge: Node
 	var fresh_url: String
 	var stale_was_cleared := false
+	var callback_pending_value := false
 	func _init(value: Node, url: String) -> void:
 		bridge = value
 		fresh_url = url
