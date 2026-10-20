@@ -117,9 +117,14 @@ func _on_auth_start_failed(error_code: String) -> void:
 func handle_native_auth_callback(raw_url: Variant) -> bool:
 	if not _awaiting_callback:
 		return false
-	status.text = "Anmeldung wird bestätigt"
-	login.disabled = true
-	return _auth_start.complete_callback(raw_url)
+	var exchange_started: bool = _auth_start.complete_callback(raw_url)
+	if exchange_started:
+		status.text = "Anmeldung wird bestätigt"
+		login.disabled = true
+	elif _auth_start.callback_pending():
+		status.text = "Systembrowser geöffnet"
+		login.disabled = false
+	return exchange_started
 
 func _on_auth_session_succeeded() -> void:
 	_zone_socket.close_zone()

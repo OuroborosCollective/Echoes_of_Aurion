@@ -3861,3 +3861,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G09 stale App Link runtime preservation
+Status: VERIFIED candidate
+Task: Preserve the current Android login when a well-formed callback from an older browser attempt reaches the active auth runtime.
+Change: NativeAuthStart now distinguishes the parser's preserved-current-flow result from malformed callback failure, and the launch UI remains waiting and cancellable until the current callback starts exchange.
+Evidence: Candidate `5bbac9b89cf7cc8edd93b4b39afc0186eeebb27b`; Godot headless run 39421731007/artifact 12263474803 and Android Preview APK run 39421730952/artifact 12264615704 passed.
+Learned: Preserving PKCE state inside the URI parser is insufficient if its caller collapses an empty stale-callback result into terminal session failure.
+Open: Exact Memory-bearing final-head gates, shared code/security review, merge and main readback.
+Next safe step: Merge only after the final head is green and reviews are clear.

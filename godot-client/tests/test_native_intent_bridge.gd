@@ -27,6 +27,7 @@ class FakeAuth:
 	var bridge: Node
 	var fresh_url: String
 	var stale_was_cleared := false
+	var callback_pending_value := false
 	func _init(value: Node, url: String) -> void:
 		bridge = value
 		fresh_url = url
@@ -39,6 +40,10 @@ class FakeAuth:
 		# The new browser can now return immediately after the boundary.
 		intent.setData(fresh_url)
 		return true
+	func complete_callback(_raw_url: Variant) -> bool:
+		return false
+	func callback_pending() -> bool:
+		return callback_pending_value
 
 func check(ok: bool, why: String) -> void:
 	if not ok: failures.append(why)
@@ -104,6 +109,17 @@ func verify() -> void:
 	check(race_intent.data == valid, "fresh callback was erased after browser launch")
 	check(bridge.poll_activity_intent_for_test(true), "fresh callback was not delivered after browser launch")
 	check(race_intent.data == null, "delivered fresh callback remained in the Activity intent")
+	app.status = Label.new()
+	app.login = Button.new()
+	app._awaiting_callback = true
+	fake_auth.callback_pending_value = true
+	app.status.text = "Anmeldung wird bestätigt"
+	app.login.disabled = true
+	check(not app.handle_native_auth_callback(valid + "-stale"), "stale callback started an exchange")
+	check(app.status.text == "Systembrowser geöffnet", "stale callback left the login UI in exchange state")
+	check(not app.login.disabled, "stale callback disabled cancellation of the current login")
+	app.status.free()
+	app.login.free()
 	app.free()
 	fake_auth.free()
 	bridge.free()
