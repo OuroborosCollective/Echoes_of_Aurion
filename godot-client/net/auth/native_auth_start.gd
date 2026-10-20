@@ -71,9 +71,16 @@ func complete_callback(raw_url: Variant) -> bool:
 		return false
 	var request: Dictionary = Callback.consume(raw_url, _flow)
 	if request.is_empty():
+		# A well-formed callback for an older browser attempt is consumed by the
+		# parser without clearing the current flow. Keep waiting for its callback.
+		if callback_pending():
+			return false
 		_fail_session(FALLBACK_ERROR)
 		return false
 	return _send_json(EXCHANGE_PATH, request, "exchange")
+
+func callback_pending() -> bool:
+	return not _request_active and not _flow.browser_url().is_empty()
 
 func access_token(now_ms: int = -1) -> String:
 	return _tokens.access_token(now_ms)
