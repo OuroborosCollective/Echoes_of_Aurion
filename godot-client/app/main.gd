@@ -340,12 +340,12 @@ func _update_position_presentation(now_ms: int) -> void:
 		confirmed_position.text = ""
 		confirmed_position.visible = false
 		return
-	var visual: Variant = _visuals.visual_mm(_confirmed_zone.self_entity_id(), now_ms)
-	if not visual is Vector2:
+	var visual: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
+	if visual.is_empty():
 		confirmed_position.text = ""
 		confirmed_position.visible = false
 		return
-	confirmed_position.text = "Position · X %.2f m · Z %.2f m" % [visual.x / 1000.0, visual.y / 1000.0]
+	confirmed_position.text = "Position · X %.2f m · Z %.2f m" % [float(visual["x"]) / 1000.0, float(visual["z"]) / 1000.0]
 	confirmed_position.visible = true
 
 func _expire_combat_notice(now_ms: int) -> void:
