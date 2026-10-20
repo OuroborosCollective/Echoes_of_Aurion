@@ -38,6 +38,19 @@ func verify() -> void:
 	check(received.size() == 1 and received[0] == valid, "callback not forwarded exactly once")
 	check(not bridge.deliver_for_test(valid, true), "same callback replay forwarded")
 	check(received.size() == 1, "replayed callback emitted")
+	# Android path matching can deliver the registered route without a query.
+	var malformed := "https://arelogic.space/app/auth/callback"
+	var malformed_intent := FakeIntent.new(malformed)
+	bridge._activity = FakeActivity.new(malformed_intent)
+	check(bridge.poll_activity_intent_for_test(true), "canonical malformed callback was trapped before the auth validator")
+	check(malformed_intent.data == null, "canonical malformed callback remained in the Activity intent")
+	check(received.size() == 2 and received[1] == malformed, "canonical malformed callback did not reach the auth validator exactly once")
+	var fragmented := "https://arelogic.space/app/auth/callback#cancelled"
+	var fragmented_intent := FakeIntent.new(fragmented)
+	bridge._activity = FakeActivity.new(fragmented_intent)
+	check(bridge.poll_activity_intent_for_test(true), "fragmented canonical callback was trapped before the auth validator")
+	check(fragmented_intent.data == null, "fragmented canonical callback remained in the Activity intent")
+	check(received.size() == 3 and received[2] == fragmented, "fragmented canonical callback did not reach the auth validator exactly once")
 	var stale_intent := FakeIntent.new(valid)
 	bridge._activity = FakeActivity.new(stale_intent)
 	bridge.reset()
