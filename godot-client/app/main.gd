@@ -29,6 +29,8 @@ var _awaiting_callback := false
 var _zone_reject_code := ""
 var _seen_combat_events: Dictionary = {}
 var _seen_combat_order: Array[String] = []
+var _seen_telegraph_events: Dictionary = {}
+var _seen_telegraph_order: Array[String] = []
 var _combat_notice_expires_at_ms := -1
 var _confirmed_zone = ZoneState.new()
 var _entities = EntityRegistry.new()
@@ -62,6 +64,7 @@ func _ready() -> void:
 	_zone_socket.zone_welcome.connect(_on_zone_welcome)
 	_zone_socket.zone_snapshot.connect(_on_zone_snapshot)
 	_zone_socket.zone_combat.connect(_on_zone_combat)
+	_zone_socket.zone_telegraph.connect(_on_zone_telegraph)
 	_zone_socket.zone_connected.connect(_on_zone_connected)
 	_zone_socket.zone_rejected.connect(_on_zone_rejected)
 	_zone_socket.zone_closed.connect(_on_zone_closed)
@@ -166,6 +169,8 @@ func _reset_projection() -> void:
 	_visuals.reset()
 	_seen_combat_events.clear()
 	_seen_combat_order.clear()
+	_seen_telegraph_events.clear()
+	_seen_telegraph_order.clear()
 	_combat_notice_expires_at_ms = -1
 	combat_notice.text = ""
 	combat_notice.visible = false
@@ -218,6 +223,20 @@ func _on_zone_combat(event: Dictionary) -> void:
 		combat_notice.text = "Treffer erhalten · %d Schaden" % int(event.get("damage", 0))
 	else:
 		combat_notice.text = "Treffer bestätigt · %d Schaden" % int(event.get("damage", 0))
+
+func _on_zone_telegraph(event: Dictionary) -> void:
+	if not _confirmed_zone.has_state() or event.get("targetEntityId") != _confirmed_zone.self_entity_id():
+		return
+	var event_id := str(event.get("id", ""))
+	if event_id.is_empty() or _seen_telegraph_events.has(event_id):
+		return
+	_seen_telegraph_events[event_id] = true
+	_seen_telegraph_order.append(event_id)
+	if _seen_telegraph_order.size() > 128:
+		_seen_telegraph_events.erase(_seen_telegraph_order.pop_front())
+	combat_notice.text = "Angriff angekündigt"
+	combat_notice.visible = true
+	_combat_notice_expires_at_ms = Time.get_ticks_msec() + COMBAT_NOTICE_DURATION_MS
 
 func _on_zone_connected() -> void:
 	if not _confirmed_zone.has_state():
