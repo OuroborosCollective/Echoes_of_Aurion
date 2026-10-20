@@ -138,6 +138,15 @@ func verify() -> void:
 		enabled_scene._on_zone_snapshot(stale_snapshot)
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.text == "Position · X 3.00 m · Z -2.00 m", "stale snapshot rewound active position presentation")
+		var large_snapshot: Dictionary = moved_snapshot.duplicate(true)
+		large_snapshot["snapshotSeq"] = 3
+		large_snapshot["tick"] = 3
+		large_snapshot["resources"]["revision"] = 3
+		large_snapshot["presences"][0]["position"] = {"x":60000000123,"z":-60000000123}
+		require(ZoneCodec.is_valid_snapshot(large_snapshot), "large position presentation fixture violates Aurion v5")
+		enabled_scene._on_zone_snapshot(large_snapshot)
+		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
+		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m", "large confirmed position lost integer precision in presentation")
 	var real_zone: Node = enabled_scene._zone_socket
 	var telegraph := {
 		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
