@@ -120,7 +120,7 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	callback_transport.queue_free()
 	await process_frame
 
-func verify_move_packet_loop(welcome_wire: String, invalid_server_wire: String) -> void:
+func verify_move_packet_loop(welcome_wire: String, combat_wire: String, telegraph_wire: String, invalid_server_wire: String) -> void:
 	var server := TCPServer.new()
 	require(server.listen(0, "127.0.0.1") == OK, "move loopback server could not listen")
 	if not server.is_listening():
@@ -140,11 +140,20 @@ func verify_move_packet_loop(welcome_wire: String, invalid_server_wire: String) 
 	var first_sent := false
 	var second_sent := false
 	var reject_sent := false
+	var event_frames_sent := false
 	var invalid_frame_sent := false
-	var signals := {"reject_count": 0, "reject_code": "", "close_count": 0, "close_reason": ""}
+	var signals := {"reject_count": 0, "reject_code": "", "combat_count": 0, "telegraph_count": 0, "close_count": 0, "close_reason": ""}
 	transport.zone_rejected.connect(func(code: String) -> void:
 		signals["reject_count"] += 1
 		signals["reject_code"] = code
+	)
+	transport.zone_combat.connect(func(event: Dictionary) -> void:
+		signals["combat_count"] += 1
+		signals["combat_type"] = event.get("type")
+	)
+	transport.zone_telegraph.connect(func(event: Dictionary) -> void:
+		signals["telegraph_count"] += 1
+		signals["telegraph_type"] = event.get("type")
 	)
 	transport.zone_closed.connect(func(reason: String) -> void:
 		signals["close_count"] += 1
@@ -172,7 +181,10 @@ func verify_move_packet_loop(welcome_wire: String, invalid_server_wire: String) 
 						if received.size() == 1:
 							reject_sent = remote.send_text(JSON.stringify({"type":"reject","code":"STALE_CLIENT_SEQUENCE"})) == OK
 						elif received.size() == 2:
-							# An invalid server-union member must never be silently ignored.
+							# Validated server events must reach presentation before a later
+							# invalid union member terminates the authenticated session.
+							event_frames_sent = remote.send_text(combat_wire) == OK
+							event_frames_sent = remote.send_text(telegraph_wire) == OK and event_frames_sent
 							invalid_frame_sent = remote.send_text(invalid_server_wire) == OK
 		if transport.state_name() == "connected" and not first_sent:
 			require(transport.send_move(1, 0), "connected move was not queued")
@@ -187,6 +199,9 @@ func verify_move_packet_loop(welcome_wire: String, invalid_server_wire: String) 
 	require(first_sent and second_sent, "move test did not exercise both sends")
 	require(reject_sent, "server did not send the post-welcome command reject")
 	require(signals["reject_count"] == 1 and signals["reject_code"] == "STALE_CLIENT_SEQUENCE", "post-welcome command reject was lost or duplicated")
+	require(event_frames_sent, "server did not send the valid combat and telegraph frames")
+	require(signals["combat_count"] == 1 and signals.get("combat_type") == "combat", "validated combat event was lost or duplicated")
+	require(signals["telegraph_count"] == 1 and signals.get("telegraph_type") == "telegraph", "validated telegraph event was lost or duplicated")
 	require(invalid_frame_sent, "server did not send the invalid post-welcome frame")
 	require(signals["close_count"] == 1, "invalid server frame did not emit exactly one terminal close callback")
 	require(signals["close_reason"] == "invalid_server_message", "invalid server frame did not fail closed")
@@ -429,8 +444,8 @@ func verify() -> void:
 	var welcome_wire := JSON.stringify(welcome)
 	require(Codec.wire_numbers_are_integers(welcome_wire), "valid integer wire numbers rejected")
 	await verify_socket_packet_loop(welcome_wire, true)
-	await verify_move_packet_loop(welcome_wire, JSON.stringify({"type":"fabricated_server_message","value":1.5}))
-	await verify_move_packet_loop(welcome_wire, JSON.stringify({"type":"combat"}))
+	await verify_move_packet_loop(welcome_wire, JSON.stringify(combat_event), JSON.stringify(telegraph_event), JSON.stringify({"type":"fabricated_server_message","value":1.5}))
+	await verify_move_packet_loop(welcome_wire, JSON.stringify(combat_event), JSON.stringify(telegraph_event), JSON.stringify({"type":"combat"}))
 	# Real Aurion zone.join broadcasts a snapshot before the server sends
 	# welcome. This uses two wire packets with intervening Godot process frames.
 	early_snapshot["presences"] = [{"entityId":"player:1","userId":1,"position":{"x":0,"z":0},"lastAcceptedClientSeq":0}]
