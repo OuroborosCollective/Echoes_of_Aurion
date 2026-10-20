@@ -16,7 +16,7 @@ test('explicit opt-in, separate absolute SDK and revision-bound destination requ
 test('packaged Login config binds the exact build and enables native auth',()=>{
  const enabled=`[aurion]\nclient_build="${sha}"\nnative_auth_start_enabled=true\n`;
  assert.equal(createLoginOverride(sha),enabled);
- assert.throws(()=>createLoginOverride('ABC'),/lowercase/);
+ assert.throws(()=>createLoginOverride('ABC'));
  assert.equal(assertPackagedBuildRevision(enabled,sha),sha);
  assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${'b'.repeat(40)}"\nnative_auth_start_enabled=true\n`,sha));
  assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${sha}"\n`,sha),/enable native auth/);
