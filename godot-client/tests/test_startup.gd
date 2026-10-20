@@ -131,6 +131,12 @@ func verify() -> void:
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.visible, "confirmed self position presentation stayed hidden")
 		require(position_label.text == "Position · X 1.00 m · Z 0.00 m", "welcome position presentation did not preserve confirmed millimetres")
+		require(enabled_scene.has_method("_update_world_freshness"), "active scene cannot expose stale confirmed state")
+		if enabled_scene.has_method("_update_world_freshness"):
+			enabled_scene._update_world_freshness(Time.get_ticks_msec() + 5000)
+			require(position_label.text == "Position · X 1.00 m · Z 0.00 m · Stand veraltet", "stale presentation did not freeze and mark the last confirmed position")
+			if entity_summary != null:
+				require(entity_summary.text == "In der Nähe · 1 Reisender · 1 Kreatur · Stand veraltet", "stale presentation did not preserve and mark confirmed entities")
 		var moved_snapshot: Dictionary = confirmed_welcome.duplicate(true)
 		moved_snapshot.erase("protocolVersion")
 		moved_snapshot.erase("connectionId")
