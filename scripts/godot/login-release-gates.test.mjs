@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requireLoginReleaseInputs, assertPackagedBuildRevision, checkAssetlinksDocument, LIVE_ASSETLINKS_URL } from './login-release-gates.mjs';
+import { requireLoginReleaseInputs, createLoginOverride, assertPackagedBuildRevision, checkAssetlinksDocument, LIVE_ASSETLINKS_URL } from './login-release-gates.mjs';
 const sha='a'.repeat(40);
 const fp='FA:'.repeat(31)+'FA';
 const pkg='org.ouroboroscollective.aurion.godot.login';
@@ -13,10 +13,15 @@ test('explicit opt-in, separate absolute SDK and revision-bound destination requ
  assert.throws(()=>requireLoginReleaseInputs({...env,AURION_LOGIN_GRADLE_SDK_ROOT:'/tmp/login-results'}),/must differ/);
  assert.throws(()=>requireLoginReleaseInputs({...env,AURION_EXPECTED_REVISION:'ABC'}),/exact lowercase/);
 });
-test('packaged build ID is exact and no Preview swap',()=>{
- assert.equal(assertPackagedBuildRevision(`[aurion]\nclient_build="${sha}"\n`,sha),sha);
- assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${'b'.repeat(40)}"\n`,sha));
- assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${sha}"\nlogin_token="secret"\n`,sha));
+test('packaged Login config binds the exact build and enables native auth',()=>{
+ const enabled=`[aurion]\nclient_build="${sha}"\nnative_auth_start_enabled=true\n`;
+ assert.equal(createLoginOverride(sha),enabled);
+ assert.throws(()=>createLoginOverride('ABC'));
+ assert.equal(assertPackagedBuildRevision(enabled,sha),sha);
+ assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${'b'.repeat(40)}"\nnative_auth_start_enabled=true\n`,sha));
+ assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${sha}"\n`,sha),/enable native auth/);
+ assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${sha}"\nnative_auth_start_enabled=false\n`,sha),/enable native auth/);
+ assert.throws(()=>assertPackagedBuildRevision(enabled+'login_token="secret"\n',sha));
 });
 test('DAL accepts only the intended package plus persistent certificate',()=>{
  assert.match(checkAssetlinksDocument(response,pkg,fp).sha256,/^[a-f0-9]{64}$/);

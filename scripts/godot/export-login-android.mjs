@@ -8,7 +8,7 @@ import { androidReport } from './android-toolchain.mjs';
 import { inspectLoginGradleSdk,verifyGodotGradleVersions } from './gradle-prerequisites.mjs';
 import { stageGodotGradleBuild } from './android-gradle-link.mjs';
 import { createLoginPreset,validateSignerConfig,verifySignerOnDisk,validateLoginArtifact,loginPackage } from './login-gradle-export.mjs';
-import { requireLoginReleaseInputs,assertPackagedBuildRevision,verifyLiveAssetlinks,LOGIN_APK_FILENAME } from './login-release-gates.mjs';
+import { requireLoginReleaseInputs,createLoginOverride,assertPackagedBuildRevision,verifyLiveAssetlinks,LOGIN_APK_FILENAME } from './login-release-gates.mjs';
 
 function checked(binary,args,env,timeout=60000) {
  const p=spawnSync(binary,args,{env,encoding:'utf8',timeout,maxBuffer:4*1024*1024});
@@ -42,7 +42,7 @@ export async function signedLoginExport(env=process.env) {
   await cp(join(repo,'godot-client'),project,{recursive:true,filter:p=>!p.split('/').includes('.godot')});
   const original=await readFile(join(project,'export_presets.cfg'),'utf8');
   await writeFile(join(project,'export_presets.cfg'),createLoginPreset(original),{mode:0o600});
-  await writeFile(join(project,'override.cfg'),`[aurion]\nclient_build="${revision}"\n`,{mode:0o600});
+  await writeFile(join(project,'override.cfg'),createLoginOverride(revision),{mode:0o600});
   await stageGodotGradleBuild({archive,project,version});
   const manifestSource=await readFile(join(project,'android/build/src/main/AndroidManifest.xml'),'utf8');
   assert.match(manifestSource,/android:host="arelogic.space"/);

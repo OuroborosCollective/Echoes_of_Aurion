@@ -20,9 +20,13 @@ export function requireLoginReleaseInputs(env) {
  return Object.freeze({sdkRoot:env.AURION_LOGIN_GRADLE_SDK_ROOT,outputDirectory:env.AURION_LOGIN_APK_OUTPUT,revision:env.AURION_EXPECTED_REVISION});
 }
 
-export function assertPackagedBuildRevision(override, expectedRevision) {
+export function createLoginOverride(expectedRevision) {
  assert.match(expectedRevision,SHA);
- assert.equal(override, `[aurion]\nclient_build="${expectedRevision}"\n`,'packaged revision differs from exact source');
+ return `[aurion]\nclient_build="${expectedRevision}"\nnative_auth_start_enabled=true\n`;
+}
+
+export function assertPackagedBuildRevision(override, expectedRevision) {
+ assert.equal(override, createLoginOverride(expectedRevision),'packaged Login config must bind exact source and enable native auth');
  return expectedRevision;
 }
 
