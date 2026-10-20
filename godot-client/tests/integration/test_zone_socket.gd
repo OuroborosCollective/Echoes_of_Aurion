@@ -140,17 +140,19 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 	var first_sent := false
 	var second_sent := false
 	var reject_sent := false
-	var signals := {"reject_count": 0, "reject_code": "", "close_count": 0}
+	var unknown_frame_sent := false
+	var signals := {"reject_count": 0, "reject_code": "", "close_count": 0, "close_reason": ""}
 	transport.zone_rejected.connect(func(code: String) -> void:
 		signals["reject_count"] += 1
 		signals["reject_code"] = code
 	)
-	transport.zone_closed.connect(func(_reason: String) -> void:
+	transport.zone_closed.connect(func(reason: String) -> void:
 		signals["close_count"] += 1
+		signals["close_reason"] = reason
 	)
 	var received: Array = []
 	var started := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - started < 4000 and received.size() < 2:
+	while Time.get_ticks_msec() - started < 4000 and signals["close_count"] == 0:
 		if remote == null and server.is_connection_available():
 			remote = WebSocketPeer.new()
 			require(remote.accept_stream(server.take_connection()) == OK, "move loopback WebSocket accept failed")
@@ -169,6 +171,9 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 						received.append(decoded)
 						if received.size() == 1:
 							reject_sent = remote.send_text(JSON.stringify({"type":"reject","code":"STALE_CLIENT_SEQUENCE"})) == OK
+						elif received.size() == 2:
+							# A schema-unknown server message must never be silently ignored.
+							unknown_frame_sent = remote.send_text(JSON.stringify({"type":"fabricated_server_message"})) == OK
 		if transport.state_name() == "connected" and not first_sent:
 			require(transport.send_move(1, 0), "connected move was not queued")
 			require(not transport.send_move(2, 0), "out-of-contract move axis was queued")
@@ -182,8 +187,10 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 	require(first_sent and second_sent, "move test did not exercise both sends")
 	require(reject_sent, "server did not send the post-welcome command reject")
 	require(signals["reject_count"] == 1 and signals["reject_code"] == "STALE_CLIENT_SEQUENCE", "post-welcome command reject was lost or duplicated")
-	require(signals["close_count"] == 0, "command reject emitted a terminal close callback")
-	require(transport.state_name() == "connected", "command reject terminated the authenticated session")
+	require(unknown_frame_sent, "server did not send the schema-unknown post-welcome frame")
+	require(signals["close_count"] == 1, "schema-unknown server frame did not emit exactly one terminal close callback")
+	require(signals["close_reason"] == "invalid_server_message", "schema-unknown server frame did not fail closed")
+	require(transport.state_name() == "closed", "schema-unknown server frame left the authenticated session open")
 	require(received.size() == 2, "server did not receive exactly two move frames")
 	if received.size() == 2:
 		var first: Dictionary = received[0]
