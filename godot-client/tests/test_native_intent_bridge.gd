@@ -109,6 +109,15 @@ func verify() -> void:
 	check(race_intent.data == valid, "fresh callback was erased after browser launch")
 	check(bridge.poll_activity_intent_for_test(true), "fresh callback was not delivered after browser launch")
 	check(race_intent.data == null, "delivered fresh callback remained in the Activity intent")
+	app.status = Label.new()
+	app.login = Button.new()
+	app._awaiting_callback = true
+	fake_auth.callback_pending_value = true
+	app.status.text = "Anmeldung wird bestätigt"
+	app.login.disabled = true
+	check(not app.handle_native_auth_callback(valid + "-stale"), "stale callback started an exchange")
+	check(app.status.text == "Systembrowser geöffnet", "stale callback left the login UI in exchange state")
+	check(not app.login.disabled, "stale callback disabled cancellation of the current login")
 	app.free()
 	fake_auth.free()
 	bridge.free()
