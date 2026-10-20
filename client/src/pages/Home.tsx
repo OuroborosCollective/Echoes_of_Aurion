@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import {
   BookOpen,
   Box,
+  Bug,
   CalendarDays,
   Compass,
   FileText,
@@ -19,7 +20,7 @@ import {
 } from "@/xaurion/integration/Ax1PlayNavigationBridge";
 import "./homeCinematic.css";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues";
 
 function openAccountAccess(): void {
   window.dispatchEvent(new Event("aurion:open-local-auth"));
@@ -356,6 +357,16 @@ export default function Home() {
 
       <section className="mx-auto max-w-7xl px-5 py-12 sm:px-8">
         <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            title="Fehler melden"
+            onClick={() => openCommunity("issues")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+          >
+            <Bug className="mr-2 size-4 text-cyan-300" />
+            Fehler melden
+          </button>
           <button
             type="button"
             aria-haspopup="dialog"
