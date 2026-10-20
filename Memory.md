@@ -4060,3 +4060,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G11 confirmed lethal-combat feedback
+Status: VERIFIED candidate
+Task: Preserve Aurion's confirmed lethal combat result in the active Godot scene.
+Change: Self-involved combat notices now distinguish a server-confirmed defeat from generic damage while retaining exact-event deduplication, projection reset and the two-second presentation bound.
+Evidence: Baseline `0acb88f7b95b0fd26d7da6c83c063d743644ea1f` failed causally in Godot run 39473942330/job 118804914916; candidate `79c36706b4d591e723e42417f8bc421a6d078e40` passed Godot/runtime run 39474362277 and Android Preview run 39474365304.
+Learned: The validated `killed` field reached the active scene but was previously discarded by generic hit wording; presentation can preserve it without becoming combat authority.
+Open: Exact Memory-bearing head gates, shared review, merge and main readback.
+Next safe step: Merge only after the final head is green and review is clear.
