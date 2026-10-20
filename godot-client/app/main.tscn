@@ -105,6 +105,15 @@ theme_override_colors/font_color = Color(0.94, 0.33, 0.27, 1)
 theme_override_font_sizes/font_size = 18
 autowrap_mode = 3
 
+[node name="ConfirmedPosition" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54, 0.82, 0.72, 1)
+theme_override_font_sizes/font_size = 18
+text = "Position · X 0.00 m · Z 0.00 m"
+autowrap_mode = 3
+
 [node name="Destination" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
 unique_name_in_owner = true
 layout_mode = 2
