@@ -166,6 +166,7 @@ func _reset_projection() -> void:
 	_last_combat_sequence = -1
 	_last_telegraph_sequence = -1
 	combat_notice.text = ""
+	combat_notice.visible = false
 
 func _on_zone_welcome(welcome: Dictionary) -> void:
 	if _lifecycle.is_suspended():
@@ -192,6 +193,7 @@ func _on_zone_telegraph(event: Dictionary) -> void:
 	if sequence <= _last_telegraph_sequence:
 		return
 	_last_telegraph_sequence = sequence
+	combat_notice.visible = true
 	combat_notice.text = "Achtung: Gegnerischer Angriff angekündigt"
 
 func _on_zone_combat(event: Dictionary) -> void:
@@ -204,6 +206,7 @@ func _on_zone_combat(event: Dictionary) -> void:
 	if sequence <= _last_combat_sequence:
 		return
 	_last_combat_sequence = sequence
+	combat_notice.visible = true
 	if not event.get("hit", false):
 		combat_notice.text = "Angriff verfehlt"
 	elif event.get("defenderEntityId") == self_id:
