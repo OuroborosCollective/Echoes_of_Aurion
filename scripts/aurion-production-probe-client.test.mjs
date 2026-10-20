@@ -18,24 +18,38 @@ test('classifies transport and JSON failures at the actual runner exchange bound
   const nativeFetch = globalThis.fetch;
   const nativeTimeout = AbortSignal.timeout;
   let mode = 'success';
+  let interruptedResponse;
   const calls = [];
   const server = createServer((req, res) => {
     const stage = req.url === '/token' ? 'oidc' : 'execute';
     calls.push(stage);
     if (mode === `${stage}-timeout`) return;
     if (mode === `${stage}-body-timeout`) { res.writeHead(200, { 'content-type': 'application/json' }); res.flushHeaders(); return; }
+    if (mode === `${stage}-body-disconnect`) {
+      interruptedResponse = res;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.write('{');
+      return;
+    }
     if (mode === `${stage}-disconnect`) { req.socket.destroy(); return; }
     res.setHeader('content-type', 'application/json');
     if (mode === `${stage}-denied`) { res.writeHead(403); res.end('private-test-server-body'); return; }
     if (mode === `${stage}-invalid`) { res.end('{private-test-server-body'); return; }
     if (mode === `${stage}-null`) { res.end('null'); return; }
-    res.end(JSON.stringify(stage === 'oidc' ? { value: 'disposable-test-jwt'.repeat(10) }
-      : mode === 'binding-mismatch' ? { ...receipt, runAttempt: 2 } : receipt));
+    const body = JSON.stringify(stage === 'oidc' ? { value: 'disposable-test-jwt'.repeat(10) }
+      : mode === 'binding-mismatch' ? { ...receipt, runAttempt: 2 } : receipt);
+    // Prove that a slower OIDC setup cannot consume the execution-only deadline.
+    if (stage === 'oidc' && mode.startsWith('execute-') && mode.endsWith('-timeout')) {
+      setTimeout(() => res.end(body), 160);
+    } else res.end(body);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  t.mock.method(AbortSignal, 'timeout', ms => nativeTimeout(mode.endsWith('-timeout') ? 80 : ms));
-  t.mock.method(globalThis, 'fetch', (url, options) => {
+  t.mock.method(AbortSignal, 'timeout', ms => {
+    const stage = ms === 10000 ? 'oidc' : 'execute';
+    return nativeTimeout(mode.startsWith(`${stage}-`) && mode.endsWith('-timeout') ? 80 : ms);
+  });
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
     const oidc = new URL(url).hostname === 'test.actions.githubusercontent.com';
     assert.equal(options.redirect, 'error');
     assert.ok(options.signal instanceof AbortSignal);
@@ -44,7 +58,13 @@ test('classifies transport and JSON failures at the actual runner exchange bound
       assert.equal(String(url), 'https://arelogic.space/api/production-probe/execute');
       assert.deepEqual(JSON.parse(options.body), { scope });
     }
-    return nativeFetch(`${origin}/${oidc ? 'token' : 'execute'}`, options);
+    const response = await nativeFetch(`${origin}/${oidc ? 'token' : 'execute'}`, options);
+    if (mode === `${oidc ? 'oidc' : 'execute'}-body-disconnect`) {
+      // Headers have actually reached fetch; break only the remaining body stream.
+      assert.equal(response.status, 200);
+      interruptedResponse.destroy();
+    }
+    return response;
   });
   try {
     for (const [scenario, expected] of [
@@ -54,6 +74,8 @@ test('classifies transport and JSON failures at the actual runner exchange bound
       ['execute-body-timeout', 'PROBE_EXECUTION_TIMEOUT'],
       ['oidc-disconnect', 'PROBE_OIDC_REQUEST_NETWORK_FAILED'],
       ['execute-disconnect', 'PROBE_EXECUTION_NETWORK_FAILED'],
+      ['oidc-body-disconnect', 'PROBE_OIDC_REQUEST_NETWORK_FAILED'],
+      ['execute-body-disconnect', 'PROBE_EXECUTION_NETWORK_FAILED'],
       ['oidc-invalid', 'PROBE_OIDC_RESPONSE_INVALID'],
       ['execute-invalid', 'PROBE_EXECUTION_RESPONSE_INVALID'],
       ['oidc-null', 'PROBE_OIDC_RESPONSE_INVALID'],
