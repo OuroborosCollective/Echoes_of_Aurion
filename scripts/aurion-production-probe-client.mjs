@@ -9,11 +9,12 @@ async function probeFetch(url, options, stage) {
 
 async function probeJson(response, signal, stage) {
   try { return await response.json(); }
-  catch {
+  catch (error) {
     // The same deadline also covers a response whose headers arrived but body stalled.
-    throw new Error(signal.aborted
-      ? stage === 'PROBE_OIDC' ? 'PROBE_OIDC_REQUEST_TIMEOUT' : 'PROBE_EXECUTION_TIMEOUT'
-      : `${stage}_RESPONSE_INVALID`);
+    const requestStage = stage === 'PROBE_OIDC' ? 'PROBE_OIDC_REQUEST' : 'PROBE_EXECUTION';
+    if (signal.aborted) throw new Error(`${requestStage}_TIMEOUT`);
+    if (error instanceof SyntaxError) throw new Error(`${stage}_RESPONSE_INVALID`);
+    throw new Error(`${requestStage}_NETWORK_FAILED`);
   }
 }
 
