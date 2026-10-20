@@ -175,11 +175,13 @@ func verify() -> void:
 		enabled_scene._on_zone_snapshot(cleared_entities)
 		if entity_summary != null:
 			require(entity_summary.text == "In der Nähe · 0 Reisende · 0 Kreaturen", "entity despawn did not update active presentation")
+		enabled_scene._update_world_freshness(Time.get_ticks_msec() + 5000)
 		var stale_entities: Dictionary = large_snapshot.duplicate(true)
 		stale_entities["snapshotSeq"] = 3
 		enabled_scene._on_zone_snapshot(stale_entities)
 		if entity_summary != null:
-			require(entity_summary.text == "In der Nähe · 0 Reisende · 0 Kreaturen", "stale snapshot rewound active entity presentation")
+			require(entity_summary.text == "In der Nähe · 0 Reisende · 0 Kreaturen · Stand veraltet", "rejected stale snapshot refreshed or rewound active entity presentation")
+		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m · Stand veraltet", "rejected stale snapshot refreshed or rewound active position presentation")
 	var real_zone: Node = enabled_scene._zone_socket
 	var telegraph := {
 		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
