@@ -108,11 +108,23 @@ func verify() -> void:
 		"type":"welcome", "protocolVersion":5, "zoneId":"observatory_threshold",
 		"connectionId":"zone_peer_startupintegration123", "selfEntityId":"player:1",
 		"snapshotSeq":1, "tick":1,
-		"presences":[{"entityId":"player:1", "userId":1, "position":{"x":1000,"z":0},"lastAcceptedClientSeq":0}],
-		"mobs":[], "combatants":[],
+		"presences":[
+			{"entityId":"player:1", "userId":1, "position":{"x":1000,"z":0},"lastAcceptedClientSeq":0},
+			{"entityId":"player:2", "userId":2, "position":{"x":2000,"z":1000},"lastAcceptedClientSeq":0}
+		],
+		"mobs":[{
+			"entityId":"mob_1", "archetype":"clockwork_stalker", "level":1, "state":"idle",
+			"position":{"x":2000,"z":1000}, "targetEntityId":null,
+			"isBoss":false, "isElite":false, "health":10, "maxHealth":10
+		}], "combatants":[],
 		"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":nodes}
 	}
 	enabled_scene._on_zone_welcome(confirmed_welcome)
+	var entity_summary := enabled_scene.get_node_or_null("%EntitySummary") as Label
+	require(entity_summary != null, "confirmed entities have no active scene presentation")
+	if entity_summary != null:
+		require(entity_summary.visible, "confirmed entity summary stayed hidden")
+		require(entity_summary.text == "In der Nähe · 1 Reisender · 1 Kreatur", "welcome entity summary did not reflect the confirmed registry")
 	var position_label := enabled_scene.get_node_or_null("%ConfirmedPosition") as Label
 	require(position_label != null, "confirmed self position has no active scene presentation")
 	if position_label != null:
@@ -147,6 +159,21 @@ func verify() -> void:
 		enabled_scene._on_zone_snapshot(large_snapshot)
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m", "large confirmed world position lost integer precision in presentation")
+		var cleared_entities: Dictionary = large_snapshot.duplicate(true)
+		cleared_entities["snapshotSeq"] = 4
+		cleared_entities["tick"] = 4
+		cleared_entities["resources"]["revision"] = 4
+		cleared_entities["presences"] = [cleared_entities["presences"][0]]
+		cleared_entities["mobs"] = []
+		require(ZoneCodec.is_valid_snapshot(cleared_entities), "entity despawn fixture violates Aurion v5")
+		enabled_scene._on_zone_snapshot(cleared_entities)
+		if entity_summary != null:
+			require(entity_summary.text == "In der Nähe · 0 Reisende · 0 Kreaturen", "entity despawn did not update active presentation")
+		var stale_entities: Dictionary = large_snapshot.duplicate(true)
+		stale_entities["snapshotSeq"] = 3
+		enabled_scene._on_zone_snapshot(stale_entities)
+		if entity_summary != null:
+			require(entity_summary.text == "In der Nähe · 0 Reisende · 0 Kreaturen", "stale snapshot rewound active entity presentation")
 	var real_zone: Node = enabled_scene._zone_socket
 	var telegraph := {
 		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
@@ -214,6 +241,9 @@ func verify() -> void:
 	enabled_scene._reset_projection()
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
 	require(not enabled_scene.get_node("%CombatNotice").visible, "combat presentation retained layout space after reset")
+	if entity_summary != null:
+		require(entity_summary.text.is_empty(), "confirmed entity summary survived projection reset")
+		require(not entity_summary.visible, "confirmed entity summary retained layout space after reset")
 	if position_label != null:
 		require(position_label.text.is_empty(), "confirmed position text survived projection reset")
 		require(not position_label.visible, "confirmed position retained layout space after projection reset")

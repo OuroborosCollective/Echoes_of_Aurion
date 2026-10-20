@@ -4218,3 +4218,10 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G11 confirmed nearby-entity presentation
+Status: VERIFIED candidate
+Change: The active Godot scene now presents other confirmed players and mobs from its synchronized entity registry, updates on accepted despawns, ignores stale rewinds and clears on projection reset.
+Learned: The registry was runtime-synchronized but unused by the scene, so remote entity state had no visible presentation despite valid projection.
+Evidence: Regression-only `d2f87cfeeb95b607dee6b70aa8e4681d845a4442` failed causally in Godot run 39507260462/job 118919198085; fixed `8a59a80794b26ecf8585ead050b75b32d1f04773` passed Godot runtime/render 39507540778 and Android Preview/APK readback 39507540985.
+Open: Exact Memory-bearing head gates, shared review, merge and main readback.
