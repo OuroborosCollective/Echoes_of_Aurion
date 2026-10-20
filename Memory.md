@@ -3990,3 +3990,24 @@ Evidence: Candidate `96d04095b27bc77872a39184af037a507bd689b0`; Godot headless r
 Learned: Combat events have a productive server broadcast, but their tick-derived sequence is not a cross-tick watermark; telegraphs still lack a productive producer and remain a separate slice.
 Open: Exact corrected-head gates, shared review, merge and main readback.
 Next safe step: Merge only after the corrected head is green and reviews are clear.
+
+
+### 2026-10-20 — PR #1084 — feat(g11): show confirmed combat results
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1084 merge=594484d53533a728e324f1ea2a3c8b7162014156 -->
+Task: Merge PR #1084 into `main` — feat(g11): show confirmed combat results.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/app/main.gd`
+- `godot-client/app/main.tscn`
+- `godot-client/tests/test_startup.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1084
+- Merge commit: `594484d53533a728e324f1ea2a3c8b7162014156`
+- PR head: `5a34252831b3768c3d941a888ad9e47604cf69c7`
+- Merged at: 2026-10-20T16:47:21Z
+- Post-merge workflow run: 39460516812
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
