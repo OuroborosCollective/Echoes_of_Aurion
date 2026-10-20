@@ -62,4 +62,4 @@ func deliver_for_test(raw_url: String, pending_login: bool) -> bool:
 	return true
 
 func _is_callback_route(raw_url: String) -> bool:
-	return raw_url == CALLBACK_ROUTE or raw_url.begins_with(CALLBACK_ROUTE + "?")
+	return raw_url == CALLBACK_ROUTE or raw_url.begins_with(CALLBACK_ROUTE + "?") or raw_url.begins_with(CALLBACK_ROUTE + "#")
