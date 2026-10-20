@@ -85,12 +85,18 @@ func _on_login_pressed() -> void:
 		return
 	login.disabled = true
 	status.text = "Anmeldung wird vorbereitet"
-	if not _auth_start.begin(_config.server_base_url, _config.client_build):
+	if not _begin_native_login():
 		login.disabled = false
+
+func _begin_native_login() -> bool:
+	# Discard an App Link left by a cancelled attempt before the new request.
+	# Once begin() opens the browser, its callback belongs to this attempt and
+	# must remain available for the Activity polling path.
+	_intent_bridge.reset()
+	return _auth_start.begin(_config.server_base_url, _config.client_build)
 
 func _on_auth_start_succeeded() -> void:
 	_awaiting_callback = true
-	_intent_bridge.reset()
 	status.text = "Systembrowser geöffnet"
 	login.text = "Abbrechen"
 	login.disabled = false
