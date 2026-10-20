@@ -120,7 +120,7 @@ func verify_socket_packet_loop(wire: String, expect_welcome: bool, expected_reje
 	callback_transport.queue_free()
 	await process_frame
 
-func verify_move_packet_loop(welcome_wire: String) -> void:
+func verify_move_packet_loop(welcome_wire: String, invalid_server_wire: String) -> void:
 	var server := TCPServer.new()
 	require(server.listen(0, "127.0.0.1") == OK, "move loopback server could not listen")
 	if not server.is_listening():
@@ -140,17 +140,19 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 	var first_sent := false
 	var second_sent := false
 	var reject_sent := false
-	var signals := {"reject_count": 0, "reject_code": "", "close_count": 0}
+	var invalid_frame_sent := false
+	var signals := {"reject_count": 0, "reject_code": "", "close_count": 0, "close_reason": ""}
 	transport.zone_rejected.connect(func(code: String) -> void:
 		signals["reject_count"] += 1
 		signals["reject_code"] = code
 	)
-	transport.zone_closed.connect(func(_reason: String) -> void:
+	transport.zone_closed.connect(func(reason: String) -> void:
 		signals["close_count"] += 1
+		signals["close_reason"] = reason
 	)
 	var received: Array = []
 	var started := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - started < 4000 and received.size() < 2:
+	while Time.get_ticks_msec() - started < 4000 and signals["close_count"] == 0:
 		if remote == null and server.is_connection_available():
 			remote = WebSocketPeer.new()
 			require(remote.accept_stream(server.take_connection()) == OK, "move loopback WebSocket accept failed")
@@ -169,6 +171,9 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 						received.append(decoded)
 						if received.size() == 1:
 							reject_sent = remote.send_text(JSON.stringify({"type":"reject","code":"STALE_CLIENT_SEQUENCE"})) == OK
+						elif received.size() == 2:
+							# An invalid server-union member must never be silently ignored.
+							invalid_frame_sent = remote.send_text(invalid_server_wire) == OK
 		if transport.state_name() == "connected" and not first_sent:
 			require(transport.send_move(1, 0), "connected move was not queued")
 			require(not transport.send_move(2, 0), "out-of-contract move axis was queued")
@@ -182,8 +187,10 @@ func verify_move_packet_loop(welcome_wire: String) -> void:
 	require(first_sent and second_sent, "move test did not exercise both sends")
 	require(reject_sent, "server did not send the post-welcome command reject")
 	require(signals["reject_count"] == 1 and signals["reject_code"] == "STALE_CLIENT_SEQUENCE", "post-welcome command reject was lost or duplicated")
-	require(signals["close_count"] == 0, "command reject emitted a terminal close callback")
-	require(transport.state_name() == "connected", "command reject terminated the authenticated session")
+	require(invalid_frame_sent, "server did not send the invalid post-welcome frame")
+	require(signals["close_count"] == 1, "invalid server frame did not emit exactly one terminal close callback")
+	require(signals["close_reason"] == "invalid_server_message", "invalid server frame did not fail closed")
+	require(transport.state_name() == "closed", "invalid server frame left the authenticated session open")
 	require(received.size() == 2, "server did not receive exactly two move frames")
 	if received.size() == 2:
 		var first: Dictionary = received[0]
@@ -397,6 +404,16 @@ func verify() -> void:
 		invalid_entity["selfEntityId"] = bad_id
 		require(not Codec.is_valid_welcome(invalid_entity), "invalid v5 selfEntityId accepted: " + bad_id)
 	require(Codec.is_valid_reject({"type":"reject","code":"PROTOCOL_VERSION_UNSUPPORTED"}), "known v5 reject code missing")
+	var combat_event := {"type":"combat","contractVersion":"wasd-zone-combat.v2","tick":1,"sequence":1,"action":"melee","skillId":null,"skillSourceRevision":null,"attackerEntityId":"player:1","defenderEntityId":"mob_1","hit":true,"damage":1,"crit":false,"killed":false,"defenderHealth":9,"attackerStamina":10,"gameplaySourceRevision":"a".repeat(40)}
+	require(Codec.is_valid_combat_event(combat_event), "valid combat event rejected")
+	var malformed_combat: Dictionary = combat_event.duplicate(true)
+	malformed_combat.erase("damage")
+	require(not Codec.is_valid_combat_event(malformed_combat), "incomplete combat event accepted")
+	var telegraph_event := {"type":"telegraph","contractVersion":"aurion-zone-telegraph.v1","id":"telegraph:mob_1:1","sequence":1,"startTick":2,"impactTick":3,"attackerEntityId":"mob_1","targetEntityId":"player:1","kind":"line","origin":{"x":0,"z":0},"target":{"x":1000,"z":0},"widthFixed":500,"color":"#ef4444","visualSourceRevision":Codec.FIXED_CONTENT,"authorityRuleset":"aurion-ax1-mob-windup.v1"}
+	require(Codec.is_valid_telegraph_event(telegraph_event), "valid telegraph event rejected")
+	var malformed_telegraph: Dictionary = telegraph_event.duplicate(true)
+	malformed_telegraph["impactTick"] = 53
+	require(not Codec.is_valid_telegraph_event(malformed_telegraph), "overlong telegraph windup accepted")
 	var command_peer = Socket.new()
 	root.add_child(command_peer)
 	await process_frame
@@ -412,7 +429,8 @@ func verify() -> void:
 	var welcome_wire := JSON.stringify(welcome)
 	require(Codec.wire_numbers_are_integers(welcome_wire), "valid integer wire numbers rejected")
 	await verify_socket_packet_loop(welcome_wire, true)
-	await verify_move_packet_loop(welcome_wire)
+	await verify_move_packet_loop(welcome_wire, JSON.stringify({"type":"fabricated_server_message","value":1.5}))
+	await verify_move_packet_loop(welcome_wire, JSON.stringify({"type":"combat"}))
 	# Real Aurion zone.join broadcasts a snapshot before the server sends
 	# welcome. This uses two wire packets with intervening Godot process frames.
 	early_snapshot["presences"] = [{"entityId":"player:1","userId":1,"position":{"x":0,"z":0},"lastAcceptedClientSeq":0}]

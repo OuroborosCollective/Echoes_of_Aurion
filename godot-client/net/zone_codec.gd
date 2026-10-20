@@ -101,6 +101,56 @@ static func wire_numbers_are_integers(wire: String) -> bool:
 		index += 1
 	return not inside_string
 
+static func _valid_lower_hex_revision(value: Variant) -> bool:
+	if typeof(value) != TYPE_STRING or value.length() != 40:
+		return false
+	for index in range(value.length()):
+		var ch: String = value[index]
+		if not ((ch >= "0" and ch <= "9") or (ch >= "a" and ch <= "f")):
+			return false
+	return true
+
+static func is_valid_combat_event(raw: Variant) -> bool:
+	if typeof(raw) != TYPE_DICTIONARY or raw.get("type") != "combat" or raw.get("contractVersion") != "wasd-zone-combat.v2" or raw.get("action") != "melee":
+		return false
+	var skill_id: Variant = raw.get("skillId", "missing")
+	var skill_revision: Variant = raw.get("skillSourceRevision", "missing")
+	if skill_id == null:
+		if skill_revision != null:
+			return false
+	elif skill_id not in ["k_strike", "k_charge", "k_shield", "k_whirlwind", "k_overdrive"] or skill_revision != "d356881538dae23c3aa97364a5596d48b6ac3079":
+		return false
+	if not _safe_nonnegative(raw.get("tick")) or not _positive(raw.get("sequence")):
+		return false
+	if not _valid_entity_id(raw.get("attackerEntityId")) or not _valid_entity_id(raw.get("defenderEntityId")) or raw["attackerEntityId"] == raw["defenderEntityId"]:
+		return false
+	for key in ["hit", "crit", "killed"]:
+		if typeof(raw.get(key)) != TYPE_BOOL:
+			return false
+	for key in ["damage", "defenderHealth", "attackerStamina"]:
+		if not _safe_nonnegative(raw.get(key)):
+			return false
+	return _valid_lower_hex_revision(raw.get("gameplaySourceRevision"))
+
+static func is_valid_telegraph_event(raw: Variant) -> bool:
+	if typeof(raw) != TYPE_DICTIONARY or raw.get("type") != "telegraph" or raw.get("contractVersion") != "aurion-zone-telegraph.v1":
+		return false
+	var sequence: Variant = raw.get("sequence")
+	var start_tick: Variant = raw.get("startTick")
+	var impact_tick: Variant = raw.get("impactTick")
+	var attacker: Variant = raw.get("attackerEntityId")
+	if not _positive(sequence) or not _safe_nonnegative(start_tick) or not _positive(impact_tick) or impact_tick <= start_tick or impact_tick - start_tick > 50:
+		return false
+	if not _valid_mob_id(attacker) or not _valid_player_entity_id(raw.get("targetEntityId")):
+		return false
+	if raw.get("id") != "telegraph:%s:%d" % [attacker, int(sequence)] or raw.get("kind") != "line":
+		return false
+	if not _valid_position(raw.get("origin")) or not _valid_position(raw.get("target")):
+		return false
+	if not _safe_nonnegative(raw.get("widthFixed")) or raw["widthFixed"] < 500 or raw["widthFixed"] > 8000:
+		return false
+	return raw.get("color") == "#ef4444" and raw.get("visualSourceRevision") == FIXED_CONTENT and raw.get("authorityRuleset") == "aurion-ax1-mob-windup.v1"
+
 static func is_valid_reject(raw: Variant) -> bool:
 	return typeof(raw) == TYPE_DICTIONARY and raw.get("type") == "reject" and typeof(raw.get("code")) == TYPE_STRING and raw.get("code") in REJECT_CODES
 
