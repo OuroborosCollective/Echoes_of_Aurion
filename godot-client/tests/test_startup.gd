@@ -133,6 +133,9 @@ func verify() -> void:
 	next_tick_combat["damage"] = 3
 	real_zone.emit_signal("zone_combat", next_tick_combat)
 	require(enabled_scene.get_node("%CombatNotice").text == "Treffer erhalten · 3 Schaden", "valid lower sequence from a later tick was discarded")
+	await create_timer(2.1).timeout
+	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "expired combat presentation retained stale text")
+	require(not enabled_scene.get_node("%CombatNotice").visible, "expired combat presentation retained layout space")
 	enabled_scene._reset_projection()
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
 	require(not enabled_scene.get_node("%CombatNotice").visible, "combat presentation retained layout space after reset")

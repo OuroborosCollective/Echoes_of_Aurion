@@ -10,6 +10,7 @@ const ZoneState = preload("res://projection/zone_state.gd")
 const EntityRegistry = preload("res://projection/entity_registry.gd")
 const SnapshotInterpolator = preload("res://projection/snapshot_interpolator.gd")
 const NativeIntentBridge = preload("res://platform/android/native_intent_bridge.gd")
+const COMBAT_NOTICE_DURATION_MS := 2000
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
 
 @onready var card: PanelContainer = %LaunchCard
@@ -28,6 +29,7 @@ var _awaiting_callback := false
 var _zone_reject_code := ""
 var _seen_combat_events: Dictionary = {}
 var _seen_combat_order: Array[String] = []
+var _combat_notice_expires_at_ms := -1
 var _confirmed_zone = ZoneState.new()
 var _entities = EntityRegistry.new()
 var _visuals = SnapshotInterpolator.new()
@@ -164,6 +166,7 @@ func _reset_projection() -> void:
 	_visuals.reset()
 	_seen_combat_events.clear()
 	_seen_combat_order.clear()
+	_combat_notice_expires_at_ms = -1
 	combat_notice.text = ""
 	combat_notice.visible = false
 
@@ -204,6 +207,7 @@ func _on_zone_combat(event: Dictionary) -> void:
 	if _seen_combat_order.size() > 128:
 		_seen_combat_events.erase(_seen_combat_order.pop_front())
 	combat_notice.visible = true
+	_combat_notice_expires_at_ms = Time.get_ticks_msec() + COMBAT_NOTICE_DURATION_MS
 	if not event.get("hit", false):
 		combat_notice.text = "Angriff verfehlt"
 	elif event.get("defenderEntityId") == self_id:
@@ -293,10 +297,18 @@ func _notification(what: int) -> void:
 		_on_app_resumed()
 
 func _process(_delta: float) -> void:
+	_expire_combat_notice(Time.get_ticks_msec())
 	if _awaiting_callback:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
 		_poll_reconnect(Time.get_ticks_msec())
+
+func _expire_combat_notice(now_ms: int) -> void:
+	if _combat_notice_expires_at_ms < 0 or now_ms < _combat_notice_expires_at_ms:
+		return
+	_combat_notice_expires_at_ms = -1
+	combat_notice.text = ""
+	combat_notice.visible = false
 
 func _on_app_suspended() -> void:
 	var must_restore: bool = _confirmed_zone.has_state() or _zone_socket.state_name() == "connected" or _ticket_pending or _reconnect.active()

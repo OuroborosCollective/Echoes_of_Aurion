@@ -4011,3 +4011,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G11 bounded confirmed-combat notice
+Status: VERIFIED candidate
+Task: Remove stale confirmed combat feedback from the active Godot scene.
+Change: Each accepted self-involved combat event now refreshes a two-second presentation deadline; expiry and projection reset both clear text and layout without changing Aurion combat truth.
+Evidence: Baseline `047ca97eeb5174bcf3a20eb3f71be33ce75656df` failed causally in Godot run 39465336479; candidate `a26341d535cbd8927d49ee94b276902f701dfc82` passed Godot/render run 39465407832 and Android Preview run 39465407619/artifact 12285430649.
+Learned: Confirmed event identity and presentation lifetime are separate; bounded deduplication alone does not prevent stale on-screen feedback.
+Open: Exact documentation-head gates, shared review, merge and main readback.
+Next safe step: Merge only after the final head is green and review is clear.
