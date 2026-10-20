@@ -40,6 +40,10 @@ class FakeAuth:
 		# The new browser can now return immediately after the boundary.
 		intent.setData(fresh_url)
 		return true
+	func complete_callback(_raw_url: Variant) -> bool:
+		return false
+	func callback_pending() -> bool:
+		return callback_pending_value
 
 func check(ok: bool, why: String) -> void:
 	if not ok: failures.append(why)
