@@ -127,6 +127,12 @@ func verify() -> void:
 	enabled_scene.get_node("%CombatNotice").text = "sequenced"
 	real_zone.emit_signal("zone_combat", combat)
 	require(enabled_scene.get_node("%CombatNotice").text == "sequenced", "duplicate combat result replayed presentation")
+	var next_tick_combat: Dictionary = combat.duplicate(true)
+	next_tick_combat["tick"] = 6
+	next_tick_combat["sequence"] = 1
+	next_tick_combat["damage"] = 3
+	real_zone.emit_signal("zone_combat", next_tick_combat)
+	require(enabled_scene.get_node("%CombatNotice").text == "Treffer erhalten · 3 Schaden", "valid lower sequence from a later tick was discarded")
 	enabled_scene._reset_projection()
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
 	require(not enabled_scene.get_node("%CombatNotice").visible, "combat presentation retained layout space after reset")
