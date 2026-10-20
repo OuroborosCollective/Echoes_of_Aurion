@@ -3870,3 +3870,25 @@ Evidence: Candidate `5bbac9b89cf7cc8edd93b4b39afc0186eeebb27b`; Godot headless r
 Learned: Preserving PKCE state inside the URI parser is insufficient if its caller collapses an empty stale-callback result into terminal session failure.
 Open: Exact Memory-bearing final-head gates, shared code/security review, merge and main readback.
 Next safe step: Merge only after the final head is green and reviews are clear.
+
+
+### 2026-10-20 — PR #1080 — fix(g09): preserve current login after stale App Link
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1080 merge=55d2eeecdf55a24b058da003e02842791606f978 -->
+Task: Merge PR #1080 into `main` — fix(g09): preserve current login after stale App Link.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/app/main.gd`
+- `godot-client/net/auth/native_auth_start.gd`
+- `godot-client/tests/test_native_auth_start_runtime.gd`
+- `godot-client/tests/test_native_intent_bridge.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1080
+- Merge commit: `55d2eeecdf55a24b058da003e02842791606f978`
+- PR head: `434d48d9635977cd14b19bfcce542d7522624cd5`
+- Merged at: 2026-10-20T12:29:05Z
+- Post-merge workflow run: 39422601952
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
