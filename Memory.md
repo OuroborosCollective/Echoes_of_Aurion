@@ -4069,3 +4069,23 @@ Evidence: Baseline `0acb88f7b95b0fd26d7da6c83c063d743644ea1f` failed causally in
 Learned: The validated `killed` field reached the active scene but was previously discarded by generic hit wording; presentation can preserve it without becoming combat authority.
 Open: Exact Memory-bearing head gates, shared review, merge and main readback.
 Next safe step: Merge only after the final head is green and review is clear.
+
+
+### 2026-10-20 — PR #1087 — fix(g11): preserve confirmed lethal feedback
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1087 merge=69d4344714fa593e3569a60807f9743c9a596f42 -->
+Task: Merge PR #1087 into `main` — fix(g11): preserve confirmed lethal feedback.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/app/main.gd`
+- `godot-client/tests/test_startup.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1087
+- Merge commit: `69d4344714fa593e3569a60807f9743c9a596f42`
+- PR head: `c157a48e7d919d917b0634a536dc19f763d14c51`
+- Merged at: 2026-10-20T18:30:44Z
+- Post-merge workflow run: 39475390839
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
