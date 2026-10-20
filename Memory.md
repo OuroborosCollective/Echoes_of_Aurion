@@ -3747,3 +3747,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-20 — PR #1076 — fix(g09): discard stale App Link intent before relogin
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1076 merge=00918a5f7f793681a4435d28fc68dc98e33f8582 -->
+Task: Merge PR #1076 into `main` — fix(g09): discard stale App Link intent before relogin.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/platform/android/native_intent_bridge.gd`
+- `godot-client/tests/test_native_intent_bridge.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1076
+- Merge commit: `00918a5f7f793681a4435d28fc68dc98e33f8582`
+- PR head: `7c78b1720d3b72d5a9cbffa87b85db0cafdfa587`
+- Merged at: 2026-10-20T08:27:44Z
+- Post-merge workflow run: 39393569134
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
