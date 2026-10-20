@@ -4089,3 +4089,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-20 — PR #1088 — fix(ops): show production approval request outcomes
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1088 merge=c9a5a5072f7796057c028f7df84e9007de424f24 -->
+Task: Merge PR #1088 into `main` — fix(ops): show production approval request outcomes.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-production-probe-approval-proof.yml`
+- `client/src/components/ProductionProbeApproval.test.tsx`
+- `client/src/components/ProductionProbeApproval.tsx`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1088
+- Merge commit: `c9a5a5072f7796057c028f7df84e9007de424f24`
+- PR head: `8090c4772df91325f55d2b8dbb34378bafda6494`
+- Merged at: 2026-10-20T18:39:20Z
+- Post-merge workflow run: 39476652052
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
