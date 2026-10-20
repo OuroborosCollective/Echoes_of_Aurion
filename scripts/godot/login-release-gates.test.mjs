@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requireLoginReleaseInputs, assertPackagedBuildRevision, checkAssetlinksDocument, LIVE_ASSETLINKS_URL } from './login-release-gates.mjs';
+import { requireLoginReleaseInputs, createLoginOverride, assertPackagedBuildRevision, checkAssetlinksDocument, LIVE_ASSETLINKS_URL } from './login-release-gates.mjs';
 const sha='a'.repeat(40);
 const fp='FA:'.repeat(31)+'FA';
 const pkg='org.ouroboroscollective.aurion.godot.login';
@@ -15,6 +15,7 @@ test('explicit opt-in, separate absolute SDK and revision-bound destination requ
 });
 test('packaged Login config binds the exact build and enables native auth',()=>{
  const enabled=`[aurion]\nclient_build="${sha}"\nnative_auth_start_enabled=true\n`;
+ assert.equal(createLoginOverride(sha),enabled);
  assert.equal(assertPackagedBuildRevision(enabled,sha),sha);
  assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${'b'.repeat(40)}"\nnative_auth_start_enabled=true\n`,sha));
  assert.throws(()=>assertPackagedBuildRevision(`[aurion]\nclient_build="${sha}"\n`,sha),/enable native auth/);
