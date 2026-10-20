@@ -4253,3 +4253,23 @@ Change: After one second without an accepted Aurion welcome or snapshot, the act
 Learned: Bounded interpolation already stopped at confirmed coordinates, but without freshness presentation a frozen projection was indistinguishable from a live one.
 Evidence: Regression-only `894d7e8bdc856d0ada3c6013a0f50c01d33b14cf` failed causally in Godot run 39514091913/job 118941945373; fixed `400e4283810cd46e29e8efebc7bd48a63714eef5` passed Godot runtime/render 39514172835 and Android Preview/APK readback 39514172997.
 Open: Exact Memory-bearing head gates, shared review, merge and main readback.
+
+
+### 2026-10-20 — PR #1097 — fix(g11): mark stale confirmed world presentation
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1097 merge=6396ff4cd9592440a23eb62e8beb266187dedea4 -->
+Task: Merge PR #1097 into `main` — fix(g11): mark stale confirmed world presentation.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `Memory.md`
+- `godot-client/app/main.gd`
+- `godot-client/tests/test_startup.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1097
+- Merge commit: `6396ff4cd9592440a23eb62e8beb266187dedea4`
+- PR head: `0ad2225731f67f8c323b6b9af31583148e81bfba`
+- Merged at: 2026-10-20T23:29:12Z
+- Post-merge workflow run: 39515322906
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
