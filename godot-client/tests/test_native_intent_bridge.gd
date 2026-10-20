@@ -118,6 +118,8 @@ func verify() -> void:
 	check(not app.handle_native_auth_callback(valid + "-stale"), "stale callback started an exchange")
 	check(app.status.text == "Systembrowser geöffnet", "stale callback left the login UI in exchange state")
 	check(not app.login.disabled, "stale callback disabled cancellation of the current login")
+	app.status.free()
+	app.login.free()
 	app.free()
 	fake_auth.free()
 	bridge.free()
