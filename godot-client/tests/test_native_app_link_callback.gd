@@ -75,7 +75,15 @@ func verify() -> void:
 	var mismatch: Dictionary = begin(30000)
 	require(Callback.consume(CALLBACK + "code=" + CODE + "&state=" + "x".repeat(43),
 			mismatch["flow"], 30100).is_empty(), "foreign callback state accepted")
-	require(mismatch["flow"].browser_url().is_empty(), "wrong state did not clear session")
+	require(not mismatch["flow"].browser_url().is_empty(), "well-formed stale state destroyed the current transaction")
+	var after_stale: Dictionary = Callback.consume(CALLBACK + "code=" + CODE + "&state=" + mismatch["state"],
+			mismatch["flow"], 30101)
+	require(after_stale.size() == 5, "current callback was rejected after a stale browser callback")
+	require(mismatch["flow"].browser_url().is_empty(), "accepted current callback did not consume the transaction")
+	var malformed_state: Dictionary = begin(40000)
+	require(Callback.consume(CALLBACK + "code=" + CODE + "&state=short",
+			malformed_state["flow"], 40100).is_empty(), "malformed callback state accepted")
+	require(malformed_state["flow"].browser_url().is_empty(), "malformed callback state retained the transaction")
 	var expired: Dictionary = begin(50000)
 	require(Callback.consume(CALLBACK + "code=" + CODE + "&state=" + expired["state"],
 			expired["flow"], 650000).is_empty(), "expired callback accepted")

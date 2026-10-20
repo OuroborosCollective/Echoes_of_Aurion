@@ -3829,10 +3829,10 @@ Open: Runtime, deployment and independent readback claims remain governed by the
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
 ### 2026-10-20 — G09 pre-launch App Link reset ordering
-Status: VERIFIED candidate
-Task: Prevent a fast verified Android callback from being erased after the system browser opens without admitting an older callback that arrives during the asynchronous start request.
-Change: The native auth transport now emits a synchronous pre-browser-open boundary; the live Activity owner clears stale callback data there, while callbacks delivered after launch remain available for one-time polling and consumption.
-Evidence: Baseline `b960f5d8faf21d668039b76e98f5fc540dc39f1f` failed Godot run 39414331617; review-corrected candidate `bbe0c3454a4ae02f0caa534d953707b815b01ace` passed Godot run 39415740717/artifact 12261856422 and Android Preview APK run 39415740855/artifact 12262165584.
-Learned: Cleanup belongs immediately before browser launch, not merely before the earlier asynchronous start request.
-Open: Exact Memory-bearing final-head gates, refreshed shared review, merge and main readback.
+Status: PARTIAL candidate
+Task: Preserve the current Android login across stale callback races without losing its fast post-launch callback.
+Change: The transport provides a synchronous pre-browser-open cleanup boundary, and the strict callback parser harmlessly consumes a well-formed mismatched stale state while malformed, expired and matching callbacks retain their fail-closed/one-time semantics.
+Evidence: Baseline `b960f5d8faf21d668039b76e98f5fc540dc39f1f` failed Godot run 39414331617; two exact-head reviews then exposed the asynchronous pre-launch and post-boundary stale windows, both covered by corrected regressions.
+Learned: Timing cleanup narrows Android callback races, but transaction state must distinguish a valid old callback from malformed input so stale browser completion cannot cancel a newer PKCE attempt.
+Open: Corrected runtime/APK gates, refreshed exact-head reviews, merge and main readback.
 Next safe step: Merge only after the Memory-bearing final head is green and reviews are clear.
