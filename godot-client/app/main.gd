@@ -212,6 +212,8 @@ func _on_zone_combat(event: Dictionary) -> void:
 		combat_notice.text = ("Du wurdest besiegt" if event.get("defenderEntityId") == self_id else "Gegner besiegt") + " · %d Schaden" % int(event.get("damage", 0))
 	elif not event.get("hit", false):
 		combat_notice.text = "Angriff verfehlt"
+	elif event.get("crit", false):
+		combat_notice.text = ("Kritischer Treffer erhalten" if event.get("defenderEntityId") == self_id else "Kritischer Treffer bestätigt") + " · %d Schaden" % int(event.get("damage", 0))
 	elif event.get("defenderEntityId") == self_id:
 		combat_notice.text = "Treffer erhalten · %d Schaden" % int(event.get("damage", 0))
 	else:
