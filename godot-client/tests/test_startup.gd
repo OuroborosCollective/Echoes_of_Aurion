@@ -125,6 +125,7 @@ func verify() -> void:
 	require(ZoneCodec.is_valid_telegraph_event(telegraph), "combat notice telegraph fixture violates Aurion v5")
 	real_zone.emit_signal("zone_telegraph", telegraph)
 	require(enabled_scene.get_node("%CombatNotice").text == "Achtung: Gegnerischer Angriff angekündigt", "confirmed self telegraph was not displayed")
+	require(enabled_scene.get_node("%CombatNotice").visible, "confirmed self telegraph notice stayed hidden")
 	enabled_scene.get_node("%CombatNotice").text = "sequenced"
 	real_zone.emit_signal("zone_telegraph", telegraph)
 	require(enabled_scene.get_node("%CombatNotice").text == "sequenced", "duplicate telegraph replayed presentation")
@@ -140,6 +141,7 @@ func verify() -> void:
 	require(enabled_scene.get_node("%CombatNotice").text == "Treffer erhalten · 4 Schaden", "confirmed self combat result was not displayed")
 	enabled_scene._reset_projection()
 	require(enabled_scene.get_node("%CombatNotice").text.is_empty(), "combat presentation survived projection reset")
+	require(not enabled_scene.get_node("%CombatNotice").visible, "combat presentation retained layout space after reset")
 	var live_api: Node = enabled_scene._api
 	live_api.cancel()
 	live_api.queue_free()
