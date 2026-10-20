@@ -4189,3 +4189,10 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-20 — G11 confirmed self-position presentation
+Status: VERIFIED candidate
+Change: The active Godot scene now consumes its existing bounded `SnapshotInterpolator` for a visible self-position readout; verified welcome/new snapshots update it, stale snapshots cannot rewind it, and projection reset removes it.
+Learned: Confirmed state, entity registration and interpolation were already active, but no runtime scene element consumed the interpolated position.
+Evidence: Regression-only head `d13dc5cb768fe136b9f22f920014a3010aaf2948` failed causally in Godot run 39499325834/job 118892493698; implementation head `272d86c9b9c808e3acd5ef9f526dbff91826c234` passed Godot/runtime/render run 39499595517 and Android Preview APK run 39499595992.
+Open: Exact Memory-bearing head gates, shared review, merge and main readback.
