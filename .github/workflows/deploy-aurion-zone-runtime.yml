@@ -132,6 +132,7 @@ jobs:
           node --check scripts/build-aurion-sbom.mjs
           node --test \
             scripts/aurion-probe-bootstrap.test.mjs \
+            scripts/aurion-production-probe-client.test.mjs \
             scripts/dispatch-aurion-schema-plan.test.mjs \
             scripts/aurion-build-input-manifest.test.mjs \
             scripts/aurion-release-attestation.test.mjs \
@@ -589,6 +590,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: verify-and-build
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     environment: production
     permissions:
       contents: read
@@ -669,8 +671,8 @@ jobs:
           parseProductionProbeControlPlaneStatus(fs.readFileSync(process.env.STATUS_FILE,'utf8'));
           NODE
           node --input-type=module <<'NODE'
-          import { executeProductionProbe } from './scripts/aurion-production-probe-client.mjs';
-          const receipt = await executeProductionProbe('aurion.probe.admin-readback');
+          import { waitForProductionAdminApproval } from './scripts/aurion-production-probe-client.mjs';
+          const receipt = await waitForProductionAdminApproval();
           if (receipt.status !== 'AUTHORIZED') throw new Error('PROBE_PREFLIGHT_NOT_AUTHORIZED');
           console.log(JSON.stringify({ approvalId: receipt.approvalId, revision: receipt.revision, runId: receipt.runId, runAttempt: receipt.runAttempt, scope: receipt.scope, credentialReturned: false }));
           NODE

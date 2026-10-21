@@ -39,10 +39,53 @@ export async function executeProductionProbe(scope, env = process.env) {
   const response = await probeFetch('https://arelogic.space/api/production-probe/execute', { method: 'POST',
     headers: { authorization: `Bearer ${value}`, 'content-type': 'application/json' }, body: JSON.stringify({ scope }),
     redirect: 'error', signal: executionSignal }, 'PROBE_EXECUTION');
-  if (!response.ok) throw new Error('PROBE_AUTHORIZATION_DENIED');
+  if (!response.ok) {
+    const error = new Error('PROBE_AUTHORIZATION_DENIED');
+    error.httpStatus = response.status;
+    throw error;
+  }
   const body = await probeJson(response, executionSignal, 'PROBE_EXECUTION');
   if (!body || typeof body !== 'object' || Array.isArray(body)
     || body.revision !== env.GITHUB_SHA || body.runId !== env.GITHUB_RUN_ID || body.runAttempt !== Number(env.GITHUB_RUN_ATTEMPT)
     || body.scope !== scope || body.mutationAuthority !== mutationAuthority || body.credentialReturned !== false) throw new Error('PROBE_RECEIPT_BINDING_MISMATCH');
   return body;
+}
+
+/** Only the read-only admin exchange may be repeated. A 403 is deliberately
+ * ambiguous on the deployed server; never claim it proves a missing approval.
+ * Every attempt obtains fresh OIDC and still requires the exact bound receipt.
+ * Network/body failures are NOT retried: the approval may already be consumed.
+ */
+export async function waitForProductionAdminApproval(env = process.env, {
+  now = () => performance.now(),
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  report = value => console.log(JSON.stringify(value)),
+} = {}) {
+  if (!/^[a-f0-9]{40}$/.test(env.GITHUB_SHA ?? '')
+    || !/^[1-9][0-9]*$/.test(env.GITHUB_RUN_ID ?? '')
+    || !/^[1-9][0-9]*$/.test(env.GITHUB_RUN_ATTEMPT ?? '')) throw new Error('PROBE_RUN_IDENTITY_INVALID');
+  // Snapshot identity; a pending wait must not silently follow another run.
+  const identity = { ...env };
+  const scope = 'aurion.probe.admin-readback';
+  const deadline = now() + 15 * 60 * 1000;
+  report({ recordType: 'aurion.production-probe-approval-wait',
+    approvalUrl: 'https://arelogic.space/ops', revision: identity.GITHUB_SHA,
+    runId: identity.GITHUB_RUN_ID, runAttempt: Number(identity.GITHUB_RUN_ATTEMPT),
+    scope, purpose: 'Produktionsrelease Schema-Preflight', maxWaitSeconds: 900 });
+  for (let attempt = 0; attempt < 90 && now() < deadline; attempt++) {
+    try {
+      const receipt = await executeProductionProbe(scope, identity);
+      if (receipt.status !== 'AUTHORIZED') throw new Error('PROBE_PREFLIGHT_NOT_AUTHORIZED');
+      return receipt;
+    } catch (error) {
+      if (error?.message !== 'PROBE_AUTHORIZATION_DENIED' || error.httpStatus !== 403) throw error;
+    }
+    if (attempt === 0 || attempt % 6 === 0) report({
+      recordType: 'aurion.production-probe-approval-wait', status: 'NOT_AUTHORIZED_YET',
+    });
+    const remaining = deadline - now();
+    if (remaining <= 0) break;
+    await sleep(Math.min(10000, remaining));
+  }
+  throw new Error('PROBE_ADMIN_APPROVAL_WAIT_EXPIRED');
 }

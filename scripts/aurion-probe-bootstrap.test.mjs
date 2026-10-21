@@ -69,6 +69,7 @@ done
 printf '%s' "$FIXTURE_STATUS"
 `, { mode: 0o700 });
     const env = { ...process.env, PATH: `${temp}:${process.env.PATH}`, BOOTSTRAP_PROBE_CONTROL_PLANE: 'false',
+      GITHUB_SHA: 'a'.repeat(40), GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1',
       FIXTURE_HEADERS: path.join(temp, 'headers'), FIXTURE_BODY: path.join(temp, 'body') };
     delete env.ACTIONS_ID_TOKEN_REQUEST_URL;
     delete env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
@@ -90,7 +91,12 @@ printf '%s' "$FIXTURE_STATUS"
       assert.ok(result.stderr.includes(expected), result.stderr);
       assert.ok(!result.stderr.includes('private upstream body'), 'upstream content must remain private');
       assert.ok(!result.stderr.includes('SyntaxError'), 'failure must be classified');
-      assert.equal(JSON.parse(result.stdout.trim()).httpStatus, Number(status));
+      const records = result.stdout.trim().split('\n').map(line => JSON.parse(line));
+      assert.equal(records[0].httpStatus, Number(status));
+      if (expected === 'PROBE_OIDC_REQUEST_UNAVAILABLE') {
+        assert.equal(records[1].recordType, 'aurion.production-probe-approval-wait');
+        assert.equal(records[1].revision, env.GITHUB_SHA);
+      } else assert.equal(records.length, 1);
       if (expected !== 'PROBE_OIDC_REQUEST_UNAVAILABLE') assert.ok(!result.stderr.includes('PROBE_OIDC_'));
     }
     for (const [status, type] of [['301', 'text/html'], ['403', 'text/html'], ['502', 'text/html'],
