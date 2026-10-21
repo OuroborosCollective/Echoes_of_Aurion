@@ -4342,3 +4342,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1103 — fix(release): non-locking schema fingerprints and timeout classification
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1103 merge=18d459e326a0af42fdb11ab399b1fe4d0a834819 -->
+Task: Merge PR #1103 into `main` — fix(release): non-locking schema fingerprints and timeout classification.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `deploy/aurion-production-schema-apply-core`
+- `scripts/aurion-production-schema-fingerprint.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1103
+- Merge commit: `18d459e326a0af42fdb11ab399b1fe4d0a834819`
+- PR head: `1ca0ccbd0ac62380a09acd2ef6a254f555d873a6`
+- Merged at: 2026-10-21T04:16:33Z
+- Post-merge workflow run: 39543141539
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
