@@ -1,0 +1,33 @@
+name: Aurion Production Database Gate
+
+on:
+  pull_request:
+    paths:
+      - "server/_core/productionDatabaseGate.ts"
+      - "server/_core/productionDatabaseGate.test.ts"
+      - "server/_core/index.ts"
+      - "server/db.ts"
+      - ".github/workflows/aurion-production-db-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-database-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify production MariaDB fail-closed boundaries
+        run: pnpm exec vitest run server/_core/productionDatabaseGate.test.ts --reporter=verbose
+      - name: TypeScript
+        run: pnpm check

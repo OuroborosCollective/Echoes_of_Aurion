@@ -110,16 +110,18 @@ export async function getDb() {
   return _db;
 }
 
+export async function requireDb() {
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  return db;
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
   }
 
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+  const db = await requireDb();
 
   try {
     const values: InsertUser = {
@@ -260,8 +262,7 @@ export async function recordWorldPresenceLease(values: { userId: number; connect
 }
 
 export async function releaseWorldPresenceLease(values: { connectionId: string; now?: Date }): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
+  const db = await requireDb();
   await db.update(aurionWorldPresenceLeases).set({ disconnectedAt: values.now ?? operationalDate() }).where(and(
     eq(aurionWorldPresenceLeases.connectionId, values.connectionId),
     isNull(aurionWorldPresenceLeases.disconnectedAt),
