@@ -37,12 +37,14 @@ import { globalAssuranceService } from "../causality/assuranceService";
 import { globalTickRecorder } from "../causality/tickRecorder";
 import { createOtelHttpMiddleware } from "../observability/otelBoundary";
 import { drainAurionRuntimeForShutdown } from "./gracefulCausalShutdown";
+import { assertProductionDatabaseConfigured, assertProductionDatabaseConnected } from "./productionDatabaseGate";
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
 const allowedCorsOrigin = createCorsOriginResolver(process.env.AURION_ALLOWED_ORIGINS);
 
 async function startServer(){
+  assertProductionDatabaseConfigured(process.env.NODE_ENV, process.env.DATABASE_URL);
   if (process.env.DATABASE_URL && !isConfiguredDatabaseUrl(process.env.DATABASE_URL)) {
     console.warn(`[Database] Ignored invalid DATABASE_URL "${process.env.DATABASE_URL}". Protocol must be "mysql:" or "mariadb:".`);
     delete process.env.DATABASE_URL;
@@ -53,6 +55,7 @@ async function startServer(){
   const gameDevelopmentStudio=await resolveGameDevelopmentStudioRuntimeReadback();
   if(gameDevelopmentStudio.required&&!gameDevelopmentStudio.available)throw new Error(gameDevelopmentStudio.error??"GAME_DEV_REQUIRED_UNAVAILABLE");
   const databaseConnected = await canConnectToDatabase(1000);
+  assertProductionDatabaseConnected(process.env.NODE_ENV, databaseConnected);
   if (databaseConnected) {
     globalReadbackService.start();
     globalSnapshotReconciliationService.start();
@@ -132,4 +135,4 @@ async function startServer(){
   process.once("SIGINT",()=>{void shutdown("SIGINT");});
   server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
-startServer().catch(error=>{console.error(error);process.exitCode=1;});
+startServer().catch(error=>{console.error(error);process.exit(1);});
