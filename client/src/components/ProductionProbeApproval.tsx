@@ -25,10 +25,26 @@ function isApproval(value: unknown): value is Approval {
     && typeof approval.run.runId === "string" && /^[1-9][0-9]{0,19}$/.test(approval.run.runId)
     && Number.isSafeInteger(approval.run.runAttempt) && approval.run.runAttempt > 0;
 }
+function readApprovalLinkPreset() {
+  const query = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+  const revision = query.get("aurion_revision") ?? "";
+  const runId = query.get("aurion_run_id") ?? "";
+  const attemptString = query.get("aurion_attempt") ?? "";
+  const requestedScope = query.get("aurion_scope") ?? "";
+  const valid = /^[a-f0-9]{40}$/.test(revision) && /^[1-9][0-9]{0,19}$/.test(runId)
+    && /^[1-9][0-9]*$/.test(attemptString) && Number.isSafeInteger(Number(attemptString))
+    && scopes.includes(requestedScope as ProbeScope);
+  return { valid, revision: valid ? revision : "", runId: valid ? runId : "",
+    attempt: valid ? Number(attemptString) : 1,
+    scope: (valid ? requestedScope : scopes[0]) as ProbeScope };
+}
 export function ProductionProbeApproval() {
-  const [revision, setRevision] = useState(""); const [runId, setRunId] = useState("");
-  const [attempt, setAttempt] = useState(1); const [purpose, setPurpose] = useState("");
-  const [scope, setScope] = useState<ProbeScope>(scopes[0]); const [password, setPassword] = useState("");
+  const [preset] = useState(readApprovalLinkPreset);
+  const [revision, setRevision] = useState(preset.revision); const [runId, setRunId] = useState(preset.runId);
+  const [attempt, setAttempt] = useState(preset.attempt); const [purpose, setPurpose] = useState(preset.valid
+    ? preset.scope === "aurion.probe.gameplay-session-readback" ? "Produktionsrelease Gameplay-Join/Readback" : "Produktionsrelease Schema-Preflight"
+    : "");
+  const [scope, setScope] = useState<ProbeScope>(preset.scope); const [password, setPassword] = useState("");
   const [confirmed, setConfirmed] = useState(false); const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(""); const [approvals, setApprovals] = useState<Approval[]>([]);
   const request = async (operation: string, body: unknown) => {
@@ -69,6 +85,7 @@ export function ProductionProbeApproval() {
     setApprovals(current => [approved, ...current]); setMessage(`Gespeichert; Ablauf: ${new Date(approved.expiresAtMs).toLocaleString()}`);
   }); }}>
     <p className="break-all text-sm">OuroborosCollective/Echoes_of_Aurion · deploy-aurion-zone-runtime.yml · main · production</p>
+    {preset.valid && <p className="text-sm">Linkangaben vor Freigabe prüfen: Run, Revision und Berechtigung sind nur vorausgefüllt, nicht autorisiert.</p>}
     <Label htmlFor="probe-revision">Unveränderliche Commit-SHA (40 Zeichen)</Label><Input id="probe-revision" value={revision} onChange={event => { setRevision(event.target.value); setConfirmed(false); }} pattern="[a-f0-9]{40}" required />
     <Label htmlFor="probe-run">GitHub Run-ID</Label><Input id="probe-run" value={runId} onChange={event => { setRunId(event.target.value); setConfirmed(false); }} pattern="[1-9][0-9]{0,19}" required />
     <Label htmlFor="probe-attempt">Run-Attempt</Label><Input id="probe-attempt" type="number" min={1} step={1} value={attempt} onChange={event => { setAttempt(Number(event.target.value)); setConfirmed(false); }} required />

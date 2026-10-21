@@ -63,6 +63,21 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
       else { const body = exactBody(req.body, ["approvalId"]); res.json(await store.revoke(actor.id, body.approvalId as string)); }
     } catch { res.status(403).json({ error: "PROBE_OWNER_REQUEST_DENIED" }); }
   });
+  /** OIDC-authenticated, read-only readiness. Never consumes approval or starts a zone. */
+  app.post(`${path}/readiness`, async (req, res) => {
+    try {
+      const body = exactBody(req.body, ["scope"]);
+      if (req.headers.cookie || body.scope !== AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE) throw new Error("PROBE_READINESS_SCOPE_INVALID");
+      const authorization = req.header("authorization");
+      if (!authorization?.startsWith("Bearer ")) throw new Error("PROBE_OIDC_REQUIRED");
+      const run: AurionProbeRunIdentity = await verifyGithubProbeOidc(authorization.slice(7));
+      if (health().revision !== run.revision) throw new Error("PROBE_RUNTIME_REVISION_MISMATCH");
+      const ready = await productionProbeStore().hasPendingGameplayApproval(run);
+      res.json({ recordType: "aurion.production-probe-readiness", schemaVersion: 1,
+        revision: run.revision, runId: run.runId, runAttempt: run.runAttempt,
+        scope: body.scope, state: ready ? "READY" : "WAITING", credentialReturned: false });
+    } catch { res.status(403).json({ error: "PROBE_READINESS_DENIED", credentialReturned: false }); }
+  });
   app.post(`${path}/execute`, async (req, res) => {
     try {
       const body = exactBody(req.body, ["scope"]);

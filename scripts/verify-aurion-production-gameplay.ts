@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { executeProductionProbe } from "./aurion-production-probe-client.mjs";
+import { waitForProductionGameplayApproval } from "./aurion-production-probe-client.mjs";
 import { ZONE_PROTOCOL_VERSION, validConfirmedPresences } from "../shared/zonePresenceContract";
 import { verifySnapshot } from "./aurion-production-assurance.mjs";
 import { requireProbePersistenceReadback } from "../shared/aurionProductionProbeEvidence";
@@ -49,7 +49,7 @@ export async function run() {
   // This is deliberately not the read-only observation scope. A real welcome
   // and subsequent snapshot require the separately owner-approved, short
   // canonical probe session.
-  return requireFunctionalProbeReceipt(await executeProductionProbe("aurion.probe.gameplay-session-readback"), process.env.AURION_EXPECTED_SHA ?? "");
+  return requireFunctionalProbeReceipt(await waitForProductionGameplayApproval(), process.env.AURION_EXPECTED_SHA ?? "");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

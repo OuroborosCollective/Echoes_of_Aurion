@@ -1207,7 +1207,7 @@ jobs:
     needs: [verify-release-attestations, production-schema-readback]
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 25
     permissions:
       contents: read
       id-token: write
