@@ -4408,3 +4408,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1104 — ⚡ Bolt: Optimize array allocations in Wolfram CAG probes
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1104 merge=51ea43f2282d2cf86da7f0067d7f0557bcdca9e9 -->
+Task: Merge PR #1104 into `main` — ⚡ Bolt: Optimize array allocations in Wolfram CAG probes.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.jules/bolt.md`
+- `shared/aurionCagDesignProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1104
+- Merge commit: `51ea43f2282d2cf86da7f0067d7f0557bcdca9e9`
+- PR head: `e52b9086b1a1851fb24da555569a5cf712984e6f`
+- Merged at: 2026-10-21T07:51:59Z
+- Post-merge workflow run: 39565017219
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
