@@ -19,6 +19,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var status: Label = %ConnectionStatus
 @onready var combat_notice: Label = %CombatNotice
 @onready var confirmed_position: Label = %ConfirmedPosition
+@onready var confirmed_vitals: Label = %ConfirmedVitals
 @onready var entity_summary: Label = %EntitySummary
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
@@ -183,6 +184,8 @@ func _reset_projection() -> void:
 	combat_notice.visible = false
 	confirmed_position.text = ""
 	confirmed_position.visible = false
+	confirmed_vitals.text = ""
+	confirmed_vitals.visible = false
 	entity_summary.text = ""
 	entity_summary.visible = false
 
@@ -200,6 +203,7 @@ func _on_zone_welcome(welcome: Dictionary) -> void:
 	_world_is_stale = false
 	_visuals.capture(_confirmed_zone, now_ms)
 	_update_entity_presentation()
+	_update_vitals_presentation()
 	_update_position_presentation(now_ms)
 
 func _on_zone_snapshot(snapshot: Dictionary) -> void:
@@ -212,6 +216,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		_world_is_stale = false
 		_visuals.capture(_confirmed_zone, now_ms)
 		_update_entity_presentation()
+		_update_vitals_presentation()
 		_update_position_presentation(now_ms)
 
 func _on_zone_combat(event: Dictionary) -> void:
@@ -370,10 +375,30 @@ func _update_world_freshness(now_ms: int) -> void:
 		return
 	_world_is_stale = stale
 	_update_entity_presentation()
+	_update_vitals_presentation()
 	_update_position_presentation(now_ms)
 
 func _world_freshness_suffix() -> String:
 	return " · Stand veraltet" if _world_is_stale else ""
+
+func _update_vitals_presentation() -> void:
+	if not _confirmed_zone.has_state():
+		confirmed_vitals.text = ""
+		confirmed_vitals.visible = false
+		return
+	var self_combatant := _entities.record("combatants", _confirmed_zone.self_entity_id())
+	if self_combatant.is_empty():
+		confirmed_vitals.text = ""
+		confirmed_vitals.visible = false
+		return
+	confirmed_vitals.text = "Zustand · HP %d/%d · Ausdauer %d/%d%s" % [
+		int(self_combatant["health"]),
+		int(self_combatant["maxHealth"]),
+		int(self_combatant["stamina"]),
+		int(self_combatant["maxStamina"]),
+		_world_freshness_suffix(),
+	]
+	confirmed_vitals.visible = true
 
 func _update_position_presentation(now_ms: int) -> void:
 	if not _confirmed_zone.has_state():
