@@ -4293,3 +4293,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-21 — PR #1099 — feat(g11): present confirmed self vitals
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1099 merge=36959526da9eb1f9922910306713f41361214eaa -->
+Task: Record the completed integration of confirmed self health/stamina presentation after the original post-merge recorder was cancelled before creating a job.
+Decisions: Keep the Godot client presentation-only and downstream of Aurion's validated combatant projection; do not change gameplay, protocol, persistence or server authority.
+Touched surfaces:
+- `godot-client/app/main.gd`
+- `godot-client/app/main.tscn`
+- `godot-client/tests/test_startup.gd`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1099
+- Merge commit: `36959526da9eb1f9922910306713f41361214eaa`
+- PR head: `5e07327184154148e9aa91ec0dfd92f29cd302c8`
+- Merged at: 2026-10-21T00:23:34Z
+- Exact-head Godot contract run 39520518244 and Android Preview/APK run 39520518622 passed; exact-head code and security reviews completed without findings.
+- Original post-merge Memory recorder run 39521039812 was cancelled before job creation during the adjacent #1098 integration; GitHub rejected a direct retry, so this isolated repair records the missing receipt.
+Learned: Concurrent adjacent merges can cancel a post-merge recorder before it creates a job; the unique PR/merge marker must be checked before an isolated recovery write.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Merge this isolated Memory-only repair after its exact head is green, then verify exactly one #1099 marker on main.
+
