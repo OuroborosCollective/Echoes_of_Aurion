@@ -24,6 +24,23 @@ async function serve(reply: (response: ServerResponse) => void) {
 afterEach(async () => { cleanup(); vi.unstubAllGlobals(); await stop?.(); stop = undefined; });
 
 describe("production approval list feedback over HTTP", () => {
+
+  it("prefills exact-run identity from a release URL but still requires explicit owner confirmation", () => {
+    const previous = window.location.href;
+    const revision = "a".repeat(40);
+    window.history.replaceState({}, "", "/ops?aurion_revision="+revision+"&aurion_run_id=39550898621&aurion_attempt=1&aurion_scope=aurion.probe.gameplay-session-readback");
+    try {
+      render(<ProductionProbeApproval />);
+      expect((screen.getByLabelText("Unveränderliche Commit-SHA (40 Zeichen)") as HTMLInputElement).value).toBe(revision);
+      expect((screen.getByLabelText("GitHub Run-ID") as HTMLInputElement).value).toBe("39550898621");
+      expect((screen.getByLabelText("Run-Attempt") as HTMLInputElement).value).toBe("1");
+      expect((screen.getByLabelText("Zugelassene Prüfung") as HTMLSelectElement).value).toBe("aurion.probe.gameplay-session-readback");
+      expect((screen.getByRole("button", { name: "Einmalig freigeben" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText(/Linkangaben vor Freigabe prüfen/)).toBeTruthy();
+    } finally {
+      window.history.replaceState({}, "", new URL(previous).pathname);
+    }
+  });
   it("announces an empty successful read even with the approval form empty", async () => {
     await serve(response => { response.setHeader("Content-Type", "application/json"); response.end("[]"); });
     render(<ProductionProbeApproval />);
