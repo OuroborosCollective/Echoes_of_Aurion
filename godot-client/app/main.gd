@@ -5,6 +5,7 @@ const NativeAuthStart = preload("res://net/auth/native_auth_start.gd")
 const AurionApi = preload("res://net/api/aurion_api.gd")
 const ZoneSocket = preload("res://net/zone_socket.gd")
 const SessionLifecycle = preload("res://app/session_lifecycle.gd")
+const TechnicalDiagnostics = preload("res://app/technical_diagnostics.gd")
 const ReconnectPolicy = preload("res://net/reconnect_policy.gd")
 const ZoneState = preload("res://projection/zone_state.gd")
 const EntityRegistry = preload("res://projection/entity_registry.gd")
@@ -25,6 +26,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var login: Button = %Login
 @onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
 
+var _diagnostics = TechnicalDiagnostics.new()
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
@@ -78,6 +80,7 @@ func _ready() -> void:
 	add_child(_intent_bridge)
 	_intent_bridge.callback_received.connect(handle_native_auth_callback)
 	login.pressed.connect(_on_login_pressed)
+	%CopyDiagnostics.pressed.connect(_on_copy_diagnostics_pressed)
 	login.disabled = true
 	if _config.server_base_url.is_empty() or _config.client_build.is_empty() or _config.renderer_profile != "compatibility":
 		status.text = "Konfiguration ungültig"
@@ -91,6 +94,11 @@ func _ready() -> void:
 	set_process(true)
 	resized.connect(_fit_layout)
 	_fit_layout()
+
+func _on_copy_diagnostics_pressed() -> void:
+	var readback: String = _diagnostics.report(_config.client_build, _config.server_base_url, _zone_socket.state_name(), _zone_socket.state_name() == "connected", _confirmed_zone.has_state())
+	DisplayServer.clipboard_set(readback)
+	%CopyDiagnostics.text = "Diagnose kopiert"
 
 func _on_login_pressed() -> void:
 	if _awaiting_callback:
