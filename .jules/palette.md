@@ -28,3 +28,6 @@
 ## 2024-10-17 - Checkpoint Button Keyboard Focus and Screen Reader Context
 **Learning:** List items mapped as buttons (like the checkpoint replay list in `CausalStudioDashboard`) often inherit basic layout classes but forget to define explicit focus states or aria labels, leaving keyboard users unaware of their focus position and screen readers without clear contextual action descriptions.
 **Action:** When adding interactive lists built with buttons, always ensure `focus-visible:ring-2`, `focus-visible:outline-none`, and an `aria-label` are present to make the action fully accessible to all users.
+## 2024-05-24 - Playwright Assertion Methods
+**Learning:** In Playwright Python `sync_api` scripts, `expect(locator).to_have_class()` accepts only a string, a list of strings, or a regular expression (e.g., `re.compile(r".*my-class.*")`). It does not support lambda functions or custom callbacks.
+**Action:** Use `re.compile(r".*class1.*class2.*")` to assert multiple classes on an element instead of lambdas.

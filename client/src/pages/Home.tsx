@@ -197,7 +197,7 @@ export default function Home() {
               )}
               <a
                 href="#gameplay"
-                className="inline-flex min-h-12 items-center rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+                className="inline-flex min-h-12 items-center rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
               >
                 GAMEPLAY ENTDECKEN
               </a>
@@ -461,6 +461,7 @@ export default function Home() {
                 onClick={() =>
                   window.dispatchEvent(new Event(AX1_PLAY_REQUEST_EVENT))
                 }
+                title="Spiel betreten"
                 className="min-h-12 rounded-xl bg-cyan-300 px-6 font-bold text-slate-950 transition-all hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
               >
                 <Compass className="mr-2 inline size-4" />
@@ -491,13 +492,13 @@ export default function Home() {
             persistentes 3D-MMORPG · Living World
           </p>
           <nav aria-label="Fußzeilennavigation" className="flex flex-wrap gap-x-5 gap-y-3">
-            <Link href="/community" className="hover:text-slate-200">
+            <Link href="/community" className="rounded px-1 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
               Community
             </Link>
-            <Link href="/account" className="hover:text-slate-200">
+            <Link href="/account" className="rounded px-1 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
               Konto
             </Link>
-            <a href="/ops" className="hover:text-slate-200">
+            <a href="/ops" className="rounded px-1 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
               OPS
             </a>
           </nav>

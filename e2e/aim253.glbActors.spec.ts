@@ -73,6 +73,7 @@ for (const viewport of [
       await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
       await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle=?", [handle]);
       await page.goto("/ops/glb-upload");
+      await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 15_000 });
       const input = page.locator("#smartGlbFile");
       const upload = async (file: string, filename: string) => {
         await expect(input).toBeEnabled();
