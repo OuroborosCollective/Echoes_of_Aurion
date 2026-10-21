@@ -37,3 +37,6 @@
 ## 2024-05-18 - Optimize Wolfram CAG array allocations
 **Learning:** In high-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity), using chained array methods like `.map().join()` creates unnecessary intermediate array allocations, triggering frequent garbage collection spikes.
 **Action:** Replace chained `.map().join()` operations with pre-allocated arrays (`new Array(length)`) populated via direct `for` loops to eliminate intermediary allocations and reduce garbage collection overhead.
+## 2026-10-21 - Optimize tick loop allocations
+**Learning:** High-frequency game loops suffer GC overhead from chained array methods like `.filter()` and `.map()`.
+**Action:** Replace allocations with single-pass `for` loops and cached arrays populated alongside existing iterators.
