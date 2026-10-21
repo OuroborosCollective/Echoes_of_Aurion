@@ -48,6 +48,36 @@ suite('real MariaDB one-shot transaction and role/reauth proof (isolated DB only
   await expect(store.consume(r,'aurion.probe.gameplay-readback')).rejects.toThrow();await expect(store.consume(r,'schema.write')).rejects.toThrow();
   expect((await store.consume(r,scope)).mutationAuthority).toBe('none');
  });
+ it('read-only gameplay readiness never consumes authority and is exact-run bound',async()=>{
+  const gameplay='aurion.probe.gameplay-session-readback', r=identity();
+  // Missing gameplay approval, including admin-only approval, remains WAITING.
+  expect(await store.hasPendingGameplayApproval(r)).toBe(false);
+  await store.approve(userId,password,r,scope,'admin only readiness regression');
+  expect(await store.hasPendingGameplayApproval(r)).toBe(false);
+  const approved=await store.approve(userId,password,r,gameplay,'distinct gameplay readback approval');
+  expect(await store.hasPendingGameplayApproval(r)).toBe(true);
+  expect(await store.hasPendingGameplayApproval(r)).toBe(true);
+  for(const altered of [{...r,revision:'b'.repeat(40)},{...r,runId:'87654321'},{...r,runAttempt:2}])
+    expect(await store.hasPendingGameplayApproval(altered)).toBe(false);
+  // The polling lane must not touch the one-shot consumption column.
+  const [rows]=await pool.execute<RowDataPacket[]>(
+    'SELECT consumedAtMs FROM aurionProductionProbeApprovals WHERE approvalId=?',[approved.approvalId]);
+  expect(rows[0].consumedAtMs).toBeNull();
+  await pool.execute("UPDATE users SET role='user' WHERE id=?",[userId]);
+  try { expect(await store.hasPendingGameplayApproval(r)).toBe(false); }
+  finally { await pool.execute("UPDATE users SET role='admin' WHERE id=?",[userId]); }
+  expect(await store.hasPendingGameplayApproval(r)).toBe(true);
+  await store.consume(r,gameplay);
+  expect(await store.hasPendingGameplayApproval(r)).toBe(false);
+
+  const revoked=identity(), expired=identity();
+  const bad=await store.approve(userId,password,revoked,gameplay,'revoked gameplay readiness test');
+  await store.revoke(userId,bad.approvalId);
+  expect(await store.hasPendingGameplayApproval(revoked)).toBe(false);
+  const late=await store.approve(userId,password,expired,gameplay,'expired gameplay readiness test');
+  await pool.execute('UPDATE aurionProductionProbeApprovals SET expiresAtMs=approvedAtMs WHERE approvalId=?',[late.approvalId]);
+  expect(await store.hasPendingGameplayApproval(expired)).toBe(false);
+ });
  it('requires a separate unconsumed gameplay approval before any session work',async()=>{
   const r=identity(), gameplay='aurion.probe.gameplay-session-readback';
   // The root production run had only an admin-readback approval. A missing
