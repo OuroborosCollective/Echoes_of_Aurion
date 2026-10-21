@@ -149,6 +149,7 @@ export class AuthoritativeMovementZone {
   private sortedPeersByEntityId: PresencePeer[] = [];
   // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
   private sortedPresences: ZonePresence[] = [];
+  private probeFilteredPresences: ZonePresence[] = [];
   private sortedPeersDirty = false;
   private pendingIntents: AurionZoneIntent[] = [];
   private arrivalSequence = 0;
@@ -411,8 +412,13 @@ export class AuthoritativeMovementZone {
   nextClientSequenceForUser(userId: number): number {
     const peer = this.peersByEntityId.get(`player:${userId}`);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
-    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
-      ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
+    let maxIntentSeq = 0;
+    for (let i = 0; i < this.pendingIntents.length; i++) {
+      if (this.pendingIntents[i].entityId === `player:${userId}`) {
+        maxIntentSeq = Math.max(maxIntentSeq, this.pendingIntents[i].clientSeq);
+      }
+    }
+    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq, maxIntentSeq) + 1;
   }
 
   nextArrivalSequence(): number {
@@ -708,9 +714,8 @@ export class AuthoritativeMovementZone {
     // 05 mob FSM.
     // The reserved diagnostic actor participates in membership receipts, never
     // hostile targeting. Identity-based policy is identical during causal replay.
-    const mobsChanged = this.mobRuntime.tick(this.presences().filter(
-      presence => presence.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
-    ), this.tickNumber);
+    this.presences();
+    const mobsChanged = this.mobRuntime.tick(this.probeFilteredPresences, this.tickNumber);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -862,10 +867,14 @@ export class AuthoritativeMovementZone {
   private presences(): ZonePresence[] {
     this.refreshPeerOrder();
     // ⚡ Bolt: Iterate over cached objects to avoid creating new ZonePresence objects on every tick
+    this.probeFilteredPresences.length = 0;
     for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
       const peer = this.sortedPeersByEntityId[i];
       peer.presence.position = peer.position;
       peer.presence.lastAcceptedClientSeq = peer.lastAcceptedClientSeq;
+      if (peer.userId !== AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID) {
+        this.probeFilteredPresences.push(peer.presence);
+      }
     }
     return this.sortedPresences;
   }
