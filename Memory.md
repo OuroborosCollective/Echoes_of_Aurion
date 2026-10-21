@@ -4323,3 +4323,22 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1102 — fix(release): request exact child run ID in production schema dispatch
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1102 merge=3371934a6a6bd343e1466bab09fe9182d7a193a0 -->
+Task: Merge PR #1102 into `main` — fix(release): request exact child run ID in production schema dispatch.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `scripts/dispatch-aurion-schema-plan.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1102
+- Merge commit: `3371934a6a6bd343e1466bab09fe9182d7a193a0`
+- PR head: `e76ff8511fe11b1dae3640f8f6787df10b472900`
+- Merged at: 2026-10-21T02:51:26Z
+- Post-merge workflow run: 39535334872
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
