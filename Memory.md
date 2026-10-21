@@ -4362,3 +4362,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1105 — fix(production): fail fast on missing gameplay-session approval before zone hydration
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1105 merge=780a65406b0eb073fd6f8bca3ffd3a7d99ca95f5 -->
+Task: Merge PR #1105 into `main` — fix(production): fail fast on missing gameplay-session approval before zone hydration.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `server/aurionProductionProbeHttp.ts`
+- `server/aurionProductionProbeMariaDb.test.ts`
+- `server/aurionProductionProbeStore.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1105
+- Merge commit: `780a65406b0eb073fd6f8bca3ffd3a7d99ca95f5`
+- PR head: `b61ddffe331d63123e3e48599e8af969b8b0e3f8`
+- Merged at: 2026-10-21T05:40:10Z
+- Post-merge workflow run: 39550858330
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
