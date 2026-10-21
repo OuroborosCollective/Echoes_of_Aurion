@@ -163,3 +163,9 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Build wird geprüft"
 autowrap_mode = 3
+
+[node name="CopyDiagnostics" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+text = "Technische Diagnose kopieren"
