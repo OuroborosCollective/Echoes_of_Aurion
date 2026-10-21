@@ -32,10 +32,20 @@ jobs:
   exact-head-home-community:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: ci
+          MARIADB_DATABASE: aurion
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pci --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
     env:
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       VITE_APP_ID: aurion-home-community-regression
-      DATABASE_URL: "mysql://ci:ci@127.0.0.1:3306/aurion"
+      DATABASE_URL: "mysql://root:ci@127.0.0.1:3306/aurion"
     steps:
       - uses: actions/checkout@v4
         with:
