@@ -4273,3 +4273,23 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1098 — fix(ops): bound schema dump subprocesses
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1098 merge=0aca135c2f2f72d1bdc1ec61284a9a21509303f1 -->
+Task: Merge PR #1098 into `main` — fix(ops): bound schema dump subprocesses.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `deploy/aurion-production-schema-apply-core`
+- `scripts/aurion-production-schema-apply-core.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1098
+- Merge commit: `0aca135c2f2f72d1bdc1ec61284a9a21509303f1`
+- PR head: `441f3bec9d56e00a016df1cfbfa2cafb62f959be`
+- Merged at: 2026-10-21T00:23:15Z
+- Post-merge workflow run: 39521006256
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
