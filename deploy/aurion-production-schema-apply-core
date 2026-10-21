@@ -252,7 +252,12 @@ production_client() {
           client="$(command -v mariadb || command -v mysql || true)"
         fi
         test -n "$client"
-        "$client" --defaults-extra-file="$config" "$@"
+        if [ "$mode" = dump ]; then
+          timeout --foreground --signal=TERM --kill-after=30s 900s \
+            "$client" --defaults-extra-file="$config" "$@"
+        else
+          "$client" --defaults-extra-file="$config" "$@"
+        fi
       ' sh "$mode" "$@" 2>/dev/null
 }
 
@@ -268,7 +273,12 @@ recovery_client() {
       client="$(command -v mariadb || command -v mysql || true)"
     fi
     test -n "$client"
-    "$client" --protocol=socket -uroot "$@"
+    if [ "$mode" = dump ]; then
+      timeout --foreground --signal=TERM --kill-after=30s 900s \
+        "$client" --protocol=socket -uroot "$@"
+    else
+      "$client" --protocol=socket -uroot "$@"
+    fi
   ' sh "$mode" "$@"
 }
 
