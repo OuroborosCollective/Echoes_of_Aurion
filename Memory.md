@@ -4448,3 +4448,25 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1109 — fix(db): fail closed without productive MariaDB authority
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1109 merge=f29d012dfbddf408b2f00bd05fc62d2efe9a1ddc -->
+Task: Merge PR #1109 into `main` — fix(db): fail closed without productive MariaDB authority.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-production-db-gate.yml`
+- `server/_core/index.ts`
+- `server/_core/productionDatabaseGate.test.ts`
+- `server/_core/productionDatabaseGate.ts`
+- `server/db.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1109
+- Merge commit: `f29d012dfbddf408b2f00bd05fc62d2efe9a1ddc`
+- PR head: `cd684ef0addf24d8fb3e9d3b2ef7c1ad9c9ab91c`
+- Merged at: 2026-10-21T10:41:14Z
+- Post-merge workflow run: 39586400467
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
