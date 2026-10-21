@@ -96,6 +96,10 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
         return;
       }
       if (scope === AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE) {
+        // Read-only eligibility check before any expensive hydration/replay.
+        // This does not grant authority or consume the approval. The existing
+        // exclusive session still consumes the exact scope before activation.
+        await store.requirePendingGameplayApproval(run);
         const result = await store.withExclusiveGameplayProbeSession(async () => {
           const { zone, needsActivation } = await prepareProductionProbeZone(globalZoneRegistry, globalCausalPersistence);
           const receipt = await store.consume(run, scope);

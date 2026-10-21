@@ -48,6 +48,26 @@ suite('real MariaDB one-shot transaction and role/reauth proof (isolated DB only
   await expect(store.consume(r,'aurion.probe.gameplay-readback')).rejects.toThrow();await expect(store.consume(r,'schema.write')).rejects.toThrow();
   expect((await store.consume(r,scope)).mutationAuthority).toBe('none');
  });
+ it('requires a separate unconsumed gameplay approval before any session work',async()=>{
+  const r=identity(), gameplay='aurion.probe.gameplay-session-readback';
+  // The root production run had only an admin-readback approval. A missing
+  // effectful scope must be rejected before costly zone hydration or a fence.
+  await expect(store.requirePendingGameplayApproval(r)).rejects.toThrow('PROBE_GAMEPLAY_APPROVAL_REQUIRED');
+  await store.approve(userId,password,r,scope,'admin readback does not authorize gameplay');
+  await expect(store.requirePendingGameplayApproval(r)).rejects.toThrow('PROBE_GAMEPLAY_APPROVAL_REQUIRED');
+  const [withoutFence]=await pool.execute<RowDataPacket[]>('SELECT ownerId FROM aurionProductionProbeSessionFence WHERE fenceName=?',['aurion-production-gameplay-probe-v1']);
+  expect(withoutFence).toHaveLength(0);
+  await store.approve(userId,password,r,gameplay,'isolated gameplay approval test');
+  // Read-only precheck must NOT consume the approval or expose its contents.
+  await expect(store.requirePendingGameplayApproval(r)).resolves.toBeUndefined();
+  await expect(store.requirePendingGameplayApproval(r)).resolves.toBeUndefined();
+  await expect(store.requirePendingGameplayApproval({...r,runAttempt:2})).rejects.toThrow('PROBE_GAMEPLAY_APPROVAL_REQUIRED');
+  await pool.execute("UPDATE users SET role='user' WHERE id=?",[userId]);
+  try { await expect(store.requirePendingGameplayApproval(r)).rejects.toThrow('PROBE_GAMEPLAY_APPROVAL_REQUIRED'); }
+  finally { await pool.execute("UPDATE users SET role='admin' WHERE id=?",[userId]); }
+  await expect(store.consume(r,gameplay)).resolves.toMatchObject({scope:gameplay});
+  await expect(store.requirePendingGameplayApproval(r)).rejects.toThrow('PROBE_GAMEPLAY_APPROVAL_REQUIRED');
+ });
  it('uses independently consumable read-only and effectful scopes',async()=>{
   const r=identity();for(const s of [scope,'aurion.probe.gameplay-readback','aurion.probe.gameplay-session-readback'])await store.approve(userId,password,r,s,'separate probe consumers');
   await store.consume(r,scope);await store.consume(r,'aurion.probe.gameplay-readback');await store.consume(r,'aurion.probe.gameplay-session-readback');
