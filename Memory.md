@@ -4470,3 +4470,27 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1112 — feat(godot/G43): kopierbare datensparsame Tablet-Diagnose
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1112 merge=2f813d578eabb390e6ff3bbc82f8a58e92e618a8 -->
+Task: Merge PR #1112 into `main` — feat(godot/G43): kopierbare datensparsame Tablet-Diagnose.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `godot-client/app/main.gd`
+- `godot-client/app/main.tscn`
+- `godot-client/app/technical_diagnostics.gd`
+- `godot-client/app/technical_diagnostics.gd.uid`
+- `godot-client/tests/test_technical_diagnostics.gd`
+- `godot-client/tests/test_technical_diagnostics.gd.uid`
+- `scripts/godot/check.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1112
+- Merge commit: `2f813d578eabb390e6ff3bbc82f8a58e92e618a8`
+- PR head: `af4b9b55be6b335a7dbd2dc819048c6256bd51e6`
+- Merged at: 2026-10-21T18:40:13Z
+- Post-merge workflow run: 39654808286
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
