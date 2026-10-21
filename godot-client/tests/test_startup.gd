@@ -116,7 +116,9 @@ func verify() -> void:
 			"entityId":"mob_1", "archetype":"clockwork_stalker", "level":1, "state":"idle",
 			"position":{"x":2000,"z":1000}, "targetEntityId":null,
 			"isBoss":false, "isElite":false, "health":10, "maxHealth":10
-		}], "combatants":[],
+		}], "combatants":[
+			{"entityId":"player:1", "health":20, "maxHealth":20, "stamina":8, "maxStamina":10, "alive":true, "combatLevel":1, "lastCombatSequence":0}
+		],
 		"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":nodes}
 	}
 	enabled_scene._on_zone_welcome(confirmed_welcome)
@@ -127,6 +129,11 @@ func verify() -> void:
 		require(entity_summary.text == "In der Nähe · 1 Reisender · 1 Kreatur", "welcome entity summary did not reflect the confirmed registry")
 	var position_label := enabled_scene.get_node_or_null("%ConfirmedPosition") as Label
 	require(position_label != null, "confirmed self position has no active scene presentation")
+	var vitals_label := enabled_scene.get_node_or_null("%ConfirmedVitals") as Label
+	require(vitals_label != null, "confirmed self vitals have no active scene presentation")
+	if vitals_label != null:
+		require(vitals_label.visible, "confirmed self vitals stayed hidden")
+		require(vitals_label.text == "Zustand · HP 20/20 · Ausdauer 8/10", "welcome vitals did not reflect confirmed self combatant")
 	if position_label != null:
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.visible, "confirmed self position presentation stayed hidden")
@@ -146,16 +153,24 @@ func verify() -> void:
 		moved_snapshot["tick"] = 2
 		moved_snapshot["resources"]["revision"] = 2
 		moved_snapshot["presences"][0]["position"] = {"x":3000,"z":-2000}
+		moved_snapshot["combatants"][0]["health"] = 14
+		moved_snapshot["combatants"][0]["stamina"] = 6
 		require(ZoneCodec.is_valid_snapshot(moved_snapshot), "position presentation fixture violates Aurion v5")
 		enabled_scene._on_zone_snapshot(moved_snapshot)
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.text == "Position · X 3.00 m · Z -2.00 m", "new confirmed snapshot did not reach active position presentation")
+		if vitals_label != null:
+			require(vitals_label.text == "Zustand · HP 14/20 · Ausdauer 6/10", "new confirmed snapshot did not update self vitals")
 		var stale_snapshot: Dictionary = moved_snapshot.duplicate(true)
 		stale_snapshot["snapshotSeq"] = 1
 		stale_snapshot["presences"][0]["position"] = {"x":9000,"z":9000}
+		stale_snapshot["combatants"][0]["health"] = 1
+		stale_snapshot["combatants"][0]["stamina"] = 1
 		enabled_scene._on_zone_snapshot(stale_snapshot)
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.text == "Position · X 3.00 m · Z -2.00 m", "stale snapshot rewound active position presentation")
+		if vitals_label != null:
+			require(vitals_label.text == "Zustand · HP 14/20 · Ausdauer 6/10", "stale snapshot rewound confirmed self vitals")
 		var large_snapshot: Dictionary = moved_snapshot.duplicate(true)
 		large_snapshot["snapshotSeq"] = 3
 		large_snapshot["tick"] = 3
@@ -182,6 +197,8 @@ func verify() -> void:
 		if entity_summary != null:
 			require(entity_summary.text == "In der Nähe · 0 Reisende · 0 Kreaturen · Stand veraltet", "rejected stale snapshot refreshed or rewound active entity presentation")
 		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m · Stand veraltet", "rejected stale snapshot refreshed or rewound active position presentation")
+		if vitals_label != null:
+			require(vitals_label.text == "Zustand · HP 14/20 · Ausdauer 6/10 · Stand veraltet", "rejected stale snapshot refreshed or rewound self vitals presentation")
 	var real_zone: Node = enabled_scene._zone_socket
 	var telegraph := {
 		"type":"telegraph", "contractVersion":"aurion-zone-telegraph.v1",
@@ -255,6 +272,9 @@ func verify() -> void:
 	if position_label != null:
 		require(position_label.text.is_empty(), "confirmed position text survived projection reset")
 		require(not position_label.visible, "confirmed position retained layout space after projection reset")
+	if vitals_label != null:
+		require(vitals_label.text.is_empty(), "confirmed self vitals survived projection reset")
+		require(not vitals_label.visible, "confirmed self vitals retained layout space after projection reset")
 	var live_api: Node = enabled_scene._api
 	live_api.cancel()
 	live_api.queue_free()
