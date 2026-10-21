@@ -35,6 +35,7 @@ on:
       - "deploy/aurion-production-schema-apply"
       - "deploy/aurion-production-schema-apply-core"
       - "scripts/aurion-production-schema-apply-core.test.mjs"
+      - "scripts/aurion-production-schema-fingerprint.test.mjs"
       - "deploy/aurion-production-schema-apply.environment.template"
       - "deploy/aurion-production-schema-apply.sudoers"
       - "deploy/install-aurion-production-schema-apply"
@@ -137,7 +138,7 @@ jobs:
           set -euo pipefail
           pnpm check
           pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts server/aurionSchemaRepairRefresh.test.ts server/aurionSchemaRepairFailureReceipt.test.ts
-          node --test scripts/aurion-production-schema-apply-core.test.mjs
+          node --test scripts/aurion-production-schema-apply-core.test.mjs scripts/aurion-production-schema-fingerprint.test.mjs
           bash -n deploy/aurion-production-schema-apply
           bash -n deploy/aurion-production-schema-apply-core
           bash -n deploy/install-aurion-production-schema-apply
