@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { executeProductionProbe, waitForProductionAdminApproval } from './aurion-production-probe-client.mjs';
+import { executeProductionProbe, waitForProductionAdminApproval, waitForProductionGameplayApproval } from './aurion-production-probe-client.mjs';
 
 // Disposable loopback responses prove runner diagnostics, never production OIDC,
 // scope approval, gameplay or persistence. All credentials below are test-only.
@@ -156,5 +156,54 @@ test('admin preflight waits for late approval without relaxing OIDC or receipt b
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('gameplay readiness polls read-only, then runs exactly one effectful execution', async t => {
+  const nativeFetch = globalThis.fetch;
+  let readyChecks=0, executions=0, tokens=0, clock=0;
+  const reports=[];
+  const server=createServer((req,res)=>{
+    res.setHeader('content-type','application/json');
+    if(req.url==='/token') {
+      tokens++;
+      res.end(JSON.stringify({value:'local-test-token-'.repeat(10)}));return;
+    }
+    if(req.url==='/readiness'){
+      readyChecks++;
+      res.end(JSON.stringify({recordType:'aurion.production-probe-readiness',schemaVersion:1,
+        revision:env.GITHUB_SHA,runId:env.GITHUB_RUN_ID,runAttempt:1,scope,
+        state:readyChecks<3?'WAITING':'READY',credentialReturned:false}));return;
+    }
+    if(req.url==='/execute'){
+      executions++;
+      res.end(JSON.stringify(receipt));return;
+    }
+    res.statusCode=404;res.end('{}');
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    const parsed=new URL(url),oidc=parsed.hostname.endsWith('.actions.githubusercontent.com');
+    assert.equal(options.redirect,'error');
+    if(!oidc) {
+      assert.equal(options.method,'POST');
+      assert.deepEqual(JSON.parse(options.body),{scope});
+    }
+    const stage=oidc?'token':parsed.pathname.endsWith('/readiness')?'readiness':'execute';
+    return nativeFetch('http://127.0.0.1:'+server.address().port+'/'+stage,options);
+  });
+  try{
+    const output=await waitForProductionGameplayApproval(env,{
+      now:()=>clock,sleep:async ms=>{clock+=ms;},report:v=>reports.push(v),
+    });
+    assert.deepEqual(output,receipt);
+    assert.equal(readyChecks,3);
+    assert.equal(executions,1);
+    assert.equal(clock,20000);
+    assert.equal(reports[0].scope,scope);
+    assert.equal(reports[0].runId,env.GITHUB_RUN_ID);
+    assert.ok(!JSON.stringify(reports).includes('local-test-token'));
+  }finally{
+    server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
   }
 });
