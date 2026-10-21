@@ -129,13 +129,17 @@ export class AurionProductionProbeStore {
    * Only consume() under the exclusive gameplay session grants permission.
    */
   async requirePendingGameplayApproval(verifiedRun: AurionProbeRunIdentity): Promise<void> {
+    if (!await this.hasPendingGameplayApproval(verifiedRun)) throw new Error("PROBE_GAMEPLAY_APPROVAL_REQUIRED");
+  }
+  /** Observation only; never grants authority and never updates approval rows. */
+  async hasPendingGameplayApproval(verifiedRun: AurionProbeRunIdentity): Promise<boolean> {
     const run = parseAurionProbeRunIdentity(verifiedRun);
     const [rows] = await this.pool.execute<RowDataPacket[]>(
       "SELECT a.approvalId FROM aurionProductionProbeApprovals a INNER JOIN users u ON u.id=a.approvedByUserId " +
       "WHERE a.runKey=? AND a.scope=? AND a.consumedAtMs IS NULL AND a.revokedAtMs IS NULL " +
       "AND a.expiresAtMs>FLOOR(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000) AND u.role='admin' LIMIT 1",
       [probeRunKey(run), "aurion.probe.gameplay-session-readback"]);
-    if (rows.length !== 1) throw new Error("PROBE_GAMEPLAY_APPROVAL_REQUIRED");
+    return rows.length === 1;
   }
   async consume(verifiedRun: AurionProbeRunIdentity, rawScope: unknown) {
     const run = parseAurionProbeRunIdentity(verifiedRun), scope = probeScope(rawScope);
