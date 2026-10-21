@@ -27,7 +27,7 @@ export async function dispatchSchemaPlan(input, { request, pause, attempts = 480
   if (!Array.isArray(activeRuns?.workflow_runs)) throw new Error("SCHEMA_DISPATCH_ACTIVE_RUNS_UNAVAILABLE");
   const collision = activeRuns.workflow_runs.find(run => run.head_sha === input.expectedSha && run.status !== "completed");
   if (collision) throw new Error(`SCHEMA_DISPATCH_EXISTING_ACTIVE_APPLY:${Number.isSafeInteger(collision.id) ? collision.id : "UNKNOWN"}`);
-  const dispatched = await request(`${prefix}/actions/workflows/${workflow}/dispatches`, "POST", { ref: "main", inputs: { ledger_run_id: input.ledgerRunId, plan_sha256: input.planSha256 } });
+  const dispatched = await request(`${prefix}/actions/workflows/${workflow}/dispatches`, "POST", { ref: "main", return_run_details: true, inputs: { ledger_run_id: input.ledgerRunId, plan_sha256: input.planSha256 } });
   const runId = dispatched.workflow_run_id;
   if (!Number.isSafeInteger(runId) || runId < 1) throw new Error("SCHEMA_DISPATCH_RUN_ID_MISSING");
   console.log(JSON.stringify({ recordType: "aurion.schema-apply-dispatched", applyRunId: runId, sourceRevision: input.expectedSha }));
