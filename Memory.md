@@ -4427,3 +4427,24 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1107 — fix(ws): prevent oversized-frame process crash and reject unknown upgrades
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1107 merge=8cc92ed171bd459a75b7fa8544b91ff1c665b64a -->
+Task: Merge PR #1107 into `main` — fix(ws): prevent oversized-frame process crash and reject unknown upgrades.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aurion-ws-ingress-regression.yml`
+- `scripts/tests/zone-gateway-ingress-probe.mjs`
+- `server/zoneGateway.ts`
+- `server/zoneGatewayIngress.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1107
+- Merge commit: `8cc92ed171bd459a75b7fa8544b91ff1c665b64a`
+- PR head: `255418e1553c9190c8e0ec969c1c6c09f74f33d7`
+- Merged at: 2026-10-21T10:18:02Z
+- Post-merge workflow run: 39583573814
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
