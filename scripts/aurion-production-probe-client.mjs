@@ -91,6 +91,16 @@ export async function readProductionGameplayApprovalReadiness(env = process.env)
   return result.state;
 }
 
+/** Copy-friendly link; parameters are inert until explicit owner reauthentication. */
+function approvalPrefillUrl(identity, scope) {
+  const link = new URL('https://arelogic.space/ops');
+  link.searchParams.set('aurion_revision', identity.GITHUB_SHA);
+  link.searchParams.set('aurion_run_id', identity.GITHUB_RUN_ID);
+  link.searchParams.set('aurion_attempt', identity.GITHUB_RUN_ATTEMPT);
+  link.searchParams.set('aurion_scope', scope);
+  return link.toString();
+}
+
 /** Bounded wait for a separate owner action; only the final effectful POST runs once. */
 export async function waitForProductionGameplayApproval(env = process.env, {
   now = () => performance.now(),
@@ -105,7 +115,7 @@ export async function waitForProductionGameplayApproval(env = process.env, {
   const scope = 'aurion.probe.gameplay-session-readback';
   const deadline = now() + 15 * 60 * 1000;
   report({ recordType:'aurion.production-gameplay-approval-wait',
-    approvalUrl:'https://arelogic.space/ops', revision:identity.GITHUB_SHA,
+    approvalUrl:'https://arelogic.space/ops', prefilledApprovalUrl:approvalPrefillUrl(identity,scope), revision:identity.GITHUB_SHA,
     runId:identity.GITHUB_RUN_ID, runAttempt:Number(identity.GITHUB_RUN_ATTEMPT),
     scope, purpose:'Produktionsrelease Gameplay-Join/Readback',
     maxWaitSeconds:900 });
@@ -139,7 +149,7 @@ export async function waitForProductionAdminApproval(env = process.env, {
   const scope = 'aurion.probe.admin-readback';
   const deadline = now() + 15 * 60 * 1000;
   report({ recordType: 'aurion.production-probe-approval-wait',
-    approvalUrl: 'https://arelogic.space/ops', revision: identity.GITHUB_SHA,
+    approvalUrl: 'https://arelogic.space/ops', prefilledApprovalUrl:approvalPrefillUrl(identity,scope), revision: identity.GITHUB_SHA,
     runId: identity.GITHUB_RUN_ID, runAttempt: Number(identity.GITHUB_RUN_ATTEMPT),
     scope, purpose: 'Produktionsrelease Schema-Preflight', maxWaitSeconds: 900 });
   for (let attempt = 0; attempt < 90 && now() < deadline; attempt++) {
