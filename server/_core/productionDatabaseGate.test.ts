@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { assertProductionDatabaseConfigured, assertProductionDatabaseConnected } from "./productionDatabaseGate";
 
 describe("Aurion production MariaDB authority gate", () => {
@@ -18,6 +20,20 @@ describe("Aurion production MariaDB authority gate", () => {
     expect(() => assertProductionDatabaseConfigured("development", undefined)).not.toThrow();
     expect(() => assertProductionDatabaseConfigured("test", undefined)).not.toThrow();
     expect(() => assertProductionDatabaseConnected("development", false)).not.toThrow();
+  });
+
+  it("terminates the real production entrypoint before listening when MariaDB is absent", () => {
+    const entry = resolve("server/_core/index.ts");
+    const result = spawnSync(process.execPath, ["--import", "tsx", entry], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 10_000,
+      env: { ...process.env, NODE_ENV: "production", DATABASE_URL: "", AURION_GAME_DEV_REQUIRED: "false" },
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("AURION_PRODUCTION_DATABASE_CONFIGURATION_REQUIRED");
+    expect(result.stdout).not.toContain("Server running on");
   });
 
   it("refuses to report productive readiness after an unsuccessful real database probe", () => {
