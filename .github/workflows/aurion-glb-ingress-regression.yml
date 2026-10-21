@@ -1,0 +1,31 @@
+name: Aurion GLB ZIP Ingress Regression
+
+on:
+  pull_request:
+    paths:
+      - "server/glbZipUpload.ts"
+      - "server/glbZipIngress.test.ts"
+      - ".github/workflows/aurion-glb-ingress-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-glb-ingress:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify authentication happens before ZIP buffering
+        run: pnpm exec vitest run server/glbZipIngress.test.ts server/glbZipUpload.test.ts --reporter=verbose
+      - name: TypeScript check
+        run: pnpm check
