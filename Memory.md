@@ -4301,3 +4301,25 @@ Status: VERIFIED repository merge
 Change: The active Godot scene now presents authenticated self HP and stamina only from accepted Aurion combatant snapshots, marks frozen values stale, rejects rewind updates and clears them on projection reset.
 Learned: A validated combatant registry is not user-visible runtime integration until the active scene consumes the authenticated self record without deriving gameplay state locally.
 Evidence: PR #1099; tested head `5e07327184154148e9aa91ec0dfd92f29cd302c8`; Godot runtime/render run 39520518244 and Android Preview/APK run 39520518622 passed; exact-head code/security reviews were clear; merge `36959526da9eb1f9922910306713f41361214eaa` was read back from `main`.
+
+
+### 2026-10-21 — PR #1101 — fix(ops): wait for exact-run admin probe approval
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1101 merge=c0229a62b7e40fa4de018f1b5c74e3093aea0b5d -->
+Task: Merge PR #1101 into `main` — fix(ops): wait for exact-run admin probe approval.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `scripts/aurion-probe-bootstrap.test.mjs`
+- `scripts/aurion-production-probe-client.mjs`
+- `scripts/aurion-production-probe-client.test.mjs`
+- `server/aurionReleaseAttestation.test.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1101
+- Merge commit: `c0229a62b7e40fa4de018f1b5c74e3093aea0b5d`
+- PR head: `452fea44ff90319e08119119b810c4a7c3c9d62f`
+- Merged at: 2026-10-21T01:06:41Z
+- Post-merge workflow run: 39525386897
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
