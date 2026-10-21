@@ -4293,3 +4293,11 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — G11 confirmed self-vitals presentation
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1099 merge=36959526da9eb1f9922910306713f41361214eaa -->
+Change: The active Godot scene now presents authenticated self HP and stamina only from accepted Aurion combatant snapshots, marks frozen values stale, rejects rewind updates and clears them on projection reset.
+Learned: A validated combatant registry is not user-visible runtime integration until the active scene consumes the authenticated self record without deriving gameplay state locally.
+Evidence: PR #1099; tested head `5e07327184154148e9aa91ec0dfd92f29cd302c8`; Godot runtime/render run 39520518244 and Android Preview/APK run 39520518622 passed; exact-head code/security reviews were clear; merge `36959526da9eb1f9922910306713f41361214eaa` was read back from `main`.
