@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { executeProductionProbe } from './aurion-production-probe-client.mjs';
+import { executeProductionProbe, waitForProductionAdminApproval } from './aurion-production-probe-client.mjs';
 
 // Disposable loopback responses prove runner diagnostics, never production OIDC,
 // scope approval, gameplay or persistence. All credentials below are test-only.
@@ -98,6 +98,61 @@ test('classifies transport and JSON failures at the actual runner exchange bound
       mode = 'success';
       assert.deepEqual(await executeProductionProbe(scope, env), receipt);
     });
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('admin preflight waits for late approval without relaxing OIDC or receipt binding', async t => {
+  const nativeFetch = globalThis.fetch;
+  let mode = 'late', executions = 0, tokens = 0, clock = 0;
+  const reports = [];
+  const adminReceipt = { ...receipt, scope: 'aurion.probe.admin-readback', mutationAuthority: 'none', status: 'AUTHORIZED' };
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.url === '/token') {
+      tokens++;
+      if (mode === 'oidc-denied') { res.writeHead(403); res.end('{}'); return; }
+      res.end(JSON.stringify({ value: (`test-token-${tokens}-`).repeat(20) })); return;
+    }
+    executions++;
+    if (mode === 'network') { req.socket.destroy(); return; }
+    if (mode === 'denied' || (mode === 'late' && executions < 3) || mode === 'server-error') {
+      res.writeHead(mode === 'server-error' ? 503 : 403); res.end('{}'); return;
+    }
+    res.end(JSON.stringify(mode === 'mismatch' ? { ...adminReceipt, runAttempt: 2 }
+      : mode === 'wrong-status' ? { ...adminReceipt, status: 'OBSERVED' } : adminReceipt));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const oidc = new URL(url).hostname === 'test.actions.githubusercontent.com';
+    if (!oidc) {
+      assert.deepEqual(JSON.parse(options.body), { scope: 'aurion.probe.admin-readback' });
+      assert.equal(options.headers.authorization, `Bearer ${(`test-token-${tokens}-`).repeat(20)}`);
+    }
+    return nativeFetch(`http://127.0.0.1:${server.address().port}/${oidc ? 'token' : 'execute'}`, options);
+  });
+  const options = { now: () => clock, sleep: async ms => { clock += ms; }, report: value => reports.push(value) };
+  try {
+    assert.deepEqual(await waitForProductionAdminApproval(env, options), adminReceipt);
+    assert.equal(executions, 3); assert.equal(tokens, 3); assert.equal(clock, 20000);
+    assert.equal(reports[0].approvalUrl, 'https://arelogic.space/ops');
+    assert.equal(reports[0].revision, env.GITHUB_SHA);
+    assert.ok(!JSON.stringify(reports).includes('test-token'));
+    for (const [scenario, code] of [
+      ['denied', 'PROBE_ADMIN_APPROVAL_WAIT_EXPIRED'], ['server-error', 'PROBE_AUTHORIZATION_DENIED'],
+      ['network', 'PROBE_EXECUTION_NETWORK_FAILED'], ['oidc-denied', 'PROBE_OIDC_REQUEST_FAILED'],
+      ['mismatch', 'PROBE_RECEIPT_BINDING_MISMATCH'], ['wrong-status', 'PROBE_PREFLIGHT_NOT_AUTHORIZED'],
+    ]) {
+      mode = scenario; executions = 0; tokens = 0; clock = 0;
+      await assert.rejects(waitForProductionAdminApproval(env, options), { message: code });
+      assert.equal(executions, scenario === 'denied' ? 90 : scenario === 'oidc-denied' ? 0 : 1);
+      if (scenario === 'denied') assert.equal(clock, 900000);
+    }
+    executions = 0;
+    await assert.rejects(waitForProductionAdminApproval({ ...env, GITHUB_RUN_ATTEMPT: 'invalid' }, options), { message: 'PROBE_RUN_IDENTITY_INVALID' });
+    assert.equal(executions, 0);
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));

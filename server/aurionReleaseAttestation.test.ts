@@ -5,6 +5,7 @@ describe("Blocker 2 detached release attestation contract", () => {
   const workflow = fs.readFileSync(".github/workflows/deploy-aurion-zone-runtime.yml", "utf8");
   const builder = fs.readFileSync("scripts/build-aurion-traefik-runtime-artifact.mjs", "utf8");
   const buildInput = fs.readFileSync("scripts/aurion-build-input-manifest.mjs", "utf8");
+  const probeClient = fs.readFileSync("scripts/aurion-production-probe-client.mjs", "utf8");
 
   it("pins GitHub's attestation action and grants only explicit signing permissions", () => {
     expect(workflow.match(/actions\/attest@1e69f48acb82d1966a394da916b4c1698aa569d6/g)?.length).toBe(2);
@@ -56,7 +57,10 @@ describe("Blocker 2 detached release attestation contract", () => {
     expect(independent).toContain("PROBE_BOOTSTRAP_RESPONSE_NOT_ELIGIBLE");
     expect(independent).toContain("await readLegacyProbeBootstrap()");
     expect(independent).toContain("PROBE_CONTROL_PLANE_REQUIRED");
-    expect(independent).toContain("executeProductionProbe('aurion.probe.admin-readback')");
+    // The workflow invokes the bounded helper; that helper must retain the read-only admin scope.
+    expect(independent).toContain("waitForProductionAdminApproval()");
+    expect(probeClient).toContain("const scope = 'aurion.probe.admin-readback';");
+    expect(probeClient).toContain("await executeProductionProbe(scope, identity)");
   });
 
   it("seals a canonical BuildInputManifest into the runtime artifact", () => {
