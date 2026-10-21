@@ -7,7 +7,7 @@ const input = { manifest: JSON.parse(await readFile(new URL("../config/aurion-mi
 function harness(overrides = {}) {
   const writes = [];
   return { writes, pause: async () => {}, attempts: 2, request: async (path, method, body) => {
-    if (method === "POST") { writes.push({ path, body }); return { workflow_run_id: 456 }; }
+    if (method === "POST") { writes.push({ path, body }); return body?.return_run_details === true ? { workflow_run_id: 456 } : {}; }
     if (path.endsWith("/123")) return { head_sha: input.expectedSha, head_branch: "main", event: "push", run_attempt: 1, path: ".github/workflows/deploy-aurion-zone-runtime.yml", ...overrides.caller };
     if (path.includes("/workflows/aurion-production-schema-apply.yml/runs?")) return { workflow_runs: overrides.activeRuns ?? [] };
     if (path.endsWith("/heads/main")) return { object: { sha: overrides.main ?? input.expectedSha } };
@@ -19,7 +19,7 @@ test("dispatches exactly one revision/plan-bound apply and waits for that run", 
   const api = harness();
   assert.equal((await dispatchSchemaPlan(input, api)).applyRunId, 456);
   assert.equal(api.writes.length, 1);
-  assert.deepEqual(api.writes[0].body, { ref: "main", inputs: { ledger_run_id: "123", plan_sha256: input.planSha256 } });
+  assert.deepEqual(api.writes[0].body, { ref: "main", return_run_details: true, inputs: { ledger_run_id: "123", plan_sha256: input.planSha256 } });
 });
 test("future waves, PR callers and stale main fail before any dispatch", async () => {
   const futureManifest={...input.manifest,waveId:"aurion-production-0021-0060",migrations:[...input.manifest.migrations,{tag:"0060_unreviewed_future_wave",source:"aurion"}]};
@@ -60,4 +60,13 @@ test("missing active-run inventory fails closed", async () => {
   api.request=async(path,...rest)=>path.includes("/workflows/aurion-production-schema-apply.yml/runs?")?{}:original(path,...rest);
   await assert.rejects(dispatchSchemaPlan(input,api),/SCHEMA_DISPATCH_ACTIVE_RUNS_UNAVAILABLE/);
   assert.equal(api.writes.length,0);
+});
+
+// The GitHub workflow-dispatch endpoint returns 204/empty without opt-in;
+// a missing run ID must stop the parent instead of dispatching another child.
+test("missing dispatched run details fail closed without a second write", async () => {
+  const api=harness(); const request=api.request;
+  api.request=async(path,method,body)=>method==="POST"?(api.writes.push({path,body}),{}):request(path,method,body);
+  await assert.rejects(dispatchSchemaPlan(input,api),/SCHEMA_DISPATCH_RUN_ID_MISSING/);
+  assert.equal(api.writes.length,1);
 });
