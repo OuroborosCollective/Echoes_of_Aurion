@@ -34,3 +34,6 @@
 ## 2026-10-17 - Optimize sorting map in ZoneRegistry
 **Learning:** Extracting map values using `Array.from(map.entries()).sort().map()` creates temporary arrays and causes GC pressure when regenerating sorted arrays. Even though it is guarded by a dirty flag, allocating intermediate arrays inside registries is suboptimal.
 **Action:** Replaced chained array mappings with an in-place mutation of the cached `sortedZones` array and a single `for...of` loop iterating over `map.values()`, then sorting it directly.
+## 2024-05-18 - Optimize Wolfram CAG array allocations
+**Learning:** In high-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity), using chained array methods like `.map().join()` creates unnecessary intermediate array allocations, triggering frequent garbage collection spikes.
+**Action:** Replace chained `.map().join()` operations with pre-allocated arrays (`new Array(length)`) populated via direct `for` loops to eliminate intermediary allocations and reduce garbage collection overhead.
