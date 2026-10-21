@@ -82,13 +82,47 @@ function knownCode(error: unknown, fallback: string): string {
     : fallback;
 }
 
+/**
+ * Runs before express.raw(): unauthenticated peers must never cause a
+ * 768 MiB request to be accumulated by the ZIP parser.
+ */
+export function createGlbZipPreAuth(
+  dependencies: Pick<GlbZipUploadDependencies, "authenticate"> = defaultDependencies()
+) {
+  return async (request: Request, response: Response, next: (error?: unknown) => void): Promise<void> => {
+    let user: AuthenticatedUploader | null;
+    try {
+      user = await dependencies.authenticate(request);
+    } catch (error) {
+      if (isNativeAuthUnavailable(error)) {
+        response.status(503).json({ error: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" });
+        return;
+      }
+      response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" });
+      return;
+    }
+    if (!user) {
+      response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" });
+      return;
+    }
+    if (user.role !== "admin") {
+      response.status(403).json({ error: "GLB_ADMIN_REQUIRED" });
+      return;
+    }
+    response.locals.glbZipUploader = user;
+    next();
+  };
+}
+
 export function createGlbZipUploadHandler(
   dependencies: GlbZipUploadDependencies = defaultDependencies()
 ) {
   return async (request: Request, response: Response) => {
-    let user: AuthenticatedUploader | null = null;
+    let user: AuthenticatedUploader | null = response.locals.glbZipUploader ?? null;
     try {
-      user = await dependencies.authenticate(request);
+      // Maintain direct handler callers (e.g. existing isolated upload tests),
+      // while the production route always authenticates before express.raw().
+      if (!user) user = await dependencies.authenticate(request);
     } catch (error) {
       if (isNativeAuthUnavailable(error)) { response.status(503).json({ error: "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE" }); return; }
       response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" });
@@ -218,6 +252,7 @@ export function registerGlbZipUpload(app: Express): void {
   });
   app.post(
     GLB_ZIP_UPLOAD_PATH,
+    createGlbZipPreAuth(),
     express.raw({
       type: [
         "application/zip",
