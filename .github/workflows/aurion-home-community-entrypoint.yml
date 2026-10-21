@@ -35,6 +35,7 @@ jobs:
     env:
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       VITE_APP_ID: aurion-home-community-regression
+      DATABASE_URL: "mysql://ci:ci@127.0.0.1:3306/aurion"
     steps:
       - uses: actions/checkout@v4
         with:

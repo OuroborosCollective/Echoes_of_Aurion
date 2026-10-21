@@ -37,3 +37,6 @@
 ## 2024-05-18 - Optimize Wolfram CAG array allocations
 **Learning:** In high-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity), using chained array methods like `.map().join()` creates unnecessary intermediate array allocations, triggering frequent garbage collection spikes.
 **Action:** Replace chained `.map().join()` operations with pre-allocated arrays (`new Array(length)`) populated via direct `for` loops to eliminate intermediary allocations and reduce garbage collection overhead.
+## 2024-05-24 - E2E Testing UI State Race Conditions
+**Learning:** In Playwright e2e tests for GLB uploads (e.g., `e2e/aim253.glbActors.spec.ts`), always wait for the storage catalog to initialize using `await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 15_000 });` before asserting that the `#smartGlbFile` input is enabled.
+**Action:** Wait for backend-dependent UI states to resolve before asserting interactive element readiness.
