@@ -4382,3 +4382,29 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-21 — PR #1106 — fix(release): owner approval readiness without repeated gameplay probe execution
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1106 merge=9fabc3981c7c63e1e3380cd42234c4d272d07e41 -->
+Task: Merge PR #1106 into `main` — fix(release): owner approval readiness without repeated gameplay probe execution.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `client/src/components/ProductionProbeApproval.test.tsx`
+- `client/src/components/ProductionProbeApproval.tsx`
+- `scripts/aurion-production-probe-client.mjs`
+- `scripts/aurion-production-probe-client.test.mjs`
+- `scripts/verify-aurion-production-gameplay.ts`
+- `server/aurionProductionProbeHttp.ts`
+- `server/aurionProductionProbeMariaDb.test.ts`
+- `server/aurionProductionProbeStore.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1106
+- Merge commit: `9fabc3981c7c63e1e3380cd42234c4d272d07e41`
+- PR head: `001c9e647e8b9cef67c715671f016c7c260d5cdf`
+- Merged at: 2026-10-21T06:37:00Z
+- Post-merge workflow run: 39556519629
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
