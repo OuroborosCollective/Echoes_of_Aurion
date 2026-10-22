@@ -228,7 +228,7 @@ test('best-effort notification contains exact revision and run but no credential
   assert.ok(calls[0].options.body.includes('SHA: '+env.GITHUB_SHA));
   assert.ok(calls[0].options.body.includes('Run-ID: 123'));
   assert.match(calls[0].options.body, /aurion_revision=/);
-  assert.match(calls[0].options.body, /actions\\/runs\\/123/);
+  assert.ok(calls[0].options.body.includes('/actions/runs/123'));
   assert.ok(!calls[0].options.body.includes(env.ACTIONS_ID_TOKEN_REQUEST_TOKEN));
   assert.equal(calls[0].options.redirect, 'error');
   assert.equal(await notifyApprovalWait({...local,AURION_APPROVAL_NOTIFY_URL:'http://insecure.example/'},
