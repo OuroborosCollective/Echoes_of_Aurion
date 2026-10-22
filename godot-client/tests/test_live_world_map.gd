@@ -159,7 +159,7 @@ func verify() -> void:
 	scene._on_zone_snapshot(crowded)
 	require(not map.marker_record("player:1").is_empty(), "crowded map omitted authenticated self")
 	require(not map.marker_record("mob_32").is_empty(), "presence cap displaced valid mob markers")
-	require(map.marker_record("player:128").is_empty(), "bounded map exceeded reserved presence capacity")
+	require(map.marker_record("player:99").is_empty(), "bounded map exceeded reserved presence capacity")
 
 	var despawn := crowded.duplicate(true)
 	despawn["snapshotSeq"] = 5
