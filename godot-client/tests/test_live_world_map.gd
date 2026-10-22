@@ -61,6 +61,7 @@ func verify() -> void:
 	var confirmed := welcome()
 	require(Codec.is_valid_welcome(confirmed), "world map source violates Aurion wire contract")
 	scene._on_zone_welcome(confirmed)
+	await process_frame
 	require(panel.visible, "server welcome did not reveal map")
 	require(map.marker_record("player:1").get("position") == {"x":1000,"z":-2000}, "own confirmed position absent")
 	require(map.marker_record("player:2").get("position") == {"x":3000,"z":1000}, "other player not displayed")
