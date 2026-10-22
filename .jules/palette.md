@@ -28,3 +28,6 @@
 ## 2024-10-17 - Checkpoint Button Keyboard Focus and Screen Reader Context
 **Learning:** List items mapped as buttons (like the checkpoint replay list in `CausalStudioDashboard`) often inherit basic layout classes but forget to define explicit focus states or aria labels, leaving keyboard users unaware of their focus position and screen readers without clear contextual action descriptions.
 **Action:** When adding interactive lists built with buttons, always ensure `focus-visible:ring-2`, `focus-visible:outline-none`, and an `aria-label` are present to make the action fully accessible to all users.
+## 2024-05-18 - Keyboard Accessibility for Custom Interactive Elements
+**Learning:** Custom interactive elements (like clickable divs) used for list item selection must include keyboard navigation support (Enter/Space keys) and appropriate accessibility attributes (`role="button"`, `tabIndex={0}`, `aria-pressed`) to be fully accessible, as they lack the native behaviors of `<button>` or `<a>` tags.
+**Action:** When implementing clickable list items or cards, default to using semantic `<button>` tags if possible. If using a `div` is necessary for styling or layout reasons, always pair `onClick` with an `onKeyDown` handler and include `role="button"`, `tabIndex={0}`, and visible focus styles (`focus-visible:ring-2 focus-visible:outline-none`).
