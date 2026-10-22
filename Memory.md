@@ -4568,3 +4568,9 @@ Next safe step: Use the new main revision as the canonical baseline for the next
 Change: The active Godot scene now renders bounded HP and stamina meters from accepted Aurion self-combatant snapshots, ignores rejected rewinds, and clears both meters when self state or the projection disappears.
 Learned: The confirmed vitals readmodel was already active at runtime; extending that presentation preserves Aurion authority without introducing client-owned gameplay state.
 Evidence: Tested code head `05e0808b1c10af29e09fa77a5f32b7fc5459a724`; Godot headless/runtime/software-render run 39821748545 and Android Preview/APK readback run 39821748434 passed; final Memory-bearing PR head is re-gated before merge.
+
+
+### 2026-10-22 — G12 WebSocket Handshake Retry Budget (PR pending)
+Change: Native Godot recovery spends the existing bounded retry budget when a WebSocket handshake ends in `hello_timeout` or `closed` before server welcome, rather than logging out immediately or restarting retries endlessly.
+Learned: A verified server welcome remains the only connection authority; a ticket without welcome must not clear the current bounded reconnect reservation. Gameplay effects are never replayed.
+Evidence: Baseline main `2726c69814d868305406678b8f33a0e5620f940d`; regression first authored in commit `40cb31b12cc1f54893a198288a84d41df8857fea`, implementation on isolated branch; Godot headless and APK CI readback required before merge. Device and production verification explicitly unverified.
