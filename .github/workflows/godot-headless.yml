@@ -1,5 +1,17 @@
 name: Godot headless contract
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/godot/**'
+      - 'config/godot-toolchain.lock.json'
+      - 'godot-client/**'
+      - 'shared/**'
+      - 'server/zoneProtocol.ts'
+      - 'server/zoneGateway.ts'
+      - 'client/src/lib/zoneMovement.ts'
+      - '.github/workflows/godot-headless.yml'
   pull_request:
     paths:
       - 'scripts/godot/**'
@@ -29,7 +41,7 @@ jobs:
       - name: Install locked gateway WebSocket dependency
         run: pnpm install --frozen-lockfile --prod --ignore-scripts
       - name: Bootstrap regression
-        run: node --test scripts/godot/toolchain.test.mjs
+        run: node --test scripts/godot/toolchain.test.mjs scripts/godot/ci-autobuild-workflow.test.mjs
       - name: Install and verify editor
         run: |
           node scripts/godot/bootstrap.mjs
