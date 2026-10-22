@@ -1,0 +1,87 @@
+name: Aurion Nerva opt-in infrastructure security
+on:
+  pull_request:
+    paths:
+      - ".github/nerva/**"
+      - ".github/workflows/aurion-nerva-security.yml"
+      - "scripts/aurion-release-paths.mjs"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Pre-approved target profile; no arbitrary external hosts"
+        required: true
+        type: choice
+        options:
+          - public-web
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Nerva contract and release isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact change
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Prove exact revision
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Validate scripts and redaction contracts
+        run: |
+          set -euo pipefail
+          node --check .github/nerva/run-nerva.mjs
+          node --test .github/nerva/run-nerva.test.mjs
+          node scripts/append-post-merge-memory.test.mjs
+
+  manual-scan:
+    name: Explicit non-blocking perimeter scan
+    if: github.event_name == 'workflow_dispatch'
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Checkout approved revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Download immutable Nerva release and validate SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 --connect-timeout 10 --max-time 90 \
+            --output "$RUNNER_TEMP/nerva.tar.gz" \
+            https://github.com/praetorian-inc/nerva/releases/download/v1.75.1/nerva_1.75.1_linux_amd64.tar.gz
+          echo "812b0ec0ec824ed97a09a2e670a53a2cc10d446da09788550f93a560db871ccd  $RUNNER_TEMP/nerva.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/nerva-bin"
+          tar -xzf "$RUNNER_TEMP/nerva.tar.gz" -C "$RUNNER_TEMP/nerva-bin"
+          test -f "$RUNNER_TEMP/nerva-bin/nerva"
+          chmod +x "$RUNNER_TEMP/nerva-bin/nerva"
+      - name: Observe only approved Aurion public endpoints
+        env:
+          NERVA_PROFILE: ${{ inputs.profile }}
+          NERVA_BINARY: ${{ runner.temp }}/nerva-bin/nerva
+          NERVA_RECEIPT_PATH: nerva-evidence/receipt.json
+        run: node .github/nerva/run-nerva.mjs
+      - name: Upload minimal redacted evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: aurion-nerva-receipt-${{ github.sha }}
+          path: nerva-evidence/receipt.json
+          if-no-files-found: warn
+          retention-days: 14
