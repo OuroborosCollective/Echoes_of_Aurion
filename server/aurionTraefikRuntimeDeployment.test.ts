@@ -24,7 +24,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     const guard = workflow.match(/- name: Guard repository scope\n[\s\S]*?        run: \|\n([\s\S]*?)\n      - name:/)?.[1];
     expect(guard).toBeDefined();
     expect(workflow).toContain("EXPECTED_RELEASE_SHA: ${{ inputs.expected_sha }}");
-    expect(read(".github/workflows/post-merge-memory.yml")).toContain('-f expected_sha="$expected_sha"');
+    // RED at previous main: the recorder exists and can advance main after a merge.
+    // GREEN after this PR: no autonomous post-merge commit or chained dispatch.
+    expect(fs.existsSync(path.join(root, ".github/workflows/post-merge-memory.yml"))).toBe(false);
     const script = guard!.replaceAll("${{ github.repository }}", "OuroborosCollective/Echoes_of_Aurion");
     for (const expected of ["a".repeat(40), "b".repeat(40), "", "main"]) {
       const result = spawnSync("bash", ["-c", script], { encoding: "utf8", env: {
@@ -130,13 +132,14 @@ describe("Aurion labelled Traefik runtime deployment", () => {
 
   it("keeps runtime-affecting main revisions serialized while excluding docs-only deployment noise", () => {
     const triggerBlock = workflow.slice(0, workflow.indexOf("\nconcurrency:"));
-    const memoryWorkflow = read(".github/workflows/post-merge-memory.yml");
+    const memorySyncWorkflow = read(".github/workflows/agent-memory-supabase-sync.yml");
     const trustedMainCondition =
       "if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'";
     expect(triggerBlock).not.toContain("  push:");
-    expect(memoryWorkflow).toContain("group: aurion-production-release-main");
-    expect(memoryWorkflow).toContain("requiresAurionRelease");
-    expect(memoryWorkflow.indexOf("node scripts/sync-agent-memory-to-supabase.mjs")).toBeLessThan(memoryWorkflow.indexOf("gh workflow run deploy-aurion-zone-runtime.yml --ref main"));
+    expect(fs.existsSync(path.join(root, ".github/workflows/post-merge-memory.yml"))).toBe(false);
+    expect(memorySyncWorkflow).toContain('"Memory.md"');
+    expect(memorySyncWorkflow).not.toContain("git push origin HEAD:main");
+    expect(memorySyncWorkflow).not.toContain("gh workflow run deploy-aurion-zone-runtime.yml");
     expect(triggerBlock).toContain("workflow_dispatch:");
     for (const jobName of [
       "promote-zone-runtime",

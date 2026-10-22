@@ -14,7 +14,6 @@ on:
       - "scripts/append-post-merge-memory.mjs"
       - "scripts/append-post-merge-memory.test.mjs"
       - ".github/workflows/agent-memory-supabase-sync.yml"
-      - ".github/workflows/post-merge-memory.yml"
   workflow_dispatch:
 
 concurrency:
