@@ -139,6 +139,7 @@ func verify() -> void:
 		require(vitals_label.text == "Zustand · HP 20/20 · Ausdauer 8/10", "welcome vitals did not reflect confirmed self combatant")
 	if health_meter != null and stamina_meter != null:
 		require(health_meter.visible and stamina_meter.visible, "confirmed self vitals meters stayed hidden")
+		require(health_meter.min_value == 0 and stamina_meter.min_value == 0, "confirmed self vitals meters do not have a bounded zero floor")
 		require(health_meter.max_value == 20 and health_meter.value == 20, "welcome health meter did not reflect confirmed self combatant")
 		require(stamina_meter.max_value == 10 and stamina_meter.value == 8, "welcome stamina meter did not reflect confirmed self combatant")
 	if position_label != null:
