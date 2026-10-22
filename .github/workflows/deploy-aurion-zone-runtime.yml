@@ -590,7 +590,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: verify-and-build
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 60
     environment: production
     permissions:
       contents: read
@@ -599,6 +599,8 @@ jobs:
       id-token: write
     env:
       BOOTSTRAP_PROBE_CONTROL_PLANE: ${{ inputs.bootstrap_probe_control_plane }}
+      AURION_PROBE_APPROVAL_WAIT_SECONDS: '2400'
+      AURION_APPROVAL_NOTIFY_URL: ${{ secrets.AURION_APPROVAL_NOTIFY_URL }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
