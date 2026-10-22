@@ -3,7 +3,7 @@ extends Control
 ## private, volatile design sketches; never sent to Aurion as gameplay commands.
 signal selection_changed(label: String)
 
-const SCALE := 0.018
+const SCALE := 18.0
 const MAX_MARKERS := 128
 var _records: Dictionary = {}
 var _self_id := ""
