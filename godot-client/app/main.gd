@@ -21,6 +21,8 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var combat_notice: Label = %CombatNotice
 @onready var confirmed_position: Label = %ConfirmedPosition
 @onready var confirmed_vitals: Label = %ConfirmedVitals
+@onready var confirmed_health_meter: ProgressBar = %ConfirmedHealthMeter
+@onready var confirmed_stamina_meter: ProgressBar = %ConfirmedStaminaMeter
 @onready var entity_summary: Label = %EntitySummary
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
@@ -192,8 +194,7 @@ func _reset_projection() -> void:
 	combat_notice.visible = false
 	confirmed_position.text = ""
 	confirmed_position.visible = false
-	confirmed_vitals.text = ""
-	confirmed_vitals.visible = false
+	_clear_vitals_presentation()
 	entity_summary.text = ""
 	entity_summary.visible = false
 
@@ -389,15 +390,21 @@ func _update_world_freshness(now_ms: int) -> void:
 func _world_freshness_suffix() -> String:
 	return " · Stand veraltet" if _world_is_stale else ""
 
+func _clear_vitals_presentation() -> void:
+	confirmed_vitals.text = ""
+	confirmed_vitals.visible = false
+	confirmed_health_meter.value = 0
+	confirmed_health_meter.visible = false
+	confirmed_stamina_meter.value = 0
+	confirmed_stamina_meter.visible = false
+
 func _update_vitals_presentation() -> void:
 	if not _confirmed_zone.has_state():
-		confirmed_vitals.text = ""
-		confirmed_vitals.visible = false
+		_clear_vitals_presentation()
 		return
 	var self_combatant := _entities.record("combatants", _confirmed_zone.self_entity_id())
 	if self_combatant.is_empty():
-		confirmed_vitals.text = ""
-		confirmed_vitals.visible = false
+		_clear_vitals_presentation()
 		return
 	confirmed_vitals.text = "Zustand · HP %d/%d · Ausdauer %d/%d%s" % [
 		int(self_combatant["health"]),
@@ -407,6 +414,12 @@ func _update_vitals_presentation() -> void:
 		_world_freshness_suffix(),
 	]
 	confirmed_vitals.visible = true
+	confirmed_health_meter.max_value = int(self_combatant["maxHealth"])
+	confirmed_health_meter.value = int(self_combatant["health"])
+	confirmed_health_meter.visible = true
+	confirmed_stamina_meter.max_value = int(self_combatant["maxStamina"])
+	confirmed_stamina_meter.value = int(self_combatant["stamina"])
+	confirmed_stamina_meter.visible = true
 
 func _update_position_presentation(now_ms: int) -> void:
 	if not _confirmed_zone.has_state():

@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://app/main.gd" id="1_main"]
 
@@ -24,6 +24,27 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_left = 6
 corner_radius_bottom_right = 6
+
+[sub_resource type="StyleBoxFlat" id="Style_meter_background"]
+bg_color = Color(0.025, 0.047, 0.059, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="StyleBoxFlat" id="Style_health_fill"]
+bg_color = Color(0.82, 0.27, 0.24, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="StyleBoxFlat" id="Style_stamina_fill"]
+bg_color = Color(0.32, 0.68, 0.58, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
 
 [node name="AurionLaunch" type="Control"]
 layout_mode = 3
@@ -122,6 +143,26 @@ theme_override_colors/font_color = Color(0.90, 0.75, 0.44, 1)
 theme_override_font_sizes/font_size = 18
 text = "Zustand · HP 0/0 · Ausdauer 0/0"
 autowrap_mode = 3
+
+[node name="ConfirmedHealthMeter" type="ProgressBar" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+mouse_filter = 2
+show_percentage = false
+theme_override_styles/background = SubResource("Style_meter_background")
+theme_override_styles/fill = SubResource("Style_health_fill")
+
+[node name="ConfirmedStaminaMeter" type="ProgressBar" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+mouse_filter = 2
+show_percentage = false
+theme_override_styles/background = SubResource("Style_meter_background")
+theme_override_styles/fill = SubResource("Style_stamina_fill")
 
 [node name="EntitySummary" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
 unique_name_in_owner = true

@@ -4562,3 +4562,9 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-22 — PR #1120 — confirmed self-vitals meters
+Change: The active Godot scene now renders bounded HP and stamina meters from accepted Aurion self-combatant snapshots, ignores rejected rewinds, and clears both meters when self state or the projection disappears.
+Learned: The confirmed vitals readmodel was already active at runtime; extending that presentation preserves Aurion authority without introducing client-owned gameplay state.
+Evidence: Tested code head `05e0808b1c10af29e09fa77a5f32b7fc5459a724`; Godot headless/runtime/software-render run 39821748545 and Android Preview/APK readback run 39821748434 passed; final Memory-bearing PR head is re-gated before merge.
