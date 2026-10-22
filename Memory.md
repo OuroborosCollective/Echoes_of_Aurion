@@ -4499,3 +4499,24 @@ Next safe step: Use the new main revision as the canonical baseline for the next
 Change: Extended admin preflight wait to configurable 2400 seconds with one best-effort HTTPS ntfy notice, full SHA/Run-ID and unchanged gameplay readiness/explicit approval guards.
 Learned: Replacing the supplied probe client outright would remove existing gameplay-readiness functions; integration must be additive.
 Evidence: Local Node tests 23/23 PASS; GitHub PR CI pending: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1117 (no production apply/promotion performed).
+
+
+### 2026-10-22 — PR #1117 — fix(release): bounded 40-minute owner approval wait with ntfy notification
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1117 merge=3ea5b58ea303b4c16900b48dda00c8bc00fbeeaf -->
+Task: Merge PR #1117 into `main` — fix(release): bounded 40-minute owner approval wait with ntfy notification.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `Memory.md`
+- `scripts/aurion-production-probe-client.mjs`
+- `scripts/aurion-production-probe-client.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1117
+- Merge commit: `3ea5b58ea303b4c16900b48dda00c8bc00fbeeaf`
+- PR head: `587d57d10844087f3e918837a05ad5f56cafbc72`
+- Merged at: 2026-10-22T04:04:59Z
+- Post-merge workflow run: 39720368739
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
