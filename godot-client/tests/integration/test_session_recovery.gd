@@ -221,6 +221,38 @@ func verify() -> void:
 	scene._poll_reconnect(Time.get_ticks_msec())
 	require(api.issues == 5, "pending-ticket recovery duplicated the ticket request")
 
+	# G12 regression: a fresh-ticket reconnect can still fail at WebSocket
+	# hello. Its transport failure must spend the next bounded retry, not
+	# revoke the otherwise valid native session on the first timeout.
+	var fresh_ticket := {
+		"ticket": "n".repeat(48),
+		"zoneId": "observatory_threshold",
+		"expiresAt": "2026-10-19T06:00:00.000Z",
+	}
+	var logouts_before: int = auth.logout_calls
+	scene._on_zone_ticket_succeeded(fresh_ticket)
+	require(scene._reconnect.active(), "reconnect reservation cleared before welcome")
+	socket.connected = false
+	scene._on_zone_closed("hello_timeout")
+	require(scene._reconnect.active(), "hello timeout discarded bounded reconnect")
+	require(auth.logout_calls == logouts_before, "first hello timeout revoked healthy auth")
+	var issues_before: int = api.issues
+	scene._poll_reconnect(Time.get_ticks_msec() + 10000)
+	require(api.issues == issues_before + 1, "hello timeout did not request a second fresh ticket")
+	scene._on_zone_ticket_succeeded(fresh_ticket)
+	socket.connected = false
+	scene._on_zone_closed("closed")
+	require(scene._reconnect.active(), "closed handshake discarded final bounded retry")
+	require(auth.logout_calls == logouts_before, "second handshake failure revoked auth early")
+	issues_before = api.issues
+	scene._poll_reconnect(Time.get_ticks_msec() + 10000)
+	require(api.issues == issues_before + 1, "closed handshake did not request third ticket")
+	scene._on_zone_ticket_succeeded(fresh_ticket)
+	socket.connected = false
+	scene._on_zone_closed("hello_timeout")
+	require(not scene._reconnect.active(), "exhausted handshake attempts remained active")
+	require(auth.logout_calls == logouts_before + 1, "exhausted retry did not terminate native session")
+
 	scene.queue_free()
 	await process_frame
 	finish()
