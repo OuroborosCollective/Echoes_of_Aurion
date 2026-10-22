@@ -83,7 +83,10 @@ function canonicalTerrainMatrix(chunk: BaseWorldChunk): readonly (readonly numbe
   if (chunk.tiles.length !== WORLD_CHUNK_GRID_SIZE * WORLD_CHUNK_GRID_SIZE) {
     throw new Error("terrain tile count does not match the canonical world chunk grid");
   }
-  const byCoordinate = new Map<string, number>();
+  const matrix = new Array(WORLD_CHUNK_GRID_SIZE);
+  for (let z = 0; z < WORLD_CHUNK_GRID_SIZE; z++) {
+    matrix[z] = new Array(WORLD_CHUNK_GRID_SIZE);
+  }
   for (const tile of chunk.tiles) {
     if (!Number.isSafeInteger(tile.x) || !Number.isSafeInteger(tile.z) || !Number.isSafeInteger(tile.heightMm)) {
       throw new Error("terrain tile must use integer coordinates and millimeter heights");
@@ -91,17 +94,16 @@ function canonicalTerrainMatrix(chunk: BaseWorldChunk): readonly (readonly numbe
     if (tile.x < 0 || tile.x >= WORLD_CHUNK_GRID_SIZE || tile.z < 0 || tile.z >= WORLD_CHUNK_GRID_SIZE) {
       throw new Error("terrain tile coordinate is outside the canonical chunk grid");
     }
-    const key = `${tile.x}:${tile.z}`;
-    if (byCoordinate.has(key)) throw new Error("terrain tile coordinate must be unique");
-    byCoordinate.set(key, tile.heightMm);
+    if (matrix[tile.z]![tile.x] !== undefined) throw new Error("terrain tile coordinate must be unique");
+    matrix[tile.z]![tile.x] = tile.heightMm;
   }
-  return Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, z) =>
-    Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, x) => {
-      const value = byCoordinate.get(`${x}:${z}`);
-      if (value === undefined) throw new Error("terrain grid is incomplete");
-      return value;
-    })),
-  ));
+  for (let z = 0; z < WORLD_CHUNK_GRID_SIZE; z++) {
+    for (let x = 0; x < WORLD_CHUNK_GRID_SIZE; x++) {
+      if (matrix[z]![x] === undefined) throw new Error("terrain grid is incomplete");
+    }
+    Object.freeze(matrix[z]);
+  }
+  return Object.freeze(matrix);
 }
 
 export function summarizeWorldChunkTerrain(chunk: BaseWorldChunk): AurionTerrainInvariantSummary {
@@ -240,7 +242,10 @@ function canonicalSurfaceMatrix(chunk: BaseWorldChunk): readonly (readonly numbe
   if (chunk.tiles.length !== WORLD_CHUNK_GRID_SIZE * WORLD_CHUNK_GRID_SIZE) {
     throw new Error("terrain tile count does not match the canonical world chunk grid");
   }
-  const byCoordinate = new Map<string, number>();
+  const matrix = new Array(WORLD_CHUNK_GRID_SIZE);
+  for (let z = 0; z < WORLD_CHUNK_GRID_SIZE; z++) {
+    matrix[z] = new Array(WORLD_CHUNK_GRID_SIZE);
+  }
   for (const tile of chunk.tiles) {
     if (!Number.isSafeInteger(tile.x) || !Number.isSafeInteger(tile.z) || !Number.isSafeInteger(tile.heightMm)) {
       throw new Error("terrain tile must use integer coordinates and millimeter heights");
@@ -248,19 +253,18 @@ function canonicalSurfaceMatrix(chunk: BaseWorldChunk): readonly (readonly numbe
     if (tile.x < 0 || tile.x >= WORLD_CHUNK_GRID_SIZE || tile.z < 0 || tile.z >= WORLD_CHUNK_GRID_SIZE) {
       throw new Error("terrain tile coordinate is outside the canonical chunk grid");
     }
-    const key = `${tile.x}:${tile.z}`;
-    if (byCoordinate.has(key)) throw new Error("terrain tile coordinate must be unique");
+    if (matrix[tile.z]![tile.x] !== undefined) throw new Error("terrain tile coordinate must be unique");
     const mapped = SURFACE_MAPPING[tile.surface];
     if (!Number.isSafeInteger(mapped)) throw new Error(`unmapped surface: ${tile.surface}`);
-    byCoordinate.set(key, mapped);
+    matrix[tile.z]![tile.x] = mapped;
   }
-  return Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, z) =>
-    Object.freeze(Array.from({ length: WORLD_CHUNK_GRID_SIZE }, (_, x) => {
-      const value = byCoordinate.get(`${x}:${z}`);
-      if (value === undefined) throw new Error("terrain grid is incomplete");
-      return value;
-    })),
-  ));
+  for (let z = 0; z < WORLD_CHUNK_GRID_SIZE; z++) {
+    for (let x = 0; x < WORLD_CHUNK_GRID_SIZE; x++) {
+      if (matrix[z]![x] === undefined) throw new Error("terrain grid is incomplete");
+    }
+    Object.freeze(matrix[z]);
+  }
+  return Object.freeze(matrix);
 }
 
 export function summarizeWorldChunkTerrainContinuity(chunk: BaseWorldChunk): AurionTerrainContinuitySummary {
@@ -370,19 +374,28 @@ function finitePositive(value: number, field: string): number {
 
 export function normalizeModelBounds(bounds: ModelBounds, targetMaxExtent: number): ModelScaleNormalization {
   finitePositive(targetMaxExtent, "targetMaxExtent");
-  const extents = bounds.max.map((value, index) => value - bounds.min[index]!) as [number, number, number];
+  const extents: [number, number, number] = [
+    bounds.max[0]! - bounds.min[0]!,
+    bounds.max[1]! - bounds.min[1]!,
+    bounds.max[2]! - bounds.min[2]!
+  ];
   extents.forEach((value, index) => finitePositive(value, `extent${index}`));
   const sourceMaxExtent = Math.max(...extents);
   const scaleE8 = Math.round((targetMaxExtent / sourceMaxExtent) * SCALE_E8);
   if (!Number.isSafeInteger(scaleE8) || scaleE8 <= 0) throw new Error("normalized model scale is outside the safe integer envelope");
   const scale = scaleE8 / SCALE_E8;
+  const normalizedExtents: [number, number, number] = [
+    extents[0] * scale,
+    extents[1] * scale,
+    extents[2] * scale
+  ];
   return Object.freeze({
     sourceExtents: Object.freeze(extents),
     sourceMaxExtent,
     targetMaxExtent,
     scaleE8,
     scale,
-    normalizedExtents: Object.freeze(extents.map(value => value * scale) as [number, number, number]),
+    normalizedExtents: Object.freeze(normalizedExtents),
   });
 }
 
@@ -399,7 +412,11 @@ function wolframNumber(value: number): string {
 
 export function buildModelScaleCagProbe(bounds: ModelBounds, targetMaxExtent: number): AurionCagProbe {
   const normalized = normalizeModelBounds(bounds, targetMaxExtent);
-  const extents = normalized.sourceExtents.map(wolframNumber).join(",");
+  const extents = [
+    wolframNumber(normalized.sourceExtents[0]),
+    wolframNumber(normalized.sourceExtents[1]),
+    wolframNumber(normalized.sourceExtents[2])
+  ].join(",");
   return Object.freeze({
     kind: "model_scale",
     code: `source=Max[{${extents}}];Round[(${wolframNumber(targetMaxExtent)}/source)*100000000]`,
