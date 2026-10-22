@@ -50,8 +50,9 @@ func set_confirmed(world: Variant, registry: Variant) -> void:
 	_records = updated
 	if not _records.has(_selected):
 		_selected = ""
-		selection_changed.emit("")
-	elif not _selected.is_empty():
+		if _armed.is_empty():
+			selection_changed.emit("")
+	elif not _selected.is_empty() and _armed.is_empty():
 		selection_changed.emit(_describe_record(_selected))
 	_fresh = true
 	visible = true

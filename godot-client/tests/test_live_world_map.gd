@@ -162,7 +162,12 @@ func verify() -> void:
 
 	var moved := snapshot_from(confirmed, 2)
 	moved["mobs"][0]["position"] = {"x":5000,"z":0}
+	require(map.arm_plan("A"), "A plan could not be armed after inspecting an entity")
 	scene._on_zone_snapshot(moved)
+	require(detail.text.contains("Entwurf A"), "accepted snapshot replaced the armed planning prompt")
+	tap(map, map.world_to_screen({"x":1000,"z":-2000}))
+	require(map.plan_points().get("A") == {"x":1000,"z":-2000}, "snapshot-interleaved planning did not place A")
+	tap(map, map.world_to_screen({"x":5000,"z":0}))
 	require(detail.text.contains("X 5.00 m"), "accepted movement left stale inspector coordinates")
 
 	var old := snapshot_from(confirmed, 1)

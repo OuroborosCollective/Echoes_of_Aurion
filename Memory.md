@@ -4590,3 +4590,9 @@ Evidence: Base main `9f072e5f896817044248059305a37fca420fea38`; initial exact co
 Change: The active Godot confirmed-world map now passes unhandled pointer drags to its enclosing ScrollContainer while retaining its own tap inspection and local-plan handling.
 Learned: Rejecting a drag inside the map is insufficient on mobile when a STOP-filtered Control prevents the parent launch card from receiving that gesture.
 Evidence: Regression-only head `3043cedfb6ed957bee53e972acb6ffd4df4f23a0` failed causally in Godot run 39856109793/job 120094623336; fixed code head `230a7a9a0f3be4e9e6b9ecab8d9ae06804d2f4c2` passed Godot headless/runtime/software-render run 39856334183 and Android Preview/APK readback run 39856334197; final Memory-bearing head is re-gated before merge. Physical-device touch remains unverified.
+
+### 2026-10-22 — Native map planning prompt persistence (PR #1128)
+Change: Accepted Aurion snapshots no longer replace the visible A/B/Haus planning prompt with a previously selected entity description while local placement remains armed.
+Learned: Confirmed entity records may refresh during local planning, but snapshot-driven inspection signals must not hide the still-active input mode.
+Evidence: Regression-only head `a993ec8a0cf8b25a4273e602b45cac899e9936c2` failed causally in Godot run 39870818147/job 120144500559; fixed code head `e4e0803a201c7b076b3817b4c7e5c66746adf42f` passed Godot headless/runtime/software-render run 39870954747 and Android Preview/APK readback run 39870954681; final Memory-bearing head is re-gated before merge. Physical-device touch remains unverified.
+
