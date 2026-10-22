@@ -4,14 +4,19 @@ extends Control
 signal selection_changed(label: String)
 
 const SCALE := 18.0
-const MAX_MARKERS := 128
+const MAX_PRESENCES := 96
+const MAX_MOBS := 32
+const TAP_DRAG_THRESHOLD := 12.0
 var _records: Dictionary = {}
 var _self_id := ""
 var _selected := ""
 var _armed := ""
 var _plans: Dictionary = {}
 var _fresh := false
-var _origin := Vector2.ZERO
+var _origin := {"x": 0, "z": 0}
+var _pointer_down := false
+var _pointer_dragged := false
+var _pointer_origin := Vector2.ZERO
 
 func set_confirmed(world: Variant, registry: Variant) -> void:
 	if world == null or not world.has_state():
@@ -22,19 +27,32 @@ func set_confirmed(world: Variant, registry: Variant) -> void:
 	if own.is_empty():
 		clear()
 		return
-	_origin = Vector2(float(own["position"]["x"]), float(own["position"]["z"]))
-	var updated: Dictionary = {}
-	for category in ["presences", "mobs"]:
-		for id in registry.ids(category):
-			if updated.size() >= MAX_MARKERS:
-				break
-			var record: Dictionary = registry.record(category, id)
-			if record.has("position"):
-				updated[id] = record
+	_origin = {"x": int(own["position"]["x"]), "z": int(own["position"]["z"])}
+	var updated: Dictionary = {_self_id: own}
+	var presence_count := 1
+	for id in registry.ids("presences"):
+		if id == _self_id:
+			continue
+		if presence_count >= MAX_PRESENCES:
+			break
+		var record: Dictionary = registry.record("presences", id)
+		if record.has("position"):
+			updated[id] = record
+			presence_count += 1
+	var mob_count := 0
+	for id in registry.ids("mobs"):
+		if mob_count >= MAX_MOBS:
+			break
+		var record: Dictionary = registry.record("mobs", id)
+		if record.has("position"):
+			updated[id] = record
+			mob_count += 1
 	_records = updated
 	if not _records.has(_selected):
 		_selected = ""
 		selection_changed.emit("")
+	elif not _selected.is_empty():
+		selection_changed.emit(_describe_record(_selected))
 	_fresh = true
 	visible = true
 	queue_redraw()
@@ -59,6 +77,7 @@ func set_stale(stale: bool) -> void:
 	_fresh = not stale and not _records.is_empty()
 	if stale:
 		_armed = ""
+		_pointer_down = false
 	queue_redraw()
 
 func clear() -> void:
@@ -68,47 +87,77 @@ func clear() -> void:
 	_selected = ""
 	_armed = ""
 	_fresh = false
-	_origin = Vector2.ZERO
+	_origin = {"x": 0, "z": 0}
+	_pointer_down = false
+	_pointer_dragged = false
 	visible = false
 	selection_changed.emit("")
 	queue_redraw()
 
 func world_to_screen(position: Dictionary) -> Vector2:
-	return size * 0.5 + (Vector2(float(position["x"]), float(position["z"])) - _origin) * (SCALE / 1000.0)
+	var relative_x := int(position["x"]) - int(_origin["x"])
+	var relative_z := int(position["z"]) - int(_origin["z"])
+	return size * 0.5 + Vector2(float(relative_x), float(relative_z)) * (SCALE / 1000.0)
 
 func _screen_to_world(point: Vector2) -> Dictionary:
-	var coords := _origin + (point - size * 0.5) * (1000.0 / SCALE)
-	return {"x": int(round(coords.x)), "z": int(round(coords.y))}
+	var relative := (point - size * 0.5) * (1000.0 / SCALE)
+	return {
+		"x": int(_origin["x"]) + int(round(relative.x)),
+		"z": int(_origin["z"]) + int(round(relative.y)),
+	}
 
 func _gui_input(event: InputEvent) -> void:
-	if not _fresh or not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
+	if not _fresh:
+		return
+	if event is InputEventMouseMotion and _pointer_down:
+		if event.position.distance_to(_pointer_origin) > TAP_DRAG_THRESHOLD:
+			_pointer_dragged = true
+		return
+	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if event.pressed:
+		_pointer_down = true
+		_pointer_dragged = false
+		_pointer_origin = event.position
 		return
 	var point: Vector2 = event.position
-	if not Rect2(Vector2.ZERO, size).has_point(point):
+	var is_tap := _pointer_down and not _pointer_dragged and point.distance_to(_pointer_origin) <= TAP_DRAG_THRESHOLD
+	_pointer_down = false
+	if not is_tap or not Rect2(Vector2.ZERO, size).has_point(point):
 		return
+	_activate_point(point)
+	accept_event()
+
+func _activate_point(point: Vector2) -> void:
 	if not _armed.is_empty():
 		var key := _armed
 		_plans[key] = _screen_to_world(point)
 		_armed = ""
 		selection_changed.emit("Entwurf " + key + " · X %.2f m · Z %.2f m · nur lokal" % [float(_plans[key]["x"]) / 1000.0, float(_plans[key]["z"]) / 1000.0])
 		queue_redraw()
-		accept_event()
 		return
 	_selected = ""
 	var distance := 18.0
 	for id in _records:
 		var record: Dictionary = _records[id]
 		var delta := world_to_screen(record["position"]).distance_to(point)
-		if delta < distance:
+		# Later-drawn records win exact ties, so a visible mob remains selectable.
+		if delta <= distance:
 			distance = delta
 			_selected = id
-	if not _selected.is_empty():
-		var selected := _records[_selected] as Dictionary
-		selection_changed.emit("Aurion bestätigt · " + _selected + (" · Modell " + str(selected["archetype"]) if selected.has("archetype") else "") + " · X %.2f m · Z %.2f m" % [float(selected["position"]["x"]) / 1000.0, float(selected["position"]["z"]) / 1000.0])
-	else:
-		selection_changed.emit("Kein bestätigtes Objekt an dieser Position")
+	selection_changed.emit(_describe_record(_selected) if not _selected.is_empty() else "Kein bestätigtes Objekt an dieser Position")
 	queue_redraw()
-	accept_event()
+
+func _describe_record(id: String) -> String:
+	var selected := _records[id] as Dictionary
+	return "Aurion bestätigt · " + id + (" · Modell " + str(selected["archetype"]) if selected.has("archetype") else "") + " · X %.2f m · Z %.2f m" % [float(selected["position"]["x"]) / 1000.0, float(selected["position"]["z"]) / 1000.0]
+
+func _plan_tint(label: String) -> Color:
+	if label == "A":
+		return Color(0.50, 0.96, 0.60)
+	if label == "B":
+		return Color(0.98, 0.72, 0.28)
+	return Color(0.36, 0.78, 0.96)
 
 func _draw() -> void:
 	var background := Color(0.055, 0.10, 0.13, 1)
@@ -129,4 +178,6 @@ func _draw() -> void:
 	for label in _plans:
 		var point := world_to_screen(_plans[label])
 		if Rect2(Vector2.ZERO, size).has_point(point):
-			draw_rect(Rect2(point - Vector2(5, 5), Vector2(10, 10)), Color(0.50, 0.96, 0.60), false, 2)
+			var tint := _plan_tint(label)
+			draw_rect(Rect2(point - Vector2(5, 5), Vector2(10, 10)), tint, false, 2)
+			draw_string(ThemeDB.fallback_font, point + Vector2(8, 5), str(label), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, tint)
