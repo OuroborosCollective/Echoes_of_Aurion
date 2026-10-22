@@ -121,11 +121,12 @@ func verify() -> void:
 	require(scroll.get_v_scroll_bar().max_value > scroll.get_v_scroll_bar().page, "mobile launch card fixture is not scrollable")
 	scroll.scroll_vertical = 0
 	var drag_start := map.get_global_rect().get_center()
-	Input.parse_input_event(touch_event(drag_start, true))
-	Input.parse_input_event(touch_drag(drag_start - Vector2(0, 140), Vector2(0, -140)))
-	Input.parse_input_event(touch_event(drag_start - Vector2(0, 140), false))
+	scroll._gui_input(touch_event(drag_start, true))
+	scroll._gui_input(touch_drag(drag_start - Vector2(0, 70), Vector2(0, -70)))
+	scroll._gui_input(touch_drag(drag_start - Vector2(0, 140), Vector2(0, -70)))
+	scroll._gui_input(touch_event(drag_start - Vector2(0, 140), false))
 	await process_frame
-	require(scroll.scroll_vertical > 0, "map-origin touch drag did not change parent scroll offset")
+	require(scroll.scroll_vertical > 0, "touch drag did not change active parent ScrollContainer offset")
 	require(map.marker_record("player:1").get("position") == {"x":1000,"z":-2000}, "own confirmed position absent")
 	require(map.marker_record("player:2").get("position") == {"x":3000,"z":1000}, "other player not displayed")
 	require(map.marker_record("mob_1").get("archetype") == "clockwork_stalker", "server monster model/archetype lost")
