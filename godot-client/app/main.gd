@@ -408,6 +408,7 @@ func _update_world_freshness(now_ms: int) -> void:
 	if stale == _world_is_stale:
 		return
 	_world_is_stale = stale
+	zone_map.set_stale(stale)
 	_update_entity_presentation()
 	_update_vitals_presentation()
 	_update_position_presentation(now_ms)
