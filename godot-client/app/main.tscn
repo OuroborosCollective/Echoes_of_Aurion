@@ -1,6 +1,7 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://app/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://world/confirmed_map.gd" id="2_map"]
 
 [sub_resource type="StyleBoxFlat" id="Style_card"]
 bg_color = Color(0.045, 0.085, 0.11, 0.96)
@@ -172,6 +173,56 @@ theme_override_colors/font_color = Color(0.73, 0.81, 0.82, 1)
 theme_override_font_sizes/font_size = 18
 text = "In der Nähe · 0 Reisende · 0 Kreaturen"
 autowrap_mode = 3
+
+[node name="MapPanel" type="VBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MapHeading" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+layout_mode = 2
+text = "Sternwarte · bestätigte Aurion-Karte (X / Z)"
+
+[node name="ZoneMap" type="Control" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 250)
+layout_mode = 2
+mouse_filter = 0
+script = ExtResource("2_map")
+
+[node name="MapSelection" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+text = "Berühre ein bestätigtes Objekt oder skizziere einen Punkt."
+
+[node name="PlanButtons" type="HBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlanA" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel/PlanButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Punkt A"
+
+[node name="PlanB" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel/PlanButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Punkt B"
+
+[node name="PlanHouse" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel/PlanButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Haus"
+
+[node name="PlanDisclaimer" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+layout_mode = 2
+autowrap_mode = 3
+text = "A/B/Haus sind nur flüchtige Entwürfe auf diesem Gerät; keine Weltänderung und kein Questfortschritt."
 
 [node name="Destination" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
 unique_name_in_owner = true

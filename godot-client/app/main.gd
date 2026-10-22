@@ -24,6 +24,9 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var confirmed_health_meter: ProgressBar = %ConfirmedHealthMeter
 @onready var confirmed_stamina_meter: ProgressBar = %ConfirmedStaminaMeter
 @onready var entity_summary: Label = %EntitySummary
+@onready var map_panel: VBoxContainer = %MapPanel
+@onready var zone_map: Control = %ZoneMap
+@onready var map_selection: Label = %MapSelection
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
 @onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
@@ -83,6 +86,10 @@ func _ready() -> void:
 	_intent_bridge.callback_received.connect(handle_native_auth_callback)
 	login.pressed.connect(_on_login_pressed)
 	%CopyDiagnostics.pressed.connect(_on_copy_diagnostics_pressed)
+	zone_map.selection_changed.connect(_on_map_selection_changed)
+	%PlanA.pressed.connect(func(): zone_map.arm_plan("A"))
+	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
+	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	login.disabled = true
 	if _config.server_base_url.is_empty() or _config.client_build.is_empty() or _config.renderer_profile != "compatibility":
 		status.text = "Konfiguration ungültig"
@@ -96,6 +103,9 @@ func _ready() -> void:
 	set_process(true)
 	resized.connect(_fit_layout)
 	_fit_layout()
+
+func _on_map_selection_changed(message: String) -> void:
+	map_selection.text = message if not message.is_empty() else "Berühre ein bestätigtes Objekt oder skizziere einen Punkt."
 
 func _on_copy_diagnostics_pressed() -> void:
 	var readback: String = _diagnostics.report(_config.client_build, _config.server_base_url, _zone_socket.state_name(), _zone_socket.state_name() == "connected", _confirmed_zone.has_state())
@@ -197,6 +207,8 @@ func _reset_projection() -> void:
 	_clear_vitals_presentation()
 	entity_summary.text = ""
 	entity_summary.visible = false
+	zone_map.clear()
+	map_panel.visible = false
 
 func _on_zone_welcome(welcome: Dictionary) -> void:
 	if _lifecycle.is_suspended():
@@ -207,6 +219,8 @@ func _on_zone_welcome(welcome: Dictionary) -> void:
 		_zone_socket.close_zone()
 		return
 	_entities.sync(_confirmed_zone)
+	zone_map.set_confirmed(_confirmed_zone, _entities)
+	map_panel.visible = zone_map.visible
 	var now_ms := Time.get_ticks_msec()
 	_last_world_update_ms = now_ms
 	_world_is_stale = false
@@ -220,6 +234,8 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		return
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
+		zone_map.set_confirmed(_confirmed_zone, _entities)
+		map_panel.visible = zone_map.visible
 		var now_ms := Time.get_ticks_msec()
 		_last_world_update_ms = now_ms
 		_world_is_stale = false
@@ -394,6 +410,7 @@ func _update_world_freshness(now_ms: int) -> void:
 	if stale == _world_is_stale:
 		return
 	_world_is_stale = stale
+	zone_map.set_stale(stale)
 	_update_entity_presentation()
 	_update_vitals_presentation()
 	_update_position_presentation(now_ms)
