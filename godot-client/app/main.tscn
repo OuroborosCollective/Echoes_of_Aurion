@@ -80,6 +80,7 @@ size_flags_vertical = 3
 [node name="LaunchCard" type="PanelContainer" parent="SafeMargin/Scroll/Center"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 1
 theme_override_styles/panel = SubResource("Style_card")
 
 [node name="Content" type="VBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard"]
