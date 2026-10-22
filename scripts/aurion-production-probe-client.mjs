@@ -136,10 +136,44 @@ export async function waitForProductionGameplayApproval(env = process.env, {
  * Every attempt obtains fresh OIDC and still requires the exact bound receipt.
  * Network/body failures are NOT retried: the approval may already be consumed.
  */
+/** Independent bounded wait window: owner must still explicitly authorize an exact run. */
+export function approvalWaitSeconds(env = process.env) {
+  const raw = env.AURION_PROBE_APPROVAL_WAIT_SECONDS;
+  if (raw === undefined || raw === '') return 900;
+  if (!/^[0-9]{2,4}$/.test(raw)) return 900;
+  const seconds = Number(raw);
+  return seconds >= 60 && seconds <= 3600 ? seconds : 900;
+}
+
+/** Best-effort owner notification. A successful HTTP POST is not proof of device delivery.
+ * The topic URL is a secret; credentials and OIDC tokens are never sent.
+ */
+export async function notifyApprovalWait(env, { revision, runId, runAttempt, waitSeconds }, fetchImpl = globalThis.fetch) {
+  const url = env.AURION_APPROVAL_NOTIFY_URL;
+  if (!/^https:\/\/[^\s]+$/.test(url ?? '')) return false;
+  const runUrl = `${env.GITHUB_SERVER_URL ?? 'https://github.com'}/${env.GITHUB_REPOSITORY ?? ''}/actions/runs/${runId}`;
+  const prefilled = approvalPrefillUrl({ GITHUB_SHA: revision, GITHUB_RUN_ID: String(runId),
+    GITHUB_RUN_ATTEMPT: String(runAttempt) }, 'aurion.probe.admin-readback');
+  const message = [
+    `Aurion Produktions-Freigabe offen (${Math.round(waitSeconds / 60)} min)`,
+    `Jetzt freigeben: ${prefilled}`,
+    `SHA: ${revision}`,
+    `Run-ID: ${runId} (Versuch ${runAttempt})`,
+    runUrl,
+  ].join('\n');
+  try {
+    const response = await fetchImpl(url, { method: 'POST', body: message, redirect: 'error',
+      headers: { 'content-type': 'text/plain; charset=utf-8', title: 'Aurion Freigabe', priority: 'high', tags: 'rotating_light' },
+      signal: AbortSignal.timeout(5000) });
+    return response.ok === true;
+  } catch { return false; }
+}
+
 export async function waitForProductionAdminApproval(env = process.env, {
   now = () => performance.now(),
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
   report = value => console.log(JSON.stringify(value)),
+  notify = notifyApprovalWait,
 } = {}) {
   if (!/^[a-f0-9]{40}$/.test(env.GITHUB_SHA ?? '')
     || !/^[1-9][0-9]*$/.test(env.GITHUB_RUN_ID ?? '')
@@ -147,12 +181,16 @@ export async function waitForProductionAdminApproval(env = process.env, {
   // Snapshot identity; a pending wait must not silently follow another run.
   const identity = { ...env };
   const scope = 'aurion.probe.admin-readback';
-  const deadline = now() + 15 * 60 * 1000;
+  const waitSeconds = approvalWaitSeconds(env);
+  const deadline = now() + waitSeconds * 1000;
   report({ recordType: 'aurion.production-probe-approval-wait',
     approvalUrl: 'https://arelogic.space/ops', prefilledApprovalUrl:approvalPrefillUrl(identity,scope), revision: identity.GITHUB_SHA,
     runId: identity.GITHUB_RUN_ID, runAttempt: Number(identity.GITHUB_RUN_ATTEMPT),
-    scope, purpose: 'Produktionsrelease Schema-Preflight', maxWaitSeconds: 900 });
-  for (let attempt = 0; attempt < 90 && now() < deadline; attempt++) {
+    scope, purpose: 'Produktionsrelease Schema-Preflight', maxWaitSeconds: waitSeconds });
+  const notified = await notify(identity, { revision: identity.GITHUB_SHA, runId: identity.GITHUB_RUN_ID,
+    runAttempt: Number(identity.GITHUB_RUN_ATTEMPT), waitSeconds });
+  report({ recordType: 'aurion.production-probe-approval-notify', delivered: notified === true });
+  for (let attempt = 0; attempt < Math.ceil(waitSeconds / 10) && now() < deadline; attempt++) {
     try {
       const receipt = await executeProductionProbe(scope, identity);
       if (receipt.status !== 'AUTHORIZED') throw new Error('PROBE_PREFLIGHT_NOT_AUTHORIZED');
