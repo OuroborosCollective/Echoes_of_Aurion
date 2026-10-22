@@ -4574,3 +4574,9 @@ Evidence: Tested code head `05e0808b1c10af29e09fa77a5f32b7fc5459a724`; Godot hea
 Change: Native Godot recovery spends the existing bounded retry budget when a WebSocket handshake ends in `hello_timeout` or `closed` before server welcome, rather than logging out immediately or restarting retries endlessly.
 Learned: A verified server welcome remains the only connection authority; a ticket without welcome must not clear the current bounded reconnect reservation. Gameplay effects are never replayed.
 Evidence: Baseline main `2726c69814d868305406678b8f33a0e5620f940d`; regression first authored in commit `40cb31b12cc1f54893a198288a84d41df8857fea`, implementation on isolated branch; Godot headless and APK CI readback required before merge. Device and production verification explicitly unverified.
+
+
+### 2026-10-22 — First native confirmed-world map / local authoring sketches (PR pending)
+Change: Godot startup scene gains touch world-map markers for validated Aurion presences/mobs and server-reported mob archetypes, plus ephemeral A/B/house sketch points in integer millimetres. Markers clear on logout, mobs despawn only on accepted newer snapshots, and stale worlds reject new designs.
+Architecture: Map is strictly presentation of accepted zone-v5 welcome/snapshots; local planning markers are visibly non-authoritative, never emitted as network commands, and cannot change canonical world state. Actual world placements require existing Aurion admin worldPlan/worldApply + receipt/readback in a separate authorized workflow.
+Evidence boundary: Base main ce4a52ace1a5de099d33913f726543e757829165; Godot headless + Android Preview source-exact CI evidence pending. No real on-device pointer or production gateway proof yet.
