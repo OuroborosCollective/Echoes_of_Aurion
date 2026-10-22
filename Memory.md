@@ -4574,3 +4574,8 @@ Evidence: Tested code head `05e0808b1c10af29e09fa77a5f32b7fc5459a724`; Godot hea
 Change: Native Godot recovery spends the existing bounded retry budget when a WebSocket handshake ends in `hello_timeout` or `closed` before server welcome, rather than logging out immediately or restarting retries endlessly.
 Learned: A verified server welcome remains the only connection authority; a ticket without welcome must not clear the current bounded reconnect reservation. Gameplay effects are never replayed.
 Evidence: Baseline main `2726c69814d868305406678b8f33a0e5620f940d`; regression first authored in commit `40cb31b12cc1f54893a198288a84d41df8857fea`, implementation on isolated branch; Godot headless and APK CI readback required before merge. Device and production verification explicitly unverified.
+
+### 2026-10-22 — G12 invalid-welcome reconnect fail-closed
+Change: During an active native reconnect, rejected protocol frames such as `invalid_welcome` now disarm the retry budget and terminate the session immediately; only `closed` and `hello_timeout` remain retryable.
+Learned: Handshake recovery must classify transport loss separately from authenticated protocol validation failure, otherwise malformed server state can trigger fresh-ticket churn.
+Evidence: Baseline regression head `8539edf493e9e62d3057a9c2829d1ccc9d410b92` failed causally in Godot run 39830317341/job 120004425309; fixed code head `60cc710bcb065f5e043ef9672f91ca5331d3a02c` passed Godot headless/runtime/software-render run 39830879589 and Android Preview/APK readback run 39830879563 (APK SHA256 `0408d079aa05745e0f5350a1287318343c6f9c6d81c9b79cbfda3e450e4fbc0b`); final Memory-bearing head is re-gated before merge. Device and production WSS remain unverified.

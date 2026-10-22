@@ -253,6 +253,16 @@ func verify() -> void:
 	require(not scene._reconnect.active(), "exhausted handshake attempts remained active")
 	require(auth.logout_calls == logouts_before + 1, "exhausted retry did not terminate native session")
 
+	# A server frame that fails the welcome contract is not a transient network
+	# interruption. It must terminate immediately instead of spending retries.
+	var invalid_logouts_before: int = auth.logout_calls
+	var invalid_now: int = Time.get_ticks_msec()
+	require(scene._reconnect.begin(invalid_now), "invalid-welcome setup could not reserve recovery")
+	require(scene._reconnect.take_if_due(invalid_now), "invalid-welcome setup did not start an attempt")
+	scene._on_zone_closed("invalid_welcome")
+	require(not scene._reconnect.active(), "invalid welcome retained reconnect budget")
+	require(auth.logout_calls == invalid_logouts_before + 1, "invalid welcome did not terminate native session")
+
 	scene.queue_free()
 	await process_frame
 	finish()
