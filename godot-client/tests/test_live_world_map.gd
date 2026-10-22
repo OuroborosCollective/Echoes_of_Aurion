@@ -148,8 +148,14 @@ func verify() -> void:
 			"lastAcceptedClientSeq":0,
 		})
 	crowded["mobs"] = []
+	var mob_ids: Array[String] = []
 	for index in range(1, 33):
+		mob_ids.append("mob_%d" % index)
+	mob_ids.sort()
+	for id in mob_ids:
+		var index := int(id.trim_prefix("mob_"))
 		crowded["mobs"].append(mob_record(index, {"x":64000001000 + index,"z":64000000000}))
+	require(Codec.is_valid_snapshot(crowded), "crowded marker fixture violates Aurion wire order")
 	scene._on_zone_snapshot(crowded)
 	require(not map.marker_record("player:1").is_empty(), "crowded map omitted authenticated self")
 	require(not map.marker_record("mob_32").is_empty(), "presence cap displaced valid mob markers")
