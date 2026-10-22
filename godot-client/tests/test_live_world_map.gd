@@ -58,6 +58,20 @@ func drag(map: Control, start: Vector2, finish: Vector2) -> void:
 	map._gui_input(motion)
 	map._gui_input(mouse_event(finish, false))
 
+func touch_event(point: Vector2, pressed: bool) -> InputEventScreenTouch:
+	var event := InputEventScreenTouch.new()
+	event.index = 0
+	event.position = point
+	event.pressed = pressed
+	return event
+
+func touch_drag(point: Vector2, relative: Vector2) -> InputEventScreenDrag:
+	var event := InputEventScreenDrag.new()
+	event.index = 0
+	event.position = point
+	event.relative = relative
+	return event
+
 func mob_record(index: int, position: Dictionary) -> Dictionary:
 	return {
 		"entityId":"mob_%d" % index, "archetype":"clockwork_stalker", "level":1, "state":"idle",
@@ -74,14 +88,19 @@ func verify() -> void:
 	if packed == null:
 		finish()
 		return
+	root.size = Vector2i(480, 480)
 	var scene: Control = packed.instantiate()
 	root.add_child(scene)
 	await process_frame
 	var panel := scene.get_node_or_null("%MapPanel") as Control
 	var map := scene.get_node_or_null("%ZoneMap") as Control
 	var detail := scene.get_node_or_null("%MapSelection") as Label
-	require(panel != null and map != null and detail != null, "active Godot scene lacks interactive confirmed world map")
-	if map == null or panel == null or detail == null:
+	var scroll := scene.get_node_or_null("SafeMargin/Scroll") as ScrollContainer
+	var card := scene.get_node_or_null("%LaunchCard") as Control
+	require(panel != null and map != null and detail != null and scroll != null and card != null, "active Godot scene lacks interactive confirmed world map")
+	require(map == null or map.mouse_filter == Control.MOUSE_FILTER_PASS, "confirmed map blocks parent touch scrolling")
+	require(card == null or card.mouse_filter == Control.MOUSE_FILTER_PASS, "launch card blocks map drags before parent scroll")
+	if map == null or panel == null or detail == null or scroll == null or card == null:
 		scene.queue_free()
 		await process_frame
 		finish()
@@ -93,6 +112,32 @@ func verify() -> void:
 	scene._on_zone_welcome(confirmed)
 	await process_frame
 	require(panel.visible, "server welcome did not reveal map")
+	await process_frame
+	var ancestor := map.get_parent_control()
+	while ancestor != null and ancestor != scroll:
+		require(ancestor.mouse_filter != Control.MOUSE_FILTER_STOP, "map drag path stops before ScrollContainer at " + str(ancestor.name))
+		ancestor = ancestor.get_parent_control()
+	require(ancestor == scroll, "confirmed map is not inside the launch-card ScrollContainer")
+	require(scroll.get_v_scroll_bar().max_value > scroll.get_v_scroll_bar().page, "mobile launch card fixture is not scrollable")
+	var max_scroll := int(scroll.get_v_scroll_bar().max_value - scroll.get_v_scroll_bar().page)
+	var center_delta := int(map.get_global_rect().get_center().y - scroll.get_global_rect().get_center().y)
+	scroll.scroll_vertical = clampi(scroll.scroll_vertical + center_delta, 0, max_scroll)
+	await process_frame
+	var scroll_before := scroll.scroll_vertical
+	var prior_touch_emulation := Input.emulate_touch_from_mouse
+	Input.emulate_touch_from_mouse = true
+	var drag_start := map.get_global_rect().get_center()
+	require(scroll.get_global_rect().has_point(drag_start), "map drag fixture starts outside visible ScrollContainer")
+	Input.parse_input_event(touch_event(drag_start, true))
+	await process_frame
+	Input.parse_input_event(touch_drag(drag_start - Vector2(0, 70), Vector2(0, -70)))
+	await process_frame
+	Input.parse_input_event(touch_drag(drag_start - Vector2(0, 140), Vector2(0, -70)))
+	await process_frame
+	Input.parse_input_event(touch_event(drag_start - Vector2(0, 140), false))
+	await process_frame
+	require(scroll.scroll_vertical > scroll_before, "map-origin touch drag did not change active parent ScrollContainer offset")
+	Input.emulate_touch_from_mouse = prior_touch_emulation
 	require(map.marker_record("player:1").get("position") == {"x":1000,"z":-2000}, "own confirmed position absent")
 	require(map.marker_record("player:2").get("position") == {"x":3000,"z":1000}, "other player not displayed")
 	require(map.marker_record("mob_1").get("archetype") == "clockwork_stalker", "server monster model/archetype lost")
