@@ -81,6 +81,7 @@ func verify() -> void:
 	var map := scene.get_node_or_null("%ZoneMap") as Control
 	var detail := scene.get_node_or_null("%MapSelection") as Label
 	require(panel != null and map != null and detail != null, "active Godot scene lacks interactive confirmed world map")
+	require(map == null or map.mouse_filter == Control.MOUSE_FILTER_PASS, "confirmed map blocks parent touch scrolling")
 	if map == null or panel == null or detail == null:
 		scene.queue_free()
 		await process_frame
