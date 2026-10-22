@@ -4520,3 +4520,25 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-22 — PR #1111 — security: Nerva opt-in Netzwerkprüfung ohne Aurion-Release-Blockade
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1111 merge=40e1be29a105bb65a2f61e51e750fa4d527506c3 -->
+Task: Merge PR #1111 into `main` — security: Nerva opt-in Netzwerkprüfung ohne Aurion-Release-Blockade.
+Decisions: - Security-Prüfung ist advisory; keine Gameplay-, Auth-, Datenbank- oder Produktions-Authority und kein Godot-/APK-Gate. - Nie automatisch externe Ziele scannen; nur Workflow-Dispatch mit festem public-web-Profil. - Pfadfilter verhindern Production-Deploy für reinen Nerva-Sicherheitscode; gemischte Änderungen bleiben releasepflichtig.
+Touched surfaces:
+- `.github/nerva/README.md`
+- `.github/nerva/run-nerva.mjs`
+- `.github/nerva/run-nerva.test.mjs`
+- `.github/workflows/aurion-nerva-security.yml`
+- `scripts/aurion-release-paths.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1111
+- Merge commit: `40e1be29a105bb65a2f61e51e750fa4d527506c3`
+- PR head: `318a185143d20a4793eb1dc84a1815304eee8847`
+- Merged at: 2026-10-22T07:33:29Z
+- Post-merge workflow run: 39741324255
+Learned: - Aktuelles upstream Nerva v1.75.1 (20. Oktober 2026) ist neuer als die zuvor betrachtete Version; Download ist digest-pinned.
+Open: - CI-Readback und optionaler, explizit manuell ausgelöster Live-Scan stehen noch aus. Keine produktive Netzwerkerkenntnis aus Unit-Tests ableiten.
+Next safe step: - Readback der CI und Review; erst danach Merge. Einen echten Scan nur separat über Workflow-Dispatch auslösen.
