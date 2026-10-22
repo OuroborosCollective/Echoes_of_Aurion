@@ -293,7 +293,16 @@ func _on_zone_closed(_reason: String) -> void:
 	_reset_projection()
 	if _reason == "client_close":
 		return
-	if _reason == "closed" and _zone_reject_code.is_empty() and not _lifecycle.is_suspended() and not _awaiting_callback and _auth_start.protected_response_allowed():
+	var was_reconnecting: bool = _reconnect.active()
+	# A reconnect attempt remains reserved until the first verified welcome.
+	# A failed hello/transport consumes one bounded retry, never a blind replay
+	# of a server effect or an unconditional native-session revocation.
+	if _reconnect.active() and not _lifecycle.is_suspended():
+		_recovering_ticket = false
+		if _zone_reject_code.is_empty() and _auth_start.protected_response_allowed() and _reconnect.retry_after_failure(Time.get_ticks_msec()):
+			status.text = "Verbindung wird erneut versucht"
+			return
+	if _reason == "closed" and not was_reconnecting and _zone_reject_code.is_empty() and not _lifecycle.is_suspended() and not _awaiting_callback and _auth_start.protected_response_allowed():
 		if _reconnect.begin(Time.get_ticks_msec()):
 			_recovering_ticket = false
 			status.text = "Verbindung wird erneut versucht"
