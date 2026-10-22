@@ -1,7 +1,7 @@
 name: Deploy Aurion Traefik runtime
 
 on:
-  # Main releases are dispatched after the single Memory entry and mirror readback.
+  # Main releases use a deliberate dispatch pinned to the exact main SHA; no post-merge memory writer.
   pull_request:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
@@ -30,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: Exact main revision whose Memory snapshot has been synchronized and read back.
+        description: Exact main revision selected for the trusted production release dispatch.
         required: true
         type: string
       bootstrap_probe_control_plane:
