@@ -4494,3 +4494,8 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-22 — PR #1117 — bounded owner approval notification
+Change: Extended admin preflight wait to configurable 2400 seconds with one best-effort HTTPS ntfy notice, full SHA/Run-ID and unchanged gameplay readiness/explicit approval guards.
+Learned: Replacing the supplied probe client outright would remove existing gameplay-readiness functions; integration must be additive.
+Evidence: Local Node tests 23/23 PASS; GitHub PR CI pending: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1117 (no production apply/promotion performed).
