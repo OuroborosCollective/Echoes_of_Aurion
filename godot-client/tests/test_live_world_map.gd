@@ -119,8 +119,13 @@ func verify() -> void:
 		ancestor = ancestor.get_parent_control()
 	require(ancestor == scroll, "confirmed map is not inside the launch-card ScrollContainer")
 	require(scroll.get_v_scroll_bar().max_value > scroll.get_v_scroll_bar().page, "mobile launch card fixture is not scrollable")
-	scroll.scroll_vertical = 0
+	var max_scroll := int(scroll.get_v_scroll_bar().max_value - scroll.get_v_scroll_bar().page)
+	var center_delta := int(map.get_global_rect().get_center().y - scroll.get_global_rect().get_center().y)
+	scroll.scroll_vertical = clampi(scroll.scroll_vertical + center_delta, 0, max_scroll)
+	await process_frame
+	var scroll_before := scroll.scroll_vertical
 	var drag_start := map.get_global_rect().get_center()
+	require(scroll.get_global_rect().has_point(drag_start), "map drag fixture starts outside visible ScrollContainer")
 	Input.parse_input_event(touch_event(drag_start, true))
 	await process_frame
 	Input.parse_input_event(touch_drag(drag_start - Vector2(0, 70), Vector2(0, -70)))
@@ -129,7 +134,7 @@ func verify() -> void:
 	await process_frame
 	Input.parse_input_event(touch_event(drag_start - Vector2(0, 140), false))
 	await process_frame
-	require(scroll.scroll_vertical > 0, "map-origin touch drag did not change active parent ScrollContainer offset")
+	require(scroll.scroll_vertical > scroll_before, "map-origin touch drag did not change active parent ScrollContainer offset")
 	require(map.marker_record("player:1").get("position") == {"x":1000,"z":-2000}, "own confirmed position absent")
 	require(map.marker_record("player:2").get("position") == {"x":3000,"z":1000}, "other player not displayed")
 	require(map.marker_record("mob_1").get("archetype") == "clockwork_stalker", "server monster model/archetype lost")
