@@ -170,9 +170,14 @@ func _on_auth_session_succeeded() -> void:
 	_reset_projection()
 	_zone_reject_code = ""
 	_awaiting_callback = false
-	status.text = "Zonenticket wird angefordert"
 	login.text = "Verbinden"
 	login.disabled = true
+	if _lifecycle.is_suspended():
+		_lifecycle.require_restore()
+		_ticket_abandoned = true
+		_ticket_pending = false
+		return
+	status.text = "Zonenticket wird angefordert"
 	_ticket_pending = true
 	_ticket_abandoned = false
 	if not _api.issue_zone_ticket(_config.server_base_url, _config.client_build):
