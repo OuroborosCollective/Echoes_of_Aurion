@@ -516,7 +516,7 @@ func _on_app_resumed() -> void:
 		status.text = "Sitzung wird neu bestätigt"
 	elif _awaiting_callback:
 		login.text = "Abbrechen"
-		login.disabled = false
+		login.disabled = _auth_start.request_in_flight()
 	else:
 		login.text = "Anmelden"
 		if not _configuration_valid():
