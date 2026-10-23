@@ -350,9 +350,10 @@ func _on_zone_ticket_failed(_error_code: String) -> void:
 	_ticket_pending = false
 	if _reconnect.active() and not _lifecycle.is_suspended():
 		_recovering_ticket = false
-		if _reconnect.retry_after_failure(Time.get_ticks_msec()):
+		if _error_code == "AURION_API_REQUEST_FAILED" and _reconnect.retry_after_failure(Time.get_ticks_msec()):
 			status.text = "Verbindung wird erneut versucht"
 			return
+		_reconnect.reset()
 	_reset_projection()
 	_zone_socket.close_zone()
 	status.text = "Verbindung derzeit nicht verfügbar"
