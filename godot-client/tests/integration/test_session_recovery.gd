@@ -138,6 +138,32 @@ func verify() -> void:
 	require(scene._awaiting_callback, "browser callback lost on resume")
 
 	scene._awaiting_callback = false
+	# Initial transport setup uses the same authenticated recovery budget as a
+	# later drop: a missing welcome must refresh the ticket before logout.
+	var initial_logouts_before: int = auth.logout_calls
+	scene._on_auth_session_succeeded()
+	require(api.issues == 1, "initial session did not request a zone ticket")
+	scene._on_zone_ticket_succeeded({
+		"ticket": "i".repeat(48),
+		"zoneId": "observatory_threshold",
+		"expiresAt": "2026-10-19T06:00:00.000Z",
+	})
+	require(socket.opens == 1, "initial ticket did not open the zone socket")
+	socket.connected = false
+	scene._on_zone_closed("hello_timeout")
+	require(scene._reconnect.active(), "initial hello timeout did not arm bounded recovery")
+	require(auth.logout_calls == initial_logouts_before, "initial hello timeout revoked healthy auth")
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 2, "initial hello timeout did not request a fresh ticket")
+	# Keep the remaining independent lifecycle scenarios on their zero baseline.
+	scene._reconnect.reset()
+	scene._recovering_ticket = false
+	scene._ticket_pending = false
+	scene._ticket_abandoned = false
+	api.issues = 0
+	socket.opens = 0
+	auth.logout_calls = initial_logouts_before
+
 	socket.connected = true
 	require(Codec.is_valid_welcome(valid_welcome()), "G12 welcome fixture invalid")
 	scene._on_zone_welcome(valid_welcome())

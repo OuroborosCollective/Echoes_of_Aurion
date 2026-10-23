@@ -320,7 +320,7 @@ func _on_zone_closed(_reason: String) -> void:
 			status.text = "Verbindung wird erneut versucht"
 			return
 		_reconnect.reset()
-	if _reason == "closed" and not was_reconnecting and _zone_reject_code.is_empty() and not _lifecycle.is_suspended() and not _awaiting_callback and _auth_start.protected_response_allowed():
+	if retryable_handshake_end and not was_reconnecting and _zone_reject_code.is_empty() and not _lifecycle.is_suspended() and not _awaiting_callback and _auth_start.protected_response_allowed():
 		if _reconnect.begin(Time.get_ticks_msec()):
 			_recovering_ticket = false
 			status.text = "Verbindung wird erneut versucht"
