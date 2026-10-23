@@ -203,6 +203,21 @@ func verify() -> void:
 
 	scene._awaiting_callback = false
 	auth.allowed = true
+	# The first protected ticket request can refuse to start without emitting a
+	# failure signal. It must leave no phantom pending request and enter the same
+	# bounded recovery used by later pre-response transport failures.
+	var initial_start_logouts_before: int = auth.logout_calls
+	api.start_succeeds = false
+	scene._on_auth_session_succeeded()
+	require(not scene._ticket_pending, "initial ticket-start refusal left a phantom request pending")
+	require(scene._reconnect.active(), "initial ticket-start refusal did not arm bounded recovery")
+	require(auth.logout_calls == initial_start_logouts_before, "initial ticket-start refusal revoked healthy auth")
+	api.start_succeeds = true
+	scene._reconnect.reset()
+	scene._recovering_ticket = false
+	scene._ticket_abandoned = false
+	api.issues = 0
+
 	# Initial transport setup uses the same authenticated recovery budget as a
 	# later drop: a missing welcome must refresh the ticket before logout.
 	var initial_logouts_before: int = auth.logout_calls
