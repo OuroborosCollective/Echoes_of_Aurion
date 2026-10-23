@@ -55,6 +55,9 @@ var _ticket_pending := false
 var _ticket_abandoned := false
 var _intent_bridge: Node
 
+func _configuration_valid() -> bool:
+	return not _config.server_base_url.is_empty() and not _config.client_build.is_empty() and _config.renderer_profile == "compatibility"
+
 func _ready() -> void:
 	Engine.max_fps = 30
 	_config = RuntimeConfig.current()
@@ -91,7 +94,7 @@ func _ready() -> void:
 	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	login.disabled = true
-	if _config.server_base_url.is_empty() or _config.client_build.is_empty() or _config.renderer_profile != "compatibility":
+	if not _configuration_valid():
 		status.text = "Konfiguration ungültig"
 		destination.text = "Die Verbindung ist gesperrt. Bitte verwende einen geprüften Client-Build."
 	else:
@@ -470,7 +473,7 @@ func _expire_combat_notice(now_ms: int) -> void:
 	combat_notice.visible = false
 
 func _on_app_suspended() -> void:
-	var must_restore: bool = _confirmed_zone.has_state() or _zone_socket.state_name() == "connected" or _ticket_pending or _reconnect.active()
+	var must_restore: bool = _confirmed_zone.has_state() or _zone_socket.state_name() != "closed" or _ticket_pending or _reconnect.active() or _auth_start.protected_response_allowed()
 	if not _lifecycle.suspend(must_restore):
 		return
 	_reconnect.reset()
@@ -491,9 +494,15 @@ func _on_app_resumed() -> void:
 		_reconnect.begin(Time.get_ticks_msec())
 		status.text = "Sitzung wird neu bestätigt"
 	elif not _awaiting_callback:
-		status.text = "Nicht verbunden"
 		login.text = "Anmelden"
-		login.disabled = not _config.native_auth_start_enabled
+		if not _configuration_valid():
+			status.text = "Konfiguration ungültig"
+			login.disabled = true
+		elif _auth_start.request_in_flight():
+			login.disabled = true
+		else:
+			status.text = "Nicht verbunden"
+			login.disabled = not _config.native_auth_start_enabled
 
 func _poll_reconnect(now_ms: int) -> void:
 	if not _reconnect.active() or _lifecycle.is_suspended() or _recovering_ticket:
