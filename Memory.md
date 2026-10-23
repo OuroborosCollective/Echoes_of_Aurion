@@ -4642,3 +4642,8 @@ Next safe step: Merge only after the final head is green and has no unresolved r
 Change: Cancelled native-auth HTTP completions are now bound to their original request epoch and cannot publish a result or open a browser after a successor request starts.
 Learned: The zone-ticket client already isolated cancelled wire generations, but the preceding native start/exchange/refresh transport needed the same boundary to keep a late response from mutating the active PKCE flow.
 Evidence: Regression-only head `1c6a287dc8053acb5183583f983d6508a3fdcbae` failed causally in Godot run 39905156305/job 120255316300; fixed code head `492101b26cdc0e63288cad8152e233caabcbbe20` passed Godot headless/runtime/software-render run 39905336234 and Android Preview/APK run 39905336227. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+
+### 2026-10-23 — G12 logged-out resume restores login (PR #1135)
+Change: Resuming the active Godot scene without an authenticated zone now restores the disconnected login UI instead of leaving the login action disabled; no ticket or socket is started.
+Learned: The lifecycle correctly avoided recovery when no zone existed, but that same no-op branch also needed to undo the paused presentation state.
+Evidence: Regression-only head `220d5defe422b64a569d768781c14aedd97d06a0` failed causally in Godot run 39911283493/job 120274656627; fixed code head `a65d518a5e83d8bf8251bebaf7f178068a2e14bf` passed Godot headless/runtime/software-render run 39911507527 and Android Preview/APK run 39911507450. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
