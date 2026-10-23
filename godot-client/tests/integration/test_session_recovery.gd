@@ -181,6 +181,7 @@ func verify() -> void:
 
 	# Android switches to system browser during PKCE. Pause must preserve that
 	# pending transaction; only the original verified callback can complete it.
+	auth.allowed = false
 	scene._awaiting_callback = true
 	scene.get_node("%ConnectionStatus").text = "Systembrowser geöffnet"
 	scene._on_app_suspended()
@@ -193,6 +194,7 @@ func verify() -> void:
 	require(scene._awaiting_callback, "browser callback lost on resume")
 
 	scene._awaiting_callback = false
+	auth.allowed = true
 	# Initial transport setup uses the same authenticated recovery budget as a
 	# later drop: a missing welcome must refresh the ticket before logout.
 	var initial_logouts_before: int = auth.logout_calls
