@@ -54,6 +54,7 @@ var _recovering_ticket := false
 var _ticket_pending := false
 var _ticket_abandoned := false
 var _intent_bridge: Node
+var _discarded_zone_generation_through := -1
 
 func _configuration_valid() -> bool:
 	return not _config.server_base_url.is_empty() and not _config.client_build.is_empty() and _config.renderer_profile == "compatibility"
@@ -83,7 +84,7 @@ func _ready() -> void:
 	_zone_socket.zone_telegraph.connect(_on_zone_telegraph)
 	_zone_socket.zone_connected.connect(_on_zone_connected)
 	_zone_socket.zone_rejected.connect(_on_zone_rejected)
-	_zone_socket.zone_closed.connect(_on_zone_closed)
+	_zone_socket.zone_closed_generation.connect(_on_zone_closed)
 	_intent_bridge = NativeIntentBridge.new()
 	add_child(_intent_bridge)
 	_intent_bridge.callback_received.connect(handle_native_auth_callback)
@@ -308,9 +309,15 @@ func _on_zone_rejected(code: String) -> void:
 	_zone_reject_code = code
 	status.text = "Zonenverbindung abgelehnt"
 
-func _on_zone_closed(_reason: String) -> void:
+func _on_zone_closed(_reason: String, generation: int = -1) -> void:
+	# Suspension discards one exact socket generation. Its terminal callback may
+	# arrive after resume or a successor welcome and must not touch that session.
+	if generation >= 0 and generation <= _discarded_zone_generation_through:
+		return
 	_reset_projection()
 	if _reason == "client_close":
+		return
+	if _lifecycle.is_suspended():
 		return
 	var was_reconnecting: bool = _reconnect.active()
 	var retryable_handshake_end := _reason == "closed" or _reason == "hello_timeout"
@@ -473,7 +480,8 @@ func _expire_combat_notice(now_ms: int) -> void:
 	combat_notice.visible = false
 
 func _on_app_suspended() -> void:
-	var must_restore: bool = _confirmed_zone.has_state() or _zone_socket.state_name() != "closed" or _ticket_pending or _reconnect.active() or _auth_start.protected_response_allowed()
+	var socket_active: bool = _zone_socket.state_name() != "closed"
+	var must_restore: bool = _confirmed_zone.has_state() or socket_active or _ticket_pending or _reconnect.active() or _auth_start.protected_response_allowed()
 	if not _lifecycle.suspend(must_restore):
 		return
 	_reconnect.reset()
@@ -481,6 +489,8 @@ func _on_app_suspended() -> void:
 	_api.cancel()
 	_ticket_abandoned = true
 	_ticket_pending = false
+	if socket_active:
+		_discarded_zone_generation_through = maxi(_discarded_zone_generation_through, _zone_socket.connection_generation())
 	_zone_socket.close_zone()
 	_reset_projection()
 	if not _awaiting_callback:
