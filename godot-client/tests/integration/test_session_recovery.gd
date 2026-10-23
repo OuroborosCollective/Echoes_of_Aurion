@@ -126,6 +126,8 @@ func verify() -> void:
 
 	# A logged-out app has no zone to restore. Resume must make the real login
 	# action usable again without starting a ticket or socket.
+	scene._config.native_auth_start_enabled = true
+	scene._on_auth_logout_terminal()
 	require(not scene.get_node("%Login").disabled, "logged-out scene did not start with login enabled")
 	scene._on_app_suspended()
 	require(scene._lifecycle.is_suspended(), "logged-out OS pause not registered")
