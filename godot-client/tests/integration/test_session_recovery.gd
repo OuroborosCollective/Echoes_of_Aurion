@@ -213,6 +213,8 @@ func verify() -> void:
 	require(scene._reconnect.active(), "initial ticket-start refusal did not arm bounded recovery")
 	require(auth.logout_calls == initial_start_logouts_before, "initial ticket-start refusal revoked healthy auth")
 	api.start_succeeds = true
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 2, "initial ticket-start refusal did not request a fresh ticket")
 	scene._reconnect.reset()
 	scene._recovering_ticket = false
 	scene._ticket_abandoned = false
