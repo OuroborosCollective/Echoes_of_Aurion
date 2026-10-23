@@ -18,8 +18,11 @@ class ProtectedAuth:
 	var allowed := true
 	var cancel_calls := 0
 	var logout_calls := 0
+	var request_active := false
 	func protected_response_allowed() -> bool:
 		return allowed
+	func request_in_flight() -> bool:
+		return request_active
 	func cancel() -> void:
 		cancel_calls += 1
 	func logout_in_flight() -> bool:
@@ -33,11 +36,13 @@ class ZoneTransport:
 	var connected := false
 	var closes := 0
 	var opens := 0
+	var reported_state := ""
 	func state_name() -> String:
-		return "connected" if connected else "closed"
+		return reported_state if not reported_state.is_empty() else ("connected" if connected else "closed")
 	func close_zone() -> void:
 		closes += 1
 		connected = false
+		reported_state = ""
 	func connect_zone(_base: String, _ticket: String) -> bool:
 		opens += 1
 		connected = true
@@ -126,6 +131,7 @@ func verify() -> void:
 
 	# A logged-out app has no zone to restore. Resume must make the real login
 	# action usable again without starting a ticket or socket.
+	auth.allowed = false
 	scene._config.native_auth_start_enabled = true
 	scene._on_auth_logout_terminal()
 	require(not scene.get_node("%Login").disabled, "logged-out scene did not start with login enabled")
@@ -136,6 +142,42 @@ func verify() -> void:
 	require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "logged-out resume retained paused status")
 	require(not scene.get_node("%Login").disabled, "logged-out resume left login disabled")
 	require(api.issues == 0 and socket.opens == 0, "logged-out resume started a protected connection")
+
+	# Resume must not bypass startup configuration validation.
+	var valid_server: String = scene._config.server_base_url
+	scene._config.server_base_url = ""
+	scene._on_app_suspended()
+	scene._on_app_resumed()
+	require(scene.get_node("%ConnectionStatus").text == "Konfiguration ungültig", "invalid configuration was hidden by resume")
+	require(scene.get_node("%Login").disabled, "invalid configuration enabled login after resume")
+	scene._config.server_base_url = valid_server
+	scene._on_auth_logout_terminal()
+
+	# Native login may still be in flight while Android pauses. It remains the
+	# sole active attempt and resume must not expose a second login action.
+	auth.request_active = true
+	scene._on_app_suspended()
+	scene._on_app_resumed()
+	require(scene.get_node("%Login").disabled, "resume enabled login during an active native-auth request")
+	require(api.issues == 0 and socket.opens == 0, "native-auth resume started a protected connection")
+	auth.request_active = false
+	scene._on_auth_logout_terminal()
+
+	# A pre-welcome socket has consumed its ticket but still owns authenticated
+	# recovery. Pause/resume must request one replacement ticket, not show login.
+	auth.allowed = true
+	socket.reported_state = "connecting"
+	scene._on_app_suspended()
+	scene._on_app_resumed()
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 1, "pre-welcome resume did not request a replacement ticket")
+	require(scene.get_node("%Login").disabled, "pre-welcome resume exposed a second login")
+	scene._api.cancel()
+	scene._ticket_pending = false
+	scene._ticket_abandoned = true
+	scene._recovering_ticket = false
+	scene._reconnect.reset()
+	api.issues = 0
 
 	# Android switches to system browser during PKCE. Pause must preserve that
 	# pending transaction; only the original verified callback can complete it.
