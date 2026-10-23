@@ -4678,3 +4678,13 @@ Next safe step: Verify the Memory-bearing exact PR head, complete shared review,
 Change: A protected ticket request that synchronously refuses to start without emitting a failure now consumes the existing bounded recovery budget and terminates the native session cleanly when that budget is exhausted.
 Learned: The controller must distinguish an API failure already classified by a synchronous signal from a bare false return; otherwise the latter leaves a phantom pending request and disabled login after the final attempt.
 Evidence: Regression-only head `d36519ae8c40f841671d153afe95e4a2df07550c` failed causally in Godot run 39960142460/job 120435797800; implementation head `9af008452ccb71d08db7bcdb9c167d368f18f9c0` passed active-scene session recovery, startup and software-render checks in run 39960326772/job 120436415548. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
+
+### 2026-10-23 — G12 initial ticket-start refusal recovery
+Status: VERIFIED candidate
+Task: Prevent the first protected zone-ticket start after successful native auth from hanging when the API refuses synchronously without emitting a failure.
+Decisions: Clear the phantom pending flag and classify only callbackless start refusal as bounded pre-response transport loss; synchronously signaled API failures retain their existing fail-closed callback path.
+Touched surfaces: `godot-client/app/main.gd`, `godot-client/tests/integration/test_session_recovery.gd`.
+Evidence: PR #1141; causal-red head `504204c859cc4f4ce8a2d775c1e7baa338e3c233`, Godot run 39968449600/job 120464420110 failed the two new active-scene assertions; fixed candidate `7128b6be1440cc2d03b15e5f31cf6a36586dfebc`, Godot/runtime/software-render and Android toolchain run 39968766948 plus Preview/APK run 39968766999 passed.
+Learned: The initial ticket request and reconnect ticket requests share the same synchronous-start boundary; both must distinguish a callback-classified failure from a silent refusal before mutating recovery state.
+Open: Exact final-head gates, shared review, merge and main readback remain required.
+Next safe step: Re-run all required checks on the Memory-bearing final head, resolve review findings, then merge only with exact-head evidence.
