@@ -4637,3 +4637,8 @@ Evidence: Baseline main 818e93b87d1760ebeca4e7d988b800fa6de386e7 accepted every 
 Learned: A rejected transport combat intent must be gated before admitSequence so it neither becomes canonical history nor prevents a later independently sequenced movement.
 Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
 Next safe step: Merge only after the final head is green and has no unresolved review findings, then read back main.
+
+### 2026-10-23 — G12 native-auth HTTP callback generation (PR #1134)
+Change: Cancelled native-auth HTTP completions are now bound to their original request epoch and cannot publish a result or open a browser after a successor request starts.
+Learned: The zone-ticket client already isolated cancelled wire generations, but the preceding native start/exchange/refresh transport needed the same boundary to keep a late response from mutating the active PKCE flow.
+Evidence: Regression-only head `1c6a287dc8053acb5183583f983d6508a3fdcbae` failed causally in Godot run 39905156305/job 120255316300; fixed code head `492101b26cdc0e63288cad8152e233caabcbbe20` passed Godot headless/runtime/software-render run 39905336234 and Android Preview/APK run 39905336227. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
