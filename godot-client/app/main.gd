@@ -191,7 +191,7 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 	status.text = "Zonenverbindung wird aufgebaut"
 	login.text = "Verbinden"
 	if not _zone_socket.connect_zone(_config.server_base_url, receipt["ticket"]):
-		_on_zone_ticket_failed("AURION_ZONE_SOCKET_UNAVAILABLE")
+		_on_zone_closed("socket_open_failed")
 
 func _reset_projection() -> void:
 	_confirmed_zone.reset()
@@ -320,7 +320,7 @@ func _on_zone_closed(_reason: String, generation: int = -1) -> void:
 	if _lifecycle.is_suspended():
 		return
 	var was_reconnecting: bool = _reconnect.active()
-	var retryable_handshake_end := _reason in ["closed", "hello_timeout", "hello_send_failed"]
+	var retryable_handshake_end := _reason in ["closed", "hello_timeout", "hello_send_failed", "socket_open_failed"]
 	# A reconnect attempt remains reserved until the first verified welcome.
 	# Only transport/timeout endings consume that budget; rejected protocol
 	# frames fail closed immediately and cannot race another ticket request.

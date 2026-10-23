@@ -4663,3 +4663,13 @@ Evidence: Activated regression head `1db4975a16b84a26e5f727391baa0968e7faa630` f
 Change: A native socket that opens but cannot send its authenticated hello now spends the existing bounded fresh-ticket recovery budget instead of immediately revoking healthy auth.
 Learned: Pre-welcome transport classification must include the actual hello-send boundary; unlike invalid server frames, a failed local send carries no authenticated server response and is safe only under the same finite retry cap.
 Evidence: Regression-only head `cf2d586bb6fddce36091a59892e6d692ac453057` failed causally in Godot run 39938317972/job 120363254334; implementation head `f35a96f57e40d42fab198ed8f8f0082809e6824f` passed the Godot headless/runtime/software-render contract in run 39938726550. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
+
+### 2026-10-23 — G12 synchronous socket-open recovery
+Status: VERIFIED candidate integration
+Task: Keep healthy native auth alive when the zone WebSocket cannot begin opening before any server response.
+Decisions: Classify only the validated ticket path's synchronous socket-open failure as bounded pre-response transport loss; invalid ticket, server/protocol and exhausted-retry paths remain fail-closed.
+Touched surfaces: `godot-client/app/main.gd`, active-scene G12 recovery regression.
+Evidence: PR #1139; causal red `8c5205550d122a47583119da9d9aef5b3cd5645a` run 39945163285/job 120385922873; corrected implementation `09b139ee45bcfaee4b7864d83856cd0c543030b7` passed Godot/runtime/software-render 39945341612 and Android Preview/APK 39945341168.
+Learned: A local `connect_to_url` setup failure consumes the one-time ticket but says nothing about session validity, so it belongs to the same bounded fresh-ticket recovery as pre-welcome transport loss.
+Open: None beyond exact final-head gates and review.
+Next safe step: Verify the Memory-bearing exact PR head, complete shared review, merge, and read back `main`.
