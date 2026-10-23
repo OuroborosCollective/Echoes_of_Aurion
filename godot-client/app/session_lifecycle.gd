@@ -22,6 +22,10 @@ func require_restore() -> bool:
 	_pending_restore = true
 	return true
 
+func cancel_restore() -> void:
+	_had_zone = false
+	_pending_restore = false
+
 func resume() -> bool:
 	if not _suspended:
 		return false
