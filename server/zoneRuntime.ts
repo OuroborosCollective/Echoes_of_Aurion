@@ -474,6 +474,16 @@ export class AuthoritativeMovementZone {
     return "accepted";
   }
 
+  /**
+   * Transport admission only: reserve one player combat command per zone tick.
+   * Canonical replay still resolves every recorded intent under its original
+   * ruleset, so historical tick receipts are not reinterpreted.
+   */
+  private hasQueuedPlayerCombat(entityId: string): boolean {
+    return this.pendingIntents.some(intent =>
+      intent.entityId === entityId && (intent.type === "attack" || intent.type === "skill"));
+  }
+
   submitAttack(connectionId: string, attack: ZoneAttack): AttackResult {
     const peer = this.peers.get(connectionId);
     if (!peer) return "missing";
@@ -482,6 +492,7 @@ export class AuthoritativeMovementZone {
     const mob = this.mobRuntime.stateFor(attack.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
     if (mobDistance(peer.position, mob.position) > AX1_PLAYER_BASIC_MELEE_RANGE_FIXED) return "out_of_range";
+    if (this.hasQueuedPlayerCombat(`player:${peer.userId}`)) return "cooldown";
     if (!this.admitSequence(peer, attack.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
     this.pendingIntents.push({ type: "attack", connectionId, entityId: `player:${peer.userId}`, clientSeq: attack.clientSeq, arrivalSeq: ++this.arrivalSequence, targetEntityId: attack.targetEntityId });
@@ -500,6 +511,7 @@ export class AuthoritativeMovementZone {
     const mob = this.mobRuntime.stateFor(skill.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
     if (mobDistance(peer.position, mob.position) > definition.rangeFixed) return "out_of_range";
+    if (this.hasQueuedPlayerCombat(`player:${peer.userId}`)) return "cooldown";
     if (!this.admitSequence(peer, skill.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
     this.pendingIntents.push({ type: "skill", connectionId, entityId: `player:${peer.userId}`, clientSeq: skill.clientSeq, arrivalSeq: ++this.arrivalSequence, skillId: skill.skillId, targetEntityId: skill.targetEntityId });
