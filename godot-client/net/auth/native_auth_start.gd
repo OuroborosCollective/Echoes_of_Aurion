@@ -103,6 +103,9 @@ func refresh(now_ms: int = -1) -> bool:
 		return false
 	return _send_json(REFRESH_PATH, request, "refresh", now_ms)
 
+func request_in_flight() -> bool:
+	return _request_active
+
 func refresh_in_flight() -> bool:
 	return _request_active and _request_phase == "refresh"
 
