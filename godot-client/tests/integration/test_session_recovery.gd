@@ -213,6 +213,7 @@ func verify() -> void:
 	scene._process(0.0)
 	require(api.issues == suspended_auth_issues_before + 1, "suspended auth completion did not request one ticket after resume")
 	scene._on_auth_logout_terminal()
+	api.issues = 0
 
 	auth.allowed = true
 	# The first protected ticket request can refuse to start without emitting a
