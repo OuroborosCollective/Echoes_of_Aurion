@@ -4673,3 +4673,8 @@ Evidence: PR #1139; causal red `8c5205550d122a47583119da9d9aef5b3cd5645a` run 39
 Learned: A local `connect_to_url` setup failure consumes the one-time ticket but says nothing about session validity, so it belongs to the same bounded fresh-ticket recovery as pre-welcome transport loss.
 Open: None beyond exact final-head gates and review.
 Next safe step: Verify the Memory-bearing exact PR head, complete shared review, merge, and read back `main`.
+
+### 2026-10-23 — G12 synchronous ticket-start exhaustion (PR #1140)
+Change: A protected ticket request that synchronously refuses to start without emitting a failure now consumes the existing bounded recovery budget and terminates the native session cleanly when that budget is exhausted.
+Learned: The controller must distinguish an API failure already classified by a synchronous signal from a bare false return; otherwise the latter leaves a phantom pending request and disabled login after the final attempt.
+Evidence: Regression-only head `d36519ae8c40f841671d153afe95e4a2df07550c` failed causally in Godot run 39960142460/job 120435797800; implementation head `9af008452ccb71d08db7bcdb9c167d368f18f9c0` passed active-scene session recovery, startup and software-render checks in run 39960326772/job 120436415548. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.

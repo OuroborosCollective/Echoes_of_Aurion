@@ -7,11 +7,12 @@ class FreshTicketApi:
 	extends Node
 	var issues := 0
 	var cancelled := 0
+	var start_succeeds := true
 	func cancel() -> void:
 		cancelled += 1
 	func issue_zone_ticket(_server: String, _build: String, _allow_local: bool = false) -> bool:
 		issues += 1
-		return true
+		return start_succeeds
 
 class ProtectedAuth:
 	extends Node
@@ -410,6 +411,21 @@ func verify() -> void:
 	scene._on_zone_closed("hello_timeout")
 	require(not scene._reconnect.active(), "exhausted handshake attempts remained active")
 	require(auth.logout_calls == logouts_before + 1, "exhausted retry did not terminate native session")
+
+	# A synchronous ticket-request start refusal can occur before any failure
+	# signal. It must consume the same finite retry budget and terminate cleanly.
+	var start_refusal_logouts_before: int = auth.logout_calls
+	api.start_succeeds = false
+	var start_refusal_now: int = Time.get_ticks_msec()
+	require(scene._reconnect.begin(start_refusal_now), "ticket-start refusal setup could not reserve recovery")
+	scene._poll_reconnect(start_refusal_now)
+	scene._poll_reconnect(start_refusal_now + 500)
+	scene._poll_reconnect(start_refusal_now + 2000)
+	require(not scene._reconnect.active(), "exhausted ticket-start refusals retained reconnect budget")
+	require(not scene._ticket_pending, "exhausted ticket-start refusals left a phantom request pending")
+	require(auth.logout_calls == start_refusal_logouts_before + 1, "exhausted ticket-start refusals did not terminate native session")
+	api.start_succeeds = true
+
 
 	# A structurally invalid protected ticket response is not a transient network
 	# failure. Retrying it would keep a suspect authenticated session alive and
