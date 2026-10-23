@@ -170,12 +170,26 @@ func verify() -> void:
 	tap(map, map.world_to_screen({"x":5000,"z":0}))
 	require(detail.text.contains("X 5.00 m"), "accepted movement left stale inspector coordinates")
 
+	var offscreen := snapshot_from(moved, 3)
+	offscreen["mobs"][0]["position"] = map._screen_to_world(Vector2(-8, map.size.y * 0.5))
+	scene._on_zone_snapshot(offscreen)
+	tap(map, Vector2(4, map.size.y * 0.5))
+	require(map.selected_record().is_empty(), "empty map-edge tap selected an off-screen enemy")
+
+	var edge := snapshot_from(offscreen, 4)
+	edge["mobs"][0]["position"] = map._screen_to_world(Vector2(8, map.size.y * 0.5))
+	scene._on_zone_snapshot(edge)
+	var visible_edge_point: Vector2 = map.world_to_screen(edge["mobs"][0]["position"])
+	require(Rect2(Vector2.ZERO, map.size).has_point(visible_edge_point), "edge marker fixture is not visible")
+	tap(map, visible_edge_point)
+	require(map.selected_record().get("entityId") == "mob_1", "visible edge marker could not be inspected")
+
 	var old := snapshot_from(confirmed, 1)
 	old["mobs"] = []
 	scene._on_zone_snapshot(old)
 	require(not map.marker_record("mob_1").is_empty(), "replayed stale snapshot removed a confirmed enemy")
 
-	var far := snapshot_from(moved, 3)
+	var far := snapshot_from(edge, 5)
 	far["presences"][0]["position"] = {"x":64000000000,"z":64000000000}
 	far["presences"][1]["position"] = {"x":64000001000,"z":64000000000}
 	far["mobs"][0]["position"] = {"x":64000001000,"z":64000000000}
@@ -189,7 +203,7 @@ func verify() -> void:
 	tap(map, shared_screen)
 	require(map.selected_record().get("entityId") == "mob_1", "overlapping visible mob lost hit-test priority")
 
-	var crowded := snapshot_from(far, 4)
+	var crowded := snapshot_from(far, 6)
 	crowded["presences"] = []
 	for index in range(1, 129):
 		crowded["presences"].append({
@@ -212,9 +226,9 @@ func verify() -> void:
 	require(map.marker_record("player:99").is_empty(), "bounded map exceeded reserved presence capacity")
 
 	var despawn := crowded.duplicate(true)
-	despawn["snapshotSeq"] = 5
-	despawn["tick"] = 5
-	despawn["resources"]["revision"] = 5
+	despawn["snapshotSeq"] = 7
+	despawn["tick"] = 7
+	despawn["resources"]["revision"] = 7
 	despawn["mobs"] = []
 	scene._on_zone_snapshot(despawn)
 	require(map.marker_record("mob_1").is_empty(), "despawned monster remained selectable")
