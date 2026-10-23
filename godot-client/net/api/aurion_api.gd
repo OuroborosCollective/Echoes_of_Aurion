@@ -156,7 +156,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_begin_refresh()
 		return
 	if response_code != 200:
-		_fail(REQUEST_FAILED)
+		_fail(RESPONSE_INVALID)
 		return
 	if not _json_content_type(headers):
 		_fail(RESPONSE_INVALID)
