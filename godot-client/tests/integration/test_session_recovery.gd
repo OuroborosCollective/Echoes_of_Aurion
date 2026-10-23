@@ -206,6 +206,7 @@ func verify() -> void:
 	# ticket may start in the background; resume must request exactly one fresh
 	# ticket through the bounded recovery path.
 	var suspended_auth_issues_before: int = api.issues
+	auth.allowed = true
 	scene._on_app_suspended()
 	scene._on_auth_session_succeeded()
 	require(api.issues == suspended_auth_issues_before, "suspended auth completion started a background ticket")
