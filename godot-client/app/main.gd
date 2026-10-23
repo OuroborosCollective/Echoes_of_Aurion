@@ -175,7 +175,12 @@ func _on_auth_session_succeeded() -> void:
 	login.disabled = true
 	_ticket_pending = true
 	_ticket_abandoned = false
-	_api.issue_zone_ticket(_config.server_base_url, _config.client_build)
+	if not _api.issue_zone_ticket(_config.server_base_url, _config.client_build):
+		# A synchronous API failure may already have emitted request_failed.
+		if not _ticket_pending:
+			return
+		_ticket_pending = false
+		_on_zone_closed("ticket_start_failed")
 
 func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 	if _ticket_abandoned or not _ticket_pending:
@@ -320,7 +325,7 @@ func _on_zone_closed(_reason: String, generation: int = -1) -> void:
 	if _lifecycle.is_suspended():
 		return
 	var was_reconnecting: bool = _reconnect.active()
-	var retryable_handshake_end := _reason in ["closed", "hello_timeout", "hello_send_failed", "socket_open_failed"]
+	var retryable_handshake_end := _reason in ["closed", "hello_timeout", "hello_send_failed", "socket_open_failed", "ticket_start_failed"]
 	# A reconnect attempt remains reserved until the first verified welcome.
 	# Only transport/timeout endings consume that budget; rejected protocol
 	# frames fail closed immediately and cannot race another ticket request.
