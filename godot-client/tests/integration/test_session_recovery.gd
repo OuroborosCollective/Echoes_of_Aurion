@@ -133,7 +133,7 @@ func verify() -> void:
 	scene._on_app_resumed()
 	require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "logged-out resume retained paused status")
 	require(not scene.get_node("%Login").disabled, "logged-out resume left login disabled")
-	require(api.issues == 0 and socket.connect_calls == 0, "logged-out resume started a protected connection")
+	require(api.issues == 0 and socket.opens == 0, "logged-out resume started a protected connection")
 
 	# Android switches to system browser during PKCE. Pause must preserve that
 	# pending transaction; only the original verified callback can complete it.
