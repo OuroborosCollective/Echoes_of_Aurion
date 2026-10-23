@@ -4606,3 +4606,14 @@ Evidence: Regression-only `20d6b00c00b7fc808bd2d42ef256a25b1b3695c8` failed caus
 Learned: Marker visibility and selection must share the same bounds rule; integer-mm screen roundtrips require an explicitly visible positive-control point rather than assuming exact floating-point edge identity.
 Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
 Next safe step: Gate and review the exact final PR head, then merge only with no unresolved findings and read back `main`.
+
+
+### 2026-10-23 — PR #1130 — initial welcome-timeout recovery
+Status: VERIFIED candidate
+Task: Keep an authenticated native session recoverable when its initial zone socket reaches `hello_timeout` before a verified welcome.
+Decisions: Start the existing bounded fresh-ticket policy for both retryable initial handshake endings (`closed` and `hello_timeout`); invalid welcome/protocol endings still fail closed.
+Touched surfaces: `godot-client/app/main.gd`, active-scene `godot-client/tests/integration/test_session_recovery.gd` regression.
+Evidence: Regression-only `7dd180be354dcdccec502ad2dc6e74b012fd8df5` failed causally in Godot run 39883258813/job 120185375241; fixed candidate `7e9d2b86314a0127b16d4a980eb777b8c06a76c3` passed Godot/runtime/software-render 39883404930 and Android Preview/APK 39883404928.
+Learned: The socket already classified welcome timeouts as retryable during recovery, but the controller's initial-entry predicate must use the same classification to avoid premature logout.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Gate and review the exact final PR head, then merge only with no unresolved findings and read back `main`.
