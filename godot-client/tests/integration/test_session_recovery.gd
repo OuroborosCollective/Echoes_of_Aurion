@@ -236,6 +236,22 @@ func verify() -> void:
 	scene._on_app_resumed()
 	require(not scene.get_node("%Login").disabled, "resume after suspended logout did not restore login")
 
+	# A protected session can finish logout while Android is still paused. That
+	# terminal result must cancel the reserved restore without pretending the app
+	# resumed early or arming a reconnect against revoked authority.
+	auth.allowed = true
+	socket.connected = true
+	scene._on_zone_welcome(valid_welcome())
+	scene._on_zone_connected()
+	scene._on_app_suspended()
+	auth.allowed = false
+	scene._on_auth_logout_terminal()
+	require(scene._lifecycle.is_suspended(), "terminal logout resumed the app lifecycle")
+	scene._on_app_resumed()
+	require(not scene._reconnect.active(), "resume after suspended protected logout armed reconnect")
+	require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "resume after suspended protected logout retained recovery status")
+	require(not scene.get_node("%Login").disabled, "resume after suspended protected logout did not restore login")
+
 	scene._awaiting_callback = false
 	# A native exchange may complete while Android is still paused. No protected
 	# ticket may start in the background; resume must request exactly one fresh

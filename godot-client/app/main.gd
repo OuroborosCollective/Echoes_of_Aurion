@@ -375,6 +375,7 @@ func _on_zone_ticket_failed(_error_code: String) -> void:
 		_on_auth_logout_terminal()
 
 func _on_auth_logout_terminal(_error_code: String = "") -> void:
+	_lifecycle.cancel_restore()
 	_ticket_abandoned = true
 	_ticket_pending = false
 	_reconnect.reset()
@@ -386,6 +387,7 @@ func _on_auth_logout_terminal(_error_code: String = "") -> void:
 	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 
 func _on_auth_session_failed(_error_code: String) -> void:
+	_lifecycle.cancel_restore()
 	_ticket_abandoned = true
 	_ticket_pending = false
 	_reset_projection()

@@ -4708,3 +4708,9 @@ Evidence: Owner run 39989532413 rejected the actual missing filter before apksig
 Change: A native-auth start response received while Android is paused preserves its callback transaction without exposing cancellation in the background; resume restores “Abbrechen” only while the browser callback is pending, never during its exchange request.
 Learned: The callback transaction spans two UI states under one awaiting flag, so lifecycle resume must also consult the native request boundary before restoring interaction.
 Evidence: Original regression head `e151e42d9c476c6955004547ba730fd72701b5f2` failed in Godot run 40002179714/job 120580821276; review regression head `aa41d1a8a75fd7f87b3a07778c2a2a55f6211820` failed causally in run 40010325367/job 120608733299; corrected code head `61de554c13a1610004281a7137f1aa1bbf6e5caf` passed the Godot runtime/software-render contract job 120609720469. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+
+
+### 2026-10-23 — G12 suspended terminal-logout restore cancellation (PR #1146)
+Change: A terminal logout or native-session failure received while Android is paused now cancels the reserved protected-session restore without ending suspension early; foreground resume returns directly to idle login instead of arming reconnect against revoked authority.
+Learned: Clearing reconnect state is insufficient because the lifecycle owns a separate pending-restore reservation that survives terminal auth callbacks.
+Evidence: Regression-only head `603163444430368a2566a80970e8198587c2eb46` failed causally in Godot run 40018063075/job 120635162163; corrected code head `a451d8e978e30ddd1681dc064012ba12d9af2261` passed the active-scene Godot runtime/software-render contract in run 40018341005. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
