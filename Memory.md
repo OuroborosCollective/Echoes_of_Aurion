@@ -4617,3 +4617,13 @@ Evidence: Regression-only `7dd180be354dcdccec502ad2dc6e74b012fd8df5` failed caus
 Learned: The socket already classified welcome timeouts as retryable during recovery, but the controller's initial-entry predicate must use the same classification to avoid premature logout.
 Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
 Next safe step: Gate and review the exact final PR head, then merge only with no unresolved findings and read back `main`.
+
+### 2026-10-23 — Godot Login SDK source.properties whitespace regression
+Status: IMPLEMENTED_IN_REPOSITORY; new exact-head CI and actual signed APK pending.
+Task: Fix real owner-dispatched signed-Login run 39886214133 / build job 120194930032 failing at separate SDK inspection.
+Decisions: Accept surrounding whitespace on the exact SDK source.properties key before `=`, still require exactly one declaration, the unchanged locked SDK versions and required tool files; no signer, gameplay or production runtime modifications.
+Touched surfaces: scripts/godot/gradle-prerequisites.mjs, scripts/godot/gradle-prerequisites.test.mjs.
+Evidence: Run 39886214133 showed `Pkg.Revision must appear once` in build step 6; Validate and upstream Godot/App Link gates succeeded; signing skipped. Added realistic `Pkg.Revision = ...` NDK fixture and missing/duplicate-key rejection regressions. Fresh Godot and Android CI on this PR must confirm behavior.
+Learned: Android NDK source.properties can separate the key and `=` with spaces; a key/value parser must not confuse syntax whitespace with missing SDK version.
+Open: Final exact-head CI, review, merge, new pinned signer workflow and real signed APK readback.
+Next safe step: Gate regression in Aurion CI, merge only when green, then update Sovereign signing source pin and trigger owner-only run.

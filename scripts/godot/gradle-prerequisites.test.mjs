@@ -31,7 +31,7 @@ async function fixture() {
  await writeFile(join(tools,'source.properties'),'Pkg.Revision=36.1.0\n');
  await writeFile(join(tools,'aapt'),'unit fixture only');
  await writeFile(join(tools,'apksigner'),'unit fixture only');
- await writeFile(join(ndk,'source.properties'),'Pkg.Revision=29.0.14206865\n');
+ await writeFile(join(ndk,'source.properties'),'Pkg.Desc = Android NDK\nPkg.Revision = 29.0.14206865\n');
  return {sdk,platform,tools,ndk};
 }
 test('installed versions, not folder names alone, decide Gradle SDK readiness',async t=>{
@@ -47,6 +47,15 @@ test('rejects NDK manifest that contradicts directory name',async t=>{
  await writeFile(join(f.ndk,'source.properties'),'Pkg.Revision=28.1.13356709\n');
  await assert.rejects(inspectLoginGradleSdk(f.sdk, expected),/NDK version mismatch/);
 });
+
+test('rejects absent or duplicate NDK revisions with mixed whitespace',async t=>{
+ const f=await fixture();t.after(()=>rm(f.sdk,{recursive:true,force:true}));
+ await writeFile(join(f.ndk,'source.properties'),'Pkg.Desc = Android NDK\nPkg.RevisionExtra = 29.0.14206865\n');
+ await assert.rejects(inspectLoginGradleSdk(f.sdk,expected),/Pkg.Revision must appear once/);
+ await writeFile(join(f.ndk,'source.properties'),'Pkg.Revision = 29.0.14206865\nPkg.Revision=29.0.14206865\n');
+ await assert.rejects(inspectLoginGradleSdk(f.sdk,expected),/Pkg.Revision must appear once/);
+});
+
 test('rejects absent Android platform, build tools and certificate inspector',async t=>{
  const f=await fixture();t.after(()=>rm(f.sdk,{recursive:true,force:true}));
  await rm(join(f.platform,'android.jar'));
