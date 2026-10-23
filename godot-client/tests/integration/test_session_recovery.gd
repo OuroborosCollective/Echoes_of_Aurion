@@ -37,14 +37,18 @@ class ZoneTransport:
 	var closes := 0
 	var opens := 0
 	var reported_state := ""
+	var generation := 0
 	func state_name() -> String:
 		return reported_state if not reported_state.is_empty() else ("connected" if connected else "closed")
+	func connection_generation() -> int:
+		return generation
 	func close_zone() -> void:
 		closes += 1
 		connected = false
 		reported_state = ""
 	func connect_zone(_base: String, _ticket: String) -> bool:
 		opens += 1
+		generation += 1
 		connected = true
 		return true
 
@@ -226,18 +230,13 @@ func verify() -> void:
 	scene._on_zone_welcome(valid_welcome())
 	scene._on_zone_connected()
 	require(scene._confirmed_zone.has_state(), "verified initial zone missing")
+	var suspended_generation: int = socket.connection_generation()
 	scene._on_app_suspended()
 	require(not scene._confirmed_zone.has_state(), "suspend retained stale world authority")
 	require(scene._entities.ids("presences").is_empty(), "suspend retained stale entity readmodels")
 	require(socket.closes > 0 and not socket.connected, "suspend did not neutralize active socket")
 	scene._on_zone_welcome(valid_welcome(1))
 	require(not scene._confirmed_zone.has_state(), "late suspended welcome revived world")
-	# The intentionally closed pre-suspend transport may report its terminal
-	# event after Android has already paused. It must not revoke healthy auth.
-	var suspended_logouts_before: int = auth.logout_calls
-	scene._on_zone_closed("closed")
-	require(auth.logout_calls == suspended_logouts_before, "late suspended close revoked healthy auth")
-	require(scene._lifecycle.is_suspended(), "late close escaped the suspended lifecycle")
 	scene._on_app_resumed()
 	var current_time := Time.get_ticks_msec()
 	scene._poll_reconnect(current_time)
@@ -256,6 +255,13 @@ func verify() -> void:
 	scene._on_zone_connected()
 	require(scene._confirmed_zone.has_state(), "fresh server welcome did not restore world")
 	require(not scene._reconnect.active(), "successful welcome left retry loop enabled")
+	# The discarded transport may report terminal state after resume and even
+	# after a successor welcome. Its generation cannot disturb the new session.
+	var suspended_logouts_before: int = auth.logout_calls
+	scene._on_zone_closed("closed", suspended_generation)
+	require(scene._confirmed_zone.has_state(), "discarded close erased successor projection")
+	require(not scene._reconnect.active(), "discarded close consumed successor retry state")
+	require(auth.logout_calls == suspended_logouts_before, "discarded close revoked healthy auth")
 	require(auth.logout_calls == 0, "recoverable pause incorrectly revoked authenticated session")
 
 	# Re-establish a confirmed session for an unexpected network-drop test.
