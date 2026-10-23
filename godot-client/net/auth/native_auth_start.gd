@@ -44,6 +44,8 @@ var _http: HTTPRequest
 var _request_active := false
 var _request_phase := ""
 var _request_started_at_ms := -1
+var _request_epoch := 0
+var _wire_bound := false
 var _server_base_url := ""
 var _logout_after_exchange := false
 
@@ -122,10 +124,9 @@ func logout() -> bool:
 		_tokens.clear()
 		return true
 	if _request_active:
-		_http.request_completed.disconnect(_on_request_completed)
+		_request_epoch += 1
 		_http.cancel_request()
-		remove_child(_http)
-		_http.free()
+		_http.queue_free()
 		_install_http()
 		_request_active = false
 		_request_phase = ""
@@ -137,6 +138,7 @@ func logout() -> bool:
 	return _send_json(REVOKE_PATH, request, "logout")
 
 func cancel() -> void:
+	_request_epoch += 1
 	if _request_active and is_instance_valid(_http):
 		_http.cancel_request()
 	if _request_phase == "refresh":
@@ -157,9 +159,19 @@ func _install_http() -> void:
 	_http.max_redirects = 0
 	_http.timeout = 15.0
 	add_child(_http)
-	_http.request_completed.connect(_on_request_completed)
+	_wire_bound = false
 
 func _send_json(path: String, payload: Dictionary, phase: String, started_at_ms: int = -1) -> bool:
+	# A cancelled HTTPRequest may still deliver its completion after a successor
+	# starts. Give every send a fresh node and an epoch-bound callback.
+	if _wire_bound:
+		_http.cancel_request()
+		_http.queue_free()
+		_install_http()
+	_request_epoch += 1
+	var wire_epoch: int = _request_epoch
+	_http.request_completed.connect(_on_wire_request_completed.bind(wire_epoch))
+	_wire_bound = true
 	_request_active = true
 	_request_phase = phase
 	_request_started_at_ms = started_at_ms if started_at_ms >= 0 else Time.get_ticks_msec()
@@ -173,6 +185,11 @@ func _send_json(path: String, payload: Dictionary, phase: String, started_at_ms:
 		_fail_request(phase, FALLBACK_ERROR)
 		return false
 	return true
+
+func _on_wire_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, epoch: int) -> void:
+	if epoch != _request_epoch or not _request_active:
+		return
+	_on_request_completed(result, response_code, headers, body)
 
 func _on_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
 	if not _request_active:
