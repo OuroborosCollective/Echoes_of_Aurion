@@ -38,6 +38,7 @@ class ZoneTransport:
 	var opens := 0
 	var reported_state := ""
 	var generation := 0
+	var open_succeeds := true
 	func state_name() -> String:
 		return reported_state if not reported_state.is_empty() else ("connected" if connected else "closed")
 	func connection_generation() -> int:
@@ -48,6 +49,8 @@ class ZoneTransport:
 		reported_state = ""
 	func connect_zone(_base: String, _ticket: String) -> bool:
 		opens += 1
+		if not open_succeeds:
+			return false
 		generation += 1
 		connected = true
 		return true
@@ -224,6 +227,31 @@ func verify() -> void:
 	api.issues = 0
 	socket.opens = 0
 	auth.logout_calls = initial_logouts_before
+
+	# A synchronous native WebSocket open failure is transport loss before any
+	# server response. It must use the same bounded fresh-ticket recovery instead
+	# of revoking an otherwise healthy authenticated session.
+	var socket_open_logouts_before: int = auth.logout_calls
+	var socket_open_issues_before: int = api.issues
+	socket.open_succeeds = false
+	scene._on_auth_session_succeeded()
+	scene._on_zone_ticket_succeeded({
+		"ticket": "p".repeat(48),
+		"zoneId": "observatory_threshold",
+		"expiresAt": "2026-10-19T06:00:00.000Z",
+	})
+	require(scene._reconnect.active(), "socket open failure did not arm bounded recovery")
+	require(auth.logout_calls == socket_open_logouts_before, "socket open failure revoked healthy auth")
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == socket_open_issues_before + 2, "socket open failure did not request a fresh ticket")
+	scene._api.cancel()
+	scene._ticket_pending = false
+	scene._ticket_abandoned = true
+	scene._recovering_ticket = false
+	scene._reconnect.reset()
+	api.issues = 0
+	socket.opens = 0
+	socket.open_succeeds = true
 
 	socket.connected = true
 	require(Codec.is_valid_welcome(valid_welcome()), "G12 welcome fixture invalid")
