@@ -320,7 +320,7 @@ func _on_zone_closed(_reason: String, generation: int = -1) -> void:
 	if _lifecycle.is_suspended():
 		return
 	var was_reconnecting: bool = _reconnect.active()
-	var retryable_handshake_end := _reason == "closed" or _reason == "hello_timeout"
+	var retryable_handshake_end := _reason in ["closed", "hello_timeout", "hello_send_failed"]
 	# A reconnect attempt remains reserved until the first verified welcome.
 	# Only transport/timeout endings consume that budget; rejected protocol
 	# frames fail closed immediately and cannot race another ticket request.

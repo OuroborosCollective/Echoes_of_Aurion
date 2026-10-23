@@ -4658,3 +4658,8 @@ Evidence: Regression-only head `ccfca418875fdd4fc1c4866d830390caea1d5df8` failed
 Change: During bounded native recovery, only an actual Aurion API transport failure retains retry state; invalid payloads, unexpected HTTP responses and authorization failures clear the reservation and terminate the native session immediately.
 Learned: Fresh-ticket recovery must preserve the API boundary between transport loss and completed-response integrity failures, otherwise malformed or rejected responses cause protected request churn.
 Evidence: Activated regression head `1db4975a16b84a26e5f727391baa0968e7faa630` failed causally in Godot run 39932848033/job 120345106091; review-corrected code head `9b3d35f181b4ee6661543a7bef245621a56ab92d` adds controller and API-runtime coverage. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
+
+### 2026-10-23 — G12 WebSocket hello-send recovery (PR #1138)
+Change: A native socket that opens but cannot send its authenticated hello now spends the existing bounded fresh-ticket recovery budget instead of immediately revoking healthy auth.
+Learned: Pre-welcome transport classification must include the actual hello-send boundary; unlike invalid server frames, a failed local send carries no authenticated server response and is safe only under the same finite retry cap.
+Evidence: Regression-only head `cf2d586bb6fddce36091a59892e6d692ac453057` failed causally in Godot run 39938317972/job 120363254334; implementation head `f35a96f57e40d42fab198ed8f8f0082809e6824f` passed the Godot headless/runtime/software-render contract in run 39938726550. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.

@@ -306,6 +306,24 @@ func verify() -> void:
 	require(scene._confirmed_zone.has_state(), "network recovery lacked fresh validated welcome")
 	require(not scene._reconnect.active(), "network recovery left retry policy armed")
 
+	# The WebSocket can open and still fail while sending its authenticated hello.
+	# That is transport loss before any server response, so it must consume the
+	# same bounded fresh-ticket recovery budget instead of revoking native auth.
+	var hello_send_logouts_before: int = auth.logout_calls
+	var hello_send_issues_before: int = api.issues
+	socket.connected = false
+	scene._on_zone_closed("hello_send_failed")
+	require(scene._reconnect.active(), "hello send failure did not arm bounded recovery")
+	require(auth.logout_calls == hello_send_logouts_before, "hello send failure revoked healthy auth")
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == hello_send_issues_before + 1, "hello send failure did not request a fresh ticket")
+	scene._api.cancel()
+	scene._ticket_pending = false
+	scene._ticket_abandoned = true
+	scene._recovering_ticket = false
+	scene._reconnect.reset()
+	api.issues = hello_send_issues_before
+
 	scene._on_app_suspended()
 	auth.allowed = false
 	scene._on_app_resumed()
