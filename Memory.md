@@ -4647,3 +4647,9 @@ Evidence: Regression-only head `1c6a287dc8053acb5183583f983d6508a3fdcbae` failed
 Change: Resuming the active Godot scene without an authenticated zone now restores the disconnected login UI instead of leaving the login action disabled; no ticket or socket is started.
 Learned: A no-zone resume is logged out only when configuration is valid, native auth is idle and no authenticated/pre-welcome transport remains; each active state must retain its own fail-closed recovery path.
 Evidence: Regression-only head `220d5defe422b64a569d768781c14aedd97d06a0` failed causally in Godot run 39911283493/job 120274656627. Review-corrected code head `b8cbb1083a29ca80bca16a5a8bc0eab24b5be508` passed Godot headless/runtime/software-render run 39912605561, Android Preview/APK run 39912605498, determinism run 39912605490 and Memory sync run 39912605558; final Memory-bearing head is re-gated before merge. Physical-device interruption remains unverified.
+
+
+### 2026-10-23 — G12 suspended transport-close isolation (PR #1136)
+Change: A late terminal callback from the socket generation intentionally discarded during Android suspension can no longer revoke healthy native auth; resume still requires one fresh ticket and verified welcome.
+Learned: Lifecycle suspension owns the discarded transport generation, so its delayed terminal signal must be ignored while foreground network failures continue through the bounded fail-closed policy.
+Evidence: Regression-only head `ccfca418875fdd4fc1c4866d830390caea1d5df8` failed causally in Godot run 39923686463/job 120314764849; fixed code head `9f422fbe471b479bc2e80219a8c82ccf58450175` passed Godot headless/runtime/software-render and Android toolchain run 39923913914 plus Preview/APK run 39923913936. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
