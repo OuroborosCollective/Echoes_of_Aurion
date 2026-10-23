@@ -219,6 +219,11 @@ func verify() -> void:
 	scene._on_app_resumed()
 	require(not scene.get_node("%Login").disabled, "resume after suspended auth start success did not restore cancellation")
 	require(api.issues == 0 and socket.opens == 0, "suspended auth start success opened a protected connection")
+	auth.request_active = true
+	scene._on_app_suspended()
+	scene._on_app_resumed()
+	require(scene.get_node("%Login").disabled, "resume during callback exchange enabled cancellation")
+	auth.request_active = false
 	scene._awaiting_callback = true
 	scene._on_app_suspended()
 	scene._on_auth_session_failed("NATIVE_AUTH_TRANSACTION_INVALID")
