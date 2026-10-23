@@ -4703,3 +4703,8 @@ Evidence: Regression-only head `cbefa6f7aa7caf3bba3c41b466a51220b926bce3` failed
 Change: Register the Android export hook so the native callback filter survives Godot's generated release overlay; reuse one XML source and add a real unsigned Login APK/manifest CI regression without signing credentials.
 Learned: A patched src/main template is insufficient because Godot's generated launcher uses mergeOnlyAttributes; only the packaged APK establishes the callback contract.
 Evidence: Owner run 39989532413 rejected the actual missing filter before apksigner; regression-only head e81fb201e599b9cc80a83bc10cb070bd458f3a02 failed causally in Android run 39992835000/job 120548684600 (0 VIEW filters, expected 1). Focused local contracts pass; final exact-head Godot/Android CI, owner signing, artifact readback and device login remain required.
+
+### 2026-10-23 — G12 suspended auth-start success UI isolation (PR #1145)
+Change: A native-auth start response received while Android is paused now preserves the pending browser callback but keeps its cancellation action disabled; foreground resume alone restores “Abbrechen” without starting a protected ticket or socket.
+Learned: Start success is another asynchronous auth terminal at the lifecycle boundary, but unlike failure it retains a callback transaction that resume must make explicitly interactive.
+Evidence: Regression-only head `e151e42d9c476c6955004547ba730fd72701b5f2` failed causally in Godot run 40002179714/job 120580821276; corrected code head `40094972dc8c47cd911aca6b427e9a8eddb8b11e` passed Godot runtime/software-render run 40002372403. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
