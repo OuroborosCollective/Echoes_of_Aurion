@@ -255,14 +255,31 @@ func verify() -> void:
 	scene._on_zone_connected()
 	require(scene._confirmed_zone.has_state(), "fresh server welcome did not restore world")
 	require(not scene._reconnect.active(), "successful welcome left retry loop enabled")
-	# The discarded transport may report terminal state after resume and even
-	# after a successor welcome. Its generation cannot disturb the new session.
+	# A second pause may discard another socket before the first generation's
+	# terminal callback arrives. Both must remain isolated from the successor.
+	var second_suspended_generation: int = socket.connection_generation()
+	scene._on_app_suspended()
+	scene._on_app_resumed()
+	scene._poll_reconnect(Time.get_ticks_msec())
+	require(api.issues == 2, "second resume did not request one fresh ticket")
+	scene._on_zone_ticket_succeeded({
+		"ticket":"y".repeat(48),
+		"zoneId":"observatory_threshold",
+		"expiresAt":"2026-10-19T06:00:00.000Z",
+	})
+	scene._on_zone_welcome(valid_welcome(1))
+	scene._on_zone_connected()
+	require(scene._confirmed_zone.has_state(), "second successor welcome did not restore world")
 	var suspended_logouts_before: int = auth.logout_calls
 	scene._on_zone_closed("closed", suspended_generation)
-	require(scene._confirmed_zone.has_state(), "discarded close erased successor projection")
-	require(not scene._reconnect.active(), "discarded close consumed successor retry state")
-	require(auth.logout_calls == suspended_logouts_before, "discarded close revoked healthy auth")
-	require(auth.logout_calls == 0, "recoverable pause incorrectly revoked authenticated session")
+	scene._on_zone_closed("closed", second_suspended_generation)
+	require(scene._confirmed_zone.has_state(), "discarded closes erased successor projection")
+	require(not scene._reconnect.active(), "discarded closes consumed successor retry state")
+	require(auth.logout_calls == suspended_logouts_before, "discarded closes revoked healthy auth")
+	require(auth.logout_calls == 0, "recoverable pauses incorrectly revoked authenticated session")
+	# Keep later independent scenarios on their established counter baseline.
+	api.issues = 1
+	socket.opens = 1
 
 	# Re-establish a confirmed session for an unexpected network-drop test.
 	socket.connected = true
