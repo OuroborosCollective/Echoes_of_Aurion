@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Sparkles,
   Swords,
+  Trophy,
   UsersRound,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -19,7 +20,7 @@ import {
 } from "@/xaurion/integration/Ax1PlayNavigationBridge";
 import "./homeCinematic.css";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "leaderboard";
 
 function openAccountAccess(): void {
   window.dispatchEvent(new Event("aurion:open-local-auth"));
@@ -409,6 +410,16 @@ export default function Home() {
           >
             <UsersRound className="mr-2 size-4 text-cyan-300" />
             Gilden
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            title="Rangliste öffnen"
+            onClick={() => openCommunity("leaderboard")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+          >
+            <Trophy className="mr-2 size-4 text-cyan-300" />
+            Rangliste
           </button>
         </div>
       </section>
