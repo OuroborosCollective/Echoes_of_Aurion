@@ -4645,5 +4645,5 @@ Evidence: Regression-only head `1c6a287dc8053acb5183583f983d6508a3fdcbae` failed
 
 ### 2026-10-23 — G12 logged-out resume restores login (PR #1135)
 Change: Resuming the active Godot scene without an authenticated zone now restores the disconnected login UI instead of leaving the login action disabled; no ticket or socket is started.
-Learned: The lifecycle correctly avoided recovery when no zone existed, but that same no-op branch also needed to undo the paused presentation state.
-Evidence: Regression-only head `220d5defe422b64a569d768781c14aedd97d06a0` failed causally in Godot run 39911283493/job 120274656627; fixed code head `a65d518a5e83d8bf8251bebaf7f178068a2e14bf` passed Godot headless/runtime/software-render run 39911507527 and Android Preview/APK run 39911507450. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+Learned: A no-zone resume is logged out only when configuration is valid, native auth is idle and no authenticated/pre-welcome transport remains; each active state must retain its own fail-closed recovery path.
+Evidence: Regression-only head `220d5defe422b64a569d768781c14aedd97d06a0` failed causally in Godot run 39911283493/job 120274656627. Review-corrected code head `b8cbb1083a29ca80bca16a5a8bc0eab24b5be508` passed Godot headless/runtime/software-render run 39912605561, Android Preview/APK run 39912605498, determinism run 39912605490 and Memory sync run 39912605558; final Memory-bearing head is re-gated before merge. Physical-device interruption remains unverified.
