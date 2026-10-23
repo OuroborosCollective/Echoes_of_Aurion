@@ -15,6 +15,13 @@ func suspend(had_zone: bool) -> bool:
 	_pending_restore = had_zone
 	return true
 
+func require_restore() -> bool:
+	if not _suspended:
+		return false
+	_had_zone = true
+	_pending_restore = true
+	return true
+
 func resume() -> bool:
 	if not _suspended:
 		return false
