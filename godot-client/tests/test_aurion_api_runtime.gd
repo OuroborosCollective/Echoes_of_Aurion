@@ -260,6 +260,32 @@ func verify() -> void:
 	stale_api.queue_free()
 	replacement_auth.queue_free()
 
+	# A completed non-success HTTP response is a server-response integrity
+	# failure, not a retryable transport interruption.
+	var status_auth := FakeAuth.new()
+	root.add_child(status_auth)
+	var status_api := AurionApi.new(status_auth)
+	status_api.request_failed.connect(_on_request_failure)
+	root.add_child(status_api)
+	await process_frame
+	request_completed = false
+	request_error = ""
+	request_failure_count = 0
+	status_api._active = true
+	status_api._sent_access_token = status_auth.current_access
+	status_api._sent_session_generation = status_auth.session_generation()
+	status_api._on_request_completed(
+		HTTPRequest.RESULT_SUCCESS,
+		403,
+		PackedStringArray(["Content-Type: application/json"]),
+		"{}".to_utf8_buffer()
+	)
+	require(request_completed, "unexpected HTTP status did not terminate request")
+	require(request_error == "AURION_API_RESPONSE_INVALID", "unexpected HTTP status was treated as transport failure")
+	require(status_auth.refresh_calls == 0 and status_auth.logout_calls == 0, "unexpected HTTP status mutated auth inside API adapter")
+	status_api.queue_free()
+	status_auth.queue_free()
+
 	var expired_auth := FakeAuth.new()
 	expired_auth.current_access = ""
 	expired_auth.refresh_behavior = "start"
