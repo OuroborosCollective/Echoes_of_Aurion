@@ -4688,3 +4688,8 @@ Evidence: PR #1141; causal-red head `504204c859cc4f4ce8a2d775c1e7baa338e3c233`, 
 Learned: The initial ticket request and reconnect ticket requests share the same synchronous-start boundary; both must distinguish a callback-classified failure from a silent refusal before mutating recovery state.
 Open: Exact final-head gates, shared review, merge and main readback remain required.
 Next safe step: Re-run all required checks on the Memory-bearing final head, resolve review findings, then merge only with exact-head evidence.
+
+### 2026-10-23 — G12 suspended auth-completion recovery (PR #1142)
+Change: A native auth exchange that completes while Android is paused no longer starts a protected zone-ticket request in the background; it reserves restore and requests exactly one fresh ticket after resume.
+Learned: Suspension can begin before native auth owns protected authority, so the lifecycle must allow a successful in-flight exchange to promote that pause into a restore-required session.
+Evidence: Regression-only head `5da1ff0cffb28b053aeba1310994f5327d541a47` failed causally in Godot run 39977310364/job 120495188989; corrected code head `75dc890588c78d965369ba407dede44dea9dd3df` passed Godot/runtime/software-render and Android toolchain run 39977871316 plus Preview/APK run 39977871398. Final Memory-bearing head is re-gated before merge; physical-device interruption and production WSS remain unverified.

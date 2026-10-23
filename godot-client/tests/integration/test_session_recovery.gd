@@ -202,6 +202,20 @@ func verify() -> void:
 	require(scene._awaiting_callback, "browser callback lost on resume")
 
 	scene._awaiting_callback = false
+	# A native exchange may complete while Android is still paused. No protected
+	# ticket may start in the background; resume must request exactly one fresh
+	# ticket through the bounded recovery path.
+	var suspended_auth_issues_before: int = api.issues
+	auth.allowed = true
+	scene._on_app_suspended()
+	scene._on_auth_session_succeeded()
+	require(api.issues == suspended_auth_issues_before, "suspended auth completion started a background ticket")
+	scene._on_app_resumed()
+	scene._process(0.0)
+	require(api.issues == suspended_auth_issues_before + 1, "suspended auth completion did not request one ticket after resume")
+	scene._on_auth_logout_terminal()
+	api.issues = 0
+
 	auth.allowed = true
 	# The first protected ticket request can refuse to start without emitting a
 	# failure signal. It must leave no phantom pending request and enter the same
