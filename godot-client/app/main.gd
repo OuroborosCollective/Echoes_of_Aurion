@@ -54,7 +54,7 @@ var _recovering_ticket := false
 var _ticket_pending := false
 var _ticket_abandoned := false
 var _intent_bridge: Node
-var _discarded_zone_generation := -1
+var _discarded_zone_generation_through := -1
 
 func _configuration_valid() -> bool:
 	return not _config.server_base_url.is_empty() and not _config.client_build.is_empty() and _config.renderer_profile == "compatibility"
@@ -312,7 +312,7 @@ func _on_zone_rejected(code: String) -> void:
 func _on_zone_closed(_reason: String, generation: int = -1) -> void:
 	# Suspension discards one exact socket generation. Its terminal callback may
 	# arrive after resume or a successor welcome and must not touch that session.
-	if generation >= 0 and generation == _discarded_zone_generation:
+	if generation >= 0 and generation <= _discarded_zone_generation_through:
 		return
 	_reset_projection()
 	if _reason == "client_close":
@@ -490,7 +490,7 @@ func _on_app_suspended() -> void:
 	_ticket_abandoned = true
 	_ticket_pending = false
 	if socket_active:
-		_discarded_zone_generation = _zone_socket.connection_generation()
+		_discarded_zone_generation_through = maxi(_discarded_zone_generation_through, _zone_socket.connection_generation())
 	_zone_socket.close_zone()
 	_reset_projection()
 	if not _awaiting_callback:
