@@ -232,6 +232,12 @@ func verify() -> void:
 	require(socket.closes > 0 and not socket.connected, "suspend did not neutralize active socket")
 	scene._on_zone_welcome(valid_welcome(1))
 	require(not scene._confirmed_zone.has_state(), "late suspended welcome revived world")
+	# The intentionally closed pre-suspend transport may report its terminal
+	# event after Android has already paused. It must not revoke healthy auth.
+	var suspended_logouts_before: int = auth.logout_calls
+	scene._on_zone_closed("closed")
+	require(auth.logout_calls == suspended_logouts_before, "late suspended close revoked healthy auth")
+	require(scene._lifecycle.is_suspended(), "late close escaped the suspended lifecycle")
 	scene._on_app_resumed()
 	var current_time := Time.get_ticks_msec()
 	scene._poll_reconnect(current_time)
