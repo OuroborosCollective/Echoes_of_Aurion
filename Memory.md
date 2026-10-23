@@ -4627,3 +4627,13 @@ Evidence: Run 39886214133 showed `Pkg.Revision must appear once` in build step 6
 Learned: Android NDK source.properties can separate the key and `=` with spaces; a key/value parser must not confuse syntax whitespace with missing SDK version.
 Open: Final exact-head CI, review, merge, new pinned signer workflow and real signed APK readback.
 Next safe step: Gate regression in Aurion CI, merge only when green, then update Sovereign signing source pin and trigger owner-only run.
+
+### 2026-10-23 — Same-tick combat intent admission regression (PR #1132)
+Status: PARTIAL; draft candidate, exact-head CI pending
+Task: Prevent one authenticated player from committing multiple transport-admitted basic attacks or blade skills inside the same Aurion zone tick.
+Decisions: Keep aurion.zone.rules.v3, historical replay semantics, deterministic tick resolution, existing zone-v5 reject wire contract and single Aurion authority unchanged. Only the live transport admission queue rejects a second pending combat intent for the same entity; movement remains independently admissible.
+Touched surfaces: server/zoneRuntime.ts, server/zoneGateway.ts, server/zoneCombatContinuity.test.ts.
+Evidence: Baseline main 818e93b87d1760ebeca4e7d988b800fa6de386e7; regression-first commit a37513d5fd5baa6d81b88776dbe25e6115a1aacd; implementation candidate ece912dcd371e5568d0c71484cd7955396939b53; https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1132. Relevant GitHub CI workflows queued or pending at record time; no completed RED/GREEN, database, production or native-device proof is claimed.
+Learned: Gate duplicate transport combat intents before the causal tick, rather than silently changing the meaning of previously persisted canonical intents or adding a second gameplay state machine. Use existing COMBAT_SKILL_COOLDOWN rejection for the throttled basic attack because the zone-v5 reject enum currently has no general combat-throttle code.
+Open: Prove RED against the regression-only commit, run exact Memory-bearing head CI and neighboring replay/network checks, inspect review, merge only after gates and then read main SHA.
+Next safe step: Reconcile latest SHA-bound CI; remediate failures without weakening tests, update this entry through an append-only correction if evidence changes.
