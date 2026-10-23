@@ -530,8 +530,15 @@ func _poll_reconnect(now_ms: int) -> void:
 	status.text = "Neues Zonenticket wird angefordert"
 	if not _api.issue_zone_ticket(_config.server_base_url, _config.client_build):
 		_recovering_ticket = false
-		if _reconnect.active():
-			_reconnect.retry_after_failure(now_ms)
+		# The API may synchronously emit request_failed before returning false.
+		# In that case its callback already classified the failure.
+		if not _ticket_pending:
+			return
+		_ticket_pending = false
+		if _reconnect.active() and _reconnect.retry_after_failure(now_ms):
+			status.text = "Verbindung wird erneut versucht"
+			return
+		_on_zone_ticket_failed("AURION_API_REQUEST_FAILED")
 
 func _fit_layout() -> void:
 	if not is_node_ready():
