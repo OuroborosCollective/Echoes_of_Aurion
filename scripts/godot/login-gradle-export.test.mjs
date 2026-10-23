@@ -4,7 +4,7 @@ import { mkdtemp,chmod,rm,symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createLoginPreset,validateSignerConfig,validateLoginArtifact,verifySignerOnDisk } from './login-gradle-export.mjs';
+import { createLoginPreset,validateSignerConfig,validateLoginArtifact,validateLoginManifest,verifySignerOnDisk } from './login-gradle-export.mjs';
 const preset='[preset.0]\nname="Android Preview"\nplatform="Android"\ninclude_filter="net/contracts/*.json,override.cfg"\n[preset.0.options]\ngradle_build/use_gradle_build=false\nversion/name="0.1.0-preview"\npackage/unique_name="org.ouroboroscollective.aurion.godot.preview"\npackage/name="Aurion Preview"\npackage/signed=true\narchitectures/arm64-v8a=true\n';
 const fp='A1:'.repeat(31)+'A1';
 const signer={AURION_LOGIN_KEYSTORE_PATH:'/secured/aurion.jks',AURION_LOGIN_KEY_ALIAS:'aurion',AURION_LOGIN_KEYSTORE_PASSWORD:'test123456',AURION_LOGIN_KEY_PASSWORD:'test123456',AURION_LOGIN_SIGNER_SHA256:fp};
@@ -57,4 +57,13 @@ test('actual temporary keytool signer readback enforces permissions and certific
  await assert.rejects(verifySignerOnDisk({...env,AURION_LOGIN_SIGNER_SHA256:fp},'keytool'),/does not match/);
  await chmod(path,0o644);await assert.rejects(verifySignerOnDisk(env,'keytool'),/private/);
  const link=join(dir,'alias.jks');await symlink(path,link);await assert.rejects(verifySignerOnDisk({...env,AURION_LOGIN_KEYSTORE_PATH:link},'keytool'),/private/);
+});
+
+test('unsigned regression uses full manifest contract without synthetic signature evidence',()=>{
+ assert.equal(validateLoginManifest({badging:badge,manifest,entries}).packageName,'org.ouroboroscollective.aurion.godot.login');
+ const missing=manifest.slice(0,manifest.indexOf('        E: intent-filter (line=4)'));
+ assert.throws(()=>validateLoginManifest({badging:badge,manifest:missing,entries}),/exactly one VIEW/);
+ for(const wrong of [manifest.replace('arelogic.space','wrong.test'),manifest.replace('/app/auth/callback','/wrong')])
+  assert.throws(()=>validateLoginManifest({badging:badge,manifest:wrong,entries}));
+ assert.throws(()=>inspect(manifest,''),'signed release may not use unsigned manifest-only evidence');
 });

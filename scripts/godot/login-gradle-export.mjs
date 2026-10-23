@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { lstat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { previewPackage, loginPackage, loginIdentity, validateApk } from './apk-readback.mjs';
+import { previewPackage, loginPackage, loginIdentity, validateApk, validateApkManifest } from './apk-readback.mjs';
 export { loginPackage };
 import { requireLoginSigner } from './android-gradle-link.mjs';
 
@@ -53,11 +53,8 @@ export async function verifySignerOnDisk(env, keytoolPath) {
 }
 
 /** aapt/apksigner readback from the actual APK; OS and live domain still unverified. */
-export function validateLoginArtifact({badging,manifest,signature,entries,expectedFingerprint}) {
- assert.match(expectedFingerprint,/^(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$/);
- const identity=validateApk(badging,signature,entries,manifest,loginIdentity);
- const expectedHex=expectedFingerprint.replaceAll(':','').toLowerCase();
- assert.equal(identity.certificateSha256,expectedHex,'APK signer differs from persisted identity');
+export function validateLoginManifest({badging,manifest,entries}) {
+ const identity=validateApkManifest(badging,entries,manifest,loginIdentity);
  assert.ok(entries.includes('assets/override.cfg'),'source revision asset missing');
  assert.ok(!entries.some(name=>name.startsWith('assets/tests/')),'test sources included in APK');
  const aliasBlocks=manifest.split(/(?=^ {6}E: )/m).filter(x=>x.startsWith('      E: activity-alias ('));
@@ -75,7 +72,16 @@ export function validateLoginArtifact({badging,manifest,signature,entries,expect
   /android:host[^\n]*"arelogic.space"/,
   /android:path[^\n]*"\/app\/auth\/callback"/,
  ]) assert.match(filter,expected,'packaged verified App Link incomplete');
- return {packageName:identity.package,certificateSha256:expectedFingerprint.toUpperCase(),
+ return {packageName:identity.package,
   callback:callbackUrl,sourceRevision:'packaged-override-to-be-checked',
   domainAssociation:'unverified',device:'unverified'};
+}
+
+/** Signed releases retain both the complete manifest and persisted-certificate checks. */
+export function validateLoginArtifact({badging,manifest,signature,entries,expectedFingerprint}) {
+ assert.match(expectedFingerprint,/^(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$/);
+ const manifestIdentity=validateLoginManifest({badging,manifest,entries});
+ const identity=validateApk(badging,signature,entries,manifest,loginIdentity);
+ assert.equal(identity.certificateSha256,expectedFingerprint.replaceAll(':','').toLowerCase(),'APK signer differs from persisted identity');
+ return {...manifestIdentity,certificateSha256:expectedFingerprint.toUpperCase()};
 }
