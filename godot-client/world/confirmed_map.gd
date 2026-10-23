@@ -141,7 +141,10 @@ func _activate_point(point: Vector2) -> void:
 	var distance := 18.0
 	for id in _records:
 		var record: Dictionary = _records[id]
-		var delta := world_to_screen(record["position"]).distance_to(point)
+		var location := world_to_screen(record["position"])
+		if not Rect2(Vector2.ZERO, size).has_point(location):
+			continue
+		var delta := location.distance_to(point)
 		# Later-drawn records win exact ties, so a visible mob remains selectable.
 		if delta <= distance:
 			distance = delta
