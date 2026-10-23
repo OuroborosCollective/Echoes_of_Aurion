@@ -45,7 +45,12 @@ async function readRegularFile(path) {
  return readFile(path, 'utf8');
 }
 function oneProperty(content, key) {
- const rows = content.split(/\r?\n/).filter(row => row.trim().startsWith(key + '='));
+ // Android NDK source.properties uses "Pkg.Revision = <version>" with spaces.
+ // Preserve exact-key, single-declaration and locked-version checks.
+ const rows = content.split(/\r?\n/).filter(row => {
+  const separator = row.indexOf('=');
+  return separator >= 0 && row.slice(0, separator).trim() === key;
+ });
  assert.equal(rows.length, 1, key+' must appear once in SDK metadata');
  return rows[0].slice(rows[0].indexOf('=')+1).trim();
 }
