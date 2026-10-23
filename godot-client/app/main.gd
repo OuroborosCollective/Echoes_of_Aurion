@@ -146,7 +146,7 @@ func _on_auth_start_succeeded() -> void:
 func _on_auth_start_failed(error_code: String) -> void:
 	_awaiting_callback = false
 	login.text = "Anmelden"
-	login.disabled = not _config.native_auth_start_enabled
+	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 	if error_code == "NATIVE_AUTH_BUILD_UNSUPPORTED":
 		status.text = "Client-Aktualisierung erforderlich"
 	else:
