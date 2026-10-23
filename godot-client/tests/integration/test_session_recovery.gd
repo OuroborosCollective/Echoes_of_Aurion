@@ -201,6 +201,27 @@ func verify() -> void:
 	require(api.issues == 0, "resume without an authenticated zone issued a ticket")
 	require(scene._awaiting_callback, "browser callback lost on resume")
 
+	# Terminal auth callbacks can also arrive while Android remains paused.
+	# They must not expose a tappable login action until the foreground resume.
+	auth.request_active = true
+	scene._on_app_suspended()
+	auth.request_active = false
+	scene._on_auth_start_failed("NATIVE_AUTH_CONFIGURATION_UNAVAILABLE")
+	require(scene.get_node("%Login").disabled, "suspended auth start failure enabled login in the background")
+	scene._on_app_resumed()
+	require(not scene.get_node("%Login").disabled, "resume after suspended auth start failure did not restore login")
+	scene._awaiting_callback = true
+	scene._on_app_suspended()
+	scene._on_auth_session_failed("NATIVE_AUTH_TRANSACTION_INVALID")
+	require(scene.get_node("%Login").disabled, "suspended auth failure enabled login in the background")
+	scene._on_app_resumed()
+	require(not scene.get_node("%Login").disabled, "resume after suspended auth failure did not restore login")
+	scene._on_app_suspended()
+	scene._on_auth_logout_terminal()
+	require(scene.get_node("%Login").disabled, "suspended logout completion enabled login in the background")
+	scene._on_app_resumed()
+	require(not scene.get_node("%Login").disabled, "resume after suspended logout did not restore login")
+
 	scene._awaiting_callback = false
 	# A native exchange may complete while Android is still paused. No protected
 	# ticket may start in the background; resume must request exactly one fresh
