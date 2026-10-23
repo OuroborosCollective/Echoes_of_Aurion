@@ -141,7 +141,7 @@ func _on_auth_start_succeeded() -> void:
 	_awaiting_callback = true
 	status.text = "Systembrowser geöffnet"
 	login.text = "Abbrechen"
-	login.disabled = false
+	login.disabled = _lifecycle.is_suspended()
 
 func _on_auth_start_failed(error_code: String) -> void:
 	_awaiting_callback = false
@@ -514,7 +514,10 @@ func _on_app_resumed() -> void:
 	if _lifecycle.resume():
 		_reconnect.begin(Time.get_ticks_msec())
 		status.text = "Sitzung wird neu bestätigt"
-	elif not _awaiting_callback:
+	elif _awaiting_callback:
+		login.text = "Abbrechen"
+		login.disabled = false
+	else:
 		login.text = "Anmelden"
 		if not _configuration_valid():
 			status.text = "Konfiguration ungültig"
