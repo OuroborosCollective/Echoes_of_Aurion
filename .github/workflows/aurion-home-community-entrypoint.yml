@@ -32,7 +32,16 @@ jobs:
   exact-head-home-community:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: aurion
+        ports:
+          - 3306:3306
     env:
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/aurion"
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       VITE_APP_ID: aurion-home-community-regression
     steps:
