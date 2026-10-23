@@ -177,9 +177,11 @@ func verify() -> void:
 	require(map.selected_record().is_empty(), "empty map-edge tap selected an off-screen enemy")
 
 	var edge := snapshot_from(offscreen, 4)
-	edge["mobs"][0]["position"] = map._screen_to_world(Vector2(0, map.size.y * 0.5))
+	edge["mobs"][0]["position"] = map._screen_to_world(Vector2(8, map.size.y * 0.5))
 	scene._on_zone_snapshot(edge)
-	tap(map, Vector2(0, map.size.y * 0.5))
+	var visible_edge_point: Vector2 = map.world_to_screen(edge["mobs"][0]["position"])
+	require(Rect2(Vector2.ZERO, map.size).has_point(visible_edge_point), "edge marker fixture is not visible")
+	tap(map, visible_edge_point)
 	require(map.selected_record().get("entityId") == "mob_1", "visible edge marker could not be inspected")
 
 	var old := snapshot_from(confirmed, 1)
