@@ -40,6 +40,38 @@ describe("continuous authoritative zone combat", () => {
     expect(restored.getCanonicalZoneState().players).toEqual(zone.getCanonicalZoneState().players);
   });
 
+  it("resolves only one confirmed player attack in one tick even for separately sequenced intents", () => {
+    const { zone, connectionId, events } = fixture("attack-burst");
+    zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
+    for (let i = 0; i < 5; i++) zone.tick();
+
+    expect(zone.submitAttack(connectionId, { type: "attack", clientSeq: 2, targetEntityId: "mob_12" })).toBe("accepted");
+    expect(zone.submitAttack(connectionId, { type: "attack", clientSeq: 3, targetEntityId: "mob_12" })).toBe("cooldown");
+    zone.tick();
+
+    expect(events().filter(event => event.attackerEntityId === "player:73")).toHaveLength(1);
+    expect(zone.getCanonicalZoneState().players[0]!.lastAcceptedClientSeq).toBe(2);
+
+    expect(zone.submitAttack(connectionId, { type: "attack", clientSeq: 4, targetEntityId: "mob_12" })).toBe("accepted");
+    zone.tick();
+    expect(events().filter(event => event.attackerEntityId === "player:73")).toHaveLength(2);
+  });
+
+  it("allows movement after the throttled attack while preserving canonical sequence", () => {
+    const { zone, connectionId, events } = fixture("attack-and-move");
+    zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
+    for (let i = 0; i < 5; i++) zone.tick();
+
+    expect(zone.submitAttack(connectionId, { type: "attack", clientSeq: 2, targetEntityId: "mob_12" })).toBe("accepted");
+    expect(zone.submitAttack(connectionId, { type: "attack", clientSeq: 3, targetEntityId: "mob_12" })).toBe("cooldown");
+    expect(zone.submitMovement(connectionId, { type: "move", clientSeq: 4, input: { x: 0, z: 0 } })).toBe("accepted");
+    zone.tick();
+
+    expect(events().filter(event => event.attackerEntityId === "player:73")).toHaveLength(1);
+    expect(zone.getCanonicalZoneState().players[0]).toMatchObject({ lastAcceptedClientSeq: 4, inputZ: 0 });
+    expect(zone.getLatestReceipt()?.orderedIntentHash).toBeDefined();
+  });
+
   it("preserves the historical v2 action ordering during restored replay", () => {
     const { zone, connectionId } = fixture("historical");
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });

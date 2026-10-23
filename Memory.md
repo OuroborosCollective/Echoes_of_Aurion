@@ -4627,3 +4627,13 @@ Evidence: Run 39886214133 showed `Pkg.Revision must appear once` in build step 6
 Learned: Android NDK source.properties can separate the key and `=` with spaces; a key/value parser must not confuse syntax whitespace with missing SDK version.
 Open: Final exact-head CI, review, merge, new pinned signer workflow and real signed APK readback.
 Next safe step: Gate regression in Aurion CI, merge only when green, then update Sovereign signing source pin and trigger owner-only run.
+
+### 2026-10-23 — Same-tick combat intent admission regression (PR #1132)
+Status: VERIFIED candidate; final Memory-bearing head gates and review pending
+Task: Prevent one authenticated player from committing multiple transport-admitted basic attacks or blade skills inside the same Aurion zone tick.
+Decisions: Keep aurion.zone.rules.v3, historical replay semantics, deterministic tick resolution and zone-v5 wire contract unchanged; reject only a second pending live combat intent, preserve movement admission, and do not acknowledge the rejected client sequence.
+Touched surfaces: server/zoneRuntime.ts, server/zoneGateway.ts, server/zoneCombatContinuity.test.ts.
+Evidence: Baseline main 818e93b87d1760ebeca4e7d988b800fa6de386e7 accepted every increasing attack sequence; corrected candidate 8abe5ce030b48b824b83d07d0e509e049607db9a. Local Test Pack 39899673013 passed the 6-case combat-continuity runtime regression, actual Godot/zone-gateway/MariaDB process checks and 455 files / 2288 tests; WS ingress 39899673137, runtime candidate 39899673077, container proof 39899673078, Godot headless 39899673074, deterministic DES 39899673099 and Memory sync 39899673063 passed.
+Learned: A rejected transport combat intent must be gated before admitSequence so it neither becomes canonical history nor prevents a later independently sequenced movement.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Merge only after the final head is green and has no unresolved review findings, then read back main.
