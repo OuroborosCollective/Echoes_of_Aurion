@@ -203,6 +203,13 @@ func verify() -> void:
 
 	# Terminal auth callbacks can also arrive while Android remains paused.
 	# They must not expose a tappable login action until the foreground resume.
+	auth.request_active = true
+	scene._on_app_suspended()
+	auth.request_active = false
+	scene._on_auth_start_failed("NATIVE_AUTH_CONFIGURATION_UNAVAILABLE")
+	require(scene.get_node("%Login").disabled, "suspended auth start failure enabled login in the background")
+	scene._on_app_resumed()
+	require(not scene.get_node("%Login").disabled, "resume after suspended auth start failure did not restore login")
 	scene._awaiting_callback = true
 	scene._on_app_suspended()
 	scene._on_auth_session_failed("NATIVE_AUTH_TRANSACTION_INVALID")
