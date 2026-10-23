@@ -312,6 +312,10 @@ func _on_zone_closed(_reason: String) -> void:
 	_reset_projection()
 	if _reason == "client_close":
 		return
+	# Suspension already neutralized this socket and reserved any authenticated
+	# resume. A delayed terminal callback belongs to that discarded generation.
+	if _lifecycle.is_suspended():
+		return
 	var was_reconnecting: bool = _reconnect.active()
 	var retryable_handshake_end := _reason == "closed" or _reason == "hello_timeout"
 	# A reconnect attempt remains reserved until the first verified welcome.
