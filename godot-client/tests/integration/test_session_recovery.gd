@@ -124,6 +124,17 @@ func verify() -> void:
 	scene.add_child(auth)
 	scene._auth_start = auth
 
+	# A logged-out app has no zone to restore. Resume must make the real login
+	# action usable again without starting a ticket or socket.
+	require(not scene.get_node("%Login").disabled, "logged-out scene did not start with login enabled")
+	scene._on_app_suspended()
+	require(scene._lifecycle.is_suspended(), "logged-out OS pause not registered")
+	require(scene.get_node("%Login").disabled, "logged-out app remained interactive while paused")
+	scene._on_app_resumed()
+	require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "logged-out resume retained paused status")
+	require(not scene.get_node("%Login").disabled, "logged-out resume left login disabled")
+	require(api.issues == 0 and socket.connect_calls == 0, "logged-out resume started a protected connection")
+
 	# Android switches to system browser during PKCE. Pause must preserve that
 	# pending transaction; only the original verified callback can complete it.
 	scene._awaiting_callback = true
