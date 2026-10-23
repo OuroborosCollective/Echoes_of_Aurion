@@ -4596,3 +4596,13 @@ Change: Accepted Aurion snapshots no longer replace the visible A/B/Haus plannin
 Learned: Confirmed entity records may refresh during local planning, but snapshot-driven inspection signals must not hide the still-active input mode.
 Evidence: Regression-only head `a993ec8a0cf8b25a4273e602b45cac899e9936c2` failed causally in Godot run 39870818147/job 120144500559; fixed code head `e4e0803a201c7b076b3817b4c7e5c66746adf42f` passed Godot headless/runtime/software-render run 39870954747 and Android Preview/APK readback run 39870954681; final Memory-bearing head is re-gated before merge. Physical-device touch remains unverified.
 
+
+### 2026-10-23 — PR #1129 — visible-only confirmed-map hit testing
+Status: VERIFIED candidate
+Task: Prevent empty map-edge taps from inspecting server-confirmed entities whose marker centers are outside the drawable Godot map.
+Decisions: Apply the renderer's existing half-open map-bounds predicate before distance and draw-order hit resolution; keep visible edge markers, overlap priority and Aurion snapshot authority unchanged.
+Touched surfaces: `godot-client/world/confirmed_map.gd`, active-scene `godot-client/tests/test_live_world_map.gd` regression.
+Evidence: Regression-only `20d6b00c00b7fc808bd2d42ef256a25b1b3695c8` failed causally in Godot run 39877183226/job 120165505717; fixed candidate `7155d4e830d0816aa3dfb37d58b2bf76334499eb` passed Godot/runtime/software-render 39877458922 and Android Preview/APK 39877458897.
+Learned: Marker visibility and selection must share the same bounds rule; integer-mm screen roundtrips require an explicitly visible positive-control point rather than assuming exact floating-point edge identity.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Gate and review the exact final PR head, then merge only with no unresolved findings and read back `main`.
