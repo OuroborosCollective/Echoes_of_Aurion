@@ -62,6 +62,8 @@ jobs:
         run: pnpm check && pnpm build
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
+      - name: Push database schema
+        run: pnpm run db:push
       - name: Start exact built portal
         shell: bash
         run: |
