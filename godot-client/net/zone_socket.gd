@@ -7,6 +7,7 @@ signal zone_combat(event: Dictionary)
 signal zone_telegraph(event: Dictionary)
 signal zone_rejected(code: String)
 signal zone_closed(reason: String)
+signal zone_closed_generation(reason: String, generation: int)
 
 const Codec = preload("res://net/zone_codec.gd")
 const TIMEOUT_MS := 5000
@@ -21,9 +22,13 @@ var _reject_notifications_in_flight := false
 var _last_snapshot_seq := -1
 var _last_tick := -1
 var _next_client_seq := 1
+var _generation := 0
 
 func state_name() -> String:
 	return _state
+
+func connection_generation() -> int:
+	return _generation
 
 func send_move(input_x: int, input_z: int) -> bool:
 	if _state != "connected" or _peer == null or _peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
@@ -71,6 +76,7 @@ func connect_zone(base_url: String, ticket: String) -> bool:
 		_peer = null
 		_hello = ""
 		return false
+	_generation += 1
 	_state = "connecting"
 	_last_snapshot_seq = -1
 	_last_tick = -1
@@ -186,6 +192,7 @@ func _report_reject(code: String) -> void:
 	_finish("server_reject", false)
 	emit_signal("zone_rejected", code)
 	emit_signal("zone_closed", "server_reject")
+	emit_signal("zone_closed_generation", "server_reject", _generation)
 	_reject_notifications_in_flight = false
 
 func _accept_welcome(raw: Variant) -> bool:
@@ -215,6 +222,7 @@ func _finish(reason: String, notify: bool = true) -> void:
 	set_process(false)
 	if old != "closed" and notify:
 		emit_signal("zone_closed", reason)
+		emit_signal("zone_closed_generation", reason, _generation)
 
 func close_zone() -> void:
 	_finish("client_close")
