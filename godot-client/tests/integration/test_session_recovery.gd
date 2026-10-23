@@ -322,6 +322,7 @@ func verify() -> void:
 	scene._ticket_abandoned = true
 	scene._recovering_ticket = false
 	scene._reconnect.reset()
+	api.issues = hello_send_issues_before
 
 	scene._on_app_suspended()
 	auth.allowed = false
