@@ -490,6 +490,10 @@ func _on_app_resumed() -> void:
 	if _lifecycle.resume():
 		_reconnect.begin(Time.get_ticks_msec())
 		status.text = "Sitzung wird neu bestätigt"
+	elif not _awaiting_callback:
+		status.text = "Nicht verbunden"
+		login.text = "Anmelden"
+		login.disabled = not _config.native_auth_start_enabled
 
 func _poll_reconnect(now_ms: int) -> void:
 	if not _reconnect.active() or _lifecycle.is_suspended() or _recovering_ticket:
