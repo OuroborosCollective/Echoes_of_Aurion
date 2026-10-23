@@ -79,3 +79,4 @@ jobs:
           path: ${{ runner.temp }}/aurion-login-regression/
           if-no-files-found: warn
           retention-days: 7
+

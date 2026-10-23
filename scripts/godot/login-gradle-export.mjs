@@ -85,3 +85,4 @@ export function validateLoginArtifact({badging,manifest,signature,entries,expect
  assert.equal(identity.certificateSha256,expectedFingerprint.replaceAll(':','').toLowerCase(),'APK signer differs from persisted identity');
  return {...manifestIdentity,certificateSha256:expectedFingerprint.toUpperCase()};
 }
+

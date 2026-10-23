@@ -38,3 +38,4 @@ export function validateApk(badging, signature, entries, manifest, identity = pr
   assert.ok(fingerprint, 'signing certificate missing');
   return {...parsed, certificateSha256: fingerprint[1]};
 }
+

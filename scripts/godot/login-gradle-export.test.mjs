@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createLoginPreset,validateSignerConfig,validateLoginArtifact,validateLoginManifest,verifySignerOnDisk } from './login-gradle-export.mjs';
+import { unsignedLoginExport } from './export-login-android.mjs';
 const preset='[preset.0]\nname="Android Preview"\nplatform="Android"\ninclude_filter="net/contracts/*.json,override.cfg"\n[preset.0.options]\ngradle_build/use_gradle_build=false\nversion/name="0.1.0-preview"\npackage/unique_name="org.ouroboroscollective.aurion.godot.preview"\npackage/name="Aurion Preview"\npackage/signed=true\narchitectures/arm64-v8a=true\n';
 const fp='A1:'.repeat(31)+'A1';
 const signer={AURION_LOGIN_KEYSTORE_PATH:'/secured/aurion.jks',AURION_LOGIN_KEY_ALIAS:'aurion',AURION_LOGIN_KEYSTORE_PASSWORD:'test123456',AURION_LOGIN_KEY_PASSWORD:'test123456',AURION_LOGIN_SIGNER_SHA256:fp};
@@ -67,3 +68,9 @@ test('unsigned regression uses full manifest contract without synthetic signatur
   assert.throws(()=>validateLoginManifest({badging:badge,manifest:wrong,entries}));
  assert.throws(()=>inspect(manifest,''),'signed release may not use unsigned manifest-only evidence');
 });
+test('unsigned runtime rejects signing credentials before starting tools',async()=>{
+ const base={AURION_LOGIN_ALLOW_SIGNED_EXPORT:'1',AURION_LOGIN_GRADLE_SDK_ROOT:'/unused-sdk',AURION_LOGIN_APK_OUTPUT:'/unused-output',AURION_EXPECTED_REVISION:'a'.repeat(40)};
+ for(const key of ['AURION_LOGIN_KEYSTORE_PATH','AURION_LOGIN_KEYSTORE_PASSWORD','AURION_LOGIN_KEY_ALIAS','AURION_LOGIN_KEY_PASSWORD'])
+  await assert.rejects(unsignedLoginExport({...base,[key]:'forbidden-in-unsigned-mode'}),/must not receive signing credentials/);
+});
+

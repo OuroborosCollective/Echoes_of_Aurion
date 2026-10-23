@@ -97,3 +97,4 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
  assert.ok(process.argv.length===2 || (process.argv.length===3 && process.argv[2]==='--unsigned'),'unknown export argument');
  await (process.argv[2]==='--unsigned' ? unsignedLoginExport() : signedLoginExport());
 }
+

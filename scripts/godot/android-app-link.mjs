@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
-const callbackFilter = `<intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="arelogic.space"
-                    android:path="/app/auth/callback" />
-            </intent-filter>`;
+const callbackFilter = readFileSync(new URL('../../godot-client/addons/aurion_android_app_link/callback_filter.xml', import.meta.url), 'utf8');
 
 /** Modify only the exported GodotAppLauncher alias; preserve MAIN/LAUNCHER. */
 export function insertVerifiedLink(manifest) {
@@ -36,3 +31,4 @@ export function validateDomainAssociation(statements,packageName,certificateSha2
     row.target?.namespace==='android_app'&&row.target.package_name===packageName&&
     Array.isArray(row.target.sha256_cert_fingerprints)&&row.target.sha256_cert_fingerprints.some(value=>typeof value==='string'&&value.toUpperCase()===canonical));
 }
+
