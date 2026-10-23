@@ -374,6 +374,7 @@ func verify() -> void:
 	require(scene._reconnect.take_if_due(invalid_ticket_now), "invalid-ticket setup did not start an attempt")
 	scene._recovering_ticket = true
 	scene._ticket_pending = true
+	scene._ticket_abandoned = false
 	scene._on_zone_ticket_failed("AURION_API_RESPONSE_INVALID")
 	require(not scene._reconnect.active(), "invalid ticket response retained reconnect budget")
 	require(auth.logout_calls == invalid_ticket_logouts_before + 1, "invalid ticket response did not terminate native session")
