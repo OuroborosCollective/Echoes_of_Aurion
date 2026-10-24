@@ -63,6 +63,14 @@ func verify() -> void:
 	check(received.size() == 1 and received[0] == valid, "callback not forwarded exactly once")
 	check(not bridge.deliver_for_test(valid, true), "same callback replay forwarded")
 	check(received.size() == 1, "replayed callback emitted")
+	# Android can relaunch the process with a completed App Link after the
+	# in-memory PKCE transaction was lost. Drain that canonical orphan without
+	# forwarding it as authentication or retaining it for a later login attempt.
+	var orphaned_intent := FakeIntent.new(valid)
+	bridge._activity = FakeActivity.new(orphaned_intent)
+	check(not bridge.poll_activity_intent_for_test(false), "orphaned callback was forwarded without a pending login")
+	check(orphaned_intent.data == null, "orphaned canonical callback remained in the Activity intent")
+	check(received.size() == 1, "orphaned callback reached the auth validator")
 	# Android may redeliver the same callback while the first exchange is in flight.
 	# It must be consumed from the Activity even though no second signal is emitted.
 	var duplicate_intent := FakeIntent.new(valid)
