@@ -14,6 +14,7 @@ jobs:
     timeout-minutes: 25
     env:
       AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,12 +25,17 @@ jobs:
       - name: Grant approved KVM ACL only to this ephemeral runner account
         run: |
           mkdir -p "$RUNNER_TEMP/aurion-jni-smoke"
+          printf '{"schemaVersion":1,"runtime":"UNVERIFIED"}\n' > "$RUNNER_TEMP/aurion-jni-smoke/runner-preflight.json"
           test -c /dev/kvm
           sudo setfacl -m "u:$(id -u):rw" /dev/kvm
       - name: Require runner KVM access
+        env:
+          AURION_SMOKE_OUTPUT: ${{ runner.temp }}/aurion-jni-smoke
         run: |
           python3 - <<'PY'
-          import os
+          import os,json,pathlib
+          report={'schemaVersion':1,'runtime':'UNVERIFIED','runnerUid':os.getuid(),'kvmReadable':os.access('/dev/kvm',os.R_OK),'kvmWritable':os.access('/dev/kvm',os.W_OK)}
+          (pathlib.Path(os.environ['AURION_SMOKE_OUTPUT'])/'runner-preflight.json').write_text(json.dumps(report)+'\n')
           if not os.access('/dev/kvm',os.R_OK|os.W_OK):
               raise SystemExit('RUNNER_KVM_ACCESS_UNAVAILABLE')
           PY
