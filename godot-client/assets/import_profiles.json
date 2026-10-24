@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "aurion.godot-import-profiles.v1",
+  "defaultProfile": "compatible-copy-v1",
+  "profiles": {
+    "compatible-copy-v1": {
+      "operation": "byte-exact-copy",
+      "requiredExtensions": "reject",
+      "compression": "none",
+      "scale": 1,
+      "axes": "source",
+      "pivot": "preserve",
+      "preserve": [
+        "meshes",
+        "materials",
+        "embedded-textures",
+        "skeletons",
+        "skins",
+        "morph-targets",
+        "animations"
+      ],
+      "reason": "G14 verified the original GLBs in pinned Godot 4.7.2 without required glTF extensions; transformation and compression remain unproven."
+    }
+  },
+  "roleProfiles": {
+    "character": "compatible-copy-v1",
+    "environment": "compatible-copy-v1",
+    "monster": "compatible-copy-v1",
+    "nature": "compatible-copy-v1"
+  }
+}
