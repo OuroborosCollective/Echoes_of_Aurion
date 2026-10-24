@@ -15,6 +15,12 @@ function checked(binary,args,env,timeout=60000) {
  assert.ok(!p.error&&p.status===0,'release tool failed (inspect private operator logs)');
  return p.stdout;
 }
+export async function cleanupLoginWorkspace(job) {
+ // Gradle may finish writing its private home during recursive removal.
+ // Retry transient ENOTEMPTY/EBUSY with Node's bounded backoff; still reject
+ // persistent cleanup failures instead of reporting a successful export.
+ await rm(job,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+}
 async function loginExport(env, unsigned) {
  const request=requireLoginReleaseInputs(env);
  const signer=unsigned ? null : validateSignerConfig(env);
@@ -89,7 +95,7 @@ async function loginExport(env, unsigned) {
   } finally {await rm(staging,{recursive:true,force:true});}
   console.log((unsigned?'UNSIGNED LOGIN REGRESSION VERIFIED / NOT INSTALLABLE: ':'SIGNED LOGIN APK VERIFIED / DEVICE UNVERIFIED: ')+destination);
   return evidence;
- } finally {await rm(job,{recursive:true,force:true});}
+ } finally {await cleanupLoginWorkspace(job);}
 }
 export async function signedLoginExport(env=process.env) { return loginExport(env,false); }
 export async function unsignedLoginExport(env=process.env) { return loginExport(env,true); }
