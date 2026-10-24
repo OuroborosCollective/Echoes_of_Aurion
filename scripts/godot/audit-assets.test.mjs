@@ -2,10 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { inspectGlb, inventory } from './audit-assets.mjs';
 import { repo } from './toolchain.mjs';
 
 const player = await readFile(resolve(repo, 'assets/characters/aurion-player-standard-animated.glb'));
+test('source transform reader preserves rotated, scaled and translated glTF hierarchy', () => {
+  const result = spawnSync('python3', ['-B', resolve(repo, 'scripts/godot/test_asset_transforms.py')], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /OK/);
+});
 function changedDocument(mutate) {
   const end = 20 + player.readUInt32LE(12);
   const doc = JSON.parse(player.toString('utf8', 20, end));

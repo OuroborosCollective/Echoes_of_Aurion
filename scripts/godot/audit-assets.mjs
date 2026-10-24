@@ -76,7 +76,7 @@ export async function inventory() {
     if (declared.canonicalMapping.contract.endsWith('.json')) assert.equal(JSON.parse(contract).sha256, actual.sha256, 'CANONICAL_SOURCE_MAPPING');
     sources.push({ ...declared, ...actual });
   }
-  const textures = spawnSync('python3', [resolve(repo, 'scripts/godot/asset-image-metadata.py')], { input: JSON.stringify(paths), encoding: 'utf8', timeout: 30000 });
+  const textures = spawnSync('python3', ['-B', resolve(repo, 'scripts/godot/asset-image-metadata.py')], { input: JSON.stringify(paths), encoding: 'utf8', timeout: 30000 });
   assert.ok(!textures.error && textures.status === 0, `ASSET_TEXTURE_READBACK: ${textures.stderr}`);
   const dimensions = JSON.parse(textures.stdout);
   for (const source of sources) {

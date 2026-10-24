@@ -195,7 +195,7 @@ func verify() -> void:
 		records.append({"path": source.path, "sha256": source.sha256, "triangles": triangles, "meshInstances": meshes.size(), "bones": bone_count, "boundsMin":[bounds.position.x,bounds.position.y,bounds.position.z], "boundsSize":[bounds.size.x,bounds.size.y,bounds.size.z], "clips": clips, "captures":captures})
 		scene.free()
 		await process_frame
-	var report := {"schemaVersion":"aurion.godot-asset-import.v1", "sourceRevision":inventory.sourceRevision, "engine":Engine.get_version_info().string, "display":DisplayServer.get_name(), "records":records, "failures":failures, "truthNotice":"Real Godot source imports and skeleton-motion samples; no gameplay, live assignment or Android device proof."}
+	var report := {"schemaVersion":"aurion.godot-asset-import.v1", "sourceRevision":inventory.sourceRevision, "engine":Engine.get_version_info().string, "display":DisplayServer.get_name(), "videoAdapter":RenderingServer.get_video_adapter_name(), "records":records, "failures":failures, "truthNotice":"Real Godot source imports and skeleton-motion samples; no gameplay, live assignment or Android device proof."}
 	var output := FileAccess.open(output_path, FileAccess.WRITE)
 	if output == null:
 		push_error("G14 output unavailable")

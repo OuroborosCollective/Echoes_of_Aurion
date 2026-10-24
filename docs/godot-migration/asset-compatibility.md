@@ -34,6 +34,8 @@ Die Prüfung liest echte GLB-Geometrie, eingebettete Texturgrößen über Aurion
 
 Der Renderlauf verwendet dieselben Quellbytes mit Kamera und Licht in einer ausdrücklich bezeichneten Assetprobe. Er verlangt sichtbare Geometrie und unterschiedliche Bilder zweier Walk-Posen. JSON, Logs, PNGs und die revisionsgebundenen Receipts werden im Workflow **Godot 3D source asset audit** archiviert. Software-OpenGL belegt keine Tab-A9-Leistung. Skelettbewegung allein belegt weder korrekt deformierte Haut noch die visuelle Qualität aller Clips; diese bleiben gesonderte Prüfungen.
 
+Die zwölf ursprünglichen Mesh-Knoten verwenden Identitätsmatrizen. Eine zusätzliche, ausdrücklich synthetische Testhierarchie prüft deshalb Quaternionrotation, nichtuniforme Elternskalierung und eine glTF-Spaltenmatrix sowohl mathematisch als auch durch einen echten Godot-Import. Sie wird nicht als Spielasset übernommen. Der Renderbeleg liest den tatsächlichen Softwareadapter zurück; ein vorhandenes Fenster allein genügt nicht.
+
 ## Grenze und nächster Schritt
 
 Diese Assetprobe ist keine Live-Welt und kein neuer APK-Spielmodus. Sie baut weder lokale Spielregeln noch erfundene Weltplatzierungen. Der nächste Schritt ist [G15 / #922](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/922): kontrollierte Godot-Ausgaben mit Quellhash und Importprofil. Darauf folgen [G16 / #923](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/923), bestätigte 3D-Figuren, und [G18 / #925](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/925), die tatsächlich bestätigte Weltgeometrie. Persistente Bearbeitung folgt den vorhandenen Aurion-Plan/Apply-/Receipt-Verträgen aus [G42 / #949](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/949).
