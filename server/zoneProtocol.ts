@@ -9,7 +9,7 @@ import { ZONE_TICK_MS } from "@shared/zoneTimingContract";
 import { isAx1BladeSkillId, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
 
 export { ZONE_TICK_MS };
-export const zoneIdSchema=z.literal("observatory_threshold");
+export const zoneIdSchema=z.enum(["observatory_threshold", "windhollow"]);
 export type ZoneId=z.infer<typeof zoneIdSchema>;
 export const ZONE_FIXED_POINT_SCALE=1_000;
 export const zoneHelloSchema=z.object({type:z.literal("hello"),ticket:z.string().min(24).max(160),zoneId:zoneIdSchema,protocolVersion:z.literal(ZONE_PROTOCOL_VERSION)});
