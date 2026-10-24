@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, readFile, writeFile, symlink, access, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, symlink, access, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, root, executable, lock, digest, run } from './toolchain.mjs';
 import { androidReport } from './android-toolchain.mjs';
 import { execute } from './check-runtime.mjs';
 import { validateApk } from './apk-readback.mjs';
-import { readApkAssets } from './export-assets.mjs';
-import { prepareAssets } from './prepare-assets.mjs';
+import { stageAssetProject, includeAssetManifest, verifyStagedAssetImports, readApkAssets } from './export-assets.mjs';
 
 const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
@@ -25,7 +24,9 @@ await rm(join(output, 'build-evidence.json'), { force: true });
 const job = await mkdtemp(join(root, 'export-'));
 try {
   const project = join(job, 'project');
-  await cp(join(repo, 'godot-client'), project, { recursive: true, filter: path => !path.split('/').includes('.godot') });
+  const prepared = await stageAssetProject(project, revision);
+  const presets = await readFile(join(project, 'export_presets.cfg'), 'utf8');
+  await writeFile(join(project, 'export_presets.cfg'), includeAssetManifest(presets));
   await writeFile(join(project, 'override.cfg'), `[aurion]\nclient_build="${revision}"\n`);
   const config = join(job, 'config/godot');
   const data = join(job, 'data/godot');
@@ -49,6 +50,7 @@ try {
     assert.ok(!result.error && result.status === 0 && !/(?:SCRIPT ERROR:|\bERROR:)/.test(log), `${id} failed: ${result.error?.message || log}`);
   }
   await godot('import', ['--editor', '--import']);
+  await verifyStagedAssetImports(project, prepared, env);
   await godot('export', ['--export-debug', 'Android Preview', apk]);
   const buildTools = join(installed, 'sdk/build-tools', lock.android.buildTools);
   const badging = run(join(buildTools, 'aapt'), ['dump', 'badging', apk]);
@@ -58,8 +60,8 @@ try {
   const signature = signatureResult.stdout;
   const entries = run('unzip', ['-Z1', apk]).split('\n');
   const identity = validateApk(badging, signature, entries, manifest);
-  const { manifest: assetManifest, manifestPath } = await prepareAssets();
-  readApkAssets(apk, { manifest: assetManifest, manifestBytes: await readFile(manifestPath) }, entries);
+  const packagedAssets = readApkAssets(apk, prepared, entries);
+  await writeFile(join(output, 'packaged-assets.json'), JSON.stringify(packagedAssets, null, 2) + '\n');
   assert.match(manifest, /screenOrientation.*0x0/, 'landscape not encoded in manifest');
   const override = run('unzip', ['-p', apk, 'assets/override.cfg']);
   assert.ok(override.includes(revision), 'source revision absent from packaged settings');
@@ -68,8 +70,8 @@ try {
   for (const [file, text] of Object.entries(readback)) await writeFile(join(output, file), text);
   run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
   assert.equal((await androidReport()).status, 'ready', 'export changed the pinned toolchain');
-  const evidence = { schemaVersion: 1, sourceRevision: revision, toolchainHash: await digest(join(repo, 'config/godot-toolchain.lock.json')), engine: lock.engine.version, editorHash: await digest(executable), androidTreeHash: android.treeSha256, identity, apkSha256: await digest(apk), runtimeLayer: 'android-export-and-package-readback', device: 'unverified', sdkLicenses: 'unverified-no-sdkmanager-invoked', artifacts: {} };
-  for (const file of ['Aurion-Preview.apk', 'import.log', 'export.log', ...Object.keys(readback)]) evidence.artifacts[file] = await digest(join(output, file));
+  const evidence = { schemaVersion: 1, sourceRevision: revision, toolchainHash: await digest(join(repo, 'config/godot-toolchain.lock.json')), engine: lock.engine.version, editorHash: await digest(executable), androidTreeHash: android.treeSha256, identity, packagedAssets, apkSha256: await digest(apk), runtimeLayer: 'android-export-and-package-readback', device: 'unverified', sdkLicenses: 'unverified-no-sdkmanager-invoked', artifacts: {} };
+  for (const file of ['Aurion-Preview.apk', 'import.log', 'export.log', 'packaged-assets.json', ...Object.keys(readback)]) evidence.artifacts[file] = await digest(join(output, file));
   await writeFile(join(output, 'build-evidence.json'), JSON.stringify(evidence, null, 2) + '\n');
   console.log(`BUILD PASS / DEVICE UNVERIFIED: ${apk}`);
   console.log(JSON.stringify(evidence, null, 2));
