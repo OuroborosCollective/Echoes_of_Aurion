@@ -16,7 +16,7 @@ function fixture() {
     }],
   };
   const manifestBytes = Buffer.from(JSON.stringify(manifest) + '\n');
-  const remapEntry = 'assets/assets/generated/' + assetId + '.glb.remap';
+  const remapEntry = 'assets/assets/generated/' + assetId + '.glb.import';
   const importedEntry = 'assets/.godot/imported/' + assetId + '.glb-deadbeef.scn';
   const files = new Map([
     ['assets/assets/generated/manifest.json', manifestBytes],

@@ -21,6 +21,7 @@ func verify() -> void:
 	require(manifest.sourceRevision == OS.get_environment("AURION_EXPECTED_REVISION"), "Staged import revision changed")
 	for source: Dictionary in manifest.sources:
 		var resource_path := "res://assets/generated/" + str(source.assetId) + ".glb"
+		require(FileAccess.get_sha256(resource_path) == source.outputSha256, "Staged GLB output hash changed")
 		var import_config := ConfigFile.new()
 		require(import_config.load(resource_path + ".import") == OK, "Staged import mapping missing")
 		var imported: String = import_config.get_value("remap", "path", "")

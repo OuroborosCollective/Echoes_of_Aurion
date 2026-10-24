@@ -62,7 +62,7 @@ export function verifyPackagedAssets({ manifest, manifestBytes, stagedImports, e
     assert.equal(source.path, 'godot-client/assets/generated/' + source.assetId + '.glb', 'PACKAGED_ASSET_PATH');
     assert.equal(seen.has(source.assetId), false, 'DUPLICATE_PACKAGED_ASSET');
     seen.add(source.assetId);
-    const remapEntry = 'assets/assets/generated/' + source.assetId + '.glb.remap';
+    const remapEntry = 'assets/assets/generated/' + source.assetId + '.glb.import';
     assert.ok(entries.includes(remapEntry), 'PACKAGED_ASSET_REMAP_MISSING: ' + source.assetId);
     const remap = readEntry(remapEntry).toString('utf8');
     const paths = [...remap.matchAll(/^path="(res:\/\/\.godot\/imported\/[a-zA-Z0-9_.-]+\.scn)"\s*$/gm)];
@@ -84,6 +84,9 @@ export function verifyPackagedAssets({ manifest, manifestBytes, stagedImports, e
       outputSha256: source.outputSha256,
       importedEntry,
       importedBytes: bytes.length,
+      triangles: staged.triangles,
+      bones: staged.bones,
+      clips: staged.clips,
       importedSha256: sha256(bytes),
     });
   }

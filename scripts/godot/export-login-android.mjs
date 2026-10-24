@@ -90,6 +90,7 @@ async function loginExport(env, unsigned) {
   const association=await verifyLiveAssetlinks({packageName:loginPackage,fingerprint:signer?.expectedFingerprint || env.AURION_LOGIN_SIGNER_SHA256});
   assert.equal((await androidReport()).treeSha256,baseline.treeSha256,'Preview SDK changed');
   const evidence={schemaVersion:1,sourceRevision:revision,packagedAssets,apkSha256:await digest(apk),packageName:identity.packageName,signerSha256:signer?.expectedFingerprint || null,signingState:unsigned?'unsigned':'verified',assetlinks:association,device:'unverified',toolchainLockSha256:await digest(join(repo,'config/godot-toolchain.lock.json'))};
+  console.log(JSON.stringify({sourceRevision:revision,packagedAssets}));
   const staging=await mkdtemp(join(request.outputDirectory,'.signed-login-'));
   try {
    await copyFile(apk,join(staging,LOGIN_APK_FILENAME));
