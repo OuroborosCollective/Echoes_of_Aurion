@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("bridge_smoke", Path(__file__).with_name("android-bridge-smoke.py"))
 smoke = importlib.util.module_from_spec(spec)
@@ -56,6 +57,28 @@ class Reports(unittest.TestCase):
         self.assertNotIn("secret", str(report))
         self.assertNotIn("https://", str(report))
         self.assertFalse(smoke.browser_diagnostics("invalid secret", "com.android.chrome", "", False)["uiParsed"])
+
+    def test_browser_observer_does_not_launch_a_competing_first_run_intent(self):
+        def device(*args, **kwargs):
+            if args[:3] == ("shell", "am", "start"):
+                self.fail("a second VIEW can replace the APK's pending first-run navigation")
+            if args[:4] == ("shell", "pm", "list", "packages"):
+                return "package:com.android.chrome"
+            return "topResumedActivity com.android.chrome/Main"
+        with patch.object(smoke, "adb", side_effect=device), patch.object(smoke.FixturePage, "hits", {"/legacy"}):
+            smoke.open_browser("legacy")
+
+    def test_other_variant_page_cannot_satisfy_browser_observation(self):
+        def device(*args, **kwargs):
+            if args[:4] == ("shell", "pm", "list", "packages"):
+                return "package:com.android.chrome"
+            if args[:4] == ("shell", "dumpsys", "activity", "activities"):
+                return "topResumedActivity com.android.chrome/Main"
+            return "<hierarchy/>"
+        with patch.object(smoke, "adb", side_effect=device), patch.object(smoke.FixturePage, "hits", {"/legacy"}), \
+                patch.object(smoke.time, "monotonic", side_effect=[0, 1, 50]), patch.object(smoke.time, "sleep"):
+            with self.assertRaisesRegex(RuntimeError, "^BROWSER_FIXTURE_UNOBSERVED$"):
+                smoke.open_browser("fixed")
 
 
 if __name__ == "__main__":

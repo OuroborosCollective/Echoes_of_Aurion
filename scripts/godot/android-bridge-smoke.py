@@ -31,9 +31,9 @@ BROWSER_IDS = {"signin_fre_dismiss_button", "signin_fre_continue_button", "terms
 
 
 def browser_diagnostics(xml, browser, foreground, fixture_observed):
-    report = {"browserForeground": any(browser in line for line in foreground.splitlines()
-                                      if "ResumedActivity" in line or "topResumedActivity" in line),
-              "firstRunActivity": "firstrun.FirstRunActivity" in foreground,
+    resumed = [line for line in foreground.splitlines() if "ResumedActivity" in line or "topResumedActivity" in line]
+    report = {"browserForeground": any(browser in line for line in resumed),
+              "firstRunActivity": any("firstrun.FirstRunActivity" in line for line in resumed),
               "fixtureObserved": fixture_observed, "uiParsed": False, "knownLabels": [], "knownIds": []}
     try:
         nodes = list(ET.fromstring(xml).iter("node"))
@@ -163,13 +163,16 @@ def open_browser(guard):
     browser = next((p for p in ("com.android.chrome", "com.android.browser") if "package:" + p in packages), None)
     require(browser is not None, "BROWSER_UNAVAILABLE")
     PROGRESS["browserPackage"] = browser
-    adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-p", browser,
-        "-d", "http://127.0.0.1:8765/" + guard)
+    # The APK owns the single browser launch. A second VIEW here races Chrome's
+    # first-run pending intent, which may resume the APK's original URL instead.
+    # Observe that exact variant-specific request and the real browser, rather
+    # than replacing the navigation or accepting a stale page from another case.
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         foreground = adb("shell", "dumpsys", "activity", "activities")
         resumed = [s for s in foreground.splitlines() if "ResumedActivity" in s or "topResumedActivity" in s]
         if "/" + guard in FixturePage.hits and any(browser in line for line in resumed):
+            print("SMOKE_BROWSER_FIXTURE_OBSERVED / " + guard)
             return
         # Dismiss only the empty emulator browser's first-run UI, never a login
         # or a consent/authentication screen. No account is created or entered.
@@ -225,6 +228,7 @@ def run(output):
         require(re.fullmatch(r"/data/app/[A-Za-z0-9_./=+~\-]+/base\.apk", path), "APK_IDENTITY_MISMATCH")
         require(adb("shell", "sha256sum", path).split()[0] == build["apkSha256"], "APK_IDENTITY_MISMATCH")
         component = PACKAGE + "/" + build["launcher"]
+        FixturePage.hits.discard("/" + guard)
         adb("shell", "am", "start", "-W", "-n", component)
         before = wait_report(lambda r: r["guard"] == guard and r["phase"] == "waiting")
         PROGRESS["stage"] = guard + "_browser"

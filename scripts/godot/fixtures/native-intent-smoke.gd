@@ -20,7 +20,8 @@ func _ready() -> void:
 		_app._auth_start._server_base_url = "http://127.0.0.1:1"
 		_app._on_auth_start_succeeded()
 		_write_report()
-		if OS.shell_open("http://127.0.0.1:8765/") != OK:
+		var guard: String = ProjectSettings.get_setting("aurion_smoke/guard")
+		if guard not in ["legacy", "fixed"] or OS.shell_open("http://127.0.0.1:8765/" + guard) != OK:
 			push_error("SMOKE_BROWSER_OPEN_FAILED")
 	set_process(true)
 	_write_report()
