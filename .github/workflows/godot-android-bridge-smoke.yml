@@ -50,9 +50,14 @@ jobs:
           node scripts/godot/export-android.mjs
           node scripts/godot/export-bridge-smoke.mjs
       - name: Provision standard runner emulator without changing KVM permissions
+        env:
+          ANDROID_AVD_HOME: ${{ runner.temp }}/aurion-jni-avd
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
-          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name aurion-jni --package "system-images;android-35;google_apis;x86_64"
+          mkdir -p "$ANDROID_AVD_HOME"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name aurion-jni --path "$ANDROID_AVD_HOME/aurion-jni.avd" --package "system-images;android-35;google_apis;x86_64"
+          test -f "$ANDROID_AVD_HOME/aurion-jni.ini"
+          test "$("$ANDROID_HOME/emulator/emulator" -list-avds)" = "aurion-jni"
           "$ANDROID_HOME/emulator/emulator" -avd aurion-jni -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -memory 2048 -cores 2 > "$RUNNER_TEMP/aurion-emulator.log" 2>&1 &
           printf '%s\n' "$!" > "$RUNNER_TEMP/aurion-emulator.pid"
       - name: Run real JNI legacy RED, fixed warm return, duplicate and cold-start smoke
