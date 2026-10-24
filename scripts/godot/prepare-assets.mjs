@@ -18,6 +18,19 @@ export function requireCleanSourceInventory(sourceInventory) {
   assert.equal(sourceInventory.workingTreeClean, true, 'SOURCE_WORKTREE_DIRTY');
 }
 
+export function assertPreparedRecord(prepared, original) {
+  assert.equal(prepared.path, `godot-client/assets/generated/${original.assetId}.glb`, 'PREPARED_ASSET_PATH');
+  assert.equal(prepared.sourcePath, original.path, 'PREPARED_SOURCE_PATH');
+  assert.equal(prepared.sourceSha256, original.sha256, 'PREPARED_SOURCE_HASH');
+  assert.equal(prepared.outputSha256, original.sha256, 'PREPARED_OUTPUT_HASH');
+  assert.equal(prepared.sha256, original.sha256, 'PREPARED_HASH');
+  assert.equal(prepared.assetId, original.assetId, 'PREPARED_ASSET_ID');
+  for (const key of [
+    'role', 'bytes', 'triangles', 'meshes', 'materials', 'images', 'skins',
+    'animations', 'extensionsUsed', 'extensionsRequired', 'meshNodeTransforms',
+  ]) assert.deepEqual(prepared[key], original[key], `PREPARED_${key.toUpperCase()}_CHANGED`);
+}
+
 function repositoryPath(path) {
   const value = relative(repo, path).split(sep).join('/');
   assert.ok(value && value !== '..' && !value.startsWith('../'), 'OUTPUT_OUTSIDE_REPOSITORY');
