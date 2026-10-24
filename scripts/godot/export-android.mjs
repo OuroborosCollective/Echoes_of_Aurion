@@ -6,6 +6,8 @@ import { repo, root, executable, lock, digest, run } from './toolchain.mjs';
 import { androidReport } from './android-toolchain.mjs';
 import { execute } from './check-runtime.mjs';
 import { validateApk } from './apk-readback.mjs';
+import { readApkAssets } from './export-assets.mjs';
+import { prepareAssets } from './prepare-assets.mjs';
 
 const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
@@ -56,6 +58,8 @@ try {
   const signature = signatureResult.stdout;
   const entries = run('unzip', ['-Z1', apk]).split('\n');
   const identity = validateApk(badging, signature, entries, manifest);
+  const { manifest: assetManifest, manifestPath } = await prepareAssets();
+  readApkAssets(apk, { manifest: assetManifest, manifestBytes: await readFile(manifestPath) }, entries);
   assert.match(manifest, /screenOrientation.*0x0/, 'landscape not encoded in manifest');
   const override = run('unzip', ['-p', apk, 'assets/override.cfg']);
   assert.ok(override.includes(revision), 'source revision absent from packaged settings');
