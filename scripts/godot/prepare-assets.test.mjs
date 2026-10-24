@@ -25,13 +25,14 @@ test('two clean preparations are stable and remove stale outputs', async t => {
   );
   const prepared = first.manifest.sources[0];
   const original = { ...prepared, path: prepared.sourcePath };
-  assert.doesNotThrow(() => assertPreparedRecord(prepared, original));
+  const testOutputRoot = '.aurion-godot/prepare-assets-test';
+  assert.doesNotThrow(() => assertPreparedRecord(prepared, original, testOutputRoot));
   assert.throws(
-    () => assertPreparedRecord({ ...prepared, path: `godot-client/assets/generated/../../../../${prepared.sourcePath}` }, original),
+    () => assertPreparedRecord({ ...prepared, path: `${testOutputRoot}/../../../../${prepared.sourcePath}` }, original, testOutputRoot),
     /PREPARED_ASSET_PATH/,
   );
   assert.throws(
-    () => assertPreparedRecord({ ...prepared, animations: prepared.animations.slice(0, 1) }, original),
+    () => assertPreparedRecord({ ...prepared, animations: prepared.animations.slice(0, 1) }, original, testOutputRoot),
     /PREPARED_ANIMATIONS_CHANGED/,
   );
 });
