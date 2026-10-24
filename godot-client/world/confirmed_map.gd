@@ -15,7 +15,6 @@ var _selected := ""
 var _armed := ""
 var _plans: Dictionary = {}
 var _fresh := false
-var _origin := {"x": 0, "z": 0}
 var _pointer_down := false
 var _pointer_dragged := false
 var _pointer_origin := Vector2.ZERO
@@ -29,7 +28,6 @@ func set_confirmed(world: Variant, registry: Variant) -> void:
 	if own.is_empty():
 		clear()
 		return
-	_origin = {"x": int(own["position"]["x"]), "z": int(own["position"]["z"])}
 	var updated: Dictionary = {_self_id: own}
 	var presence_count := 1
 	for id in registry.ids("presences"):
@@ -111,7 +109,6 @@ func clear() -> void:
 	_selected = ""
 	_armed = ""
 	_fresh = false
-	_origin = {"x": 0, "z": 0}
 	_visual_origin = {"x": 0.0, "z": 0.0}
 	_pointer_down = false
 	_pointer_dragged = false
@@ -167,7 +164,6 @@ func _activate_point(point: Vector2) -> void:
 	_selected = ""
 	var distance := 18.0
 	for id in _records:
-		var record: Dictionary = _records[id]
 		var location := marker_screen(id)
 		if not Rect2(Vector2.ZERO, size).has_point(location):
 			continue
@@ -198,7 +194,6 @@ func _draw() -> void:
 		draw_line(Vector2(size.x * 0.5 + axis, 0), Vector2(size.x * 0.5 + axis, size.y), Color(0.16, 0.28, 0.30, 0.55), 1)
 		draw_line(Vector2(0, size.y * 0.5 + axis), Vector2(size.x, size.y * 0.5 + axis), Color(0.16, 0.28, 0.30, 0.55), 1)
 	for id in _records:
-		var record: Dictionary = _records[id]
 		var location := marker_screen(id)
 		if not Rect2(Vector2.ZERO, size).has_point(location):
 			continue
