@@ -9,6 +9,7 @@ var world := World.new()
 var registry := Registry.new()
 var visual := Interpolator.new()
 var confirmed_receipt: Dictionary = {}
+var captured_ms := 0
 
 var failures: Array[String] = []
 var transport: Node
@@ -34,7 +35,8 @@ func _on_snapshot(snapshot: Dictionary) -> void:
 	snapshot_count += 1
 	_require(world.apply_snapshot(snapshot), "projection rejected actual snapshot")
 	_require(registry.sync(world), "registry rejected actual snapshot")
-	_require(visual.capture(world, Time.get_ticks_msec()), "interpolator rejected actual snapshot")
+	captured_ms = Time.get_ticks_msec()
+	_require(visual.capture(world, captured_ms), "interpolator rejected actual snapshot")
 	for presence in snapshot.get("presences", []):
 		if typeof(presence) != TYPE_DICTIONARY:
 			continue
@@ -50,6 +52,10 @@ func _on_snapshot(snapshot: Dictionary) -> void:
 					confirmed_receipt[category]["nodes"] = records
 				else:
 					confirmed_receipt[category] = records
+			var target := Vector2(presence["position"]["x"], presence["position"]["z"])
+			_require(Interpolator.WINDOW_MS == 100, "presentation contract must remain 100 ms")
+			_require(visual.visual_mm(expected_entity_id, captured_ms) != target, "moving presentation not separated from confirmed target")
+			_require(visual.visual_mm(expected_entity_id, captured_ms + 100) == target, "presentation exceeds 100 ms bound")
 			_require(visual.confirmed_mm(expected_entity_id) == presence["position"], "interpolation changed confirmed integer position")
 			var before := world.current_state()
 			_require(not world.apply_snapshot(snapshot), "real duplicate snapshot accepted")
