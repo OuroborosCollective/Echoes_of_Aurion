@@ -4716,7 +4716,7 @@ Learned: Clearing reconnect state is insufficient because the lifecycle owns a s
 Evidence: Regression-only head `603163444430368a2566a80970e8198587c2eb46` failed causally in Godot run 40018063075/job 120635162163; corrected code head `a451d8e978e30ddd1681dc064012ba12d9af2261` passed the active-scene Godot runtime/software-render contract in run 40018341005. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
 
 
-2026-10-24 · PR #1148 · Leaderboard privacy and CI DB boundary
-Change: Public leaderboard now projects only rank, level, victories and seasonPoints; account-bearing list is admin-only. CI uses an isolated non-root test user, production env files are ignored, and invalid database URLs are no longer echoed in logs.
-Learned: A public UI readmodel must not inherit account identifiers from an existing public tRPC route; even invalid connection strings are secrets in diagnostics.
-Evidence: RED regression commit e7c48d73631ac99bfd3c54cdb396a5305b38ad94; implementation 1031c181f73851420ed0e10816f34f195730f1e4; exact-head GitHub CI pending at memory-entry time, no production runtime readback claimed.
+2026-10-24 · PR #1148 · Home leaderboard privacy and committed-schema runtime gate
+Change: Home now opens an anonymous leaderboard backed by an account-free public projection; guest browser errors stay strict and its MariaDB gate applies only committed migrations while covering leaderboard server changes.
+Learned: A public readmodel needs both field-level privacy and an exact-head browser/database gate whose path filters include the server query boundary.
+Evidence: RED e7c48d73631ac99bfd3c54cdb396a5305b38ad94; verified code head 58fa2fa093880943de01a19d7e06b56f76743ca2 passed all 27 workflows, including Home/MariaDB/strict-console run 40053583748, Local Test Pack 40053583715, runtime candidate 40053583826 and container proof 40053583688; final Memory-bearing head is re-gated before merge.
