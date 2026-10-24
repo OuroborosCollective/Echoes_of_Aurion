@@ -25,6 +25,7 @@ test('two clean preparations are stable and remove stale outputs', async t => {
   );
   const prepared = first.manifest.sources[0];
   const original = { ...prepared, path: prepared.sourcePath };
+  for (const key of ['sourcePath', 'sourceSha256', 'outputSha256', 'profileId', 'profileHash']) delete original[key];
   const testOutputRoot = '.aurion-godot/prepare-assets-test';
   assert.doesNotThrow(() => assertPreparedRecord(prepared, original, testOutputRoot));
   assert.throws(
