@@ -183,12 +183,14 @@ func verify() -> void:
 	var offscreen := snapshot_from(moved, 3)
 	offscreen["mobs"][0]["position"] = map._screen_to_world(Vector2(-8, map.size.y * 0.5))
 	scene._on_zone_snapshot(offscreen)
+	map.set_visual_positions(scene._visuals, scene._last_world_update_ms + 100)
 	tap(map, Vector2(4, map.size.y * 0.5))
 	require(map.selected_record().is_empty(), "empty map-edge tap selected an off-screen enemy")
 
 	var edge := snapshot_from(offscreen, 4)
 	edge["mobs"][0]["position"] = map._screen_to_world(Vector2(8, map.size.y * 0.5))
 	scene._on_zone_snapshot(edge)
+	map.set_visual_positions(scene._visuals, scene._last_world_update_ms + 100)
 	var visible_edge_point: Vector2 = map.world_to_screen(edge["mobs"][0]["position"])
 	require(Rect2(Vector2.ZERO, map.size).has_point(visible_edge_point), "edge marker fixture is not visible")
 	tap(map, visible_edge_point)
@@ -204,6 +206,7 @@ func verify() -> void:
 	far["presences"][1]["position"] = {"x":64000001000,"z":64000000000}
 	far["mobs"][0]["position"] = {"x":64000001000,"z":64000000000}
 	scene._on_zone_snapshot(far)
+	map.set_visual_positions(scene._visuals, scene._last_world_update_ms + 100)
 	var self_screen: Vector2 = map.world_to_screen(far["presences"][0]["position"])
 	var shared_screen: Vector2 = map.world_to_screen(far["mobs"][0]["position"])
 	require(is_equal_approx(self_screen.distance_to(shared_screen), 18.0), "large valid coordinates lost relative marker precision")
