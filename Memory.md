@@ -4720,3 +4720,9 @@ Evidence: Regression-only head `603163444430368a2566a80970e8198587c2eb46` failed
 Change: Home now opens an anonymous leaderboard backed by an account-free public projection; guest browser errors stay strict and its MariaDB gate applies only committed migrations while covering leaderboard server changes.
 Learned: A public readmodel needs both field-level privacy and an exact-head browser/database gate whose path filters include the server query boundary.
 Evidence: RED e7c48d73631ac99bfd3c54cdb396a5305b38ad94; verified code head 58fa2fa093880943de01a19d7e06b56f76743ca2 passed all 27 workflows, including Home/MariaDB/strict-console run 40053583748, Local Test Pack 40053583715, runtime candidate 40053583826 and container proof 40053583688; final Memory-bearing head is re-gated before merge.
+
+
+2026-10-24 · PR #1147 · Zone-tick mob-target view reuse
+Change: The authoritative zone tick now reuses one zone-owned array when excluding the reserved production probe from mob-FSM targeting.
+Learned: Allocation evidence must exercise the real tick path and compare both reference churn and the exact filtered result; source-level removal of `.filter()` alone is insufficient.
+Evidence: Verified code head `ee5a185f64064d247e641ae74e3c593350257116` passed all eight workflows; Local Test Pack run 40061837291 proved 256 legacy filter arrays versus one reused runtime view with identical user IDs across 256 real ticks, alongside the full repository suite. Runtime candidate 40061837337, container proof 40061837265, production probe 40061837303 and deterministic DES 40061837286 also passed; final Memory-bearing head is re-gated before merge.
