@@ -32,9 +32,19 @@ jobs:
   exact-head-home-community:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_browser_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=3
     env:
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       VITE_APP_ID: aurion-home-community-regression
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_browser_test
     steps:
       - uses: actions/checkout@v4
         with:
