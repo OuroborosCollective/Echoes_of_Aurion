@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp,chmod,rm,symlink } from 'node:fs/promises';
+import { mkdtemp,chmod,rm,symlink,mkdir,writeFile,stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -72,5 +72,38 @@ test('unsigned runtime rejects signing credentials before starting tools',async(
  const base={AURION_LOGIN_ALLOW_SIGNED_EXPORT:'1',AURION_LOGIN_GRADLE_SDK_ROOT:'/unused-sdk',AURION_LOGIN_APK_OUTPUT:'/unused-output',AURION_EXPECTED_REVISION:'a'.repeat(40)};
  for(const key of ['AURION_LOGIN_KEYSTORE_PATH','AURION_LOGIN_KEYSTORE_PASSWORD','AURION_LOGIN_KEY_ALIAS','AURION_LOGIN_KEY_PASSWORD'])
   await assert.rejects(unsignedLoginExport({...base,[key]:'forbidden-in-unsigned-mode'}),/must not receive signing credentials/);
+});
+
+test('workspace cleanup tolerates one late Gradle write but rejects persistent writes',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'aurion-gradle-cleanup-'));
+ t.after(()=>rm(directory,{recursive:true,force:true}));
+ for(const persistent of [false,true]) {
+  const victim=join(directory,persistent?'persistent':'transient');
+  await mkdir(victim);await writeFile(join(victim,'initial.log'),'fixture');
+  // In a fresh Node process, interpose the filesystem boundary before rm's
+  // lazy initialization. The second rmdir occurs after children were removed:
+  // adding a real file there reproduces the runner's actual ENOTEMPTY race.
+  const child=spawnSync(process.execPath,['--input-type=module','-e',`
+   import fs from 'node:fs';
+   import {join} from 'node:path';
+   import assert from 'node:assert/strict';
+   const [victim,moduleUrl,mode]=process.argv.slice(1);
+   const rmdir=fs.rmdir;let calls=0;
+   fs.rmdir=function(path,...args) {
+    if(String(path)===victim) {
+     calls++;
+     if(mode==='persistent'||calls===2) fs.writeFileSync(join(victim,'late.log'),'fixture');
+    }
+    return rmdir.call(this,path,...args);
+   };
+   const {cleanupLoginWorkspace}=await import(moduleUrl);
+   if(mode==='persistent') await assert.rejects(cleanupLoginWorkspace(victim),{code:'ENOTEMPTY'});
+   else await cleanupLoginWorkspace(victim);
+   assert.ok(calls>=2&&calls<=20,'cleanup retry was absent or unbounded');
+  `,victim,new URL('./export-login-android.mjs',import.meta.url).href,persistent?'persistent':'transient'],{encoding:'utf8',timeout:5000});
+  assert.equal(child.status,0,child.stderr);
+  if(persistent) assert.ok((await stat(victim)).isDirectory());
+  else await assert.rejects(stat(victim),{code:'ENOENT'});
+ }
 });
 

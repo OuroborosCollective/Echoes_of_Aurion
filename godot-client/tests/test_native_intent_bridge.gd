@@ -21,6 +21,24 @@ class FakeActivity:
 	func getIntent() -> FakeIntent:
 		return intent
 
+class FakeJniRuntime:
+	extends RefCounted
+	var activity: Object
+	var java_available := true
+	var activity_calls := 0
+	func _init(value: Object) -> void:
+		activity = value
+	# Model Godot's JNISingleton boundary: Java methods are callable via
+	# callp but absent from Object.has_method's Script/ClassDB lookup.
+	@warning_ignore("native_method_override")
+	func has_method(method: StringName) -> bool:
+		return method == "has_java_method"
+	func has_java_method(method: StringName) -> bool:
+		return java_available and method == "getActivity"
+	func getActivity() -> Object:
+		activity_calls += 1
+		return activity
+
 class FakeAuth:
 	extends Node
 	signal browser_opening
@@ -28,6 +46,8 @@ class FakeAuth:
 	var fresh_url: String
 	var stale_was_cleared := false
 	var callback_pending_value := false
+	var exchange_accepted := false
+	var callback_calls := 0
 	func _init(value: Node, url: String) -> void:
 		bridge = value
 		fresh_url = url
@@ -41,7 +61,8 @@ class FakeAuth:
 		intent.setData(fresh_url)
 		return true
 	func complete_callback(_raw_url: Variant) -> bool:
-		return false
+		callback_calls += 1
+		return exchange_accepted
 	func callback_pending() -> bool:
 		return callback_pending_value
 
@@ -56,6 +77,34 @@ func verify() -> void:
 	var received: Array[String] = []
 	bridge.callback_received.connect(func(url: String): received.append(url))
 	var valid := "https://arelogic.space/app/auth/callback?code=" + "c".repeat(43) + "&state=" + "s".repeat(43)
+	# Exercise the same runtime initialization called by _ready(), rather than
+	# assigning _activity directly (which hid the JNI method lookup defect).
+	var initial_intent := FakeIntent.new(null)
+	var activity := FakeActivity.new(initial_intent)
+	var runtime: Variant = FakeJniRuntime.new(activity)
+	check(not runtime.has_method("getActivity") and runtime.has_java_method("getActivity"), "JNI fixture did not separate native and Java method discovery")
+	bridge._initialize_android_runtime(runtime)
+	check(runtime.activity_calls == 1 and bridge._activity == activity, "JNI runtime initialization failed to resolve the Activity")
+	# GodotActivity.onNewIntent replaces the Activity intent on a warm return.
+	# The already initialized bridge must read that new intent exactly once.
+	var returned_intent := FakeIntent.new(valid)
+	activity.intent = returned_intent
+	check(bridge.poll_activity_intent_for_test(true), "warm return through initialized JNI runtime was not forwarded")
+	check(returned_intent.data == null and received.size() == 1, "warm callback was not consumed exactly once")
+	bridge.reset()
+	received.clear()
+	runtime.java_available = false
+	bridge._initialize_android_runtime(runtime)
+	check(bridge._activity == null and runtime.activity_calls == 1, "missing Java capability retained or invoked an Activity")
+	check(not bridge.poll_activity_intent_for_test(true), "missing Java runtime admitted a callback")
+	bridge._initialize_android_runtime(RefCounted.new())
+	check(bridge._activity == null, "non-JNI runtime admitted an Activity")
+	runtime.java_available = true
+	runtime.activity = null
+	bridge._initialize_android_runtime(runtime)
+	check(bridge._activity == null, "null Java Activity did not fail closed")
+	bridge._initialize_android_runtime(null)
+	check(bridge._activity == null, "missing runtime retained an Activity")
 	check(not bridge.deliver_for_test(valid, false), "callback accepted without active login")
 	check(not bridge.deliver_for_test("http://arelogic.space/app/auth/callback?code=" + "c".repeat(43) + "&state=" + "s".repeat(43), true), "HTTP callback admitted")
 	check(not bridge.deliver_for_test("https://arelogic.space.evil.test/app/auth/callback?code=" + "c".repeat(43) + "&state=" + "s".repeat(43), true), "lookalike host admitted")
@@ -126,6 +175,23 @@ func verify() -> void:
 	check(not app.handle_native_auth_callback(valid + "-stale"), "stale callback started an exchange")
 	check(app.status.text == "Systembrowser geöffnet", "stale callback left the login UI in exchange state")
 	check(not app.login.disabled, "stale callback disabled cancellation of the current login")
+	# Connect the initialized transport to the actual controller signal handler.
+	# A warm callback advances the waiting UI to exchange; a duplicate cannot
+	# start a second exchange. This fixture does not establish Android delivery
+	# or real authentication: the HTTP/PKCE suites own those separate boundaries.
+	runtime.activity = activity
+	bridge._initialize_android_runtime(runtime)
+	bridge.reset()
+	bridge.callback_received.connect(app.handle_native_auth_callback)
+	fake_auth.exchange_accepted = true
+	activity.intent = FakeIntent.new(valid)
+	var calls_before := fake_auth.callback_calls
+	check(bridge.poll_activity_intent_for_test(true), "initialized warm callback did not reach the controller")
+	check(app.status.text == "Anmeldung wird bestätigt" and app.login.disabled, "warm return left the controller waiting for the system browser")
+	check(fake_auth.callback_calls == calls_before + 1, "warm return did not start exactly one controller exchange")
+	activity.intent = FakeIntent.new(valid)
+	check(not bridge.poll_activity_intent_for_test(true), "warm callback replay started another exchange")
+	check(fake_auth.callback_calls == calls_before + 1 and activity.intent.data == null, "warm callback replay was not drained without exchange")
 	app.status.free()
 	app.login.free()
 	app.free()

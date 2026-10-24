@@ -11,10 +11,16 @@ func _ready() -> void:
 		return
 	if not Engine.has_singleton("AndroidRuntime"):
 		return
-	_android_runtime = Engine.get_singleton("AndroidRuntime")
-	if _android_runtime == null or not _android_runtime.has_method("getActivity"):
+	_initialize_android_runtime(Engine.get_singleton("AndroidRuntime"))
+
+func _initialize_android_runtime(runtime: Variant) -> void:
+	_android_runtime = runtime
+	_activity = null
+	# AndroidRuntime is a JNISingleton: @UsedByGodot Java methods are not
+	# ClassDB methods, so Object.has_method("getActivity") always misses them.
+	if runtime == null or not runtime.has_method("has_java_method") or not runtime.has_java_method("getActivity"):
 		return
-	_activity = _android_runtime.getActivity()
+	_activity = runtime.getActivity()
 
 func poll_for_callback(pending_login: bool) -> bool:
 	if OS.get_name() != "Android":
