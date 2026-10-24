@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-function recordUnexpectedConsoleErrors(page: import("@playwright/test").Page, isExpected = (_message: string) => _message.includes("failed to connect to websocket") || _message.includes("WebSocket connection to")) {
+function recordUnexpectedConsoleErrors(page: import("@playwright/test").Page, isExpected = (_message: string) => false) {
   const errors: string[] = [];
   page.on("console", message => {
     if (message.type() === "error" && !isExpected(message.text())) errors.push(message.text());

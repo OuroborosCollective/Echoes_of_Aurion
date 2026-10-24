@@ -10,6 +10,10 @@ on:
       - "client/src/pages/Home.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
       - "client/src/components/CommunityOverlay.test.tsx"
+      - "server/leaderboardPrivacy.test.ts"
+      - "server/leaderboardPublicProjection.ts"
+      - "server/db.ts"
+      - "server/routers.ts"
       - "e2e/guest-smoke.spec.ts"
       - ".github/workflows/aurion-home-community-entrypoint.yml"
   push:
@@ -22,6 +26,10 @@ on:
       - "client/src/pages/Home.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
       - "client/src/components/CommunityOverlay.test.tsx"
+      - "server/leaderboardPrivacy.test.ts"
+      - "server/leaderboardPublicProjection.ts"
+      - "server/db.ts"
+      - "server/routers.ts"
       - "e2e/guest-smoke.spec.ts"
       - ".github/workflows/aurion-home-community-entrypoint.yml"
 
@@ -59,8 +67,18 @@ jobs:
           cache: pnpm
       - run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
       - run: pnpm install --frozen-lockfile
-      - name: Push database schema
-        run: pnpm run db:push
+      - name: Verify and apply committed database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm run verify:migrations
+          pnpm exec drizzle-kit generate
+          if test -n "$(git status --porcelain)"; then
+            git status --short
+            echo "drizzle-kit generate changed the exact checked-out revision" >&2
+            exit 1
+          fi
+          pnpm exec drizzle-kit migrate
       - name: Focused component contract
         run: pnpm exec vitest run client/src/pages/Home.test.tsx client/src/components/CommunityOverlay.test.tsx server/leaderboardPrivacy.test.ts --reporter=verbose
       - name: TypeScript and production build
