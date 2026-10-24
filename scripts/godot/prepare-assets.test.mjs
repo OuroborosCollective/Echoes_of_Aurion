@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { prepareAssets, requireCleanSourceInventory, sha256 } from './prepare-assets.mjs';
+import { assertPreparedRecord, prepareAssets, requireCleanSourceInventory, sha256 } from './prepare-assets.mjs';
 import { repo } from './toolchain.mjs';
 
 const output = resolve(repo, '.aurion-godot/prepare-assets-test');
@@ -22,6 +22,17 @@ test('two clean preparations are stable and remove stale outputs', async t => {
   assert.deepEqual(
     second.manifest.sources.map(source => source.outputSha256),
     first.manifest.sources.map(source => source.outputSha256),
+  );
+  const prepared = first.manifest.sources[0];
+  const original = { ...prepared, path: prepared.sourcePath };
+  assert.doesNotThrow(() => assertPreparedRecord(prepared, original));
+  assert.throws(
+    () => assertPreparedRecord({ ...prepared, path: `godot-client/assets/generated/../../../../${prepared.sourcePath}` }, original),
+    /PREPARED_ASSET_PATH/,
+  );
+  assert.throws(
+    () => assertPreparedRecord({ ...prepared, animations: prepared.animations.slice(0, 1) }, original),
+    /PREPARED_ANIMATIONS_CHANGED/,
   );
 });
 
