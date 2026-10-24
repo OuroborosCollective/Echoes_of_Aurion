@@ -195,29 +195,24 @@ export function summarizeWorldChunkTexturization(chunk: BaseWorldChunk): AurionT
  */
 export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
   const summary = summarizeWorldChunkTexturization(chunk);
-  const surfacesArr = new Array(chunk.tiles.length);
-  for (let i = 0; i < chunk.tiles.length; i++) {
-    const t = chunk.tiles[i]!;
-    switch(t.surface) {
-        case "grass": surfacesArr[i] = 1; break;
-        case "riverbank": surfacesArr[i] = 2; break;
-        case "stone": surfacesArr[i] = 3; break;
-        case "forest_floor": surfacesArr[i] = 4; break;
-        case "ash": surfacesArr[i] = 5; break;
-        case "ruin_path": surfacesArr[i] = 6; break;
-        default: throw new Error(`unmapped surface: ${t.surface}`);
-    }
+  const surfaceMatrix = canonicalSurfaceMatrix(chunk);
+
+  const sRowStrings = new Array(surfaceMatrix.length);
+  for (let i = 0; i < surfaceMatrix.length; i++) {
+    sRowStrings[i] = `{${surfaceMatrix[i]!.join(",")}}`;
   }
-  const surfaces = surfacesArr.join(",");
+  const sRows = sRowStrings.join(",");
+
   const code = [
-    `surfaces={${surfaces}}`,
-    "Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]"
+    `s={${sRows}}`,
+    "sf=Flatten[s]",
+    "Prepend[BinCounts[sf, {1, 7, 1}], Length[sf]]"
   ].join(";");
 
   return Object.freeze({
     kind: "terrain_texturization",
     code,
-    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.forestFloorTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
+    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.forestFloorTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
     truthNotice: "CAG verifies texturization distribution of a canonical Aurion chunk; it does not assign textures or modify world state.",
   });
 }
