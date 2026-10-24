@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -24,7 +25,10 @@ if (preparedManifestPath) {
   assert.equal(sources.sourceRevision, auditedSources.sourceRevision);
   assert.equal(sources.toolchainHash, auditedSources.toolchainHash);
   assert.equal(sources.sourceManifestHash, await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')));
-  assert.equal(sources.profileDocumentHash, await digest(join(repo, 'godot-client/assets/import_profiles.json')));
+  const profileDocumentPath = join(repo, 'godot-client/assets/import_profiles.json');
+  const profileDocumentBytes = await readFile(profileDocumentPath);
+  const profileDocument = JSON.parse(profileDocumentBytes);
+  assert.equal(sources.profileDocumentHash, createHash('sha256').update(profileDocumentBytes).digest('hex'));
   assert.equal(sources.sources.length, auditedSources.sources.length);
   assert.deepEqual(
     sources.sources.map(source => source.sourcePath).sort(),
@@ -40,7 +44,11 @@ if (preparedManifestPath) {
     assert.equal(source.outputSha256, original.sha256);
     assert.equal(source.sha256, original.sha256);
     assert.equal(source.assetId, original.assetId);
-    assert.match(source.profileHash, /^[a-f0-9]{64}$/);
+    const expectedProfileId = profileDocument.roleProfiles[source.role] ?? profileDocument.defaultProfile;
+    const expectedProfile = profileDocument.profiles[expectedProfileId];
+    assert.ok(expectedProfile, `Prepared asset profile is missing: ${expectedProfileId}`);
+    assert.equal(source.profileId, expectedProfileId);
+    assert.equal(source.profileHash, createHash('sha256').update(JSON.stringify(expectedProfile)).digest('hex'));
   }
 }
 if (process.env.AURION_EXPECTED_REVISION) assert.equal(sources.sourceRevision, process.env.AURION_EXPECTED_REVISION);
