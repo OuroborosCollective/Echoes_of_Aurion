@@ -72,6 +72,10 @@ describe("native HTTP session boundary",()=>{
   const browser=await fetch(x.url+"/browser/"+secret("t"));
   expect(browser.status).toBe(200);
   expect(browser.headers.get("content-type")).toContain("text/html");
+  expect(browser.headers.get("referrer-policy")).toBe("strict-origin");
+  expect(ok.headers.get("referrer-policy")).toBe("no-referrer");
+  const callback=await fetch(x.url.replace("/api/native-auth", "")+"/app/auth/callback");
+  expect(callback.headers.get("referrer-policy")).toBe("no-referrer");
   const page=await browser.text();
   expect(page).not.toContain(startRequest.requestState);
   expect(page).not.toContain("accessToken");

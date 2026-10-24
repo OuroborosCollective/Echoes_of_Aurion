@@ -159,6 +159,8 @@ export function registerNativeAuthHttpRoutes(app: Express, options: Partial<Nati
       res.cookie(NATIVE_BROWSER_PENDING_COOKIE, binding.cookie, nativeBrowserCookieOptions());
       res.setHeader("Content-Security-Policy", "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
       res.setHeader("X-Content-Type-Options", "nosniff");
+      // Preserve the form POST Origin without disclosing the transaction path.
+      res.setHeader("Referrer-Policy", "strict-origin");
       return res.status(200).type("html").send(browserPage(id, userId ? binding.csrf : null));
     } catch (error) {
       return fail(res, error);

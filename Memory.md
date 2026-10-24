@@ -4726,3 +4726,12 @@ Evidence: RED e7c48d73631ac99bfd3c54cdb396a5305b38ad94; verified code head 58fa2
 Change: The authoritative zone tick now reuses one zone-owned array when excluding the reserved production probe from mob-FSM targeting.
 Learned: Allocation evidence must exercise the real tick path and compare both reference churn and the exact filtered result; source-level removal of `.filter()` alone is insufficient.
 Evidence: Verified code head `ee5a185f64064d247e641ae74e3c593350257116` passed all eight workflows; Local Test Pack run 40061837291 proved 256 legacy filter arrays versus one reused runtime view with identical user IDs across 256 real ticks, alongside the full repository suite. Runtime candidate 40061837337, container proof 40061837265, production probe 40061837303 and deterministic DES 40061837286 also passed; final Memory-bearing head is re-gated before merge.
+
+### 2026-10-24 — Native consent form Origin policy
+Status: VERIFIED local browser contract; device/runtime fix UNVERIFIED.
+Task: Investigate the real Android consent REQUEST_INVALID report without issuing live auth transactions.
+Decisions: Override Referrer-Policy with strict-origin only on the browser consent document; preserve strict Origin/CSRF/session checks and callback no-referrer. Android process-death recovery remains a separate client gap, not fixed by PRs #1145/#1146.
+Touched surfaces: server/nativeAuthHttp.ts, its HTTP regression, scripts/native-auth-browser-origin.test.mjs and existing isolated Local Test Pack browser step.
+Evidence: Actual Chromium 151 navigation using the source renderer and guard failed before the change (Origin null) and passed afterward (canonical Origin, origin-only Referer); six hostile-header cases rejected; zero production requests. Full HTTP/Vitest/MariaDB CI and physical device outcome remain UNVERIFIED. No merge or deployment.
+Learned: Manually adding Origin in Node HTTP tests cannot establish browser-generated form headers; pending PKCE/State held only in process memory cannot survive Android process death.
+Next safe step: Review the minimal server fix and run the existing HTTP/MariaDB gates; separately design Keystore-backed, bounded one-time pending-login recovery and test real Android process death.
