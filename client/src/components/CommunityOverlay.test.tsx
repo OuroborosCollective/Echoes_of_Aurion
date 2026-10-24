@@ -59,4 +59,16 @@ describe("CommunityOverlay", () => {
     await user.click(screen.getByRole("button", { name: "Community-Konsole schließen" }));
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Community-Events öffnen" }));
   });
+  it("opens a read-only anonymous leaderboard panel for guests", async () => {
+    const user = userEvent.setup();
+    render(<RealClientHarness><CommunityOverlay isAuthenticated={false} /></RealClientHarness>);
+    const button = screen.getByRole("button", { name: "Rangliste öffnen" });
+    await user.click(button);
+    const dialog = await screen.findByRole("dialog", { name: "Saison-Rangliste" });
+    expect(dialog).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+    expect(screen.getByText("Sortiert nach bestätigten Saisonpunkten, Siegen und Stufe.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Ausrüsten|Hochladen/i })).toBeNull();
+  });
+
 });
