@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { inventory, inspectGlb } from './audit-assets.mjs';
-import { assertPreparedRecord } from './prepare-assets.mjs';
+import { assertPreparedOutputFile, assertPreparedRecord } from './prepare-assets.mjs';
 import { executable, repo, root, digest, run, lock } from './toolchain.mjs';
 
 const render = process.argv.includes('--render');
@@ -44,6 +44,7 @@ if (preparedManifestPath) {
     const original = originals.get(source.sourcePath);
     assert.ok(original, `Prepared asset has no audited source: ${source.sourcePath}`);
     assertPreparedRecord(source, original);
+    await assertPreparedOutputFile(source);
     const expectedProfileId = profileDocument.roleProfiles[source.role] ?? profileDocument.defaultProfile;
     const expectedProfile = profileDocument.profiles[expectedProfileId];
     assert.ok(expectedProfile, `Prepared asset profile is missing: ${expectedProfileId}`);
