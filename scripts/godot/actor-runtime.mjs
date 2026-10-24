@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execute } from './check-runtime.mjs';
 import { executable, repo, root, run, digest, lock } from './toolchain.mjs';
@@ -7,6 +7,10 @@ import { executable, repo, root, run, digest, lock } from './toolchain.mjs';
 const render = process.argv.includes('--render');
 const directory = join(root, 'actor-evidence');
 await mkdir(directory, { recursive: true });
+// Failed reruns must never leave previously green evidence for always-upload.
+for (const file of render ? ['render.json', 'actors.png', 'render.log'] : ['headless.json', 'headless.log', 'import.log']) {
+  await rm(join(directory, file), { force: true });
+}
 const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
 if (process.env.AURION_EXPECTED_REVISION) assert.equal(revision, process.env.AURION_EXPECTED_REVISION);
 assert.equal(run(executable, ['--headless', '--version']), lock.engine.version);

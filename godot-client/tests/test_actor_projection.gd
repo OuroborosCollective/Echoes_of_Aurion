@@ -140,13 +140,28 @@ func verify() -> void:
 		require(monster.get_child_count() == 0 and not monster.visible, "despawn leaked node")
 	# A different session with identical positions must not reuse old visuals.
 	var other := World.new()
-	var other_welcome := welcome.duplicate(true)
+	var other_welcome := world.current_state()
+	other_welcome.type = "welcome"
+	other_welcome.protocolVersion = 5
+	other_welcome.selfEntityId = "player:1"
 	other_welcome.connectionId = "zone_peer_otheractor1234567"
-	other.apply_welcome(other_welcome)
+	require(other.apply_welcome(other_welcome), "foreign-session fixture invalid")
 	var other_visual := Visual.new()
 	other_visual.capture(other, 1200)
 	for actor in actors:
-		require(not actor.project(world, other_visual, 1200) and not actor.visible, "foreign-session interpolation accepted")
+		if actor.entity_id.is_empty():
+			continue
+		require(not actor.project(world, other_visual, 1600) and not actor.visible, "foreign-session interpolation accepted")
+		require(actor.project(world, visual, 1600) and actor.diagnostic.is_empty(), "same-pose recovery retained diagnostic")
+		var stale := World.new()
+		var stale_welcome := other_welcome.duplicate(true)
+		stale_welcome.connectionId = world.connection_id()
+		stale_welcome.snapshotSeq -= 1
+		require(stale.apply_welcome(stale_welcome), "stale-session fixture invalid")
+		var stale_visual := Visual.new()
+		stale_visual.capture(stale, 1600)
+		require(not actor.project(world, stale_visual, 1600), "stale-sequence interpolation accepted")
+		require(actor.project(world, visual, 1600) and actor.diagnostic.is_empty(), "stale-sequence recovery retained diagnostic")
 	world.reset()
 	for actor in actors:
 		require(not actor.project(world, visual, 1300), "reset retained actor")

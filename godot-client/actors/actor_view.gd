@@ -84,11 +84,10 @@ func project(world: Variant, interpolation: Variant, now_ms: int) -> bool:
 		_seq = world.last_seq()
 	var moving: bool = point.distance_to(Vector2(confirmed["x"], confirmed["z"])) > 0.5
 	var clip := "Death" if _dead else ("Walk" if moving else "Idle")
+	diagnostic = "" if _player.has_animation(clip) else "missing_clip:" + clip
 	if _pose != clip:
-		diagnostic = ""
 		if not _player.has_animation(clip):
 			_player.stop()
-			diagnostic = "missing_clip:" + clip
 		else:
 			_player.play(clip)
 		_pose = clip
