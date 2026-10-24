@@ -70,15 +70,23 @@ export async function inventory() {
     assert.equal(actual.sha256, declared.sha256, `SOURCE_HASH_CHANGED: ${path}`);
     assert.equal(actual.bytes, declared.bytes, `SOURCE_SIZE_CHANGED: ${path}`);
     await readFile(resolve(repo, declared.provenance));
+    assert.equal(declared.assetId, `glb_${actual.sha256.slice(0, 48)}`, 'CANONICAL_ASSET_ID');
+    const contract = await readFile(resolve(repo, declared.canonicalMapping.contract), 'utf8');
+    if (declared.canonicalMapping.kind === 'environment-lod-family') assert.ok(contract.includes(actual.sha256) && contract.includes(declared.assetId), 'CANONICAL_ENVIRONMENT_MAPPING');
+    if (declared.canonicalMapping.contract.endsWith('.json')) assert.equal(JSON.parse(contract).sha256, actual.sha256, 'CANONICAL_SOURCE_MAPPING');
     sources.push({ ...declared, ...actual });
   }
   const textures = spawnSync('python3', [resolve(repo, 'scripts/godot/asset-image-metadata.py')], { input: JSON.stringify(paths), encoding: 'utf8', timeout: 30000 });
   assert.ok(!textures.error && textures.status === 0, `ASSET_TEXTURE_READBACK: ${textures.stderr}`);
   const dimensions = JSON.parse(textures.stdout);
-  for (const source of sources) source.images = source.images.map((image, index) => ({ ...image, ...dimensions[source.path][index] }));
+  for (const source of sources) {
+    source.images = source.images.map((image, index) => ({ ...image, ...dimensions[source.path].images[index] }));
+    source.meshNodeTransforms = dimensions[source.path].meshNodeTransforms;
+  }
   const registry = await readFile(resolve(repo, 'shared/aurionMonsterAssetRegistry.ts'), 'utf8');
   const externalReferences = [...registry.matchAll(/speciesId: "([^"]+)"[^\n]*sha256: "([a-f0-9]{64})"/g)].map(([, speciesId, sha256]) => ({ speciesId, sha256, repositoryBytesPresent: sources.some(source => source.sha256 === sha256) }));
-  return { schemaVersion: 'aurion.godot-source-assets.v1', sourceRevision: run('git', ['-C', repo, 'rev-parse', 'HEAD']), toolchainHash: createHash('sha256').update(await readFile(resolve(repo, 'config/godot-toolchain.lock.json'))).digest('hex'), sources, externalReferences, truthNotice: 'Source bytes only. No shipping admission, live assignment, Godot import, animation quality or physical-device claim.' };
+  const workingTreeClean = run('git', ['-C', repo, 'diff', '--name-only', 'HEAD']) === '' && run('git', ['-C', repo, 'ls-files', '--others', '--exclude-standard', 'godot-client', 'scripts/godot']) === '';
+  return { schemaVersion: 'aurion.godot-source-assets.v1', sourceRevision: run('git', ['-C', repo, 'rev-parse', 'HEAD']), workingTreeClean, toolchainHash: createHash('sha256').update(await readFile(resolve(repo, 'config/godot-toolchain.lock.json'))).digest('hex'), sources, externalReferences, truthNotice: 'Source bytes only. No shipping admission, live assignment, Godot import, animation quality or physical-device claim.' };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

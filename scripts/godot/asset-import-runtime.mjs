@@ -45,6 +45,10 @@ const result = await probe(render ? 'render' : 'import', sources);
 const wrongHash = structuredClone(sources);
 wrongHash.sources = [{ ...wrongHash.sources[0], sha256: '0'.repeat(64) }];
 await probe('negative-source-hash', wrongHash, repo, 'Source hash changed');
+const wrongTransform = structuredClone(sources);
+wrongTransform.sources = [wrongTransform.sources[0]];
+wrongTransform.sources[0].meshNodeTransforms[0].globalMatrix[3] += 1;
+await probe('negative-source-transform', wrongTransform, repo, 'Imported global pivot/scale/orientation changed');
 // Keep clip names and a valid skinned GLB, but flatten every Idle sampler.
 // The real engine must reject the motion claim, not trust metadata or labels.
 const player = sources.sources.find(source => source.role === 'character');
@@ -63,6 +67,6 @@ const flattenedPath = 'negative-static-clip.glb';
 await writeFile(join(directory, flattenedPath), flat);
 const flattened = { ...sources, sources: [{ ...player, ...inspectGlb(flat), path: flattenedPath, animations: player.animations.filter(clip => clip.name === 'Idle') }] };
 await probe('negative-static-clip', flattened, directory, 'Clip has no imported skeleton motion');
-const receipt = { schemaVersion: 'aurion.godot-asset-evidence.v1', sourceRevision: sources.sourceRevision, toolchainHash: sources.toolchainHash, editorHash: await digest(executable), sourceManifestHash: await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')), layer: render ? 'software-render' : 'headless-import', importedAssets: result.records.length, motionClips: result.records.reduce((sum, record) => sum + record.clips.length, 0), negativeControls: ['wrong-source-hash', 'static-clip-with-valid-names'], result: 'passed' };
+const receipt = { schemaVersion: 'aurion.godot-asset-evidence.v1', sourceRevision: sources.sourceRevision, toolchainHash: sources.toolchainHash, editorHash: await digest(executable), sourceManifestHash: await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')), layer: render ? 'software-render' : 'headless-import', importedAssets: result.records.length, motionClips: result.records.reduce((sum, record) => sum + record.clips.length, 0), negativeControls: ['wrong-source-hash', 'wrong-source-transform', 'static-clip-with-valid-names'], result: 'passed' };
 await writeFile(join(directory, render ? 'render-evidence.json' : 'import-evidence.json'), JSON.stringify(receipt, null, 2) + '\n');
 console.log(JSON.stringify(receipt));

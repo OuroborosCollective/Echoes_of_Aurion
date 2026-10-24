@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 10
     env:
       AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
-      AURION_ASSET_EVIDENCE: ${{ runner.temp }}/godot-3d-assets
+      AURION_ASSET_EVIDENCE: .aurion-godot/asset-evidence
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,8 +55,8 @@ jobs:
         with:
           name: godot-3d-source-assets-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            ${{ runner.temp }}/godot-3d-assets/*.json
-            ${{ runner.temp }}/godot-3d-assets/*.log
-            ${{ runner.temp }}/godot-3d-assets/renders/*.png
+            .aurion-godot/asset-evidence/*.json
+            .aurion-godot/asset-evidence/*.log
+            .aurion-godot/asset-evidence/renders/*.png
           if-no-files-found: error
           retention-days: 14

@@ -20,6 +20,9 @@ func poses(skeletons: Array[Node]) -> Array[Transform3D]:
 			result.append(skeleton.get_bone_pose(bone))
 	return result
 
+func source_transform(matrix: Array) -> Transform3D:
+	return Transform3D(Basis(Vector3(matrix[0],matrix[4],matrix[8]), Vector3(matrix[1],matrix[5],matrix[9]), Vector3(matrix[2],matrix[6],matrix[10])), Vector3(matrix[3],matrix[7],matrix[11]))
+
 func prepare_render() -> void:
 	root.size = Vector2i(1024, 768)
 	DisplayServer.window_set_size(root.size)
@@ -123,6 +126,20 @@ func verify() -> void:
 			continue
 		root.add_child(scene)
 		var meshes := scene.find_children("*", "MeshInstance3D", true, false)
+		require(meshes.size() == source.meshNodeTransforms.size(), "Imported mesh-node mapping differs from source")
+		var mapped_names: Dictionary = {}
+		for expected: Dictionary in source.meshNodeTransforms:
+			# GLTFState may retain a freed pre-skeleton mesh node. Resolve the
+			# generated scene by its unique source name, and reject ambiguity.
+			var godot_name := str(expected.name).validate_node_name()
+			require(not mapped_names.has(godot_name), "Ambiguous sanitized source mesh name")
+			mapped_names[godot_name] = true
+			var matching := meshes.filter(func(node: Node): return str(node.name) == godot_name)
+			var imported_node := matching[0] as Node3D if matching.size() == 1 else null
+			require(imported_node != null, "Imported source node missing: " + str(expected.name))
+			if imported_node != null:
+				require(imported_node.transform.is_equal_approx(source_transform(expected.localMatrix)), "Imported local pivot/scale/orientation changed: " + source.path)
+				require(imported_node.global_transform.is_equal_approx(source_transform(expected.globalMatrix)), "Imported global pivot/scale/orientation changed: " + source.path)
 		var skeletons := scene.find_children("*", "Skeleton3D", true, false)
 		var players := scene.find_children("*", "AnimationPlayer", true, false)
 		require(not meshes.is_empty(), "Imported asset is invisible/meshless: " + source.path)
