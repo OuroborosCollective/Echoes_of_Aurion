@@ -1,0 +1,66 @@
+name: Godot Android JNI bridge smoke
+on:
+  pull_request:
+    paths: ['godot-client/**', 'scripts/godot/**', 'config/godot-toolchain.lock.json', '.github/workflows/godot-android-bridge-smoke.yml']
+  push:
+    branches: [main]
+    paths: ['godot-client/**', 'scripts/godot/**', 'config/godot-toolchain.lock.json', '.github/workflows/godot-android-bridge-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-jni:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+      AURION_SMOKE_OUTPUT: ${{ runner.temp }}/aurion-jni-smoke
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require existing runner KVM access
+        run: |
+          python3 - <<'PY'
+          import os
+          if not os.access('/dev/kvm',os.R_OK|os.W_OK):
+              raise SystemExit('RUNNER_KVM_ACCESS_UNAVAILABLE')
+          PY
+      - name: Verify pinned build tools and existing Preview debug signer
+        env:
+          AURION_APK_OUTPUT: ${{ runner.temp }}/preview-debug-baseline
+        run: |
+          python3 scripts/godot/test_android_bridge_smoke.py
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/bootstrap-android.mjs
+          node scripts/godot/export-android.mjs
+          node scripts/godot/export-bridge-smoke.mjs
+      - name: Provision standard runner emulator without changing KVM permissions
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name aurion-jni --package "system-images;android-35;google_apis;x86_64"
+          "$ANDROID_HOME/emulator/emulator" -avd aurion-jni -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -memory 2048 -cores 2 > "$RUNNER_TEMP/aurion-emulator.log" 2>&1 &
+      - name: Run real JNI legacy RED, fixed warm return, duplicate and cold-start smoke
+        run: |
+          export ADB="$ANDROID_HOME/platform-tools/adb"
+          python3 - <<'PY'
+          import os, subprocess, time
+          deadline=time.monotonic()+180
+          while time.monotonic()<deadline:
+              r=subprocess.run([os.environ['ADB'],'-s','emulator-5554','shell','getprop','sys.boot_completed'],capture_output=True,text=True,timeout=10)
+              if r.returncode==0 and r.stdout.strip()=='1': break
+              time.sleep(2)
+          else: raise SystemExit('EMULATOR_BOOT_TIMEOUT')
+          PY
+          python3 scripts/godot/android-bridge-smoke.py
+      - name: Preserve only APK identity and redacted runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-JNI-Bridge-Smoke-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurion-jni-smoke/
+          if-no-files-found: error
+          retention-days: 7

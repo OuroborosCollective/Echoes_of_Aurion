@@ -1,0 +1,73 @@
+extends Node
+## Test-only autoload in a disposable debug APK. No auth request or credential.
+var _app: Variant
+var _callbacks := 0
+var _mode := "warm"
+var _previous := ""
+
+func _ready() -> void:
+	if OS.get_name() != "Android":
+		push_error("ANDROID_SMOKE_REQUIRES_ANDROID")
+		return
+	await get_tree().process_frame
+	_app = get_tree().current_scene
+	if FileAccess.file_exists("user://smoke-mode"):
+		_mode = FileAccess.get_file_as_string("user://smoke-mode").strip_edges()
+	_app._intent_bridge.callback_received.connect(_observed_callback)
+	if _mode == "warm":
+		# Exercise the real waiting controller and strict rejection path, without
+		# /start, PKCE material or any request to a production auth endpoint.
+		_app._auth_start._server_base_url = "http://127.0.0.1:1"
+		_app._on_auth_start_succeeded()
+		_write_report()
+		if OS.shell_open("http://127.0.0.1:8765/") != OK:
+			push_error("SMOKE_BROWSER_OPEN_FAILED")
+	set_process(true)
+	_write_report()
+
+func _observed_callback(_raw_url: String) -> void:
+	_callbacks += 1
+
+func _process(_delta: float) -> void:
+	if _app != null:
+		_write_report()
+
+func _write_report() -> void:
+	var bridge: Variant = _app._intent_bridge
+	var runtime: Variant = bridge._android_runtime
+	var has_activity: bool = bridge._activity != null
+	var intent_present: Variant = null
+	if has_activity:
+		var intent: Variant = bridge._activity.getIntent()
+		if intent != null:
+			intent_present = intent.getDataString() != null
+	var status: String = _app.status.text
+	var phase := "waiting" if _app._awaiting_callback else "other"
+	if _mode == "cold" and not _app._awaiting_callback:
+		phase = "cold_login_required"
+	elif _callbacks == 1 and status == "Anmeldung derzeit nicht verfügbar":
+		phase = "callback_rejected"
+	var report := {
+		"schemaVersion": 1, "layer": "android-jni-bridge-smoke", "mode": _mode,
+		"guard": ProjectSettings.get_setting("aurion_smoke/guard"),
+		"pid": OS.get_process_id(), "phase": phase,
+		"runtimeClass": runtime.get_class() if runtime != null else "absent",
+		"javaGetActivity": runtime != null and runtime.has_java_method("getActivity"),
+		"objectGetActivity": runtime != null and runtime.has_method("getActivity"),
+		"activityPresent": has_activity, "intentDataPresent": intent_present,
+		"callbacks": _callbacks, "waiting": _app._awaiting_callback,
+		"requestActive": _app._auth_start.request_in_flight(),
+		"sessionPresent": not _app._auth_start.access_token().is_empty(),
+		"worldConfirmed": _app._confirmed_zone.has_state(),
+		"loginEnabled": not _app.login.disabled,
+		"fullLogin": "UNVERIFIED", "physicalDevice": "UNVERIFIED",
+	}
+	var encoded := JSON.stringify(report)
+	if encoded == _previous:
+		return
+	_previous = encoded
+	var file := FileAccess.open("user://bridge-smoke.json", FileAccess.WRITE)
+	if file == null:
+		push_error("SMOKE_REPORT_UNAVAILABLE")
+		return
+	file.store_string(encoded)
