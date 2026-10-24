@@ -318,4 +318,10 @@ static func is_valid_welcome(raw: Variant) -> bool:
 		return false
 	if not conn.begins_with("zone_peer_") or not _valid_player_entity_id(entity):
 		return false
-	return is_valid_zone_state(raw)
+	if not is_valid_zone_state(raw):
+		return false
+	var self_id: String = entity
+	for presence: Dictionary in raw["presences"]:
+		if presence["entityId"] == self_id:
+			return true
+	return false

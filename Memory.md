@@ -4773,3 +4773,9 @@ Evidence: Kausales RED `1309b3b4029c8d3b60ee338c7050b914d3b8b2a3`, Run 401069788
 Änderung: Der echte Godot/Gateway/MariaDB-Test durchläuft nun ZoneState, EntityRegistry und SnapshotInterpolator; sein bestätigter Zustand wird einschließlich aller Entitätskategorien mit dem unabhängig empfangenen Snapshot des zweiten Clients derselben Sequenz verglichen.
 Erkenntnis: Zwei beobachtete Bewegungen belegen noch keine identischen Projektionen. Die 100-ms-Darstellungsgrenze braucht eine eigene Assertion am tatsächlichen Empfangszeitpunkt; ein später Endpunktvergleich allein reicht nicht.
 Evidence: Lokal mit gepinntem Godot 4.7.2: Import, Skriptprüfung und bestehende Registry-/Interpolationstests bestanden. Beide unabhängigen Reviews sind nach expliziter Prüfung der 100-ms-Grenze ohne verbleibenden Befund. Codehead `30ade9a0452ce87a91e7ad0d3f694719ac8b0b2a`; finaler Memory-Head benötigt den vollständigen isolierten Gateway-/MariaDB-Lauf und sämtliche zugehörigen CI-Gates vor Merge. Dies ist kein Produktions-, Geräte- oder Live-3D-Nachweis.
+
+
+### 2026-10-24 — G11 bestätigte Self-Presence im Welcome (PR #1157)
+Änderung: Der Godot-v5-Decoder akzeptiert einen authentifizierten Welcome nur, wenn dessen `selfEntityId` auch als bestätigte Presence enthalten ist; sonst entsteht kein verbundener Projektionszustand.
+Erkenntnis: Eine formal gültige Self-ID reicht nicht, weil Karte und Positionsprojektion den eigenen bestätigten Presence-Datensatz benötigen; Runtime-Fixtures müssen dieselbe Join-Invariante wie Aurions `zoneRuntime` abbilden.
+Evidence: Kausales RED `bdf760b07b0f7ddf1c68186566dfd1259cc0f3c2`, Run 40111150094/Job 120922955998; verifizierter Codehead `077b0caf17b78b37861385d5074514128fa46839` bestand Godot-4.7.2-WebSocket-/Szenen-/Software-Render 40111832038, beide Android-APK-Exporte 40111832027 und 3D-Audit 40111832041. Finaler rebased Memory-Head wird erneut exakt geprüft.
