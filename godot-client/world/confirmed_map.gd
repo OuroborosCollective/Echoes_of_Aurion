@@ -8,6 +8,8 @@ const MAX_PRESENCES := 96
 const MAX_MOBS := 32
 const TAP_DRAG_THRESHOLD := 12.0
 var _records: Dictionary = {}
+var _visual_positions: Dictionary = {}
+var _visual_origin := {"x": 0.0, "z": 0.0}
 var _self_id := ""
 var _selected := ""
 var _armed := ""
@@ -48,6 +50,10 @@ func set_confirmed(world: Variant, registry: Variant) -> void:
 			updated[id] = record
 			mob_count += 1
 	_records = updated
+	_visual_positions.clear()
+	for id in _records:
+		_visual_positions[id] = (_records[id]["position"] as Dictionary).duplicate(true)
+	_visual_origin = (_visual_positions[_self_id] as Dictionary).duplicate(true)
 	if not _records.has(_selected):
 		_selected = ""
 		if _armed.is_empty():
@@ -58,8 +64,24 @@ func set_confirmed(world: Variant, registry: Variant) -> void:
 	visible = true
 	queue_redraw()
 
+func set_visual_positions(interpolator: Variant, now_ms: int) -> void:
+	if _records.is_empty():
+		return
+	var updated: Dictionary = {}
+	for id in _records:
+		var position: Dictionary = interpolator.visual_precise_mm(id, now_ms)
+		updated[id] = position if not position.is_empty() else (_records[id]["position"] as Dictionary).duplicate(true)
+	_visual_positions = updated
+	_visual_origin = (_visual_positions[_self_id] as Dictionary).duplicate(true)
+	queue_redraw()
+
 func marker_record(id: String) -> Dictionary:
 	return (_records.get(id, {}) as Dictionary).duplicate(true)
+
+func marker_screen(id: String) -> Vector2:
+	if not _visual_positions.has(id):
+		return Vector2.ZERO
+	return _position_to_screen(_visual_positions[id])
 
 func selected_record() -> Dictionary:
 	return marker_record(_selected)
@@ -83,12 +105,14 @@ func set_stale(stale: bool) -> void:
 
 func clear() -> void:
 	_records.clear()
+	_visual_positions.clear()
 	_plans.clear()
 	_self_id = ""
 	_selected = ""
 	_armed = ""
 	_fresh = false
 	_origin = {"x": 0, "z": 0}
+	_visual_origin = {"x": 0.0, "z": 0.0}
 	_pointer_down = false
 	_pointer_dragged = false
 	visible = false
@@ -96,15 +120,18 @@ func clear() -> void:
 	queue_redraw()
 
 func world_to_screen(position: Dictionary) -> Vector2:
-	var relative_x := int(position["x"]) - int(_origin["x"])
-	var relative_z := int(position["z"]) - int(_origin["z"])
-	return size * 0.5 + Vector2(float(relative_x), float(relative_z)) * (SCALE / 1000.0)
+	return _position_to_screen(position)
+
+func _position_to_screen(position: Dictionary) -> Vector2:
+	var relative_x := float(position["x"]) - float(_visual_origin["x"])
+	var relative_z := float(position["z"]) - float(_visual_origin["z"])
+	return size * 0.5 + Vector2(relative_x, relative_z) * (SCALE / 1000.0)
 
 func _screen_to_world(point: Vector2) -> Dictionary:
 	var relative := (point - size * 0.5) * (1000.0 / SCALE)
 	return {
-		"x": int(_origin["x"]) + int(round(relative.x)),
-		"z": int(_origin["z"]) + int(round(relative.y)),
+		"x": int(round(float(_visual_origin["x"]) + relative.x)),
+		"z": int(round(float(_visual_origin["z"]) + relative.y)),
 	}
 
 func _gui_input(event: InputEvent) -> void:
@@ -141,7 +168,7 @@ func _activate_point(point: Vector2) -> void:
 	var distance := 18.0
 	for id in _records:
 		var record: Dictionary = _records[id]
-		var location := world_to_screen(record["position"])
+		var location := marker_screen(id)
 		if not Rect2(Vector2.ZERO, size).has_point(location):
 			continue
 		var delta := location.distance_to(point)
@@ -172,7 +199,7 @@ func _draw() -> void:
 		draw_line(Vector2(0, size.y * 0.5 + axis), Vector2(size.x, size.y * 0.5 + axis), Color(0.16, 0.28, 0.30, 0.55), 1)
 	for id in _records:
 		var record: Dictionary = _records[id]
-		var location := world_to_screen(record["position"])
+		var location := marker_screen(id)
 		if not Rect2(Vector2.ZERO, size).has_point(location):
 			continue
 		var tint := Color(0.93, 0.76, 0.36) if id == _self_id else Color(0.85, 0.32, 0.33) if id.begins_with("mob_") else Color(0.31, 0.75, 0.90)
