@@ -37,6 +37,19 @@ test("guest opens Home Events through the accessible community overlay", async (
   expect(errors).toEqual([]);
 });
 
+
+test("guest opens Home Rangliste through an anonymous read-only dialog", async ({ page }) => {
+  const errors = recordUnexpectedConsoleErrors(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Rangliste", exact: true }).click();
+  const dialog = page.getByLabel("Aurion Gemeinschaft").getByRole("dialog", { name: "Saison-Rangliste" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeFocused();
+  await expect(dialog.getByText("Sortiert nach bestätigten Saisonpunkten, Siegen und Stufe.")).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("guest cannot start AX1 before authentication", async ({ page }) => {
   const errors = recordUnexpectedConsoleErrors(page);
   await page.goto("/");

@@ -106,4 +106,21 @@ describe("Home", () => {
       expect(screen.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet\./i })).toBeTruthy();
     });
   });
+  it("opens the public Rangliste dialog without entering gameplay or authentication", async () => {
+    const user = userEvent.setup();
+    const opened: unknown[] = [];
+    const listener = (event: Event) => opened.push((event as CustomEvent).detail);
+    window.addEventListener("aurion:open-community", listener);
+    try {
+      render(<RealClientHarness><Home /></RealClientHarness>);
+      const button = screen.getByRole("button", { name: "Rangliste", exact: true });
+      expect(button.getAttribute("aria-haspopup")).toBe("dialog");
+      await user.click(button);
+      expect(opened).toEqual([{ panel: "leaderboard" }]);
+      expect(document.querySelector("canvas")).toBeNull();
+    } finally {
+      window.removeEventListener("aurion:open-community", listener);
+    }
+  });
+
 });

@@ -36,12 +36,15 @@ jobs:
       mariadb:
         image: mariadb:10.11
         env:
-          MARIADB_ROOT_PASSWORD: root
-          MARIADB_DATABASE: aurion
+          # Ephemeral CI-only credentials. Never reuse production database secrets.
+          MARIADB_ROOT_PASSWORD: ci_ephemeral_root_only
+          MARIADB_DATABASE: aurion_ci_test
+          MARIADB_USER: aurion_ci
+          MARIADB_PASSWORD: ci_only_password
         ports:
           - 3306:3306
     env:
-      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/aurion"
+      DATABASE_URL: "mysql://aurion_ci:ci_only_password@127.0.0.1:3306/aurion_ci_test"
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       VITE_APP_ID: aurion-home-community-regression
     steps:
@@ -57,7 +60,7 @@ jobs:
       - run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
       - run: pnpm install --frozen-lockfile
       - name: Focused component contract
-        run: pnpm exec vitest run client/src/pages/Home.test.tsx client/src/components/CommunityOverlay.test.tsx --reporter=verbose
+        run: pnpm exec vitest run client/src/pages/Home.test.tsx client/src/components/CommunityOverlay.test.tsx server/leaderboardPrivacy.test.ts --reporter=verbose
       - name: TypeScript and production build
         run: pnpm check && pnpm build
       - name: Install Chromium
@@ -97,7 +100,7 @@ jobs:
             },
           });
           EOF
-          pnpm exec playwright test e2e/guest-smoke.spec.ts --grep "guest opens Home Events" --config=playwright.home-community.config.ts
+          pnpm exec playwright test e2e/guest-smoke.spec.ts --grep "guest opens Home (Events|Rangliste)" --config=playwright.home-community.config.ts
       - name: Upload runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
