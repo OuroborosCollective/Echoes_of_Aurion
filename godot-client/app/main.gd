@@ -236,12 +236,13 @@ func _on_zone_welcome(welcome: Dictionary) -> void:
 		_zone_socket.close_zone()
 		return
 	_entities.sync(_confirmed_zone)
-	zone_map.set_confirmed(_confirmed_zone, _entities)
-	map_panel.visible = zone_map.visible
 	var now_ms := Time.get_ticks_msec()
 	_last_world_update_ms = now_ms
 	_world_is_stale = false
 	_visuals.capture(_confirmed_zone, now_ms)
+	zone_map.set_confirmed(_confirmed_zone, _entities)
+	zone_map.set_visual_positions(_visuals, now_ms)
+	map_panel.visible = zone_map.visible
 	_update_entity_presentation()
 	_update_vitals_presentation()
 	_update_position_presentation(now_ms)
@@ -251,12 +252,13 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		return
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
-		zone_map.set_confirmed(_confirmed_zone, _entities)
-		map_panel.visible = zone_map.visible
 		var now_ms := Time.get_ticks_msec()
 		_last_world_update_ms = now_ms
 		_world_is_stale = false
 		_visuals.capture(_confirmed_zone, now_ms)
+		zone_map.set_confirmed(_confirmed_zone, _entities)
+		zone_map.set_visual_positions(_visuals, now_ms)
+		map_panel.visible = zone_map.visible
 		_update_entity_presentation()
 		_update_vitals_presentation()
 		_update_position_presentation(now_ms)
@@ -409,6 +411,8 @@ func _notification(what: int) -> void:
 
 func _process(_delta: float) -> void:
 	var now_ms := Time.get_ticks_msec()
+	if _confirmed_zone.has_state():
+		zone_map.set_visual_positions(_visuals, now_ms)
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
