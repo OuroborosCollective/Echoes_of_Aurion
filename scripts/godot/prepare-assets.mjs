@@ -23,12 +23,29 @@ export function assertPreparedRecord(prepared, original, outputRoot = 'godot-cli
   assert.equal(prepared.sourcePath, original.path, 'PREPARED_SOURCE_PATH');
   assert.equal(prepared.sourceSha256, original.sha256, 'PREPARED_SOURCE_HASH');
   assert.equal(prepared.outputSha256, original.sha256, 'PREPARED_OUTPUT_HASH');
-  assert.equal(prepared.sha256, original.sha256, 'PREPARED_HASH');
-  assert.equal(prepared.assetId, original.assetId, 'PREPARED_ASSET_ID');
-  for (const key of [
-    'role', 'bytes', 'triangles', 'meshes', 'materials', 'images', 'skins',
-    'animations', 'extensionsUsed', 'extensionsRequired', 'meshNodeTransforms',
-  ]) assert.deepEqual(prepared[key], original[key], `PREPARED_${key.toUpperCase()}_CHANGED`);
+  const generatedFields = ['sourcePath', 'sourceSha256', 'outputSha256', 'profileId', 'profileHash'];
+  assert.deepEqual(
+    Object.keys(prepared).sort(),
+    [...Object.keys(original), ...generatedFields].sort(),
+    'PREPARED_RECORD_FIELDS_CHANGED',
+  );
+  for (const [key, value] of Object.entries(original)) {
+    if (key !== 'path') assert.deepEqual(prepared[key], value, `PREPARED_${key.toUpperCase()}_CHANGED`);
+  }
+}
+
+export async function assertPreparedOutputFile(prepared, outputRoot = 'godot-client/assets/generated') {
+  const root = resolve(repo, outputRoot);
+  const path = resolve(repo, prepared.path);
+  assert.equal(dirname(path), root, 'PREPARED_ASSET_PARENT');
+  const rootStat = await lstat(root);
+  assert.equal(rootStat.isSymbolicLink(), false, 'PREPARED_OUTPUT_ROOT_SYMLINK');
+  assert.equal(rootStat.isDirectory(), true, 'PREPARED_OUTPUT_ROOT_NOT_DIRECTORY');
+  assert.equal(await realpath(root), root, 'PREPARED_OUTPUT_ROOT_ESCAPES_REPOSITORY');
+  const pathStat = await lstat(path);
+  assert.equal(pathStat.isSymbolicLink(), false, 'PREPARED_ASSET_SYMLINK');
+  assert.equal(pathStat.isFile(), true, 'PREPARED_ASSET_NOT_FILE');
+  assert.equal(await realpath(path), path, 'PREPARED_ASSET_ESCAPES_OUTPUT');
 }
 
 function repositoryPath(path) {
