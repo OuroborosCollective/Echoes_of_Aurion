@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { assertPreparedRecord, prepareAssets, requireCleanSourceInventory, sha256 } from './prepare-assets.mjs';
+import { assertPreparedOutputFile, assertPreparedRecord, prepareAssets, requireCleanSourceInventory, sha256 } from './prepare-assets.mjs';
 import { repo } from './toolchain.mjs';
 
 const output = resolve(repo, '.aurion-godot/prepare-assets-test');
@@ -34,6 +34,23 @@ test('two clean preparations are stable and remove stale outputs', async t => {
   assert.throws(
     () => assertPreparedRecord({ ...prepared, animations: prepared.animations.slice(0, 1) }, original, testOutputRoot),
     /PREPARED_ANIMATIONS_CHANGED/,
+  );
+  assert.throws(
+    () => assertPreparedRecord({ ...prepared, liveAssignment: !prepared.liveAssignment }, original, testOutputRoot),
+    /PREPARED_LIVEASSIGNMENT_CHANGED/,
+  );
+});
+
+test('prepared runtime rejects linked asset files', async t => {
+  t.after(() => rm(output, { recursive: true, force: true }));
+  const { manifest } = await prepareAssets({ outputDirectory: output });
+  const prepared = manifest.sources[0];
+  const preparedPath = resolve(repo, prepared.path);
+  await rm(preparedPath);
+  await symlink(resolve(repo, prepared.sourcePath), preparedPath);
+  await assert.rejects(
+    assertPreparedOutputFile(prepared, '.aurion-godot/prepare-assets-test'),
+    /PREPARED_ASSET_SYMLINK/,
   );
 });
 
