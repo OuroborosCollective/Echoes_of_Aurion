@@ -18,8 +18,8 @@ export function requireCleanSourceInventory(sourceInventory) {
   assert.equal(sourceInventory.workingTreeClean, true, 'SOURCE_WORKTREE_DIRTY');
 }
 
-export function assertPreparedRecord(prepared, original) {
-  assert.equal(prepared.path, `godot-client/assets/generated/${original.assetId}.glb`, 'PREPARED_ASSET_PATH');
+export function assertPreparedRecord(prepared, original, outputRoot = 'godot-client/assets/generated') {
+  assert.equal(prepared.path, `${outputRoot}/${original.assetId}.glb`, 'PREPARED_ASSET_PATH');
   assert.equal(prepared.sourcePath, original.path, 'PREPARED_SOURCE_PATH');
   assert.equal(prepared.sourceSha256, original.sha256, 'PREPARED_SOURCE_HASH');
   assert.equal(prepared.outputSha256, original.sha256, 'PREPARED_OUTPUT_HASH');
