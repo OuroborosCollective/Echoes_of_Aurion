@@ -18,8 +18,11 @@ const auditedSources = await inventory();
 const preparedManifestPath = process.env.AURION_PREPARED_ASSET_MANIFEST
   ? resolve(repo, process.env.AURION_PREPARED_ASSET_MANIFEST)
   : '';
-const sources = preparedManifestPath
-  ? JSON.parse(await readFile(preparedManifestPath, 'utf8'))
+const preparedManifestBytes = preparedManifestPath
+  ? await readFile(preparedManifestPath)
+  : null;
+const sources = preparedManifestBytes
+  ? JSON.parse(preparedManifestBytes)
   : auditedSources;
 if (preparedManifestPath) {
   assert.equal(sources.schemaVersion, 'aurion.godot-prepared-assets.v1');
@@ -126,6 +129,6 @@ const flattenedPath = 'negative-static-clip.glb';
 await writeFile(join(directory, flattenedPath), flat);
 const flattened = { ...sources, sources: [{ ...player, ...inspectGlb(flat), path: flattenedPath, animations: player.animations.filter(clip => clip.name === 'Idle') }] };
 await probe('negative-static-clip', flattened, directory, 'Clip has no imported skeleton motion');
-const receipt = { schemaVersion: 'aurion.godot-asset-evidence.v1', sourceRevision: sources.sourceRevision, toolchainHash: sources.toolchainHash, editorHash: await digest(executable), sourceManifestHash: await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')), preparedManifestHash: preparedManifestPath ? await digest(preparedManifestPath) : null, profileDocumentHash: sources.profileDocumentHash ?? null, layer: render ? 'software-render' : 'headless-import', videoAdapter: result.videoAdapter, importedAssets: result.records.length, motionClips: result.records.reduce((sum, record) => sum + record.clips.length, 0), positiveControls: ['nonidentity-parent-scale-rotation-child-matrix'], negativeControls: ['wrong-source-hash', 'wrong-source-transform', 'static-clip-with-valid-names'], result: 'passed' };
+const receipt = { schemaVersion: 'aurion.godot-asset-evidence.v1', sourceRevision: sources.sourceRevision, toolchainHash: sources.toolchainHash, editorHash: await digest(executable), sourceManifestHash: await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')), preparedManifestHash: preparedManifestBytes ? createHash('sha256').update(preparedManifestBytes).digest('hex') : null, profileDocumentHash: sources.profileDocumentHash ?? null, layer: render ? 'software-render' : 'headless-import', videoAdapter: result.videoAdapter, importedAssets: result.records.length, motionClips: result.records.reduce((sum, record) => sum + record.clips.length, 0), positiveControls: ['nonidentity-parent-scale-rotation-child-matrix'], negativeControls: ['wrong-source-hash', 'wrong-source-transform', 'static-clip-with-valid-names'], result: 'passed' };
 await writeFile(join(directory, render ? 'render-evidence.json' : 'import-evidence.json'), JSON.stringify(receipt, null, 2) + '\n');
 console.log(JSON.stringify(receipt));
