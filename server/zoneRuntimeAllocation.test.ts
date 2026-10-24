@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
 import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
+import { AurionTickRecorder } from "./causality/tickRecorder";
 import { AuthoritativeMovementZone } from "./zoneRuntime";
 import type { ZoneId } from "./zoneProtocol";
 
@@ -12,7 +13,10 @@ type MobRuntimeView = {
 describe("zone tick mob-target presence allocation", () => {
   it("reuses one filtered view while preserving the production-probe exclusion", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
-    const zone = new AuthoritativeMovementZone("allocation_evidence_zone" as ZoneId);
+    const zone = new AuthoritativeMovementZone(
+      "allocation_evidence_zone" as ZoneId,
+      new AurionTickRecorder(256),
+    );
     zone.join({ userId: 41, socket: socket as unknown as WebSocket });
     const welcome = zone.join({
       userId: AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID,
