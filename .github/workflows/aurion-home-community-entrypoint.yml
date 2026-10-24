@@ -59,14 +59,14 @@ jobs:
           cache: pnpm
       - run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
       - run: pnpm install --frozen-lockfile
+      - name: Push database schema
+        run: pnpm run db:push
       - name: Focused component contract
         run: pnpm exec vitest run client/src/pages/Home.test.tsx client/src/components/CommunityOverlay.test.tsx server/leaderboardPrivacy.test.ts --reporter=verbose
       - name: TypeScript and production build
         run: pnpm check && pnpm build
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: Push database schema
-        run: pnpm run db:push
       - name: Start exact built portal
         shell: bash
         run: |
