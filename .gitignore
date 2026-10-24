@@ -146,3 +146,4 @@ scripts/__pycache__/
 
 # Godot editor cache stays local; stable script UIDs remain tracked.
 /godot-client/.godot/
+/godot-client/assets/generated/

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { inventory, inspectGlb } from './audit-assets.mjs';
+import { assertPreparedOutputFile, assertPreparedRecord } from './prepare-assets.mjs';
 import { executable, repo, root, digest, run, lock } from './toolchain.mjs';
 
 const render = process.argv.includes('--render');
@@ -12,7 +14,44 @@ await rm(join(directory, render ? 'render-evidence.json' : 'import-evidence.json
 assert.equal(run(executable, ['--headless', '--version']), lock.engine.version);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 assert.equal(run('git', ['-C', repo, 'ls-files', '--others', '--exclude-standard', 'godot-client', 'scripts/godot']), '', 'commit probe source before evidence');
-const sources = await inventory();
+const auditedSources = await inventory();
+const preparedManifestPath = process.env.AURION_PREPARED_ASSET_MANIFEST
+  ? resolve(repo, process.env.AURION_PREPARED_ASSET_MANIFEST)
+  : '';
+const preparedManifestBytes = preparedManifestPath
+  ? await readFile(preparedManifestPath)
+  : null;
+const sources = preparedManifestBytes
+  ? JSON.parse(preparedManifestBytes)
+  : auditedSources;
+if (preparedManifestPath) {
+  assert.equal(sources.schemaVersion, 'aurion.godot-prepared-assets.v1');
+  assert.equal(sources.sourceRevision, auditedSources.sourceRevision);
+  assert.equal(sources.toolchainHash, auditedSources.toolchainHash);
+  assert.equal(sources.sourceManifestHash, await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')));
+  const profileDocumentPath = join(repo, 'godot-client/assets/import_profiles.json');
+  const profileDocumentBytes = await readFile(profileDocumentPath);
+  const profileDocument = JSON.parse(profileDocumentBytes);
+  assert.equal(sources.profileDocumentHash, createHash('sha256').update(profileDocumentBytes).digest('hex'));
+  assert.equal(sources.sources.length, auditedSources.sources.length);
+  assert.deepEqual(
+    sources.sources.map(source => source.sourcePath).sort(),
+    auditedSources.sources.map(source => source.path).sort(),
+    'Prepared asset coverage changed',
+  );
+  const originals = new Map(auditedSources.sources.map(source => [source.path, source]));
+  for (const source of sources.sources) {
+    const original = originals.get(source.sourcePath);
+    assert.ok(original, `Prepared asset has no audited source: ${source.sourcePath}`);
+    assertPreparedRecord(source, original);
+    await assertPreparedOutputFile(source);
+    const expectedProfileId = profileDocument.roleProfiles[source.role] ?? profileDocument.defaultProfile;
+    const expectedProfile = profileDocument.profiles[expectedProfileId];
+    assert.ok(expectedProfile, `Prepared asset profile is missing: ${expectedProfileId}`);
+    assert.equal(source.profileId, expectedProfileId);
+    assert.equal(source.profileHash, createHash('sha256').update(JSON.stringify(expectedProfile)).digest('hex'));
+  }
+}
 if (process.env.AURION_EXPECTED_REVISION) assert.equal(sources.sourceRevision, process.env.AURION_EXPECTED_REVISION);
 async function probe(id, input, sourceRoot = repo, expectedFailure = '') {
   const shouldRender = render && !expectedFailure && !id.startsWith('synthetic-');
@@ -91,6 +130,6 @@ const flattenedPath = 'negative-static-clip.glb';
 await writeFile(join(directory, flattenedPath), flat);
 const flattened = { ...sources, sources: [{ ...player, ...inspectGlb(flat), path: flattenedPath, animations: player.animations.filter(clip => clip.name === 'Idle') }] };
 await probe('negative-static-clip', flattened, directory, 'Clip has no imported skeleton motion');
-const receipt = { schemaVersion: 'aurion.godot-asset-evidence.v1', sourceRevision: sources.sourceRevision, toolchainHash: sources.toolchainHash, editorHash: await digest(executable), sourceManifestHash: await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')), layer: render ? 'software-render' : 'headless-import', videoAdapter: result.videoAdapter, importedAssets: result.records.length, motionClips: result.records.reduce((sum, record) => sum + record.clips.length, 0), positiveControls: ['nonidentity-parent-scale-rotation-child-matrix'], negativeControls: ['wrong-source-hash', 'wrong-source-transform', 'static-clip-with-valid-names'], result: 'passed' };
+const receipt = { schemaVersion: 'aurion.godot-asset-evidence.v1', sourceRevision: sources.sourceRevision, toolchainHash: sources.toolchainHash, editorHash: await digest(executable), sourceManifestHash: await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')), preparedManifestHash: preparedManifestBytes ? createHash('sha256').update(preparedManifestBytes).digest('hex') : null, profileDocumentHash: sources.profileDocumentHash ?? null, layer: render ? 'software-render' : 'headless-import', videoAdapter: result.videoAdapter, importedAssets: result.records.length, motionClips: result.records.reduce((sum, record) => sum + record.clips.length, 0), positiveControls: ['nonidentity-parent-scale-rotation-child-matrix'], negativeControls: ['wrong-source-hash', 'wrong-source-transform', 'static-clip-with-valid-names'], result: 'passed' };
 await writeFile(join(directory, render ? 'render-evidence.json' : 'import-evidence.json'), JSON.stringify(receipt, null, 2) + '\n');
 console.log(JSON.stringify(receipt));

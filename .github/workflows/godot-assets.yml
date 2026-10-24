@@ -29,6 +29,7 @@ jobs:
     env:
       AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
       AURION_ASSET_EVIDENCE: .aurion-godot/asset-evidence
+      AURION_PREPARED_ASSET_MANIFEST: godot-client/assets/generated/manifest.json
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,6 +39,14 @@ jobs:
           node-version: '22'
       - name: Source inventory and hostile-input regressions
         run: node --test scripts/godot/audit-assets.test.mjs
+      - name: Deterministic Godot compatibility outputs
+        run: |
+          node --test scripts/godot/prepare-assets.test.mjs
+          node scripts/godot/prepare-assets.mjs
+          mkdir -p "$AURION_ASSET_EVIDENCE"
+          cp "$AURION_PREPARED_ASSET_MANIFEST" "$AURION_ASSET_EVIDENCE/preparation-first.json"
+          node scripts/godot/prepare-assets.mjs
+          cmp "$AURION_PREPARED_ASSET_MANIFEST" "$AURION_ASSET_EVIDENCE/preparation-first.json"
       - name: Install verified pinned Godot editor
         run: node scripts/godot/bootstrap.mjs
       - name: Real GLTF imports, skeleton motion and causal negative controls
@@ -58,5 +67,6 @@ jobs:
             .aurion-godot/asset-evidence/*.json
             .aurion-godot/asset-evidence/*.log
             .aurion-godot/asset-evidence/renders/*.png
+            godot-client/assets/generated/manifest.json
           if-no-files-found: error
           retention-days: 14
