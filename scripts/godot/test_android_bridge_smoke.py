@@ -46,6 +46,17 @@ class Reports(unittest.TestCase):
         for forbidden in ("https://", "callback?", "not-a-real-secret", "not-a-real-token", "z"*50):
             self.assertNotIn(forbidden, result)
 
+    def test_browser_diagnostics_only_emit_fixed_labels_and_resource_ids(self):
+        xml = '<hierarchy><node text="Use without an account" resource-id="com.android.chrome:id/signin_fre_dismiss_button"/><node text="secret-token-fixture" resource-id="com.android.chrome:id/secret-token-fixture"/><node text="https://example.invalid/callback?code=secret-code-fixture" resource-id="other:id/url_bar"/></hierarchy>'
+        report = smoke.browser_diagnostics(xml, "com.android.chrome", "topResumedActivity com.android.chrome/firstrun.FirstRunActivity secret-cookie-fixture", False)
+        self.assertEqual(report["knownLabels"], ["use without an account"])
+        self.assertEqual(report["knownIds"], ["signin_fre_dismiss_button"])
+        self.assertTrue(report["browserForeground"])
+        self.assertTrue(report["firstRunActivity"])
+        self.assertNotIn("secret", str(report))
+        self.assertNotIn("https://", str(report))
+        self.assertFalse(smoke.browser_diagnostics("invalid secret", "com.android.chrome", "", False)["uiParsed"])
+
 
 if __name__ == "__main__":
     unittest.main()

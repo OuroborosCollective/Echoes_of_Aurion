@@ -23,6 +23,27 @@ FAILURES = {"SMOKE_REPORT_INVALID", "JNI_RUNTIME_UNAVAILABLE", "JNI_METHOD_CONTR
             "BROWSER_FIXTURE_UNOBSERVED", "FOREIGN_ADB_TARGET", "APK_IDENTITY_MISMATCH",
             "LEGACY_GUARD_NOT_RED", "FIXED_WARM_FAILED", "DUPLICATE_CALLBACK_FORWARDED", "COLD_FLOW_UNSAFE"}
 PROGRESS = {"stage": "initializing"}
+BROWSER_LABELS = {"accept & continue", "use without an account", "use without account", "no thanks", "skip", "more",
+                  "continue", "get started", "not now", "got it", "set as default", "choose your search engine"}
+BROWSER_IDS = {"signin_fre_dismiss_button", "signin_fre_continue_button", "terms_accept", "button_primary",
+               "button_secondary", "negative_button", "positive_button", "ack_button", "more_button",
+               "url_bar", "search_provider_logo", "fre_promo_title", "default_search_engine_dialog_options"}
+
+
+def browser_diagnostics(xml, browser, foreground, fixture_observed):
+    report = {"browserForeground": any(browser in line for line in foreground.splitlines()
+                                      if "ResumedActivity" in line or "topResumedActivity" in line),
+              "firstRunActivity": "firstrun.FirstRunActivity" in foreground,
+              "fixtureObserved": fixture_observed, "uiParsed": False, "knownLabels": [], "knownIds": []}
+    try:
+        nodes = list(ET.fromstring(xml).iter("node"))
+    except ET.ParseError:
+        return report
+    report["uiParsed"] = True
+    report["knownLabels"] = sorted({node.get("text", "").casefold() for node in nodes} & BROWSER_LABELS)
+    report["knownIds"] = sorted({node.get("resource-id", "").removeprefix(browser + ":id/") for node in nodes
+                                 if node.get("resource-id", "").startswith(browser + ":id/")} & BROWSER_IDS)
+    return report
 
 
 def safe_boot_diagnostics(log):
@@ -154,6 +175,11 @@ def open_browser(guard):
         # or a consent/authentication screen. No account is created or entered.
         adb("shell", "uiautomator", "dump", "/data/local/tmp/aurion-smoke-ui.xml", tolerate=True)
         xml = adb("exec-out", "cat", "/data/local/tmp/aurion-smoke-ui.xml", tolerate=True)
+        diagnostic = browser_diagnostics(xml, browser, foreground, "/" + guard in FixturePage.hits)
+        states = PROGRESS.setdefault("browserStates", [])
+        if not states or states[-1] != diagnostic:
+            states.append(diagnostic)
+            del states[:-12]
         try:
             nodes = ET.fromstring(xml).iter("node")
         except ET.ParseError:
@@ -255,6 +281,7 @@ if __name__ == "__main__":
         code = str(error) if isinstance(error, RuntimeError) and str(error) in FAILURES else "SMOKE_INTERNAL_FAILURE"
         (output / "failure-evidence.json").write_text(json.dumps({"code": code, **PROGRESS}) + "\n")
         print("ANDROID_JNI_BRIDGE_SMOKE_FAILED / " + code)
+        print("ANDROID_JNI_SMOKE_FAILURE_EVIDENCE " + json.dumps(PROGRESS, sort_keys=True))
         raise SystemExit(1) from None
     finally:
         server.shutdown()
