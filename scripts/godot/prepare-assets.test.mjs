@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { prepareAssets, sha256 } from './prepare-assets.mjs';
+import { prepareAssets, requireCleanSourceInventory, sha256 } from './prepare-assets.mjs';
 import { repo } from './toolchain.mjs';
 
 const output = resolve(repo, '.aurion-godot/prepare-assets-test');
@@ -27,4 +27,22 @@ test('two clean preparations are stable and remove stale outputs', async t => {
 
 test('output is constrained to the repository', async () => {
   await assert.rejects(prepareAssets({ outputDirectory: resolve(repo, '..', 'escaped-assets') }), /OUTPUT_OUTSIDE_REPOSITORY/);
+});
+
+test('dirty source provenance is rejected', () => {
+  assert.throws(() => requireCleanSourceInventory({ workingTreeClean: false }), /SOURCE_WORKTREE_DIRTY/);
+});
+
+test('symlinked output is rejected before recursive cleanup', async t => {
+  const target = resolve(repo, '.aurion-godot/prepare-assets-symlink-target');
+  t.after(async () => {
+    await rm(output, { force: true });
+    await rm(target, { recursive: true, force: true });
+  });
+  await rm(output, { recursive: true, force: true });
+  await mkdir(target, { recursive: true });
+  await writeFile(resolve(target, 'sentinel'), 'preserve');
+  await symlink(target, output, 'dir');
+  await assert.rejects(prepareAssets({ outputDirectory: output }), /OUTPUT_SYMLINK/);
+  assert.equal(await readFile(resolve(target, 'sentinel'), 'utf8'), 'preserve');
 });
