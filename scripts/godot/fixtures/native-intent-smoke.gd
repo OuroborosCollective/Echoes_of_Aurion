@@ -30,7 +30,9 @@ func _observed_callback(_raw_url: String) -> void:
 
 func _process(_delta: float) -> void:
 	if _app != null:
-		_write_report()
+		# Sample after Main's process/poll work in this frame, so an Intent ack
+		# cannot race ahead of the controller's opportunity to process it.
+		call_deferred("_write_report")
 
 func _write_report() -> void:
 	var bridge: Variant = _app._intent_bridge

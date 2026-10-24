@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -22,6 +23,50 @@ FAILURES = {"SMOKE_REPORT_INVALID", "JNI_RUNTIME_UNAVAILABLE", "JNI_METHOD_CONTR
             "BROWSER_FIXTURE_UNOBSERVED", "FOREIGN_ADB_TARGET", "APK_IDENTITY_MISMATCH",
             "LEGACY_GUARD_NOT_RED", "FIXED_WARM_FAILED", "DUPLICATE_CALLBACK_FORWARDED", "COLD_FLOW_UNSAFE"}
 PROGRESS = {"stage": "initializing"}
+
+
+def safe_boot_diagnostics(log):
+    rows = []
+    for line in log.splitlines():
+        if not re.search(r"ERROR|PANIC|FATAL|failed|not enough|unsupported", line, re.I):
+            continue
+        if re.search(r"token|cookie|password|authorization|verifier|credential|\bbearer\b|(?:^|\s)(?:code|state)=", line, re.I):
+            rows.append("[REDACTED_BOOT_LINE]")
+            continue
+        line = re.sub(r"https?://\S+", "[URL]", line)
+        line = re.sub(r"[A-Za-z0-9_+/-]{32,}={0,2}", "[OPAQUE]", line)
+        rows.append(line[:400])
+    return rows[-30:]
+
+
+def boot_emulator():
+    output = Path(os.environ["AURION_SMOKE_OUTPUT"])
+    deadline = time.monotonic() + 180
+    completed = False
+    while time.monotonic() < deadline:
+        try:
+            value = adb("shell", "getprop", "sys.boot_completed", tolerate=True, timeout=10)
+        except subprocess.TimeoutExpired:
+            value = ""
+        if value == "1":
+            completed = True
+            break
+        time.sleep(2)
+    alive = False
+    try:
+        pid = int((Path(os.environ["RUNNER_TEMP"]) / "aurion-emulator.pid").read_text())
+        os.kill(pid, 0)
+        alive = True
+    except (ValueError, OSError):
+        pass
+    host_log = Path(os.environ["RUNNER_TEMP"]) / "aurion-emulator.log"
+    report = {"bootCompleted": completed, "hostProcessAlive": alive, "runtime": "UNVERIFIED",
+              "diagnostics": safe_boot_diagnostics(host_log.read_text(errors="replace") if host_log.exists() else "")}
+    (output / "emulator-boot-evidence.json").write_text(json.dumps(report, indent=2) + "\n")
+    if not completed:
+        print(json.dumps(report))
+        raise RuntimeError("EMULATOR_BOOT_TIMEOUT") from None
+    print("ANDROID_EMULATOR_BOOT_VERIFIED / BRIDGE_RUNTIME_PENDING")
 
 
 def require(value, code):
@@ -189,6 +234,14 @@ def run(output):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--boot"]:
+        try:
+            boot_emulator()
+        except BaseException:
+            print("EMULATOR_BOOT_FAILED / INSPECT_REDACTED_BOOT_EVIDENCE")
+            raise SystemExit(1) from None
+        raise SystemExit(0)
+    require(not sys.argv[1:], "SMOKE_REPORT_INVALID")
     output = Path(os.environ["AURION_SMOKE_OUTPUT"])
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 8765), FixturePage)
     threading.Thread(target=server.serve_forever, daemon=True).start()

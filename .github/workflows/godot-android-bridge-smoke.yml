@@ -54,20 +54,13 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name aurion-jni --package "system-images;android-35;google_apis;x86_64"
           "$ANDROID_HOME/emulator/emulator" -avd aurion-jni -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -memory 2048 -cores 2 > "$RUNNER_TEMP/aurion-emulator.log" 2>&1 &
+          printf '%s\n' "$!" > "$RUNNER_TEMP/aurion-emulator.pid"
       - name: Run real JNI legacy RED, fixed warm return, duplicate and cold-start smoke
         env:
           AURION_SMOKE_OUTPUT: ${{ runner.temp }}/aurion-jni-smoke
         run: |
           export ADB="$ANDROID_HOME/platform-tools/adb"
-          python3 - <<'PY'
-          import os, subprocess, time
-          deadline=time.monotonic()+180
-          while time.monotonic()<deadline:
-              r=subprocess.run([os.environ['ADB'],'-s','emulator-5554','shell','getprop','sys.boot_completed'],capture_output=True,text=True,timeout=10)
-              if r.returncode==0 and r.stdout.strip()=='1': break
-              time.sleep(2)
-          else: raise SystemExit('EMULATOR_BOOT_TIMEOUT')
-          PY
+          python3 scripts/godot/android-bridge-smoke.py --boot
           python3 scripts/godot/android-bridge-smoke.py
       - name: Preserve only APK identity and redacted runtime evidence
         if: always()

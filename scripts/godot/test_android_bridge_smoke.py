@@ -39,6 +39,13 @@ class Reports(unittest.TestCase):
     def test_fresh_native_intent_ack_matches_sequence_and_process(self):
         self.assertTrue(smoke.fresh_dispatch({**self.report(), "dispatchSequence": 2}, 2, 100))
 
+    def test_boot_diagnostics_preserve_cause_without_urls_or_secrets(self):
+        value = "ERROR invalid GPU mode swiftshader\nERROR https://example.invalid/app/auth/callback?code=not-a-real-secret\nERROR token=not-a-real-token\nPANIC opaque " + "z"*50
+        result = "\n".join(smoke.safe_boot_diagnostics(value))
+        self.assertIn("invalid GPU mode swiftshader", result)
+        for forbidden in ("https://", "callback?", "not-a-real-secret", "not-a-real-token", "z"*50):
+            self.assertNotIn(forbidden, result)
+
 
 if __name__ == "__main__":
     unittest.main()
