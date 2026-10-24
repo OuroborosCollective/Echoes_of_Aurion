@@ -24,7 +24,13 @@ if (preparedManifestPath) {
   assert.equal(sources.sourceRevision, auditedSources.sourceRevision);
   assert.equal(sources.toolchainHash, auditedSources.toolchainHash);
   assert.equal(sources.sourceManifestHash, await digest(join(repo, 'godot-client/assets/catalog/source-manifest.json')));
+  assert.equal(sources.profileDocumentHash, await digest(join(repo, 'godot-client/assets/import_profiles.json')));
   assert.equal(sources.sources.length, auditedSources.sources.length);
+  assert.deepEqual(
+    sources.sources.map(source => source.sourcePath).sort(),
+    auditedSources.sources.map(source => source.path).sort(),
+    'Prepared asset coverage changed',
+  );
   const originals = new Map(auditedSources.sources.map(source => [source.path, source]));
   for (const source of sources.sources) {
     const original = originals.get(source.sourcePath);
