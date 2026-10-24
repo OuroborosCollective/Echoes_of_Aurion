@@ -21,7 +21,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Require existing runner KVM access
+      - name: Grant approved KVM ACL only to this ephemeral runner account
+        run: |
+          mkdir -p "$RUNNER_TEMP/aurion-jni-smoke"
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -u):rw" /dev/kvm
+      - name: Require runner KVM access
         run: |
           python3 - <<'PY'
           import os

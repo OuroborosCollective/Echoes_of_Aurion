@@ -12,7 +12,7 @@ class Reports(unittest.TestCase):
         return dict(schemaVersion=1, layer="android-jni-bridge-smoke", mode="warm", guard="fixed", pid=100,
                     phase="callback_rejected", runtimeClass="JNISingleton", javaGetActivity=True, objectGetActivity=False,
                     activityPresent=True, intentDataPresent=False, callbacks=1, waiting=False, requestActive=False,
-                    sessionPresent=False, worldConfirmed=False, loginEnabled=True, fullLogin="UNVERIFIED", physicalDevice="UNVERIFIED")
+                    sessionPresent=False, worldConfirmed=False, loginEnabled=True, dispatchSequence=1, fullLogin="UNVERIFIED", physicalDevice="UNVERIFIED")
 
     def test_safe_report(self):
         self.assertEqual(smoke.validate_report(self.report())["callbacks"], 1)
@@ -31,6 +31,13 @@ class Reports(unittest.TestCase):
 
     def test_missing_native_activity_is_explicitly_unknown(self):
         smoke.validate_report({**self.report(), "guard": "legacy", "activityPresent": False, "intentDataPresent": None, "phase": "waiting", "waiting": True, "callbacks": 0})
+
+    def test_pre_dispatch_report_does_not_ack_duplicate(self):
+        self.assertFalse(smoke.fresh_dispatch(self.report(), 2, 100))
+        self.assertFalse(smoke.fresh_dispatch({**self.report(), "dispatchSequence": 2}, 2, 101))
+
+    def test_fresh_native_intent_ack_matches_sequence_and_process(self):
+        self.assertTrue(smoke.fresh_dispatch({**self.report(), "dispatchSequence": 2}, 2, 100))
 
 
 if __name__ == "__main__":

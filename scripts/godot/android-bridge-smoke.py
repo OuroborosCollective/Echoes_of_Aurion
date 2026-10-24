@@ -16,7 +16,7 @@ CALLBACK = "https://arelogic.space/app/auth/callback"  # no code, state, or veri
 FIELDS = {"schemaVersion", "layer", "mode", "guard", "pid", "phase", "runtimeClass",
           "javaGetActivity", "objectGetActivity", "activityPresent", "intentDataPresent",
           "callbacks", "waiting", "requestActive", "sessionPresent", "worldConfirmed",
-          "loginEnabled", "fullLogin", "physicalDevice"}
+          "loginEnabled", "fullLogin", "physicalDevice", "dispatchSequence"}
 FAILURES = {"SMOKE_REPORT_INVALID", "JNI_RUNTIME_UNAVAILABLE", "JNI_METHOD_CONTRACT_CHANGED",
             "UNEXPECTED_AUTHORITY", "ADB_STEP_FAILED", "SMOKE_REPORT_TIMEOUT", "BROWSER_UNAVAILABLE",
             "BROWSER_FIXTURE_UNOBSERVED", "FOREIGN_ADB_TARGET", "APK_IDENTITY_MISMATCH",
@@ -37,6 +37,7 @@ def validate_report(report):
     require(report["runtimeClass"] == "JNISingleton", "JNI_RUNTIME_UNAVAILABLE")
     require(type(report["pid"]) is int and report["pid"] > 0, "SMOKE_REPORT_INVALID")
     require(type(report["callbacks"]) is int and 0 <= report["callbacks"] <= 2, "SMOKE_REPORT_INVALID")
+    require(type(report["dispatchSequence"]) is int and 0 <= report["dispatchSequence"] <= 3, "SMOKE_REPORT_INVALID")
     for field in ("javaGetActivity", "objectGetActivity", "activityPresent", "waiting", "requestActive", "sessionPresent", "worldConfirmed", "loginEnabled"):
         require(type(report[field]) is bool, "SMOKE_REPORT_INVALID")
     require(type(report["intentDataPresent"]) is bool if report["activityPresent"] else report["intentDataPresent"] is None, "SMOKE_REPORT_INVALID")
@@ -44,6 +45,10 @@ def validate_report(report):
     require(not report["requestActive"] and not report["sessionPresent"] and not report["worldConfirmed"], "UNEXPECTED_AUTHORITY")
     require(report["fullLogin"] == report["physicalDevice"] == "UNVERIFIED", "SMOKE_REPORT_INVALID")
     return report
+
+
+def fresh_dispatch(report, sequence, pid):
+    return report["dispatchSequence"] == sequence and report["pid"] == pid
 
 
 def adb(*args, timeout=15, tolerate=False, input=None):
@@ -120,11 +125,12 @@ def open_browser(guard):
     raise RuntimeError("BROWSER_FIXTURE_UNOBSERVED") from None
 
 
-def dispatch(component):
+def dispatch(component, sequence):
     # Explicit OS delivery is intentional for a debug signer. It proves real
     # Activity/onNewIntent/JNI, not verified production-domain association.
     adb("shell", "am", "start", "-W", "--activity-clear-top", "--activity-single-top",
-        "-n", component, "-a", "android.intent.action.VIEW", "-d", CALLBACK)
+        "-n", component, "-a", "android.intent.action.VIEW", "-d", CALLBACK,
+        "--ei", "aurion_smoke_dispatch", str(sequence))
 
 
 def run(output):
@@ -139,6 +145,7 @@ def run(output):
         PROGRESS["stage"] = guard + "_install"
         build = json.loads((output / (guard + "-build.json")).read_text())
         require(build["guard"] == guard and build["sourceRevision"] == os.environ["AURION_EXPECTED_REVISION"], "APK_IDENTITY_MISMATCH")
+        require(build["internetPermission"] is False and build["productionDomainFilter"] is False and build["configuredOrigin"] == "loopback-only", "APK_IDENTITY_MISMATCH")
         apk = output / (guard + ".apk")
         require(hashlib.file_digest(apk.open("rb"), "sha256").hexdigest() == build["apkSha256"], "APK_IDENTITY_MISMATCH")
         adb("uninstall", PACKAGE, tolerate=True)
@@ -152,7 +159,7 @@ def run(output):
         PROGRESS["stage"] = guard + "_browser"
         open_browser(guard)
         PROGRESS["stage"] = guard + "_callback"
-        dispatch(component)
+        dispatch(component, 1)
         if guard == "legacy":
             time.sleep(5)
             after = snapshot()
@@ -161,22 +168,21 @@ def run(output):
             PROGRESS["legacyRedObserved"] = True
             (output / "runtime-evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
         else:
-            after = wait_report(lambda r: r["phase"] == "callback_rejected")
+            after = wait_report(lambda r: r["phase"] == "callback_rejected" and fresh_dispatch(r, 1, before["pid"]))
             require(after["pid"] == before["pid"] and after["callbacks"] == 1 and not after["waiting"] and after["activityPresent"] and not after["intentDataPresent"], "FIXED_WARM_FAILED")
             evidence["cases"]["fixedWarm"] = after
             (output / "runtime-evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
             # After terminal rejection Main stops polling; another OS Intent
             # must not recreate authority or forward a second callback.
-            dispatch(component)
-            time.sleep(1)
-            duplicate = snapshot()
+            dispatch(component, 2)
+            duplicate = wait_report(lambda r: fresh_dispatch(r, 2, before["pid"]))
             require(duplicate is not None and duplicate["pid"] == before["pid"] and duplicate["callbacks"] == 1 and not duplicate["waiting"], "DUPLICATE_CALLBACK_FORWARDED")
             evidence["cases"]["fixedDuplicate"] = duplicate
             PROGRESS["stage"] = "fixed_cold_start"
             adb("shell", "run-as", PACKAGE, "tee", "files/smoke-mode", input="cold\n")
             adb("shell", "am", "force-stop", PACKAGE)
-            dispatch(component)
-            cold = wait_report(lambda r: r["phase"] == "cold_login_required" and r["pid"] != before["pid"])
+            dispatch(component, 3)
+            cold = wait_report(lambda r: r["phase"] == "cold_login_required" and r["dispatchSequence"] == 3 and r["pid"] != before["pid"])
             require(cold["activityPresent"] and cold["loginEnabled"] and not cold["intentDataPresent"] and not cold["waiting"] and cold["callbacks"] == 0, "COLD_FLOW_UNSAFE")
             evidence["cases"]["fixedCold"] = cold
     return evidence

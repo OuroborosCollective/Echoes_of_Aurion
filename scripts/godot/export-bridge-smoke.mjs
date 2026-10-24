@@ -21,9 +21,22 @@ for(const guard of ['legacy','fixed']) {
   await cp(join(repo,'godot-client'),project,{recursive:true,filter:p=>!p.split('/').includes('.godot')});
   const preset=original.replace('architectures/arm64-v8a=true','architectures/arm64-v8a=false')
    .replace('architectures/x86_64=false','architectures/x86_64=true')
+   .replace('permissions/internet=true','permissions/internet=false')
    .replace('org.ouroboroscollective.aurion.godot.preview','org.ouroboroscollective.aurion.godot.smoke');
   assert.notEqual(preset,original);
   await writeFile(join(project,'export_presets.cfg'),preset);
+  const settingsPath=join(project,'project.godot');
+  const settings=await readFile(settingsPath,'utf8');
+  assert.equal(settings.split('server_base_url="https://arelogic.space"').length,2);
+  assert.equal(settings.split('enabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg")').length,2);
+  await writeFile(settingsPath,settings.replace('server_base_url="https://arelogic.space"','server_base_url="http://127.0.0.1:1"')
+   .replace('enabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg")','enabled=PackedStringArray()'));
+  // The disposable fixture keeps the same one-origin validator, bound only to
+  // loopback. The APK has no INTERNET permission, including in the cold case.
+  const configPath=join(project,'config/runtime_config.gd');
+  const runtimeConfig=await readFile(configPath,'utf8');
+  assert.equal(runtimeConfig.split('const PRODUCT_SERVER := "https://arelogic.space"').length,2);
+  await writeFile(configPath,runtimeConfig.replace('const PRODUCT_SERVER := "https://arelogic.space"','const PRODUCT_SERVER := "http://127.0.0.1:1"'));
   await cp(join(repo,'scripts/godot/fixtures/native-intent-smoke.gd'),join(project,'bridge_smoke.gd'));
   await writeFile(join(project,'override.cfg'),`[autoload]\nAurionBridgeSmoke="*res://bridge_smoke.gd"\n[aurion]\nclient_build="${revision}"\nnative_auth_start_enabled=true\n[aurion_smoke]\nguard="${guard}"\n`);
   const bridge=join(project,'platform/android/native_intent_bridge.gd');
@@ -50,13 +63,15 @@ for(const guard of ['legacy','fixed']) {
   assert.match(badging,/package: name='org\.ouroboroscollective\.aurion\.godot\.smoke'/);
   assert.match(badging,/native-code: 'x86_64'\s*$/m);
   assert.match(signature,/Verified using v2 scheme.*true/);
+  assert.ok(!badging.includes('android.permission.INTERNET'),'SMOKE_NETWORK_PERMISSION_FORBIDDEN');
+  assert.ok(!manifest.includes('arelogic.space'),'SMOKE_PRODUCTION_DOMAIN_FILTER_FORBIDDEN');
   const alias=manifest.split(/(?=^ {6}E: )/m).find(s=>s.startsWith('      E: activity-alias (')&&s.includes('android.intent.action.MAIN'));
   assert.ok(alias);assert.match(alias,/android:exported[^\n]*0xffffffff/);
   const launcher=alias.match(/android:name[^\n]*="([^"]+)"/)?.[1];assert.ok(launcher);
   const entries=run('unzip',['-Z1',apk]).split('\n');
   assert.ok(entries.includes('lib/x86_64/libgodot_android.so'));
   assert.ok(!entries.some(p=>p.startsWith('lib/')&&!p.startsWith('lib/x86_64/')));
-  await writeFile(join(output,guard+'-build.json'),JSON.stringify({schemaVersion:1,sourceRevision:revision,guard,package:'org.ouroboroscollective.aurion.godot.smoke',launcher,apkSha256:await digest(apk),bridgeSha256:await digest(bridge),engine:lock.engine.version,productionApk:false,signer:'existing-preview-debug'},null,2));
+  await writeFile(join(output,guard+'-build.json'),JSON.stringify({schemaVersion:1,sourceRevision:revision,guard,package:'org.ouroboroscollective.aurion.godot.smoke',launcher,apkSha256:await digest(apk),bridgeSha256:await digest(bridge),engine:lock.engine.version,productionApk:false,internetPermission:false,productionDomainFilter:false,configuredOrigin:'loopback-only',signer:'existing-preview-debug'},null,2));
  } finally {await rm(job,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 }
 assert.equal(await readFile(join(repo,'godot-client/export_presets.cfg'),'utf8'),original);

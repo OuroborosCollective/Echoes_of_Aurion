@@ -37,10 +37,12 @@ func _write_report() -> void:
 	var runtime: Variant = bridge._android_runtime
 	var has_activity: bool = bridge._activity != null
 	var intent_present: Variant = null
+	var dispatch_sequence := 0
 	if has_activity:
 		var intent: Variant = bridge._activity.getIntent()
 		if intent != null:
 			intent_present = intent.getDataString() != null
+			dispatch_sequence = intent.getIntExtra("aurion_smoke_dispatch", 0)
 	var status: String = _app.status.text
 	var phase := "waiting" if _app._awaiting_callback else "other"
 	if _mode == "cold" and not _app._awaiting_callback:
@@ -51,6 +53,7 @@ func _write_report() -> void:
 		"schemaVersion": 1, "layer": "android-jni-bridge-smoke", "mode": _mode,
 		"guard": ProjectSettings.get_setting("aurion_smoke/guard"),
 		"pid": OS.get_process_id(), "phase": phase,
+		"dispatchSequence": dispatch_sequence,
 		"runtimeClass": runtime.get_class() if runtime != null else "absent",
 		"javaGetActivity": runtime != null and runtime.has_java_method("getActivity"),
 		"objectGetActivity": runtime != null and runtime.has_method("getActivity"),
