@@ -1,0 +1,222 @@
+{
+  "schemaVersion": "aurion.godot-source-manifest.v1",
+  "scope": "All 12 GLB source files committed under assets/; test fixtures excluded. Registry-only monster identities are separately audited, never treated as local assets.",
+  "entries": [
+    {
+      "path": "assets/characters/aurion-player-standard-animated.glb",
+      "sha256": "2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d34f3d94a0e64765cc",
+      "bytes": 794088,
+      "role": "character",
+      "provenance": "scripts/repair-player-animation.py",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d3",
+      "canonicalMapping": {
+        "kind": "public-player-character-source",
+        "contract": "scripts/seed-starter-village-public-character.ts",
+        "purpose": "player-public",
+        "targetKey": null
+      }
+    },
+    {
+      "path": "assets/environment/asterion-courtyard/Asterion_Courtyard_LOD0.glb",
+      "sha256": "dc4199201ce72b403d63570e8112b28cb037938fdbadc68d47c8782d0f952e2d",
+      "bytes": 687260,
+      "role": "environment",
+      "provenance": "assets/environment/asterion-courtyard/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_dc4199201ce72b403d63570e8112b28cb037938fdbadc68d",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/asterionCourtyardContract.ts",
+        "targetKey": "asterion_courtyard",
+        "lod": 0
+      }
+    },
+    {
+      "path": "assets/environment/asterion-courtyard/Asterion_Courtyard_LOD1.glb",
+      "sha256": "b02c76c803de5facee861042965ef534ab3efade3b3cec5f359f1e82d692cb65",
+      "bytes": 646756,
+      "role": "environment",
+      "provenance": "assets/environment/asterion-courtyard/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_b02c76c803de5facee861042965ef534ab3efade3b3cec5f",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/asterionCourtyardContract.ts",
+        "targetKey": "asterion_courtyard",
+        "lod": 1
+      }
+    },
+    {
+      "path": "assets/environment/asterion-courtyard/Asterion_Courtyard_LOD2.glb",
+      "sha256": "a8d05c60d38f34adccb06bb9606fd70700f6ce198d07cf8716f8390c02b16775",
+      "bytes": 238252,
+      "role": "environment",
+      "provenance": "assets/environment/asterion-courtyard/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_a8d05c60d38f34adccb06bb9606fd70700f6ce198d07cf87",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/asterionCourtyardContract.ts",
+        "targetKey": "asterion_courtyard",
+        "lod": 2
+      }
+    },
+    {
+      "path": "assets/environment/fountain/Aurion_Village_Fountain_LOD1.glb",
+      "sha256": "68b4b573d41589ed82632b3915280c41858d237d3d18f0b37763f677f26c20db",
+      "bytes": 720480,
+      "role": "environment",
+      "provenance": "assets/environment/fountain/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_68b4b573d41589ed82632b3915280c41858d237d3d18f0b3",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/aurionVillageFountainContract.ts",
+        "purpose": "world-environment",
+        "subcategory": "fountain",
+        "lod": 1
+      }
+    },
+    {
+      "path": "assets/environment/fountain/Aurion_Village_Fountain_LOD2.glb",
+      "sha256": "1aa07c92677889a6173df083f6eb025d4a02c942ab8f7bd89f286882db23c90a",
+      "bytes": 204956,
+      "role": "environment",
+      "provenance": "assets/environment/fountain/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_1aa07c92677889a6173df083f6eb025d4a02c942ab8f7bd8",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/aurionVillageFountainContract.ts",
+        "purpose": "world-environment",
+        "subcategory": "fountain",
+        "lod": 2
+      }
+    },
+    {
+      "path": "assets/environment/street-lamp/Aurion_Street_Lamp_LOD0.glb",
+      "sha256": "8246a3c42834d9280cbad0cd89b6e354650857223590e7177b696a26cb6cd2ec",
+      "bytes": 2514256,
+      "role": "environment",
+      "provenance": "assets/environment/street-lamp/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_8246a3c42834d9280cbad0cd89b6e354650857223590e717",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/aurionVillageStreetLampContract.ts",
+        "purpose": "world-environment",
+        "subcategory": "street-prop",
+        "lod": 0
+      }
+    },
+    {
+      "path": "assets/environment/street-lamp/Aurion_Street_Lamp_LOD1.glb",
+      "sha256": "c6655649ba9ca1ef602371a08552ffd70cda8b35a0bc796f21bdcc98bbeaca42",
+      "bytes": 2484916,
+      "role": "environment",
+      "provenance": "assets/environment/street-lamp/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_c6655649ba9ca1ef602371a08552ffd70cda8b35a0bc796f",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/aurionVillageStreetLampContract.ts",
+        "purpose": "world-environment",
+        "subcategory": "street-prop",
+        "lod": 1
+      }
+    },
+    {
+      "path": "assets/environment/street-lamp/Aurion_Street_Lamp_LOD2.glb",
+      "sha256": "61da6c957f63f9c994f6b657d813a165f6ec73f2e9680cb1406ac33557f212c8",
+      "bytes": 785232,
+      "role": "environment",
+      "provenance": "assets/environment/street-lamp/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_61da6c957f63f9c994f6b657d813a165f6ec73f2e9680cb1",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/aurionVillageStreetLampContract.ts",
+        "purpose": "world-environment",
+        "subcategory": "street-prop",
+        "lod": 2
+      }
+    },
+    {
+      "path": "assets/environment/street-lamp/Aurion_Street_Lamp_LOD3.glb",
+      "sha256": "9297ed693e9b6e693ceb90f0776872f24291ef0ee7505ffd007620c68d049e61",
+      "bytes": 259136,
+      "role": "environment",
+      "provenance": "assets/environment/street-lamp/README.md",
+      "rightsEvidence": "OWNER_SOURCE_PROVENANCE_ONLY",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_9297ed693e9b6e693ceb90f0776872f24291ef0ee7505ffd",
+      "canonicalMapping": {
+        "kind": "environment-lod-family",
+        "contract": "shared/aurionVillageStreetLampContract.ts",
+        "purpose": "world-environment",
+        "subcategory": "street-prop",
+        "lod": 3
+      }
+    },
+    {
+      "path": "assets/fantasy-v1/aurion_clockwork_stalker_monster_lod0.glb",
+      "sha256": "94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a",
+      "bytes": 1250676,
+      "role": "monster",
+      "provenance": "scripts/fantasy_assets/build_stalker.py",
+      "rightsEvidence": "REPOSITORY_AUTHORED_SOURCE",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7a",
+      "canonicalMapping": {
+        "kind": "monster-source",
+        "contract": "assets/fantasy-v1/aurion_clockwork_stalker_monster_lod0.live.json",
+        "archetype": "clockwork_stalker",
+        "targetKey": null
+      }
+    },
+    {
+      "path": "assets/fantasy-v1/aurion_oak_tree.glb",
+      "sha256": "f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872",
+      "bytes": 1116224,
+      "role": "nature",
+      "provenance": "scripts/fantasy_assets/build.py",
+      "rightsEvidence": "REPOSITORY_AUTHORED_SOURCE",
+      "liveAssignment": "UNVERIFIED",
+      "godotDerivedOutput": null,
+      "assetId": "glb_f8448061b64b860ac2c605d9a90de37c85c1c4acba697727",
+      "canonicalMapping": {
+        "kind": "world-nature-source",
+        "contract": "assets/fantasy-v1/aurion_oak_tree.live.json",
+        "purpose": "world-nature",
+        "subcategory": "tree"
+      }
+    }
+  ],
+  "externalRegistry": {
+    "path": "shared/aurionMonsterAssetRegistry.ts",
+    "licenseEvidence": "docs/assets/monster-geometry-evidence-2026-10-15.md",
+    "declaredLicense": "CC0-1.0 per recorded owner archive evidence; archive bytes are not in this repository"
+  },
+  "truthNotice": "Provenance records do not create shipping admission, live assignment or a new license grant. No source asset is copied into the product APK by this inventory."
+}
