@@ -4714,3 +4714,9 @@ Evidence: Original regression head `e151e42d9c476c6955004547ba730fd72701b5f2` fa
 Change: A terminal logout or native-session failure received while Android is paused now cancels the reserved protected-session restore without ending suspension early; foreground resume returns directly to idle login instead of arming reconnect against revoked authority.
 Learned: Clearing reconnect state is insufficient because the lifecycle owns a separate pending-restore reservation that survives terminal auth callbacks.
 Evidence: Regression-only head `603163444430368a2566a80970e8198587c2eb46` failed causally in Godot run 40018063075/job 120635162163; corrected code head `a451d8e978e30ddd1681dc064012ba12d9af2261` passed the active-scene Godot runtime/software-render contract in run 40018341005. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+
+
+2026-10-24 · PR #1148 · Leaderboard privacy and CI DB boundary
+Change: Public leaderboard now projects only rank, level, victories and seasonPoints; account-bearing list is admin-only. CI uses an isolated non-root test user, production env files are ignored, and invalid database URLs are no longer echoed in logs.
+Learned: A public UI readmodel must not inherit account identifiers from an existing public tRPC route; even invalid connection strings are secrets in diagnostics.
+Evidence: RED regression commit e7c48d73631ac99bfd3c54cdb396a5305b38ad94; implementation 1031c181f73851420ed0e10816f34f195730f1e4; exact-head GitHub CI pending at memory-entry time, no production runtime readback claimed.
