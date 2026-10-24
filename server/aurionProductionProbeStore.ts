@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createPool, type Pool, type PoolConnection, type RowDataPacket, type ResultSetHeader } from "mysql2/promise";
-import { verifyLocalPassword } from "./localAuth";
+import { verifyLocalPassword, DUMMY_LOCAL_AUTH_HASH } from "./localAuth";
 import { AURION_PROBE_MAX_APPROVAL_MS, AURION_PROBE_SCOPES, parseAurionProbeRunIdentity, requireMatchingAurionProbeApproval, type AurionProbeRunIdentity, type AurionProbeScope } from "./aurionProductionProbeApprovalContract";
 
 /** Reserved only for the explicitly approved, server-owned gameplay probe. */
@@ -47,7 +47,10 @@ export class AurionProductionProbeStore {
       const [actors] = await connection.execute<RowDataPacket[]>(
         "SELECT u.role, c.handle, c.passwordHash, c.failedAttempts, c.lockedUntil FROM users u INNER JOIN localCredentials c ON c.userId=u.id WHERE u.id=? FOR UPDATE", [userId]);
       const actor = actors[0];
-      if (!actor || actor.role !== "admin" || (actor.lockedUntil && new Date(actor.lockedUntil).getTime() > now)) return null;
+      if (!actor || actor.role !== "admin" || (actor.lockedUntil && new Date(actor.lockedUntil).getTime() > now)) {
+        await verifyLocalPassword(password, DUMMY_LOCAL_AUTH_HASH);
+        return null;
+      }
       if (!await verifyLocalPassword(password, actor.passwordHash)) {
         await connection.execute("UPDATE localCredentials SET failedAttempts=failedAttempts+1, lockedUntil=IF(failedAttempts>=5, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 15 MINUTE), NULL) WHERE userId=?", [userId]);
         return null;
