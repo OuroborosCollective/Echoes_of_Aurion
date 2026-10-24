@@ -52,7 +52,9 @@ jobs:
       - name: Real GLTF imports, skeleton motion and causal negative controls
         run: node scripts/godot/asset-import-runtime.mjs
       - name: Verify confirmed actor component with real imported models
-        run: node scripts/godot/actor-runtime.mjs
+        run: |
+          node --test scripts/godot/actor-runtime.test.mjs
+          node scripts/godot/actor-runtime.mjs
       - name: Render actual source meshes and two Walk poses with software OpenGL
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'

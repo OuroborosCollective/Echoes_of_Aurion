@@ -8,7 +8,7 @@ const render = process.argv.includes('--render');
 const directory = join(root, 'actor-evidence');
 await mkdir(directory, { recursive: true });
 // Failed reruns must never leave previously green evidence for always-upload.
-for (const file of render ? ['render.json', 'actors.png', 'render.log'] : ['headless.json', 'headless.log', 'import.log']) {
+for (const file of render ? ['render.json', 'actors.png', 'render.log'] : ['headless.json', 'headless.log', 'import.log', 'render.json', 'render.log', 'actors.png']) {
   await rm(join(directory, file), { force: true });
 }
 const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
