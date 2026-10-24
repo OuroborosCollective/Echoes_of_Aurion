@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { inventory, inspectGlb } from './audit-assets.mjs';
+import { assertPreparedRecord } from './prepare-assets.mjs';
 import { executable, repo, root, digest, run, lock } from './toolchain.mjs';
 
 const render = process.argv.includes('--render');
@@ -39,11 +40,7 @@ if (preparedManifestPath) {
   for (const source of sources.sources) {
     const original = originals.get(source.sourcePath);
     assert.ok(original, `Prepared asset has no audited source: ${source.sourcePath}`);
-    assert.ok(source.path.startsWith('godot-client/assets/generated/') && source.path.endsWith('.glb'));
-    assert.equal(source.sourceSha256, original.sha256);
-    assert.equal(source.outputSha256, original.sha256);
-    assert.equal(source.sha256, original.sha256);
-    assert.equal(source.assetId, original.assetId);
+    assertPreparedRecord(source, original);
     const expectedProfileId = profileDocument.roleProfiles[source.role] ?? profileDocument.defaultProfile;
     const expectedProfile = profileDocument.profiles[expectedProfileId];
     assert.ok(expectedProfile, `Prepared asset profile is missing: ${expectedProfileId}`);
