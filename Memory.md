@@ -4735,3 +4735,8 @@ Touched surfaces: server/nativeAuthHttp.ts, its HTTP regression, scripts/native-
 Evidence: Actual Chromium 151 navigation using the source renderer and guard failed before the change (Origin null) and passed afterward (canonical Origin, origin-only Referer); six hostile-header cases rejected; zero production requests. Full HTTP/Vitest/MariaDB CI and physical device outcome remain UNVERIFIED. No merge or deployment.
 Learned: Manually adding Origin in Node HTTP tests cannot establish browser-generated form headers; pending PKCE/State held only in process memory cannot survive Android process death.
 Next safe step: Review the minimal server fix and run the existing HTTP/MariaDB gates; separately design Keystore-backed, bounded one-time pending-login recovery and test real Android process death.
+
+### 2026-10-24 — G09 orphaned native callback drain (PR #1150)
+Change: Android cold-start now consumes Aurion's canonical auth callback when process death removed the in-memory PKCE transaction, without forwarding it as authentication or touching unrelated intents.
+Learned: Fail-closed process-death handling still requires the active startup path to drain the OS intent; retaining it cannot restore PKCE and risks carrying stale callback material into a later attempt.
+Evidence: Regression-only head `276faef3ea8728570b7226d635acd9e0f2cfca18` failed causally in Godot run 40073756795/job 120812597944; fixed code head `d993fcc4af749bfcd82207de2cae5ebf7d9e2f78` passed Godot headless/runtime/software-render run 40073901229 and Android Preview/real unsigned Login APK run 40073901265. Final Memory-bearing head is re-gated before merge; physical-device process death remains unverified.

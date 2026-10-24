@@ -88,6 +88,9 @@ func _ready() -> void:
 	_intent_bridge = NativeIntentBridge.new()
 	add_child(_intent_bridge)
 	_intent_bridge.callback_received.connect(handle_native_auth_callback)
+	# A cold App-Link launch can outlive the in-memory PKCE flow after process
+	# death. Drain that orphan now; the bridge forwards only live transactions.
+	_intent_bridge.poll_for_callback(false)
 	login.pressed.connect(_on_login_pressed)
 	%CopyDiagnostics.pressed.connect(_on_copy_diagnostics_pressed)
 	zone_map.selection_changed.connect(_on_map_selection_changed)
