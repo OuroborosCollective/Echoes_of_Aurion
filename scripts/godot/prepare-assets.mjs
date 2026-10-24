@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { relative, resolve, sep } from 'node:path';
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inspectGlb, inventory } from './audit-assets.mjs';
 import { repo } from './toolchain.mjs';
@@ -14,16 +14,32 @@ export function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+export function requireCleanSourceInventory(sourceInventory) {
+  assert.equal(sourceInventory.workingTreeClean, true, 'SOURCE_WORKTREE_DIRTY');
+}
+
 function repositoryPath(path) {
   const value = relative(repo, path).split(sep).join('/');
   assert.ok(value && value !== '..' && !value.startsWith('../'), 'OUTPUT_OUTSIDE_REPOSITORY');
   return value;
 }
 
-function validateOutputDirectory(output) {
-  const testRelative = relative(TEST_OUTPUT_ROOT, output);
-  const isolatedTestOutput = testRelative && testRelative !== '..' && !testRelative.startsWith(`..${sep}`);
-  assert.ok(output === DEFAULT_OUTPUT || isolatedTestOutput, 'OUTPUT_DIRECTORY_NOT_ALLOWED');
+async function validateOutputDirectory(output) {
+  const testOutput = resolve(TEST_OUTPUT_ROOT, 'prepare-assets-test');
+  assert.ok(output === DEFAULT_OUTPUT || output === testOutput, 'OUTPUT_DIRECTORY_NOT_ALLOWED');
+  const trustedParent = output === DEFAULT_OUTPUT ? dirname(DEFAULT_OUTPUT) : TEST_OUTPUT_ROOT;
+  await mkdir(trustedParent, { recursive: true });
+  const parentStat = await lstat(trustedParent);
+  assert.equal(parentStat.isSymbolicLink(), false, 'OUTPUT_PARENT_SYMLINK');
+  assert.equal(parentStat.isDirectory(), true, 'OUTPUT_PARENT_NOT_DIRECTORY');
+  assert.equal(await realpath(trustedParent), trustedParent, 'OUTPUT_PARENT_ESCAPES_REPOSITORY');
+  try {
+    const outputStat = await lstat(output);
+    assert.equal(outputStat.isSymbolicLink(), false, 'OUTPUT_SYMLINK');
+    assert.equal(outputStat.isDirectory(), true, 'OUTPUT_NOT_DIRECTORY');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
 }
 
 function validateProfiles(document) {
@@ -52,12 +68,13 @@ async function atomicWrite(path, bytes) {
 export async function prepareAssets({ outputDirectory = DEFAULT_OUTPUT } = {}) {
   const output = resolve(outputDirectory);
   repositoryPath(output);
-  validateOutputDirectory(output);
+  await validateOutputDirectory(output);
   const [sourceInventory, profileBytes] = await Promise.all([
     inventory(),
     readFile(PROFILE_PATH),
   ]);
   const profiles = validateProfiles(JSON.parse(profileBytes));
+  requireCleanSourceInventory(sourceInventory);
   await rm(output, { recursive: true, force: true });
   await mkdir(output, { recursive: true });
   const prepared = [];
