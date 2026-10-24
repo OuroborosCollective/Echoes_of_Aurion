@@ -51,6 +51,8 @@ jobs:
         run: node scripts/godot/bootstrap.mjs
       - name: Real GLTF imports, skeleton motion and causal negative controls
         run: node scripts/godot/asset-import-runtime.mjs
+      - name: Verify confirmed actor component with real imported models
+        run: node scripts/godot/actor-runtime.mjs
       - name: Render actual source meshes and two Walk poses with software OpenGL
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
@@ -58,6 +60,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y xvfb xauth libgl1-mesa-dri
           xvfb-run -a -s '-screen 0 1280x1024x24' node scripts/godot/asset-import-runtime.mjs --render
+          xvfb-run -a -s '-screen 0 1280x720x24' node scripts/godot/actor-runtime.mjs --render
       - name: Preserve source-bound asset evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -68,5 +71,6 @@ jobs:
             .aurion-godot/asset-evidence/*.log
             .aurion-godot/asset-evidence/renders/*.png
             godot-client/assets/generated/manifest.json
+            .aurion-godot/actor-evidence/
           if-no-files-found: error
           retention-days: 14
