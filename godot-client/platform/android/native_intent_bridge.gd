@@ -16,7 +16,9 @@ func _ready() -> void:
 func _initialize_android_runtime(runtime: Variant) -> void:
 	_android_runtime = runtime
 	_activity = null
-	if runtime == null or not runtime.has_method("getActivity"):
+	# AndroidRuntime is a JNISingleton: @UsedByGodot Java methods are not
+	# ClassDB methods, so Object.has_method("getActivity") always misses them.
+	if runtime == null or not runtime.has_method("has_java_method") or not runtime.has_java_method("getActivity"):
 		return
 	_activity = runtime.getActivity()
 
