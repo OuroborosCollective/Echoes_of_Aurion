@@ -14,7 +14,6 @@ jobs:
     timeout-minutes: 25
     env:
       AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
-      AURION_SMOKE_OUTPUT: ${{ runner.temp }}/aurion-jni-smoke
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,6 +31,7 @@ jobs:
       - name: Verify pinned build tools and existing Preview debug signer
         env:
           AURION_APK_OUTPUT: ${{ runner.temp }}/preview-debug-baseline
+          AURION_SMOKE_OUTPUT: ${{ runner.temp }}/aurion-jni-smoke
         run: |
           python3 scripts/godot/test_android_bridge_smoke.py
           node scripts/godot/bootstrap.mjs
@@ -44,6 +44,8 @@ jobs:
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name aurion-jni --package "system-images;android-35;google_apis;x86_64"
           "$ANDROID_HOME/emulator/emulator" -avd aurion-jni -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on -memory 2048 -cores 2 > "$RUNNER_TEMP/aurion-emulator.log" 2>&1 &
       - name: Run real JNI legacy RED, fixed warm return, duplicate and cold-start smoke
+        env:
+          AURION_SMOKE_OUTPUT: ${{ runner.temp }}/aurion-jni-smoke
         run: |
           export ADB="$ANDROID_HOME/platform-tools/adb"
           python3 - <<'PY'
