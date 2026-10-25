@@ -11,6 +11,7 @@ var last_connection := ""
 var last_generation := -1
 var last_error := ""
 var last_response: Dictionary = {}
+var debug_http_callbacks := 0
 
 class TestAuth:
 	extends Node
@@ -60,6 +61,10 @@ func _failed_callback(code: String, connection: String) -> void:
 func _init() -> void:
 	call_deferred("verify")
 
+func _on_raw_wire(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+	debug_http_callbacks += 1
+	print("G16_RAW_HTTP_CALLBACK=", debug_http_callbacks, " result=", result, " code=", code)
+
 func _request(api: Node, connection: String) -> void:
 	completed = false
 	succeeded = false
@@ -71,9 +76,9 @@ func _request(api: Node, connection: String) -> void:
 	if not started:
 		return
 	var started_at: int = Time.get_ticks_msec()
-	while not completed and Time.get_ticks_msec() - started_at < 6000:
+	while not completed and Time.get_ticks_msec() - started_at < 2500:
 		await process_frame
-	print("G16_GET_END=", connection, " completed=", completed, " success=", succeeded, " error=", last_error)
+	print("G16_GET_END=", connection, " completed=", completed, " success=", succeeded, " error=", last_error, " http_state=", (api.get_child(0) as HTTPRequest).get_http_client_status(), " callbacks=", debug_http_callbacks)
 	require(completed, "GET timeout for " + connection)
 	if not completed:
 		api.cancel()
@@ -85,6 +90,7 @@ func verify() -> void:
 	root.add_child(api)
 	await process_frame
 	var http: HTTPRequest = api.get_child(0)
+	http.request_completed.connect(_on_raw_wire)
 	require(http.max_redirects == 0 and http.timeout == 12.0 and http.body_size_limit == 1048576,
 		"GET allows redirect or unbounded response")
 
