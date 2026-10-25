@@ -1,7 +1,7 @@
 extends RefCounted
 ## Static Aurion quest NPC readmodel only: no v5 presence or gameplay authority.
 const STANDARD_SHA := "2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d34f3d94a0e64765cc"
-const STANDARD_ASSET := "glb_" + STANDARD_SHA.substr(0, 48)
+const STANDARD_ASSET := "glb_2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d3"
 const VERSION := "aurion.quest-npc-visuals.v1"
 const PREPARED_VERSION := "aurion.godot-prepared-assets.v1"
 var diagnostic := "npc_not_loaded"
