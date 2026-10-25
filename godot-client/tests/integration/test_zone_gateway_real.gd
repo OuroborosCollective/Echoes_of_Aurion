@@ -2,6 +2,14 @@ extends SceneTree
 ## G13: actual Godot WebSocketPeer against Aurion's real isolated Node gateway.
 ## Endpoint and one-use ticket are CI-process environment only, never printed.
 const Socket = preload("res://net/zone_socket.gd")
+const World = preload("res://projection/zone_state.gd")
+const Registry = preload("res://projection/entity_registry.gd")
+const Interpolator = preload("res://projection/snapshot_interpolator.gd")
+var world := World.new()
+var registry := Registry.new()
+var visual := Interpolator.new()
+var confirmed_receipt: Dictionary = {}
+var captured_ms := 0
 
 var failures: Array[String] = []
 var transport: Node
@@ -18,13 +26,45 @@ func _init() -> void:
 func _on_connected() -> void:
 	connected_count += 1
 
+func _on_welcome(welcome: Dictionary) -> void:
+	_require(world.apply_welcome(welcome), "projection rejected actual welcome")
+	_require(registry.sync(world), "registry rejected actual welcome")
+	_require(visual.capture(world, Time.get_ticks_msec()), "interpolator rejected actual welcome")
+
 func _on_snapshot(snapshot: Dictionary) -> void:
 	snapshot_count += 1
+	_require(world.apply_snapshot(snapshot), "projection rejected actual snapshot")
+	_require(registry.sync(world), "registry rejected actual snapshot")
+	captured_ms = Time.get_ticks_msec()
+	_require(visual.capture(world, captured_ms), "interpolator rejected actual snapshot")
 	for presence in snapshot.get("presences", []):
 		if typeof(presence) != TYPE_DICTIONARY:
 			continue
 		if presence.get("entityId") == expected_entity_id and presence.get("lastAcceptedClientSeq") == 1 and presence.get("position", {}).get("x", 0) > 0:
 			accepted_movement = true
+			confirmed_receipt = world.current_state()
+			# Read through the actual registry, not directly from the wire payload.
+			for category in Registry.CATEGORIES:
+				var records: Array = []
+				for id in registry.ids(category):
+					records.append(registry.record(category, id))
+				if category == "resources":
+					confirmed_receipt[category]["nodes"] = records
+				else:
+					confirmed_receipt[category] = records
+			var target := Vector2(presence["position"]["x"], presence["position"]["z"])
+			_require(Interpolator.WINDOW_MS == 100, "presentation contract must remain 100 ms")
+			_require(visual.visual_mm(expected_entity_id, captured_ms) != target, "moving presentation not separated from confirmed target")
+			_require(visual.visual_mm(expected_entity_id, captured_ms + 100) == target, "presentation exceeds 100 ms bound")
+			_require(visual.confirmed_mm(expected_entity_id) == presence["position"], "interpolation changed confirmed integer position")
+			var before := world.current_state()
+			_require(not world.apply_snapshot(snapshot), "real duplicate snapshot accepted")
+			var stale := snapshot.duplicate(true)
+			stale["snapshotSeq"] = int(snapshot["snapshotSeq"]) - 1
+			_require(not world.apply_snapshot(stale), "real stale snapshot accepted")
+			_require(world.current_state() == before, "rejected snapshot changed confirmed state")
+			_require(not registry.sync(world), "duplicate registry update accepted")
+			_require(not visual.capture(world, Time.get_ticks_msec()), "duplicate interpolation update accepted")
 
 func _on_closed(reason: String) -> void:
 	closed_reason = reason
@@ -46,6 +86,7 @@ func _verify() -> void:
 	transport = Socket.new()
 	root.add_child(transport)
 	await process_frame
+	transport.zone_welcome.connect(_on_welcome)
 	transport.zone_connected.connect(_on_connected)
 	transport.zone_snapshot.connect(_on_snapshot)
 	transport.zone_closed.connect(_on_closed)
@@ -77,10 +118,19 @@ func _verify() -> void:
 	_require(sent_move, "native Godot movement intent was not sent")
 	_require(accepted_movement, "Aurion did not confirm Godot movement")
 	_require(closed_reason.is_empty(), "Aurion session closed unexpectedly")
+	# Stop transport before waiting: the last confirmed target must settle and
+	# freeze even without another server packet; no extrapolated future state.
 	transport.close_zone()
+	await create_timer(float(Interpolator.WINDOW_MS + 30) / 1000.0).timeout
+	var confirmed := visual.confirmed_mm(expected_entity_id)
+	_require(not confirmed.is_empty(), "confirmed position absent after disconnect")
+	if not confirmed.is_empty():
+		_require(visual.visual_mm(expected_entity_id, Time.get_ticks_msec()) == Vector2(confirmed["x"], confirmed["z"]), "visual did not settle within bounded delay")
+		_require(visual.visual_mm(expected_entity_id, Time.get_ticks_msec() + 10000) == Vector2(confirmed["x"], confirmed["z"]), "visual extrapolated beyond confirmed state")
 	transport.queue_free()
 	await process_frame
 	if failures.is_empty():
+		print("G11_CONFIRMED_PROJECTION=" + JSON.stringify(confirmed_receipt))
 		print("G13_REAL_AURION_GATEWAY_GODOT_PASS")
 		quit(0)
 	else:

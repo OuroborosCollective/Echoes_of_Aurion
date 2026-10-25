@@ -91,7 +91,7 @@ function awaitAuthoritativeMovement(socket: WebSocket, entityId: string) {
   });
 }
 
-async function runActualGodot(url: string, ticket: string, entityId: string): Promise<void> {
+async function runActualGodot(url: string, ticket: string, entityId: string): Promise<Record<string, unknown>> {
   const project = resolve(process.cwd(), "godot-client");
   const script = resolve(project, "tests/integration/test_zone_gateway_real.gd");
   // RED precondition: the integration script must exist and use an actual Godot process.
@@ -136,6 +136,9 @@ async function runActualGodot(url: string, ticket: string, entityId: string): Pr
   expect(output.code, "G13_GODOT_PROCESS_FAILED: " + sanitized.slice(-4_000)).toBe(0);
   expect(sanitized).toContain("G13_REAL_AURION_GATEWAY_GODOT_PASS");
   expect(sanitized).not.toMatch(/SCRIPT ERROR:|\bERROR:/);
+  const receipts = sanitized.split("\n").filter(line => line.startsWith("G11_CONFIRMED_PROJECTION="));
+  expect(receipts, "G11_MISSING_OR_DUPLICATE_PROJECTION_RECEIPT").toHaveLength(1);
+  return JSON.parse(receipts[0].slice("G11_CONFIRMED_PROJECTION=".length));
 }
 
 suite("G13 Godot 4 process ↔ real Aurion gateway + isolated MariaDB", () => {
@@ -167,9 +170,36 @@ suite("G13 Godot 4 process ↔ real Aurion gateway + isolated MariaDB", () => {
       if (!address || typeof address === "string") throw Error("G13_GATEWAY_LISTEN_FAILED");
       const url = "ws://127.0.0.1:" + address.port + "/v1/ws";
       observerSocket = await openRealPeer(url, observer.ticket);
-      const movement = awaitAuthoritativeMovement(observerSocket, "player:" + godotUser);
-      await runActualGodot(url, issued.ticket, "player:" + godotUser);
-      const receipt = await movement;
+      // Independently capture the second client's actual wire snapshots before
+      // Godot connects. Compare one identical sequence, never two moving ticks.
+      const observed = new Map<number, Record<string, any>>();
+      observerSocket.on("message", raw => {
+        const frame = JSON.parse(raw.toString("utf8"));
+        if (frame.type !== "snapshot") return;
+        observed.set(frame.snapshotSeq, frame);
+        if (observed.size > 128) observed.delete(observed.keys().next().value!);
+      });
+      const [projection, receipt] = await Promise.all([
+        runActualGodot(url, issued.ticket, "player:" + godotUser),
+        awaitAuthoritativeMovement(observerSocket, "player:" + godotUser),
+      ]);
+      const sameSequence = observed.get(projection.snapshotSeq as number);
+      expect(sameSequence, "G11_SECOND_CLIENT_MISSING_SAME_SEQUENCE").toBeDefined();
+      const normalized = (frame: Record<string, any>) => ({
+        ...frame,
+        ...Object.fromEntries(["presences", "mobs", "combatants"].map(category => [
+          category, [...frame[category]].sort((a, b) => a.entityId.localeCompare(b.entityId)),
+        ])),
+        resources: { ...frame.resources, nodes: [...frame.resources.nodes]
+          .sort((a, b) => a.nodeId.localeCompare(b.nodeId)) },
+      });
+      expect(normalized(projection), "G11_CLIENT_PROJECTIONS_DIVERGED")
+        .toEqual(normalized(sameSequence!));
+      expect((projection.presences as unknown[]).length).toBe(2);
+      console.log("G11 same-sequence Godot registry / second-client readback: PASS, revision=" +
+        (process.env.AURION_RELEASE_SHA ?? "unbound") +
+        ", snapshotSeq=" + projection.snapshotSeq + ", tick=" + projection.tick +
+        ", visualDelayBoundMs=100, staleAndDuplicateRejected=true");
       expect(receipt.snapshotSeq).toBeGreaterThan(0);
       expect(receipt.tick).toBeGreaterThanOrEqual(0);
       const stored = await db.select().from(zoneConnectionTickets)

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { cp,mkdir,mkdtemp,readFile,rm,symlink,writeFile,lstat,rename,copyFile } from 'node:fs/promises';
+import { mkdir,mkdtemp,readFile,rm,symlink,writeFile,lstat,rename,copyFile } from 'node:fs/promises';
 import { join,resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { repo,root,executable,lock,digest,run } from './toolchain.mjs';
 import { androidReport } from './android-toolchain.mjs';
+import { stageAssetProject,includeAssetManifest,verifyStagedAssetImports,readApkAssets } from './export-assets.mjs';
 import { inspectLoginGradleSdk,verifyGodotGradleVersions } from './gradle-prerequisites.mjs';
 import { stageGodotGradleBuild } from './android-gradle-link.mjs';
 import { createLoginPreset,validateSignerConfig,verifySignerOnDisk,validateLoginArtifact,validateLoginManifest,loginPackage } from './login-gradle-export.mjs';
@@ -49,9 +50,9 @@ async function loginExport(env, unsigned) {
  const job=await mkdtemp(join(root,'signed-login-'));
  try {
   const project=join(job,'project');
-  await cp(join(repo,'godot-client'),project,{recursive:true,filter:p=>!p.split('/').includes('.godot')});
+  const prepared=await stageAssetProject(project,revision);
   const original=await readFile(join(project,'export_presets.cfg'),'utf8');
-  const preset=createLoginPreset(original);
+  const preset=includeAssetManifest(createLoginPreset(original));
   await writeFile(join(project,'export_presets.cfg'),unsigned ? preset.replaceAll('package/signed=true','package/signed=false') : preset,{mode:0o600});
   await writeFile(join(project,'override.cfg'),createLoginOverride(revision),{mode:0o600});
   await stageGodotGradleBuild({archive,project,version});
@@ -68,6 +69,7 @@ async function loginExport(env, unsigned) {
    const result=spawnSync(executable,['--headless','--path',project,...args],{env:buildEnv,encoding:'utf8',timeout,maxBuffer:8*1024*1024});
    if(unsigned) await writeFile(join(request.outputDirectory,label+'.log'),(result.stdout||'')+(result.stderr||''));
    assert.ok(!result.error&&result.status===0,'Godot '+label+' failed; no release published');
+   if(label==='import') await verifyStagedAssetImports(project,prepared,buildEnv);
   }
   const tools=join(request.sdkRoot,'build-tools',versions.buildTools);
   const badging=checked(join(tools,'aapt'),['dump','badging',apk],buildEnv);
@@ -80,13 +82,15 @@ async function loginExport(env, unsigned) {
    await writeFile(join(request.outputDirectory,'manifest.log'),manifest);
   } else signature=checked(join(tools,'apksigner'),['verify','--verbose','--print-certs',apk],buildEnv);
   const entries=run('unzip',['-Z1',apk]).split('\n');
+  const packagedAssets=readApkAssets(apk,prepared,entries);
   const identity=unsigned ? validateLoginManifest({badging,manifest,entries}) : validateLoginArtifact({badging,manifest,signature,entries,expectedFingerprint:signer.expectedFingerprint});
   assert.match(manifest,/screenOrientation.*0x0/);
   const packed=checked('unzip',['-p',apk,'assets/override.cfg'],buildEnv);
   assertPackagedBuildRevision(packed,revision);
   const association=await verifyLiveAssetlinks({packageName:loginPackage,fingerprint:signer?.expectedFingerprint || env.AURION_LOGIN_SIGNER_SHA256});
   assert.equal((await androidReport()).treeSha256,baseline.treeSha256,'Preview SDK changed');
-  const evidence={schemaVersion:1,sourceRevision:revision,apkSha256:await digest(apk),packageName:identity.packageName,signerSha256:signer?.expectedFingerprint || null,signingState:unsigned?'unsigned':'verified',assetlinks:association,device:'unverified',toolchainLockSha256:await digest(join(repo,'config/godot-toolchain.lock.json'))};
+  const evidence={schemaVersion:1,sourceRevision:revision,packagedAssets,apkSha256:await digest(apk),packageName:identity.packageName,signerSha256:signer?.expectedFingerprint || null,signingState:unsigned?'unsigned':'verified',assetlinks:association,device:'unverified',toolchainLockSha256:await digest(join(repo,'config/godot-toolchain.lock.json'))};
+  console.log(JSON.stringify({sourceRevision:revision,packagedAssets}));
   const staging=await mkdtemp(join(request.outputDirectory,'.signed-login-'));
   try {
    await copyFile(apk,join(staging,LOGIN_APK_FILENAME));

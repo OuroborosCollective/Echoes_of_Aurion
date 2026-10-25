@@ -4747,6 +4747,66 @@ Erkenntnis: Der falsche Object-Methodenguard ist in APK `9e8c8593` und Basis `24
 Evidence: Kausales RED `efc1b38f018896559880bcfeab7b8f01460a4ab5`; danach lokal Godot 4.6.3: acht Headless-Skripte sowie HTTP-Start/Exchange/Refresh/Logout bestanden, 16 Node-Vertragsprüfungen bestanden. JNI-artige Fixture prüft Initialisierung, warmen Rücksprung, UI-Austausch und Replay; kein Android-Gerätebeleg. Gepinnte 4.7.2-/APK-CI und Tab-A9-Login bleiben bis echtem Readback UNVERIFIED. Neue APK erforderlich; Prozessverlust bleibt separate Diagnose.
 CI-Erkenntnis: Godot 4.7.2 auf `b66ca87c` bestand Run 40080109327; Run 40080109393 verifizierte die Login-APK, scheiterte danach mit ENOTEMPTY im temporären Gradle-Verzeichnis. Begrenzte Node-Löschwiederholungen beheben das separat reproduzierte Rennen; dauerhaft konkurrierende Schreibzugriffe bleiben Fehler. Finaler Head wird erneut vollständig geprüft.
 
+### 2026-10-24 — G14 Originalmodelle für die 3D-Spielwelt
+Änderung: Zwölf Original-GLBs sind mit Content-IDs, kanonischen Zuordnungsquellen und Herkunft inventarisiert; Godot prüft Geometrie, Materialien, Bones, Transformtreue und Bewegung aller 16 Clips. Die Punktkarte bleibt nur früher Verbindungsnachweis; Ziel ist die echte 3D-Welt samt Aurion-Authoring.
+Erkenntnis: Clipnamen und automatisch gerahmte Bilder reichen nicht. Statische Clips, falsche Quellhashes und Transformdrift müssen scheitern; nichttriviale Testhierarchien prüfen Rotation/Skalierung auch bei identischen Originalmatrizen.
+Evidence: Codehead `3a89b4c92eff83d4bd95917b752b5aa7cf9fd3d7`, echter Godot-4.7.2-Import-/Software-Renderlauf 40088742243 und unabhängig heruntergeladenes Artefakt 12558410719 (ZIP SHA256 `7b2ccbe882d06c235065d604a44c86a65df48e6cf829a951c0de80d979e3ca16`, 14 PNG-Hashes geprüft). Lokale Erweiterung `b4e06e09` bestätigt die synthetische Transformhierarchie. Finaler Memory-Head wird erneut vollständig geprüft; Live-3D-Welt und Android-Leistung bleiben offen.
+
+### 2026-10-24 — G15 deterministische Godot-Asset-Ausgaben
+Änderung: Die zwölf G14-geprüften Original-GLBs erhalten einen fail-closed, byteidentischen Godot-Kompatibilitätszweig mit nicht verlinkten content-adressierten Outputs sowie vollständig quellgebundener Asset-Governance; Originale und Web-Shipping bleiben unverändert.
+Erkenntnis: Bytegleichheit allein belegt keine unabhängige Generated-Schicht: Runtime-Evidence muss zusätzlich Dateityp, Realpfad und sämtliche Governance-Metadaten gegen den auditierten Quellrecord prüfen.
+Evidence: Codehead `a50511ecb14a3f121064e3e4785ec87414a16a80`; alle neun Workflows grün, darunter 40098042828 mit zwei stabilen Vorbereitungen, Symlink- und Governance-Negativkontrollen, 12 Hashgleichheiten, Godot-4.7.2-Import von 16 bewegten Clips und llvmpipe-Render. Finaler Memory-Head wird erneut vollständig geprüft.
+
+### 2026-10-24 — G11 bounded confirmed map-marker interpolation (PR #1155)
+Change: The active Godot map now renders and hit-tests confirmed player and mob markers through the existing 100 ms snapshot interpolator while preserving raw integer-mm Aurion records for inspection and local plans.
+Learned: Capturing interpolation without feeding its visual positions into the map leaves a real runtime integration gap; marker presentation needs a separate visual cache so smoothing cannot mutate confirmed truth.
+Evidence: Regression-only head `ed5e67e4b292e679988bcd65676ffdcb1d4c9940` failed causally at missing `marker_screen()` in Godot run 40106349849/job 120908725113; verified code head `4f5352c2e4a1f1ff7efbcec5c26f35bd298d57c7` passed the pinned Godot 4.7.2 active-scene/runtime/software-render run 40106478690 and 3D asset audit 40106478688. Final Memory-bearing head is re-gated before merge.
+
+
+### 2026-10-24 — G15 geprüfte 3D-Modelle in beiden Android-Exporten (PR #1156)
+Änderung: Preview und Login bereiten alle zwölf Originalmodelle vor jedem frischen Export automatisch auf, laden die importierten PackedScenes mit Godot und prüfen Manifest sowie exakt diese SCN-Bytes anschließend im APK; Signieridentität und App-Link-Vertrag bleiben unverändert.
+Erkenntnis: Ein erfolgreicher Quellimport garantiert kein APK-Asset. Godot exportiert GLB-Zuordnungen als `.glb.import`; Präsenz oder ein gültiger Dateikopf allein belegen keine korrekte Modellzuordnung.
+Evidence: Kausales RED `1309b3b4029c8d3b60ee338c7050b914d3b8b2a3`, Run 40106978837/Job 120910587582 (`PACKAGED_ASSET_MANIFEST_MISSING`). Codehead `091ed1e21bc17a356904b4ca033b169eee81b258`, APK-Run 40107803692/Job 120913019393: 40 Regressionen, zwei frische Imports mit je zwölf Modellressourcen und 16 bewegten Clips, gleiche Manifest-SHA256 `280631abddea6904bffa5cad22933b8054aedd86d3f2dbb63682e817f1c1760b`. Finaler Memory-Head wird erneut vollständig geprüft; Live-3D-Welt, produktive Neusignierung und Geräteleistung bleiben offen.
+
+
+### 2026-10-24 — G11 sequenzgleicher Mehrclient-Projektionsnachweis (PR #1158)
+Änderung: Der echte Godot/Gateway/MariaDB-Test durchläuft nun ZoneState, EntityRegistry und SnapshotInterpolator; sein bestätigter Zustand wird einschließlich aller Entitätskategorien mit dem unabhängig empfangenen Snapshot des zweiten Clients derselben Sequenz verglichen.
+Erkenntnis: Zwei beobachtete Bewegungen belegen noch keine identischen Projektionen. Die 100-ms-Darstellungsgrenze braucht eine eigene Assertion am tatsächlichen Empfangszeitpunkt; ein später Endpunktvergleich allein reicht nicht.
+Evidence: Lokal mit gepinntem Godot 4.7.2: Import, Skriptprüfung und bestehende Registry-/Interpolationstests bestanden. Beide unabhängigen Reviews sind nach expliziter Prüfung der 100-ms-Grenze ohne verbleibenden Befund. Codehead `30ade9a0452ce87a91e7ad0d3f694719ac8b0b2a`; finaler Memory-Head benötigt den vollständigen isolierten Gateway-/MariaDB-Lauf und sämtliche zugehörigen CI-Gates vor Merge. Dies ist kein Produktions-, Geräte- oder Live-3D-Nachweis.
+
+
+### 2026-10-24 — G11 bestätigte Self-Presence im Welcome (PR #1157)
+Änderung: Der Godot-v5-Decoder akzeptiert einen authentifizierten Welcome nur, wenn dessen `selfEntityId` auch als bestätigte Presence enthalten ist; sonst entsteht kein verbundener Projektionszustand.
+Erkenntnis: Eine formal gültige Self-ID reicht nicht, weil Karte und Positionsprojektion den eigenen bestätigten Presence-Datensatz benötigen; Runtime-Fixtures müssen dieselbe Join-Invariante wie Aurions `zoneRuntime` abbilden.
+Evidence: Kausales RED `bdf760b07b0f7ddf1c68186566dfd1259cc0f3c2`, Run 40111150094/Job 120922955998; verifizierter Codehead `077b0caf17b78b37861385d5074514128fa46839` bestand Godot-4.7.2-WebSocket-/Szenen-/Software-Render 40111832038, beide Android-APK-Exporte 40111832027 und 3D-Audit 40111832041. Finaler rebased Memory-Head wird erneut exakt geprüft.
+
+### 2026-10-24 — G16 bestätigte 3D-Figuren als Darstellungsbaustein (PR #1160)
+Änderung: Ein wiederverwendbarer Godot-Actor bindet bestätigte Entity-IDs an explizit übergebene Katalogmodelle, projiziert Positionen getrennt von Bones/Root-Animation und behandelt Idle/Walk/Tod, Despawn und Sitzungswechsel ohne Gameplay- oder Auswahlmutation.
+Erkenntnis: Erfolgreiche Wiederherstellung muss auch bei gleicher Pose alte Diagnosen löschen; Sitzungs-/Sequenztests brauchen sonst identische Zustände. Ein fehlgeschlagener Headless-Lauf muss ebenfalls nachgelagerte Renderbelege entfernen.
+Evidence: Codehead `52ef7849c94babe64f8f7abc075e19a4eea43d77`, tatsächlicher Godot-4.7.2-/llvmpipe-Lauf 40117220212, Artefakt 12570391196 unabhängig heruntergeladen (ZIP SHA256 `b4558eb2ae3a9bc9ef1748f53fd6c548f28876a6e8a57eece10c098d2e268cda`, Bild `2914e24cb78cdc2b3fbcfc90668c6eafcd4eca3a864743b49d9f56d5c8683a0e` visuell geprüft). Lokale kausale Negativkontrollen für Sitzung, Sequenz und Diagnose sowie ergänzte Prozessregression für veraltete Evidence bestanden. Finaler Memory-Head wird erneut geprüft. Protokoll-Fixtures mit echten Modellen; Live-Zuordnung, aktive 3D-Spielwelt, Angriff/Equipment/LOD und Geräteleistung bleiben offen.
+
+### 2026-10-25 — G16 freigegebene Selbstfigur in nativer 3D-Szene (PR #1163)
+Änderung: Schmale native Godot-3D-Szene bindet den eigenen serverbestätigten Actor über eine schreibgeschützte, generationsgesicherte Session-Abfrage an einen freigegebenen Katalogeintrag und ein hashgleiches G15-GLB; neutraler Vorschau-Boden folgt nur der visuellen Spielerposition und wird beim Sitzungswechsel zurückgesetzt.
+Erkenntnis: Katalog-ID und lokale GLB-Datei-ID dürfen abweichen; Gesamtrender können Testfiguren enthalten. Der zunächst hängende HTTP-Test hatte unverdrahtete Testsignale; ein ferner Spieler ließ den Neutralboden am Ursprung zurück. Weder Fixtures noch unsigned APK belegen Live-Gameplay oder Gerät.
+Evidence: Kausale RED-Läufe 40145458865 (Resolver) und 40149025949 (Boden); Codehead 003bd4c8c6a5be648a79cebdd71218b04361dba0, Godot-4.7.2-/llvmpipe-Lauf 40149084983, Artefakt 12581366707 (ZIP SHA256 da97e61efc9a7880ab906aaa51defdef4c201694084efd0b6ce68f29c9767ed8; isolierter Viewport SHA256 0fc22c39e4df503fa87d01541600da0394e3a1ee2ba80e7bdd1b90424e68fbe8). Alle acht Head-CI-Workflows grün nach gezieltem Android-Retry 40149084963/2; tatsächlicher unsigned Login-APK SHA256 edd710d7e5fd97ae05e0229422ca4e4309840e07776307b17b198c2f389d4d55, DAL-Readback verifiziert. Live-Zuordnung, Gerätestart, Signierung und unabhängige Reviews weiterhin offen; finaler Memory-Head erneut zu prüfen.
+
+### 2026-10-25 — G16 Session-Kamera, Stale-HUD und Viewport-Renderwache (PR #1167)
+Änderung: Godot setzt beim Aurion-Sitzungsreset Kamera und Neutralboden zurück, aktualisiert den 3D-Stale-Status auch ohne geladenes Modell und begrenzt verstecktes SubViewport-Rendering auf sichtbarkeitsabhängige Frames. Keine Änderung an Core, Tick oder Persistenz.
+Erkenntnis: Die echte Szene behielt zuvor die alte Kameraposition; ohne Actor blieb das sichtbare HUD trotz veralteter Welt frisch; das versteckte Viewport-Target renderte ungebremst. Der Godot-Viewport-Modus ist nach Szenenstart explizit zu setzen.
+Evidence: Kausaler RED im Godot-4.7.2-Actor-Lauf 40214828986 (alle drei Assertions) nach Parserbereinigung; GREEN-Codehead 8a8f6d18629d9e9377e9ad6211f85efd80c137a0, echter GLB-Import/Actor/llvmpipe-Render 40215074542 PASS. Finaler Memory-Head benötigt seine eigenen CI-/Artefakt-Readbacks; keine Geräte- oder Live-Welt-Abnahme.
+
+### 2026-10-25 — Zone-Tick-Watermarks ohne pro-Tick-Map-Neuanlage (PR #1168)
+Änderung: Verwendet die actionSequenceWatermarks-Map innerhalb einer Aurion-Zone wieder und füllt sie pro Tick aus den sortierten Peers erneut; unverknüpfte BVH-Benchmarkzahlen und Bot-Memory-Änderungen wurden aus dem PR-Diff entfernt.
+Erkenntnis: Tick und kanonische Sequenz bleiben autoritativ; die Map muss in jedem Tick vollständig geleert werden. Eine gemessene CPU-/GC-Verbesserung liegt nicht vor, nur die entfallende Quellcode-Allokationsstelle.
+Evidence: Codehead 3886633b554e1f38f8b19887a0a7044e90daabd3, zugehörige GitHub-Action-Runs 40218642017/40218641931/40218641965/40218641987/40218641957/40218641950/40218641947/40218641958: acht relevante CI-Läufe PASS. Der finale Memory-tragende PR-Head braucht zusätzlich eigenen CI- und GitHub-Readback; keine Produktionsmessung.
+
+
+### 2026-10-25 — Home- und Community-Zugaenglichkeit (PR #1162)
+Änderung: Leicht bedienbare, fokussierbare Home-CTAs und eine Rangliste-Community-Kachel, bei Wahrung bestehender Events und Typnamen; fremde BVH-Receipts und Bot-Notiz nicht uebernommen.
+Erkenntnis: UI-Verbesserungen duerfen keine Runtime-/Gameplay-Autoritaet erzeugen; reale Browser-Regressionspruefung und finaler Main-Readback sind Pflicht.
+Evidence: Vorheriger PR-Head 0c0dd5a8a74f6d7e5e5aa54d2e0376e16eff0e9b mit 7/7 CI-PASS. Neu synchronisierter Head muss seine eigenen CI-Gates bestehen.
+
+
 ### 2026-10-24 — G09 echter Android-JNI-Runner-Smoke
 Änderung: Isolierte x86_64-Debug-APKs prüfen echte AndroidRuntime/JNI-Initialisierung, Browser-Rücksprung, frische Intent-Acks und Cold-Start. Nur die Smoke-Kopie nutzt Loopback ohne INTERNET oder produktive Domainfilter; die freigegebene /dev/kvm-ACL gilt allein dem kurzlebigen Runnerkonto.
 Erkenntnis: Desktop-/Exporttests verdeckten JNI; unterschiedliche AVD-Suchpfade blockierten den ersten Boot. Wiederholungsdiagnose 40084889747 zeigte Chrome-FRE, dann Browser ohne erwarteten Seitenabruf: APK und Treiber öffneten konkurrierende URLs. Nun startet ausschließlich die APK die variantenspezifische Seite; der Treiber verlangt denselben frischen Abruf und Vordergrundbrowser, ohne zweite Navigation.

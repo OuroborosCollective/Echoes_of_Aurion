@@ -1,0 +1,158 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, relative, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { inspectGlb, inventory } from './audit-assets.mjs';
+import { repo } from './toolchain.mjs';
+
+const DEFAULT_OUTPUT = resolve(repo, 'godot-client/assets/generated');
+const TEST_OUTPUT_ROOT = resolve(repo, '.aurion-godot');
+const PROFILE_PATH = resolve(repo, 'godot-client/assets/import_profiles.json');
+
+export function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+export function requireCleanSourceInventory(sourceInventory) {
+  assert.equal(sourceInventory.workingTreeClean, true, 'SOURCE_WORKTREE_DIRTY');
+}
+
+export function assertPreparedRecord(prepared, original, outputRoot = 'godot-client/assets/generated') {
+  assert.equal(prepared.path, `${outputRoot}/${original.assetId}.glb`, 'PREPARED_ASSET_PATH');
+  assert.equal(prepared.sourcePath, original.path, 'PREPARED_SOURCE_PATH');
+  assert.equal(prepared.sourceSha256, original.sha256, 'PREPARED_SOURCE_HASH');
+  assert.equal(prepared.outputSha256, original.sha256, 'PREPARED_OUTPUT_HASH');
+  const generatedFields = ['sourcePath', 'sourceSha256', 'outputSha256', 'profileId', 'profileHash'];
+  assert.deepEqual(
+    Object.keys(prepared).sort(),
+    [...Object.keys(original), ...generatedFields].sort(),
+    'PREPARED_RECORD_FIELDS_CHANGED',
+  );
+  for (const [key, value] of Object.entries(original)) {
+    if (key !== 'path') assert.deepEqual(prepared[key], value, `PREPARED_${key.toUpperCase()}_CHANGED`);
+  }
+}
+
+export async function assertPreparedOutputFile(prepared, outputRoot = 'godot-client/assets/generated') {
+  const root = resolve(repo, outputRoot);
+  const path = resolve(repo, prepared.path);
+  assert.equal(dirname(path), root, 'PREPARED_ASSET_PARENT');
+  const rootStat = await lstat(root);
+  assert.equal(rootStat.isSymbolicLink(), false, 'PREPARED_OUTPUT_ROOT_SYMLINK');
+  assert.equal(rootStat.isDirectory(), true, 'PREPARED_OUTPUT_ROOT_NOT_DIRECTORY');
+  assert.equal(await realpath(root), root, 'PREPARED_OUTPUT_ROOT_ESCAPES_REPOSITORY');
+  const pathStat = await lstat(path);
+  assert.equal(pathStat.isSymbolicLink(), false, 'PREPARED_ASSET_SYMLINK');
+  assert.equal(pathStat.isFile(), true, 'PREPARED_ASSET_NOT_FILE');
+  assert.equal(await realpath(path), path, 'PREPARED_ASSET_ESCAPES_OUTPUT');
+}
+
+function repositoryPath(path) {
+  const value = relative(repo, path).split(sep).join('/');
+  assert.ok(value && value !== '..' && !value.startsWith('../'), 'OUTPUT_OUTSIDE_REPOSITORY');
+  return value;
+}
+
+async function validateOutputDirectory(output) {
+  const testOutput = resolve(TEST_OUTPUT_ROOT, 'prepare-assets-test');
+  assert.ok(output === DEFAULT_OUTPUT || output === testOutput, 'OUTPUT_DIRECTORY_NOT_ALLOWED');
+  const trustedParent = output === DEFAULT_OUTPUT ? dirname(DEFAULT_OUTPUT) : TEST_OUTPUT_ROOT;
+  await mkdir(trustedParent, { recursive: true });
+  const parentStat = await lstat(trustedParent);
+  assert.equal(parentStat.isSymbolicLink(), false, 'OUTPUT_PARENT_SYMLINK');
+  assert.equal(parentStat.isDirectory(), true, 'OUTPUT_PARENT_NOT_DIRECTORY');
+  assert.equal(await realpath(trustedParent), trustedParent, 'OUTPUT_PARENT_ESCAPES_REPOSITORY');
+  try {
+    const outputStat = await lstat(output);
+    assert.equal(outputStat.isSymbolicLink(), false, 'OUTPUT_SYMLINK');
+    assert.equal(outputStat.isDirectory(), true, 'OUTPUT_NOT_DIRECTORY');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+}
+
+function validateProfiles(document) {
+  assert.equal(document.schemaVersion, 'aurion.godot-import-profiles.v1', 'PROFILE_SCHEMA');
+  assert.ok(document.profiles && typeof document.profiles === 'object', 'PROFILES_REQUIRED');
+  assert.ok(document.profiles[document.defaultProfile], 'DEFAULT_PROFILE_REQUIRED');
+  for (const [id, profile] of Object.entries(document.profiles)) {
+    assert.match(id, /^[a-z0-9-]+$/, 'PROFILE_ID');
+    assert.equal(profile.operation, 'byte-exact-copy', 'UNVERIFIED_PROFILE_OPERATION');
+    assert.equal(profile.requiredExtensions, 'reject', 'REQUIRED_EXTENSION_POLICY');
+    assert.equal(profile.compression, 'none', 'UNVERIFIED_COMPRESSION');
+    assert.equal(profile.scale, 1, 'UNVERIFIED_SCALE');
+    assert.equal(profile.axes, 'source', 'UNVERIFIED_AXES');
+    assert.equal(profile.pivot, 'preserve', 'UNVERIFIED_PIVOT');
+    assert.ok(Array.isArray(profile.preserve) && profile.preserve.includes('animations') && profile.preserve.includes('skins'), 'PRESERVATION_POLICY');
+  }
+  return document;
+}
+
+async function atomicWrite(path, bytes) {
+  const temporary = `${path}.tmp-${process.pid}`;
+  await writeFile(temporary, bytes);
+  await rename(temporary, path);
+}
+
+export async function prepareAssets({ outputDirectory = DEFAULT_OUTPUT } = {}) {
+  const output = resolve(outputDirectory);
+  repositoryPath(output);
+  await validateOutputDirectory(output);
+  const [sourceInventory, profileBytes] = await Promise.all([
+    inventory(),
+    readFile(PROFILE_PATH),
+  ]);
+  const profiles = validateProfiles(JSON.parse(profileBytes));
+  requireCleanSourceInventory(sourceInventory);
+  await rm(output, { recursive: true, force: true });
+  await mkdir(output, { recursive: true });
+  const prepared = [];
+  const outputNames = new Set();
+  for (const source of sourceInventory.sources) {
+    const profileId = profiles.roleProfiles[source.role] ?? profiles.defaultProfile;
+    const profile = profiles.profiles[profileId];
+    assert.ok(profile, `PROFILE_MISSING: ${source.role}`);
+    assert.deepEqual(source.extensionsRequired, [], `REQUIRED_GLTF_EXTENSION: ${source.path}`);
+    const sourceBytes = await readFile(resolve(repo, source.path));
+    assert.equal(sha256(sourceBytes), source.sha256, `SOURCE_HASH_CHANGED: ${source.path}`);
+    const outputName = `${source.assetId}.glb`;
+    assert.equal(outputNames.has(outputName), false, `DUPLICATE_OUTPUT: ${outputName}`);
+    outputNames.add(outputName);
+    const outputPath = resolve(output, outputName);
+    await atomicWrite(outputPath, sourceBytes);
+    const outputBytes = await readFile(outputPath);
+    const outputInspection = inspectGlb(outputBytes);
+    assert.equal(outputInspection.sha256, source.sha256, `OUTPUT_HASH_CHANGED: ${source.path}`);
+    for (const key of ['bytes', 'triangles', 'meshes', 'materials']) assert.equal(outputInspection[key], source[key], `OUTPUT_${key.toUpperCase()}_CHANGED: ${source.path}`);
+    assert.deepEqual(outputInspection.skins, source.skins, `OUTPUT_SKINS_CHANGED: ${source.path}`);
+    assert.deepEqual(outputInspection.animations, source.animations, `OUTPUT_ANIMATIONS_CHANGED: ${source.path}`);
+    prepared.push({
+      ...source,
+      path: repositoryPath(outputPath),
+      sourcePath: source.path,
+      sourceSha256: source.sha256,
+      outputSha256: outputInspection.sha256,
+      profileId,
+      profileHash: sha256(Buffer.from(JSON.stringify(profile))),
+    });
+  }
+  const manifest = {
+    schemaVersion: 'aurion.godot-prepared-assets.v1',
+    sourceRevision: sourceInventory.sourceRevision,
+    sourceManifestHash: sha256(await readFile(resolve(repo, 'godot-client/assets/catalog/source-manifest.json'))),
+    toolchainHash: sourceInventory.toolchainHash,
+    profileDocumentHash: sha256(profileBytes),
+    outputMode: 'byte-exact-compatible-copy',
+    sources: prepared,
+    truthNotice: 'Generated compatibility outputs only. No live assignment, gameplay authority, compression, simplification or physical-device claim.',
+  };
+  const manifestPath = resolve(output, 'manifest.json');
+  await atomicWrite(manifestPath, Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`));
+  return { manifest, manifestPath };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  const { manifest, manifestPath } = await prepareAssets();
+  console.log(JSON.stringify({ manifest: repositoryPath(manifestPath), assets: manifest.sources.length, profileDocumentHash: manifest.profileDocumentHash }));
+}

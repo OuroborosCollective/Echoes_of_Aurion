@@ -256,7 +256,7 @@ func verify() -> void:
 	require(not transport.send_attack("mob_12"), "attack sent before verified welcome")
 	require(not transport.send_skill("k_strike", "mob_12"), "skill sent before verified welcome")
 
-	var welcome = {"type":"welcome","protocolVersion":5,"zoneId":"observatory_threshold","connectionId":"zone_peer_abcdefghijklmnop","selfEntityId":"player:1","snapshotSeq":0,"tick":0,"presences":[],"mobs":[],"combatants":[],"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":[]}}
+	var welcome = {"type":"welcome","protocolVersion":5,"zoneId":"observatory_threshold","connectionId":"zone_peer_abcdefghijklmnop","selfEntityId":"player:1","snapshotSeq":0,"tick":0,"presences":[{"entityId":"player:1","userId":1,"position":{"x":0,"z":0},"lastAcceptedClientSeq":0}],"mobs":[],"combatants":[{"entityId":"player:1","health":20,"maxHealth":20,"stamina":10,"maxStamina":10,"alive":true,"combatLevel":1,"lastCombatSequence":0}],"resources":{"contractVersion":1,"contentSourceRevision":"286c575d3d0050ffa77b794d5b7a7e24858acee8","revision":1,"nodes":[]}}
 	require(not Codec.is_valid_welcome(welcome), "incomplete resources accepted as authoritative welcome")
 	# P1: real wire JSON is parsed through JSON.parse_string, not hand-built integer variants.
 	var nodes: Array[Dictionary] = []
