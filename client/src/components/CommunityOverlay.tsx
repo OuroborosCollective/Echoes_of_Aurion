@@ -1,11 +1,11 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
-import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, UsersRound, X } from "lucide-react";
+import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, Trophy, UsersRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { soundSynth } from "../xaurion/audio/SoundSynthesizer";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues" | null;
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues" | "leaderboard" | null;
 type ForumCategory = "announcements" | "patch_notes" | "events" | "general" | "issues";
 
 function participantName(name: string | null, userId: number): string {
@@ -51,7 +51,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
       const requested = (event as CustomEvent<unknown>).detail;
       if (!requested || typeof requested !== "object" || !("panel" in requested)) return;
       const value = String(requested.panel);
-      const mapped: CommunityPanel = value === "events" ? "events" : value === "chat" || value === "forum" || value === "assets" || value === "guild" || value === "issues" ? value : null;
+      const mapped: CommunityPanel = value === "events" ? "events" : value === "chat" || value === "forum" || value === "assets" || value === "guild" || value === "issues" || value === "leaderboard" ? value : null;
       if (!mapped) {
         setMessage("Diese Funktion gehört nicht zur Aurion-Communityfläche und wird hier nicht ausgeführt.");
         return;
@@ -81,6 +81,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
   const thread = trpc.community.forum.get.useQuery({ threadId: selectedThreadId ?? "thread_unselected" }, { enabled: Boolean(selectedThreadId) });
   const publicAssets = trpc.assetSubmissions.publicCatalog.useQuery(undefined, { enabled: panel === "assets" });
   const guild = trpc.guild.mine.useQuery(undefined, { enabled: isAuthenticated && panel === "guild", retry: false });
+  const leaderboard = trpc.leaderboard.publicList.useQuery({ limit: 25 }, { enabled: panel === "leaderboard" });
 
   const sendChat = trpc.community.chat.send.useMutation({ onSuccess: async () => { setChatBody(""); await utils.community.chat.list.invalidate(); }, onError: () => setMessage("Der Funkspruch konnte nicht bestätigt gespeichert werden.") });
   const createQuestion = trpc.community.forum.createQuestion.useMutation({ onSuccess: async result => { setQuestionTitle(""); setQuestionBody(""); setSelectedThreadId(result.id); setForumCategory("general"); await utils.community.forum.list.invalidate({ category: "general" }); }, onError: () => setMessage("Die Forumsfrage konnte nicht bestätigt gespeichert werden.") });
@@ -97,7 +98,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
     restoreFocus();
   };
 
-  const panelTitle = panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : "Öffentlicher Asset-Katalog";
+  const panelTitle = panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : panel === "leaderboard" ? "Saison-Rangliste" : "Öffentlicher Asset-Katalog";
 
   const overlay = <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18}/><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
@@ -124,6 +125,10 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         soundSynth.playUiClick();
         openPanel("assets");
       }} aria-label="Asset-Katalog öffnen"><Box size={16}/><span>ASSETS</span></button>
+      <button type="button" aria-pressed={panel === "leaderboard"} className={panel === "leaderboard" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
+        soundSynth.playUiClick();
+        openPanel("leaderboard");
+      }} aria-label="Rangliste öffnen"><Trophy size={16}/><span>RANGLISTE</span></button>
     </div>
 
     {message && !panel && <p className="community-feedback"><BellRing size={13}/>{message}</p>}
@@ -151,6 +156,8 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         {panel === "guild" && <div className="community-partners">{guild.data ? <div className="community-team-card"><p><UsersRound size={16}/> READ-ONLY GILDE</p><strong>{guild.data.guild.name} [{guild.data.guild.tag}]</strong><span>Rolle: {guild.data.membership.role}</span><span>Keine Gründung, Bank, Gebäude, Governance oder Gameplay-Mutation auf dieser Aurion-Fläche.</span></div> : <p className="community-empty">Keine bestätigte aktive Gildenzugehörigkeit.</p>}</div>}
 
         {panel === "assets" && <div className="community-assets"><p className="community-empty">Öffentlicher Aurion-Katalog · nur lesend. Upload, Auswahl und Ausrüstung erfolgen nicht über diese Communityfläche.</p><div className="market-inventory">{publicAssets.data?.map(asset => <article key={asset.id} className="market-item"><header><b>{asset.displayName}</b><span>{asset.assetType}</span></header><p>{asset.description || asset.subcategory || "Freigegebenes Community-Asset"}</p></article>)}{!publicAssets.isLoading && !publicAssets.data?.length && <p className="community-empty">Noch keine öffentlichen Assets.</p>}</div></div>}
+
+        {panel === "leaderboard" && <div className="community-assets"><p className="community-empty">Sortiert nach bestätigten Saisonpunkten, Siegen und Stufe.</p><div className="market-inventory">{leaderboard.data?.map(entry => <article key={entry.rank} className="market-item"><header><b><span style={{ color: "rgba(34,211,238,1)", marginRight: "8px" }}>{entry.rank}</span>Platz {entry.rank}</b><span>Stufe {entry.level}</span></header><p style={{ color: "rgba(251,191,36,1)" }}>{entry.seasonPoints} SP · <span style={{ color: "inherit", opacity: 0.7 }}>{entry.victories} Siege</span></p></article>)}{!leaderboard.isLoading && !leaderboard.data?.length && <p className="community-empty">Noch keine bestätigten Expeditionswerte.</p>}</div></div>}
       </motion.section>}
     </AnimatePresence>
   </aside>;

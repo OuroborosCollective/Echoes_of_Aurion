@@ -4494,3 +4494,314 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-22 — PR #1117 — bounded owner approval notification
+Change: Extended admin preflight wait to configurable 2400 seconds with one best-effort HTTPS ntfy notice, full SHA/Run-ID and unchanged gameplay readiness/explicit approval guards.
+Learned: Replacing the supplied probe client outright would remove existing gameplay-readiness functions; integration must be additive.
+Evidence: Local Node tests 23/23 PASS; GitHub PR CI pending: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1117 (no production apply/promotion performed).
+
+
+### 2026-10-22 — PR #1117 — fix(release): bounded 40-minute owner approval wait with ntfy notification
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1117 merge=3ea5b58ea303b4c16900b48dda00c8bc00fbeeaf -->
+Task: Merge PR #1117 into `main` — fix(release): bounded 40-minute owner approval wait with ntfy notification.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/deploy-aurion-zone-runtime.yml`
+- `Memory.md`
+- `scripts/aurion-production-probe-client.mjs`
+- `scripts/aurion-production-probe-client.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1117
+- Merge commit: `3ea5b58ea303b4c16900b48dda00c8bc00fbeeaf`
+- PR head: `587d57d10844087f3e918837a05ad5f56cafbc72`
+- Merged at: 2026-10-22T04:04:59Z
+- Post-merge workflow run: 39720368739
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-22 — PR #1111 — security: Nerva opt-in Netzwerkprüfung ohne Aurion-Release-Blockade
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1111 merge=40e1be29a105bb65a2f61e51e750fa4d527506c3 -->
+Task: Merge PR #1111 into `main` — security: Nerva opt-in Netzwerkprüfung ohne Aurion-Release-Blockade.
+Decisions: - Security-Prüfung ist advisory; keine Gameplay-, Auth-, Datenbank- oder Produktions-Authority und kein Godot-/APK-Gate. - Nie automatisch externe Ziele scannen; nur Workflow-Dispatch mit festem public-web-Profil. - Pfadfilter verhindern Production-Deploy für reinen Nerva-Sicherheitscode; gemischte Änderungen bleiben releasepflichtig.
+Touched surfaces:
+- `.github/nerva/README.md`
+- `.github/nerva/run-nerva.mjs`
+- `.github/nerva/run-nerva.test.mjs`
+- `.github/workflows/aurion-nerva-security.yml`
+- `scripts/aurion-release-paths.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1111
+- Merge commit: `40e1be29a105bb65a2f61e51e750fa4d527506c3`
+- PR head: `318a185143d20a4793eb1dc84a1815304eee8847`
+- Merged at: 2026-10-22T07:33:29Z
+- Post-merge workflow run: 39741324255
+Learned: - Aktuelles upstream Nerva v1.75.1 (20. Oktober 2026) ist neuer als die zuvor betrachtete Version; Download ist digest-pinned.
+Open: - CI-Readback und optionaler, explizit manuell ausgelöster Live-Scan stehen noch aus. Keine produktive Netzwerkerkenntnis aus Unit-Tests ableiten.
+Next safe step: - Readback der CI und Review; erst danach Merge. Einen echten Scan nur separat über Workflow-Dispatch auslösen.
+
+
+### 2026-10-22 — PR #1118 — ⚡ Bolt: Optimize Wolfram CAG terrain analysis queries
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=1118 merge=5e58f4a7490cd174cbf88e31137f64a5096eb8a7 -->
+Task: Merge PR #1118 into `main` — ⚡ Bolt: Optimize Wolfram CAG terrain analysis queries.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.jules/bolt.md`
+- `aim296-bvh-performance-receipt.json`
+- `shared/aurionCagDesignProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1118
+- Merge commit: `5e58f4a7490cd174cbf88e31137f64a5096eb8a7`
+- PR head: `954bada88670167fa61f3558ae2b8f3d7f63f331`
+- Merged at: 2026-10-22T07:35:22Z
+- Post-merge workflow run: 39741543147
+Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-22 — PR #1120 — confirmed self-vitals meters
+Change: The active Godot scene now renders bounded HP and stamina meters from accepted Aurion self-combatant snapshots, ignores rejected rewinds, and clears both meters when self state or the projection disappears.
+Learned: The confirmed vitals readmodel was already active at runtime; extending that presentation preserves Aurion authority without introducing client-owned gameplay state.
+Evidence: Tested code head `05e0808b1c10af29e09fa77a5f32b7fc5459a724`; Godot headless/runtime/software-render run 39821748545 and Android Preview/APK readback run 39821748434 passed; final Memory-bearing PR head is re-gated before merge.
+
+
+### 2026-10-22 — G12 WebSocket Handshake Retry Budget (PR pending)
+Change: Native Godot recovery spends the existing bounded retry budget when a WebSocket handshake ends in `hello_timeout` or `closed` before server welcome, rather than logging out immediately or restarting retries endlessly.
+Learned: A verified server welcome remains the only connection authority; a ticket without welcome must not clear the current bounded reconnect reservation. Gameplay effects are never replayed.
+Evidence: Baseline main `2726c69814d868305406678b8f33a0e5620f940d`; regression first authored in commit `40cb31b12cc1f54893a198288a84d41df8857fea`, implementation on isolated branch; Godot headless and APK CI readback required before merge. Device and production verification explicitly unverified.
+
+### 2026-10-22 — G12 invalid-welcome reconnect fail-closed
+Change: During an active native reconnect, rejected protocol frames such as `invalid_welcome` now disarm the retry budget and terminate the session immediately; only `closed` and `hello_timeout` remain retryable.
+Learned: Handshake recovery must classify transport loss separately from authenticated protocol validation failure, otherwise malformed server state can trigger fresh-ticket churn.
+Evidence: Baseline regression head `8539edf493e9e62d3057a9c2829d1ccc9d410b92` failed causally in Godot run 39830317341/job 120004425309; fixed code head `60cc710bcb065f5e043ef9672f91ca5331d3a02c` passed Godot headless/runtime/software-render run 39830879589 and Android Preview/APK readback run 39830879563 (APK SHA256 `0408d079aa05745e0f5350a1287318343c6f9c6d81c9b79cbfda3e450e4fbc0b`); final Memory-bearing head is re-gated before merge. Device and production WSS remain unverified.
+
+
+### 2026-10-22 — First native confirmed-world map / local authoring sketches (PR #1125)
+Change: The active Godot startup scene now renders touch-selectable player and mob positions only from accepted Aurion zone-v5 state, refreshes inspected coordinates, preserves enemy visibility and selection in crowded/overlapping scenes, retains integer-millimetre precision at world bounds, distinguishes A/B/house sketches, rejects drag placement, and clears volatile local plans on logout.
+Learned: A useful first map preserves Aurion single authority only when confirmed markers and local sketches are visually and behaviorally separated; touch gestures, marker caps and coordinate conversion are also part of the projection contract, not cosmetic details.
+Evidence: Base main `9f072e5f896817044248059305a37fca420fea38`; initial exact code head `4c3ae182230907b208654469c860fa78b575384a` passed Godot headless/runtime/software-render run 39841758487, Android Preview/APK readback run 39841758917, local pack 39841758498, runtime candidate 39841758529, container proof 39841758458, determinism 39841758652 and Memory contract 39841758696. Exact-head shared review on `aa477f90a638cf02171736ad4b039d384cb3b847` identified the six interaction/precision cases now covered by the final regression; the final Memory-bearing head is re-gated before merge. No physical-device pointer or production gateway proof is claimed.
+
+### 2026-10-22 — Native map drag pass-through (PR #1126)
+Change: The active Godot confirmed-world map now passes unhandled pointer drags to its enclosing ScrollContainer while retaining its own tap inspection and local-plan handling.
+Learned: Rejecting a drag inside the map is insufficient on mobile when a STOP-filtered Control prevents the parent launch card from receiving that gesture.
+Evidence: Regression-only head `3043cedfb6ed957bee53e972acb6ffd4df4f23a0` failed causally in Godot run 39856109793/job 120094623336; fixed code head `230a7a9a0f3be4e9e6b9ecab8d9ae06804d2f4c2` passed Godot headless/runtime/software-render run 39856334183 and Android Preview/APK readback run 39856334197; final Memory-bearing head is re-gated before merge. Physical-device touch remains unverified.
+
+### 2026-10-22 — Native map planning prompt persistence (PR #1128)
+Change: Accepted Aurion snapshots no longer replace the visible A/B/Haus planning prompt with a previously selected entity description while local placement remains armed.
+Learned: Confirmed entity records may refresh during local planning, but snapshot-driven inspection signals must not hide the still-active input mode.
+Evidence: Regression-only head `a993ec8a0cf8b25a4273e602b45cac899e9936c2` failed causally in Godot run 39870818147/job 120144500559; fixed code head `e4e0803a201c7b076b3817b4c7e5c66746adf42f` passed Godot headless/runtime/software-render run 39870954747 and Android Preview/APK readback run 39870954681; final Memory-bearing head is re-gated before merge. Physical-device touch remains unverified.
+
+
+### 2026-10-23 — PR #1129 — visible-only confirmed-map hit testing
+Status: VERIFIED candidate
+Task: Prevent empty map-edge taps from inspecting server-confirmed entities whose marker centers are outside the drawable Godot map.
+Decisions: Apply the renderer's existing half-open map-bounds predicate before distance and draw-order hit resolution; keep visible edge markers, overlap priority and Aurion snapshot authority unchanged.
+Touched surfaces: `godot-client/world/confirmed_map.gd`, active-scene `godot-client/tests/test_live_world_map.gd` regression.
+Evidence: Regression-only `20d6b00c00b7fc808bd2d42ef256a25b1b3695c8` failed causally in Godot run 39877183226/job 120165505717; fixed candidate `7155d4e830d0816aa3dfb37d58b2bf76334499eb` passed Godot/runtime/software-render 39877458922 and Android Preview/APK 39877458897.
+Learned: Marker visibility and selection must share the same bounds rule; integer-mm screen roundtrips require an explicitly visible positive-control point rather than assuming exact floating-point edge identity.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Gate and review the exact final PR head, then merge only with no unresolved findings and read back `main`.
+
+
+### 2026-10-23 — PR #1130 — initial welcome-timeout recovery
+Status: VERIFIED candidate
+Task: Keep an authenticated native session recoverable when its initial zone socket reaches `hello_timeout` before a verified welcome.
+Decisions: Start the existing bounded fresh-ticket policy for both retryable initial handshake endings (`closed` and `hello_timeout`); invalid welcome/protocol endings still fail closed.
+Touched surfaces: `godot-client/app/main.gd`, active-scene `godot-client/tests/integration/test_session_recovery.gd` regression.
+Evidence: Regression-only `7dd180be354dcdccec502ad2dc6e74b012fd8df5` failed causally in Godot run 39883258813/job 120185375241; fixed candidate `7e9d2b86314a0127b16d4a980eb777b8c06a76c3` passed Godot/runtime/software-render 39883404930 and Android Preview/APK 39883404928.
+Learned: The socket already classified welcome timeouts as retryable during recovery, but the controller's initial-entry predicate must use the same classification to avoid premature logout.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Gate and review the exact final PR head, then merge only with no unresolved findings and read back `main`.
+
+### 2026-10-23 — Godot Login SDK source.properties whitespace regression
+Status: IMPLEMENTED_IN_REPOSITORY; new exact-head CI and actual signed APK pending.
+Task: Fix real owner-dispatched signed-Login run 39886214133 / build job 120194930032 failing at separate SDK inspection.
+Decisions: Accept surrounding whitespace on the exact SDK source.properties key before `=`, still require exactly one declaration, the unchanged locked SDK versions and required tool files; no signer, gameplay or production runtime modifications.
+Touched surfaces: scripts/godot/gradle-prerequisites.mjs, scripts/godot/gradle-prerequisites.test.mjs.
+Evidence: Run 39886214133 showed `Pkg.Revision must appear once` in build step 6; Validate and upstream Godot/App Link gates succeeded; signing skipped. Added realistic `Pkg.Revision = ...` NDK fixture and missing/duplicate-key rejection regressions. Fresh Godot and Android CI on this PR must confirm behavior.
+Learned: Android NDK source.properties can separate the key and `=` with spaces; a key/value parser must not confuse syntax whitespace with missing SDK version.
+Open: Final exact-head CI, review, merge, new pinned signer workflow and real signed APK readback.
+Next safe step: Gate regression in Aurion CI, merge only when green, then update Sovereign signing source pin and trigger owner-only run.
+
+### 2026-10-23 — Same-tick combat intent admission regression (PR #1132)
+Status: VERIFIED candidate; final Memory-bearing head gates and review pending
+Task: Prevent one authenticated player from committing multiple transport-admitted basic attacks or blade skills inside the same Aurion zone tick.
+Decisions: Keep aurion.zone.rules.v3, historical replay semantics, deterministic tick resolution and zone-v5 wire contract unchanged; reject only a second pending live combat intent, preserve movement admission, and do not acknowledge the rejected client sequence.
+Touched surfaces: server/zoneRuntime.ts, server/zoneGateway.ts, server/zoneCombatContinuity.test.ts.
+Evidence: Baseline main 818e93b87d1760ebeca4e7d988b800fa6de386e7 accepted every increasing attack sequence; corrected candidate 8abe5ce030b48b824b83d07d0e509e049607db9a. Local Test Pack 39899673013 passed the 6-case combat-continuity runtime regression, actual Godot/zone-gateway/MariaDB process checks and 455 files / 2288 tests; WS ingress 39899673137, runtime candidate 39899673077, container proof 39899673078, Godot headless 39899673074, deterministic DES 39899673099 and Memory sync 39899673063 passed.
+Learned: A rejected transport combat intent must be gated before admitSequence so it neither becomes canonical history nor prevents a later independently sequenced movement.
+Open: Exact Memory-bearing final-head gates, shared review, merge and main readback.
+Next safe step: Merge only after the final head is green and has no unresolved review findings, then read back main.
+
+### 2026-10-23 — G12 native-auth HTTP callback generation (PR #1134)
+Change: Cancelled native-auth HTTP completions are now bound to their original request epoch and cannot publish a result or open a browser after a successor request starts.
+Learned: The zone-ticket client already isolated cancelled wire generations, but the preceding native start/exchange/refresh transport needed the same boundary to keep a late response from mutating the active PKCE flow.
+Evidence: Regression-only head `1c6a287dc8053acb5183583f983d6508a3fdcbae` failed causally in Godot run 39905156305/job 120255316300; fixed code head `492101b26cdc0e63288cad8152e233caabcbbe20` passed Godot headless/runtime/software-render run 39905336234 and Android Preview/APK run 39905336227. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+
+### 2026-10-23 — G12 logged-out resume restores login (PR #1135)
+Change: Resuming the active Godot scene without an authenticated zone now restores the disconnected login UI instead of leaving the login action disabled; no ticket or socket is started.
+Learned: A no-zone resume is logged out only when configuration is valid, native auth is idle and no authenticated/pre-welcome transport remains; each active state must retain its own fail-closed recovery path.
+Evidence: Regression-only head `220d5defe422b64a569d768781c14aedd97d06a0` failed causally in Godot run 39911283493/job 120274656627. Review-corrected code head `b8cbb1083a29ca80bca16a5a8bc0eab24b5be508` passed Godot headless/runtime/software-render run 39912605561, Android Preview/APK run 39912605498, determinism run 39912605490 and Memory sync run 39912605558; final Memory-bearing head is re-gated before merge. Physical-device interruption remains unverified.
+
+
+### 2026-10-23 — G12 suspended transport-close isolation (PR #1136)
+Change: A late terminal callback from the socket generation intentionally discarded during Android suspension can no longer revoke healthy native auth; resume still requires one fresh ticket and verified welcome.
+Learned: Discarded sockets need a monotonic generation watermark because terminal signals can arrive after resume, after a successor welcome or across repeated suspend cycles; lifecycle state and one scalar generation are too narrow.
+Evidence: Regression-only head `ccfca418875fdd4fc1c4866d830390caea1d5df8` failed causally in Godot run 39923686463/job 120314764849; review-corrected code head `597779d04f941be3e8f94090fb2adadffa375f55` passed Godot headless/runtime/software-render and Android toolchain run 39926563781, Preview/APK run 39926563850, determinism run 39926563977 and Memory sync run 39926563839. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
+
+### 2026-10-23 — G12 invalid zone-ticket response fail-closed (PR #1137)
+Change: During bounded native recovery, only an actual Aurion API transport failure retains retry state; invalid payloads, unexpected HTTP responses and authorization failures clear the reservation and terminate the native session immediately.
+Learned: Fresh-ticket recovery must preserve the API boundary between transport loss and completed-response integrity failures, otherwise malformed or rejected responses cause protected request churn.
+Evidence: Activated regression head `1db4975a16b84a26e5f727391baa0968e7faa630` failed causally in Godot run 39932848033/job 120345106091; review-corrected code head `9b3d35f181b4ee6661543a7bef245621a56ab92d` adds controller and API-runtime coverage. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
+
+### 2026-10-23 — G12 WebSocket hello-send recovery (PR #1138)
+Change: A native socket that opens but cannot send its authenticated hello now spends the existing bounded fresh-ticket recovery budget instead of immediately revoking healthy auth.
+Learned: Pre-welcome transport classification must include the actual hello-send boundary; unlike invalid server frames, a failed local send carries no authenticated server response and is safe only under the same finite retry cap.
+Evidence: Regression-only head `cf2d586bb6fddce36091a59892e6d692ac453057` failed causally in Godot run 39938317972/job 120363254334; implementation head `f35a96f57e40d42fab198ed8f8f0082809e6824f` passed the Godot headless/runtime/software-render contract in run 39938726550. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
+
+### 2026-10-23 — G12 synchronous socket-open recovery
+Status: VERIFIED candidate integration
+Task: Keep healthy native auth alive when the zone WebSocket cannot begin opening before any server response.
+Decisions: Classify only the validated ticket path's synchronous socket-open failure as bounded pre-response transport loss; invalid ticket, server/protocol and exhausted-retry paths remain fail-closed.
+Touched surfaces: `godot-client/app/main.gd`, active-scene G12 recovery regression.
+Evidence: PR #1139; causal red `8c5205550d122a47583119da9d9aef5b3cd5645a` run 39945163285/job 120385922873; corrected implementation `09b139ee45bcfaee4b7864d83856cd0c543030b7` passed Godot/runtime/software-render 39945341612 and Android Preview/APK 39945341168.
+Learned: A local `connect_to_url` setup failure consumes the one-time ticket but says nothing about session validity, so it belongs to the same bounded fresh-ticket recovery as pre-welcome transport loss.
+Open: None beyond exact final-head gates and review.
+Next safe step: Verify the Memory-bearing exact PR head, complete shared review, merge, and read back `main`.
+
+### 2026-10-23 — G12 synchronous ticket-start exhaustion (PR #1140)
+Change: A protected ticket request that synchronously refuses to start without emitting a failure now consumes the existing bounded recovery budget and terminates the native session cleanly when that budget is exhausted.
+Learned: The controller must distinguish an API failure already classified by a synchronous signal from a bare false return; otherwise the latter leaves a phantom pending request and disabled login after the final attempt.
+Evidence: Regression-only head `d36519ae8c40f841671d153afe95e4a2df07550c` failed causally in Godot run 39960142460/job 120435797800; implementation head `9af008452ccb71d08db7bcdb9c167d368f18f9c0` passed active-scene session recovery, startup and software-render checks in run 39960326772/job 120436415548. Final Memory-bearing head is re-gated before merge; physical-device and production WSS remain unverified.
+
+### 2026-10-23 — G12 initial ticket-start refusal recovery
+Status: VERIFIED candidate
+Task: Prevent the first protected zone-ticket start after successful native auth from hanging when the API refuses synchronously without emitting a failure.
+Decisions: Clear the phantom pending flag and classify only callbackless start refusal as bounded pre-response transport loss; synchronously signaled API failures retain their existing fail-closed callback path.
+Touched surfaces: `godot-client/app/main.gd`, `godot-client/tests/integration/test_session_recovery.gd`.
+Evidence: PR #1141; causal-red head `504204c859cc4f4ce8a2d775c1e7baa338e3c233`, Godot run 39968449600/job 120464420110 failed the two new active-scene assertions; fixed candidate `7128b6be1440cc2d03b15e5f31cf6a36586dfebc`, Godot/runtime/software-render and Android toolchain run 39968766948 plus Preview/APK run 39968766999 passed.
+Learned: The initial ticket request and reconnect ticket requests share the same synchronous-start boundary; both must distinguish a callback-classified failure from a silent refusal before mutating recovery state.
+Open: Exact final-head gates, shared review, merge and main readback remain required.
+Next safe step: Re-run all required checks on the Memory-bearing final head, resolve review findings, then merge only with exact-head evidence.
+
+### 2026-10-23 — G12 suspended auth-completion recovery (PR #1142)
+Change: A native auth exchange that completes while Android is paused no longer starts a protected zone-ticket request in the background; it reserves restore and requests exactly one fresh ticket after resume.
+Learned: Suspension can begin before native auth owns protected authority, so the lifecycle must allow a successful in-flight exchange to promote that pause into a restore-required session.
+Evidence: Regression-only head `5da1ff0cffb28b053aeba1310994f5327d541a47` failed causally in Godot run 39977310364/job 120495188989; corrected code head `75dc890588c78d965369ba407dede44dea9dd3df` passed Godot/runtime/software-render and Android toolchain run 39977871316 plus Preview/APK run 39977871398. Final Memory-bearing head is re-gated before merge; physical-device interruption and production WSS remain unverified.
+
+### 2026-10-23 — G12 suspended auth-terminal UI isolation (PR #1143)
+Change: Native-auth failure and logout completion callbacks received while Android is paused keep the login action disabled; foreground resume alone restores the idle login UI without starting a protected connection.
+Learned: Terminal auth callbacks can arrive after the OS pause boundary, so logged-out UI availability must remain lifecycle-gated even though local authority has already been cleared.
+Evidence: Regression-only head `cbefa6f7aa7caf3bba3c41b466a51220b926bce3` failed causally in Godot run 39985999109/job 120525230455; review-corrected code head `0c3092c3b93b748ad4f1f372a10664a2600366b8` passed Godot/runtime/software-render and Android toolchain run 39987244375, Preview/APK run 39987244437, deterministic pattern 39987244552 and Memory sync 39987244674. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+
+### 2026-10-23 — G09 generated Android Login App Link
+Change: Register the Android export hook so the native callback filter survives Godot's generated release overlay; reuse one XML source and add a real unsigned Login APK/manifest CI regression without signing credentials.
+Learned: A patched src/main template is insufficient because Godot's generated launcher uses mergeOnlyAttributes; only the packaged APK establishes the callback contract.
+Evidence: Owner run 39989532413 rejected the actual missing filter before apksigner; regression-only head e81fb201e599b9cc80a83bc10cb070bd458f3a02 failed causally in Android run 39992835000/job 120548684600 (0 VIEW filters, expected 1). Focused local contracts pass; final exact-head Godot/Android CI, owner signing, artifact readback and device login remain required.
+
+### 2026-10-23 — G12 suspended auth-start success UI isolation (PR #1145)
+Change: A native-auth start response received while Android is paused preserves its callback transaction without exposing cancellation in the background; resume restores “Abbrechen” only while the browser callback is pending, never during its exchange request.
+Learned: The callback transaction spans two UI states under one awaiting flag, so lifecycle resume must also consult the native request boundary before restoring interaction.
+Evidence: Original regression head `e151e42d9c476c6955004547ba730fd72701b5f2` failed in Godot run 40002179714/job 120580821276; review regression head `aa41d1a8a75fd7f87b3a07778c2a2a55f6211820` failed causally in run 40010325367/job 120608733299; corrected code head `61de554c13a1610004281a7137f1aa1bbf6e5caf` passed the Godot runtime/software-render contract job 120609720469. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+
+
+### 2026-10-23 — G12 suspended terminal-logout restore cancellation (PR #1146)
+Change: A terminal logout or native-session failure received while Android is paused now cancels the reserved protected-session restore without ending suspension early; foreground resume returns directly to idle login instead of arming reconnect against revoked authority.
+Learned: Clearing reconnect state is insufficient because the lifecycle owns a separate pending-restore reservation that survives terminal auth callbacks.
+Evidence: Regression-only head `603163444430368a2566a80970e8198587c2eb46` failed causally in Godot run 40018063075/job 120635162163; corrected code head `a451d8e978e30ddd1681dc064012ba12d9af2261` passed the active-scene Godot runtime/software-render contract in run 40018341005. Final Memory-bearing head is re-gated before merge; physical-device interruption remains unverified.
+
+
+2026-10-24 · PR #1148 · Home leaderboard privacy and committed-schema runtime gate
+Change: Home now opens an anonymous leaderboard backed by an account-free public projection; guest browser errors stay strict and its MariaDB gate applies only committed migrations while covering leaderboard server changes.
+Learned: A public readmodel needs both field-level privacy and an exact-head browser/database gate whose path filters include the server query boundary.
+Evidence: RED e7c48d73631ac99bfd3c54cdb396a5305b38ad94; verified code head 58fa2fa093880943de01a19d7e06b56f76743ca2 passed all 27 workflows, including Home/MariaDB/strict-console run 40053583748, Local Test Pack 40053583715, runtime candidate 40053583826 and container proof 40053583688; final Memory-bearing head is re-gated before merge.
+
+
+2026-10-24 · PR #1147 · Zone-tick mob-target view reuse
+Change: The authoritative zone tick now reuses one zone-owned array when excluding the reserved production probe from mob-FSM targeting.
+Learned: Allocation evidence must exercise the real tick path and compare both reference churn and the exact filtered result; source-level removal of `.filter()` alone is insufficient.
+Evidence: Verified code head `ee5a185f64064d247e641ae74e3c593350257116` passed all eight workflows; Local Test Pack run 40061837291 proved 256 legacy filter arrays versus one reused runtime view with identical user IDs across 256 real ticks, alongside the full repository suite. Runtime candidate 40061837337, container proof 40061837265, production probe 40061837303 and deterministic DES 40061837286 also passed; final Memory-bearing head is re-gated before merge.
+
+### 2026-10-24 — Native consent form Origin policy
+Status: VERIFIED local browser contract; device/runtime fix UNVERIFIED.
+Task: Investigate the real Android consent REQUEST_INVALID report without issuing live auth transactions.
+Decisions: Override Referrer-Policy with strict-origin only on the browser consent document; preserve strict Origin/CSRF/session checks and callback no-referrer. Android process-death recovery remains a separate client gap, not fixed by PRs #1145/#1146.
+Touched surfaces: server/nativeAuthHttp.ts, its HTTP regression, scripts/native-auth-browser-origin.test.mjs and existing isolated Local Test Pack browser step.
+Evidence: Actual Chromium 151 navigation using the source renderer and guard failed before the change (Origin null) and passed afterward (canonical Origin, origin-only Referer); six hostile-header cases rejected; zero production requests. Full HTTP/Vitest/MariaDB CI and physical device outcome remain UNVERIFIED. No merge or deployment.
+Learned: Manually adding Origin in Node HTTP tests cannot establish browser-generated form headers; pending PKCE/State held only in process memory cannot survive Android process death.
+Next safe step: Review the minimal server fix and run the existing HTTP/MariaDB gates; separately design Keystore-backed, bounded one-time pending-login recovery and test real Android process death.
+
+### 2026-10-24 — G09 orphaned native callback drain (PR #1150)
+Change: Android cold-start now consumes Aurion's canonical auth callback when process death removed the in-memory PKCE transaction, without forwarding it as authentication or touching unrelated intents.
+Learned: Fail-closed process-death handling still requires the active startup path to drain the OS intent; retaining it cannot restore PKCE and risks carrying stale callback material into a later attempt.
+Evidence: Regression-only head `276faef3ea8728570b7226d635acd9e0f2cfca18` failed causally in Godot run 40073756795/job 120812597944; fixed code head `d993fcc4af749bfcd82207de2cae5ebf7d9e2f78` passed Godot headless/runtime/software-render run 40073901229 and Android Preview/real unsigned Login APK run 40073901265. Final Memory-bearing head is re-gated before merge; physical-device process death remains unverified.
+
+### 2026-10-24 — G09 JNI-Aktivität für Native-Auth-Rücksprung
+Änderung: Die Android-Intent-Brücke initialisiert die Activity über Godots `has_java_method("getActivity")`; fehlende JNI-Fähigkeit oder Activity bleibt gesperrt. Keine Credential-Persistenz oder Änderung des PKCE-/Callback-Vertrags.
+Erkenntnis: Der falsche Object-Methodenguard ist in APK `9e8c8593` und Basis `24fe3944` vorhanden; direkt injizierte Activities verdeckten ihn. PR #1150 leert nur verwaiste Cold-Start-Callbacks.
+Evidence: Kausales RED `efc1b38f018896559880bcfeab7b8f01460a4ab5`; danach lokal Godot 4.6.3: acht Headless-Skripte sowie HTTP-Start/Exchange/Refresh/Logout bestanden, 16 Node-Vertragsprüfungen bestanden. JNI-artige Fixture prüft Initialisierung, warmen Rücksprung, UI-Austausch und Replay; kein Android-Gerätebeleg. Gepinnte 4.7.2-/APK-CI und Tab-A9-Login bleiben bis echtem Readback UNVERIFIED. Neue APK erforderlich; Prozessverlust bleibt separate Diagnose.
+CI-Erkenntnis: Godot 4.7.2 auf `b66ca87c` bestand Run 40080109327; Run 40080109393 verifizierte die Login-APK, scheiterte danach mit ENOTEMPTY im temporären Gradle-Verzeichnis. Begrenzte Node-Löschwiederholungen beheben das separat reproduzierte Rennen; dauerhaft konkurrierende Schreibzugriffe bleiben Fehler. Finaler Head wird erneut vollständig geprüft.
+
+### 2026-10-24 — G14 Originalmodelle für die 3D-Spielwelt
+Änderung: Zwölf Original-GLBs sind mit Content-IDs, kanonischen Zuordnungsquellen und Herkunft inventarisiert; Godot prüft Geometrie, Materialien, Bones, Transformtreue und Bewegung aller 16 Clips. Die Punktkarte bleibt nur früher Verbindungsnachweis; Ziel ist die echte 3D-Welt samt Aurion-Authoring.
+Erkenntnis: Clipnamen und automatisch gerahmte Bilder reichen nicht. Statische Clips, falsche Quellhashes und Transformdrift müssen scheitern; nichttriviale Testhierarchien prüfen Rotation/Skalierung auch bei identischen Originalmatrizen.
+Evidence: Codehead `3a89b4c92eff83d4bd95917b752b5aa7cf9fd3d7`, echter Godot-4.7.2-Import-/Software-Renderlauf 40088742243 und unabhängig heruntergeladenes Artefakt 12558410719 (ZIP SHA256 `7b2ccbe882d06c235065d604a44c86a65df48e6cf829a951c0de80d979e3ca16`, 14 PNG-Hashes geprüft). Lokale Erweiterung `b4e06e09` bestätigt die synthetische Transformhierarchie. Finaler Memory-Head wird erneut vollständig geprüft; Live-3D-Welt und Android-Leistung bleiben offen.
+
+### 2026-10-24 — G15 deterministische Godot-Asset-Ausgaben
+Änderung: Die zwölf G14-geprüften Original-GLBs erhalten einen fail-closed, byteidentischen Godot-Kompatibilitätszweig mit nicht verlinkten content-adressierten Outputs sowie vollständig quellgebundener Asset-Governance; Originale und Web-Shipping bleiben unverändert.
+Erkenntnis: Bytegleichheit allein belegt keine unabhängige Generated-Schicht: Runtime-Evidence muss zusätzlich Dateityp, Realpfad und sämtliche Governance-Metadaten gegen den auditierten Quellrecord prüfen.
+Evidence: Codehead `a50511ecb14a3f121064e3e4785ec87414a16a80`; alle neun Workflows grün, darunter 40098042828 mit zwei stabilen Vorbereitungen, Symlink- und Governance-Negativkontrollen, 12 Hashgleichheiten, Godot-4.7.2-Import von 16 bewegten Clips und llvmpipe-Render. Finaler Memory-Head wird erneut vollständig geprüft.
+
+### 2026-10-24 — G11 bounded confirmed map-marker interpolation (PR #1155)
+Change: The active Godot map now renders and hit-tests confirmed player and mob markers through the existing 100 ms snapshot interpolator while preserving raw integer-mm Aurion records for inspection and local plans.
+Learned: Capturing interpolation without feeding its visual positions into the map leaves a real runtime integration gap; marker presentation needs a separate visual cache so smoothing cannot mutate confirmed truth.
+Evidence: Regression-only head `ed5e67e4b292e679988bcd65676ffdcb1d4c9940` failed causally at missing `marker_screen()` in Godot run 40106349849/job 120908725113; verified code head `4f5352c2e4a1f1ff7efbcec5c26f35bd298d57c7` passed the pinned Godot 4.7.2 active-scene/runtime/software-render run 40106478690 and 3D asset audit 40106478688. Final Memory-bearing head is re-gated before merge.
+
+
+### 2026-10-24 — G15 geprüfte 3D-Modelle in beiden Android-Exporten (PR #1156)
+Änderung: Preview und Login bereiten alle zwölf Originalmodelle vor jedem frischen Export automatisch auf, laden die importierten PackedScenes mit Godot und prüfen Manifest sowie exakt diese SCN-Bytes anschließend im APK; Signieridentität und App-Link-Vertrag bleiben unverändert.
+Erkenntnis: Ein erfolgreicher Quellimport garantiert kein APK-Asset. Godot exportiert GLB-Zuordnungen als `.glb.import`; Präsenz oder ein gültiger Dateikopf allein belegen keine korrekte Modellzuordnung.
+Evidence: Kausales RED `1309b3b4029c8d3b60ee338c7050b914d3b8b2a3`, Run 40106978837/Job 120910587582 (`PACKAGED_ASSET_MANIFEST_MISSING`). Codehead `091ed1e21bc17a356904b4ca033b169eee81b258`, APK-Run 40107803692/Job 120913019393: 40 Regressionen, zwei frische Imports mit je zwölf Modellressourcen und 16 bewegten Clips, gleiche Manifest-SHA256 `280631abddea6904bffa5cad22933b8054aedd86d3f2dbb63682e817f1c1760b`. Finaler Memory-Head wird erneut vollständig geprüft; Live-3D-Welt, produktive Neusignierung und Geräteleistung bleiben offen.
+
+
+### 2026-10-24 — G11 sequenzgleicher Mehrclient-Projektionsnachweis (PR #1158)
+Änderung: Der echte Godot/Gateway/MariaDB-Test durchläuft nun ZoneState, EntityRegistry und SnapshotInterpolator; sein bestätigter Zustand wird einschließlich aller Entitätskategorien mit dem unabhängig empfangenen Snapshot des zweiten Clients derselben Sequenz verglichen.
+Erkenntnis: Zwei beobachtete Bewegungen belegen noch keine identischen Projektionen. Die 100-ms-Darstellungsgrenze braucht eine eigene Assertion am tatsächlichen Empfangszeitpunkt; ein später Endpunktvergleich allein reicht nicht.
+Evidence: Lokal mit gepinntem Godot 4.7.2: Import, Skriptprüfung und bestehende Registry-/Interpolationstests bestanden. Beide unabhängigen Reviews sind nach expliziter Prüfung der 100-ms-Grenze ohne verbleibenden Befund. Codehead `30ade9a0452ce87a91e7ad0d3f694719ac8b0b2a`; finaler Memory-Head benötigt den vollständigen isolierten Gateway-/MariaDB-Lauf und sämtliche zugehörigen CI-Gates vor Merge. Dies ist kein Produktions-, Geräte- oder Live-3D-Nachweis.
+
+
+### 2026-10-24 — G11 bestätigte Self-Presence im Welcome (PR #1157)
+Änderung: Der Godot-v5-Decoder akzeptiert einen authentifizierten Welcome nur, wenn dessen `selfEntityId` auch als bestätigte Presence enthalten ist; sonst entsteht kein verbundener Projektionszustand.
+Erkenntnis: Eine formal gültige Self-ID reicht nicht, weil Karte und Positionsprojektion den eigenen bestätigten Presence-Datensatz benötigen; Runtime-Fixtures müssen dieselbe Join-Invariante wie Aurions `zoneRuntime` abbilden.
+Evidence: Kausales RED `bdf760b07b0f7ddf1c68186566dfd1259cc0f3c2`, Run 40111150094/Job 120922955998; verifizierter Codehead `077b0caf17b78b37861385d5074514128fa46839` bestand Godot-4.7.2-WebSocket-/Szenen-/Software-Render 40111832038, beide Android-APK-Exporte 40111832027 und 3D-Audit 40111832041. Finaler rebased Memory-Head wird erneut exakt geprüft.
+
+### 2026-10-24 — G16 bestätigte 3D-Figuren als Darstellungsbaustein (PR #1160)
+Änderung: Ein wiederverwendbarer Godot-Actor bindet bestätigte Entity-IDs an explizit übergebene Katalogmodelle, projiziert Positionen getrennt von Bones/Root-Animation und behandelt Idle/Walk/Tod, Despawn und Sitzungswechsel ohne Gameplay- oder Auswahlmutation.
+Erkenntnis: Erfolgreiche Wiederherstellung muss auch bei gleicher Pose alte Diagnosen löschen; Sitzungs-/Sequenztests brauchen sonst identische Zustände. Ein fehlgeschlagener Headless-Lauf muss ebenfalls nachgelagerte Renderbelege entfernen.
+Evidence: Codehead `52ef7849c94babe64f8f7abc075e19a4eea43d77`, tatsächlicher Godot-4.7.2-/llvmpipe-Lauf 40117220212, Artefakt 12570391196 unabhängig heruntergeladen (ZIP SHA256 `b4558eb2ae3a9bc9ef1748f53fd6c548f28876a6e8a57eece10c098d2e268cda`, Bild `2914e24cb78cdc2b3fbcfc90668c6eafcd4eca3a864743b49d9f56d5c8683a0e` visuell geprüft). Lokale kausale Negativkontrollen für Sitzung, Sequenz und Diagnose sowie ergänzte Prozessregression für veraltete Evidence bestanden. Finaler Memory-Head wird erneut geprüft. Protokoll-Fixtures mit echten Modellen; Live-Zuordnung, aktive 3D-Spielwelt, Angriff/Equipment/LOD und Geräteleistung bleiben offen.
+
+### 2026-10-25 — G16 freigegebene Selbstfigur in nativer 3D-Szene (PR #1163)
+Änderung: Schmale native Godot-3D-Szene bindet den eigenen serverbestätigten Actor über eine schreibgeschützte, generationsgesicherte Session-Abfrage an einen freigegebenen Katalogeintrag und ein hashgleiches G15-GLB; neutraler Vorschau-Boden folgt nur der visuellen Spielerposition und wird beim Sitzungswechsel zurückgesetzt.
+Erkenntnis: Katalog-ID und lokale GLB-Datei-ID dürfen abweichen; Gesamtrender können Testfiguren enthalten. Der zunächst hängende HTTP-Test hatte unverdrahtete Testsignale; ein ferner Spieler ließ den Neutralboden am Ursprung zurück. Weder Fixtures noch unsigned APK belegen Live-Gameplay oder Gerät.
+Evidence: Kausale RED-Läufe 40145458865 (Resolver) und 40149025949 (Boden); Codehead 003bd4c8c6a5be648a79cebdd71218b04361dba0, Godot-4.7.2-/llvmpipe-Lauf 40149084983, Artefakt 12581366707 (ZIP SHA256 da97e61efc9a7880ab906aaa51defdef4c201694084efd0b6ce68f29c9767ed8; isolierter Viewport SHA256 0fc22c39e4df503fa87d01541600da0394e3a1ee2ba80e7bdd1b90424e68fbe8). Alle acht Head-CI-Workflows grün nach gezieltem Android-Retry 40149084963/2; tatsächlicher unsigned Login-APK SHA256 edd710d7e5fd97ae05e0229422ca4e4309840e07776307b17b198c2f389d4d55, DAL-Readback verifiziert. Live-Zuordnung, Gerätestart, Signierung und unabhängige Reviews weiterhin offen; finaler Memory-Head erneut zu prüfen.
+
+### 2026-10-25 — G16 Session-Kamera, Stale-HUD und Viewport-Renderwache (PR #1167)
+Änderung: Godot setzt beim Aurion-Sitzungsreset Kamera und Neutralboden zurück, aktualisiert den 3D-Stale-Status auch ohne geladenes Modell und begrenzt verstecktes SubViewport-Rendering auf sichtbarkeitsabhängige Frames. Keine Änderung an Core, Tick oder Persistenz.
+Erkenntnis: Die echte Szene behielt zuvor die alte Kameraposition; ohne Actor blieb das sichtbare HUD trotz veralteter Welt frisch; das versteckte Viewport-Target renderte ungebremst. Der Godot-Viewport-Modus ist nach Szenenstart explizit zu setzen.
+Evidence: Kausaler RED im Godot-4.7.2-Actor-Lauf 40214828986 (alle drei Assertions) nach Parserbereinigung; GREEN-Codehead 8a8f6d18629d9e9377e9ad6211f85efd80c137a0, echter GLB-Import/Actor/llvmpipe-Render 40215074542 PASS. Finaler Memory-Head benötigt seine eigenen CI-/Artefakt-Readbacks; keine Geräte- oder Live-Welt-Abnahme.
+
+### 2026-10-25 — Zone-Tick-Watermarks ohne pro-Tick-Map-Neuanlage (PR #1168)
+Änderung: Verwendet die actionSequenceWatermarks-Map innerhalb einer Aurion-Zone wieder und füllt sie pro Tick aus den sortierten Peers erneut; unverknüpfte BVH-Benchmarkzahlen und Bot-Memory-Änderungen wurden aus dem PR-Diff entfernt.
+Erkenntnis: Tick und kanonische Sequenz bleiben autoritativ; die Map muss in jedem Tick vollständig geleert werden. Eine gemessene CPU-/GC-Verbesserung liegt nicht vor, nur die entfallende Quellcode-Allokationsstelle.
+Evidence: Codehead 3886633b554e1f38f8b19887a0a7044e90daabd3, zugehörige GitHub-Action-Runs 40218642017/40218641931/40218641965/40218641987/40218641957/40218641950/40218641947/40218641958: acht relevante CI-Läufe PASS. Der finale Memory-tragende PR-Head braucht zusätzlich eigenen CI- und GitHub-Readback; keine Produktionsmessung.
+
+
+### 2026-10-25 — G17 ZoneMobRuntime: iterativer Tick ueber Cache (PR #1170)
+Änderung: Der Aurion-Mob-Tick liest vorhandene, kanonisch geordnete `cachedOrderedStates` direkt statt pro Tick die ID-Reihe mit Map-Lookups zu durchlaufen; Cache-Erneuerung in `updateState`, Restore und Reset bleibt erhalten.
+Erkenntnis: Reihenfolge, v5-Projektion und kanonische FSM-Daten werden nicht neu autorisiert. Weniger Lookup-/Iteratorarbeit ist eine Codeeigenschaft, keine gemessene CPU-Steigerung.
+Evidence: Ursprungs-Head f79da06779f6a40c323b87328587b5693491b1c7 mit sechs zugeordneten GitHub-Actions-PASS (Runtime Candidate, Container Proof, Starter Village, AIM292, AIM259, Local Test Pack). Finaler Memory-tragender Head und Integrations-Readback sind vor Merge separat erforderlich.

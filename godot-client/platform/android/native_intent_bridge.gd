@@ -11,10 +11,16 @@ func _ready() -> void:
 		return
 	if not Engine.has_singleton("AndroidRuntime"):
 		return
-	_android_runtime = Engine.get_singleton("AndroidRuntime")
-	if _android_runtime == null or not _android_runtime.has_method("getActivity"):
+	_initialize_android_runtime(Engine.get_singleton("AndroidRuntime"))
+
+func _initialize_android_runtime(runtime: Variant) -> void:
+	_android_runtime = runtime
+	_activity = null
+	# AndroidRuntime is a JNISingleton: @UsedByGodot Java methods are not
+	# ClassDB methods, so Object.has_method("getActivity") always misses them.
+	if runtime == null or not runtime.has_method("has_java_method") or not runtime.has_java_method("getActivity"):
 		return
-	_activity = _android_runtime.getActivity()
+	_activity = runtime.getActivity()
 
 func poll_for_callback(pending_login: bool) -> bool:
 	if OS.get_name() != "Android":
@@ -22,7 +28,7 @@ func poll_for_callback(pending_login: bool) -> bool:
 	return poll_activity_intent_for_test(pending_login)
 
 func poll_activity_intent_for_test(pending_login: bool) -> bool:
-	if not pending_login or _activity == null:
+	if _activity == null:
 		return false
 	var intent: Variant = _activity.getIntent()
 	if intent == null:
@@ -32,11 +38,11 @@ func poll_activity_intent_for_test(pending_login: bool) -> bool:
 		return false
 	var raw_url := str(data)
 	var canonical := _is_callback_route(raw_url)
-	var accepted := deliver_for_test(raw_url, pending_login)
+	var accepted := deliver_for_test(raw_url, pending_login) if pending_login else false
 	if canonical:
-		# Clear every observed canonical URI, including malformed or duplicate
-		# callbacks, so app resume cannot retry it forever. Dedupe still ensures
-		# that only the first delivery reaches the strict auth validator.
+		# Always consume Aurion's callback route, including an orphan delivered
+		# after process death. Only a live in-memory login may forward it to the
+		# strict validator; unrelated Android intents remain untouched.
 		intent.setData(null)
 	return accepted
 

@@ -44,6 +44,9 @@ func capture(world: Variant, now_ms: int) -> bool:
 	_captured_ms = now_ms
 	return true
 
+func matches(world: Variant) -> bool:
+	return world != null and world.has_state() and world.connection_id() == _connection and world.last_seq() == _seq
+
 func confirmed_mm(entity_id: String) -> Dictionary:
 	var found: Dictionary = _positions.get(entity_id, {})
 	return found.duplicate(true)

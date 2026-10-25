@@ -12,11 +12,11 @@
 
 ## Automation
 
-The repository now creates the one Memory.md entry for a completed merge automatically.
+The repository no longer generates an additional Memory.md entry after a completed merge. Any required entry is reviewed in the PR before merge, so the merge commit remains the production source revision.
 
-`.github/workflows/post-merge-memory.yml` runs only when a pull request is actually merged into `main`. It resolves the merged PR metadata and changed-file list, appends one deterministic structured entry, prevents duplicates with a PR/merge-SHA marker, commits only `Memory.md` with `[skip ci]`, and immediately runs the Supabase synchronization/readback against the resulting Memory commit.
+The former `.github/workflows/post-merge-memory.yml` was removed to stop its post-merge bot commit, main-SHA churn, shared production-release concurrency and chained production dispatch. `scripts/append-post-merge-memory.mjs` remains as a historical, manually inspectable generator, but is not scheduled by GitHub Actions.
 
-This removes the manual post-merge Memory.md editing step. The merge still has to pass the repository's normal required checks; the Memory bookkeeping happens afterward and does not restart the large Main CI/deploy workflow set.
+No post-merge Memory.md editing is scheduled. The merge still has to pass ordinary PR checks. The release operator reads the exact new `main` SHA and deliberately dispatches the production workflow with matching `expected_sha`. All OIDC, schema and readback guards remain in force.
 
 The existing `.github/workflows/agent-memory-supabase-sync.yml` remains the lower-level Memory-to-Supabase synchronization lane. Its automatic `main` trigger is limited to actual `Memory.md` changes, while pull requests continue to run the secret-free contract regression.
 

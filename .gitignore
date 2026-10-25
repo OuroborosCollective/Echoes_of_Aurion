@@ -18,6 +18,9 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+.env.production.*
+.env.*.local
 
 # IDE and editor files
 .vscode/
@@ -143,3 +146,4 @@ scripts/__pycache__/
 
 # Godot editor cache stays local; stable script UIDs remain tracked.
 /godot-client/.godot/
+/godot-client/assets/generated/

@@ -196,6 +196,30 @@ func verify() -> void:
 	require(request.timeout == 15.0, "native auth transport has no bounded timeout")
 	require(request.max_redirects == 0, "native auth transport can follow redirects")
 
+	# A cancelled request can complete after its successor has started. Only the
+	# callback bound to the current wire generation may mutate the new flow.
+	var stale_epoch: int = client._request_epoch
+	client._request_epoch += 1
+	client._request_active = true
+	client._request_phase = "start"
+	client._request_started_at_ms = Time.get_ticks_msec()
+	client._flow.prepare_start(BUILD)
+	client._on_wire_request_completed(
+		HTTPRequest.RESULT_SUCCESS,
+		200,
+		PackedStringArray(["Content-Type: application/json"]),
+		JSON.stringify({
+			"version": "aurion.native-auth.v1",
+			"transactionId": "o".repeat(43),
+			"browserUrl": "https://arelogic.space/api/native-auth/browser/" + "o".repeat(43),
+			"expiresInSeconds": 600,
+		}).to_utf8_buffer(),
+		stale_epoch,
+	)
+	require(not start_completed, "stale cancelled start published a successor result")
+	require(opened_urls.is_empty(), "stale cancelled start opened its browser in a successor flow")
+	client.cancel()
+
 	await run_start()
 	require(start_succeeded, "valid local HTTP start failed")
 	require(opened_urls == [CANONICAL_BROWSER], "canonical browser URL was not opened exactly once")

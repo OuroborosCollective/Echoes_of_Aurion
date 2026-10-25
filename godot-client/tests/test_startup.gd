@@ -130,10 +130,18 @@ func verify() -> void:
 	var position_label := enabled_scene.get_node_or_null("%ConfirmedPosition") as Label
 	require(position_label != null, "confirmed self position has no active scene presentation")
 	var vitals_label := enabled_scene.get_node_or_null("%ConfirmedVitals") as Label
+	var health_meter := enabled_scene.get_node_or_null("%ConfirmedHealthMeter") as ProgressBar
+	var stamina_meter := enabled_scene.get_node_or_null("%ConfirmedStaminaMeter") as ProgressBar
 	require(vitals_label != null, "confirmed self vitals have no active scene presentation")
+	require(health_meter != null and stamina_meter != null, "confirmed self vitals have no bounded visual meters")
 	if vitals_label != null:
 		require(vitals_label.visible, "confirmed self vitals stayed hidden")
 		require(vitals_label.text == "Zustand · HP 20/20 · Ausdauer 8/10", "welcome vitals did not reflect confirmed self combatant")
+	if health_meter != null and stamina_meter != null:
+		require(health_meter.visible and stamina_meter.visible, "confirmed self vitals meters stayed hidden")
+		require(health_meter.min_value == 0 and stamina_meter.min_value == 0, "confirmed self vitals meters do not have a bounded zero floor")
+		require(health_meter.max_value == 20 and health_meter.value == 20, "welcome health meter did not reflect confirmed self combatant")
+		require(stamina_meter.max_value == 10 and stamina_meter.value == 8, "welcome stamina meter did not reflect confirmed self combatant")
 	if position_label != null:
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.visible, "confirmed self position presentation stayed hidden")
@@ -161,6 +169,9 @@ func verify() -> void:
 		require(position_label.text == "Position · X 3.00 m · Z -2.00 m", "new confirmed snapshot did not reach active position presentation")
 		if vitals_label != null:
 			require(vitals_label.text == "Zustand · HP 14/20 · Ausdauer 6/10", "new confirmed snapshot did not update self vitals")
+		if health_meter != null and stamina_meter != null:
+			require(health_meter.max_value == 20 and health_meter.value == 14, "new confirmed snapshot did not update health meter")
+			require(stamina_meter.max_value == 10 and stamina_meter.value == 6, "new confirmed snapshot did not update stamina meter")
 		var stale_snapshot: Dictionary = moved_snapshot.duplicate(true)
 		stale_snapshot["snapshotSeq"] = 1
 		stale_snapshot["presences"][0]["position"] = {"x":9000,"z":9000}
@@ -171,19 +182,31 @@ func verify() -> void:
 		require(position_label.text == "Position · X 3.00 m · Z -2.00 m", "stale snapshot rewound active position presentation")
 		if vitals_label != null:
 			require(vitals_label.text == "Zustand · HP 14/20 · Ausdauer 6/10", "stale snapshot rewound confirmed self vitals")
+		if health_meter != null and stamina_meter != null:
+			require(health_meter.value == 14 and stamina_meter.value == 6, "stale snapshot rewound confirmed self vitals meters")
+		var missing_self: Dictionary = moved_snapshot.duplicate(true)
+		missing_self["snapshotSeq"] = 3
+		missing_self["tick"] = 3
+		missing_self["resources"]["revision"] = 3
+		missing_self["combatants"] = []
+		require(ZoneCodec.is_valid_snapshot(missing_self), "missing self combatant fixture violates Aurion v5")
+		enabled_scene._on_zone_snapshot(missing_self)
+		if health_meter != null and stamina_meter != null:
+			require(not health_meter.visible and not stamina_meter.visible, "missing self combatant left stale vitals meters visible")
+			require(health_meter.value == 0 and stamina_meter.value == 0, "missing self combatant retained stale vitals values")
 		var large_snapshot: Dictionary = moved_snapshot.duplicate(true)
-		large_snapshot["snapshotSeq"] = 3
-		large_snapshot["tick"] = 3
-		large_snapshot["resources"]["revision"] = 3
+		large_snapshot["snapshotSeq"] = 4
+		large_snapshot["tick"] = 4
+		large_snapshot["resources"]["revision"] = 4
 		large_snapshot["presences"][0]["position"] = {"x":60000000123,"z":-60000000123}
 		require(ZoneCodec.is_valid_snapshot(large_snapshot), "large position presentation fixture violates Aurion v5")
 		enabled_scene._on_zone_snapshot(large_snapshot)
 		enabled_scene._update_position_presentation(Time.get_ticks_msec() + 100)
 		require(position_label.text == "Position · X 60000000.12 m · Z -60000000.12 m", "large confirmed world position lost integer precision in presentation")
 		var cleared_entities: Dictionary = large_snapshot.duplicate(true)
-		cleared_entities["snapshotSeq"] = 4
-		cleared_entities["tick"] = 4
-		cleared_entities["resources"]["revision"] = 4
+		cleared_entities["snapshotSeq"] = 5
+		cleared_entities["tick"] = 5
+		cleared_entities["resources"]["revision"] = 5
 		cleared_entities["presences"] = [cleared_entities["presences"][0]]
 		cleared_entities["mobs"] = []
 		require(ZoneCodec.is_valid_snapshot(cleared_entities), "entity despawn fixture violates Aurion v5")
@@ -275,6 +298,9 @@ func verify() -> void:
 	if vitals_label != null:
 		require(vitals_label.text.is_empty(), "confirmed self vitals survived projection reset")
 		require(not vitals_label.visible, "confirmed self vitals retained layout space after projection reset")
+	if health_meter != null and stamina_meter != null:
+		require(not health_meter.visible and not stamina_meter.visible, "confirmed self vitals meters retained layout space after projection reset")
+		require(health_meter.value == 0 and stamina_meter.value == 0, "confirmed self vitals meters survived projection reset")
 	var live_api: Node = enabled_scene._api
 	live_api.cancel()
 	live_api.queue_free()

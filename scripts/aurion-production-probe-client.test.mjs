@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { executeProductionProbe, waitForProductionAdminApproval, waitForProductionGameplayApproval } from './aurion-production-probe-client.mjs';
+import { executeProductionProbe, waitForProductionAdminApproval, waitForProductionGameplayApproval, approvalWaitSeconds, notifyApprovalWait } from './aurion-production-probe-client.mjs';
 
 // Disposable loopback responses prove runner diagnostics, never production OIDC,
 // scope approval, gameplay or persistence. All credentials below are test-only.
@@ -206,4 +206,52 @@ test('gameplay readiness polls read-only, then runs exactly one effectful execut
   }finally{
     server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
   }
+});
+
+test('configurable admin window remains bounded and defaults safely', () => {
+  assert.equal(approvalWaitSeconds({}), 900);
+  assert.equal(approvalWaitSeconds({ AURION_PROBE_APPROVAL_WAIT_SECONDS: '2400' }), 2400);
+  for (const bad of ['', '59', '3601', 'abc', '-900', '1e3', '99999', ' 900'])
+    assert.equal(approvalWaitSeconds({ AURION_PROBE_APPROVAL_WAIT_SECONDS: bad }), 900);
+});
+
+test('best-effort notification contains exact revision and run but no credentials', async () => {
+  const local = { ...env, GITHUB_REPOSITORY: 'OuroborosCollective/Echoes_of_Aurion',
+    AURION_APPROVAL_NOTIFY_URL: 'https://ntfy.example/private-topic' };
+  const calls = [];
+  const result = await notifyApprovalWait(local,
+    { revision:env.GITHUB_SHA, runId:'123', runAttempt:1, waitSeconds:2400 },
+    async (url, options) => { calls.push({ url, options }); return { ok:true }; });
+  assert.equal(result, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, local.AURION_APPROVAL_NOTIFY_URL);
+  assert.ok(calls[0].options.body.includes('SHA: '+env.GITHUB_SHA));
+  assert.ok(calls[0].options.body.includes('Run-ID: 123'));
+  assert.match(calls[0].options.body, /aurion_revision=/);
+  assert.ok(calls[0].options.body.includes('/actions/runs/123'));
+  assert.ok(!calls[0].options.body.includes(env.ACTIONS_ID_TOKEN_REQUEST_TOKEN));
+  assert.equal(calls[0].options.redirect, 'error');
+  assert.equal(await notifyApprovalWait({...local,AURION_APPROVAL_NOTIFY_URL:'http://insecure.example/'},
+    {revision:env.GITHUB_SHA,runId:'123',runAttempt:1,waitSeconds:2400},
+    async () => { throw new Error('insecure attempt'); }), false);
+  assert.equal(await notifyApprovalWait(local,
+    {revision:env.GITHUB_SHA,runId:'123',runAttempt:1,waitSeconds:2400},
+    async () => { throw new Error('network offline'); }), false);
+});
+
+test('extended admin wait sends one notification without affecting gameplay gate', async t => {
+  let clock=0, attempts=0, notices=0;
+  t.mock.method(globalThis,'fetch',async url => {
+    if (new URL(url).hostname.endsWith('.actions.githubusercontent.com'))
+      return new Response(JSON.stringify({value:'local-test-token-'.repeat(10)}), {status:200});
+    attempts++;
+    return new Response('{}',{status:403});
+  });
+  await assert.rejects(waitForProductionAdminApproval(
+    {...env, AURION_PROBE_APPROVAL_WAIT_SECONDS:'2400'},
+    {now:()=>clock,sleep:async ms=>{clock+=ms;},report:()=>{},
+      notify:async()=>{notices++;return true;}}), {message:'PROBE_ADMIN_APPROVAL_WAIT_EXPIRED'});
+  assert.equal(attempts,240);
+  assert.equal(clock,2400000);
+  assert.equal(notices,1);
 });

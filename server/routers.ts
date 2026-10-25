@@ -13,6 +13,7 @@ import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
+import { toPublicLeaderboard } from "./leaderboardPublicProjection";
 import { controlSettingsSchema, itemReferenceSchema } from "../shared/playerUiProtocol";
 import { executeAurionInventoryTransaction, readAurionInventorySnapshot } from "./aurionInventoryBackendAdapter";
 import { readPlayerUi, savePlayerControls, collectPlayerLoot, equipPlayerItem, unequipPlayerItem } from "./playerUiPersistence";
@@ -485,7 +486,10 @@ export const appRouter = router({
     }),
   }),
   leaderboard: router({
-    list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
+    // Account-bearing details are administrative; no guest or ordinary user receives ids or names.
+    list: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
+    // Anonymous public projection is strictly rank + confirmed server-authoritative scores.
+    publicList: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(async ({ input }) => toPublicLeaderboard(await db.listLeaderboard(input?.limit ?? 25))),
   }),
   history: civilizationHistoryRouter,
   npcPolicy: router({

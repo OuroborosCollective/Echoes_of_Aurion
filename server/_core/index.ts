@@ -46,7 +46,7 @@ const allowedCorsOrigin = createCorsOriginResolver(process.env.AURION_ALLOWED_OR
 async function startServer(){
   assertProductionDatabaseConfigured(process.env.NODE_ENV, process.env.DATABASE_URL);
   if (process.env.DATABASE_URL && !isConfiguredDatabaseUrl(process.env.DATABASE_URL)) {
-    console.warn(`[Database] Ignored invalid DATABASE_URL "${process.env.DATABASE_URL}". Protocol must be "mysql:" or "mariadb:".`);
+    console.warn("[Database] Ignored invalid DATABASE_URL (allowed protocols: mysql:, mariadb:). Connection values are withheld.");
     delete process.env.DATABASE_URL;
   }
   const releaseRevision=process.env.AURION_RELEASE_SHA?.trim().toLowerCase();if(releaseRevision&&!/^[a-f0-9]{40}$/.test(releaseRevision))throw new Error("AURION_RELEASE_SHA must be a 40-character Git revision when it is set");

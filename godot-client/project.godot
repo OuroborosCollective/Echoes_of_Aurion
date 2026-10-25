@@ -1,6 +1,9 @@
 ; Aurion client presentation. Canonical simulation remains on the Aurion server.
 config_version=5
 
+[editor_plugins]
+enabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg")
+
 [application]
 config/name="Echoes of Aurion"
 config/icon="res://assets/icon.svg"
@@ -36,3 +39,4 @@ server_base_url="https://arelogic.space"
 client_build="aurion-godot-g06-dev"
 renderer_profile="compatibility"
 native_auth_start_enabled=false
+

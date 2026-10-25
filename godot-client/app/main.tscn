@@ -1,6 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://app/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://world/confirmed_map.gd" id="2_map"]
 
 [sub_resource type="StyleBoxFlat" id="Style_card"]
 bg_color = Color(0.045, 0.085, 0.11, 0.96)
@@ -25,6 +26,34 @@ corner_radius_top_right = 6
 corner_radius_bottom_left = 6
 corner_radius_bottom_right = 6
 
+[sub_resource type="StyleBoxFlat" id="Style_meter_background"]
+bg_color = Color(0.025, 0.047, 0.059, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="StyleBoxFlat" id="Style_health_fill"]
+bg_color = Color(0.82, 0.27, 0.24, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="StyleBoxFlat" id="Style_stamina_fill"]
+bg_color = Color(0.32, 0.68, 0.58, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="PlaneMesh" id="Mesh_unassigned_floor"]
+size = Vector2(100, 100)
+
+[sub_resource type="StandardMaterial3D" id="Material_unassigned_floor"]
+albedo_color = Color(0.12, 0.20, 0.18, 1)
+roughness = 1.0
+
 [node name="AurionLaunch" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -33,6 +62,41 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_main")
+
+
+[node name="WorldView" type="SubViewportContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+mouse_filter = 2
+
+[node name="Live3D" type="SubViewport" parent="WorldView"]
+render_target_update_mode = 3
+size = Vector2i(1280, 800)
+
+[node name="World" type="Node3D" parent="WorldView/Live3D"]
+
+[node name="UnassignedFloor" type="MeshInstance3D" parent="WorldView/Live3D/World"]
+mesh = SubResource("Mesh_unassigned_floor")
+surface_material_override/0 = SubResource("Material_unassigned_floor")
+
+[node name="Actors" type="Node3D" parent="WorldView/Live3D/World"]
+unique_name_in_owner = true
+
+[node name="WorldCamera" type="Camera3D" parent="WorldView/Live3D/World"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 5)
+current = true
+
+[node name="WorldLight" type="DirectionalLight3D" parent="WorldView/Live3D/World"]
+rotation_degrees = Vector3(-50, -30, 0)
+light_energy = 1.0
 
 [node name="SafeMargin" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -58,6 +122,7 @@ size_flags_vertical = 3
 [node name="LaunchCard" type="PanelContainer" parent="SafeMargin/Scroll/Center"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 1
 theme_override_styles/panel = SubResource("Style_card")
 
 [node name="Content" type="VBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard"]
@@ -123,6 +188,26 @@ theme_override_font_sizes/font_size = 18
 text = "Zustand · HP 0/0 · Ausdauer 0/0"
 autowrap_mode = 3
 
+[node name="ConfirmedHealthMeter" type="ProgressBar" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+mouse_filter = 2
+show_percentage = false
+theme_override_styles/background = SubResource("Style_meter_background")
+theme_override_styles/fill = SubResource("Style_health_fill")
+
+[node name="ConfirmedStaminaMeter" type="ProgressBar" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+mouse_filter = 2
+show_percentage = false
+theme_override_styles/background = SubResource("Style_meter_background")
+theme_override_styles/fill = SubResource("Style_stamina_fill")
+
 [node name="EntitySummary" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
 unique_name_in_owner = true
 visible = false
@@ -131,6 +216,56 @@ theme_override_colors/font_color = Color(0.73, 0.81, 0.82, 1)
 theme_override_font_sizes/font_size = 18
 text = "In der Nähe · 0 Reisende · 0 Kreaturen"
 autowrap_mode = 3
+
+[node name="MapPanel" type="VBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MapHeading" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+layout_mode = 2
+text = "Sternwarte · bestätigte Aurion-Karte (X / Z)"
+
+[node name="ZoneMap" type="Control" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 250)
+layout_mode = 2
+mouse_filter = 1
+script = ExtResource("2_map")
+
+[node name="MapSelection" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+text = "Berühre ein bestätigtes Objekt oder skizziere einen Punkt."
+
+[node name="PlanButtons" type="HBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlanA" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel/PlanButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Punkt A"
+
+[node name="PlanB" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel/PlanButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Punkt B"
+
+[node name="PlanHouse" type="Button" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel/PlanButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Haus"
+
+[node name="PlanDisclaimer" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+layout_mode = 2
+autowrap_mode = 3
+text = "A/B/Haus sind nur flüchtige Entwürfe auf diesem Gerät; keine Weltänderung und kein Questfortschritt."
 
 [node name="Destination" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content"]
 unique_name_in_owner = true
@@ -169,3 +304,35 @@ unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(0, 48)
 text = "Technische Diagnose kopieren"
+
+[node name="WorldHUD" type="MarginContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+
+[node name="WorldBar" type="HBoxContainer" parent="WorldHUD"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="WorldStatus" type="Label" parent="WorldHUD/WorldBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.96, 0.93, 0.81, 1)
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 3
+text = "3D-Vorschau · Keine bestätigte Sitzung"
+
+[node name="WorldToggle" type="Button" parent="WorldHUD/WorldBar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(130, 48)
+text = "Diagnose"

@@ -53,15 +53,15 @@ Do not:
 - Legacy source hashes prove provenance only.
 - No mock/stub/preview result may stand in for production truth.
 - After an integration/fix, run the relevant regression and runtime/readback checks.
-- Follow the repository's exact-head Memory.md → integration → evidence → merge → automated post-merge Memory/readback workflow.
+- Follow the exact-head Memory.md read → integration → evidence → merge → main SHA readback workflow. If a new Memory.md entry is needed, include it in the PR before merging. Never push a separate automated Memory commit after merge.
 
 ## Agent working-memory readback
 
 GitHub `Memory.md` is the canonical repository memory document. The Supabase project `Echoes_of_Aurion` is only an agent-working-memory mirror and readback history.
 
 - Never treat the Supabase memory workspace as Aurion gameplay/world/persistence truth.
-- The automated `post-merge-memory.yml` job creates the single structured Memory.md entry after each merged PR into `main`; its commit is marked `[skip ci]` so Memory bookkeeping does not re-run the large main CI/deploy lanes.
-- `agent-memory-supabase-sync.yml` synchronizes actual Memory.md changes and performs the independent Supabase readback; the post-merge recorder invokes the same sync directly after its automated Memory commit.
+- The former `post-merge-memory.yml` writer is disabled (workflow file removed). It must not push a second commit to `main` after a PR merge or dispatch a production release. Write any required structured Memory.md entry in the same reviewed PR.
+- `agent-memory-supabase-sync.yml` remains an independent, read-only-of-Git sync lane for actual Memory.md changes. It does not commit to main or dispatch a production release.
 - Never place Supabase credentials or secrets into `Memory.md`, logs, tests, or repository files.
 
 <!-- gitbook-agent-instructions:start -->
