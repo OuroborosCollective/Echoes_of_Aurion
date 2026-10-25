@@ -553,6 +553,7 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	malicious.npcs[0].model.sha256 = "b".repeat(64)
 	require(not scene.call("_apply_quest_npc_visuals", malicious, manifest) and npcs_root.get_child_count() == 0,
 		"wrong standard model hash silently fell back or mounted")
+	require(scene.get_node("%WorldStatus").text.contains("NPC: npc_standard_identity_invalid"), "active HUD hides concrete NPC model rejection")
 	var wrong_zone: Dictionary = response.duplicate(true)
 	wrong_zone.zoneId = "unconfirmed_other_zone"
 	require(not scene.call("_apply_quest_npc_visuals", wrong_zone, manifest) and npcs_root.get_child_count() == 0,

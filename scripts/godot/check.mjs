@@ -94,6 +94,9 @@ await stage(
   ['scripts/godot/quest-npc-api-runtime.mjs', executable, project],
   'G16 quest NPC protected GET boundary verified (isolated HTTP; test auth only)',
 );
+await stage('public-appearance-refresh-http', 'headless', process.execPath,
+  ['scripts/godot/public-appearance-api-runtime.mjs', executable, project],
+  'G16 public appearance refresh boundary verified');
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);

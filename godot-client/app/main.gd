@@ -603,7 +603,7 @@ func _update_3d_status() -> void:
 	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1 - remote_count, 0)
 	var model_message := "Spielerfigur sichtbar" if visible_count == 1 else "Spielerfigur: " + _appearance_diagnostic
 	var npc_count: int = _quest_npc_actors.visible_count()
-	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch) · %d ungeklärte Entitäten · Neutralboden%s" % [model_message, remote_count, npc_count, other_count, _world_freshness_suffix()]
+	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch)%s · %d ungeklärte Entitäten · Neutralboden%s" % [model_message, remote_count, npc_count, (" · NPC: " + _quest_npc_diagnostic) if not _quest_npc_diagnostic.is_empty() else "", other_count, _world_freshness_suffix()]
 
 ## Only server-confirmed v5 presence IDs may be queried. HTTP is read-only;
 ## a response never creates additional gameplay state or enables interactions.
