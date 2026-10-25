@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://app/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://world/confirmed_map.gd" id="2_map"]
@@ -47,6 +47,13 @@ corner_radius_top_right = 3
 corner_radius_bottom_left = 3
 corner_radius_bottom_right = 3
 
+[sub_resource type="PlaneMesh" id="Mesh_unassigned_floor"]
+size = Vector2(100, 100)
+
+[sub_resource type="StandardMaterial3D" id="Material_unassigned_floor"]
+albedo_color = Color(0.12, 0.20, 0.18, 1)
+roughness = 1.0
+
 [node name="AurionLaunch" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -55,6 +62,41 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_main")
+
+
+[node name="WorldView" type="SubViewportContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+mouse_filter = 2
+
+[node name="Live3D" type="SubViewport" parent="WorldView"]
+render_target_update_mode = 4
+size = Vector2i(1280, 800)
+
+[node name="World" type="Node3D" parent="WorldView/Live3D"]
+
+[node name="UnassignedFloor" type="MeshInstance3D" parent="WorldView/Live3D/World"]
+mesh = SubResource("Mesh_unassigned_floor")
+surface_material_override/0 = SubResource("Material_unassigned_floor")
+
+[node name="Actors" type="Node3D" parent="WorldView/Live3D/World"]
+unique_name_in_owner = true
+
+[node name="WorldCamera" type="Camera3D" parent="WorldView/Live3D/World"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 5)
+current = true
+
+[node name="WorldLight" type="DirectionalLight3D" parent="WorldView/Live3D/World"]
+rotation_degrees = Vector3(-50, -30, 0)
+light_energy = 1.0
 
 [node name="SafeMargin" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -262,3 +304,35 @@ unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(0, 48)
 text = "Technische Diagnose kopieren"
+
+[node name="WorldHUD" type="MarginContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+
+[node name="WorldBar" type="HBoxContainer" parent="WorldHUD"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="WorldStatus" type="Label" parent="WorldHUD/WorldBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.96, 0.93, 0.81, 1)
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 3
+text = "3D-Vorschau · Keine bestätigte Sitzung"
+
+[node name="WorldToggle" type="Button" parent="WorldHUD/WorldBar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(130, 48)
+text = "Diagnose"
