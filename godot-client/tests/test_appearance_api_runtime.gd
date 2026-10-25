@@ -87,6 +87,8 @@ func verify() -> void:
 	var auth := TestAuth.new()
 	root.add_child(auth)
 	var api := Api.new(auth)
+	api.appearance_ready.connect(_ready_callback)
+	api.request_failed.connect(_failed_callback)
 	root.add_child(api)
 	await process_frame
 	var http: HTTPRequest = api.get_child(0)
