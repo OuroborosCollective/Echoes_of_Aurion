@@ -4794,3 +4794,26 @@ Evidence: Kausale RED-Läufe 40145458865 (Resolver) und 40149025949 (Boden); Cod
 Änderung: Godot setzt beim Aurion-Sitzungsreset Kamera und Neutralboden zurück, aktualisiert den 3D-Stale-Status auch ohne geladenes Modell und begrenzt verstecktes SubViewport-Rendering auf sichtbarkeitsabhängige Frames. Keine Änderung an Core, Tick oder Persistenz.
 Erkenntnis: Die echte Szene behielt zuvor die alte Kameraposition; ohne Actor blieb das sichtbare HUD trotz veralteter Welt frisch; das versteckte Viewport-Target renderte ungebremst. Der Godot-Viewport-Modus ist nach Szenenstart explizit zu setzen.
 Evidence: Kausaler RED im Godot-4.7.2-Actor-Lauf 40214828986 (alle drei Assertions) nach Parserbereinigung; GREEN-Codehead 8a8f6d18629d9e9377e9ad6211f85efd80c137a0, echter GLB-Import/Actor/llvmpipe-Render 40215074542 PASS. Finaler Memory-Head benötigt seine eigenen CI-/Artefakt-Readbacks; keine Geräte- oder Live-Welt-Abnahme.
+
+### 2026-10-25 — Zone-Tick-Watermarks ohne pro-Tick-Map-Neuanlage (PR #1168)
+Änderung: Verwendet die actionSequenceWatermarks-Map innerhalb einer Aurion-Zone wieder und füllt sie pro Tick aus den sortierten Peers erneut; unverknüpfte BVH-Benchmarkzahlen und Bot-Memory-Änderungen wurden aus dem PR-Diff entfernt.
+Erkenntnis: Tick und kanonische Sequenz bleiben autoritativ; die Map muss in jedem Tick vollständig geleert werden. Eine gemessene CPU-/GC-Verbesserung liegt nicht vor, nur die entfallende Quellcode-Allokationsstelle.
+Evidence: Codehead 3886633b554e1f38f8b19887a0a7044e90daabd3, zugehörige GitHub-Action-Runs 40218642017/40218641931/40218641965/40218641987/40218641957/40218641950/40218641947/40218641958: acht relevante CI-Läufe PASS. Der finale Memory-tragende PR-Head braucht zusätzlich eigenen CI- und GitHub-Readback; keine Produktionsmessung.
+
+
+### 2026-10-25 — Home- und Community-Zugaenglichkeit (PR #1162)
+Änderung: Leicht bedienbare, fokussierbare Home-CTAs und eine Rangliste-Community-Kachel, bei Wahrung bestehender Events und Typnamen; fremde BVH-Receipts und Bot-Notiz nicht uebernommen.
+Erkenntnis: UI-Verbesserungen duerfen keine Runtime-/Gameplay-Autoritaet erzeugen; reale Browser-Regressionspruefung und finaler Main-Readback sind Pflicht.
+Evidence: Vorheriger PR-Head 0c0dd5a8a74f6d7e5e5aa54d2e0376e16eff0e9b mit 7/7 CI-PASS. Neu synchronisierter Head muss seine eigenen CI-Gates bestehen.
+
+
+### 2026-10-25 — Wolfram-CAG-Ausdrucksaufbau ohne Zwischenarrays (PR #1166)
+Änderung: Vorhandene CAG-Ausdruecke erhalten identische Syntax bei weniger temporaeren Arrays; Wolfram ist ausschliesslich Analysepfad. Bot-Notiz bleibt aussen vor.
+Erkenntnis: Bytegleichheit der Probeausdruecke und deterministische Eingaben sind Abnahmekriterien; kein CPU-Speedup ohne Benchmark behaupten.
+Evidence: Alter PR-Head 8a22effa04ec1107c827c586a2346d98d0c56913 mit 5/5 Github-Actions-PASS. Finaler Head und seine CI vor Merge unabhaengig rueckzulesen.
+
+
+### 2026-10-25 — G16 serverseitige NPC-Anker und öffentliche Spielerprojektion (PR #1169)
+Änderung: Servergebundene Quest-NPC-Anker erhalten unterschiedliche npc:-IDs und auditiertes Standard-Humanoid-Modell als reine Optik; Godot verknuepft fremde Spieler nur nach bestaetigter v5-Praesenz, freigegebener Public-Appearance und hashgleichem GLB. Fehlende Katalogtreffer diagnostizieren statt einen Monster-Ersatz zu erfinden.
+Erkenntnis: Der NPC-Readmodel-Endpunkt ersetzt weder lebende NPC-Lifecycle-Authority noch den Godot-NPC-Adapter; G16 bleibt PARTIAL. Protokoll-Fixtures sind keine Produktiv- oder Tab-A9-Belege.
+Evidence: Ursprung bef7af35423ff6f235f610af1a4b03b556fc7961 mit 8/8 zugeordneten CI-PASS. Neuer Memory-tragender Head braucht echten Godot-/GLB-Headless-, Android- und Runtime-Finalcheck vor Merge.

@@ -142,12 +142,7 @@ export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCag
     rowStrings[i] = `{${matrix[i]!.join(",")}}`;
   }
   const rows = rowStrings.join(",");
-  const code = [
-    `m={${rows}}`,
-    "dx=Abs[Differences[Transpose[m]]]",
-    "dz=Abs[Differences[m]]",
-    "{Min[m],Max[m],Max[dx,dz]}",
-  ].join(";");
+  const code = `m={${rows}};dx=Abs[Differences[Transpose[m]]];dz=Abs[Differences[m]];{Min[m],Max[m],Max[dx,dz]}`;
   return Object.freeze({
     kind: "terrain_invariants",
     code,
@@ -209,10 +204,7 @@ export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): Aurion
     }
   }
   const surfaces = surfacesArr.join(",");
-  const code = [
-    `surfaces={${surfaces}}`,
-    "Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]"
-  ].join(";");
+  const code = `surfaces={${surfaces}};Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]`;
 
   return Object.freeze({
     kind: "terrain_texturization",
@@ -326,15 +318,7 @@ export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk):
   }
   const sRows = sRowStrings.join(",");
 
-  const code = [
-    `h={${hRows}}`,
-    `s={${sRows}}`,
-    "var=Round[Variance[Flatten[h]]]",
-    "sdx=Differences[Transpose[s]]",
-    "sdz=Differences[s]",
-    "trans=Total[Unitize[sdx], 2]+Total[Unitize[sdz], 2]",
-    "{var,trans}"
-  ].join(";");
+  const code = `h={${hRows}};s={${sRows}};var=Round[Variance[Flatten[h]]];sdx=Differences[Transpose[s]];sdz=Differences[s];trans=Total[Unitize[sdx], 2]+Total[Unitize[sdz], 2];{var,trans}`;
 
   return Object.freeze({
     kind: "terrain_continuity",
@@ -412,11 +396,7 @@ function wolframNumber(value: number): string {
 
 export function buildModelScaleCagProbe(bounds: ModelBounds, targetMaxExtent: number): AurionCagProbe {
   const normalized = normalizeModelBounds(bounds, targetMaxExtent);
-  const extents = [
-    wolframNumber(normalized.sourceExtents[0]),
-    wolframNumber(normalized.sourceExtents[1]),
-    wolframNumber(normalized.sourceExtents[2])
-  ].join(",");
+  const extents = `${wolframNumber(normalized.sourceExtents[0])},${wolframNumber(normalized.sourceExtents[1])},${wolframNumber(normalized.sourceExtents[2])}`;
   return Object.freeze({
     kind: "model_scale",
     code: `source=Max[{${extents}}];Round[(${wolframNumber(targetMaxExtent)}/source)*100000000]`,
