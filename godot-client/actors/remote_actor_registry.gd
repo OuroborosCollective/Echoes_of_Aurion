@@ -5,6 +5,11 @@ const ActorScene = preload("res://actors/actor_view.tscn")
 const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
 var _actors: Dictionary = {}
 var _resource_paths: Dictionary = {}
+var diagnostic := ""
+var _monsters: bool
+
+func _init(monsters: bool = false) -> void:
+	_monsters = monsters
 
 func _remove(root: Node3D, entity_id: String) -> void:
 	var actor: Variant = _actors.get(entity_id)
@@ -24,17 +29,21 @@ func apply(world: Variant, root: Node3D, response: Variant, catalog: Variant, ma
 	if world == null or not world.has_state() or typeof(response) != TYPE_DICTIONARY:
 		clear(root)
 		return
-	var rows: Variant = response.get("appearances")
+	var rows: Variant = world.current_state().get("mobs", []) if _monsters else response.get("appearances")
 	if typeof(rows) != TYPE_ARRAY or rows.size() > 128:
 		clear(root)
 		return
+	diagnostic = ""
 	var resolver = AppearanceResolver.new()
 	var accepted: Dictionary = {}
 	for row in rows:
-		var resolution: Dictionary = resolver.resolve_public_presence(world, row, catalog, manifest)
+		var resolution: Dictionary = resolver.resolve_monster(world, row, catalog, manifest) if _monsters else resolver.resolve_public_presence(world, row, catalog, manifest)
 		if resolution.get("reason") == "presence_absent":
 			continue # A response for a player who already despawned is stale.
 		if resolution.get("status") != "resolved":
+			if _monsters:
+				diagnostic = str(resolution.get("reason", "monster_unavailable"))
+				continue
 			clear(root)
 			return
 		var id: String = resolution.entityId

@@ -55,6 +55,12 @@ var _auth_start: Node
 var _api: Node
 var _appearance_api: Node
 var _self_actor: Node3D
+var _monster_api: Node
+var _monster_actors = RemoteActorRegistry.new(true)
+var _monster_catalog: Dictionary = {}
+var _monster_manifest: Dictionary = {}
+var _monster_last_poll_ms := -1
+var _monster_diagnostic := "Katalog nicht geladen"
 var _remote_api: Node
 var _remote_actors = RemoteActorRegistry.new()
 var _quest_npc_api: Node
@@ -119,6 +125,10 @@ func _ready() -> void:
 	add_child(_quest_npc_api)
 	_quest_npc_api.npcs_ready.connect(_on_quest_npc_ready)
 	_quest_npc_api.request_failed.connect(_on_quest_npc_failed)
+	_monster_api = QuestNpcApi.new(_auth_start, "/api/game/glb-catalog")
+	add_child(_monster_api)
+	_monster_api.npcs_ready.connect(_on_monster_catalog_ready)
+	_monster_api.request_failed.connect(_on_monster_catalog_failed)
 	_zone_socket = ZoneSocket.new()
 	add_child(_zone_socket)
 	_zone_socket.zone_welcome.connect(_on_zone_welcome)
@@ -259,6 +269,12 @@ func _reset_projection() -> void:
 	if _quest_npc_api != null:
 		_quest_npc_api.cancel()
 	_quest_npc_diagnostic = "nicht geladen"
+	if _monster_api != null:
+		_monster_api.cancel()
+	_monster_catalog.clear()
+	_monster_manifest.clear()
+	_monster_last_poll_ms = -1
+	_monster_diagnostic = "Katalog nicht geladen"
 	_remote_catalog.clear()
 	_remote_manifest.clear()
 	_remote_poll_key = ""
@@ -326,6 +342,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		_update_entity_presentation()
 		_update_vitals_presentation()
 		_update_position_presentation(now_ms)
+		_sync_monsters()
 		_project_3d(now_ms)
 		_request_remote_appearances(now_ms)
 
@@ -513,6 +530,7 @@ func _toggle_world_diagnostics() -> void:
 
 func _clear_3d_actors() -> void:
 	_remote_actors.clear(world_actors)
+	_monster_actors.clear(world_actors)
 	_quest_npc_actors.clear(quest_npc_root)
 	_self_actor = null
 	for actor in world_actors.get_children():
@@ -575,6 +593,7 @@ func _project_3d(now_ms: int) -> void:
 	if not _confirmed_zone.has_state():
 		return
 	_remote_actors.project(_confirmed_zone, _visuals, now_ms, world_actors)
+	_monster_actors.project(_confirmed_zone, _visuals, now_ms, world_actors)
 	if is_instance_valid(_self_actor):
 		var valid: bool = _self_actor.project(_confirmed_zone, _visuals, now_ms)
 		if not valid:
@@ -600,10 +619,10 @@ func _update_3d_status() -> void:
 		return
 	var visible_count := 1 if is_instance_valid(_self_actor) and _self_actor.visible else 0
 	var remote_count := _remote_actors.visible_count()
-	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1 - remote_count, 0)
+	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1 - remote_count - _monster_actors.visible_count(), 0)
 	var model_message := "Spielerfigur sichtbar" if visible_count == 1 else "Spielerfigur: " + _appearance_diagnostic
 	var npc_count: int = _quest_npc_actors.visible_count()
-	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch)%s · %d ungeklärte Entitäten · Neutralboden%s" % [model_message, remote_count, npc_count, (" · NPC: " + _quest_npc_diagnostic) if not _quest_npc_diagnostic.is_empty() else "", other_count, _world_freshness_suffix()]
+	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch)%s · %d Monster (%s) · %d ungeklärte Entitäten · Neutralboden%s" % [model_message, remote_count, npc_count, (" · NPC: " + _quest_npc_diagnostic) if not _quest_npc_diagnostic.is_empty() else "", _monster_actors.visible_count(), _monster_diagnostic, other_count, _world_freshness_suffix()]
 
 ## Only server-confirmed v5 presence IDs may be queried. HTTP is read-only;
 ## a response never creates additional gameplay state or enables interactions.
@@ -624,6 +643,7 @@ func _current_remote_ids_csv() -> String:
 	return ",".join(parts)
 
 func _request_remote_appearances(now_ms: int) -> void:
+	_request_monster_catalog(now_ms)
 	if _remote_catalog.is_empty() or not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
 		return
 	var ids: Array[int] = _current_remote_ids()
@@ -849,3 +869,38 @@ func _draw() -> void:
 	draw_line(center - Vector2(0, radius), center + Vector2(0, radius), Color(0.40, 0.56, 0.60, 0.10), 1.0, true)
 	for star in STARS:
 		draw_circle(star * size, 2.0, Color(0.77, 0.69, 0.46, 0.6))
+
+func _request_monster_catalog(now_ms: int) -> void:
+	if not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or _entities.ids("mobs").is_empty():
+		return
+	if _monster_last_poll_ms >= 0 and now_ms - _monster_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS:
+		return
+	_monster_last_poll_ms = now_ms
+	_monster_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
+
+func _on_monster_catalog_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
+	_apply_monster_catalog(response, manifest if manifest is Dictionary else {})
+
+func _on_monster_catalog_failed(reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	_monster_actors.clear(world_actors)
+	_monster_catalog.clear()
+	_monster_diagnostic = reason
+	_update_3d_status()
+
+## Explicit-fixture test seam; authenticated callback is the production caller.
+func _apply_monster_catalog(catalog: Dictionary, manifest: Dictionary) -> void:
+	_monster_catalog = catalog.duplicate(true)
+	_monster_manifest = manifest.duplicate(true)
+	_sync_monsters()
+	_project_3d(Time.get_ticks_msec())
+
+func _sync_monsters() -> void:
+	_monster_actors.apply(_confirmed_zone, world_actors, {}, _monster_catalog, _monster_manifest)
+	_monster_diagnostic = _monster_actors.diagnostic

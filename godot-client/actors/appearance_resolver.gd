@@ -136,3 +136,46 @@ func resolve_public_presence(world: Variant, appearance: Variant, catalog: Varia
 	if not ResourceLoader.exists(path, "PackedScene"):
 		return _blocked("prepared_model_missing")
 	return {"status": "resolved", "entityId": id, "catalogAssetId": asset_id, "sourceAssetId": prepared_id, "sha256": sha, "resourcePath": path}
+
+## Native exact-archetype subset of approved enemy assets. Web fallback pools
+## are intentionally not guessed here: prepared provenance must name this mob.
+func resolve_monster(world: Variant, mob: Variant, catalog: Variant, prepared: Variant) -> Dictionary:
+	if world == null or not world.has_state() or typeof(mob) != TYPE_DICTIONARY:
+		return _blocked("monster_not_confirmed")
+	var confirmed := false
+	for raw in world.current_state().get("mobs", []):
+		if raw == mob:
+			confirmed = true
+	if not confirmed:
+		return _blocked("monster_not_confirmed")
+	if typeof(catalog) != TYPE_DICTIONARY or catalog.get("version") != CATALOG_VERSION or not _lower_hex(catalog.get("revision"), 64) or typeof(catalog.get("entries")) != TYPE_ARRAY or catalog.entries.size() > 500:
+		return _blocked("monster_catalog_invalid")
+	if typeof(prepared) != TYPE_DICTIONARY or prepared.get("schemaVersion") != PREPARED_VERSION or prepared.get("outputMode") != "byte-exact-compatible-copy" or not _lower_hex(prepared.get("sourceRevision"), 40) or typeof(prepared.get("sources")) != TYPE_ARRAY or prepared.sources.size() > 128:
+		return _blocked("prepared_manifest_invalid")
+	var matches: Array = []
+	for entry in catalog.entries:
+		if typeof(entry) != TYPE_DICTIONARY:
+			return _blocked("monster_catalog_invalid")
+		var sha: Variant = entry.get("sha256")
+		if entry.get("assetType") != "enemy" or entry.get("purpose") not in ["auto", "enemy-fallback"] or entry.get("targetKey") != null:
+			continue
+		if not _lower_hex(sha, 64) or entry.get("storageUrl") != "/api/assets/glb/" + str(sha) + ".glb" or typeof(entry.get("assetId")) != TYPE_STRING or entry.assetId.length() < 8 or entry.assetId.length() > 64:
+			return _blocked("monster_asset_invalid")
+		var source_id := "glb_" + str(sha).substr(0, 48)
+		var source_matches: Array = []
+		for source in prepared.sources:
+			if typeof(source) != TYPE_DICTIONARY:
+				return _blocked("prepared_manifest_invalid")
+			var mapping: Variant = source.get("canonicalMapping")
+			if source.get("role") == "monster" and source.get("assetId") == source_id and source.get("sha256") == sha and source.get("sourceSha256") == sha and source.get("outputSha256") == sha and source.get("path") == "godot-client/assets/generated/" + source_id + ".glb" and typeof(mapping) == TYPE_DICTIONARY and mapping.get("kind") == "monster-source" and mapping.get("archetype") == mob.get("archetype"):
+				source_matches.append(source)
+		if source_matches.size() > 1:
+			return _blocked("monster_source_ambiguous")
+		if source_matches.size() == 1:
+			var resource := "res://assets/generated/" + source_id + ".glb"
+			if not ResourceLoader.exists(resource, "PackedScene"):
+				return _blocked("monster_model_missing")
+			matches.append({"status":"resolved","entityId":mob.entityId,"catalogAssetId":entry.assetId,"sourceAssetId":source_id,"sha256":sha,"resourcePath":resource})
+	if matches.size() != 1:
+		return _blocked("monster_asset_ambiguous" if matches.size() > 1 else "monster_archetype_model_unavailable")
+	return matches[0]

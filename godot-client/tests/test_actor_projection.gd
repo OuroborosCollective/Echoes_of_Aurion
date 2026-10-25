@@ -55,6 +55,7 @@ func verify() -> void:
 	await verify_active_scene(welcome, manifest)
 	await verify_remote_scene(welcome, manifest)
 	await verify_quest_npc_scene(welcome, manifest)
+	await verify_monster_scene(welcome, manifest)
 	var snapshot := welcome.duplicate(true)
 	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
 		snapshot.erase(key)
@@ -563,4 +564,107 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	scene._reset_projection()
 	require(npcs_root.get_child_count() == 0,
 		"quest NPCs survived zone logout/session reset")
+	scene.queue_free()
+
+## Synthetic protocol/catalog fixtures with real imported GLBs in active scene.
+func verify_monster_scene(welcome: Dictionary, manifest: Dictionary) -> void:
+	var scene: Control = load("res://app/main.tscn").instantiate()
+	root.add_child(scene)
+	if not scene.has_method("_apply_monster_catalog"):
+		require(false, "active scene cannot project catalog-approved confirmed monsters")
+		scene.queue_free()
+		return
+	scene._on_zone_welcome(welcome)
+	scene._on_zone_connected()
+	var source: Dictionary = {}
+	for raw: Dictionary in manifest.sources:
+		if raw.role == "monster":
+			source = raw
+	var entry := {"assetId":"approved_stalker_fixture","sha256":source.sha256,"purpose":"auto","assetType":"enemy","targetKey":null,"storageUrl":"/api/assets/glb/"+str(source.sha256)+".glb"}
+	var catalog := {"version":"aurion.glb-import.v1","revision":"c".repeat(64),"entries":[entry]}
+	var actors: Node3D = scene.get_node("%Actors")
+	scene._apply_monster_catalog(catalog, manifest)
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(actors.get_child_count() == 1, "approved confirmed monster not instantiated exactly once")
+	if actors.get_child_count() != 1:
+		scene.queue_free()
+		return
+	var actor: Node3D = actors.get_child(0)
+	require(actor.entity_id == "mob_1" and actor.visible and actor.asset_id == entry.assetId, "monster identity/visibility lost")
+	require(actor.position == Vector3(2,0,0), "monster left confirmed mm position")
+	scene._apply_monster_catalog(catalog, manifest)
+	require(actors.get_child(0) == actor, "unchanged catalog replaced monster actor")
+	scene._on_monster_catalog_ready({"entries":[]}, welcome.connectionId, 0)
+	require(actors.get_child_count() == 1, "unprotected catalog callback changed actors")
+	var duplicate := catalog.duplicate(true)
+	duplicate.entries.append(entry.duplicate(true))
+	scene._apply_monster_catalog(duplicate, manifest)
+	require(actors.get_child_count() == 0, "ambiguous monster catalog retained old actor")
+	var unavailable := manifest.duplicate(true)
+	unavailable.sources.clear()
+	scene._apply_monster_catalog(catalog, unavailable)
+	require(actors.get_child_count() == 0, "missing prepared monster retained old actor")
+	scene._apply_monster_catalog(catalog, manifest)
+	actor = actors.get_child(0)
+	var changed := catalog.duplicate(true)
+	changed.entries[0].assetId = "replacement_stalker_fixture"
+	scene._apply_monster_catalog(changed, manifest)
+	require(actors.get_child_count() == 1 and actors.get_child(0).asset_id == "replacement_stalker_fixture", "same-ID catalog appearance change ignored")
+	scene._apply_monster_catalog(catalog, manifest)
+	actor = actors.get_child(0)
+	var snapshot := welcome.duplicate(true)
+	for key in ["protocolVersion","connectionId","selfEntityId"]:
+		snapshot.erase(key)
+	snapshot.type = "snapshot"
+	snapshot.snapshotSeq = 2
+	snapshot.tick = 2
+	snapshot.mobs[0].position.x = 3000
+	scene._on_zone_snapshot(snapshot)
+	scene._project_3d(scene._last_world_update_ms + 50)
+	require(is_equal_approx(actor.position.x, 2.5), "monster interpolation lost bounded confirmed samples")
+	var player: AnimationPlayer = actor.find_children("*","AnimationPlayer",true,false)[0]
+	require(player.current_animation == "Walk", "moving monster did not animate Walk")
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(player.current_animation == "Idle", "monster extrapolated walking beyond confirmed target")
+	var output := OS.get_environment("AURION_ACTOR_RENDER_DIR")
+	if not output.is_empty():
+		await process_frame
+		await RenderingServer.frame_post_draw
+		var viewport: SubViewport = scene.get_node("WorldView/Live3D")
+		require(viewport.get_texture().get_image().save_png(output.path_join("monster-viewport.png")) == OK, "monster viewport capture failed")
+	var denied := catalog.duplicate(true)
+	denied.entries[0].purpose = "player-public"
+	scene._apply_monster_catalog(denied, manifest)
+	require(actors.get_child_count() == 0, "character catalog mounted as monster")
+	scene._apply_monster_catalog(catalog, manifest)
+	snapshot.snapshotSeq = 3
+	snapshot.tick = 3
+	snapshot.mobs[0].archetype = "aether_wisp"
+	scene._on_zone_snapshot(snapshot)
+	require(actors.get_child_count() == 0, "unmatched archetype silently received Stalker")
+	snapshot.snapshotSeq = 4
+	snapshot.tick = 4
+	snapshot.mobs[0].archetype = "clockwork_stalker"
+	snapshot.mobs[0].state = "dead"
+	snapshot.mobs[0].health = 0
+	scene._on_zone_snapshot(snapshot)
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(actors.get_child_count() == 1, "confirmed dead monster disappeared before Death")
+	actor = actors.get_child(0)
+	player = actor.find_children("*","AnimationPlayer",true,false)[0]
+	require(player.current_animation == "Death", "confirmed death did not animate Death")
+	var older := snapshot.duplicate(true)
+	older.snapshotSeq = 3
+	older.mobs.clear()
+	scene._on_zone_snapshot(older)
+	require(actors.get_child_count() == 1, "stale sequence removed current monster")
+	snapshot.snapshotSeq = 5
+	snapshot.tick = 5
+	snapshot.mobs.clear()
+	scene._on_zone_snapshot(snapshot)
+	require(actors.get_child_count() == 0, "monster despawn leaked actor")
+	scene._apply_monster_catalog(catalog, manifest)
+	require(actors.get_child_count() == 0, "catalog created absent monster")
+	scene._reset_projection()
+	require(actors.get_child_count() == 0, "session reset retained monster")
 	scene.queue_free()

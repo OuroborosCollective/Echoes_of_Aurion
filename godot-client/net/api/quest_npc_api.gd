@@ -14,9 +14,14 @@ var _generation := -1
 var _server := ""
 var _retried := false
 var _waiting_refresh := false
+var _path: String
+var _body_limit: int
 
-func _init(auth: Node) -> void:
+func _init(auth: Node, path: String = PATH) -> void:
+	assert(path in [PATH, "/api/game/glb-catalog"])
 	_auth = auth
+	_path = path
+	_body_limit = 1048576 if path == "/api/game/glb-catalog" else MAX_RESPONSE_BYTES
 
 func _ready() -> void:
 	_auth.refresh_succeeded.connect(_on_refresh_succeeded)
@@ -51,12 +56,12 @@ func _send() -> bool:
 	_epoch += 1
 	var epoch: int = _epoch
 	_http = HTTPRequest.new()
-	_http.body_size_limit = MAX_RESPONSE_BYTES
+	_http.body_size_limit = _body_limit
 	_http.max_redirects = 0
 	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_completed.bind(epoch))
-	var err: Error = _http.request(_server + PATH,
+	var err: Error = _http.request(_server + _path,
 		PackedStringArray(["Accept: application/json", "Authorization: Bearer " + token]),
 		HTTPClient.METHOD_GET)
 	if err != OK:
