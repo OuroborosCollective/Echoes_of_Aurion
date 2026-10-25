@@ -40,7 +40,3 @@
 ## 2026-10-22 - Optimize Array Allocation and Matrix Lookups in Wolfram CAG Probes
 **Learning:** High-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity) suffer from garbage collection spikes when using `Map` lookups with string-concatenated keys or chained array methods like `.map().join()`. Using `Map` for grid coordinates forces O(N) string allocations and hash lookups.
 **Action:** Replace `Map` lookups and `Array.from()` with pre-allocated 2D arrays accessed via integer indices. Replace chained `.map().join()` operations with pre-allocated arrays populated via direct `for` loops or direct array instantiation for tuples.
-
-## 2026-10-23 - Optimize Array allocations in Wolfram CAG probes
-**Learning:** When building Wolfram Language queries and literal expressions for CAG probes (e.g., in `aurionCagDesignProtocol.ts` or `structureGrammarCagAnalysis.ts`), avoid chained array allocations like `[...].join(';')` or `.map().join(',')`.
-**Action:** Use direct template literal interpolation for fixed structures, or populate pre-allocated arrays (`new Array(length)`) via `for` loops to minimize garbage collection spikes.

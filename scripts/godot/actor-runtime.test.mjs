@@ -8,7 +8,7 @@ import { repo, root } from './toolchain.mjs';
 test('actual failed actor reruns cannot publish stale success receipts', async () => {
   const directory = join(root, 'actor-evidence');
   await mkdir(directory, { recursive: true });
-  const outputs = ['headless.json', 'headless.log', 'import.log', 'render.json', 'render.log', 'actors.png'];
+  const outputs = ['headless.json', 'headless.log', 'import.log', 'render.json', 'render.log', 'actors.png', 'world-view.png', 'world-viewport.png'];
   for (const render of [true, false]) {
     for (const file of outputs) await writeFile(join(directory, file), 'stale-success-sentinel');
     const result = spawnSync(process.execPath, ['scripts/godot/actor-runtime.mjs', ...(render ? ['--render'] : [])], {
@@ -18,7 +18,7 @@ test('actual failed actor reruns cannot publish stale success receipts', async (
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /ERR_ASSERTION/);
     assert.match(result.stderr, /0000000000000000000000000000000000000000/);
-    for (const file of render ? ['render.json', 'render.log', 'actors.png'] : outputs) {
+    for (const file of render ? ['render.json', 'render.log', 'actors.png', 'world-view.png', 'world-viewport.png'] : outputs) {
       await assert.rejects(access(join(directory, file)), { code: 'ENOENT' });
     }
     if (render) assert.equal(await readFile(join(directory, 'headless.json'), 'utf8'), 'stale-success-sentinel');
