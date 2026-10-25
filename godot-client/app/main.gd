@@ -495,11 +495,18 @@ func _on_appearance_ready(response: Dictionary, connection_id: String, generatio
 		_appearance_diagnostic = str(resolution.get("reason", "appearance_invalid"))
 		_update_3d_status()
 		return
+	_mount_resolved_self(resolution)
+
+## Caller must first validate the authenticated response through AppearanceResolver.
+## Kept separate so actual scene/actor composition has an independent render test.
+func _mount_resolved_self(resolution: Dictionary) -> bool:
+	if not _confirmed_zone.has_state() or resolution.get("status") != "resolved" or resolution.get("entityId") != _confirmed_zone.self_entity_id():
+		return false
 	var packed: PackedScene = load(str(resolution.resourcePath)) as PackedScene
 	if packed == null:
 		_appearance_diagnostic = "packed_model_unavailable"
 		_update_3d_status()
-		return
+		return false
 	_clear_3d_actors()
 	var actor: Node3D = ActorScene.instantiate()
 	world_actors.add_child(actor)
@@ -508,10 +515,11 @@ func _on_appearance_ready(response: Dictionary, connection_id: String, generatio
 		actor.queue_free()
 		_appearance_diagnostic = "model_bind_rejected"
 		_update_3d_status()
-		return
+		return false
 	_self_actor = actor
 	_appearance_diagnostic = ""
 	_project_3d(Time.get_ticks_msec())
+	return true
 
 func _project_3d(now_ms: int) -> void:
 	if not _confirmed_zone.has_state() or not is_instance_valid(_self_actor):
