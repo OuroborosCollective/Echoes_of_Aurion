@@ -23,7 +23,9 @@ func resolve_self(world: Variant, response: Variant, prepared: Variant) -> Dicti
 	var confirmed: Dictionary = world.current_state()
 	var has_self := false
 	for raw in confirmed.get("presences", []):
-		if typeof(raw) == TYPE_DICTIONARY and raw.get("entityId") == id and typeof(raw.get("userId")) == TYPE_INT and raw.get("userId") > 0:
+		# ZoneState has already validated the canonical v5 presence, including
+		# its integer-valued userId regardless of Godot JSON int/float decoding.
+		if typeof(raw) == TYPE_DICTIONARY and raw.get("entityId") == id:
 			has_self = true
 			break
 	if id.is_empty() or not has_self:

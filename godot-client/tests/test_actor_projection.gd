@@ -304,6 +304,19 @@ func check_approved_self_appearance(world: Variant, manifest: Dictionary) -> voi
 	require(result.get("catalogAssetId") == server_asset_id, "resolver invented catalog identity")
 	require(result.get("sourceAssetId") == source.assetId, "resolver lost generated source identity")
 	require(result.get("sha256") == sha, "resolver lost source content hash")
+	# Real JSON decoders may represent an integer wire userId as float 1.0.
+	# The authoritative codec admits either integral representation.
+	var json_numeric_welcome: Dictionary = fixture()
+	json_numeric_welcome.presences[0].userId = 1.0
+	var json_numeric_world := World.new()
+	require(json_numeric_world.apply_welcome(json_numeric_welcome),
+		"canonical codec rejected integral JSON float userId")
+	require(resolver.resolve_self(json_numeric_world, response, manifest).get("status") == "resolved",
+		"valid JSON float presence was blocked by appearance join")
+	json_numeric_welcome.presences[0].userId = 1.5
+	var invalid_fraction_world := World.new()
+	require(not invalid_fraction_world.apply_welcome(json_numeric_welcome),
+		"fractional userId admitted by canonical zone validation")
 	require(result.get("resourcePath") == "res://assets/generated/" + str(source.assetId) + ".glb",
 		"resolver selected an unapproved local path")
 	require(JSON.stringify(world.current_state()) == before, "visual resolution changed confirmed Aurion state")
