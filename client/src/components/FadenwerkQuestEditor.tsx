@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { QuestTemplateVersionSchema, type QuestTemplateVersion } from "@shared/aurionQuestContract";
+import type { QuestTemplateVersion } from "@shared/aurionQuestContract";
 import { inspectFadenwerk, nextAuthoringVersion, toQuarantinedQuestTemplate } from "@/fadenwerk/legacyQuestAdapter";
 
 /** Presentation/authoring only; never publishes a quest or writes game state. */
@@ -18,7 +18,11 @@ export default function FadenwerkQuestEditor({ templates }: { templates: QuestTe
   }, [source]);
   const proposed = trpc.aurionQuest.proposeDraft.useMutation();
   const planned = trpc.aurionQuest.publishPlan.useMutation();
-  const valid = template ? QuestTemplateVersionSchema.safeParse(template) : null;
+  // Presentation-only preflight. The authoritative QuestTemplateVersionSchema is parsed on the server.
+  // Do not import the runtime contract here: its replay dependency imports node:crypto.
+  const previewReady = !!template && template.title.trim().length > 0
+    && template.nodes.length > 0 && template.nodes.length <= 50
+    && template.nodes.every(node => node.title.trim().length > 0);
   const selected = template?.nodes.find(n => n.id === nodeId);
   const change = (edit: (t: QuestTemplateVersion) => void) => {
     setTemplate(t => { if (!t) return t; const next = structuredClone(t); edit(next); return next; });
@@ -41,9 +45,9 @@ export default function FadenwerkQuestEditor({ templates }: { templates: QuestTe
     setMessage("Unveröffentlichte neue Vorlagenversion vorbereitet.");
   };
   const requestPlan = async () => {
-    if (!valid?.success || planned.isPending || proposed.isPending) return;
+    if (!template || !previewReady || planned.isPending || proposed.isPending) return;
     try {
-      const t = valid.data;
+      const t = template;
       const proposal = await proposed.mutateAsync({
         templateId: t.templateId, templateVersion: t.version, proposedDataJson: JSON.stringify(t),
       });
@@ -84,8 +88,8 @@ export default function FadenwerkQuestEditor({ templates }: { templates: QuestTe
       <label className="block text-sm">Questtitel
         <input className="mt-1 w-full rounded bg-slate-900 p-2" value={template.title} onChange={e => change(t => { t.title=e.target.value; })} />
       </label>
-      {!valid?.success && <p role="alert" className="text-red-300 text-sm">Aurion-Schema lokal ungültig.</p>}
-      <button type="button" disabled={!valid?.success || planned.isPending || proposed.isPending} className="rounded border border-cyan-600 px-3 py-2 disabled:opacity-40" onClick={requestPlan}>Aurion-Draft + Plan anfragen (ohne Veröffentlichung)</button>
+      {!previewReady && <p role="alert" className="text-red-300 text-sm">Entwurf unvollständig. Die verbindliche Schemaprüfung findet ausschließlich auf dem Aurion-Server statt.</p>}
+      <button type="button" disabled={!previewReady || planned.isPending || proposed.isPending} className="rounded border border-cyan-600 px-3 py-2 disabled:opacity-40" onClick={requestPlan}>Aurion-Draft + Plan anfragen (ohne Veröffentlichung)</button>
       <details><summary className="cursor-pointer">Kanonischen Entwurf ansehen</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(template,null,2)}</pre></details>
     </div>}
     {message && <p role="status" className="break-words text-sm">{message}</p>}
