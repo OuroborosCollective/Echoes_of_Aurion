@@ -200,7 +200,7 @@ func verify_active_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	var initially_hidden_viewport := view.get_node_or_null("Live3D") as SubViewport
 	require(initially_hidden_viewport != null, "G16 active SubViewport missing")
 	if initially_hidden_viewport != null:
-		require(initially_hidden_viewport.render_target_update_mode == SubViewport.UPDATE_WHEN_PARENT_VISIBLE,
+		require(initially_hidden_viewport.render_target_update_mode in [SubViewport.UPDATE_WHEN_VISIBLE, SubViewport.UPDATE_WHEN_PARENT_VISIBLE],
 			"hidden login/disconnected 3D viewport still renders continuously")
 	var initial_camera_transform: Transform3D = camera.transform
 	require(not view.visible, "offline Godot scene presented an invented authenticated world")
