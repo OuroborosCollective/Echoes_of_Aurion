@@ -89,6 +89,9 @@ surface_material_override/0 = SubResource("Material_unassigned_floor")
 [node name="Actors" type="Node3D" parent="WorldView/Live3D/World"]
 unique_name_in_owner = true
 
+[node name="QuestNPCs" type="Node3D" parent="WorldView/Live3D/World"]
+unique_name_in_owner = true
+
 [node name="WorldCamera" type="Camera3D" parent="WorldView/Live3D/World"]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 5)

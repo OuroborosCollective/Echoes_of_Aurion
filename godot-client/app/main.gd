@@ -16,6 +16,8 @@ const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
 const ActorScene = preload("res://actors/actor_view.tscn")
 const RemoteActorRegistry = preload("res://actors/remote_actor_registry.gd")
 const PublicAppearanceApi = preload("res://net/api/public_actor_appearance_api.gd")
+const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
+const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
@@ -41,6 +43,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var world_status: Label = %WorldStatus
 @onready var world_toggle: Button = %WorldToggle
 @onready var world_actors: Node3D = %Actors
+@onready var quest_npc_root: Node3D = %QuestNPCs
 @onready var live_3d_viewport: SubViewport = $WorldView/Live3D
 @onready var world_camera: Camera3D = %WorldCamera
 @onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
@@ -54,6 +57,9 @@ var _appearance_api: Node
 var _self_actor: Node3D
 var _remote_api: Node
 var _remote_actors = RemoteActorRegistry.new()
+var _quest_npc_api: Node
+var _quest_npc_actors = QuestNpcRegistry.new()
+var _quest_npc_diagnostic := "nicht geladen"
 var _remote_catalog: Dictionary = {}
 var _remote_manifest: Dictionary = {}
 var _remote_poll_key := ""
@@ -109,6 +115,10 @@ func _ready() -> void:
 	add_child(_remote_api)
 	_remote_api.appearances_ready.connect(_on_remote_appearance_ready)
 	_remote_api.request_failed.connect(_on_remote_appearance_failed)
+	_quest_npc_api = QuestNpcApi.new(_auth_start)
+	add_child(_quest_npc_api)
+	_quest_npc_api.npcs_ready.connect(_on_quest_npc_ready)
+	_quest_npc_api.request_failed.connect(_on_quest_npc_failed)
 	_zone_socket = ZoneSocket.new()
 	add_child(_zone_socket)
 	_zone_socket.zone_welcome.connect(_on_zone_welcome)
@@ -246,6 +256,9 @@ func _reset_projection() -> void:
 		_appearance_api.cancel()
 	if _remote_api != null:
 		_remote_api.cancel()
+	if _quest_npc_api != null:
+		_quest_npc_api.cancel()
+	_quest_npc_diagnostic = "nicht geladen"
 	_remote_catalog.clear()
 	_remote_manifest.clear()
 	_remote_poll_key = ""
@@ -372,6 +385,8 @@ func _on_zone_connected() -> void:
 	# The authenticated optional reader cannot invalidate the v5 zone transport.
 	if _appearance_api != null and not _appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id()):
 		_appearance_diagnostic = "Erscheinung derzeit nicht abrufbar"
+	if _quest_npc_api != null and not _quest_npc_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id()):
+		_quest_npc_diagnostic = "NPC-Leser nicht verfügbar"
 	_update_3d_status()
 
 func _on_zone_rejected(code: String) -> void:
@@ -498,6 +513,7 @@ func _toggle_world_diagnostics() -> void:
 
 func _clear_3d_actors() -> void:
 	_remote_actors.clear(world_actors)
+	_quest_npc_actors.clear(quest_npc_root)
 	_self_actor = null
 	for actor in world_actors.get_children():
 		actor.visible = false
@@ -586,7 +602,8 @@ func _update_3d_status() -> void:
 	var remote_count := _remote_actors.visible_count()
 	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1 - remote_count, 0)
 	var model_message := "Spielerfigur sichtbar" if visible_count == 1 else "Spielerfigur: " + _appearance_diagnostic
-	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d ungeklärte Entitäten · Neutralboden (noch kein Welt-Chunk)%s" % [model_message, remote_count, other_count, _world_freshness_suffix()]
+	var npc_count: int = _quest_npc_actors.visible_count()
+	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch) · %d ungeklärte Entitäten · Neutralboden%s" % [model_message, remote_count, npc_count, other_count, _world_freshness_suffix()]
 
 ## Only server-confirmed v5 presence IDs may be queried. HTTP is read-only;
 ## a response never creates additional gameplay state or enables interactions.
@@ -644,6 +661,34 @@ func _on_remote_appearance_failed(_reason: String, connection_id: String) -> voi
 func _apply_remote_appearances(response: Dictionary, catalog: Dictionary, manifest: Dictionary) -> void:
 	_remote_actors.apply(_confirmed_zone, world_actors, response, catalog, manifest)
 	_update_3d_status()
+
+## Static Aurion quest anchors are NOT dynamic v5 gameplay NPCs.
+func _on_quest_npc_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
+	_apply_quest_npc_visuals(response, manifest)
+
+func _on_quest_npc_failed(reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	_quest_npc_actors.clear(quest_npc_root)
+	_quest_npc_diagnostic = reason
+	_update_3d_status()
+
+## Test-only fixture entry; production enters via the authenticated callback above.
+func _apply_quest_npc_visuals(response: Dictionary, manifest: Variant) -> bool:
+	if not _confirmed_zone.has_state() or _confirmed_zone.current_state().get("zoneId") != "observatory_threshold":
+		_quest_npc_actors.clear(quest_npc_root)
+		_quest_npc_diagnostic = "NPC-Zone nicht bestätigt"
+		_update_3d_status()
+		return false
+	var accepted: bool = _quest_npc_actors.apply(quest_npc_root, response, manifest)
+	_quest_npc_diagnostic = "" if accepted else _quest_npc_actors.diagnostic
+	_update_3d_status()
+	return accepted
 
 func _update_entity_presentation() -> void:
 	if not _confirmed_zone.has_state():
