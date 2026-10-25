@@ -14,6 +14,11 @@ const NativeIntentBridge = preload("res://platform/android/native_intent_bridge.
 const AppearanceApi = preload("res://net/api/appearance_api.gd")
 const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
 const ActorScene = preload("res://actors/actor_view.tscn")
+const RemoteActorRegistry = preload("res://actors/remote_actor_registry.gd")
+const PublicAppearanceApi = preload("res://net/api/public_actor_appearance_api.gd")
+const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
+const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
+const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
@@ -38,6 +43,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var world_status: Label = %WorldStatus
 @onready var world_toggle: Button = %WorldToggle
 @onready var world_actors: Node3D = %Actors
+@onready var quest_npc_root: Node3D = %QuestNPCs
 @onready var live_3d_viewport: SubViewport = $WorldView/Live3D
 @onready var world_camera: Camera3D = %WorldCamera
 @onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
@@ -49,6 +55,15 @@ var _auth_start: Node
 var _api: Node
 var _appearance_api: Node
 var _self_actor: Node3D
+var _remote_api: Node
+var _remote_actors = RemoteActorRegistry.new()
+var _quest_npc_api: Node
+var _quest_npc_actors = QuestNpcRegistry.new()
+var _quest_npc_diagnostic := "nicht geladen"
+var _remote_catalog: Dictionary = {}
+var _remote_manifest: Dictionary = {}
+var _remote_poll_key := ""
+var _remote_last_poll_ms := -1
 var _appearance_diagnostic := "Erscheinung nicht geprüft"
 var _zone_socket: Node
 var _awaiting_callback := false
@@ -96,6 +111,14 @@ func _ready() -> void:
 	add_child(_appearance_api)
 	_appearance_api.appearance_ready.connect(_on_appearance_ready)
 	_appearance_api.request_failed.connect(_on_appearance_failed)
+	_remote_api = PublicAppearanceApi.new(_auth_start)
+	add_child(_remote_api)
+	_remote_api.appearances_ready.connect(_on_remote_appearance_ready)
+	_remote_api.request_failed.connect(_on_remote_appearance_failed)
+	_quest_npc_api = QuestNpcApi.new(_auth_start)
+	add_child(_quest_npc_api)
+	_quest_npc_api.npcs_ready.connect(_on_quest_npc_ready)
+	_quest_npc_api.request_failed.connect(_on_quest_npc_failed)
 	_zone_socket = ZoneSocket.new()
 	add_child(_zone_socket)
 	_zone_socket.zone_welcome.connect(_on_zone_welcome)
@@ -231,6 +254,15 @@ func _reset_projection() -> void:
 	# An old HTTP completion/actor must not survive a new authenticated zone.
 	if _appearance_api != null:
 		_appearance_api.cancel()
+	if _remote_api != null:
+		_remote_api.cancel()
+	if _quest_npc_api != null:
+		_quest_npc_api.cancel()
+	_quest_npc_diagnostic = "nicht geladen"
+	_remote_catalog.clear()
+	_remote_manifest.clear()
+	_remote_poll_key = ""
+	_remote_last_poll_ms = -1
 	_clear_3d_actors()
 	unassigned_floor.position = Vector3.ZERO
 	world_camera.transform = _initial_world_camera_transform
@@ -295,6 +327,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		_update_vitals_presentation()
 		_update_position_presentation(now_ms)
 		_project_3d(now_ms)
+		_request_remote_appearances(now_ms)
 
 func _on_zone_combat(event: Dictionary) -> void:
 	if not _confirmed_zone.has_state():
@@ -352,6 +385,8 @@ func _on_zone_connected() -> void:
 	# The authenticated optional reader cannot invalidate the v5 zone transport.
 	if _appearance_api != null and not _appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id()):
 		_appearance_diagnostic = "Erscheinung derzeit nicht abrufbar"
+	if _quest_npc_api != null and not _quest_npc_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id()):
+		_quest_npc_diagnostic = "NPC-Leser nicht verfügbar"
 	_update_3d_status()
 
 func _on_zone_rejected(code: String) -> void:
@@ -452,6 +487,7 @@ func _process(_delta: float) -> void:
 	if _confirmed_zone.has_state():
 		zone_map.set_visual_positions(_visuals, now_ms)
 		_project_3d(now_ms)
+		_request_remote_appearances(now_ms)
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
@@ -476,6 +512,8 @@ func _toggle_world_diagnostics() -> void:
 	world_toggle.text = "3D-Ansicht" if $SafeMargin.visible else "Diagnose"
 
 func _clear_3d_actors() -> void:
+	_remote_actors.clear(world_actors)
+	_quest_npc_actors.clear(quest_npc_root)
 	_self_actor = null
 	for actor in world_actors.get_children():
 		actor.visible = false
@@ -496,6 +534,9 @@ func _on_appearance_ready(response: Dictionary, connection_id: String, generatio
 	if _zone_socket.state_name() != "connected":
 		return
 	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
+	_remote_catalog = response.duplicate(true)
+	_remote_manifest = manifest.duplicate(true) if typeof(manifest) == TYPE_DICTIONARY else {}
+	_request_remote_appearances(Time.get_ticks_msec())
 	var resolution: Dictionary = AppearanceResolver.new().resolve_self(_confirmed_zone, response, manifest)
 	if resolution.get("status") != "resolved":
 		_appearance_diagnostic = str(resolution.get("reason", "appearance_invalid"))
@@ -513,7 +554,10 @@ func _mount_resolved_self(resolution: Dictionary) -> bool:
 		_appearance_diagnostic = "packed_model_unavailable"
 		_update_3d_status()
 		return false
-	_clear_3d_actors()
+	if is_instance_valid(_self_actor):
+		world_actors.remove_child(_self_actor)
+		_self_actor.queue_free()
+		_self_actor = null
 	var actor: Node3D = ActorScene.instantiate()
 	world_actors.add_child(actor)
 	if not actor.bind_confirmed(_confirmed_zone, str(resolution.entityId), str(resolution.catalogAssetId), packed):
@@ -528,34 +572,123 @@ func _mount_resolved_self(resolution: Dictionary) -> bool:
 	return true
 
 func _project_3d(now_ms: int) -> void:
-	if not _confirmed_zone.has_state() or not is_instance_valid(_self_actor):
+	if not _confirmed_zone.has_state():
 		return
-	var valid: bool = _self_actor.project(_confirmed_zone, _visuals, now_ms)
-	if not valid:
-		_appearance_diagnostic = str(_self_actor.diagnostic)
-		if _self_actor.entity_id.is_empty():
-			_clear_3d_actors()
-		_update_3d_status()
-		return
-	_appearance_diagnostic = str(_self_actor.diagnostic)
-	var point: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
-	if not point.is_empty():
-		var x: float = float(point["x"]) / 1000.0
-		var z: float = float(point["z"]) / 1000.0
-		# The neutral plane has no world authority; follow only the visual point.
-		unassigned_floor.position = Vector3(x, 0.0, z)
-		world_camera.position = Vector3(x, 2.8, z + 5.5)
-		world_camera.look_at(Vector3(x, 1.0, z), Vector3.UP)
+	_remote_actors.project(_confirmed_zone, _visuals, now_ms, world_actors)
+	if is_instance_valid(_self_actor):
+		var valid: bool = _self_actor.project(_confirmed_zone, _visuals, now_ms)
+		if not valid:
+			_appearance_diagnostic = str(_self_actor.diagnostic)
+			if _self_actor.entity_id.is_empty():
+				world_actors.remove_child(_self_actor)
+				_self_actor.queue_free()
+				_self_actor = null
+		else:
+			_appearance_diagnostic = str(_self_actor.diagnostic)
+			var point: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
+			if not point.is_empty():
+				var x: float = float(point["x"]) / 1000.0
+				var z: float = float(point["z"]) / 1000.0
+				# The neutral plane has no world authority; follow only the visual point.
+				unassigned_floor.position = Vector3(x, 0.0, z)
+				world_camera.position = Vector3(x, 2.8, z + 5.5)
+				world_camera.look_at(Vector3(x, 1.0, z), Vector3.UP)
 	_update_3d_status()
-
 func _update_3d_status() -> void:
 	if not _confirmed_zone.has_state():
 		world_status.text = "3D · Keine bestätigte Sitzung"
 		return
 	var visible_count := 1 if is_instance_valid(_self_actor) and _self_actor.visible else 0
-	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1, 0)
+	var remote_count := _remote_actors.visible_count()
+	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1 - remote_count, 0)
 	var model_message := "Spielerfigur sichtbar" if visible_count == 1 else "Spielerfigur: " + _appearance_diagnostic
-	world_status.text = "Aurion 3D · %s · %d weitere ungeklärte Entitäten · Neutralboden (noch kein Welt-Chunk)%s" % [model_message, other_count, _world_freshness_suffix()]
+	var npc_count: int = _quest_npc_actors.visible_count()
+	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch)%s · %d ungeklärte Entitäten · Neutralboden%s" % [model_message, remote_count, npc_count, (" · NPC: " + _quest_npc_diagnostic) if not _quest_npc_diagnostic.is_empty() else "", other_count, _world_freshness_suffix()]
+
+## Only server-confirmed v5 presence IDs may be queried. HTTP is read-only;
+## a response never creates additional gameplay state or enables interactions.
+func _current_remote_ids() -> Array[int]:
+	var ids: Array[int] = []
+	for id in _entities.ids("presences"):
+		if id == _confirmed_zone.self_entity_id():
+			continue
+		var record: Dictionary = _entities.record("presences", id)
+		ids.append(int(record["userId"]))
+	ids.sort()
+	return ids
+
+func _current_remote_ids_csv() -> String:
+	var parts: PackedStringArray = []
+	for user_id in _current_remote_ids():
+		parts.append(str(user_id))
+	return ",".join(parts)
+
+func _request_remote_appearances(now_ms: int) -> void:
+	if _remote_catalog.is_empty() or not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
+		return
+	var ids: Array[int] = _current_remote_ids()
+	if ids.is_empty():
+		_remote_actors.clear(world_actors)
+		_remote_poll_key = ""
+		return
+	var key := _current_remote_ids_csv()
+	if _remote_api.busy() or (key == _remote_poll_key and _remote_last_poll_ms >= 0 and now_ms - _remote_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS):
+		return
+	if _remote_api.request_public(_config.server_base_url, _confirmed_zone.connection_id(), ids):
+		_remote_poll_key = key
+		_remote_last_poll_ms = now_ms
+
+func _on_remote_appearance_ready(response: Dictionary, connection_id: String, generation: int, requested_ids: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	if requested_ids != _current_remote_ids_csv():
+		_request_remote_appearances(Time.get_ticks_msec())
+		return
+	_apply_remote_appearances(response, _remote_catalog, _remote_manifest)
+	_project_3d(Time.get_ticks_msec())
+
+func _on_remote_appearance_failed(_reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	_remote_actors.clear(world_actors)
+	_update_3d_status()
+
+## Deliberately callable by the real-Godot scene regression with a separately
+## labeled server protocol fixture; production only calls it after authenticated
+## API, connection-generation, and currently confirmed presence checks.
+func _apply_remote_appearances(response: Dictionary, catalog: Dictionary, manifest: Dictionary) -> void:
+	_remote_actors.apply(_confirmed_zone, world_actors, response, catalog, manifest)
+	_update_3d_status()
+
+## Static Aurion quest anchors are NOT dynamic v5 gameplay NPCs.
+func _on_quest_npc_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
+	_apply_quest_npc_visuals(response, manifest)
+
+func _on_quest_npc_failed(reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	_quest_npc_actors.clear(quest_npc_root)
+	_quest_npc_diagnostic = reason
+	_update_3d_status()
+
+## Test-only fixture entry; production enters via the authenticated callback above.
+func _apply_quest_npc_visuals(response: Dictionary, manifest: Variant) -> bool:
+	if not _confirmed_zone.has_state() or _confirmed_zone.current_state().get("zoneId") != "observatory_threshold":
+		_quest_npc_actors.clear(quest_npc_root)
+		_quest_npc_diagnostic = "NPC-Zone nicht bestätigt"
+		_update_3d_status()
+		return false
+	var accepted: bool = _quest_npc_actors.apply(quest_npc_root, response, manifest)
+	_quest_npc_diagnostic = "" if accepted else _quest_npc_actors.diagnostic
+	_update_3d_status()
+	return accepted
 
 func _update_entity_presentation() -> void:
 	if not _confirmed_zone.has_state():

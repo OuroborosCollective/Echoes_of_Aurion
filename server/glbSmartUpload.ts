@@ -12,6 +12,7 @@ import { glbImportPurposes, type GlbEquipmentSlot, type GlbImportPurpose, type G
 import { readPlayerUi } from "./playerUiPersistence";
 import { z } from "zod";
 import { readActiveWorldDesign } from "./aurionAuthoringPersistence";
+import { projectQuestNpcVisuals } from "./aurionQuestNpcVisualProjection";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
@@ -268,6 +269,10 @@ export function registerGlbSmartUpload(app: Express): void {
     return { appearances };
   }));
   app.get("/api/game/confirmed-equipment-visuals", playerRoute(async (_request, user) => projectConfirmedEquipmentVisuals(await readPlayerUi(user.id))));
+
+  app.get("/api/game/quest-npc-visuals", playerRoute(async () =>
+    projectQuestNpcVisuals(await glbImportStore().catalog())
+  ));
 
   app.get("/api/game/glb-catalog", async (_request, response) => {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await glbImportStore().catalog()); }

@@ -53,6 +53,8 @@ func verify() -> void:
 	require(actors.size() == 2, "expected actual player and monster models")
 	check_approved_self_appearance(world, manifest)
 	await verify_active_scene(welcome, manifest)
+	await verify_remote_scene(welcome, manifest)
+	await verify_quest_npc_scene(welcome, manifest)
 	var snapshot := welcome.duplicate(true)
 	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
 		snapshot.erase(key)
@@ -400,3 +402,165 @@ func check_approved_self_appearance(world: Variant, manifest: Dictionary) -> voi
 	invalid_catalog.revision = "wrong"
 	require(resolver.resolve_self(world, invalid_catalog, manifest).get("reason") == "catalog_invalid",
 		"unversioned catalog response was trusted")
+
+## Public-appearance protocol fixtures; real active scene and imported GLB.
+func verify_remote_scene(welcome: Dictionary, manifest: Dictionary) -> void:
+	var scene: Control = load("res://app/main.tscn").instantiate()
+	root.add_child(scene)
+	if not scene.has_method("_apply_remote_appearances"):
+		require(false, "G16 active scene cannot project confirmed remote public players")
+		scene.queue_free()
+		return
+	var joined := welcome.duplicate(true)
+	joined.presences.append({"entityId":"player:2","userId":2,"position":{"x":2000,"z":0},"lastAcceptedClientSeq":0})
+	scene._on_zone_welcome(joined)
+	scene._on_zone_connected()
+	var source: Dictionary = {}
+	for candidate: Dictionary in manifest.sources:
+		if candidate.role == "character":
+			source = candidate
+	var asset_id := "public_character_fixture"
+	var url := "/api/assets/glb/" + str(source.sha256) + ".glb"
+	var catalog := {"version":"aurion.glb-import.v1","revision":"a".repeat(64),"entries":[{
+		"assetId":asset_id,"sha256":source.sha256,"storageUrl":url,"purpose":"player-public","assetType":"character","targetKey":null}]}
+	var response := {"appearances":[{"userId":2,"assetId":asset_id,"storageUrl":url,"displayName":"Fixture"}]}
+	var actor_root: Node3D = scene.get_node("%Actors")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(actor_root.get_child_count() == 1, "public remote player was not mounted exactly once")
+	if actor_root.get_child_count() != 1:
+		scene.queue_free()
+		return
+	var actor: Node3D = actor_root.get_child(0)
+	require(actor.entity_id == "player:2" and actor.asset_id == asset_id and actor.visible, "remote identity/visibility lost")
+	require(actor.position == Vector3(2, 0, 0), "remote confirmed position lost")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	require(actor_root.get_child_count() == 1 and actor_root.get_child(0) == actor, "duplicate refresh replaced/leaked actor")
+	# A denied/private response removes a previously visible public appearance.
+	scene._apply_remote_appearances({"appearances":[]}, catalog, manifest)
+	require(actor_root.get_child_count() == 0, "revoked public appearance remained visible")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	var snapshot := joined.duplicate(true)
+	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
+		snapshot.erase(key)
+	snapshot.type = "snapshot"
+	snapshot.snapshotSeq = 2
+	snapshot.tick = 2
+	snapshot.presences[1].position.x = 3000
+	scene._on_zone_snapshot(snapshot)
+	scene._project_3d(scene._last_world_update_ms + 50)
+	actor = actor_root.get_child(0)
+	require(is_equal_approx(actor.position.x, 2.5), "remote interpolation not bounded to confirmed samples")
+	var animation: AnimationPlayer = actor.find_children("*", "AnimationPlayer", true, false)[0]
+	require(animation.current_animation == "Walk", "remote movement did not select Walk")
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(animation.current_animation == "Idle", "remote actor kept walking past confirmed interval")
+	var old_snapshot := snapshot.duplicate(true)
+	old_snapshot.snapshotSeq = 1
+	old_snapshot.presences.clear()
+	scene._on_zone_snapshot(old_snapshot)
+	require(actor_root.get_child_count() == 1, "stale snapshot removed current actor")
+	var invalid := response.duplicate(true)
+	invalid.appearances.append(response.appearances[0].duplicate(true))
+	scene._apply_remote_appearances(invalid, catalog, manifest)
+	require(actor_root.get_child_count() == 0, "ambiguous appearance retained actor")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	snapshot.snapshotSeq = 3
+	snapshot.tick = 3
+	snapshot.presences.pop_back()
+	scene._on_zone_snapshot(snapshot)
+	require(actor_root.get_child_count() == 0, "despawn retained remote model")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	require(actor_root.get_child_count() == 0, "late response resurrected absent player")
+	scene._reset_projection()
+	require(actor_root.get_child_count() == 0, "session reset retained remote models")
+	scene.queue_free()
+
+
+## Separate Aurion-owned QUEST NPC category. Positions/selection here are
+## explicit wire fixtures: neither dynamic v5 NPCs nor production evidence.
+func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
+	var scene: Control = load("res://app/main.tscn").instantiate()
+	root.add_child(scene)
+	scene._on_zone_welcome(welcome)
+	scene._on_zone_connected()
+	if not scene.has_method("_apply_quest_npc_visuals"):
+		require(false, "G16 active scene cannot project separate Aurion quest NPCs")
+		scene.queue_free()
+		return
+	var npcs_root := scene.get_node_or_null("%QuestNPCs") as Node3D
+	var players_root := scene.get_node_or_null("%Actors") as Node3D
+	var isolated_viewport := scene.get_node("WorldView/Live3D") as SubViewport
+	require(isolated_viewport.own_world_3d, "G16 quest NPC SubViewport shares external actor test world")
+	require(npcs_root != null and npcs_root != players_root,
+		"Quest NPCs share the player/mob actor registry or lack own scene root")
+	if npcs_root == null:
+		scene.queue_free()
+		return
+	var sha := "2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d34f3d94a0e64765cc"
+	var id := "glb_" + sha.substr(0, 48)
+	var shipped := false
+	for source: Dictionary in manifest.sources:
+		if source.get("role") == "character" and source.get("assetId") == id and source.get("sha256") == sha:
+			shipped = true
+	require(shipped, "G16 audited standard NPC GLB absent from actual prepared manifest")
+	var fixtures: Array = []
+	var identifiers := ["lyra", "orun", "starter_village_north_gate_guard"]
+	for i in range(identifiers.size()):
+		var npc_id: String = identifiers[i]
+		fixtures.append({"entityId": "npc:" + npc_id, "npcId": npc_id,
+			"displayName": "Fixture " + npc_id, "position": {"x": (i - 1) * 1600, "z": 0},
+			"model": {"source": "audited-standard", "catalogAssetId": id, "sha256": sha}})
+	var response := {"version": "aurion.quest-npc-visuals.v1",
+		"zoneId": "observatory_threshold",
+		"stateSource": "aurion-canonical-quest-anchors",
+		"catalogRevision": "a".repeat(64), "npcs": fixtures}
+	var before := JSON.stringify(scene._confirmed_zone.current_state())
+	# A bypassed unauthenticated callback must NOT materialize a world actor.
+	if scene.has_method("_on_quest_npc_ready"):
+		scene.call("_on_quest_npc_ready", response, welcome.connectionId, 0)
+		require(npcs_root.get_child_count() == 0, "unauthenticated NPC reply mounted models")
+	require(scene.call("_apply_quest_npc_visuals", response, manifest),
+		"server-owned quest NPC anchor response not accepted")
+	require(npcs_root.get_child_count() == 3, "audited standard GLB not shown for all three quest NPCs")
+	for child in npcs_root.get_children():
+		var actor := child as Node3D
+		require(actor != null and actor.visible, "NPC visual not visible")
+		require(str(actor.get_meta("aurion_entity_id", "")).begins_with("npc:"),
+			"quest NPC presented as player or monster")
+		require(actor.find_children("*", "MeshInstance3D", true, false).size() > 0,
+			"quest NPC lacks actual imported geometry")
+		var players := actor.find_children("*", "AnimationPlayer", true, false)
+		require(players.size() == 1, "NPC missing single imported animation player")
+		if players.size() == 1:
+			require(players[0].current_animation == "Idle", "static quest NPC not in Idle")
+	var output := OS.get_environment("AURION_ACTOR_RENDER_DIR")
+	if not output.is_empty():
+		await process_frame
+		await RenderingServer.frame_post_draw
+		var viewport := scene.get_node("WorldView/Live3D") as SubViewport
+		require(viewport.get_texture().get_image().save_png(output.path_join("quest-npcs.png")) == OK,
+			"real three-NPC scene render not captured")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == before,
+		"quest NPC visuals modified canonical v5 state")
+	require(scene.call("_apply_quest_npc_visuals", response, manifest) and npcs_root.get_child_count() == 3,
+		"unchanged NPC response duplicated actors")
+	var duplicate: Dictionary = response.duplicate(true)
+	duplicate.npcs.append(duplicate.npcs[0].duplicate(true))
+	require(not scene.call("_apply_quest_npc_visuals", duplicate, manifest) and npcs_root.get_child_count() == 0,
+		"duplicate NPC identity preserved stale models")
+	var malicious: Dictionary = response.duplicate(true)
+	malicious.npcs[0].model.sha256 = "b".repeat(64)
+	require(not scene.call("_apply_quest_npc_visuals", malicious, manifest) and npcs_root.get_child_count() == 0,
+		"wrong standard model hash silently fell back or mounted")
+	require(scene.get_node("%WorldStatus").text.contains("NPC: npc_standard_identity_invalid"), "active HUD hides concrete NPC model rejection")
+	var wrong_zone: Dictionary = response.duplicate(true)
+	wrong_zone.zoneId = "unconfirmed_other_zone"
+	require(not scene.call("_apply_quest_npc_visuals", wrong_zone, manifest) and npcs_root.get_child_count() == 0,
+		"foreign-zone quest NPCs entered this session")
+	require(scene.call("_apply_quest_npc_visuals", response, manifest),
+		"valid NPCs could not recover from invalid readmodel")
+	scene._reset_projection()
+	require(npcs_root.get_child_count() == 0,
+		"quest NPCs survived zone logout/session reset")
+	scene.queue_free()

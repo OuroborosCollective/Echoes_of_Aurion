@@ -1,0 +1,140 @@
+extends Node
+## Read-only protected Aurion quest NPC readmodel; never edits selection/state.
+signal npcs_ready(response: Dictionary, connection_id: String, session_generation: int)
+signal request_failed(reason: String, connection_id: String)
+const RuntimeConfig = preload("res://config/runtime_config.gd")
+const PATH := "/api/game/quest-npc-visuals"
+const MAX_RESPONSE_BYTES := 65536
+var _auth: Node
+var _http: HTTPRequest
+var _active := false
+var _epoch := 0
+var _connection_id := ""
+var _generation := -1
+var _server := ""
+var _retried := false
+var _waiting_refresh := false
+
+func _init(auth: Node) -> void:
+	_auth = auth
+
+func _ready() -> void:
+	_auth.refresh_succeeded.connect(_on_refresh_succeeded)
+	_auth.refresh_failed.connect(_on_refresh_failed)
+	_auth.logout_succeeded.connect(_on_auth_terminal)
+	_auth.logout_failed.connect(_on_auth_terminal)
+
+func request_npcs(base_url: String, connection_id: String, allow_local: bool = false) -> bool:
+	if _active or not is_inside_tree() or connection_id.is_empty():
+		return false
+	var validated: String = RuntimeConfig.validated_server_url(base_url, allow_local)
+	if validated.is_empty() or not _auth.protected_response_allowed():
+		return false
+	_server = validated
+	_connection_id = connection_id
+	_retried = false
+	_active = true
+	if _auth.access_token().is_empty():
+		_retried = true
+		return _begin_refresh()
+	return _send()
+
+func _send() -> bool:
+	var token: String = _auth.access_token()
+	if token.is_empty() or not _auth.protected_response_allowed():
+		_fail("NPC_SESSION_UNAVAILABLE")
+		return false
+	_generation = _auth.session_generation()
+	if is_instance_valid(_http):
+		_http.cancel_request()
+		_http.queue_free()
+	_epoch += 1
+	var epoch: int = _epoch
+	_http = HTTPRequest.new()
+	_http.body_size_limit = MAX_RESPONSE_BYTES
+	_http.max_redirects = 0
+	_http.timeout = 12.0
+	add_child(_http)
+	_http.request_completed.connect(_on_completed.bind(epoch))
+	var err: Error = _http.request(_server + PATH,
+		PackedStringArray(["Accept: application/json", "Authorization: Bearer " + token]),
+		HTTPClient.METHOD_GET)
+	if err != OK:
+		_fail("NPC_REQUEST_FAILED")
+		return false
+	return true
+
+func _on_completed(result: int, code: int, headers: PackedStringArray, body: PackedByteArray, epoch: int) -> void:
+	if not _active or epoch != _epoch:
+		return
+	if not _auth.protected_response_allowed() or _auth.session_generation() != _generation:
+		_fail("NPC_SESSION_CHANGED")
+		return
+	if result != HTTPRequest.RESULT_SUCCESS:
+		_fail("NPC_REQUEST_FAILED")
+		return
+	if code == 401 and not _retried:
+		_retried = true
+		_begin_refresh()
+		return
+	if code != 200 or not _json_header(headers):
+		_fail("NPC_RESPONSE_INVALID")
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) != TYPE_DICTIONARY:
+		_fail("NPC_RESPONSE_INVALID")
+		return
+	var id := _connection_id
+	var generation := _generation
+	_complete()
+	emit_signal("npcs_ready", data, id, generation)
+
+func _begin_refresh() -> bool:
+	_waiting_refresh = true
+	var started: bool = _auth.refresh()
+	if started or _auth.refresh_in_flight():
+		return true
+	if _active:
+		_fail("NPC_SESSION_UNAVAILABLE")
+	return false
+
+func _on_refresh_succeeded() -> void:
+	if _active and _waiting_refresh:
+		_waiting_refresh = false
+		_send()
+
+func _on_refresh_failed(_reason: String) -> void:
+	if _active and _waiting_refresh:
+		_fail("NPC_SESSION_UNAVAILABLE")
+
+func _on_auth_terminal(_reason: String = "") -> void:
+	if _active:
+		_fail("NPC_SESSION_UNAVAILABLE")
+
+static func _json_header(headers: PackedStringArray) -> bool:
+	for header in headers:
+		var value := header.to_lower()
+		if value.begins_with("content-type:"):
+			var mime := value.trim_prefix("content-type:").strip_edges()
+			return mime == "application/json" or mime.begins_with("application/json;")
+	return false
+
+func _complete() -> void:
+	_active = false
+	_waiting_refresh = false
+	_connection_id = ""
+	_generation = -1
+
+func _fail(reason: String) -> void:
+	var id := _connection_id
+	_complete()
+	emit_signal("request_failed", reason, id)
+
+func cancel() -> void:
+	_epoch += 1
+	if is_instance_valid(_http):
+		_http.cancel_request()
+	_complete()
+
+func _exit_tree() -> void:
+	cancel()

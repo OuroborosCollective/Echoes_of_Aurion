@@ -80,3 +80,59 @@ func resolve_self(world: Variant, response: Variant, prepared: Variant) -> Dicti
 		"sha256": sha,
 		"resourcePath": path,
 	}
+
+## The server returns only active, public selections for requested user IDs.
+## A second join against the independently confirmed v5 presence and prepared
+## file hash prevents a catalog reply from inventing a world actor.
+func resolve_public_presence(world: Variant, appearance: Variant, catalog: Variant, prepared: Variant) -> Dictionary:
+	if world == null or not world.has_state():
+		return _blocked("no_confirmed_presence")
+	if typeof(appearance) != TYPE_DICTIONARY or typeof(catalog) != TYPE_DICTIONARY:
+		return _blocked("public_response_invalid")
+	var raw_user: Variant = appearance.get("userId")
+	if typeof(raw_user) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(raw_user)) or float(raw_user) != floor(float(raw_user)) or raw_user < 1 or raw_user > 2147483647:
+		return _blocked("public_response_invalid")
+	var id := "player:" + str(int(raw_user))
+	if id == world.self_entity_id():
+		return _blocked("self_not_remote")
+	var present := false
+	for row in world.current_state().get("presences", []):
+		if typeof(row) == TYPE_DICTIONARY and row.get("entityId") == id and int(row.get("userId", 0)) == int(raw_user):
+			present = true
+			break
+	if not present:
+		return _blocked("presence_absent")
+	if catalog.get("version") != CATALOG_VERSION or not _lower_hex(catalog.get("revision"), 64) or typeof(catalog.get("entries")) != TYPE_ARRAY or catalog.entries.size() > 500:
+		return _blocked("catalog_invalid")
+	var asset_id: Variant = appearance.get("assetId")
+	if typeof(asset_id) != TYPE_STRING or asset_id.is_empty() or asset_id.length() > 64:
+		return _blocked("public_response_invalid")
+	var matches: Array = []
+	for item in catalog.entries:
+		if typeof(item) != TYPE_DICTIONARY:
+			return _blocked("catalog_invalid")
+		if item.get("assetId") == asset_id:
+			matches.append(item)
+	if matches.size() != 1:
+		return _blocked("catalog_ambiguous" if matches.size() > 1 else "public_asset_not_admitted")
+	var entry: Dictionary = matches[0]
+	var sha: Variant = entry.get("sha256")
+	var url := "/api/assets/glb/" + str(sha) + ".glb"
+	if not _lower_hex(sha, 64) or entry.get("purpose") != "player-public" or entry.get("assetType") != "character" or entry.get("targetKey") != null or entry.get("storageUrl") != url or appearance.get("storageUrl") != url:
+		return _blocked("public_asset_not_admitted")
+	if typeof(prepared) != TYPE_DICTIONARY or prepared.get("schemaVersion") != PREPARED_VERSION or prepared.get("outputMode") != "byte-exact-compatible-copy" or not _lower_hex(prepared.get("sourceRevision"), 40) or typeof(prepared.get("sources")) != TYPE_ARRAY or prepared.sources.size() > 128:
+		return _blocked("prepared_manifest_invalid")
+	var matches_prepared: Array = []
+	for source in prepared.sources:
+		if typeof(source) != TYPE_DICTIONARY:
+			return _blocked("prepared_manifest_invalid")
+		var source_id := "glb_" + str(sha).substr(0, 48)
+		if source.get("role") == "character" and source.get("sha256") == sha and source.get("sourceSha256") == sha and source.get("outputSha256") == sha and source.get("assetId") == source_id and source.get("path") == "godot-client/assets/generated/" + source_id + ".glb":
+			matches_prepared.append(source)
+	if matches_prepared.size() != 1:
+		return _blocked("prepared_model_missing")
+	var prepared_id: String = matches_prepared[0].assetId
+	var path := "res://assets/generated/" + prepared_id + ".glb"
+	if not ResourceLoader.exists(path, "PackedScene"):
+		return _blocked("prepared_model_missing")
+	return {"status": "resolved", "entityId": id, "catalogAssetId": asset_id, "sourceAssetId": prepared_id, "sha256": sha, "resourcePath": path}
