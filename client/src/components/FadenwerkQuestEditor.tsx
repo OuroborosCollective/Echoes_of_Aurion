@@ -6,6 +6,7 @@ import { inspectFadenwerk, nextAuthoringVersion, toQuarantinedQuestTemplate } fr
 /** Presentation/authoring only; never publishes a quest or writes game state. */
 export default function FadenwerkQuestEditor({ templates }: { templates: QuestTemplateVersion[] }) {
   const [source, setSource] = useState("");
+  const [selectedQuestline, setSelectedQuestline] = useState(0);
   const [template, setTemplate] = useState<QuestTemplateVersion | null>(null);
   const [nodeId, setNodeId] = useState("");
   const [message, setMessage] = useState("");
@@ -16,6 +17,10 @@ export default function FadenwerkQuestEditor({ templates }: { templates: QuestTe
       return { value: inspectFadenwerk(JSON.parse(source)), error: "" };
     } catch (error) { return { value: null, error: String(error) }; }
   }, [source]);
+  const checkedQuestline = inspect?.value?.questlines[selectedQuestline] ?? null;
+  const resetSelection = () => { setTemplate(null); setNodeId(""); setMessage(""); };
+  const changeSource = (value: string) => { setSource(value); setSelectedQuestline(0); resetSelection(); };
+  const changeQuestline = (index: number) => { setSelectedQuestline(index); resetSelection(); };
   const proposed = trpc.aurionQuest.proposeDraft.useMutation();
   const planned = trpc.aurionQuest.publishPlan.useMutation();
   // Presentation-only preflight. The authoritative QuestTemplateVersionSchema is parsed on the server.
@@ -31,7 +36,7 @@ export default function FadenwerkQuestEditor({ templates }: { templates: QuestTe
   const prepareLegacy = () => {
     try {
       if (!inspect?.value) throw Error("NO_VALID_IMPORT");
-      const line = inspect.value.questlines[0];
+      const line = checkedQuestline;
       if (!line) throw Error("NO_QUESTLINE");
       const next = toQuarantinedQuestTemplate(line, 1);
       setTemplate(next); setNodeId(next.nodes[0]?.id ?? "");
@@ -64,15 +69,20 @@ export default function FadenwerkQuestEditor({ templates }: { templates: QuestTe
       </select>
     </label>
     <label className="block text-sm">Fadenwerk-v1-JSON prüfen (kein automatischer Import)
-      <textarea aria-label="Fadenwerk JSON" className="mt-1 min-h-28 w-full rounded bg-slate-900 p-2 font-mono text-xs" value={source} onChange={e => setSource(e.target.value)} />
+      <textarea aria-label="Fadenwerk JSON" className="mt-1 min-h-28 w-full rounded bg-slate-900 p-2 font-mono text-xs" value={source} onChange={e => changeSource(e.target.value)} />
     </label>
     {inspect?.error && <p role="alert" className="text-red-300">{inspect.error}</p>}
     {inspect?.value && <div className="space-y-1">
-      <p className="text-xs">Stränge: {inspect.value.questlines.length}; Diagnosen: {inspect.value.issues.length}</p>
+      <p className="text-xs">Stränge: {inspect.value.questlines.length}; Diagnosen gesamt: {inspect.value.issues.length}</p>
+      <label className="block text-sm">Strang für Strukturimport
+        <select className="mt-1 w-full rounded bg-slate-900 p-2" value={selectedQuestline} onChange={e => changeQuestline(Number(e.target.value))}>
+          {inspect.value.questlines.map((line, i) => <option key={line.id} value={i}>{line.title} ({line.id})</option>)}
+        </select>
+      </label>
       <ul className="max-h-44 overflow-y-auto text-xs">
-        {inspect.value.issues.map((i,k) => <li key={k} className={i.severity === "blocker" ? "text-amber-300" : "text-slate-400"}>{i.code} · {i.path}</li>)}
+        {checkedQuestline?.issues.map((i,k) => <li key={k} className={i.severity === "blocker" ? "text-amber-300" : "text-slate-400"}>{i.code} · {i.path}</li>)}
       </ul>
-      <button type="button" disabled={inspect.value.issues.some(i => i.severity === "blocker")} className="rounded border border-cyan-600 px-3 py-2 disabled:opacity-40" onClick={prepareLegacy}>Nur zulässige Struktur übernehmen</button>
+      <button type="button" disabled={!checkedQuestline || checkedQuestline.issues.some(i => i.severity === "blocker")} className="rounded border border-cyan-600 px-3 py-2 disabled:opacity-40" onClick={prepareLegacy}>Nur zulässige Struktur übernehmen</button>
     </div>}
     {template && <div className="space-y-3 rounded border border-slate-700 p-3">
       <h3 className="font-semibold">{template.title} · v{template.version} · {template.quarantined ? "Quarantäne" : "Entwurf"}</h3>

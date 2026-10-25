@@ -81,6 +81,7 @@ export function inspectFadenwerk(input: unknown): { questlines: LegacyQuestline[
       unknownContent(node.rewards, lineIssues, "UNMAPPED_REWARD", path + ".rewards");
       const choices = node.choices === undefined ? [] : node.choices;
       if (!Array.isArray(choices)) fail("CHOICES_INVALID", path);
+      if (choices.length > 16) fail("CHOICE_COUNT_EXCESSIVE", path);
       const ids = new Set<string>();
       const parsed: LegacyChoice[] = choices.map((choice, index) => {
         const place = path + ".choices[" + index + "]";
@@ -144,5 +145,5 @@ export function toQuarantinedQuestTemplate(line: LegacyQuestline, version: numbe
 }
 export function nextAuthoringVersion(template: QuestTemplateVersion): QuestTemplateVersion {
   if (!Number.isSafeInteger(template.version) || template.version >= Number.MAX_SAFE_INTEGER) throw new Error("TEMPLATE_VERSION_OVERFLOW");
-  return { ...structuredClone(template), version: template.version + 1 };
+  return { ...structuredClone(template), version: template.version + 1, active: false, quarantined: true };
 }
