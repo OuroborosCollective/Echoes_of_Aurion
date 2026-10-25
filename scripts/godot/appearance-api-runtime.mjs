@@ -50,7 +50,7 @@ clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
 process.stdout.write(output);
 assert.ifError(handlerFailure);
-assert.equal(timedOut, false, 'appearance GET runtime timed out');
+assert.equal(timedOut, false, 'appearance GET runtime timed out; calls=' + calls + '; child_tail=' + output.slice(-4000));
 assert.equal(code, 0, 'appearance GET runtime failed');
 assert.equal(calls, 8, 'GET cases were not all exercised');
 assert.equal(leakedRedirect, false, 'redirect was followed with credentials');
