@@ -50,6 +50,7 @@ func verify() -> void:
 		require(not actor.find_children("*", "MeshInstance3D", true, false).is_empty(), "figure has no real meshes")
 		actors.append(actor)
 	require(actors.size() == 2, "expected actual player and monster models")
+	check_approved_self_appearance(world, manifest)
 	var snapshot := welcome.duplicate(true)
 	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
 		snapshot.erase(key)
@@ -174,3 +175,71 @@ func verify() -> void:
 		for failure in failures:
 			push_error(failure)
 		quit(1)
+
+# Server response below is an explicit contract fixture, never a live selection.
+# It must be joined to a confirmed self presence and a packaged source hash.
+func check_approved_self_appearance(world: Variant, manifest: Dictionary) -> void:
+	var resolver_path := "res://actors/appearance_resolver.gd"
+	if not ResourceLoader.exists(resolver_path):
+		require(false, "G16 approved appearance resolver missing")
+		return
+	var resolver := load(resolver_path).new()
+	var source: Dictionary = {}
+	for candidate: Dictionary in manifest.sources:
+		if candidate.role == "character":
+			source = candidate
+			break
+	require(not source.is_empty(), "G16 real player GLB unavailable")
+	if source.is_empty():
+		return
+	var sha: String = source.sha256
+	var server_asset_id := "glb_" + sha.substr(0, 48)
+	var storage_url := "/api/assets/glb/" + sha + ".glb"
+	var entry := {"assetId": server_asset_id, "sha256": sha, "storageUrl": storage_url,
+		"purpose": "player-public", "assetType": "character", "targetKey": null}
+	var response := {"version": "aurion.glb-import.v1", "revision": "a".repeat(64),
+		"entries": [entry], "selected": {"assetId": server_asset_id,
+			"storageUrl": storage_url, "visibility": "private"}, "immutable": true}
+	var before := JSON.stringify(world.current_state())
+	var result: Dictionary = resolver.resolve_self(world, response, manifest)
+	require(result.get("status") == "resolved", "approved selected player model not resolved: " + str(result))
+	require(result.get("entityId") == world.self_entity_id(), "resolver did not bind confirmed self ID")
+	require(result.get("catalogAssetId") == server_asset_id, "resolver invented catalog identity")
+	require(result.get("sourceAssetId") == source.assetId, "resolver lost generated source identity")
+	require(result.get("sha256") == sha, "resolver lost source content hash")
+	require(result.get("resourcePath") == "res://assets/generated/" + str(source.assetId) + ".glb",
+		"resolver selected an unapproved local path")
+	require(JSON.stringify(world.current_state()) == before, "visual resolution changed confirmed Aurion state")
+	var no_selection: Dictionary = response.duplicate(true)
+	no_selection.selected = null
+	require(resolver.resolve_self(world, no_selection, manifest).get("reason") == "selection_missing",
+		"missing character selection silently fell back")
+	var wrong_purpose: Dictionary = response.duplicate(true)
+	wrong_purpose.entries[0].purpose = "enemy-fallback"
+	require(resolver.resolve_self(world, wrong_purpose, manifest).get("reason") == "selection_not_admitted",
+		"monster was admitted as selected player")
+	var changed_hash: Dictionary = response.duplicate(true)
+	changed_hash.entries[0].sha256 = "b".repeat(64)
+	require(resolver.resolve_self(world, changed_hash, manifest).get("reason") == "selection_not_admitted",
+		"catalog hash mismatch accepted")
+	var duplicate: Dictionary = response.duplicate(true)
+	duplicate.entries.append(entry.duplicate(true))
+	require(resolver.resolve_self(world, duplicate, manifest).get("reason") == "catalog_ambiguous",
+		"duplicate server catalog identity was silently selected")
+	var missing_local: Dictionary = manifest.duplicate(true)
+	missing_local.sources = []
+	require(resolver.resolve_self(world, response, missing_local).get("reason") == "prepared_model_missing",
+		"unshipped server model was rendered using a fallback")
+	var different_output: Dictionary = manifest.duplicate(true)
+	for item: Dictionary in different_output.sources:
+		if item.role == "character":
+			item.outputSha256 = "c".repeat(64)
+	require(resolver.resolve_self(world, response, different_output).get("reason") == "prepared_model_missing",
+		"corrupt prepared GLB identity was used")
+	var no_world := World.new()
+	require(resolver.resolve_self(no_world, response, manifest).get("reason") == "no_confirmed_self",
+		"unconfirmed identity rendered a player")
+	var invalid_catalog: Dictionary = response.duplicate(true)
+	invalid_catalog.revision = "wrong"
+	require(resolver.resolve_self(world, invalid_catalog, manifest).get("reason") == "catalog_invalid",
+		"unversioned catalog response was trusted")
