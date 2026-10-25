@@ -61,7 +61,7 @@ func resolve_self(world: Variant, response: Variant, prepared: Variant) -> Dicti
 	for raw in prepared.sources:
 		if typeof(raw) != TYPE_DICTIONARY:
 			return _blocked("prepared_manifest_invalid")
-		var expected_id := "glb_" + sha.substr(0, 48)
+		var expected_id: String = "glb_" + str(sha).substr(0, 48)
 		if raw.get("role") == "character" and raw.get("sha256") == sha and raw.get("sourceSha256") == sha and raw.get("outputSha256") == sha and raw.get("assetId") == expected_id and raw.get("path") == "godot-client/assets/generated/" + expected_id + ".glb":
 			source_matches.append(raw)
 	if source_matches.size() != 1:
