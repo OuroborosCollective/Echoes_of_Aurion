@@ -39,6 +39,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var world_toggle: Button = %WorldToggle
 @onready var world_actors: Node3D = %Actors
 @onready var world_camera: Camera3D = %WorldCamera
+@onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
 
 var _diagnostics = TechnicalDiagnostics.new()
 var _config: Dictionary
@@ -228,6 +229,7 @@ func _reset_projection() -> void:
 	if _appearance_api != null:
 		_appearance_api.cancel()
 	_clear_3d_actors()
+	unassigned_floor.position = Vector3.ZERO
 	world_view.visible = false
 	world_hud.visible = false
 	$SafeMargin.visible = true
@@ -536,6 +538,8 @@ func _project_3d(now_ms: int) -> void:
 	if not point.is_empty():
 		var x: float = float(point["x"]) / 1000.0
 		var z: float = float(point["z"]) / 1000.0
+		# The neutral plane has no world authority; follow only the visual point.
+		unassigned_floor.position = Vector3(x, 0.0, z)
 		world_camera.position = Vector3(x, 2.8, z + 5.5)
 		world_camera.look_at(Vector3(x, 1.0, z), Vector3.UP)
 	_update_3d_status()
