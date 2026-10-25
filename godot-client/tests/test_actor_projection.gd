@@ -197,12 +197,27 @@ func verify_active_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	if view == null or actor_root == null or camera == null:
 		scene.queue_free()
 		return
+	var initially_hidden_viewport := view.get_node_or_null("Live3D") as SubViewport
+	require(initially_hidden_viewport != null, "G16 active SubViewport missing")
+	if initially_hidden_viewport != null:
+		require(initially_hidden_viewport.render_target_update_mode in [SubViewport.UPDATE_WHEN_VISIBLE, SubViewport.UPDATE_WHEN_PARENT_VISIBLE],
+			"hidden login/disconnected 3D viewport still renders continuously")
+	var initial_camera_transform: Transform3D = camera.transform
 	require(not view.visible, "offline Godot scene presented an invented authenticated world")
 	scene._on_zone_welcome(welcome)
 	require(not view.visible, "welcome alone misreported full zone connection")
 	scene._on_zone_connected()
 	require(view.visible, "confirmed zone did not open active native 3D presentation")
 	require(actor_root.get_child_count() == 0, "unapproved player appearance silently spawned a figure")
+	# No selected/loaded actor must never hide an expired confirmed world in the
+	# full-screen 3D HUD. Test the real scene with the existing stale clock.
+	var world_label := scene.get_node_or_null("%WorldStatus") as Label
+	require(world_label != null, "3D freshness label missing")
+	scene._update_world_freshness(scene._last_world_update_ms + 1500)
+	require(scene._world_is_stale, "fixture did not reach stale world state")
+	if world_label != null:
+		require(world_label.text.contains("Stand veraltet"),
+			"no-model 3D HUD hid stale confirmed world state")
 	var source: Dictionary = {}
 	for entry: Dictionary in manifest.sources:
 		if entry.role == "character":
@@ -290,6 +305,8 @@ func verify_active_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 		require(authoritative.presences[0].position.x == 100000,
 			"moving the presentation floor modified authoritative integer-mm state")
 	scene._reset_projection()
+	require(camera.transform == initial_camera_transform,
+		"session reset retained the previous confirmed player's camera viewpoint")
 	if preview_floor != null:
 		require(preview_floor.position == Vector3.ZERO,
 			"unassigned preview floor retained prior session's position")
