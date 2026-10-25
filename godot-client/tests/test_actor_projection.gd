@@ -270,7 +270,29 @@ func verify_active_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 			"uncontaminated active native 3D composition render was not captured")
 		for hidden in unrelated:
 			hidden.visible = true
+	# Regression: a distant confirmed X position must not leave the unassigned
+	# preview plane behind at the original world origin. This is only visual
+	# presentation; it must never turn into a world/terrain authority.
+	var preview_floor := scene.get_node_or_null("WorldView/Live3D/World/UnassignedFloor") as MeshInstance3D
+	require(preview_floor != null, "G16 unassigned preview floor absent")
+	var far_snapshot := snapshot.duplicate(true)
+	far_snapshot.snapshotSeq = 3
+	far_snapshot.tick = 3
+	far_snapshot.presences[0].position.x = 100000
+	scene._on_zone_snapshot(far_snapshot)
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(is_equal_approx(actor.position.x, 100.0),
+		"confirmed distant server position not projected to native actor")
+	if preview_floor != null:
+		require(is_equal_approx(preview_floor.position.x, actor.position.x),
+			"unassigned preview floor did not follow confirmed distant actor")
+		var authoritative: Dictionary = scene._confirmed_zone.current_state()
+		require(authoritative.presences[0].position.x == 100000,
+			"moving the presentation floor modified authoritative integer-mm state")
 	scene._reset_projection()
+	if preview_floor != null:
+		require(preview_floor.position == Vector3.ZERO,
+			"unassigned preview floor retained prior session's position")
 	require(actor_root.get_child_count() == 0 and not view.visible,
 		"logout/despawn retained 3D actor or viewport")
 	scene.queue_free()
