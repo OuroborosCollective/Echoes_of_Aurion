@@ -4805,3 +4805,9 @@ Evidence: Codehead 3886633b554e1f38f8b19887a0a7044e90daabd3, zugehörige GitHub-
 Änderung: Leicht bedienbare, fokussierbare Home-CTAs und eine Rangliste-Community-Kachel, bei Wahrung bestehender Events und Typnamen; fremde BVH-Receipts und Bot-Notiz nicht uebernommen.
 Erkenntnis: UI-Verbesserungen duerfen keine Runtime-/Gameplay-Autoritaet erzeugen; reale Browser-Regressionspruefung und finaler Main-Readback sind Pflicht.
 Evidence: Vorheriger PR-Head 0c0dd5a8a74f6d7e5e5aa54d2e0376e16eff0e9b mit 7/7 CI-PASS. Neu synchronisierter Head muss seine eigenen CI-Gates bestehen.
+
+
+### 2026-10-25 — Wolfram-CAG-Ausdrucksaufbau ohne Zwischenarrays (PR #1166)
+Änderung: Vorhandene CAG-Ausdruecke erhalten identische Syntax bei weniger temporaeren Arrays; Wolfram ist ausschliesslich Analysepfad. Bot-Notiz bleibt aussen vor.
+Erkenntnis: Bytegleichheit der Probeausdruecke und deterministische Eingaben sind Abnahmekriterien; kein CPU-Speedup ohne Benchmark behaupten.
+Evidence: Alter PR-Head 8a22effa04ec1107c827c586a2346d98d0c56913 mit 5/5 Github-Actions-PASS. Finaler Head und seine CI vor Merge unabhaengig rueckzulesen.
