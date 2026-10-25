@@ -4799,3 +4799,9 @@ Evidence: Kausaler RED im Godot-4.7.2-Actor-Lauf 40214828986 (alle drei Assertio
 Änderung: Verwendet die actionSequenceWatermarks-Map innerhalb einer Aurion-Zone wieder und füllt sie pro Tick aus den sortierten Peers erneut; unverknüpfte BVH-Benchmarkzahlen und Bot-Memory-Änderungen wurden aus dem PR-Diff entfernt.
 Erkenntnis: Tick und kanonische Sequenz bleiben autoritativ; die Map muss in jedem Tick vollständig geleert werden. Eine gemessene CPU-/GC-Verbesserung liegt nicht vor, nur die entfallende Quellcode-Allokationsstelle.
 Evidence: Codehead 3886633b554e1f38f8b19887a0a7044e90daabd3, zugehörige GitHub-Action-Runs 40218642017/40218641931/40218641965/40218641987/40218641957/40218641950/40218641947/40218641958: acht relevante CI-Läufe PASS. Der finale Memory-tragende PR-Head braucht zusätzlich eigenen CI- und GitHub-Readback; keine Produktionsmessung.
+
+
+### 2026-10-25 — G17 ZoneMobRuntime: iterativer Tick ueber Cache (PR #1170)
+Änderung: Der Aurion-Mob-Tick liest vorhandene, kanonisch geordnete `cachedOrderedStates` direkt statt pro Tick die ID-Reihe mit Map-Lookups zu durchlaufen; Cache-Erneuerung in `updateState`, Restore und Reset bleibt erhalten.
+Erkenntnis: Reihenfolge, v5-Projektion und kanonische FSM-Daten werden nicht neu autorisiert. Weniger Lookup-/Iteratorarbeit ist eine Codeeigenschaft, keine gemessene CPU-Steigerung.
+Evidence: Ursprungs-Head f79da06779f6a40c323b87328587b5693491b1c7 mit sechs zugeordneten GitHub-Actions-PASS (Runtime Candidate, Container Proof, Starter Village, AIM292, AIM259, Local Test Pack). Finaler Memory-tragender Head und Integrations-Readback sind vor Merge separat erforderlich.
