@@ -38,6 +38,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var world_status: Label = %WorldStatus
 @onready var world_toggle: Button = %WorldToggle
 @onready var world_actors: Node3D = %Actors
+@onready var live_3d_viewport: SubViewport = $WorldView/Live3D
 @onready var world_camera: Camera3D = %WorldCamera
 @onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
@@ -74,6 +75,7 @@ func _configuration_valid() -> bool:
 	return not _config.server_base_url.is_empty() and not _config.client_build.is_empty() and _config.renderer_profile == "compatibility"
 
 func _ready() -> void:
+	live_3d_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE
 	Engine.max_fps = 30
 	_config = RuntimeConfig.current()
 	%BuildIdentity.text = "Build · " + _config.client_build
