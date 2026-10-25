@@ -23,8 +23,8 @@ const server = createServer((req, res) => {
     const json = { 'Content-Type': 'application/json' };
     if (calls === 2) res.writeHead(302, { Location: 'http://127.0.0.1:3011/redirect-leak' }).end();
     else if (calls === 3) res.writeHead(401, json).end('{}');
-    else if (calls === 5 || calls === 7) setTimeout(() => res.writeHead(200, json).end(payload), 200);
-    else if (calls === 4) res.writeHead(200, { 'Content-Type': 'text/html' }).end('<html>invalid</html>');
+    else if (calls === 6 || calls === 8) setTimeout(() => res.writeHead(200, json).end(payload), 200);
+    else if (calls === 5) res.writeHead(200, { 'Content-Type': 'text/html' }).end('<html>invalid</html>');
     else res.writeHead(200, json).end(payload);
   } catch (e) {
     serverError ||= e;
@@ -48,6 +48,6 @@ process.stdout.write(output);
 assert.ifError(serverError);
 assert.equal(timedOut, false, 'NPC GET runtime exceeded deadline; calls=' + calls);
 assert.equal(exit, 0, 'NPC GET actual engine HTTP regression failed');
-assert.equal(calls, 7, 'expected all seven real HTTP requests');
+assert.equal(calls, 8, 'expected all eight real HTTP requests');
 assert.equal(redirectLeaked, false, 'NPC redirected bearer leaked to redirect endpoint');
 assert.match(output, /G16 quest NPC protected GET boundary verified/);
