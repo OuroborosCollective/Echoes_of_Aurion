@@ -4805,3 +4805,9 @@ Evidence: Codehead 3886633b554e1f38f8b19887a0a7044e90daabd3, zugehörige GitHub-
 Änderung: Der Aurion-Mob-Tick liest vorhandene, kanonisch geordnete `cachedOrderedStates` direkt statt pro Tick die ID-Reihe mit Map-Lookups zu durchlaufen; Cache-Erneuerung in `updateState`, Restore und Reset bleibt erhalten.
 Erkenntnis: Reihenfolge, v5-Projektion und kanonische FSM-Daten werden nicht neu autorisiert. Weniger Lookup-/Iteratorarbeit ist eine Codeeigenschaft, keine gemessene CPU-Steigerung.
 Evidence: Ursprungs-Head f79da06779f6a40c323b87328587b5693491b1c7 mit sechs zugeordneten GitHub-Actions-PASS (Runtime Candidate, Container Proof, Starter Village, AIM292, AIM259, Local Test Pack). Finaler Memory-tragender Head und Integrations-Readback sind vor Merge separat erforderlich.
+
+
+### 2026-10-25 — Archiv-Auswahl native Tastaturbedienung (PR #1116)
+Änderung: Archivliste wird als echte native Auswahl-Buttons mit aria-pressed, Fokuswache und ohne verschachtelte Schaltfläche gerendert. Fremde Benchmarkwerte und Bot-Notizen entfernt.
+Erkenntnis: Native Buttons liefern Enter-/Space-Semantik ohne zweite Keydown-Authority; ein nicht funktionsfähiger Payload-Button darf keine Interaktionswirkung vortäuschen.
+Evidence: Ursprungs-Head 6be4a01d78d198d64605b5d4af853902ae56a4f4 mit vier GitHub-PASS; RED-Testhead 175f84877405b2560eb859f4a32e4053e2f07d0b. Finales GREEN-CI und Main-Readback vor Merge erforderlich.
