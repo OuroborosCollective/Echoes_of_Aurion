@@ -44,7 +44,7 @@ const child = spawn(godot, ['--headless', '--path', project, '--script',
   'tests/test_appearance_api_runtime.gd'], { stdio: ['ignore', 'pipe', 'pipe'] });
 child.stdout.on('data', c => { output += c; });
 child.stderr.on('data', c => { output += c; });
-const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, 30000);
+const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, 20000);
 const code = await new Promise(resolve => child.once('exit', x => resolve(x ?? 1)));
 clearTimeout(timer);
 await new Promise(resolve => server.close(resolve));
