@@ -307,6 +307,14 @@ func check_approved_self_appearance(world: Variant, manifest: Dictionary) -> voi
 	require(result.get("resourcePath") == "res://assets/generated/" + str(source.assetId) + ".glb",
 		"resolver selected an unapproved local path")
 	require(JSON.stringify(world.current_state()) == before, "visual resolution changed confirmed Aurion state")
+	# Server catalog IDs are authority IDs; generated local IDs are content
+	# addresses. They need not be identical even when the SHA is identical.
+	var aliased: Dictionary = response.duplicate(true)
+	aliased.entries[0].assetId = "approved_player_custom_01"
+	aliased.selected.assetId = "approved_player_custom_01"
+	var alias_result: Dictionary = resolver.resolve_self(world, aliased, manifest)
+	require(alias_result.get("status") == "resolved" and alias_result.get("catalogAssetId") == "approved_player_custom_01" and alias_result.get("sourceAssetId") == source.assetId,
+		"server catalog alias incorrectly treated as generated GLB filename")
 	var no_selection: Dictionary = response.duplicate(true)
 	no_selection.selected = null
 	require(resolver.resolve_self(world, no_selection, manifest).get("reason") == "selection_missing",
