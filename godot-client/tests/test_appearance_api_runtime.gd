@@ -101,7 +101,7 @@ func verify() -> void:
 		"validated GET result lost session binding")
 	require(last_response.get("version") == "aurion.glb-import.v1", "native GET payload changed")
 	await _request(api, "zone_peer_two")
-	require(not succeeded and last_error == "APPEARANCE_RESPONSE_INVALID", "redirect accepted or followed")
+	require(not succeeded and last_error == "APPEARANCE_REQUEST_FAILED", "zero-redirect policy failed to terminate rejected redirect")
 	await _request(api, "zone_peer_three")
 	require(succeeded and auth.refresh_calls == 1 and last_generation == 2,
 		"401 did not retry with rotated session generation")
