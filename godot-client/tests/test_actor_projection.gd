@@ -490,6 +490,8 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 		return
 	var npcs_root := scene.get_node_or_null("%QuestNPCs") as Node3D
 	var players_root := scene.get_node_or_null("%Actors") as Node3D
+	var isolated_viewport := scene.get_node("WorldView/Live3D") as SubViewport
+	require(isolated_viewport.own_world_3d, "G16 quest NPC SubViewport shares external actor test world")
 	require(npcs_root != null and npcs_root != players_root,
 		"Quest NPCs share the player/mob actor registry or lack own scene root")
 	if npcs_root == null:
@@ -537,7 +539,6 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 		await process_frame
 		await RenderingServer.frame_post_draw
 		var viewport := scene.get_node("WorldView/Live3D") as SubViewport
-		require(viewport.own_world_3d, "G16 quest NPC SubViewport shares external actor test world")
 		require(viewport.get_texture().get_image().save_png(output.path_join("quest-npcs.png")) == OK,
 			"real three-NPC scene render not captured")
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == before,
