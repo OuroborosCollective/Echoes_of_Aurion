@@ -53,6 +53,7 @@ func verify() -> void:
 	require(actors.size() == 2, "expected actual player and monster models")
 	check_approved_self_appearance(world, manifest)
 	await verify_active_scene(welcome, manifest)
+	await verify_remote_scene(welcome, manifest)
 	var snapshot := welcome.duplicate(true)
 	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
 		snapshot.erase(key)
@@ -400,3 +401,76 @@ func check_approved_self_appearance(world: Variant, manifest: Dictionary) -> voi
 	invalid_catalog.revision = "wrong"
 	require(resolver.resolve_self(world, invalid_catalog, manifest).get("reason") == "catalog_invalid",
 		"unversioned catalog response was trusted")
+
+## Public-appearance protocol fixtures; real active scene and imported GLB.
+func verify_remote_scene(welcome: Dictionary, manifest: Dictionary) -> void:
+	var scene: Control = load("res://app/main.tscn").instantiate()
+	root.add_child(scene)
+	if not scene.has_method("_apply_remote_appearances"):
+		require(false, "G16 active scene cannot project confirmed remote public players")
+		scene.queue_free()
+		return
+	var joined := welcome.duplicate(true)
+	joined.presences.append({"entityId":"player:2","userId":2,"position":{"x":2000,"z":0},"lastAcceptedClientSeq":0})
+	scene._on_zone_welcome(joined)
+	scene._on_zone_connected()
+	var source: Dictionary = {}
+	for candidate: Dictionary in manifest.sources:
+		if candidate.role == "character":
+			source = candidate
+	var asset_id := "public_character_fixture"
+	var url := "/api/assets/glb/" + str(source.sha256) + ".glb"
+	var catalog := {"version":"aurion.glb-import.v1","revision":"a".repeat(64),"entries":[{
+		"assetId":asset_id,"sha256":source.sha256,"storageUrl":url,"purpose":"player-public","assetType":"character","targetKey":null}]}
+	var response := {"appearances":[{"userId":2,"assetId":asset_id,"storageUrl":url,"displayName":"Fixture"}]}
+	var actor_root: Node3D = scene.get_node("%Actors")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(actor_root.get_child_count() == 1, "public remote player was not mounted exactly once")
+	if actor_root.get_child_count() != 1:
+		scene.queue_free()
+		return
+	var actor: Node3D = actor_root.get_child(0)
+	require(actor.entity_id == "player:2" and actor.asset_id == asset_id and actor.visible, "remote identity/visibility lost")
+	require(actor.position == Vector3(2, 0, 0), "remote confirmed position lost")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	require(actor_root.get_child_count() == 1 and actor_root.get_child(0) == actor, "duplicate refresh replaced/leaked actor")
+	# A denied/private response removes a previously visible public appearance.
+	scene._apply_remote_appearances({"appearances":[]}, catalog, manifest)
+	require(actor_root.get_child_count() == 0, "revoked public appearance remained visible")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	var snapshot := joined.duplicate(true)
+	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
+		snapshot.erase(key)
+	snapshot.type = "snapshot"
+	snapshot.snapshotSeq = 2
+	snapshot.tick = 2
+	snapshot.presences[1].position.x = 3000
+	scene._on_zone_snapshot(snapshot)
+	scene._project_3d(scene._last_world_update_ms + 50)
+	actor = actor_root.get_child(0)
+	require(is_equal_approx(actor.position.x, 2.5), "remote interpolation not bounded to confirmed samples")
+	var animation: AnimationPlayer = actor.find_children("*", "AnimationPlayer", true, false)[0]
+	require(animation.current_animation == "Walk", "remote movement did not select Walk")
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(animation.current_animation == "Idle", "remote actor kept walking past confirmed interval")
+	var old_snapshot := snapshot.duplicate(true)
+	old_snapshot.snapshotSeq = 1
+	old_snapshot.presences.clear()
+	scene._on_zone_snapshot(old_snapshot)
+	require(actor_root.get_child_count() == 1, "stale snapshot removed current actor")
+	var invalid := response.duplicate(true)
+	invalid.appearances.append(response.appearances[0].duplicate(true))
+	scene._apply_remote_appearances(invalid, catalog, manifest)
+	require(actor_root.get_child_count() == 0, "ambiguous appearance retained actor")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	snapshot.snapshotSeq = 3
+	snapshot.tick = 3
+	snapshot.presences.pop_back()
+	scene._on_zone_snapshot(snapshot)
+	require(actor_root.get_child_count() == 0, "despawn retained remote model")
+	scene._apply_remote_appearances(response, catalog, manifest)
+	require(actor_root.get_child_count() == 0, "late response resurrected absent player")
+	scene._reset_projection()
+	require(actor_root.get_child_count() == 0, "session reset retained remote models")
+	scene.queue_free()
