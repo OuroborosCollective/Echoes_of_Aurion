@@ -39,6 +39,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var world_toggle: Button = %WorldToggle
 @onready var world_actors: Node3D = %Actors
 @onready var world_camera: Camera3D = %WorldCamera
+@onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
 
 var _diagnostics = TechnicalDiagnostics.new()
@@ -230,6 +231,7 @@ func _reset_projection() -> void:
 		_appearance_api.cancel()
 	_clear_3d_actors()
 	unassigned_floor.position = Vector3.ZERO
+	world_camera.transform = _initial_world_camera_transform
 	world_view.visible = false
 	world_hud.visible = false
 	$SafeMargin.visible = true
@@ -576,6 +578,7 @@ func _update_world_freshness(now_ms: int) -> void:
 	_update_entity_presentation()
 	_update_vitals_presentation()
 	_update_position_presentation(now_ms)
+	_update_3d_status()
 
 func _world_freshness_suffix() -> String:
 	return " · Stand veraltet" if _world_is_stale else ""
