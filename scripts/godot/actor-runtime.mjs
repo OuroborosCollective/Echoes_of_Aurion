@@ -8,7 +8,7 @@ const render = process.argv.includes('--render');
 const directory = join(root, 'actor-evidence');
 await mkdir(directory, { recursive: true });
 // Failed reruns must never leave previously green evidence for always-upload.
-for (const file of render ? ['render.json', 'actors.png', 'render.log'] : ['headless.json', 'headless.log', 'import.log', 'render.json', 'render.log', 'actors.png']) {
+for (const file of render ? ['render.json', 'actors.png', 'world-view.png', 'render.log'] : ['headless.json', 'headless.log', 'import.log', 'render.json', 'render.log', 'actors.png', 'world-view.png']) {
   await rm(join(directory, file), { force: true });
 }
 const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
@@ -35,6 +35,7 @@ if (render) assert.match(adapter ?? '', /llvmpipe|softpipe|software/i);
 const receipt = { sourceRevision: revision, editorHash: await digest(executable),
   preparedManifestHash: await digest(manifestPath), layer: render ? 'software-render' : 'headless-imported-models',
   stateSource: 'explicit-protocol-fixtures', liveAssignment: 'unverified', device: 'unverified',
-  videoAdapter: adapter, imageSha256: render ? await digest(join(directory, 'actors.png')) : null, result: 'passed' };
+  videoAdapter: adapter, imageSha256: render ? await digest(join(directory, 'actors.png')) : null,
+  activeSceneImageSha256: render ? await digest(join(directory, 'world-view.png')) : null, result: 'passed' };
 await writeFile(join(directory, render ? 'render.json' : 'headless.json'), JSON.stringify(receipt, null, 2) + '\n');
 console.log(JSON.stringify(receipt));
