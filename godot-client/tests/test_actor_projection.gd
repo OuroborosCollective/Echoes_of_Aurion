@@ -1,6 +1,7 @@
 extends SceneTree
 ## Real imported models with explicit protocol fixtures, NOT a live-world claim.
 const Actor = preload("res://actors/actor_view.tscn")
+const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
 const World = preload("res://projection/zone_state.gd")
 const Visual = preload("res://projection/snapshot_interpolator.gd")
 const Codec = preload("res://net/zone_codec.gd")
@@ -51,6 +52,7 @@ func verify() -> void:
 		actors.append(actor)
 	require(actors.size() == 2, "expected actual player and monster models")
 	check_approved_self_appearance(world, manifest)
+	await verify_active_scene(welcome, manifest)
 	var snapshot := welcome.duplicate(true)
 	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
 		snapshot.erase(key)
@@ -178,6 +180,86 @@ func verify() -> void:
 
 # Server response below is an explicit contract fixture, never a live selection.
 # It must be joined to a confirmed self presence and a packaged source hash.
+
+## Component/scene integration with explicit protocol fixtures and real imported
+## GLBs. NOT an authenticated HTTP, production or physical-device assertion.
+func verify_active_scene(welcome: Dictionary, manifest: Dictionary) -> void:
+	var packed_main: PackedScene = load("res://app/main.tscn") as PackedScene
+	require(packed_main != null, "G16 active Godot scene absent")
+	if packed_main == null:
+		return
+	var scene: Control = packed_main.instantiate()
+	root.add_child(scene)
+	var view := scene.get_node_or_null("%WorldView") as SubViewportContainer
+	var actor_root := scene.get_node_or_null("%Actors") as Node3D
+	var camera := scene.get_node_or_null("%WorldCamera") as Camera3D
+	require(view != null and actor_root != null and camera != null, "G16 active scene lacks 3D viewport/actors/camera")
+	if view == null or actor_root == null or camera == null:
+		scene.queue_free()
+		return
+	require(not view.visible, "offline Godot scene presented an invented authenticated world")
+	scene._on_zone_welcome(welcome)
+	require(not view.visible, "welcome alone misreported full zone connection")
+	scene._on_zone_connected()
+	require(view.visible, "confirmed zone did not open active native 3D presentation")
+	require(actor_root.get_child_count() == 0, "unapproved player appearance silently spawned a figure")
+	var source: Dictionary = {}
+	for entry: Dictionary in manifest.sources:
+		if entry.role == "character":
+			source = entry
+			break
+	if source.is_empty():
+		require(false, "prepared player model absent in scene test")
+		scene.queue_free()
+		return
+	var sha: String = source.sha256
+	var asset_id := "glb_" + sha.substr(0, 48)
+	var url := "/api/assets/glb/" + sha + ".glb"
+	var response := {"version": "aurion.glb-import.v1", "revision": "a".repeat(64),
+		"entries": [{"assetId":asset_id, "sha256":sha, "storageUrl":url,
+			"purpose":"player-public", "assetType":"character", "targetKey":null}],
+		"selected":{"assetId":asset_id, "storageUrl":url, "visibility":"private"}, "immutable":true}
+	# An unprotected callback must not mount anything, even with valid-looking JSON.
+	scene._on_appearance_ready(response, welcome.connectionId, 0)
+	require(actor_root.get_child_count() == 0, "appearance response bypassed session generation/authorization")
+	var resolution: Dictionary = AppearanceResolver.new().resolve_self(scene._confirmed_zone, response, manifest)
+	require(resolution.get("status") == "resolved", "scene test catalog did not authorize its model")
+	if resolution.get("status") != "resolved":
+		scene.queue_free()
+		return
+	require(scene._mount_resolved_self(resolution), "validated real imported GLB did not enter active scene")
+	require(actor_root.get_child_count() == 1, "active scene has wrong player count")
+	var actor: Node3D = actor_root.get_child(0) as Node3D
+	require(actor != null and actor.visible, "approved model is hidden in active viewport")
+	require(actor.get("entity_id") == welcome.selfEntityId, "scene actor lost server-confirmed ID")
+	require(actor.get("asset_id") == asset_id, "scene actor lost approved catalog ID")
+	require(not actor.find_children("*", "MeshInstance3D", true, false).is_empty(),
+		"active scene did not instantiate real model geometry")
+	require(actor.position == Vector3.ZERO, "scene player position invented offsets")
+	var snapshot := welcome.duplicate(true)
+	for key in ["protocolVersion", "connectionId", "selfEntityId"]:
+		snapshot.erase(key)
+	snapshot.type = "snapshot"
+	snapshot.snapshotSeq = 2
+	snapshot.tick = 2
+	snapshot.presences[0].position.x = 1000
+	scene._on_zone_snapshot(snapshot)
+	scene._project_3d(scene._last_world_update_ms + 100)
+	require(is_equal_approx(actor.position.x, 1.0), "native scene actor did not follow confirmed 100-ms position")
+	require(is_equal_approx(camera.position.x, 1.0), "native camera stopped tracking confirmed player")
+	require(scene._confirmed_zone.current_state().presences[0].position.x == 1000,
+		"visual scene changed confirmed integer-mm truth")
+	var output := OS.get_environment("AURION_ACTOR_RENDER_DIR")
+	if not output.is_empty():
+		await process_frame
+		await RenderingServer.frame_post_draw
+		require(root.get_texture().get_image().save_png(output.path_join("world-view.png")) == OK,
+			"active native 3D scene render was not captured")
+	scene._reset_projection()
+	require(actor_root.get_child_count() == 0 and not view.visible,
+		"logout/despawn retained 3D actor or viewport")
+	scene.queue_free()
+
 func check_approved_self_appearance(world: Variant, manifest: Dictionary) -> void:
 	var resolver_path := "res://actors/appearance_resolver.gd"
 	if not ResourceLoader.exists(resolver_path):
