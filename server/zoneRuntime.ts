@@ -158,6 +158,7 @@ export class AuthoritativeMovementZone {
   private questSummaries = new Map<string, CanonicalQuestSummary>();
   private questSummariesDirty = false;
   private cachedQuestSummaries: CanonicalQuestSummary[] = [];
+  private readonly actionSequenceWatermarks = new Map<number, number>();
   /**
    * Last receipt-bound canonical state. Transport join/leave readbacks remain
    * immediate, but the next causal receipt must begin from the prior committed
@@ -650,7 +651,10 @@ export class AuthoritativeMovementZone {
     captureAuthorityStage("MEMBERSHIP_REVIVAL");
 
     // Stage ordering must not invalidate an already admitted lower-sequence action.
-    const actionSequenceWatermarks = new Map(this.sortedPeers.map(peer => [peer.userId, peer.lastAcceptedClientSeq]));
+    this.actionSequenceWatermarks.clear();
+    for (const peer of this.sortedPeers) {
+      this.actionSequenceWatermarks.set(peer.userId, peer.lastAcceptedClientSeq);
+    }
 
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {
@@ -673,8 +677,8 @@ export class AuthoritativeMovementZone {
     for (const intent of intentsToProcess) {
       if (intent.type === "move" || intent.type === "presence_join" || intent.type === "presence_leave") continue;
       const peer = this.peersByEntityId.get(intent.entityId);
-      if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
-      actionSequenceWatermarks.set(peer.userId, intent.clientSeq);
+      if (!peer || intent.clientSeq <= (this.rulesetVersion === "aurion.zone.rules.v2" ? peer.lastAcceptedClientSeq : this.actionSequenceWatermarks.get(peer.userId) ?? peer.lastAcceptedClientSeq)) continue;
+      this.actionSequenceWatermarks.set(peer.userId, intent.clientSeq);
       peer.lastAcceptedClientSeq = Math.max(peer.lastAcceptedClientSeq, intent.clientSeq);
 
       if (intent.type === "attack") {
