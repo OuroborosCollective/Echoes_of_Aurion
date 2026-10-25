@@ -44,6 +44,7 @@ func require(ok: bool, message: String) -> void:
 func _ready_callback(value: Dictionary, connection: String, generation: int) -> void:
 	completed = true
 	succeeded = true
+	print("G16_GET_CALLBACK=", connection)
 	callback_count += 1
 	last_connection = connection
 	last_generation = generation
@@ -52,6 +53,7 @@ func _ready_callback(value: Dictionary, connection: String, generation: int) -> 
 func _failed_callback(code: String, connection: String) -> void:
 	completed = true
 	succeeded = false
+	print("G16_GET_FAILURE=", connection, " code=", code)
 	last_error = code
 	last_connection = connection
 
@@ -62,9 +64,19 @@ func _request(api: Node, connection: String) -> void:
 	completed = false
 	succeeded = false
 	last_error = ""
-	require(api.request_self(SERVER, connection, true), "GET was not started")
-	while not completed:
+
+	var started: bool = api.request_self(SERVER, connection, true)
+	print("G16_GET_BEGIN=", connection, " started=", started)
+	require(started, "GET was not started: " + connection)
+	if not started:
+		return
+	var started_at: int = Time.get_ticks_msec()
+	while not completed and Time.get_ticks_msec() - started_at < 6000:
 		await process_frame
+	print("G16_GET_END=", connection, " completed=", completed, " success=", succeeded, " error=", last_error)
+	require(completed, "GET timeout for " + connection)
+	if not completed:
+		api.cancel()
 
 func verify() -> void:
 	var auth := TestAuth.new()
