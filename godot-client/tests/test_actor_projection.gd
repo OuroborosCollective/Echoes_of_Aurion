@@ -183,7 +183,7 @@ func check_approved_self_appearance(world: Variant, manifest: Dictionary) -> voi
 	if not ResourceLoader.exists(resolver_path):
 		require(false, "G16 approved appearance resolver missing")
 		return
-	var resolver := load(resolver_path).new()
+	var resolver: Variant = load(resolver_path).new()
 	var source: Dictionary = {}
 	for candidate: Dictionary in manifest.sources:
 		if candidate.role == "character":
