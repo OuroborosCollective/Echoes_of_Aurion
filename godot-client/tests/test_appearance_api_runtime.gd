@@ -95,12 +95,15 @@ func verify() -> void:
 	require(succeeded and last_connection == "zone_peer_new", "cancelled epoch replaced new connection")
 	await create_timer(0.3).timeout
 	require(callback_count == count_before + 1, "late stale HTTP response projected into replacement")
-	auth.generation += 1
+	completed = false
+	succeeded = false
+	last_error = ""
 	require(api.request_self(SERVER, "zone_peer_rotated", true), "rotation test request did not begin")
 	await create_timer(0.05).timeout
 	auth.allowed = false
 	await create_timer(0.25).timeout
-	require(not succeeded, "revoked generation accepted a protected appearance response")
+	require(completed and not succeeded and last_error == "APPEARANCE_SESSION_CHANGED",
+		"revoked generation accepted a protected appearance response")
 	api.cancel()
 	api.queue_free()
 	auth.queue_free()
