@@ -537,6 +537,7 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 		await process_frame
 		await RenderingServer.frame_post_draw
 		var viewport := scene.get_node("WorldView/Live3D") as SubViewport
+		require(viewport.own_world_3d, "G16 quest NPC SubViewport shares external actor test world")
 		require(viewport.get_texture().get_image().save_png(output.path_join("quest-npcs.png")) == OK,
 			"real three-NPC scene render not captured")
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == before,
