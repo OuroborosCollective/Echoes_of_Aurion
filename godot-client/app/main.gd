@@ -11,6 +11,9 @@ const ZoneState = preload("res://projection/zone_state.gd")
 const EntityRegistry = preload("res://projection/entity_registry.gd")
 const SnapshotInterpolator = preload("res://projection/snapshot_interpolator.gd")
 const NativeIntentBridge = preload("res://platform/android/native_intent_bridge.gd")
+const AppearanceApi = preload("res://net/api/appearance_api.gd")
+const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
+const ActorScene = preload("res://actors/actor_view.tscn")
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
@@ -30,11 +33,23 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
 @onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
+@onready var world_view: SubViewportContainer = %WorldView
+@onready var world_hud: MarginContainer = %WorldHUD
+@onready var world_status: Label = %WorldStatus
+@onready var world_toggle: Button = %WorldToggle
+@onready var world_actors: Node3D = %Actors
+@onready var live_3d_viewport: SubViewport = $WorldView/Live3D
+@onready var world_camera: Camera3D = %WorldCamera
+@onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
+@onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
 
 var _diagnostics = TechnicalDiagnostics.new()
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
+var _appearance_api: Node
+var _self_actor: Node3D
+var _appearance_diagnostic := "Erscheinung nicht geprüft"
 var _zone_socket: Node
 var _awaiting_callback := false
 var _zone_reject_code := ""
@@ -60,6 +75,7 @@ func _configuration_valid() -> bool:
 	return not _config.server_base_url.is_empty() and not _config.client_build.is_empty() and _config.renderer_profile == "compatibility"
 
 func _ready() -> void:
+	live_3d_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE
 	Engine.max_fps = 30
 	_config = RuntimeConfig.current()
 	%BuildIdentity.text = "Build · " + _config.client_build
@@ -76,6 +92,10 @@ func _ready() -> void:
 	add_child(_api)
 	_api.zone_ticket_succeeded.connect(_on_zone_ticket_succeeded)
 	_api.request_failed.connect(_on_zone_ticket_failed)
+	_appearance_api = AppearanceApi.new(_auth_start)
+	add_child(_appearance_api)
+	_appearance_api.appearance_ready.connect(_on_appearance_ready)
+	_appearance_api.request_failed.connect(_on_appearance_failed)
 	_zone_socket = ZoneSocket.new()
 	add_child(_zone_socket)
 	_zone_socket.zone_welcome.connect(_on_zone_welcome)
@@ -97,6 +117,7 @@ func _ready() -> void:
 	%PlanA.pressed.connect(func(): zone_map.arm_plan("A"))
 	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
+	world_toggle.pressed.connect(_toggle_world_diagnostics)
 	login.disabled = true
 	if not _configuration_valid():
 		status.text = "Konfiguration ungültig"
@@ -207,6 +228,17 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 		_on_zone_closed("socket_open_failed")
 
 func _reset_projection() -> void:
+	# An old HTTP completion/actor must not survive a new authenticated zone.
+	if _appearance_api != null:
+		_appearance_api.cancel()
+	_clear_3d_actors()
+	unassigned_floor.position = Vector3.ZERO
+	world_camera.transform = _initial_world_camera_transform
+	world_view.visible = false
+	world_hud.visible = false
+	$SafeMargin.visible = true
+	world_toggle.text = "Diagnose"
+	_appearance_diagnostic = "Erscheinung nicht geprüft"
 	_confirmed_zone.reset()
 	_entities.reset()
 	_visuals.reset()
@@ -262,6 +294,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		_update_entity_presentation()
 		_update_vitals_presentation()
 		_update_position_presentation(now_ms)
+		_project_3d(now_ms)
 
 func _on_zone_combat(event: Dictionary) -> void:
 	if not _confirmed_zone.has_state():
@@ -315,6 +348,11 @@ func _on_zone_connected() -> void:
 	status.text = "Sicher mit Aurion verbunden"
 	login.text = "Verbunden"
 	login.disabled = true
+	_show_3d()
+	# The authenticated optional reader cannot invalidate the v5 zone transport.
+	if _appearance_api != null and not _appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id()):
+		_appearance_diagnostic = "Erscheinung derzeit nicht abrufbar"
+	_update_3d_status()
 
 func _on_zone_rejected(code: String) -> void:
 	# Command-level rejection is recoverable after a verified welcome.
@@ -413,6 +451,7 @@ func _process(_delta: float) -> void:
 	var now_ms := Time.get_ticks_msec()
 	if _confirmed_zone.has_state():
 		zone_map.set_visual_positions(_visuals, now_ms)
+		_project_3d(now_ms)
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
@@ -420,6 +459,103 @@ func _process(_delta: float) -> void:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
 		_poll_reconnect(Time.get_ticks_msec())
+
+## G16: The viewport displays only a confirmed session. The neutral floor is
+## explicitly unassigned presentation; it is not Aurion world geometry.
+func _show_3d() -> void:
+	world_view.visible = true
+	world_hud.visible = true
+	$SafeMargin.visible = false
+	world_toggle.text = "Diagnose"
+	_update_3d_status()
+
+func _toggle_world_diagnostics() -> void:
+	if not world_view.visible:
+		return
+	$SafeMargin.visible = not $SafeMargin.visible
+	world_toggle.text = "3D-Ansicht" if $SafeMargin.visible else "Diagnose"
+
+func _clear_3d_actors() -> void:
+	_self_actor = null
+	for actor in world_actors.get_children():
+		actor.visible = false
+		world_actors.remove_child(actor)
+		actor.queue_free()
+
+func _on_appearance_failed(reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	_appearance_diagnostic = reason
+	_update_3d_status()
+
+func _on_appearance_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation:
+		return
+	if _zone_socket.state_name() != "connected":
+		return
+	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
+	var resolution: Dictionary = AppearanceResolver.new().resolve_self(_confirmed_zone, response, manifest)
+	if resolution.get("status") != "resolved":
+		_appearance_diagnostic = str(resolution.get("reason", "appearance_invalid"))
+		_update_3d_status()
+		return
+	_mount_resolved_self(resolution)
+
+## Caller must first validate the authenticated response through AppearanceResolver.
+## Kept separate so actual scene/actor composition has an independent render test.
+func _mount_resolved_self(resolution: Dictionary) -> bool:
+	if not _confirmed_zone.has_state() or resolution.get("status") != "resolved" or resolution.get("entityId") != _confirmed_zone.self_entity_id():
+		return false
+	var packed: PackedScene = load(str(resolution.resourcePath)) as PackedScene
+	if packed == null:
+		_appearance_diagnostic = "packed_model_unavailable"
+		_update_3d_status()
+		return false
+	_clear_3d_actors()
+	var actor: Node3D = ActorScene.instantiate()
+	world_actors.add_child(actor)
+	if not actor.bind_confirmed(_confirmed_zone, str(resolution.entityId), str(resolution.catalogAssetId), packed):
+		world_actors.remove_child(actor)
+		actor.queue_free()
+		_appearance_diagnostic = "model_bind_rejected"
+		_update_3d_status()
+		return false
+	_self_actor = actor
+	_appearance_diagnostic = ""
+	_project_3d(Time.get_ticks_msec())
+	return true
+
+func _project_3d(now_ms: int) -> void:
+	if not _confirmed_zone.has_state() or not is_instance_valid(_self_actor):
+		return
+	var valid: bool = _self_actor.project(_confirmed_zone, _visuals, now_ms)
+	if not valid:
+		_appearance_diagnostic = str(_self_actor.diagnostic)
+		if _self_actor.entity_id.is_empty():
+			_clear_3d_actors()
+		_update_3d_status()
+		return
+	_appearance_diagnostic = str(_self_actor.diagnostic)
+	var point: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
+	if not point.is_empty():
+		var x: float = float(point["x"]) / 1000.0
+		var z: float = float(point["z"]) / 1000.0
+		# The neutral plane has no world authority; follow only the visual point.
+		unassigned_floor.position = Vector3(x, 0.0, z)
+		world_camera.position = Vector3(x, 2.8, z + 5.5)
+		world_camera.look_at(Vector3(x, 1.0, z), Vector3.UP)
+	_update_3d_status()
+
+func _update_3d_status() -> void:
+	if not _confirmed_zone.has_state():
+		world_status.text = "3D · Keine bestätigte Sitzung"
+		return
+	var visible_count := 1 if is_instance_valid(_self_actor) and _self_actor.visible else 0
+	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1, 0)
+	var model_message := "Spielerfigur sichtbar" if visible_count == 1 else "Spielerfigur: " + _appearance_diagnostic
+	world_status.text = "Aurion 3D · %s · %d weitere ungeklärte Entitäten · Neutralboden (noch kein Welt-Chunk)%s" % [model_message, other_count, _world_freshness_suffix()]
 
 func _update_entity_presentation() -> void:
 	if not _confirmed_zone.has_state():
@@ -444,6 +580,7 @@ func _update_world_freshness(now_ms: int) -> void:
 	_update_entity_presentation()
 	_update_vitals_presentation()
 	_update_position_presentation(now_ms)
+	_update_3d_status()
 
 func _world_freshness_suffix() -> String:
 	return " · Stand veraltet" if _world_is_stale else ""
