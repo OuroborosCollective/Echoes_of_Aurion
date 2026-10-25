@@ -251,10 +251,25 @@ func verify_active_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 		"visual scene changed confirmed integer-mm truth")
 	var output := OS.get_environment("AURION_ACTOR_RENDER_DIR")
 	if not output.is_empty():
+		# The actor component test also owns two Node3D siblings at SceneTree
+		# root. Hide them before whole-window capture so no foreign monster can
+		# be mistaken for an entity instantiated by the active main scene.
+		var unrelated: Array[Node3D] = []
+		for child in root.get_children():
+			if child is Node3D and child.visible:
+				unrelated.append(child)
+				child.visible = false
 		await process_frame
 		await RenderingServer.frame_post_draw
+		var live_viewport := view.get_node("Live3D") as SubViewport
+		require(live_viewport != null, "native 3D render viewport missing")
+		if live_viewport != null:
+			require(live_viewport.get_texture().get_image().save_png(output.path_join("world-viewport.png")) == OK,
+				"isolated native 3D viewport render was not captured")
 		require(root.get_texture().get_image().save_png(output.path_join("world-view.png")) == OK,
-			"active native 3D scene render was not captured")
+			"uncontaminated active native 3D composition render was not captured")
+		for hidden in unrelated:
+			hidden.visible = true
 	scene._reset_projection()
 	require(actor_root.get_child_count() == 0 and not view.visible,
 		"logout/despawn retained 3D actor or viewport")
