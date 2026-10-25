@@ -21,7 +21,7 @@ const server = createServer((req, res) => {
     calls++;
     assert.equal(req.headers.authorization, 'Bearer ' + (calls <= 3 ? 'a' : 'b').repeat(43));
     const json = { 'Content-Type': 'application/json' };
-    if (calls === 2) res.writeHead(302, { Location: 'http://127.0.0.1:3011/redirect-leak' }).end();
+    if (calls === 2) res.writeHead(302, { Location: 'http://127.0.0.1:3000/redirect-leak' }).end();
     else if (calls === 3) res.writeHead(401, json).end('{}');
     else if (calls === 6 || calls === 8) setTimeout(() => res.writeHead(200, json).end(payload), 200);
     else if (calls === 5) res.writeHead(200, { 'Content-Type': 'text/html' }).end('<html>invalid</html>');
@@ -33,7 +33,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((resolve, reject) => {
   server.once('error', reject);
-  server.listen(3011, '127.0.0.1', resolve);
+  server.listen(3000, '127.0.0.1', resolve);
 });
 let output = '', timedOut = false;
 const child = spawn(godot, ['--headless', '--path', project, '--script',

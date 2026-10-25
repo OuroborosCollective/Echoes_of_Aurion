@@ -1,7 +1,7 @@
 extends SceneTree
 ## Isolated HTTP wire regression. Auth is a TEST DOUBLE, not production data.
 const Api = preload("res://net/api/quest_npc_api.gd")
-const SERVER := "http://127.0.0.1:3011"
+const SERVER := "http://127.0.0.1:3000"
 var failures: Array[String] = []
 var completed := false
 var success := false
@@ -84,9 +84,11 @@ func verify() -> void:
 	await _request(api, "zone_npc_one")
 	require(success and last_connection == "zone_npc_one" and last_generation == 1, "protected NPC GET lost connection/generation")
 	require(last_response.get("version") == "aurion.quest-npc-visuals.v1", "NPC GET lost server version")
-	var first_http := api.get_child(0) as HTTPRequest
-	require(first_http.max_redirects == 0 and first_http.body_size_limit == 65536 and first_http.timeout == 12.0,
-		"NPC GET allows redirects or unbounded responses")
+	var first_http := api.get_child(0) as HTTPRequest if api.get_child_count() > 0 else null
+	require(first_http != null, "NPC GET did not construct any HTTPRequest")
+	if first_http != null:
+		require(first_http.max_redirects == 0 and first_http.body_size_limit == 65536 and first_http.timeout == 12.0,
+			"NPC GET allows redirects or unbounded responses")
 	await _request(api, "zone_npc_redirect")
 	require(not success and last_error == "NPC_REQUEST_FAILED", "NPC redirect followed or accepted")
 	await _request(api, "zone_npc_refresh")
