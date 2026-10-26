@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/starter_village/Prop_WoodenFence_Single.glb" id="1_Fence"]
+[ext_resource type="PackedScene" path="res://assets/starter_village/Door_1_Flat.glb" id="2_Door"]
+
+[node name="StarterGate" type="Node3D"]
+
+[node name="FenceLeft" parent="." instance=ExtResource("1_Fence")]
+position = Vector3(-1.5, 0, 0)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="FenceRight" parent="." instance=ExtResource("1_Fence")]
+position = Vector3(1.5, 0, 0)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="DoorLeaf" parent="." instance=ExtResource("2_Door")]
+position = Vector3(0, 0, 0)
+rotation_degrees = Vector3(0, 0, 0)
