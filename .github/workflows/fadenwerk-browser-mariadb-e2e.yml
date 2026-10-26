@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "e2e/fadenwerk.authenticated.spec.ts"
+      - "Memory.md"
       - "client/src/components/FadenwerkQuestEditor.tsx"
       - "client/src/fadenwerk/legacyQuestAdapter.ts"
       - "client/src/pages/QuestStudio.tsx"
@@ -15,6 +16,7 @@ on:
     branches: [main]
     paths:
       - "e2e/fadenwerk.authenticated.spec.ts"
+      - "Memory.md"
       - "client/src/components/FadenwerkQuestEditor.tsx"
       - "client/src/fadenwerk/legacyQuestAdapter.ts"
       - "client/src/pages/QuestStudio.tsx"
