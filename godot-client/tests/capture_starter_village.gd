@@ -112,7 +112,9 @@ func verify() -> void:
     if village == null:
         finish(scene)
         return
-    camera.position = Vector3(40.0, 18.0, -4.0)
+    # Tight shot makes the real prefab occupy enough measurable frame area;
+    # the 6.7% pixel-difference threshold is deliberately not relaxed.
+    camera.position = Vector3(29.0, 7.5, -13.0)
     camera.look_at(Vector3(22.0, 2.0, -22.0), Vector3.UP)
     require(scene._apply_chunk_surface(chunk(), admitted.connectionId), "G19 G18 base chunk unavailable")
     var before: Image = await take_frame(viewport)
