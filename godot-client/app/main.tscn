@@ -93,6 +93,8 @@ script = ExtResource("3_terrain")
 
 [node name="ConfirmedNeighbors" type="Node3D" parent="WorldView/Live3D/World"]
 
+[node name="ConfirmedTerrain3D" type="Node3D" parent="WorldView/Live3D/World"]
+
 [node name="Actors" type="Node3D" parent="WorldView/Live3D/World"]
 unique_name_in_owner = true
 
