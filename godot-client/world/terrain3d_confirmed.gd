@@ -139,21 +139,20 @@ func _rebuild() -> bool:
 		_retire_terrain(terrain)
 		diagnostic = "terrain_region_budget_exceeded"
 		return false
-	var util = ClassDB.instantiate("Terrain3DUtil")
 	for reg in regions:
 		var origin_x: int = reg.x * REGION_METERS
 		var origin_z: int = reg.y * REGION_METERS
 		var heights := Image.create(REGION_METERS, REGION_METERS, false, Image.FORMAT_RF)
 		var controls := Image.create(REGION_METERS, REGION_METERS, false, Image.FORMAT_RF)
 		heights.fill(Color(0, 0, 0, 1))
-		controls.fill(Color(util.as_float(4), 0, 0, 1)) # hole flag, ID 0
+		controls.fill(Color(Terrain3DUtil.as_float(4), 0, 0, 1)) # hole flag, ID 0
 		for z in range(REGION_METERS):
 			for x in range(REGION_METERS):
 				var sample: Dictionary = samples.get(Vector2i(origin_x + x, origin_z + z), {})
 				if sample.is_empty():
 					continue
 				heights.set_pixel(x, z, Color(sample.height, 0, 0, 1))
-				controls.set_pixel(x, z, Color(util.as_float(int(sample.mat) << 27), 0, 0, 1))
+				controls.set_pixel(x, z, Color(Terrain3DUtil.as_float(int(sample.mat) << 27), 0, 0, 1))
 		terrain.data.import_images([heights, controls, null], Vector3(origin_x, 0, origin_z))
 	_terrain = terrain
 	return true
