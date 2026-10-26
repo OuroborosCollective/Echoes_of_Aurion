@@ -68,6 +68,9 @@ await stage('material-projection', 'headless', executable,
 await stage('chunk-mesh-projection', 'headless', executable,
   godot('--script', 'tests/test_chunk_terrain.gd'),
   'G18 server-shaped chunk mesh projection verified');
+await stage('starter-village-model-projection', 'headless', executable,
+  godot('--script', 'tests/test_starter_village_visuals.gd'),
+  'G19_STARTER_VILLAGE_REAL_SCENE_BINDING_PASS');
 await stage(
   'zone-socket-node-ws-reject-close',
   'headless',
