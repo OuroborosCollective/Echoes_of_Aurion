@@ -23,8 +23,9 @@ func clear() -> void:
 	_models.clear()
 	_connection = ""
 	if _terrain != null:
-		remove_child(_terrain)
-		_terrain.queue_free()
+		# Let Terrain3D exit the SceneTree while it still has a valid path.
+		# Its native teardown queries that path; detaching first leaks GDExtension nodes.
+		_terrain.free()
 		_terrain = null
 	diagnostic = "Terrain3D zurückgesetzt"
 
@@ -74,8 +75,7 @@ func apply_confirmed(model: Variant, connection_id: String) -> bool:
 
 func _rebuild() -> bool:
 	if _terrain != null:
-		remove_child(_terrain)
-		_terrain.queue_free()
+		_terrain.free()
 		_terrain = null
 	if _models.is_empty():
 		return true
@@ -124,8 +124,7 @@ func _rebuild() -> bool:
 					regions[reg] = true
 					samples[Vector2i(x,z)] = {"height":float(tile.heightMm) / 1000.0,"mat":int(MATERIAL_IDS[tile.surface])}
 	if regions.size() > 9:
-		terrain.queue_free()
-		remove_child(terrain)
+		terrain.free()
 		diagnostic = "terrain_region_budget_exceeded"
 		return false
 	var util = ClassDB.instantiate("Terrain3DUtil")
