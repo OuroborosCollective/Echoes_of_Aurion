@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateAssetPlacerSource, enableEditorOnlyTool } from './stage-editor-tools.mjs';
+import * as stageTools from './stage-editor-tools.mjs';
+const patchAssetPalettePresenter = stageTools.patchAssetPalettePresenter;
 const pinned = '1dbf9fd782566780d6a6c52bd4197f448622f0aa';
 const cfg = '[plugin]\nname="Godot Asset Placer"\nversion="1.6.0"\nscript="asset_placer_plugin.gd"\n';
 const license = 'MIT License\nCopyright (c) 2025 Roman Levinzon';
@@ -21,4 +23,39 @@ test('editor configuration is scoped and idempotent',()=>{
  assert.match(changed,/run\/main_scene/);
  assert.equal(enableEditorOnlyTool(changed),changed);
  assert.throws(()=>enableEditorOnlyTool('[application]'),/EDITOR_PLUGIN_SETTINGS_MISSING/);
+});
+
+test('AssetPalette presenter lifecycle patch releases closure capture and rejects upstream drift', () => {
+ const oldPresenter = [
+  'class_name AssetPalletesPresenter',
+  'extends RefCounted',
+  '',
+  'signal pallete_changed(pallete: AssetPalette)',
+  '',
+  '',
+  'func ready() -> void:',
+  '\tvar pallete := APEditorSettingsManager.get_editor_settings().get_asset_palette()',
+  '\tpallete_changed.emit(pallete)',
+  '\tpallete.palette_changed.connect(func(): pallete_changed.emit(pallete))',
+  '',
+  '',
+  'func create_new_pallete() -> void:',
+  '\tvar pallete = APEditorSettingsManager.get_editor_settings().get_asset_palette()',
+  '\tpallete.add_new_palette()',
+  '',
+  '',
+  'func remove_pallete(palette_index: int) -> void:',
+  '\tvar pallete = APEditorSettingsManager.get_editor_settings().get_asset_palette()',
+  '\tpallete.remove_palette(palette_index)',
+  '',
+ ].join('\n');
+ assert.equal(typeof patchAssetPalettePresenter, 'function', 'EDITOR_TOOL_PATCH_REQUIRED');
+ const patched = patchAssetPalettePresenter(oldPresenter);
+ assert.match(patched, /pallete\.palette_changed\.connect\(_on_palette_changed\)/);
+ assert.match(patched, /func _on_palette_changed\(\) -> void:/);
+ assert.match(patched, /pallete_changed\.emit\(APEditorSettingsManager\.get_editor_settings\(\)\.get_asset_palette\(\)\)/);
+ assert.doesNotMatch(patched, /func\(\): pallete_changed\.emit\(pallete\)/);
+ assert.equal(patched.split('func _on_palette_changed() -> void:').length, 2);
+ assert.throws(() => patchAssetPalettePresenter(patched), /EDITOR_TOOL_PATCH_SOURCE_DRIFT/);
+ assert.throws(() => patchAssetPalettePresenter(oldPresenter.replace('connect(func():', 'connect(func(p):')), /EDITOR_TOOL_PATCH_SOURCE_DRIFT/);
 });
