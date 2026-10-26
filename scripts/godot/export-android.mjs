@@ -7,6 +7,7 @@ import { androidReport } from './android-toolchain.mjs';
 import { execute } from './check-runtime.mjs';
 import { validateApk } from './apk-readback.mjs';
 import { stageAssetProject, includeAssetManifest, verifyStagedAssetImports, readApkAssets } from './export-assets.mjs';
+import { readTerrain3dApk } from './terrain3d-apk-readback.mjs';
 
 const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
@@ -24,7 +25,7 @@ await rm(join(output, 'build-evidence.json'), { force: true });
 const job = await mkdtemp(join(root, 'export-'));
 try {
   const project = join(job, 'project');
-  const prepared = await stageAssetProject(project, revision);
+  const prepared = await stageAssetProject(project, revision, { includeTerrain3D: true });
   const presets = await readFile(join(project, 'export_presets.cfg'), 'utf8');
   await writeFile(join(project, 'export_presets.cfg'), includeAssetManifest(presets));
   await writeFile(join(project, 'override.cfg'), `[aurion]\nclient_build="${revision}"\n`);
@@ -61,6 +62,7 @@ try {
   const entries = run('unzip', ['-Z1', apk]).split('\n');
   const identity = validateApk(badging, signature, entries, manifest);
   const packagedAssets = readApkAssets(apk, prepared, entries);
+  const packagedTerrain3D = await readTerrain3dApk(apk, prepared.terrain3d, entries, 'debug');
   await writeFile(join(output, 'packaged-assets.json'), JSON.stringify(packagedAssets, null, 2) + '\n');
   assert.match(manifest, /screenOrientation.*0x0/, 'landscape not encoded in manifest');
   const override = run('unzip', ['-p', apk, 'assets/override.cfg']);
@@ -70,7 +72,7 @@ try {
   for (const [file, text] of Object.entries(readback)) await writeFile(join(output, file), text);
   run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
   assert.equal((await androidReport()).status, 'ready', 'export changed the pinned toolchain');
-  const evidence = { schemaVersion: 1, sourceRevision: revision, toolchainHash: await digest(join(repo, 'config/godot-toolchain.lock.json')), engine: lock.engine.version, editorHash: await digest(executable), androidTreeHash: android.treeSha256, identity, packagedAssets, apkSha256: await digest(apk), runtimeLayer: 'android-export-and-package-readback', device: 'unverified', sdkLicenses: 'unverified-no-sdkmanager-invoked', artifacts: {} };
+  const evidence = { schemaVersion: 1, sourceRevision: revision, toolchainHash: await digest(join(repo, 'config/godot-toolchain.lock.json')), engine: lock.engine.version, editorHash: await digest(executable), androidTreeHash: android.treeSha256, identity, packagedAssets, packagedTerrain3D, apkSha256: await digest(apk), runtimeLayer: 'android-export-and-package-readback', device: 'unverified', sdkLicenses: 'unverified-no-sdkmanager-invoked', artifacts: {} };
   for (const file of ['Aurion-Preview.apk', 'import.log', 'export.log', 'packaged-assets.json', ...Object.keys(readback)]) evidence.artifacts[file] = await digest(join(output, file));
   await writeFile(join(output, 'build-evidence.json'), JSON.stringify(evidence, null, 2) + '\n');
   console.log(`BUILD PASS / DEVICE UNVERIFIED: ${apk}`);

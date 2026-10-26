@@ -5,25 +5,30 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { prepareAssets } from './prepare-assets.mjs';
 import { repo, executable } from './toolchain.mjs';
+import { installTerrain3D } from './install-terrain3d.mjs';
 
 const manifestEntry = 'assets/assets/generated/manifest.json';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
 /** Fresh preparation is mandatory for every export, including owner signing. */
-export async function stageAssetProject(project, revision) {
+export async function stageAssetProject(project, revision, { includeTerrain3D = false } = {}) {
   const { manifest, manifestPath } = await prepareAssets();
   assert.equal(manifest.sourceRevision, revision, 'EXPORT_ASSET_REVISION');
   await cp(join(repo, 'godot-client'), project, {
     recursive: true,
     filter: path => !path.split('/').includes('.godot'),
   });
+  // Keep the experimental native addon in the isolated preview project only.
+  const terrain3d = includeTerrain3D
+    ? await installTerrain3D(join(project, 'addons', 'terrain_3d'))
+    : null;
   const manifestBytes = await readFile(manifestPath);
   assert.equal(
     sha256(await readFile(join(project, 'assets/generated/manifest.json'))),
     sha256(manifestBytes),
     'STAGED_ASSET_MANIFEST_CHANGED',
   );
-  return { manifest, manifestBytes };
+  return { manifest, manifestBytes, terrain3d };
 }
 
 /** JSON is not a Godot resource; include it explicitly in both export presets. */

@@ -1,0 +1,71 @@
+name: Aurion Terrain3D G19 native proof
+on:
+  pull_request:
+    paths:
+      - 'godot-client/**'
+      - 'scripts/godot/install-terrain3d.mjs'
+      - '.github/workflows/aurion-terrain3d-proof.yml'
+      - 'Memory.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-native-terrain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Godot 4.7.2
+        run: node scripts/godot/bootstrap.mjs
+      - name: Prepare isolated no-addon baseline
+        env:
+          AURION_G19_BASELINE_PROJECT: ${{ runner.temp }}/aurion-g19-baseline
+        run: |
+          mkdir -p "$AURION_G19_BASELINE_PROJECT"
+          cp -a godot-client/. "$AURION_G19_BASELINE_PROJECT/"
+          test ! -e "$AURION_G19_BASELINE_PROJECT/addons/terrain_3d"
+      - name: Import project for the no-addon baseline
+        env:
+          AURION_G19_BASELINE_PROJECT: ${{ runner.temp }}/aurion-g19-baseline
+        run: |
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path "$AURION_G19_BASELINE_PROJECT" --editor --import
+      - name: Existing G17 and G18 baseline without Terrain3D
+        env:
+          AURION_G19_BASELINE_PROJECT: ${{ runner.temp }}/aurion-g19-baseline
+        run: |
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path "$AURION_G19_BASELINE_PROJECT" --script tests/test_material_projection.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path "$AURION_G19_BASELINE_PROJECT" --script tests/test_chunk_terrain.gd
+      - name: Install byte-pinned Terrain3D 1.0.2 native binaries
+        run: node scripts/godot/install-terrain3d.mjs
+      - name: Real headless native addon import
+        run: |
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
+      - name: Server-shaped native terrain and stale-session regressions
+        run: |
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_terrain3d_confirmed.gd
+      - name: Existing G17 atlas and G18 authenticated chunk fallback regressions
+        run: |
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_material_projection.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_chunk_terrain.gd
+
+      - name: Real Terrain3D software-OpenGL pixel capture
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          AURION_G19_CAPTURE_DIR: ${{ runner.temp }}/aurion-g19-pixels
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri
+          xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_terrain3d_world.gd
+      - name: Preserve original Terrain3D rendered images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g19-native-terrain3d-pixels-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurion-g19-pixels/*.png
+          if-no-files-found: warn
+          retention-days: 7
