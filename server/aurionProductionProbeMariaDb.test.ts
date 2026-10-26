@@ -110,6 +110,17 @@ suite('real MariaDB one-shot transaction and role/reauth proof (isolated DB only
   const r=identity();await store.approve(userId,password,r,scope,'role demotion proof');await pool.execute("UPDATE users SET role='user' WHERE id=?",[userId]);
   try{await expect(store.consume(r,scope)).rejects.toThrow();await expect(store.approve(userId,password,identity(),scope,'non-admin approval')).rejects.toThrow();}finally{await pool.execute("UPDATE users SET role='admin' WHERE id=?",[userId]);}
  });
+ it('rejects a missing actor and demoted admin with identical fail-closed reauth semantics',async()=>{
+  const missingId=0, runIdentity=identity();
+  const [missing]=await pool.execute<RowDataPacket[]>('SELECT id FROM users WHERE id=?',[missingId]);
+  expect(missing).toHaveLength(0);
+  await expect(store.approve(missingId,password,runIdentity,scope,'missing credentials regression')).rejects.toThrow('PROBE_ADMIN_REAUTH_REQUIRED');
+  await pool.execute("UPDATE users SET role='user' WHERE id=?",[userId]);
+  try { await expect(store.approve(userId,password,runIdentity,scope,'demoted admin regression')).rejects.toThrow('PROBE_ADMIN_REAUTH_REQUIRED'); }
+  finally { await pool.execute("UPDATE users SET role='admin' WHERE id=?",[userId]); }
+  const [rows]=await pool.execute<RowDataPacket[]>('SELECT approvalId FROM aurionProductionProbeApprovals WHERE runJson=?',[JSON.stringify(runIdentity)]);
+  expect(rows).toHaveLength(0);
+ });
  it('commits failed-password lockout and rejects even correct password while locked',async()=>{
   for(let n=0;n<5;n++)await expect(store.approve(userId,'wrong',identity(),scope,'reauth failure proof')).rejects.toThrow();
   const [rows]=await pool.execute<RowDataPacket[]>('SELECT failedAttempts,lockedUntil FROM localCredentials WHERE userId=?',[userId]);expect(Number(rows[0].failedAttempts)).toBe(5);expect(rows[0].lockedUntil).not.toBeNull();
