@@ -113,6 +113,22 @@ func verify_active_chunk_scene(receipt: Dictionary) -> void:
 		require(not scene._apply_neighbor_chunk_surface(foreign, welcome.connectionId), "G18 accepted a chunk beyond server-authorized neighborhood")
 		require(not scene._apply_neighbor_chunk_surface(duplicate, "foreign-session"), "G18 accepted foreign session chunk")
 		require(neighbors.get_child_count() == 8, "G18 invalid neighbor changed authenticated scene")
+		# RED: an invalid refreshed surface must evict only that cached neighbor.
+		# These are explicit synthetic protocol fixtures, not live Aurion evidence.
+		var invalid_refresh := duplicate.duplicate(true)
+		invalid_refresh.base.tiles[0].surface = "unrecognized_surface"
+		require(not scene._apply_neighbor_chunk_surface(invalid_refresh, welcome.connectionId), "G18 accepted invalid refreshed neighbor")
+		require(neighbors.get_node_or_null("Chunk_1_0") == null and neighbors.get_child_count() == 7,
+			"G18 kept a stale mesh after an invalid refreshed neighbor")
+		require(scene._apply_neighbor_chunk_surface(duplicate, welcome.connectionId) and neighbors.get_child_count() == 8,
+			"G18 failed to recover a cleared neighbor from a fresh validated readback")
+		# A protected HTTP failure must likewise never retain the last stale surface.
+		scene._chunk_requested = Vector2i(1, 0)
+		scene._on_chunk_surface_failed("CHUNK_RESPONSE_INVALID", welcome.connectionId)
+		require(neighbors.get_node_or_null("Chunk_1_0") == null and neighbors.get_child_count() == 7,
+			"G18 retained a stale neighboring mesh after an authenticated HTTP failure")
+		require(scene._apply_neighbor_chunk_surface(duplicate, welcome.connectionId) and neighbors.get_child_count() == 8,
+			"G18 failed to refill a failed neighbor with a valid readback")
 	scene._on_zone_closed("client_close")
 	require(terrain.get_child_count() == 0 and floor.visible, "G18 retained terrain across logout/session reset")
 	if neighbors != null:
