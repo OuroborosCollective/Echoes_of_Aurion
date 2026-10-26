@@ -65,6 +65,9 @@ await stage('surface-atlas-byte-provenance', 'static', process.execPath,
 await stage('material-projection', 'headless', executable,
   godot('--script', 'tests/test_material_projection.gd'),
   'G17 atlas material projection verified');
+await stage('chunk-mesh-projection', 'headless', executable,
+  godot('--script', 'tests/test_chunk_terrain.gd'),
+  'G18 server-shaped chunk mesh projection verified');
 await stage(
   'zone-socket-node-ws-reject-close',
   'headless',
@@ -106,6 +109,9 @@ await stage('public-appearance-refresh-http', 'headless', process.execPath,
 await stage('monster-catalog-http', 'headless', process.execPath,
   ['scripts/godot/quest-npc-api-runtime.mjs', executable, project, '--catalog'],
   'G16 GLB catalog protected GET boundary verified');
+await stage('chunk-surface-native-http', 'headless', process.execPath,
+  ['scripts/godot/chunk-surface-api-runtime.mjs', executable, project],
+  'G18 protected chunk surface GET wire boundary verified');
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);

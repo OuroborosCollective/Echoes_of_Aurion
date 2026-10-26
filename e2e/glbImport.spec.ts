@@ -62,9 +62,10 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await lowerSessionControl.scrollIntoViewIfNeeded();
     await expect(lowerSessionControl).toBeVisible();
     const lowerSessionControlReachable = await lowerSessionControl.isVisible();
-    // Reset scroll position programmatically. The checks above proved both real
-    // wheel movement and access to the lower controls; this restores the upload.
-    await scrollRegion.evaluate(element => element.scrollTo({ top: 0 }));
+    // Reset is test setup, not the user-scroll assertion above. Force an
+    // instantaneous reset even if a browser-level smooth-scroll preference is
+    // active; keep the independent scrollTop readback instead of skipping it.
+    await scrollRegion.evaluate(element => element.scrollTo({ top: 0, behavior: 'instant' }));
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
       .toBeLessThanOrEqual(2);
 
