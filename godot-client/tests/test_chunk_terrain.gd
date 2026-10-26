@@ -91,6 +91,30 @@ func verify_active_chunk_scene(receipt: Dictionary) -> void:
 	scene._on_zone_welcome(welcome)
 	require(scene._apply_chunk_surface(receipt, welcome.connectionId), "G18 active scene rejected server-shaped fixture")
 	require(terrain.get_child_count() == 1 and not floor.visible, "G18 failed to replace the preview floor after confirmed geometry")
+	# RED: neighboring readbacks need a bounded, independent presentation cache.
+	var neighbors: Node3D = scene.get_node_or_null("WorldView/Live3D/World/ConfirmedNeighbors") as Node3D
+	require(neighbors != null, "G18 missing bounded adjacent chunk presentation")
+	require(scene.has_method("_apply_neighbor_chunk_surface"), "G18 missing adjacent readback projection")
+	if neighbors != null and scene.has_method("_apply_neighbor_chunk_surface"):
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				if dx == 0 and dz == 0:
+					continue
+				var adjacent := receipt.duplicate(true)
+				adjacent.base.coordinate = {"x": dx, "z": dz}
+				require(scene._apply_neighbor_chunk_surface(adjacent, welcome.connectionId), "G18 rejected allowed adjacent server-shaped chunk")
+		require(neighbors.get_child_count() == 8, "G18 must render exactly eight bounded adjacent chunks")
+		var duplicate := receipt.duplicate(true)
+		duplicate.base.coordinate = {"x": 1, "z": 0}
+		require(scene._apply_neighbor_chunk_surface(duplicate, welcome.connectionId) and neighbors.get_child_count() == 8,
+			"G18 replay duplicated adjacent terrain")
+		var foreign := receipt.duplicate(true)
+		foreign.base.coordinate = {"x": 2, "z": 0}
+		require(not scene._apply_neighbor_chunk_surface(foreign, welcome.connectionId), "G18 accepted a chunk beyond server-authorized neighborhood")
+		require(not scene._apply_neighbor_chunk_surface(duplicate, "foreign-session"), "G18 accepted foreign session chunk")
+		require(neighbors.get_child_count() == 8, "G18 invalid neighbor changed authenticated scene")
 	scene._on_zone_closed("client_close")
 	require(terrain.get_child_count() == 0 and floor.visible, "G18 retained terrain across logout/session reset")
+	if neighbors != null:
+		require(neighbors.get_child_count() == 0, "G18 retained adjacent chunk meshes across logout")
 	scene.queue_free()
