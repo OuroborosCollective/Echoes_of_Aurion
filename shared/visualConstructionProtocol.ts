@@ -100,16 +100,22 @@ export function canonicalSerializeVisual(value: unknown): string {
   ) {
     return JSON.stringify(value);
   }
-  if (Array.isArray(value))
-    return `[${value.map(canonicalSerializeVisual).join(",")}]`;
+  if (Array.isArray(value)) {
+    const arr = new Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      arr[i] = canonicalSerializeVisual(value[i]);
+    }
+    return `[${arr.join(",")}]`;
+  }
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .sort()
-      .map(
-        key => `${JSON.stringify(key)}:${canonicalSerializeVisual(record[key])}`
-      )
-      .join(",")}}`;
+    const keys = Object.keys(record).sort();
+    const arr = new Array(keys.length);
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]!;
+      arr[i] = `${JSON.stringify(key)}:${canonicalSerializeVisual(record[key])}`;
+    }
+    return `{${arr.join(",")}}`;
   }
   return JSON.stringify(String(value));
 }
