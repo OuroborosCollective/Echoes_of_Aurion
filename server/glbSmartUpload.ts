@@ -13,6 +13,7 @@ import { readPlayerUi } from "./playerUiPersistence";
 import { z } from "zod";
 import { readActiveWorldDesign } from "./aurionAuthoringPersistence";
 import { projectQuestNpcVisuals } from "./aurionQuestNpcVisualProjection";
+import { attachStarterVillageVisuals } from "./aurionStarterVillageVisuals";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
@@ -301,7 +302,9 @@ export function registerGlbSmartUpload(app: Express): void {
     const coordinate = parseWorldChunkSurfaceQuery(request.query);
     await db.requireDb();
     requireWorldChunkSurfacePresence(coordinate, user.id, await db.listActiveWorldPresence());
-    return db.getWorldChunkReadModel(coordinate);
+    const readback = await db.getWorldChunkReadModel(coordinate);
+    // Server-owned visual layout only after authenticated DB lease and chunk readback.
+    return attachStarterVillageVisuals(readback, coordinate, db.GLOBAL_WORLD_SEED);
   }));
 
 
