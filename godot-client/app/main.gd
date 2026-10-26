@@ -971,7 +971,7 @@ func _terrain3d_bridge() -> Node3D:
 
 func _sync_terrain3d_presentation() -> void:
 	var bridge := _terrain3d_bridge()
-	var drawn := bridge != null and bridge.terrain_node() != null and bridge.active_chunk_count() > 0
+	var drawn: bool = bridge != null and bridge.terrain_node() != null and bridge.active_chunk_count() > 0
 	confirmed_terrain.visible = not drawn
 	confirmed_neighbors.visible = not drawn
 
