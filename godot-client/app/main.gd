@@ -961,6 +961,15 @@ func _clear_neighbor_chunks() -> void:
 		confirmed_neighbors.remove_child(child)
 		child.queue_free()
 
+## An invalid or failed authenticated refresh must not leave old visual
+## terrain masquerading as the latest readback. Presentation only.
+func _evict_neighbor_chunk(coordinate: Vector2i) -> void:
+	var key := "Chunk_%d_%d" % [coordinate.x, coordinate.y]
+	var existing: Node3D = confirmed_neighbors.get_node_or_null(key) as Node3D
+	if existing != null:
+		confirmed_neighbors.remove_child(existing)
+		existing.queue_free()
+
 func _request_chunk_surface(now_ms: int) -> void:
 	if _chunk_api == null or not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
 		return
@@ -1037,10 +1046,13 @@ func _on_chunk_surface_ready(response: Dictionary, connection_id: String, genera
 func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
 		return
-	if _chunk_requested == _current_confirmed_chunk():
+	var center: Variant = _current_confirmed_chunk()
+	if _chunk_requested == center:
 		confirmed_terrain.clear()
 		_clear_neighbor_chunks()
 		unassigned_floor.visible = true
+	elif typeof(center) == TYPE_VECTOR2I and maxi(absi(_chunk_requested.x - center.x), absi(_chunk_requested.y - center.y)) == 1:
+		_evict_neighbor_chunk(_chunk_requested)
 	_chunk_diagnostic = reason
 	_update_3d_status()
 
@@ -1067,10 +1079,10 @@ func _apply_neighbor_chunk_surface(readback: Dictionary, connection_id: String) 
 	painter.name = key
 	if not painter.apply_confirmed(readback, connection_id):
 		painter.free()
+		_evict_neighbor_chunk(coordinate)
 		return false
 	if existing != null:
-		confirmed_neighbors.remove_child(existing)
-		existing.queue_free()
+		_evict_neighbor_chunk(coordinate)
 	confirmed_neighbors.add_child(painter)
 	return true
 
