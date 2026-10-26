@@ -201,8 +201,8 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
       execFileSync(process.execPath, [bootstrapBuilder, sourceRoot, outputRoot], { env: { ...process.env, AURION_RELEASE_SHA: testRevision }, stdio: "pipe" });
       const canonical = JSON.parse(fs.readFileSync(path.join(sourceRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"), "utf8"));
       const bootstrap = JSON.parse(fs.readFileSync(path.join(outputRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"), "utf8"));
-      expect(canonical.imageDigest).toBe("sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
-      expect(bootstrap.imageDigest).toBe("sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96");
+      expect(canonical.imageDigest).toBe("sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d");
+      expect(bootstrap.imageDigest).toBe("sha256:ea11b74b986d520137cdef9a5346e447a00f275ecc4abc0055b7151226231e09");
       const bootstrapIdentity = JSON.parse(fs.readFileSync(path.join(outputRoot, "bootstrap-identity.json"), "utf8"));
       expect(bootstrapIdentity).toEqual({ schemaVersion: 1, recordType: "aurion_legacy_promoter_bootstrap_identity", sourceRevision: testRevision, bootstrapRevision, mode: "bootstrap_only" });
       expect(fs.readFileSync(path.join(outputRoot, "bootstrap-identity.json.sha256"), "utf8")).toBe(`${digest(path.join(outputRoot, "bootstrap-identity.json"))}  bootstrap-identity.json\n`);

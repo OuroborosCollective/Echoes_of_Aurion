@@ -64,7 +64,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   });
 
   it("binds the public health response and image metadata to one source revision", () => {
-    expect(dockerfile).toContain("node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
+    expect(dockerfile).toContain("node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d");
     expect(dockerfile).toContain("AURION_RELEASE_SHA=${AURION_RELEASE_SHA}");
     expect(dockerfile).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA}");
     expect(dockerfile).not.toContain("pnpm install");
@@ -179,10 +179,10 @@ describe("Aurion labelled Traefik runtime deployment", () => {
 
   it("pins release proof databases and Node runtime identities", () => {
     expect(workflow).toContain("mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1");
-    expect(workflow).toContain("sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
-    expect(workflow).toContain("sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96");
-    expect(workflow).toContain("node:22.23.2-bookworm-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96");
-    expect(promoter).toContain("node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
+    expect(workflow).toContain("sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d");
+    expect(workflow).toContain("sha256:ea11b74b986d520137cdef9a5346e447a00f275ecc4abc0055b7151226231e09");
+    expect(workflow).toContain("node:22.23.4-bookworm-slim@sha256:ea11b74b986d520137cdef9a5346e447a00f275ecc4abc0055b7151226231e09");
+    expect(promoter).toContain("node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d");
   });
 
   it("uses Traefik labels and a root-managed secret environment file", () => {
