@@ -66,7 +66,9 @@ test("Fadenwerk browser authoring is admin-only, persists a draft and plans with
       },
     });
     expect(unauthorized.status()).toBe(403);
-    expect((await unauthorized.json()).error.data.code).toBe("FORBIDDEN");
+    const denial = await unauthorized.json();
+    // The canonical Aurion tRPC transformer serializes errors in error.json.
+    expect(denial.error?.json?.data?.code).toBe("FORBIDDEN");
 
     const [before] = await pool.query<RowDataPacket[]>(
       "SELECT COUNT(*) AS count FROM aurionQuestAdminProposals WHERE authorUserId = ?", [me.id],
