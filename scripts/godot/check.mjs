@@ -65,6 +65,9 @@ await stage('surface-atlas-byte-provenance', 'static', process.execPath,
 await stage('material-projection', 'headless', executable,
   godot('--script', 'tests/test_material_projection.gd'),
   'G17 atlas material projection verified');
+await stage('chunk-mesh-projection', 'headless', executable,
+  godot('--script', 'tests/test_chunk_terrain.gd'),
+  'G18 server-shaped chunk mesh projection verified');
 await stage(
   'zone-socket-node-ws-reject-close',
   'headless',
