@@ -13,6 +13,9 @@ var _connection := ""
 var _terrain: Node3D = null
 var diagnostic := "Terrain3D nicht initialisiert"
 
+static func _control_float(value: int) -> float:
+	return float(ClassDB.class_call_static("Terrain3DUtil", "as_float", value))
+
 func terrain_node() -> Node3D:
 	return _terrain
 
@@ -94,6 +97,9 @@ func _rebuild() -> bool:
 	if not ClassDB.class_exists("Terrain3D"):
 		diagnostic = "terrain3d_native_addon_unavailable"
 		return false
+	if not ClassDB.class_exists("Terrain3DUtil") or not ClassDB.class_has_method("Terrain3DUtil", "as_float", true):
+		diagnostic = "terrain3d_utility_unavailable"
+		return false
 	var catalog := MaterialCatalog.new().build()
 	if catalog.get("status") != "resolved":
 		diagnostic = "terrain_atlas_unavailable"
@@ -145,14 +151,14 @@ func _rebuild() -> bool:
 		var heights := Image.create(REGION_METERS, REGION_METERS, false, Image.FORMAT_RF)
 		var controls := Image.create(REGION_METERS, REGION_METERS, false, Image.FORMAT_RF)
 		heights.fill(Color(0, 0, 0, 1))
-		controls.fill(Color(Terrain3DUtil.as_float(4), 0, 0, 1)) # hole flag, ID 0
+		controls.fill(Color(_control_float(4), 0, 0, 1)) # hole flag, ID 0
 		for z in range(REGION_METERS):
 			for x in range(REGION_METERS):
 				var sample: Dictionary = samples.get(Vector2i(origin_x + x, origin_z + z), {})
 				if sample.is_empty():
 					continue
 				heights.set_pixel(x, z, Color(sample.height, 0, 0, 1))
-				controls.set_pixel(x, z, Color(Terrain3DUtil.as_float(int(sample.mat) << 27), 0, 0, 1))
+				controls.set_pixel(x, z, Color(_control_float(int(sample.mat) << 27), 0, 0, 1))
 		terrain.data.import_images([heights, controls, null], Vector3(origin_x, 0, origin_z))
 	_terrain = terrain
 	return true
