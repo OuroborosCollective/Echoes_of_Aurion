@@ -72,6 +72,16 @@ func verify() -> void:
 	require(bridge.apply_confirmed(center, "zone_session_2"), "G19 failed to rebuild after new session")
 	bridge.clear()
 	require(bridge.active_chunk_count() == 0 and bridge.terrain_node() == null, "G19 native terrain survived logout")
+	# Real active scene can accept the same confirmed fixture using the optional
+	# GPU bridge, with the legacy G18 mesh still available as fallback.
+	var scene: Control = load("res://app/main.tscn").instantiate()
+	root.add_child(scene)
+	require(scene.get_node_or_null("WorldView/Live3D/World/ConfirmedTerrain3D") != null, "G19 active world missing Terrain3D host")
+	require(scene._terrain3d_bridge() != null, "G19 active world failed to create native Terrain3D bridge")
+	scene._reset_projection()
+	require(scene._terrain3d_bridge().active_chunk_count() == 0, "G19 scene leaked native chunks after reset")
+	scene.queue_free()
+
 	for failure in failures:
 		push_error(failure)
 	if failures.is_empty():
