@@ -1,7 +1,8 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://app/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://world/confirmed_map.gd" id="2_map"]
+[ext_resource type="Script" path="res://world/chunk_terrain.gd" id="3_terrain"]
 
 [sub_resource type="StyleBoxFlat" id="Style_card"]
 bg_color = Color(0.045, 0.085, 0.11, 0.96)
@@ -77,6 +78,7 @@ stretch = true
 mouse_filter = 2
 
 [node name="Live3D" type="SubViewport" parent="WorldView"]
+own_world_3d = true
 render_target_update_mode = 3
 size = Vector2i(1280, 800)
 
@@ -86,7 +88,13 @@ size = Vector2i(1280, 800)
 mesh = SubResource("Mesh_unassigned_floor")
 surface_material_override/0 = SubResource("Material_unassigned_floor")
 
+[node name="ConfirmedTerrain" type="Node3D" parent="WorldView/Live3D/World"]
+script = ExtResource("3_terrain")
+
 [node name="Actors" type="Node3D" parent="WorldView/Live3D/World"]
+unique_name_in_owner = true
+
+[node name="QuestNPCs" type="Node3D" parent="WorldView/Live3D/World"]
 unique_name_in_owner = true
 
 [node name="WorldCamera" type="Camera3D" parent="WorldView/Live3D/World"]

@@ -59,6 +59,15 @@ for (const [id, script, marker] of [
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
+await stage('surface-atlas-byte-provenance', 'static', process.execPath,
+  ['scripts/godot/check-surface-atlas.mjs'],
+  'G17 real source WebP SHA256 and exact-copy provenance verified');
+await stage('material-projection', 'headless', executable,
+  godot('--script', 'tests/test_material_projection.gd'),
+  'G17 atlas material projection verified');
+await stage('chunk-mesh-projection', 'headless', executable,
+  godot('--script', 'tests/test_chunk_terrain.gd'),
+  'G18 server-shaped chunk mesh projection verified');
 await stage(
   'zone-socket-node-ws-reject-close',
   'headless',
@@ -87,6 +96,22 @@ await stage(
   ['scripts/godot/appearance-api-runtime.mjs', executable, project],
   'G16 appearance GET wire boundary verified (isolated HTTP; test auth only)',
 );
+await stage(
+  'quest-npc-api-http',
+  'headless',
+  process.execPath,
+  ['scripts/godot/quest-npc-api-runtime.mjs', executable, project],
+  'G16 quest NPC protected GET boundary verified (isolated HTTP; test auth only)',
+);
+await stage('public-appearance-refresh-http', 'headless', process.execPath,
+  ['scripts/godot/public-appearance-api-runtime.mjs', executable, project],
+  'G16 public appearance refresh boundary verified');
+await stage('monster-catalog-http', 'headless', process.execPath,
+  ['scripts/godot/quest-npc-api-runtime.mjs', executable, project, '--catalog'],
+  'G16 GLB catalog protected GET boundary verified');
+await stage('chunk-surface-native-http', 'headless', process.execPath,
+  ['scripts/godot/chunk-surface-api-runtime.mjs', executable, project],
+  'G18 protected chunk surface GET wire boundary verified');
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);

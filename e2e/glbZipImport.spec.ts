@@ -64,6 +64,14 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     // the direct MariaDB role elevation.
     expect((await page.request.get("/api/admin/glb-import/status")).status()).toBe(403);
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='glb_zip_browser_admin'");
+    // Independent real API readback before navigating: the role change alone
+    // is not enough to establish that the storage/catalog boundary is ready.
+    // Do not inflate the UI readiness timeout or weaken its assertion.
+    const storagePreflight = await page.request.get("/api/admin/glb-import/status", { timeout: 15000 });
+    expect(storagePreflight.status()).toBe(200);
+    const storageState = await storagePreflight.json();
+    expect(storageState).toMatchObject({ writable: true });
+    expect(storageState.catalog?.version).toBe("aurion.glb-import.v1");
 
     await page.goto("/ops/glb-upload");
     // Synchronize on the real storage/catalog readback before asserting the ZIP

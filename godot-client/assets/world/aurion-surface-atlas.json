@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "purpose": "AX1 presentation surfaces",
+  "source": "Original atlas generated for the owner request on 2026-09-13; WebP shipping conversion",
+  "sha256": "f329e8e1224416e38967f888d40d4459bf8b359001370a432cb270c13f1f3f35",
+  "bytes": 439340,
+  "width": 1024,
+  "height": 1024,
+  "quadrants": [
+    "paving",
+    "forest",
+    "wood",
+    "rock"
+  ],
+  "runtimeTileSize": 512,
+  "colorSpace": "sRGB",
+  "maps": [
+    "baseColor"
+  ],
+  "roughness": "constant per material; no baked normal or displacement claim",
+  "gameplayAuthority": false
+}
