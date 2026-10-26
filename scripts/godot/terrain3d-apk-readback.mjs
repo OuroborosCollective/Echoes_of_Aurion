@@ -9,7 +9,11 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 /** Require the exact pinned Terrain3D ARM64 library in the exported APK. */
 export function verifyTerrain3dApkBytes({ sourceBytes, entries, readEntry }) {
   assert.ok(Buffer.isBuffer(sourceBytes) && sourceBytes.length > 0, 'TERRAIN3D_SOURCE_LIBRARY_MISSING');
-  assert.ok(entries.includes(TERRAIN3D_ANDROID_ARM64_ENTRY), 'TERRAIN3D_ANDROID_ARM64_LIBRARY_NOT_PACKAGED');
+  const terrainLibraries = entries.filter(entry => /terrain/i.test(entry) && entry.endsWith('.so'));
+  assert.ok(
+    entries.includes(TERRAIN3D_ANDROID_ARM64_ENTRY),
+    'TERRAIN3D_ANDROID_ARM64_LIBRARY_NOT_PACKAGED: ' + JSON.stringify(terrainLibraries),
+  );
   const packagedBytes = readEntry(TERRAIN3D_ANDROID_ARM64_ENTRY);
   assert.ok(Buffer.isBuffer(packagedBytes) && packagedBytes.length > 0, 'TERRAIN3D_PACKAGED_LIBRARY_UNREADABLE');
   const sourceSha256 = sha256(sourceBytes);
