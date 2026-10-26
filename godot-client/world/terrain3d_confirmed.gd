@@ -19,13 +19,25 @@ func terrain_node() -> Node3D:
 func active_chunk_count() -> int:
 	return _models.size()
 
+func _retire_terrain(terrain: Node3D) -> void:
+	if terrain == null:
+		return
+	terrain.visible = false
+	terrain.set_process(false)
+	terrain.set_physics_process(false)
+	terrain.name = "RetiringTerrain3D_%d" % terrain.get_instance_id()
+	# Keep native Terrain3D attached until SceneTree processes its exit. The
+	# extension queries node paths while tearing down internal nodes.
+	if terrain.is_inside_tree():
+		terrain.queue_free()
+	else:
+		terrain.free()
+
 func clear() -> void:
 	_models.clear()
 	_connection = ""
 	if _terrain != null:
-		# Let Terrain3D exit the SceneTree while it still has a valid path.
-		# Its native teardown queries that path; detaching first leaks GDExtension nodes.
-		_terrain.free()
+		_retire_terrain(_terrain)
 		_terrain = null
 	diagnostic = "Terrain3D zurückgesetzt"
 
@@ -41,7 +53,7 @@ func apply_confirmed(model: Variant, connection_id: String) -> bool:
 		clear()
 		diagnostic = "terrain_session_invalid"
 		return false
-	var validation: Dictionary = ChunkTerrain.new()._validate(model)
+	var validation: Dictionary = ChunkTerrain._validate(model)
 	if validation.get("status") != "validated":
 		var bad_coord := Vector2i.ZERO
 		if typeof(model) == TYPE_DICTIONARY and typeof(model.get("base")) == TYPE_DICTIONARY:
@@ -75,7 +87,7 @@ func apply_confirmed(model: Variant, connection_id: String) -> bool:
 
 func _rebuild() -> bool:
 	if _terrain != null:
-		_terrain.free()
+		_retire_terrain(_terrain)
 		_terrain = null
 	if _models.is_empty():
 		return true
@@ -124,7 +136,7 @@ func _rebuild() -> bool:
 					regions[reg] = true
 					samples[Vector2i(x,z)] = {"height":float(tile.heightMm) / 1000.0,"mat":int(MATERIAL_IDS[tile.surface])}
 	if regions.size() > 9:
-		terrain.free()
+		_retire_terrain(terrain)
 		diagnostic = "terrain_region_budget_exceeded"
 		return false
 	var util = ClassDB.instantiate("Terrain3DUtil")
