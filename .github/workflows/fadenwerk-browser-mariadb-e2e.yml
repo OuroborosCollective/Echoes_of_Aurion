@@ -1,0 +1,116 @@
+name: Fadenwerk Authenticated Browser and MariaDB E2E
+
+on:
+  pull_request:
+    paths:
+      - "e2e/fadenwerk.authenticated.spec.ts"
+      - "client/src/components/FadenwerkQuestEditor.tsx"
+      - "client/src/fadenwerk/legacyQuestAdapter.ts"
+      - "client/src/pages/QuestStudio.tsx"
+      - "server/routes/aurionQuestRouter.ts"
+      - "server/questCompiler/**"
+      - "shared/aurionQuestContract.ts"
+      - ".github/workflows/fadenwerk-browser-mariadb-e2e.yml"
+  push:
+    branches: [main]
+    paths:
+      - "e2e/fadenwerk.authenticated.spec.ts"
+      - "client/src/components/FadenwerkQuestEditor.tsx"
+      - "client/src/fadenwerk/legacyQuestAdapter.ts"
+      - "client/src/pages/QuestStudio.tsx"
+      - "server/routes/aurionQuestRouter.ts"
+      - "server/questCompiler/**"
+      - "shared/aurionQuestContract.ts"
+      - ".github/workflows/fadenwerk-browser-mariadb-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fadenwerk-authenticated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: fadenwerk-ci-only
+          MARIADB_DATABASE: aurion_fadenwerk_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pfadenwerk-ci-only --silent"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:fadenwerk-ci-only@127.0.0.1:3306/aurion_fadenwerk_test
+      JWT_SECRET: fadenwerk-disposable-e2e-ci-key-never-production
+      VITE_APP_ID: fadenwerk-disposable-ci
+      AURION_FADENWERK_E2E: "1"
+      AURION_E2E_ISOLATED: "1"
+      AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.AURION_TEST_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = "$AURION_TEST_SOURCE_SHA"
+      - name: Install pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify source, database migration and Fadenwerk component regressions
+        run: |
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+          pnpm check
+          pnpm exec vitest run client/src/fadenwerk/legacyQuestAdapter.test.ts client/src/components/FadenwerkQuestEditor.test.tsx --no-file-parallelism
+      - name: Read back isolated quest schema
+        run: |
+          node --input-type=module <<'NODE'
+          import mysql from "mysql2/promise";
+          const db = await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const [identity] = await db.query("SELECT DATABASE() AS databaseName");
+            const [proposals] = await db.query("SHOW TABLES LIKE 'aurionQuestAdminProposals'");
+            const [templates] = await db.query("SHOW TABLES LIKE 'aurionQuestTemplateVersions'");
+            if (identity[0]?.databaseName !== "aurion_fadenwerk_test" || proposals.length !== 1 || templates.length !== 1) {
+              throw Error("FADENWERK_SCHEMA_READBACK_FAILED");
+            }
+            console.log(JSON.stringify({type:"fadenwerk_isolated_schema_readback", database:identity[0].databaseName, proposalTablePresent:true, templateTablePresent:true}));
+          } finally { await db.end(); }
+          NODE
+      - name: Build exact browser application
+        run: pnpm build
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start real local Aurion server
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js > /tmp/fadenwerk-browser-e2e.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -n 100 /tmp/fadenwerk-browser-e2e.log
+          exit 1
+      - name: Fadenwerk Chromium to MariaDB E2E
+        run: pnpm exec playwright test e2e/fadenwerk.authenticated.spec.ts --workers=1 --retries=0
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fadenwerk-browser-db-e2e-${{ github.sha }}
+          path: |
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
