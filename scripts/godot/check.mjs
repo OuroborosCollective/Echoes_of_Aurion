@@ -68,6 +68,10 @@ await stage('material-projection', 'headless', executable,
 await stage('chunk-mesh-projection', 'headless', executable,
   godot('--script', 'tests/test_chunk_terrain.gd'),
   'G18 server-shaped chunk mesh projection verified');
+await stage('starter-village-source-contracts', 'static', process.execPath,
+  ['--test', 'scripts/godot/check-starter-village-assets.test.mjs'], '# pass 3');
+await stage('starter-village-source-provenance', 'static', process.execPath,
+  ['scripts/godot/check-starter-village-assets.mjs'], 'G19_STARTER_VILLAGE_ASSET_SHA_PASS');
 await stage('starter-village-model-projection', 'headless', executable,
   godot('--script', 'tests/test_starter_village_visuals.gd'),
   'G19_STARTER_VILLAGE_REAL_SCENE_BINDING_PASS');
