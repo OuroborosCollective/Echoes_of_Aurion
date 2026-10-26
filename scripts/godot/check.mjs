@@ -97,6 +97,9 @@ await stage(
 await stage('public-appearance-refresh-http', 'headless', process.execPath,
   ['scripts/godot/public-appearance-api-runtime.mjs', executable, project],
   'G16 public appearance refresh boundary verified');
+await stage('monster-catalog-http', 'headless', process.execPath,
+  ['scripts/godot/quest-npc-api-runtime.mjs', executable, project, '--catalog'],
+  'G16 GLB catalog protected GET boundary verified');
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);

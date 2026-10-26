@@ -8,7 +8,7 @@ const render = process.argv.includes('--render');
 const directory = join(root, 'actor-evidence');
 await mkdir(directory, { recursive: true });
 // Failed reruns must never leave previously green evidence for always-upload.
-for (const file of render ? ['render.json', 'actors.png', 'world-view.png', 'world-viewport.png', 'quest-npcs.png', 'render.log'] : ['headless.json', 'headless.log', 'import.log', 'render.json', 'render.log', 'actors.png', 'world-view.png', 'world-viewport.png', 'quest-npcs.png']) {
+for (const file of render ? ['render.json', 'actors.png', 'world-view.png', 'world-viewport.png', 'quest-npcs.png', 'monster-viewport.png', 'render.log'] : ['headless.json', 'headless.log', 'import.log', 'render.json', 'render.log', 'actors.png', 'world-view.png', 'world-viewport.png', 'quest-npcs.png', 'monster-viewport.png']) {
   await rm(join(directory, file), { force: true });
 }
 const revision = run('git', ['-C', repo, 'rev-parse', 'HEAD']);
@@ -38,6 +38,7 @@ const receipt = { sourceRevision: revision, editorHash: await digest(executable)
   videoAdapter: adapter, imageSha256: render ? await digest(join(directory, 'actors.png')) : null,
   activeSceneImageSha256: render ? await digest(join(directory, 'world-view.png')) : null,
   isolatedViewportImageSha256: render ? await digest(join(directory, 'world-viewport.png')) : null,
+  monsterViewportImageSha256: render ? await digest(join(directory, 'monster-viewport.png')) : null,
   npcSceneImageSha256: render ? await digest(join(directory, 'quest-npcs.png')) : null, result: 'passed' };
 await writeFile(join(directory, render ? 'render.json' : 'headless.json'), JSON.stringify(receipt, null, 2) + '\n');
 console.log(JSON.stringify(receipt));
