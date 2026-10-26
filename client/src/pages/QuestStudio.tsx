@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import FadenwerkQuestEditor from '@/components/FadenwerkQuestEditor';
 import { trpc } from '@/lib/trpc';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -143,6 +144,7 @@ export default function QuestStudio() {
         {/* Tabbed Operations */}
         <Tabs defaultValue="templates" className="space-y-4">
           <TabsList className="border-slate-800 bg-slate-900">
+            <TabsTrigger value="fadenwerk" className="data-[state=active]:bg-cyan-950 data-[state=active]:text-cyan-200">Fadenwerk</TabsTrigger>
             <TabsTrigger value="templates" className="data-[state=active]:bg-cyan-950 data-[state=active]:text-cyan-200">
               Templates & Drafts
             </TabsTrigger>
@@ -159,6 +161,8 @@ export default function QuestStudio() {
               Game Dev 1.0.2 Visual Support
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="fadenwerk"><FadenwerkQuestEditor templates={templates} /></TabsContent>
 
           {/* Templates Tab */}
           <TabsContent value="templates" className="space-y-4">
