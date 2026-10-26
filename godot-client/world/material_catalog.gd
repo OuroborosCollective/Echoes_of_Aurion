@@ -53,6 +53,5 @@ func build_from_image(image: Image) -> Dictionary:
 		material.roughness = 0.88 if NAMES[i] == "paving" else 0.96
 		material.metallic = 0.0
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-		material.texture_repeat = BaseMaterial3D.TEXTURE_REPEAT_ENABLED
 		materials[NAMES[i]] = material
 	return {"status": "resolved", "materials": materials, "surfaceIds": NAMES.duplicate(), "sourceSha256": EXPECTED_SHA256, "authority": "presentation-only"}
