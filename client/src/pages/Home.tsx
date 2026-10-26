@@ -7,6 +7,7 @@ import {
   Compass,
   FileText,
   MessageCircle,
+  Bug,
   ShieldCheck,
   Sparkles,
   Swords,
@@ -420,6 +421,16 @@ export default function Home() {
           >
             <Trophy className="mr-2 size-4 text-cyan-300" />
             Rangliste
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            title="Fehler melden"
+            onClick={() => openCommunity("issues")}
+            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+          >
+            <Bug className="mr-2 size-4 text-cyan-300" />
+            Fehler melden
           </button>
         </div>
       </section>
