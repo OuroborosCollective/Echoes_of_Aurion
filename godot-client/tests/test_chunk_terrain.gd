@@ -91,6 +91,46 @@ func verify_active_chunk_scene(receipt: Dictionary) -> void:
 	scene._on_zone_welcome(welcome)
 	require(scene._apply_chunk_surface(receipt, welcome.connectionId), "G18 active scene rejected server-shaped fixture")
 	require(terrain.get_child_count() == 1 and not floor.visible, "G18 failed to replace the preview floor after confirmed geometry")
+	# RED: neighboring readbacks need a bounded, independent presentation cache.
+	var neighbors: Node3D = scene.get_node_or_null("WorldView/Live3D/World/ConfirmedNeighbors") as Node3D
+	require(neighbors != null, "G18 missing bounded adjacent chunk presentation")
+	require(scene.has_method("_apply_neighbor_chunk_surface"), "G18 missing adjacent readback projection")
+	if neighbors != null and scene.has_method("_apply_neighbor_chunk_surface"):
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				if dx == 0 and dz == 0:
+					continue
+				var adjacent := receipt.duplicate(true)
+				adjacent.base.coordinate = {"x": dx, "z": dz}
+				require(scene._apply_neighbor_chunk_surface(adjacent, welcome.connectionId), "G18 rejected allowed adjacent server-shaped chunk")
+		require(neighbors.get_child_count() == 8, "G18 must render exactly eight bounded adjacent chunks")
+		var duplicate := receipt.duplicate(true)
+		duplicate.base.coordinate = {"x": 1, "z": 0}
+		require(scene._apply_neighbor_chunk_surface(duplicate, welcome.connectionId) and neighbors.get_child_count() == 8,
+			"G18 replay duplicated adjacent terrain")
+		var foreign := receipt.duplicate(true)
+		foreign.base.coordinate = {"x": 2, "z": 0}
+		require(not scene._apply_neighbor_chunk_surface(foreign, welcome.connectionId), "G18 accepted a chunk beyond server-authorized neighborhood")
+		require(not scene._apply_neighbor_chunk_surface(duplicate, "foreign-session"), "G18 accepted foreign session chunk")
+		require(neighbors.get_child_count() == 8, "G18 invalid neighbor changed authenticated scene")
+		# RED: an invalid refreshed surface must evict only that cached neighbor.
+		# These are explicit synthetic protocol fixtures, not live Aurion evidence.
+		var invalid_refresh := duplicate.duplicate(true)
+		invalid_refresh.base.tiles[0].surface = "unrecognized_surface"
+		require(not scene._apply_neighbor_chunk_surface(invalid_refresh, welcome.connectionId), "G18 accepted invalid refreshed neighbor")
+		require(neighbors.get_node_or_null("Chunk_1_0") == null and neighbors.get_child_count() == 7,
+			"G18 kept a stale mesh after an invalid refreshed neighbor")
+		require(scene._apply_neighbor_chunk_surface(duplicate, welcome.connectionId) and neighbors.get_child_count() == 8,
+			"G18 failed to recover a cleared neighbor from a fresh validated readback")
+		# A protected HTTP failure must likewise never retain the last stale surface.
+		scene._chunk_requested = Vector2i(1, 0)
+		scene._on_chunk_surface_failed("CHUNK_RESPONSE_INVALID", welcome.connectionId)
+		require(neighbors.get_node_or_null("Chunk_1_0") == null and neighbors.get_child_count() == 7,
+			"G18 retained a stale neighboring mesh after an authenticated HTTP failure")
+		require(scene._apply_neighbor_chunk_surface(duplicate, welcome.connectionId) and neighbors.get_child_count() == 8,
+			"G18 failed to refill a failed neighbor with a valid readback")
 	scene._on_zone_closed("client_close")
 	require(terrain.get_child_count() == 0 and floor.visible, "G18 retained terrain across logout/session reset")
+	if neighbors != null:
+		require(neighbors.get_child_count() == 0, "G18 retained adjacent chunk meshes across logout")
 	scene.queue_free()
