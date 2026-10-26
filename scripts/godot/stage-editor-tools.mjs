@@ -38,6 +38,19 @@ export function validateAssetPlacerSource({ commit, pluginConfig, license, paths
   return ASSET_PLACER;
 }
 
+
+const upstreamPresenterConnection = '\tpallete.palette_changed.connect(func(): pallete_changed.emit(pallete))';
+const safePresenterConnection = '\tpallete.palette_changed.connect(_on_palette_changed)\n\n\nfunc _on_palette_changed() -> void:\n\tpallete_changed.emit(APEditorSettingsManager.get_editor_settings().get_asset_palette())';
+
+/** Stage-only fix: avoid a signal closure capturing its own publisher resource. */
+export function patchAssetPalettePresenter(source) {
+  const matches = source.split(upstreamPresenterConnection).length - 1;
+  assert.equal(matches, 1, 'EDITOR_TOOL_PATCH_SOURCE_DRIFT');
+  assert.ok(source.includes('class_name AssetPalletesPresenter') &&
+    !source.includes('func _on_palette_changed() -> void:'), 'EDITOR_TOOL_PATCH_SOURCE_DRIFT');
+  return source.replace(upstreamPresenterConnection, safePresenterConnection);
+}
+
 const expected = 'enabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg")';
 const upgraded = 'enabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg", "res://addons/asset_placer/plugin.cfg")';
 export function enableEditorOnlyTool(project) {
@@ -84,6 +97,9 @@ export async function stageAssetPlacer({source,target}) {
   try {
     await cp(plugin,temporary,{recursive:true,force:false,errorOnExist:true,dereference:false});
     await writeFile(join(temporary,'LICENSE.upstream.txt'),lic);
+    const presenterFile=join(temporary,'ui/asset_palette/asset_palletes_presenter.gd');
+    const presenterSource=await readFile(presenterFile,'utf8');
+    await writeFile(presenterFile,patchAssetPalettePresenter(presenterSource));
     const original=await readFile(join(stageRoot,'project.godot'),'utf8');
     const enabled=enableEditorOnlyTool(original);
     await rename(temporary,addon);
