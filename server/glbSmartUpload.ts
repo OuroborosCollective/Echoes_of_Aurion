@@ -93,6 +93,28 @@ export function publicPlayerCharacterEntries(catalog: GlbRuntimeCatalog) {
     .sort((left, right) => left.assetId.localeCompare(right.assetId) || left.sha256.localeCompare(right.sha256)));
 }
 
+/** Strict read-only location parser. No implicit numeric coercion or out-of-world calls. */
+export function parseWorldChunkSurfaceQuery(value: unknown): { x: number; z: number } {
+  const coordinateText = z.string().regex(/^(?:0|-?[1-9][0-9]{0,6})$/);
+  const query = z.object({ x: coordinateText, z: coordinateText }).strict().parse(value);
+  const coordinate = { x: Number(query.x), z: Number(query.z) };
+  if (Math.abs(coordinate.x) > 1_000_000 || Math.abs(coordinate.z) > 1_000_000) throw new Error("CHUNK_SURFACE_COORDINATE_LIMIT");
+  return coordinate;
+}
+
+/** A read may only disclose the bounded window of the actual active Aurion lease.
+ * These local inputs are always loaded from Aurion's DB in the production route. */
+export function requireWorldChunkSurfacePresence(
+  coordinate: { x: number; z: number },
+  userId: number,
+  leases: readonly { userId: number; zoneId: string; chunk: { x: number; z: number } }[],
+): void {
+  const own = leases.find(lease => lease.userId === userId && lease.zoneId === "observatory_threshold");
+  if (!own || Math.abs(own.chunk.x - coordinate.x) > 1 || Math.abs(own.chunk.z - coordinate.z) > 1) {
+    throw new Error("CHUNK_SURFACE_PRESENCE_REQUIRED");
+  }
+}
+
 export function parseRequestedPresenceUserIds(value: unknown): readonly number[] {
   if (typeof value !== "string" || value.length < 1 || value.length > 1400) return Object.freeze([]);
   const ids = Array.from(new Set(value.split(",").map(part => Number(part)).filter(id => Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647))).sort((a, b) => a - b);
@@ -273,6 +295,15 @@ export function registerGlbSmartUpload(app: Express): void {
   app.get("/api/game/quest-npc-visuals", playerRoute(async () =>
     projectQuestNpcVisuals(await glbImportStore().catalog())
   ));
+  // Protected DB-backed Aurion readmodel. No world-seed computation on Godot.
+  // The active DB lease bounds the 3x3 visible window; missing DB is fail-closed.
+  app.get("/api/game/world-chunk-surface", playerRoute(async (request, user) => {
+    const coordinate = parseWorldChunkSurfaceQuery(request.query);
+    await db.requireDb();
+    requireWorldChunkSurfacePresence(coordinate, user.id, await db.listActiveWorldPresence());
+    return db.getWorldChunkReadModel(coordinate);
+  }));
+
 
   app.get("/api/game/glb-catalog", async (_request, response) => {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await glbImportStore().catalog()); }

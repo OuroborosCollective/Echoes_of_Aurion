@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, parseWorldChunkSurfaceQuery, publicPlayerCharacterEntries } from "./glbSmartUpload";
+import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, parseWorldChunkSurfaceQuery, requireWorldChunkSurfacePresence, publicPlayerCharacterEntries } from "./glbSmartUpload";
 import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
 import type { GlbRuntimeCatalog } from "../shared/glbImportContract";
 
@@ -169,5 +169,19 @@ describe("G18 protected chunk-surface coordinate gate", () => {
     { x: "0" },
   ])("rejects untrusted or ambiguous query %# fail-closed", query => {
     expect(() => parseWorldChunkSurfaceQuery(query)).toThrow();
+  });
+});
+
+describe("G18 active Aurion lease read window", () => {
+  const actualLeaseShape = [{ userId: 19, zoneId: "observatory_threshold", chunk: { x: -2, z: 3 } }];
+  it("permits only local or adjacent chunks for the authenticated active player", () => {
+    expect(() => requireWorldChunkSurfacePresence({ x: -3, z: 4 }, 19, actualLeaseShape)).not.toThrow();
+    expect(() => requireWorldChunkSurfacePresence({ x: -2, z: 3 }, 19, actualLeaseShape)).not.toThrow();
+  });
+  it("rejects missing/foreign/off-zone leases and distant or replayed requests", () => {
+    expect(() => requireWorldChunkSurfacePresence({ x: -4, z: 3 }, 19, actualLeaseShape)).toThrow("CHUNK_SURFACE_PRESENCE_REQUIRED");
+    expect(() => requireWorldChunkSurfacePresence({ x: -2, z: 3 }, 20, actualLeaseShape)).toThrow("CHUNK_SURFACE_PRESENCE_REQUIRED");
+    expect(() => requireWorldChunkSurfacePresence({ x: -2, z: 3 }, 19, [])).toThrow("CHUNK_SURFACE_PRESENCE_REQUIRED");
+    expect(() => requireWorldChunkSurfacePresence({ x: -2, z: 3 }, 19, [{ userId: 19, zoneId: "foreign", chunk: { x: -2, z: 3 } }])).toThrow("CHUNK_SURFACE_PRESENCE_REQUIRED");
   });
 });
