@@ -30,7 +30,7 @@ func welcome() -> Dictionary:
 	for id in load("res://net/zone_codec.gd").NODE_IDS:
 		nodes.append({"nodeId": id, "remaining": 5, "depleted": false, "respawnAtTick": null})
 	return {"type": "welcome", "protocolVersion": 5, "zoneId": "observatory_threshold",
-		"connectionId": "render_proof_fixture_session", "selfEntityId": "player:1",
+		"connectionId": "zone_peer_g18_render_proof", "selfEntityId": "player:1",
 		"snapshotSeq": 1, "tick": 1,
 		"presences": [{"entityId": "player:1", "userId": 1,
 			"position": {"x": 0, "z": 0}, "lastAcceptedClientSeq": 0}],
