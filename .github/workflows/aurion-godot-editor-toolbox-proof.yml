@@ -1,0 +1,65 @@
+name: Aurion Godot editor toolbox isolated proof
+on:
+  pull_request:
+    paths:
+      - 'scripts/godot/stage-editor-tools.mjs'
+      - 'scripts/godot/stage-editor-tools.test.mjs'
+      - 'docs/godot/ENGINE_TOOLBOX.md'
+      - '.github/workflows/aurion-godot-editor-toolbox-proof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  editor-toolbox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: aurion
+      - uses: actions/checkout@v4
+        with:
+          repository: levinzonr/godot-asset-placer
+          ref: 1dbf9fd782566780d6a6c52bd4197f448622f0aa
+          sparse-checkout: |
+            addons/asset_placer
+          path: upstream-asset-placer
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Negative controls for editor dependency
+        working-directory: aurion
+        run: node --test scripts/godot/stage-editor-tools.test.mjs
+      - name: Stage isolated editor tools
+        working-directory: aurion
+        env:
+          STAGE_DIR: ${{ runner.temp }}/aurion-editor-toolbox
+        run: |
+          set -euo pipefail
+          mkdir -p "$STAGE_DIR"
+          cp -a godot-client/. "$STAGE_DIR/"
+          node scripts/godot/stage-editor-tools.mjs --source ../upstream-asset-placer --target "$STAGE_DIR"
+          git diff --exit-code HEAD
+          test -f "$STAGE_DIR/addons/asset_placer/LICENSE.upstream.txt"
+          test ! -e godot-client/addons/asset_placer
+      - name: Install pinned Godot 4.7.2
+        working-directory: aurion
+        run: node scripts/godot/bootstrap.mjs
+      - name: Import Godot editor-only addon
+        working-directory: aurion
+        env:
+          STAGE_DIR: ${{ runner.temp }}/aurion-editor-toolbox
+        run: |
+          set -euo pipefail
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path "$STAGE_DIR" --editor --import > "$RUNNER_TEMP/toolbox.log" 2>&1 || { cat "$RUNNER_TEMP/toolbox.log"; exit 1; }
+          if grep -E 'SCRIPT ERROR:|(^|[[:space:]])ERROR:' "$RUNNER_TEMP/toolbox.log"; then exit 1; fi
+          test ! -e godot-client/addons/asset_placer
+          echo 'AURION_EDITOR_TOOLBOX_IMPORT_PASS (isolated, not device/runtime)'
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-toolbox-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/toolbox.log
+          if-no-files-found: warn
+          retention-days: 7
