@@ -35,7 +35,7 @@ jobs:
         run: node scripts/godot/install-terrain3d.mjs
       - name: Real headless native addon import
         run: |
-          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --editor --import
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
       - name: Server-shaped native terrain and stale-session regressions
         run: |
           .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_terrain3d_confirmed.gd
