@@ -52,6 +52,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
 @onready var confirmed_terrain: Node3D = $WorldView/Live3D/World/ConfirmedTerrain
 @onready var confirmed_neighbors: Node3D = $WorldView/Live3D/World/ConfirmedNeighbors
+@onready var starter_village_visuals: Node3D = $WorldView/Live3D/World/StarterVillageVisuals
 
 var _diagnostics = TechnicalDiagnostics.new()
 var _config: Dictionary
@@ -289,6 +290,7 @@ func _reset_projection() -> void:
 	if _chunk_api != null:
 		_chunk_api.cancel()
 	confirmed_terrain.clear()
+	starter_village_visuals.clear()
 	_clear_neighbor_chunks()
 	unassigned_floor.visible = true
 	_chunk_last_request_ms = -1
@@ -980,6 +982,7 @@ func _request_chunk_surface(now_ms: int) -> void:
 	if _chunk_center != coordinate:
 		_chunk_api.cancel()
 		confirmed_terrain.clear()
+		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
 		_neighbor_attempts.clear()
 		_chunk_center = coordinate
@@ -1049,6 +1052,7 @@ func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
 	var center: Variant = _current_confirmed_chunk()
 	if _chunk_requested == center:
 		confirmed_terrain.clear()
+		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
 		unassigned_floor.visible = true
 	elif typeof(center) == TYPE_VECTOR2I and maxi(absi(_chunk_requested.x - center.x), absi(_chunk_requested.y - center.y)) == 1:
@@ -1098,11 +1102,15 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	if base.coordinate.get("x") != coordinate.x or base.coordinate.get("z") != coordinate.y:
 		return false
 	if not confirmed_terrain.apply_confirmed(readback, connection_id):
+		starter_village_visuals.clear()
 		unassigned_floor.visible = true
 		_chunk_diagnostic = confirmed_terrain.diagnostic
 		_update_3d_status()
 		return false
 	unassigned_floor.visible = false
-	_chunk_diagnostic = ""
+	# The authenticated chunk contains an optional server-owned visual plan.
+	# A missing or invalid plan never fabricates a client-owned settlement.
+	var village_ok: bool = starter_village_visuals.apply_confirmed(readback, connection_id)
+	_chunk_diagnostic = "" if village_ok else starter_village_visuals.diagnostic
 	_update_3d_status()
 	return true
