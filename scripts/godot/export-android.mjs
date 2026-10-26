@@ -62,7 +62,7 @@ try {
   const entries = run('unzip', ['-Z1', apk]).split('\n');
   const identity = validateApk(badging, signature, entries, manifest);
   const packagedAssets = readApkAssets(apk, prepared, entries);
-  const packagedTerrain3D = await readTerrain3dApk(apk, prepared.terrain3d, entries);
+  const packagedTerrain3D = await readTerrain3dApk(apk, prepared.terrain3d, entries, 'debug');
   await writeFile(join(output, 'packaged-assets.json'), JSON.stringify(packagedAssets, null, 2) + '\n');
   assert.match(manifest, /screenOrientation.*0x0/, 'landscape not encoded in manifest');
   const override = run('unzip', ['-p', apk, 'assets/override.cfg']);

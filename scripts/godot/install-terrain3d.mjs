@@ -37,16 +37,31 @@ export async function installTerrain3D(targetDirectory = resolve('godot-client/a
     const root = join(work, 'unpacked');
     run('unzip', ['-q', zip, '-d', root]);
     const from = join(root, anchors[0], 'addons', 'terrain_3d');
-    const androidLibraryPath = join(target, 'bin', 'libterrain.android.release.arm64.so');
+    const androidDebugLibraryPath = join(target, 'bin', 'libterrain.android.debug.arm64.so');
+    const androidReleaseLibraryPath = join(target, 'bin', 'libterrain.android.release.arm64.so');
     await stat(join(from, 'terrain.gdextension'));
+    await stat(join(from, 'bin', 'libterrain.android.debug.arm64.so'));
     await stat(join(from, 'bin', 'libterrain.android.release.arm64.so'));
     await stat(join(from, 'bin', 'libterrain.linux.release.x86_64.so'));
     await mkdir(dirname(target), { recursive: true });
     await cp(from, target, { recursive: true, force: false, errorOnExist: true });
-    const androidLibrary = await readFile(androidLibraryPath);
-    const androidLibrarySha256 = createHash('sha256').update(androidLibrary).digest('hex');
-    console.log('TERRAIN3D_PINNED_VERIFIED version=v1.0.2-stable sha256=' + actual + ' android_arm64=present linux_x86_64=present');
-    return { addonPath: target, androidLibraryPath, archiveSha256: actual, androidLibrarySha256, androidLibraryBytes: androidLibrary.length };
+    const [androidDebugLibrary, androidReleaseLibrary] = await Promise.all([
+      readFile(androidDebugLibraryPath),
+      readFile(androidReleaseLibraryPath),
+    ]);
+    const androidDebugLibrarySha256 = createHash('sha256').update(androidDebugLibrary).digest('hex');
+    const androidReleaseLibrarySha256 = createHash('sha256').update(androidReleaseLibrary).digest('hex');
+    console.log('TERRAIN3D_PINNED_VERIFIED version=v1.0.2-stable sha256=' + actual + ' android_arm64_debug=present android_arm64_release=present linux_x86_64=present');
+    return {
+      addonPath: target,
+      androidDebugLibraryPath,
+      androidDebugLibrarySha256,
+      androidDebugLibraryBytes: androidDebugLibrary.length,
+      androidReleaseLibraryPath,
+      androidReleaseLibrarySha256,
+      androidReleaseLibraryBytes: androidReleaseLibrary.length,
+      archiveSha256: actual,
+    };
   } finally {
     await rm(work, { recursive: true, force: true });
   }
