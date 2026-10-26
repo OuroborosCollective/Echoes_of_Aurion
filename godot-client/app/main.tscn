@@ -1,8 +1,9 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://app/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://world/confirmed_map.gd" id="2_map"]
 [ext_resource type="Script" path="res://world/chunk_terrain.gd" id="3_terrain"]
+[ext_resource type="Script" path="res://world/starter_village_visuals.gd" id="4_village"]
 
 [sub_resource type="StyleBoxFlat" id="Style_card"]
 bg_color = Color(0.045, 0.085, 0.11, 0.96)
@@ -91,7 +92,12 @@ surface_material_override/0 = SubResource("Material_unassigned_floor")
 [node name="ConfirmedTerrain" type="Node3D" parent="WorldView/Live3D/World"]
 script = ExtResource("3_terrain")
 
+[node name="StarterVillageVisuals" type="Node3D" parent="WorldView/Live3D/World"]
+script = ExtResource("4_village")
+
 [node name="ConfirmedNeighbors" type="Node3D" parent="WorldView/Live3D/World"]
+
+[node name="ConfirmedTerrain3D" type="Node3D" parent="WorldView/Live3D/World"]
 
 [node name="Actors" type="Node3D" parent="WorldView/Live3D/World"]
 unique_name_in_owner = true

@@ -147,3 +147,9 @@ scripts/__pycache__/
 # Godot editor cache stays local; stable script UIDs remain tracked.
 /godot-client/.godot/
 /godot-client/assets/generated/
+
+# Generated Godot GLB import sidecars and texture extractions for the
+# SHA-pinned CC0 village source GLBs. Source binaries and manifest stay tracked.
+/godot-client/assets/starter_village/*.glb.import
+/godot-client/assets/starter_village/*.png
+/godot-client/assets/starter_village/*.png.import

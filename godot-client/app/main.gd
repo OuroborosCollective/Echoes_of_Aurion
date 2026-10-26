@@ -20,6 +20,7 @@ const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
 const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
 const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
+const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
@@ -52,6 +53,8 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
 @onready var confirmed_terrain: Node3D = $WorldView/Live3D/World/ConfirmedTerrain
 @onready var confirmed_neighbors: Node3D = $WorldView/Live3D/World/ConfirmedNeighbors
+@onready var starter_village_visuals: Node3D = $WorldView/Live3D/World/StarterVillageVisuals
+@onready var terrain3d_host: Node3D = $WorldView/Live3D/World/ConfirmedTerrain3D
 
 var _diagnostics = TechnicalDiagnostics.new()
 var _config: Dictionary
@@ -107,6 +110,8 @@ func _configuration_valid() -> bool:
 	return not _config.server_base_url.is_empty() and not _config.client_build.is_empty() and _config.renderer_profile == "compatibility"
 
 func _ready() -> void:
+	if ClassDB.class_exists("Terrain3D"):
+		terrain3d_host.add_child(Terrain3DConfirmed.new())
 	live_3d_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE
 	Engine.max_fps = 30
 	_config = RuntimeConfig.current()
@@ -289,7 +294,9 @@ func _reset_projection() -> void:
 	if _chunk_api != null:
 		_chunk_api.cancel()
 	confirmed_terrain.clear()
+	starter_village_visuals.clear()
 	_clear_neighbor_chunks()
+	_clear_terrain3d_presentation()
 	unassigned_floor.visible = true
 	_chunk_last_request_ms = -1
 	_chunk_has_request = false
@@ -956,6 +963,32 @@ func _current_confirmed_chunk() -> Variant:
 
 ## Only one protected GET is in flight. The center is loaded first; adjacent
 ## readbacks are bounded to eight visual meshes and never change gameplay.
+
+## Terrain3D is optional in ordinary CI/export; original G18 mesh stays the
+## checked fallback. Only already-authenticated, G18-validated readbacks reach it.
+func _terrain3d_bridge() -> Node3D:
+	if terrain3d_host.get_child_count() == 0:
+		return null
+	return terrain3d_host.get_child(0) as Node3D
+
+func _sync_terrain3d_presentation() -> void:
+	var bridge := _terrain3d_bridge()
+	var drawn: bool = bridge != null and bridge.terrain_node() != null and bridge.active_chunk_count() > 0
+	confirmed_terrain.visible = not drawn
+	confirmed_neighbors.visible = not drawn
+
+func _clear_terrain3d_presentation() -> void:
+	var bridge := _terrain3d_bridge()
+	if bridge != null:
+		bridge.clear()
+	_sync_terrain3d_presentation()
+
+func _apply_terrain3d_presentation(readback: Dictionary, connection_id: String) -> void:
+	var bridge := _terrain3d_bridge()
+	if bridge != null:
+		bridge.apply_confirmed(readback, connection_id)
+	_sync_terrain3d_presentation()
+
 func _clear_neighbor_chunks() -> void:
 	for child in confirmed_neighbors.get_children():
 		confirmed_neighbors.remove_child(child)
@@ -969,6 +1002,10 @@ func _evict_neighbor_chunk(coordinate: Vector2i) -> void:
 	if existing != null:
 		confirmed_neighbors.remove_child(existing)
 		existing.queue_free()
+	var bridge := _terrain3d_bridge()
+	if bridge != null:
+		bridge.remove_chunk(coordinate)
+	_sync_terrain3d_presentation()
 
 func _request_chunk_surface(now_ms: int) -> void:
 	if _chunk_api == null or not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
@@ -980,7 +1017,9 @@ func _request_chunk_surface(now_ms: int) -> void:
 	if _chunk_center != coordinate:
 		_chunk_api.cancel()
 		confirmed_terrain.clear()
+		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
+		_clear_terrain3d_presentation()
 		_neighbor_attempts.clear()
 		_chunk_center = coordinate
 		_chunk_last_request_ms = -1
@@ -1049,7 +1088,9 @@ func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
 	var center: Variant = _current_confirmed_chunk()
 	if _chunk_requested == center:
 		confirmed_terrain.clear()
+		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
+		_clear_terrain3d_presentation()
 		unassigned_floor.visible = true
 	elif typeof(center) == TYPE_VECTOR2I and maxi(absi(_chunk_requested.x - center.x), absi(_chunk_requested.y - center.y)) == 1:
 		_evict_neighbor_chunk(_chunk_requested)
@@ -1084,6 +1125,7 @@ func _apply_neighbor_chunk_surface(readback: Dictionary, connection_id: String) 
 	if existing != null:
 		_evict_neighbor_chunk(coordinate)
 	confirmed_neighbors.add_child(painter)
+	_apply_terrain3d_presentation(readback, connection_id)
 	return true
 
 ## Fixture seam for the real Godot active-scene test only. Runtime callers
@@ -1098,11 +1140,17 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	if base.coordinate.get("x") != coordinate.x or base.coordinate.get("z") != coordinate.y:
 		return false
 	if not confirmed_terrain.apply_confirmed(readback, connection_id):
+		starter_village_visuals.clear()
 		unassigned_floor.visible = true
+		_clear_terrain3d_presentation()
 		_chunk_diagnostic = confirmed_terrain.diagnostic
 		_update_3d_status()
 		return false
 	unassigned_floor.visible = false
-	_chunk_diagnostic = ""
+	_apply_terrain3d_presentation(readback, connection_id)
+	# The authenticated chunk contains an optional server-owned visual plan.
+	# A missing or invalid plan never fabricates a client-owned settlement.
+	var village_ok: bool = starter_village_visuals.apply_confirmed(readback, connection_id)
+	_chunk_diagnostic = "" if village_ok else starter_village_visuals.diagnostic
 	_update_3d_status()
 	return true

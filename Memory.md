@@ -4866,6 +4866,30 @@ Learned: Bisherige Geometrie-/Materialverträge konnten komplett unsichtbare Ter
 Open: Native Android-/Tab-A9-Bild- und FPS-Abnahme, echte serverbestätigte WorldLease, Terrain3D-G19-Android-Bundling und native G19-Renderaufnahme sind UNVERIFIED. PR #1183 bleibt getrennt, ebenso weitere G09/Fadenwerk-Aufgaben.
 Next safe step: Finalen Memory-Head von PR #1184 mit allen relevanten CI-Jobs und Original-Pixelartefakten unabhängig prüfen; bei grün gegen main abgleichen. Danach G19-Terrain3D separat mit gleichem echten Pixel-Gate und realem Android-Build validieren.
 
+
+### 2026-10-26 — G19 Starterdorf: AIM-240 Wheel-Rerun (PR #1186)
+Status: PARTIAL; exact-code CI rerun verified, intermittent browser failure unresolved.
+Task: Close the remaining GLB upload browser gate before merging the server-confirmed Starterdorf projection.
+Decisions: Preserve the real wheel input and scroll assertion; do not weaken the test or infer a CSS/root cause from one retry.
+Touched surfaces: This commit appends only `Memory.md`; the PR description separately records the rerun. No gameplay/source code changed.
+Evidence: Code head `c8dee9f0703b35212b088f40727d105791aa7621`; first AIM-240 job `121629833735` failed at `e2e/glbImport.spec.ts:58`; same-SHA rerun job `121722044608` passed run `40339369219`. Logs report 2 Playwright tests passed plus MariaDB migration, GLB/runtime tests, typecheck and build. Artifact `12669359046`, SHA-256 `ea50442b0eff94ce4e01ad7aba368608265b48b52f4c11d61ea94bff809215a5`. These are isolated CI proofs, not production or Tab A9 evidence.
+Learned: A pass after a prior failure shows the gate can pass on this head; it does not explain the intermittent wheel result or prove the browser behavior fixed.
+Open: Memory-bearing head still needs its own final CI readback; production world/lease, signed ARM64 APK and Tab A9 remain unverified.
+Next safe step: Verify relevant checks on the Memory-bearing head, merge only after readback, then reconcile Terrain3D PR #1183 and validate actual APK GDExtension packaging.
+
+
+### 2026-10-26 — Godot Android Terrain3D packaging / optionality and Human+AI Authoring priority (PR #1183)
+Status: Relevant Godot, asset, render, Android Preview APK and JNI gates passed on code head 50c5313c21b3d073a1032a90b437ba887283395b. APK build is successful; device and full Login remain unverified. Terrain3D stays an optional experiment; if a relevant runtime or build failure returns, remove the extension from the architecture.
+Change: Fixed the optional addon parser failure by using ClassDB.class_call_static with runtime class/method checks. Native G19 log passed sampled=4000, changed=2406, lit=2236, colors=11, with no ObjectDB/resource/path teardown errors. Local export/APK regressions passed 7/7.
+Evidence: G19 run 40377648847; Headless 40377648863; Android Preview APK 40377648805; JNI 40377648875; G18 40377649644; source asset audit 40377625740; starter-village render 40377649535. APK readback found lib/arm64-v8a/libterrain.android.debug.arm64.so, 3,572,392 bytes, source/package SHA-256 57488420ff5c15d1963109bb979b8ed7934c7980eb306c2023505ef60f2a6c94; archive SHA-256 a071850250ec5e596aa54da61c01d75768774eb379ee997584d426a45f4884a2; APK SHA-256 d6495d8d22fd8225eaf5523165842e4b8cfd5f98f699395f9880d059ddd69419. JNI status: ANDROID_JNI_BRIDGE_SMOKE_VERIFIED / FULL_LOGIN_UNVERIFIED. No Tab A9 runtime evidence.
+Next priority: Bring the existing Aurion Human + AI Authoring world/quest/dungeon workflow and its visual design to the Android app through the authorized authoring boundary. Today the workbench is admin-only web UI (AurionAuthoringWorkbench.tsx); the Godot client only exposes its gameplay zone-ticket API. Preserve Aurion validation, separate human confirmation and role checks. Finalize and read back the Memory-bearing PR head before merge; then continue the APK authoring work as a separate scoped change.
+
+### 2026-10-26 — Node.js 22.23.4 Security-Digest-Pins (Source + Bootstrap)
+Änderung: Vom Ausgangs-main `3ff7d674d0cd4fd85cb6a80f281435b5171650f7` aus Node-22-Bookworm-Slim-Image auf 22.23.4 umgebunden; kanonischen OCI-Multiarch-Index `sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d` und getrennten linux/amd64-Bootstrap-Manifest-Digest `sha256:ea11b74b986d520137cdef9a5346e447a00f275ecc4abc0055b7151226231e09` in Dockerfile, Reconcile-Vertrag, Promoter, produktionsnahen CI-/Schema-Prüfpfaden synchronisiert. Zusätzliche Vitest-Konsistenzregression und echte containerisierte Node-Version-Checks in PR-/Release-Build-Lanes. Keine Gameplay-/Tick-/DB-Mutation, keine autonome Produktionspromotion.
+Erkenntnis: Gleichnamige Node-Tags benötigen getrennte Index-/Plattformmanifest-Identitäten; Quellcode-Pin oder grüner Test beweist weder gebauten Image-Inhalt noch live laufende Node-Version.
+Evidence: Offizielle Node-Security-Release-Notes https://nodejs.org/en/blog/vulnerability/october-2026-security-releases ; Docker-Hub-Index und AMD64-Manifest https://hub.docker.com/layers/library/node/22.23.4-bookworm-slim/images/sha256-ea11b74b986d520137cdef9a5346e447a00f275ecc4abc0055b7151226231e09 ; Basiscommit https://github.com/OuroborosCollective/Echoes_of_Aurion/commit/3ff7d674d0cd4fd85cb6a80f281435b5171650f7 .
+Status: Quell-/Registry-Referenzen geprüft; exakter PR-Head-CI- und Image-Build-Erfolg erst nach unabh. GitHub-Run-Readback; aktive Produktion/Node-Version ausdrücklich UNVERIFIED. Nächster Schritt: PR-Head-Vitest, Typecheck, Image-Build-/Health-/Node-Version-Gates prüfen, bei grün Merge- und main-SHA-Readback; Produktionsimage danach getrennt prüfen, Promotion nur mit bestehender Freigabe.
+
 ### 2026-10-26 — Engine-first Werkzeuginventar und isolierter Editor-Pilot (PR #1185)
 Status: PARTIAL — kuratierte Werkzeuge und Red/Green-Policy im neuen Draft-PR, tatsächlicher Editor-Import RED wegen Shutdown-Ressourcenwarnung, kein Runtime/Add-on-Einsatz freigegeben.
 Task: Aurions Godot-4.7.2-Migration mithilfe existierender Editor-/Import-/Test-/Debug-Werkzeuge zuverlässig beschleunigen; keine zweite Aurion-Gameplay-Authority.

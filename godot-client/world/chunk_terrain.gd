@@ -47,7 +47,7 @@ func _reject(reason: String) -> bool:
 	diagnostic = reason
 	return false
 
-func _validate(read_model: Variant) -> Dictionary:
+static func _validate(read_model: Variant) -> Dictionary:
 	if typeof(read_model) != TYPE_DICTIONARY:
 		return {"reason": "chunk_readmodel_missing"}
 	var base: Variant = read_model.get("base")
