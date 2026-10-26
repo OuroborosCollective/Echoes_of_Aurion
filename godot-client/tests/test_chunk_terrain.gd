@@ -49,6 +49,17 @@ func verify() -> void:
 			require(tile_mesh.mesh.get_surface_count() == 2, "paving and forest quadrants not separated")
 			require(tile_mesh.mesh.get_aabb().size.x >= 63.9, "64m chunk surface collapsed")
 			require(is_equal_approx(tile_mesh.mesh.get_aabb().position.y, 1.25), "server heightMm was not preserved")
+			# Godot's clockwise top-face rule differs from the cross-product
+			# orientation used to infer normals: check both explicitly.
+			for surface_index in range(tile_mesh.mesh.get_surface_count()):
+				var arrays: Array = tile_mesh.mesh.surface_get_arrays(surface_index)
+				var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+				require(points.size() >= 3 and normals.size() == points.size(), "G18 material surface lacks triangle vertices/normals")
+				if points.size() >= 3 and normals.size() == points.size():
+					var face_cross_y: float = (points[1] - points[0]).cross(points[2] - points[0]).y
+					require(face_cross_y < -0.001, "G18 terrain faces use culled winding from above")
+					require(normals[0].y > 0.99, "G18 terrain normals must point up for daylight")
 	var stable_mesh: Node = painter.get_child(0) if painter.get_child_count() == 1 else null
 	require(painter.apply_confirmed(receipt, "session-one"), "same validated chunk failed replay")
 	require(painter.get_child_count() == 1 and painter.get_child(0) == stable_mesh, "unchanged readback rebuilt mesh")

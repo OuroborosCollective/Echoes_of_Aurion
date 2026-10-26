@@ -1,0 +1,44 @@
+name: Aurion Godot G18 real world render proof
+on:
+  pull_request:
+    paths:
+      - 'godot-client/**'
+      - 'scripts/godot/**'
+      - 'config/godot-toolchain.lock.json'
+      - '.github/workflows/aurion-godot-world-render-proof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-viewport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install SHA-locked Godot editor
+        run: node scripts/godot/bootstrap.mjs
+      - name: Import source assets with real Godot
+        run: .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
+      - name: Install software OpenGL display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri
+      - name: Capture and compare actual confirmed-chunk 3D pixels
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          AURION_CAPTURE_DIR: ${{ runner.temp }}/aurion-g18-world-pixels
+        run: |
+          xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_confirmed_world.gd
+      - name: Upload original render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g18-real-render-pixels-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurion-g18-world-pixels/*.png
+          if-no-files-found: warn
+          retention-days: 7
