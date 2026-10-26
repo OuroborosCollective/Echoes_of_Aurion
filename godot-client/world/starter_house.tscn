@@ -1,0 +1,53 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/starter_village/Wall_Plaster_Straight.glb" id="1_Wall"]
+[ext_resource type="PackedScene" path="res://assets/starter_village/Wall_Plaster_Door_Flat.glb" id="2_DoorWall"]
+[ext_resource type="PackedScene" path="res://assets/starter_village/Roof_RoundTiles_4x4.glb" id="3_Roof"]
+[ext_resource type="PackedScene" path="res://assets/starter_village/Door_1_Flat.glb" id="4_Door"]
+[ext_resource type="PackedScene" path="res://assets/starter_village/Bush_Common.glb" id="5_Bush"]
+
+[node name="StarterHouse" type="Node3D"]
+
+[node name="FrontDoor" parent="." instance=ExtResource("2_DoorWall")]
+position = Vector3(0, 0, -2)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="BackLeft" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(-1, 0, 2)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="BackRight" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(1, 0, 2)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="FrontLeft" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(-1, 0, -2)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="EastLeft" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(2, 0, -1)
+rotation_degrees = Vector3(0, -90, 0)
+
+[node name="EastRight" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(2, 0, 1)
+rotation_degrees = Vector3(0, -90, 0)
+
+[node name="WestLeft" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(-2, 0, -1)
+rotation_degrees = Vector3(0, 90, 0)
+
+[node name="WestRight" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(-2, 0, 1)
+rotation_degrees = Vector3(0, 90, 0)
+
+[node name="Roof" parent="." instance=ExtResource("3_Roof")]
+position = Vector3(0, 3.15, 0)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="DoorLeaf" parent="." instance=ExtResource("4_Door")]
+position = Vector3(0.5, 0, -2.1)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="BushA" parent="." instance=ExtResource("5_Bush")]
+position = Vector3(-2.9, 0, -2.8)
+rotation_degrees = Vector3(0, 0, 0)

@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/starter_village/Stall_Empty.glb" id="1_Stall"]
+[ext_resource type="PackedScene" path="res://assets/starter_village/Barrel.glb" id="2_Barrel"]
+
+[node name="StarterMarket" type="Node3D"]
+
+[node name="StallA" parent="." instance=ExtResource("1_Stall")]
+position = Vector3(-1.4, 0, -1.2)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="StallB" parent="." instance=ExtResource("1_Stall")]
+position = Vector3(1.4, 0, -1.2)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="BarrelA" parent="." instance=ExtResource("2_Barrel")]
+position = Vector3(-0.7, 0, 1.1)
+rotation_degrees = Vector3(0, 0, 0)
+
+[node name="BarrelB" parent="." instance=ExtResource("2_Barrel")]
+position = Vector3(0.1, 0, 1.5)
+rotation_degrees = Vector3(0, 45, 0)

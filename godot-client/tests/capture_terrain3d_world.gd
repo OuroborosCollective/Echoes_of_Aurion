@@ -9,7 +9,7 @@ func require(ok: bool, message: String) -> void:
 		failures.append(message)
 
 func _init() -> void:
-	call_deferred("verify")
+	call_deferred("_run")
 
 func fixture() -> Dictionary:
 	var tiles: Array = []
@@ -66,19 +66,25 @@ func measure(before: Image, after: Image) -> Dictionary:
 			palette["%d:%d:%d" % [roundi(b.r * 6.0), roundi(b.g * 6.0), roundi(b.b * 6.0)]] = true
 	return {"sampled": sampled, "changed": changed, "lit": lit, "colors": palette.size()}
 
+func _run() -> void:
+	await verify()
+	await process_frame
+	for failure in failures:
+		push_error(failure)
+	if failures.is_empty():
+		print("G19_NATIVE_TERRAIN3D_REAL_PIXELS_PASS (fixture only, not Android)")
+	quit(0 if failures.is_empty() else 1)
+
 func verify() -> void:
 	if DisplayServer.get_name() == "headless":
-		push_error("G19 requires actual OpenGL display, not headless")
-		quit(1)
+		require(false, "G19 requires actual OpenGL display, not headless")
 		return
 	if not ClassDB.class_exists("Terrain3D"):
-		push_error("G19 actual native Terrain3D library not loaded")
-		quit(1)
+		require(false, "G19 actual native Terrain3D library not loaded")
 		return
 	var output := OS.get_environment("AURION_G19_CAPTURE_DIR")
 	if output.is_empty():
-		push_error("AURION_G19_CAPTURE_DIR required")
-		quit(1)
+		require(false, "AURION_G19_CAPTURE_DIR required")
 		return
 	DirAccess.make_dir_recursive_absolute(output)
 	var packed := load("res://app/main.tscn") as PackedScene
@@ -142,8 +148,3 @@ func finish(scene: Control) -> void:
 	if scene != null:
 		scene._reset_projection()
 		scene.queue_free()
-	for failure in failures:
-		push_error(failure)
-	if failures.is_empty():
-		print("G19_NATIVE_TERRAIN3D_REAL_PIXELS_PASS (fixture only, not Android)")
-	quit(0 if failures.is_empty() else 1)

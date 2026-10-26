@@ -5,6 +5,7 @@ on:
       - 'godot-client/**'
       - 'scripts/godot/install-terrain3d.mjs'
       - '.github/workflows/aurion-terrain3d-proof.yml'
+      - 'Memory.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,20 +20,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install byte-pinned Terrain3D 1.0.2 native binaries
-        run: node scripts/godot/install-terrain3d.mjs
       - name: Install pinned Godot 4.7.2
         run: node scripts/godot/bootstrap.mjs
+      - name: Existing G17 and G18 baseline without Terrain3D
+        run: |
+          test ! -e godot-client/addons/terrain_3d
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_material_projection.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_chunk_terrain.gd
+      - name: Install byte-pinned Terrain3D 1.0.2 native binaries
+        run: node scripts/godot/install-terrain3d.mjs
       - name: Real headless native addon import
         run: |
-          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --editor --import
       - name: Server-shaped native terrain and stale-session regressions
         run: |
-          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_terrain3d_confirmed.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_terrain3d_confirmed.gd
       - name: Existing G17 atlas and G18 authenticated chunk fallback regressions
         run: |
-          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_material_projection.gd
-          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_chunk_terrain.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_material_projection.gd
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --script tests/test_chunk_terrain.gd
 
       - name: Real Terrain3D software-OpenGL pixel capture
         env:
@@ -41,7 +47,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y xvfb xauth libgl1-mesa-dri
-          xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_terrain3d_world.gd
+          xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_terrain3d_world.gd
       - name: Preserve original Terrain3D rendered images
         if: always()
         uses: actions/upload-artifact@v4

@@ -8,7 +8,7 @@ func require(ok: bool, why: String) -> void:
 		failures.append(why)
 
 func _init() -> void:
-	call_deferred("verify")
+	call_deferred("_run")
 
 func fixture(x_chunk: int = 0, z_chunk: int = 0, elevation_mm: int = 1250) -> Dictionary:
 	var tiles: Array = []
@@ -28,6 +28,11 @@ func fixture(x_chunk: int = 0, z_chunk: int = 0, elevation_mm: int = 1250) -> Di
 		"deterministicHash":"fnv1a-abcdef01",
 		},"appliedDeltaIds":[],"visibleResources":[],"structures":[],"roads":[],"deterministicHash":"fnv1a-2345bcde"}
 
+func _run() -> void:
+	await verify()
+	await process_frame
+	quit(0 if failures.is_empty() else 1)
+
 func verify() -> void:
 	require(ClassDB.class_exists("Terrain3D"), "Pinned Terrain3D native GDExtension not installed or failed to load")
 	var implementation: Script = load("res://world/terrain3d_confirmed.gd") as Script
@@ -35,7 +40,6 @@ func verify() -> void:
 	if implementation == null or not ClassDB.class_exists("Terrain3D"):
 		for failure in failures:
 			push_error(failure)
-		quit(1)
 		return
 	var bridge: Node3D = implementation.new()
 	root.add_child(bridge)
@@ -72,6 +76,9 @@ func verify() -> void:
 	require(bridge.apply_confirmed(center, "zone_session_2"), "G19 failed to rebuild after new session")
 	bridge.clear()
 	require(bridge.active_chunk_count() == 0 and bridge.terrain_node() == null, "G19 native terrain survived logout")
+	terrain = null
+	bridge.queue_free()
+	await process_frame
 	# Real active scene can accept the same confirmed fixture using the optional
 	# GPU bridge, with the legacy G18 mesh still available as fallback.
 	var scene: Control = load("res://app/main.tscn").instantiate()
@@ -81,9 +88,10 @@ func verify() -> void:
 	scene._reset_projection()
 	require(scene._terrain3d_bridge().active_chunk_count() == 0, "G19 scene leaked native chunks after reset")
 	scene.queue_free()
-
+	await process_frame
+	implementation = null
+	scene = null
 	for failure in failures:
 		push_error(failure)
 	if failures.is_empty():
 		print("G19_NATIVE_TERRAIN3D_CONFIRMED_FIXTURE_PASS")
-	quit(0 if failures.is_empty() else 1)

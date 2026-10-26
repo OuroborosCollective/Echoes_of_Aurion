@@ -1,0 +1,476 @@
+{
+  "schemaVersion": "aurion.starter-village-visual-mapping.v1",
+  "sourceKitSha256": "f0adafe5bcabcb17cefdf24ca6d1b4752eeaa4263baa41107336e211dfc05c70",
+  "license": "CC0-1.0 Quaternius",
+  "models": [
+    {
+      "pack": "medieval",
+      "name": "Wall_Plaster_Straight",
+      "originalSha256": "7027e35d369b2a52ab61f175d055ee9541cc00e2c2175396fa86843e07aca587",
+      "sha256": "242cb7a25941af19e7196af9f62f938fe602e38c2cca476e88d36b1e7a3bd42b",
+      "size": 443200,
+      "originalBytes": 3267936,
+      "images": [
+        {
+          "name": "T_WoodTrim_Normal",
+          "oldBytes": 658895,
+          "newBytes": 52368,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_WoodTrim_BaseColor",
+          "oldBytes": 509233,
+          "newBytes": 146141,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_WoodTrim_Roughness",
+          "oldBytes": 327011,
+          "newBytes": 25250,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Plaster_Normal",
+          "oldBytes": 740605,
+          "newBytes": 40386,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Plaster_BaseColor",
+          "oldBytes": 589875,
+          "newBytes": 143516,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_Plaster_ORM",
+          "oldBytes": 433154,
+          "newBytes": 26387,
+          "size": [
+            192,
+            192
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "medieval",
+      "name": "Wall_Plaster_Door_Flat",
+      "originalSha256": "41e212118e5a87a01fa34c33c149a62ed30bcd879c2444e426dfa0dfa0d4c082",
+      "sha256": "6c92cf5a01e1e696da9bead386fc87fceb27f64e5b66764116e5dae566ada59d",
+      "size": 656772,
+      "originalBytes": 4734216,
+      "images": [
+        {
+          "name": "T_WoodTrim_Normal",
+          "oldBytes": 658895,
+          "newBytes": 52368,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_WoodTrim_BaseColor",
+          "oldBytes": 509233,
+          "newBytes": 146141,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_WoodTrim_Roughness",
+          "oldBytes": 327011,
+          "newBytes": 25250,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Plaster_Normal",
+          "oldBytes": 740605,
+          "newBytes": 40386,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Plaster_BaseColor",
+          "oldBytes": 589875,
+          "newBytes": 143516,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_Plaster_ORM",
+          "oldBytes": 433154,
+          "newBytes": 26387,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_RockTrim_Normal",
+          "oldBytes": 731032,
+          "newBytes": 53551,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_RockTrim_BaseColor",
+          "oldBytes": 460395,
+          "newBytes": 138267,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_RockTrim_ORM",
+          "oldBytes": 272534,
+          "newBytes": 19440,
+          "size": [
+            192,
+            192
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "medieval",
+      "name": "Roof_RoundTiles_4x4",
+      "originalSha256": "995714684142225db0b7cd4c64ef72954c71471ca67b1903285c3d69c259c90f",
+      "sha256": "4fed5ba41ebd35d6ea9193458df2b702d171aca68e7bc84237fcf821172be1c3",
+      "size": 562060,
+      "originalBytes": 3092948,
+      "images": [
+        {
+          "name": "T_WoodTrim_Normal",
+          "oldBytes": 658895,
+          "newBytes": 52368,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_WoodTrim_BaseColor",
+          "oldBytes": 509233,
+          "newBytes": 146141,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_WoodTrim_Roughness",
+          "oldBytes": 327011,
+          "newBytes": 25250,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_RoundTiles_Normal",
+          "oldBytes": 561061,
+          "newBytes": 40495,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_RoundTiles_BaseColor",
+          "oldBytes": 684825,
+          "newBytes": 170895,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_RoundTiles_Roughness",
+          "oldBytes": 241305,
+          "newBytes": 16310,
+          "size": [
+            192,
+            192
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "medieval",
+      "name": "Door_1_Flat",
+      "originalSha256": "360dd8f417218cbbdfe2a0f2301ee0b32ebdef2d0f11c38338de7c483070a960",
+      "sha256": "f6471922242124588351b3bb7155ab1ff71dbc72894755808d7db15c334eca80",
+      "size": 251664,
+      "originalBytes": 1523052,
+      "images": [
+        {
+          "name": "T_WoodTrim_Normal",
+          "oldBytes": 658895,
+          "newBytes": 52368,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_WoodTrim_BaseColor",
+          "oldBytes": 509233,
+          "newBytes": 146141,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_WoodTrim_Roughness",
+          "oldBytes": 327011,
+          "newBytes": 25250,
+          "size": [
+            192,
+            192
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "medieval",
+      "name": "Prop_WoodenFence_Single",
+      "originalSha256": "43ca3e7ad830e3bcedaceb020a9b94f8b4eb8fd01b04b51d91450d1844856569",
+      "sha256": "5d58330d76718507ef1d6f079204ab2a8028774c7d2a82702b79da73ef7dd808",
+      "size": 228312,
+      "originalBytes": 1499696,
+      "images": [
+        {
+          "name": "T_WoodTrim_Normal",
+          "oldBytes": 658895,
+          "newBytes": 52368,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_WoodTrim_BaseColor",
+          "oldBytes": 509233,
+          "newBytes": 146141,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_WoodTrim_Roughness",
+          "oldBytes": 327011,
+          "newBytes": 25250,
+          "size": [
+            192,
+            192
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "props",
+      "name": "Stall_Empty",
+      "originalSha256": "71cad719b9207342677509eb3e1c068bbaa8a29dce7a263d4032c5191c2e8e2b",
+      "sha256": "e63810f08f687141c0f9b282be9c72e6966aee4caea053c06f3bbf941ca12631",
+      "size": 717156,
+      "originalBytes": 4399748,
+      "images": [
+        {
+          "name": "T_Trim_Metal_Normal",
+          "oldBytes": 677861,
+          "newBytes": 53438,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Metal_BaseColor",
+          "oldBytes": 397146,
+          "newBytes": 128925,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_Trim_Metal_ORM",
+          "oldBytes": 410720,
+          "newBytes": 34397,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Furniture_Normal",
+          "oldBytes": 609983,
+          "newBytes": 46763,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Furniture_BaseColor",
+          "oldBytes": 525377,
+          "newBytes": 150172,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_Trim_Furniture_ORM",
+          "oldBytes": 425414,
+          "newBytes": 34219,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Cloth_Normal",
+          "oldBytes": 677491,
+          "newBytes": 34708,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Cloth_BaseColor",
+          "oldBytes": 439901,
+          "newBytes": 129835,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_Trim_Cloth_ORM",
+          "oldBytes": 142300,
+          "newBytes": 11161,
+          "size": [
+            192,
+            192
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "props",
+      "name": "Barrel",
+      "originalSha256": "ed3fadf05b9dfbb25b651d5c0d0691044023b8d2dd9cfe90ad0bff5a04bd9f3e",
+      "sha256": "dbec78ee8f51587db4247186a44b75bc0cd639f5e3f0ea54803deaba95e4a17d",
+      "size": 508468,
+      "originalBytes": 3107064,
+      "images": [
+        {
+          "name": "T_Trim_Furniture_Normal",
+          "oldBytes": 609983,
+          "newBytes": 46763,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Furniture_BaseColor",
+          "oldBytes": 525377,
+          "newBytes": 150172,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_Trim_Furniture_ORM",
+          "oldBytes": 425414,
+          "newBytes": 34219,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Metal_Normal",
+          "oldBytes": 677861,
+          "newBytes": 53438,
+          "size": [
+            192,
+            192
+          ]
+        },
+        {
+          "name": "T_Trim_Metal_BaseColor",
+          "oldBytes": 397146,
+          "newBytes": 128925,
+          "size": [
+            384,
+            384
+          ]
+        },
+        {
+          "name": "T_Trim_Metal_ORM",
+          "oldBytes": 410720,
+          "newBytes": 34397,
+          "size": [
+            192,
+            192
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "nature",
+      "name": "Bush_Common",
+      "originalSha256": "6c3afb88d2ad7484a2bfd04df9d61d0dfa98de0b0eae23214f29c6fc99549a41",
+      "sha256": "a2ff2cf97dc89afc68507fdfc3490126c06a75a9bee2a56fad8d43d1290398e8",
+      "size": 138924,
+      "originalBytes": 215240,
+      "images": [
+        {
+          "name": "Leaves_TwistedTree_C",
+          "oldBytes": 121846,
+          "newBytes": 45530,
+          "size": [
+            384,
+            384
+          ]
+        }
+      ]
+    }
+  ],
+  "proof": "local conversion only; no Godot runtime / android / live data evidence",
+  "staticClientVisualsOnly": true
+}

@@ -10,6 +10,11 @@ export async function negativeControls(repo, executable) {
   try {
     const project = join(temp, 'godot-client');
     await cp(join(repo, 'godot-client'), project, { recursive: true, filter: path => !path.split('/').includes('.godot') });
+    // A fresh editor import is mandatory for real GLB PackedScene dependencies.
+    // No source .godot cache is carried across, and negative scene/asset
+    // injections below still run on this independently imported copy.
+    const cleanImport = execute(executable, ['--headless', '--path', project, '--editor', '--import'], { timeout: 90000 });
+    assert.ok(cleanImport.passed, 'NEGATIVE_HARNESS_FRESH_GODOT_IMPORT: ' + cleanImport.output);
     const scenePath = join(project, 'app/main.tscn');
     const original = await readFile(scenePath, 'utf8');
     const boot = () => execute(executable, ['--headless', '--path', project, '--script', 'tests/test_project_boot.gd'], { marker: 'Aurion project boot verified' });
