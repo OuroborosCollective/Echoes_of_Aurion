@@ -62,8 +62,35 @@ func verify() -> void:
 	require(painter.get_child_count() == 1 and painter.get_child(0) != stable_mesh, "old session retained 3D chunk mesh")
 	painter.clear()
 	require(painter.get_child_count() == 0, "chunk survived explicit session reset")
+	await verify_active_chunk_scene(receipt)
 	for failure in failures:
 		push_error(failure)
 	if failures.is_empty():
 		print("G18 server-shaped chunk mesh projection verified")
 	quit(0 if failures.is_empty() else 1)
+
+## Explicit protocol-shape fixture in a real active PackedScene, not actual HTTP.
+func verify_active_chunk_scene(receipt: Dictionary) -> void:
+	var scene: Control = load("res://app/main.tscn").instantiate()
+	root.add_child(scene)
+	var floor: MeshInstance3D = scene.get_node("WorldView/Live3D/World/UnassignedFloor") as MeshInstance3D
+	var terrain: Node3D = scene.get_node_or_null("WorldView/Live3D/World/ConfirmedTerrain") as Node3D
+	require(terrain != null, "G18 active world lacks a separate confirmed terrain root")
+	require(scene.has_method("_apply_chunk_surface"), "G18 active scene cannot apply an authenticated chunk readback")
+	if terrain == null or not scene.has_method("_apply_chunk_surface"):
+		scene.queue_free()
+		return
+	var nodes: Array = []
+	for id in load("res://net/zone_codec.gd").NODE_IDS:
+		nodes.append({"nodeId":id,"remaining":5,"depleted":false,"respawnAtTick":null})
+	var welcome := {"type":"welcome","protocolVersion":5,"zoneId":"observatory_threshold",
+		"connectionId":"zone_peer_g18_chunk_12345","selfEntityId":"player:1","snapshotSeq":1,"tick":1,
+		"presences":[{"entityId":"player:1","userId":1,"position":{"x":0,"z":0},"lastAcceptedClientSeq":0}],
+		"mobs":[],"combatants":[],"resources":{"contractVersion":1,
+		"contentSourceRevision":load("res://net/zone_codec.gd").FIXED_CONTENT,"revision":1,"nodes":nodes}}
+	scene._on_zone_welcome(welcome)
+	require(scene._apply_chunk_surface(receipt, welcome.connectionId), "G18 active scene rejected server-shaped fixture")
+	require(terrain.get_child_count() == 1 and not floor.visible, "G18 failed to replace the preview floor after confirmed geometry")
+	scene._on_zone_closed("client_close")
+	require(terrain.get_child_count() == 0 and floor.visible, "G18 retained terrain across logout/session reset")
+	scene.queue_free()
