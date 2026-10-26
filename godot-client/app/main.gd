@@ -982,6 +982,7 @@ func _request_chunk_surface(now_ms: int) -> void:
 	if _chunk_center != coordinate:
 		_chunk_api.cancel()
 		confirmed_terrain.clear()
+		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
 		_neighbor_attempts.clear()
 		_chunk_center = coordinate
@@ -1051,6 +1052,7 @@ func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
 	var center: Variant = _current_confirmed_chunk()
 	if _chunk_requested == center:
 		confirmed_terrain.clear()
+		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
 		unassigned_floor.visible = true
 	elif typeof(center) == TYPE_VECTOR2I and maxi(absi(_chunk_requested.x - center.x), absi(_chunk_requested.y - center.y)) == 1:
