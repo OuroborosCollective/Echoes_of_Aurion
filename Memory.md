@@ -4865,3 +4865,14 @@ Evidence: Draft PR #1184, Basis-main f2d81f6d8459fd33d57b3507fd191780fa837145. R
 Learned: Bisherige Geometrie-/Materialverträge konnten komplett unsichtbare Terrain-Oberflächen nicht erkennen. Godot-4-Frontseiten-Windung und tatsächliche Beleuchtung müssen mit Pixel-Evidence geprüft werden, nicht nur an Mesh-Daten. Kein GameKit-Code in Godot übernommen, keine zweite World Authority.
 Open: Native Android-/Tab-A9-Bild- und FPS-Abnahme, echte serverbestätigte WorldLease, Terrain3D-G19-Android-Bundling und native G19-Renderaufnahme sind UNVERIFIED. PR #1183 bleibt getrennt, ebenso weitere G09/Fadenwerk-Aufgaben.
 Next safe step: Finalen Memory-Head von PR #1184 mit allen relevanten CI-Jobs und Original-Pixelartefakten unabhängig prüfen; bei grün gegen main abgleichen. Danach G19-Terrain3D separat mit gleichem echten Pixel-Gate und realem Android-Build validieren.
+
+
+### 2026-10-26 — G19 Starterdorf: AIM-240 Wheel-Rerun (PR #1186)
+Status: PARTIAL; exact-code CI rerun verified, intermittent browser failure unresolved.
+Task: Close the remaining GLB upload browser gate before merging the server-confirmed Starterdorf projection.
+Decisions: Preserve the real wheel input and scroll assertion; do not weaken the test or infer a CSS/root cause from one retry.
+Touched surfaces: This commit appends only `Memory.md`; the PR description separately records the rerun. No gameplay/source code changed.
+Evidence: Code head `c8dee9f0703b35212b088f40727d105791aa7621`; first AIM-240 job `121629833735` failed at `e2e/glbImport.spec.ts:58`; same-SHA rerun job `121722044608` passed run `40339369219`. Logs report 2 Playwright tests passed plus MariaDB migration, GLB/runtime tests, typecheck and build. Artifact `12669359046`, SHA-256 `ea50442b0eff94ce4e01ad7aba368608265b48b52f4c11d61ea94bff809215a5`. These are isolated CI proofs, not production or Tab A9 evidence.
+Learned: A pass after a prior failure shows the gate can pass on this head; it does not explain the intermittent wheel result or prove the browser behavior fixed.
+Open: Memory-bearing head still needs its own final CI readback; production world/lease, signed ARM64 APK and Tab A9 remain unverified.
+Next safe step: Verify relevant checks on the Memory-bearing head, merge only after readback, then reconcile Terrain3D PR #1183 and validate actual APK GDExtension packaging.
