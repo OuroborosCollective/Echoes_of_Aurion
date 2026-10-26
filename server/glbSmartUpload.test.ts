@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, publicPlayerCharacterEntries } from "./glbSmartUpload";
+import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, parseWorldChunkSurfaceQuery, publicPlayerCharacterEntries } from "./glbSmartUpload";
 import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
 import type { GlbRuntimeCatalog } from "../shared/glbImportContract";
 
@@ -146,5 +146,28 @@ describe("smart GLB upload runtime", () => {
     expect(parseRequestedPresenceUserIds(undefined)).toEqual([]);
     const tooMany = Array.from({ length: 129 }, (_, index) => index + 1).join(",");
     expect(() => parseRequestedPresenceUserIds(tooMany)).toThrow("GLB_PRESENCE_QUERY_LIMIT");
+  });
+});
+
+
+describe("G18 protected chunk-surface coordinate gate", () => {
+  it("accepts only bounded canonical integer coordinate strings", () => {
+    expect(parseWorldChunkSurfaceQuery({ x: "0", z: "-1" })).toEqual({ x: 0, z: -1 });
+    expect(parseWorldChunkSurfaceQuery({ x: "1000000", z: "-1000000" })).toEqual({ x: 1000000, z: -1000000 });
+  });
+
+  it.each([
+    { x: "", z: "0" },
+    { x: "-0", z: "0" },
+    { x: "01", z: "0" },
+    { x: "0", z: "1.5" },
+    { x: "0", z: "2e2" },
+    { x: "1000001", z: "0" },
+    { x: "0", z: "-1000001" },
+    { x: "0", z: "0", unexpected: "secret" },
+    { x: ["0"], z: "0" },
+    { x: "0" },
+  ])("rejects untrusted or ambiguous query %# fail-closed", query => {
+    expect(() => parseWorldChunkSurfaceQuery(query)).toThrow();
   });
 });
