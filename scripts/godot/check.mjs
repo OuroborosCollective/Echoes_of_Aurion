@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, readdir, rm, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, rm } from 'node:fs/promises';
 import { resolve, relative, join } from 'node:path';
 import { repo, root, executable, digest, run } from './toolchain.mjs';
 import { execute } from './check-runtime.mjs';
@@ -31,8 +31,6 @@ const project = join(repo, 'godot-client');
 const godot = (...args) => ['--headless', '--path', project, ...args];
 await stage('doctor', 'static', process.execPath, ['scripts/godot/doctor.mjs'], '"editor": "ready"');
 await stage('import', 'headless', executable, godot('--editor', '--import'));
-// Temporary read-only observed Godot 4.7.2 .import readback. Remove after tracked copy.
-console.log("G17_WEBP_IMPORT_READBACK_BEGIN\\n" + await readFile(join(project, 'assets/world/aurion-surface-atlas.webp.import'), 'utf8') + "G17_WEBP_IMPORT_READBACK_END");
 async function scripts(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.name === '.godot') continue;
