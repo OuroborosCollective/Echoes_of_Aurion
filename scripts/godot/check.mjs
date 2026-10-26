@@ -59,6 +59,9 @@ for (const [id, script, marker] of [
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
 ]) await stage(id, 'headless', executable, godot('--script', `tests/${script}`), marker);
+await stage('material-projection', 'headless', executable,
+  godot('--script', 'tests/test_material_projection.gd'),
+  'G17 atlas material projection verified');
 await stage(
   'zone-socket-node-ws-reject-close',
   'headless',
