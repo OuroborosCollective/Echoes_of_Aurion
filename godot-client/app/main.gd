@@ -18,6 +18,7 @@ const RemoteActorRegistry = preload("res://actors/remote_actor_registry.gd")
 const PublicAppearanceApi = preload("res://net/api/public_actor_appearance_api.gd")
 const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
 const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
+const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
@@ -48,12 +49,18 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var world_camera: Camera3D = %WorldCamera
 @onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
+@onready var confirmed_terrain: Node3D = $WorldView/Live3D/World/ConfirmedTerrain
 
 var _diagnostics = TechnicalDiagnostics.new()
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
 var _appearance_api: Node
+var _chunk_api: Node
+var _chunk_last_request_ms := -1
+var _chunk_requested := Vector2i.ZERO
+var _chunk_has_request := false
+var _chunk_diagnostic := "Nicht geladen"
 var _self_actor: Node3D
 var _monster_api: Node
 var _monster_actors = RemoteActorRegistry.new(true)
@@ -129,6 +136,10 @@ func _ready() -> void:
 	add_child(_monster_api)
 	_monster_api.npcs_ready.connect(_on_monster_catalog_ready)
 	_monster_api.request_failed.connect(_on_monster_catalog_failed)
+	_chunk_api = ChunkSurfaceApi.new(_auth_start)
+	add_child(_chunk_api)
+	_chunk_api.surface_ready.connect(_on_chunk_surface_ready)
+	_chunk_api.request_failed.connect(_on_chunk_surface_failed)
 	_zone_socket = ZoneSocket.new()
 	add_child(_zone_socket)
 	_zone_socket.zone_welcome.connect(_on_zone_welcome)
@@ -271,6 +282,14 @@ func _reset_projection() -> void:
 	_quest_npc_diagnostic = "nicht geladen"
 	if _monster_api != null:
 		_monster_api.cancel()
+	if _chunk_api != null:
+		_chunk_api.cancel()
+	confirmed_terrain.clear()
+	unassigned_floor.visible = true
+	_chunk_last_request_ms = -1
+	_chunk_has_request = false
+	_chunk_requested = Vector2i.ZERO
+	_chunk_diagnostic = "Nicht geladen"
 	_monster_catalog.clear()
 	_monster_manifest.clear()
 	_monster_last_poll_ms = -1
@@ -404,6 +423,7 @@ func _on_zone_connected() -> void:
 		_appearance_diagnostic = "Erscheinung derzeit nicht abrufbar"
 	if _quest_npc_api != null and not _quest_npc_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id()):
 		_quest_npc_diagnostic = "NPC-Leser nicht verfügbar"
+	_request_chunk_surface(Time.get_ticks_msec())
 	_update_3d_status()
 
 func _on_zone_rejected(code: String) -> void:
@@ -505,6 +525,7 @@ func _process(_delta: float) -> void:
 		zone_map.set_visual_positions(_visuals, now_ms)
 		_project_3d(now_ms)
 		_request_remote_appearances(now_ms)
+		_request_chunk_surface(now_ms)
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
@@ -622,7 +643,8 @@ func _update_3d_status() -> void:
 	var other_count: int = maxi(_entities.ids("presences").size() + _entities.ids("mobs").size() - 1 - remote_count - _monster_actors.visible_count(), 0)
 	var model_message := "Spielerfigur sichtbar" if visible_count == 1 else "Spielerfigur: " + _appearance_diagnostic
 	var npc_count: int = _quest_npc_actors.visible_count()
-	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch)%s · %d Monster (%s) · %d ungeklärte Entitäten · Neutralboden%s" % [model_message, remote_count, npc_count, (" · NPC: " + _quest_npc_diagnostic) if not _quest_npc_diagnostic.is_empty() else "", _monster_actors.visible_count(), _monster_diagnostic, other_count, _world_freshness_suffix()]
+	var surface_text := "bestätigtes Chunk-Mesh" if confirmed_terrain.get_child_count() > 0 else "Neutralboden · Terrain: " + _chunk_diagnostic
+	world_status.text = "Aurion 3D · %s · %d weitere Spieler sichtbar · %d Quest-NPC-Anker (statisch)%s · %d Monster (%s) · %d ungeklärte Entitäten · %s%s" % [model_message, remote_count, npc_count, (" · NPC: " + _quest_npc_diagnostic) if not _quest_npc_diagnostic.is_empty() else "", _monster_actors.visible_count(), _monster_diagnostic, other_count, surface_text, _world_freshness_suffix()]
 
 ## Only server-confirmed v5 presence IDs may be queried. HTTP is read-only;
 ## a response never creates additional gameplay state or enables interactions.
@@ -904,3 +926,89 @@ func _apply_monster_catalog(catalog: Dictionary, manifest: Dictionary) -> void:
 func _sync_monsters() -> void:
 	_monster_actors.apply(_confirmed_zone, world_actors, {}, _monster_catalog, _monster_manifest)
 	_monster_diagnostic = _monster_actors.diagnostic
+
+## Aurion-acknowledged self position; chunk partition follows the existing
+## server 64m center-shift rule, not a second world-generation pipeline.
+func _current_confirmed_chunk() -> Variant:
+	if not _confirmed_zone.has_state():
+		return null
+	var point: Dictionary = _visuals.confirmed_mm(_confirmed_zone.self_entity_id())
+	if point.is_empty():
+		return null
+	var x: Variant = point.get("x")
+	var z: Variant = point.get("z")
+	if typeof(x) not in [TYPE_INT, TYPE_FLOAT] or typeof(z) not in [TYPE_INT, TYPE_FLOAT]:
+		return null
+	if not is_finite(float(x)) or not is_finite(float(z)):
+		return null
+	var ix := floori((float(x) + 32000.0) / 64000.0)
+	var iz := floori((float(z) + 32000.0) / 64000.0)
+	if absi(ix) > 1000000 or absi(iz) > 1000000:
+		return null
+	return Vector2i(ix, iz)
+
+func _request_chunk_surface(now_ms: int) -> void:
+	if _chunk_api == null or not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
+		return
+	var value: Variant = _current_confirmed_chunk()
+	if typeof(value) != TYPE_VECTOR2I:
+		return
+	var coordinate: Vector2i = value
+	if _chunk_has_request and _chunk_requested != coordinate:
+		_chunk_api.cancel()
+		confirmed_terrain.clear()
+		unassigned_floor.visible = true
+		_chunk_has_request = false
+		_chunk_diagnostic = "Chunk-Wechsel · serverseitiger Readback erforderlich"
+	if _chunk_api.busy() or (_chunk_has_request and _chunk_last_request_ms >= 0 and now_ms - _chunk_last_request_ms < 10000):
+		return
+	if _chunk_api.request_surface(_config.server_base_url, _confirmed_zone.connection_id(), coordinate):
+		_chunk_has_request = true
+		_chunk_requested = coordinate
+		_chunk_last_request_ms = now_ms
+	else:
+		_chunk_diagnostic = "Chunk-Leser nicht verfügbar"
+
+## Production enters only via a native authenticated GET and exact zone,
+## token-generation and current confirmed self-position reconciliation.
+func _on_chunk_surface_ready(response: Dictionary, connection_id: String, generation: int, coordinate: Vector2i) -> void:
+	if _lifecycle.is_suspended() or not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	if _current_confirmed_chunk() != coordinate:
+		return
+	var base: Variant = response.get("base")
+	if typeof(base) != TYPE_DICTIONARY or typeof(base.get("coordinate")) != TYPE_DICTIONARY or base.coordinate.get("x") != coordinate.x or base.coordinate.get("z") != coordinate.y:
+		_on_chunk_surface_failed("CHUNK_COORDINATE_MISMATCH", connection_id)
+		return
+	_apply_chunk_surface(response, connection_id)
+
+func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	confirmed_terrain.clear()
+	unassigned_floor.visible = true
+	_chunk_diagnostic = reason
+	_update_3d_status()
+
+## Fixture seam for the real Godot active-scene test only. Runtime callers
+## must pass _on_chunk_surface_ready's protected session and coordinate gate.
+func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return false
+	var coordinate: Variant = _current_confirmed_chunk()
+	var base: Variant = readback.get("base")
+	if typeof(coordinate) != TYPE_VECTOR2I or typeof(base) != TYPE_DICTIONARY or typeof(base.get("coordinate")) != TYPE_DICTIONARY:
+		return false
+	if base.coordinate.get("x") != coordinate.x or base.coordinate.get("z") != coordinate.y:
+		return false
+	if not confirmed_terrain.apply_confirmed(readback, connection_id):
+		unassigned_floor.visible = true
+		_chunk_diagnostic = confirmed_terrain.diagnostic
+		_update_3d_status()
+		return false
+	unassigned_floor.visible = false
+	_chunk_diagnostic = ""
+	_update_3d_status()
+	return true
