@@ -22,6 +22,10 @@ jobs:
           node-version: '22'
       - name: Install pinned Godot 4.7.2
         run: node scripts/godot/bootstrap.mjs
+      - name: Import project for the no-addon baseline
+        run: |
+          test ! -e godot-client/addons/terrain_3d
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --verbose --headless --path godot-client --editor --import
       - name: Existing G17 and G18 baseline without Terrain3D
         run: |
           test ! -e godot-client/addons/terrain_3d
