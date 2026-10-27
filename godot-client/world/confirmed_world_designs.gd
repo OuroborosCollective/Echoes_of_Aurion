@@ -31,7 +31,7 @@ static func validate_readback(value: Variant) -> bool:
 		return false
 	var keys := {}
 	for design in designs:
-		if typeof(design) != TYPE_DICTIONARY or design.size() != 7:
+		if typeof(design) != TYPE_DICTIONARY or design.size() != 6:
 			return false
 		if not _canonical(design.get("designKey")) or not _integer(design.get("version"), 1, 1000000) or not _digest(design.get("designHash")) or not _digest(design.get("expectedCatalogRevision")):
 			return false
