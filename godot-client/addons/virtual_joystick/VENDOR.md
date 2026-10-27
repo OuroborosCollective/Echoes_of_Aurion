@@ -4,8 +4,10 @@ Immutable source commit: b90891ee990881757105883677adbb619f4c319c
 Original script Git blob: 76176510909f0d72af830fd07482afe0c8cdd29e
 Original license Git blob: 66f9808d0e3cbcb02b31c24087254b1db012b84d (MIT, Copyright Marco Fazio, 2019)
 
-The original Godot Control joystick script is copied with exactly one Aurion
-lifecycle guard at the start of _input: ignore touches when not visible.
+The original Godot Control joystick script is copied with two small Aurion compatibility guards: remove the upstream
+`class_name VirtualJoystick` because Godot 4.7.2 already has a built-in class
+with that name; and ignore touches when the control is hidden at `_input`.
+The scene still uses the upstream script by its pinned resource path.
 Colors/shapes are Godot-native Panel/StyleBoxFlat resources; no texture fork.
 use_input_actions=false means this visual control cannot inject duplicate
 global InputMap events. The separate shared input adapter reads .output only
