@@ -1,0 +1,51 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://addons/virtual_joystick/virtual_joystick.gd" id="1_joystick"]
+
+[sub_resource type="StyleBoxFlat" id="Style_base"]
+bg_color = Color(0.12, 0.19, 0.23, 0.65)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.74, 0.79, 0.77, 0.67)
+corner_radius_top_left = 64
+corner_radius_top_right = 64
+corner_radius_bottom_left = 64
+corner_radius_bottom_right = 64
+
+[sub_resource type="StyleBoxFlat" id="Style_tip"]
+bg_color = Color(0.73, 0.81, 0.76, 0.85)
+corner_radius_top_left = 28
+corner_radius_top_right = 28
+corner_radius_bottom_left = 28
+corner_radius_bottom_right = 28
+
+[node name="MobileJoystick" type="Control"]
+custom_minimum_size = Vector2(220, 220)
+layout_mode = 3
+mouse_filter = 2
+script = ExtResource("1_joystick")
+deadzone_size = 12.0
+clampzone_size = 65.0
+use_input_actions = false
+
+[node name="Base" type="Panel" parent="."]
+layout_mode = 0
+offset_left = 46.0
+offset_top = 46.0
+offset_right = 174.0
+offset_bottom = 174.0
+pivot_offset = Vector2(64, 64)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_base")
+
+[node name="Tip" type="Panel" parent="Base"]
+layout_mode = 0
+offset_left = 36.0
+offset_top = 36.0
+offset_right = 92.0
+offset_bottom = 92.0
+pivot_offset = Vector2(28, 28)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_tip")
