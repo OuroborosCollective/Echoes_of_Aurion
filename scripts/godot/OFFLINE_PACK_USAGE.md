@@ -15,7 +15,7 @@ Godot Linux workspace contents:
 
 - `aurion-godot-project.tar.zst`: an exact-commit Git archive of `godot-client/`, `scripts/godot/` and `config/godot-toolchain.lock.json`, including **tracked public** add-ons and project settings.
 - `Godot_v4.7.2-stable_linux.x86_64.zst`: verified standalone Linux editor, **not** Android templates/SDK.
-- `manifest.json`, `SHA256SUMS`, `README.md` and pinned lock copy, including SHA-256 verification instructions.
+- `manifest.json`, `SHA256SUMS`, `README.md`, `LICENSE-Godot-4.7.2.txt` (upstream MIT notice) and pinned lock copy, including SHA-256 verification instructions.
 
 The archive includes source files and checked-in assets; Godot regenerates `.godot/` caches when imported. Some SHA-pinned generated runtime assets and live server-state are intentionally absent. The package is **editor-importable**, not a proof of playable production world.
 
