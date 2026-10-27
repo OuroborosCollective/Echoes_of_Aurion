@@ -150,6 +150,8 @@ func _on_completed(kind: String, data: Dictionary) -> void:
 		"catalog":
 			if data.get("glbCatalogRevision") is String:
 				_info.text = "Admin-Katalog geprüft. Revision: " + data.glbCatalogRevision
+				# Show existing confirmed world data without performing any mutation.
+				_readback()
 			else:
 				_info.text = "Admin-Katalog nicht zugelassen."
 		"propose":
@@ -178,11 +180,17 @@ func _on_completed(kind: String, data: Dictionary) -> void:
 			else:
 				_info.text = "Kein gültiger Apply-Receipt; Status ungeklärt."
 		"readback":
-			if ConfirmedWorldDesigns.validate_readback(data) and not _confirmed_revision.is_empty() and data.revision == _confirmed_revision:
-				_info.text = "Aurion-Weltstand unabhängig bestätigt: " + data.revision
-				emit_signal("confirmed_world", data)
+			if ConfirmedWorldDesigns.validate_readback(data):
+				if _confirmed_revision.is_empty():
+					_info.text = "Vorhandener Aurion-Weltstand gelesen: " + data.revision
+					emit_signal("confirmed_world", data)
+				elif data.revision == _confirmed_revision:
+					_info.text = "Aurion-Apply unabhängig bestätigt: " + data.revision
+					emit_signal("confirmed_world", data)
+				else:
+					_info.text = "Apply-Revision nicht bestätigt; Welt bleibt unverändert."
 			else:
-				_info.text = "Weltstand noch nicht als neuer Apply bestätigt."
+				_info.text = "Kein gültiger kanonischer Weltstand."
 
 func _on_failed(_kind: String, reason: String) -> void:
 	_busy = false
