@@ -55,6 +55,16 @@ jobs:
           node --test scripts/godot/check.test.mjs
           node scripts/godot/check.mjs
           node scripts/godot/verify-evidence.mjs "$AURION_GODOT_EVIDENCE/evidence.json"
+      - name: Diagnose native Godot-generated script UID files on failed contract
+        if: failure()
+        run: |
+          for source in godot-client/actors/modular_npc_visual.gd.uid godot-client/tests/test_modular_npc_visual.gd.uid; do
+            if [ -f "$source" ]; then
+              printf 'GODOT_GENERATED_UID %s ' "$source"
+              cat "$source"
+              printf '\\n'
+            fi
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: godot-headless-evidence-${{ github.event.pull_request.head.sha || github.sha }}
