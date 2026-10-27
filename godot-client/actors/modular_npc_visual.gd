@@ -20,10 +20,33 @@ const SKIN_TONES := [
 	Color(0.85, 0.60, 0.43), Color(0.43, 0.24, 0.14),
 ]
 
+const RECEIPT := "res://addons/modular_character_system/.aurion-mcs-install.json"
+const VENDOR_ROOT := "res://addons/modular_character_system/"
+const PINNED_ZIP_SHA := "ac72db1a5ff6985e19f1c07e4d1404560684f07aa7b9268382be8bcd2c635788"
+
+## Never trust vendor directory presence or an unsigned/unverified receipt alone.
+## Byte-check the complete manifest (including GLTF BIN and texture dependencies).
 static func available() -> bool:
-	return (ResourceLoader.exists(ANIMATION_SCENE, "PackedScene")
-		and ResourceLoader.exists(MALE_MODEL, "PackedScene")
-		and ResourceLoader.exists(FEMALE_MODEL, "PackedScene"))
+	if not FileAccess.file_exists(RECEIPT):
+		return false
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(RECEIPT))
+	if typeof(raw) != TYPE_DICTIONARY or raw.get("version") != "1.0.0" or raw.get("sha256") != PINNED_ZIP_SHA:
+		return false
+	var files: Variant = raw.get("files")
+	if typeof(files) != TYPE_DICTIONARY or files.size() != raw.get("count") or files.is_empty() or files.size() > 400:
+		return false
+	var regex := RegEx.new()
+	regex.compile("^[A-Za-z0-9_./ -]+$")
+	for rel in files.keys():
+		if typeof(rel) != TYPE_STRING or rel.is_empty() or rel.begins_with("/") or rel.contains("..") or rel.contains("\\") or regex.search(rel) == null:
+			return false
+		var expected: Variant = files[rel]
+		if typeof(expected) != TYPE_STRING or expected.length() != 64:
+			return false
+		var absolute := VENDOR_ROOT + rel
+		if not FileAccess.file_exists(absolute) or FileAccess.get_sha256(absolute) != expected:
+			return false
+	return ResourceLoader.exists(ANIMATION_SCENE, "PackedScene") and ResourceLoader.exists(MALE_MODEL, "PackedScene") and ResourceLoader.exists(FEMALE_MODEL, "PackedScene")
 
 ## Stable, cosmetic ONLY, independent of iteration, machine time and RNG.
 ## A profession or economic role must come from Aurion, never this hash.
