@@ -24,6 +24,12 @@ negative test and a late invalid-rig GLB fallback test, run `python3 scripts/god
 /private/path/ModularCharacterSystem.zip --godot /private/path/Godot_v4.7.2-stable_linux.x86_64`.
 The script verifies the editor digest and the archive pin, stages a temporary
 project, suppresses vendor output, and removes the temporary project on exit.
+It checks an intact private rig and GLB fallback, then independently mutates a
+source file and receipt and a real imported cache resource. Both mutations must
+be rejected. The acceptance currently fails with
+`MCS_IMPORTED_CACHE_TAMPER_NOT_REJECTED` because the adapter still accepts the
+altered cache; the adapter is not approved for a
+private release until that boundary is implemented and this test passes.
 The checked-in receipt digest binds the file list to the pinned archive; an
 archive hash merely written inside a receipt is not sufficient. The standard
 public Android exporters intentionally exclude the private MCS directory. A

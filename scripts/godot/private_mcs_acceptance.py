@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -32,6 +33,7 @@ def run_godot(editor, project, arguments, marker=None):
         raise RuntimeError("Godot private acceptance failed; output withheld")
     if marker is not None and marker not in output:
         raise RuntimeError("Godot private acceptance marker missing; output withheld")
+    return output
 
 
 def main():
@@ -64,16 +66,45 @@ def main():
         vendor = project / "addons/modular_character_system"
         target = vendor / "README.md"
         receipt = vendor / ".aurion-mcs-install.json"
-        target.write_bytes(target.read_bytes() + b"\nprivate integrity test\n")
-        data = json.loads(receipt.read_text())
-        data["files"]["README.md"] = sha256(target)
-        receipt.write_text(json.dumps(data, sort_keys=True))
+        original_target = target.read_bytes()
+        original_receipt = receipt.read_bytes()
         probe = project / "mcs_integrity_probe.gd"
         probe.write_text('extends SceneTree\nconst Visual = preload("res://actors/modular_npc_visual.gd")\n'
-                         'func _init() -> void:\n print("MCS_FORGERY_REJECTED=", not Visual.available())\n quit()\n')
+                         'func _init() -> void:\n print("MCS_AVAILABLE=", Visual.available())\n quit()\n')
+        target.write_bytes(original_target + b"\nprivate integrity test\n")
+        data = json.loads(original_receipt)
+        data["files"]["README.md"] = sha256(target)
+        receipt.write_text(json.dumps(data, sort_keys=True))
         run_godot(editor, project, ["--script", "res://mcs_integrity_probe.gd"],
-                  "MCS_FORGERY_REJECTED=true")
-    print("PRIVATE_MCS_ACCEPTANCE_PASS: rig, late-rig GLB fallback and modified-file/receipt rejection; no Android or live evidence")
+                  "MCS_AVAILABLE=false")
+        target.write_bytes(original_target)
+        receipt.write_bytes(original_receipt)
+        run_godot(editor, project, ["--script", "res://mcs_integrity_probe.gd"],
+                  "MCS_AVAILABLE=true")
+
+        # Mutate the real imported scene, not an invented mock resource. The
+        # original source and its pinned install receipt stay byte-identical.
+        remap = (vendor / "Assets/Models/BaseMale.gltf.import").read_text()
+        paths = re.findall(r'^path="(res://\.godot/imported/[^"\r\n]+)"$', remap, re.MULTILINE)
+        if len(paths) != 1:
+            raise RuntimeError("MCS_IMPORT_REMAP_UNAVAILABLE")
+        cache_root = (project / ".godot/imported").resolve(strict=True)
+        imported = (project / paths[0][len("res://"):]).resolve(strict=True)
+        if not imported.is_relative_to(cache_root) or not imported.is_file():
+            raise RuntimeError("MCS_IMPORT_REMAP_UNSAFE")
+        original_import = imported.read_bytes()
+        if not original_import:
+            raise RuntimeError("MCS_IMPORTED_SCENE_EMPTY")
+        changed = bytearray(original_import)
+        changed[-1] ^= 1
+        try:
+            imported.write_bytes(changed)
+            outcome = run_godot(editor, project, ["--script", "res://mcs_integrity_probe.gd"])
+            if "MCS_AVAILABLE=false" not in outcome:
+                raise RuntimeError("MCS_IMPORTED_CACHE_TAMPER_NOT_REJECTED")
+        finally:
+            imported.write_bytes(original_import)
+    print("PRIVATE_MCS_ACCEPTANCE_PASS: rig, GLB fallback and source/import tamper rejection; no Android or live evidence")
 
 
 if __name__ == "__main__":
