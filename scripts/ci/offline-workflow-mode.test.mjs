@@ -16,12 +16,12 @@ test('full offline snapshot is exclusively a manual workflow, never a merge/PR j
   assert.match(events, /^  workflow_dispatch:\s*$/m);
   assert.doesNotMatch(events, /^  (push|pull_request|schedule):/m);
   assert.match(events, /default: godot-linux/);
-  for (const mode of ['godot-linux', 'full', 'both']) assert.ok(events.includes(mode));
+  for (const mode of ['godot-linux', 'full']) assert.ok(events.includes(mode));
   assert.match(offline, /jobs:\n  exact-offline-pack:/);
   assert.match(offline, /inputs\.pack_type == 'full'/);
-  assert.match(offline, /inputs\.pack_type == 'both'/);
   assert.match(offline, /jobs:[\s\S]*?  godot-linux-project:/);
   assert.match(offline, /inputs\.pack_type == 'godot-linux'/);
+  assert.match(offline, /inputs\.pack_type == 'full'/);
   assert.match(offline, /scripts\/godot\/build-offline-linux-pack\.sh/);
   assert.match(offline, /AURION_RELEASE_SHA:/);
   assert.match(offline, /actions\/upload-artifact@v4/);
