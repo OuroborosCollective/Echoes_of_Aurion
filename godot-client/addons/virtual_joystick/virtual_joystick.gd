@@ -1,5 +1,5 @@
-class_name VirtualJoystick
-
+# Aurion Godot 4.7.2: class_name VirtualJoystick collides with a built-in class.
+# Resource-path scene binding is sufficient; do not register a global class.
 extends Control
 
 ## A simple virtual joystick for touchscreens, with useful options.
