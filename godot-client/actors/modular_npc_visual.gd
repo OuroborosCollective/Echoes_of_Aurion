@@ -23,11 +23,14 @@ const SKIN_TONES := [
 const RECEIPT := "res://addons/modular_character_system/.aurion-mcs-install.json"
 const VENDOR_ROOT := "res://addons/modular_character_system/"
 const PINNED_ZIP_SHA := "ac72db1a5ff6985e19f1c07e4d1404560684f07aa7b9268382be8bcd2c635788"
+## SHA-256 of the deterministic installer receipt generated from that exact archive.
+## The receipt is untrusted input: its embedded archive hash is not proof by itself.
+const PINNED_RECEIPT_SHA := "c231b0c5c81157335f0a388c3190eb3d526b5ff7fac0eea9cb7574dffca4c4ab"
 
 ## Never trust vendor directory presence or an unsigned/unverified receipt alone.
 ## Byte-check the complete manifest (including GLTF BIN and texture dependencies).
 static func available() -> bool:
-	if not FileAccess.file_exists(RECEIPT):
+	if not FileAccess.file_exists(RECEIPT) or FileAccess.get_sha256(RECEIPT) != PINNED_RECEIPT_SHA:
 		return false
 	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(RECEIPT))
 	if typeof(raw) != TYPE_DICTIONARY or raw.get("version") != "1.0.0" or raw.get("sha256") != PINNED_ZIP_SHA:

@@ -19,6 +19,17 @@ node scripts/godot/bootstrap.mjs
 .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_modular_npc_private_runtime.gd
 ```
 
+For the isolated opt-in acceptance, including a changed-file plus forged-receipt
+negative test, run `python3 scripts/godot/private_mcs_acceptance.py --archive
+/private/path/ModularCharacterSystem.zip --godot /private/path/Godot_v4.7.2-stable_linux.x86_64`.
+The script verifies the editor digest and the archive pin, stages a temporary
+project, suppresses vendor output, and removes the temporary project on exit.
+The checked-in receipt digest binds the file list to the pinned archive; an
+archive hash merely written inside a receipt is not sufficient. The standard
+public Android exporters intentionally exclude the private MCS directory. A
+private Android package and exported-resource integrity are not yet supported
+or demonstrated by this acceptance.
+
 The checked-in `godot-client/actors/modular_npc_visual.gd` is **original Aurion-owned adapter code**, not vendor code. It selects purely cosmetic appearances deterministically from validated `npc:<id>` using SHA-256 and fixed, versioned palettes. It may display confirmed **audited-standard quest NPCs** only. When the private add-on is absent or its rig is invalid, the existing independently hash-admitted standard GLB presentation remains. Approved-assignment NPCs remain rendered using their original approved assets.
 
 **Not yet demonstrated:** physical Tab A9 FPS, Android APK containing the private runtime, live Aurion NPC placement, server receipts, or licensed source redistribution. The public CI must never imply these checks passed. No NPC spawn, movement, persistence, combat, or 10 Hz gameplay code is installed or changed. Cosmetic variants do not encode a canon profession. The public source is safe for open GitHub; embedding licensed MCS assets in an APK requires applying the vendor finished-product license and checking artifact access.

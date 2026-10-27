@@ -1,8 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
-import { includeAssetManifest, verifyPackagedAssets } from './export-assets.mjs';
+import { includeAssetManifest, verifyPackagedAssets, publicProjectCopyFilter } from './export-assets.mjs';
+
+test('public project exports exclude installed private MCS and Godot caches', () => {
+  assert.equal(publicProjectCopyFilter('/project/addons/modular_character_system'), false);
+  assert.equal(publicProjectCopyFilter('/project/addons/modular_character_system/Assets/Models/model.gltf'), false);
+  assert.equal(publicProjectCopyFilter('/project/.godot/imported/model.scn'), false);
+  assert.equal(publicProjectCopyFilter('/project/actors/modular_npc_visual.gd'), true);
+});
+
+test('public project copy retains adapter while excluding private contents', async () => {
+  const temp = await mkdtemp(join(tmpdir(), 'aurion-export-filter-'));
+  try {
+    const source = join(temp, 'source'), dest = join(temp, 'dest');
+    await mkdir(join(source, 'addons/modular_character_system'), {recursive: true});
+    await mkdir(join(source, 'actors'), {recursive: true});
+    await writeFile(join(source, 'addons/modular_character_system', 'private.txt'), 'fixture');
+    await writeFile(join(source, 'actors', 'adapter.gd'), 'adapter fixture');
+    await cp(source, dest, {recursive: true, filter: publicProjectCopyFilter});
+    assert.equal(await readFile(join(dest, 'actors', 'adapter.gd'), 'utf8'), 'adapter fixture');
+    await assert.rejects(readFile(join(dest, 'addons/modular_character_system', 'private.txt')), {code: 'ENOENT'});
+  } finally { await rm(temp, {recursive: true, force: true}); }
+});
 
 function fixture() {
   const hash = 'a'.repeat(64), assetId = 'glb_' + hash.slice(0, 48);

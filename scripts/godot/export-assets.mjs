@@ -10,13 +10,20 @@ import { installTerrain3D } from './install-terrain3d.mjs';
 const manifestEntry = 'assets/assets/generated/manifest.json';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
+/** Public export paths must never copy locally installed licensed MCS source. */
+export function publicProjectCopyFilter(path) {
+  const parts = path.split(/[\\/]+/);
+  return !parts.includes('.godot') && !parts.some((part, index) =>
+    part === 'modular_character_system' && parts[index - 1] === 'addons');
+}
+
 /** Fresh preparation is mandatory for every export, including owner signing. */
 export async function stageAssetProject(project, revision, { includeTerrain3D = false } = {}) {
   const { manifest, manifestPath } = await prepareAssets();
   assert.equal(manifest.sourceRevision, revision, 'EXPORT_ASSET_REVISION');
   await cp(join(repo, 'godot-client'), project, {
     recursive: true,
-    filter: path => !path.split('/').includes('.godot'),
+    filter: publicProjectCopyFilter,
   });
   // Keep the experimental native addon in the isolated preview project only.
   const terrain3d = includeTerrain3D
