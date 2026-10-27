@@ -3,6 +3,7 @@ extends SceneTree
 ## Synthetic data, no production Admin approval or database effects.
 const Api = preload("res://net/api/world_authoring_api.gd")
 const ConfirmedWorldDesigns = preload("res://world/confirmed_world_designs.gd")
+const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
 var failures: Array[String] = []
 
 func require(ok: bool, why: String) -> void:
@@ -64,6 +65,17 @@ func verify() -> void:
 	visual.clear()
 	require(visual.get_child_count() == 0, "session reset leaked world proxies")
 	visual.queue_free()
+	var studio := WorldStudio.new()
+	root.add_child(studio)
+	var seen: Array[Dictionary] = []
+	studio.confirmed_world.connect(func(value: Dictionary) -> void: seen.append(value))
+	studio._on_completed("readback", readback())
+	require(seen.size() == 1, "existing confirmed designs were not projected on first readback")
+	studio._confirmed_revision = "f".repeat(64)
+	studio._on_completed("readback", readback())
+	require(seen.size() == 1, "mismatched post-apply revision was presented as confirmed")
+	studio.close_session()
+	studio.queue_free()
 	if failures.is_empty():
 		print("AURION_WORLD_AUTHORING_CONTRACT_PASS: strict tRPC and confirmed-only native world proxies")
 		quit(0)
