@@ -251,6 +251,48 @@ func verify() -> void:
 	var plan_before: Dictionary = map.plan_points()
 	tap(map, map.world_to_screen(despawn["presences"][0]["position"]))
 	require(map.plan_points() == plan_before, "stale map mutated local design")
+
+	# G21: strictly a synthetic confirmed-zone fixture, NOT a live WebSocket.
+	scene._on_zone_welcome(welcome())
+	scene._zone_socket.set("_state", "connected")
+	scene._show_3d()
+	var joystick: Control = scene.get_node("MobileJoystick") as Control
+	require(joystick != null and joystick.visible, "G21 lacks separately visible left joystick")
+	require(scene.has_method("_apply_camera_drag") and scene.has_method("_camera_offset"), "G21 lacks native Camera3D orbit")
+	if joystick != null and scene.has_method("_apply_camera_drag") and scene.has_method("_camera_offset"):
+		var left: InputEventScreenTouch = touch_event(joystick.get_node("Base").get_global_rect().get_center(), true)
+		left.index = 17
+		joystick._input(left)
+		var left_drag := touch_drag(left.position + Vector2(50, 0), Vector2(50, 0))
+		left_drag.index = 17
+		joystick._input(left_drag)
+		var held: Vector2 = joystick.get("output")
+		require(held.x > 0.5, "left joystick did not retain its own finger")
+		var canonical_before: String = JSON.stringify(scene._confirmed_zone.current_state())
+		var yaw_before: float = float(scene.get("_camera_yaw"))
+		var right := touch_event(Vector2(root.size.x - 30, root.size.y * 0.65), true)
+		right.index = 22
+		scene._input(right)
+		var right_drag := touch_drag(right.position + Vector2(40, -12), Vector2(40, -12))
+		right_drag.index = 22
+		scene._input(right_drag)
+		require(not is_equal_approx(float(scene.get("_camera_yaw")), yaw_before), "right camera drag failed with left finger held")
+		require((joystick.get("output") as Vector2).is_equal_approx(held), "camera finger stole left joystick")
+		require(canonical_before == JSON.stringify(scene._confirmed_zone.current_state()), "camera drag forged gameplay state")
+		var other := touch_drag(right.position + Vector2(-150, 0), Vector2(-150, 0))
+		other.index = 23
+		var yaw_after: float = float(scene.get("_camera_yaw"))
+		scene._input(other)
+		require(is_equal_approx(float(scene.get("_camera_yaw")), yaw_after), "third finger stole camera gesture")
+		scene._toggle_world_diagnostics()
+		require(int(scene.get("_camera_touch_id")) == -1, "diagnostics failed to cancel camera pointer")
+		require(joystick.get("output") == Vector2.ZERO, "diagnostics failed to cancel left joystick")
+		scene._input(right_drag)
+		require(is_equal_approx(float(scene.get("_camera_yaw")), yaw_after), "hidden camera handled drag over menu")
+		right.pressed = false
+		scene._input(right)
+		left.pressed = false
+		joystick._input(left)
 	scene._reset_projection()
 	require(not panel.visible, "logout left ghost world map visible")
 	require(map.plan_points().is_empty(), "logout retained previous session plans")
