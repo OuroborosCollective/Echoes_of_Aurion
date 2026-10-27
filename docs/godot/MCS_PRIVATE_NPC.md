@@ -8,7 +8,7 @@ The purchased archive is **ModularCharacterSystem.zip**, SHA-256:
 
 `ac72db1a5ff6985e19f1c07e4d1404560684f07aa7b9268382be8bcd2c635788`
 
-Stage the official 1.0 package **locally** beneath `godot-client/addons/modular_character_system/` with the separately supplied private installer, verifying the exact zip SHA-256, root, license and version before unpacking. The entire directory is gitignored. Do not use the 0.9.1 beta ZIP. The project does **not** need to enable the editor plugin in its checked-in `project.godot`; runtime scenes may be loaded from the installed package without making the Character Studio editor a required runtime dependency. For editor-only design, enable the plugin **in an isolated local workspace** and disable before sharing project sources.
+Run `python3 scripts/godot/stage_modular_npc.py --archive /private/path/ModularCharacterSystem.zip` to stage the official 1.0 package **locally** beneath `godot-client/addons/modular_character_system/` with the checked-in license-safe staging script, verifying the exact zip SHA-256, root, license and version before unpacking. The entire directory is gitignored. Do not use the 0.9.1 beta ZIP. The project does **not** need to enable the editor plugin in its checked-in `project.godot`; runtime scenes may be loaded from the installed package without making the Character Studio editor a required runtime dependency. For editor-only design, enable the plugin **in an isolated local workspace** and disable before sharing project sources.
 
 After staging, use the SHA-locked Godot 4.7.2 import and headless test:
 
