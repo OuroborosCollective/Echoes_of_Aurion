@@ -46,7 +46,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // observe its effect to a deadline instead of assuming synchronous delivery.
     const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
     const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
-    await scrollRegion.hover({ force: true });
+    await scrollRegion.hover({ force: true, position: { x: 10, y: 10 } });
     await page.mouse.wheel(0, 10_000);
     await expect.poll(async () => {
       const sample = await scrollRegion.evaluate(element => ({
