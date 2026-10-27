@@ -110,10 +110,26 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		var packed: PackedScene = load(item.resource) as PackedScene
 		if packed == null:
 			return _reject(root, "npc_packed_scene_missing")
-		var wants_modular: bool = item.allowModular and ModularVisual.available()
-		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if wants_modular else null
-		if wants_modular and modular == null:
-			return _reject(root, "npc_modular_create_failed")
+		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if item.allowModular and ModularVisual.available() else null
+		# Optional vendor presentation must never erase canonical quest NPCs.
+		# Try MCS in an isolated temporary host before installing the final actor.
+		if modular != null:
+			var probe := Node3D.new()
+			probe.add_child(modular)
+			root.add_child(probe)
+			var valid_rig: bool = modular.has_method("is_character_valid") and bool(modular.call("is_character_valid"))
+			var players := modular.find_children("*", "AnimationPlayer", true, false)
+			var meshes := modular.find_children("*", "MeshInstance3D", true, false)
+			valid_rig = valid_rig and players.size() == 1 and not meshes.is_empty()
+			if valid_rig:
+				var ap: AnimationPlayer = players[0]
+				valid_rig = ap.has_animation("Idle") and bool(modular.call("play_animation", &"Idle", 0.0))
+			root.remove_child(probe)
+			probe.remove_child(modular)
+			probe.free()
+			if not valid_rig:
+				modular.free()
+				modular = null
 		var model_instance: Variant = modular if modular != null else packed.instantiate()
 		if not model_instance is Node3D:
 			if is_instance_valid(model_instance):
@@ -129,8 +145,6 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		root.add_child(actor)
 		_actors[id] = actor
 		actor.add_child(model_instance)
-		if modular != null and not bool(modular.call("is_character_valid")):
-			return _reject(root, "npc_modular_rig_invalid")
 		var clips := actor.find_children("*", "AnimationPlayer", true, false)
 		var meshes := actor.find_children("*", "MeshInstance3D", true, false)
 		if clips.size() != 1 or meshes.is_empty():
@@ -138,16 +152,13 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		var player: AnimationPlayer = clips[0]
 		if not player.has_animation("Idle"):
 			return _reject(root, "npc_idle_missing")
-		for name in player.get_animation_library_list():
-			var library := player.get_animation_library(name).duplicate(true) as AnimationLibrary
-			player.remove_animation_library(name)
-			player.add_animation_library(name, library)
-			if library.has_animation("Idle"):
-				library.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
-		if modular != null:
-			if not bool(modular.call("play_animation", &"Idle", 0.0)):
-				return _reject(root, "npc_modular_idle_missing")
-		else:
+		if modular == null:
+			for name in player.get_animation_library_list():
+				var library := player.get_animation_library(name).duplicate(true) as AnimationLibrary
+				player.remove_animation_library(name)
+				player.add_animation_library(name, library)
+				if library.has_animation("Idle"):
+					library.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
 			player.play("Idle")
 		actor.visible = true
 		_identities[id] = item.identity
