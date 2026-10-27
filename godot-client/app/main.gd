@@ -21,6 +21,7 @@ const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
 const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
+const InputAdapter = preload("res://app/input_adapter.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
@@ -48,6 +49,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var world_actors: Node3D = %Actors
 @onready var quest_npc_root: Node3D = %QuestNPCs
 @onready var live_3d_viewport: SubViewport = $WorldView/Live3D
+@onready var mobile_joystick: Control = $MobileJoystick
 @onready var world_camera: Camera3D = %WorldCamera
 @onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
@@ -57,6 +59,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var terrain3d_host: Node3D = $WorldView/Live3D/World/ConfirmedTerrain3D
 
 var _diagnostics = TechnicalDiagnostics.new()
+var _movement = InputAdapter.new()
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
@@ -317,6 +320,9 @@ func _reset_projection() -> void:
 	world_camera.transform = _initial_world_camera_transform
 	world_view.visible = false
 	world_hud.visible = false
+	mobile_joystick.visible = false
+	mobile_joystick.call("_reset")
+	_movement.cancel(_zone_socket, false)
 	$SafeMargin.visible = true
 	world_toggle.text = "Diagnose"
 	_appearance_diagnostic = "Erscheinung nicht geprüft"
@@ -543,6 +549,7 @@ func _process(_delta: float) -> void:
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
+	_poll_move_intent(now_ms)
 	if _awaiting_callback:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
@@ -553,6 +560,7 @@ func _process(_delta: float) -> void:
 func _show_3d() -> void:
 	world_view.visible = true
 	world_hud.visible = true
+	mobile_joystick.visible = true
 	$SafeMargin.visible = false
 	world_toggle.text = "Diagnose"
 	_update_3d_status()
@@ -561,7 +569,35 @@ func _toggle_world_diagnostics() -> void:
 	if not world_view.visible:
 		return
 	$SafeMargin.visible = not $SafeMargin.visible
+	mobile_joystick.visible = not $SafeMargin.visible
+	if $SafeMargin.visible:
+		_cancel_move_intent()
 	world_toggle.text = "3D-Ansicht" if $SafeMargin.visible else "Diagnose"
+
+
+## G20: InputMap and the pinned native Godot joystick are presentation inputs.
+## Only a verified v5 session may send digital intents, max once per 100 ms.
+## No client-side motion, velocity, coordinates or gameplay simulation.
+func _poll_move_intent(now_ms: int) -> void:
+	if _zone_socket == null:
+		return
+	var connected: bool = _zone_socket.state_name() == "connected"
+	var permitted: bool = connected and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible
+	if not permitted:
+		_movement.cancel(_zone_socket, connected)
+		return
+	var axes: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward", 0.2)
+	if mobile_joystick.visible and bool(mobile_joystick.get("is_pressed")):
+		axes = mobile_joystick.get("output")
+	_movement.send_if_due(now_ms, axes, _zone_socket, true)
+
+func _cancel_move_intent() -> void:
+	if mobile_joystick != null:
+		mobile_joystick.call("_reset")
+	if _zone_socket != null:
+		_movement.cancel(_zone_socket, _zone_socket.state_name() == "connected")
+	else:
+		_movement.reset()
 
 func _clear_3d_actors() -> void:
 	_remote_actors.clear(world_actors)
@@ -835,6 +871,7 @@ func _on_app_suspended() -> void:
 	_api.cancel()
 	_ticket_abandoned = true
 	_ticket_pending = false
+	_cancel_move_intent()
 	if socket_active:
 		_discarded_zone_generation_through = maxi(_discarded_zone_generation_through, _zone_socket.connection_generation())
 	_zone_socket.close_zone()

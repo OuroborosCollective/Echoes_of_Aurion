@@ -26,11 +26,15 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.025, 0.045, 0.065, 1)
 
+[input_devices]
+pointing/emulate_touch_from_mouse=true
+pointing/emulate_mouse_from_touch=false
+
 [input]
-move_left={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":65)]}
-move_right={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":68)]}
-move_forward={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":87)]}
-move_backward={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":83)]}
+move_left={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":65),Object(InputEventJoypadMotion,"axis":0,"axis_value":-1.0)]}
+move_right={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":68),Object(InputEventJoypadMotion,"axis":0,"axis_value":1.0)]}
+move_forward={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":87),Object(InputEventJoypadMotion,"axis":1,"axis_value":-1.0)]}
+move_backward={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":83),Object(InputEventJoypadMotion,"axis":1,"axis_value":1.0)]}
 interact={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":69)]}
 primary_action={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":32)]}
 
