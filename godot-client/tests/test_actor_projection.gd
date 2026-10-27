@@ -2,6 +2,7 @@ extends SceneTree
 ## Real imported models with explicit protocol fixtures, NOT a live-world claim.
 const Actor = preload("res://actors/actor_view.tscn")
 const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
+const ModularNpcVisual = preload("res://actors/modular_npc_visual.gd")
 const World = preload("res://projection/zone_state.gd")
 const Visual = preload("res://projection/snapshot_interpolator.gd")
 const Codec = preload("res://net/zone_codec.gd")
@@ -531,6 +532,9 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 			"quest NPC presented as player or monster")
 		require(actor.find_children("*", "MeshInstance3D", true, false).size() > 0,
 			"quest NPC lacks actual imported geometry")
+		var modular_used: bool = actor.get_child_count() == 1 and actor.get_child(0).get_meta("aurion_visual_system", "") == "private-mcs-1.0"
+		require(modular_used == ModularNpcVisual.available(), "private MCS rig was silently replaced by catalog fallback or leaked into public builds")
+		require(actor.get_meta("aurion_model_sha256", "") == sha, "confirmed catalog SHA was lost")
 		var players := actor.find_children("*", "AnimationPlayer", true, false)
 		require(players.size() == 1, "NPC missing single imported animation player")
 		if players.size() == 1:
@@ -561,6 +565,31 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 		"foreign-zone quest NPCs entered this session")
 	require(scene.call("_apply_quest_npc_visuals", response, manifest),
 		"valid NPCs could not recover from invalid readmodel")
+	var assigned := response.duplicate(true)
+	assigned.npcs[0].model.source = "approved-assignment"
+	require(scene.call("_apply_quest_npc_visuals", assigned, manifest),
+		"a new approved NPC model source was rejected")
+	var first: Node3D = npcs_root.get_node_or_null("QuestNPC_lyra") as Node3D
+	require(first != null, "approved NPC disappeared")
+	if first != null:
+		require(first.get_meta("aurion_visual_source", "") == "catalog-glb",
+			"changed approved-assignment reused private MCS actor")
+	require(scene.call("_apply_quest_npc_visuals", response, manifest),
+		"approved model could not return to audited source")
+	first = npcs_root.get_node_or_null("QuestNPC_lyra") as Node3D
+	if first != null and ModularNpcVisual.available():
+		require(first.get_meta("aurion_visual_source", "") == "private-mcs-1.0",
+			"audited-standard source did not restore the installed private rig")
+	var renamed := response.duplicate(true)
+	renamed.npcs[0].displayName = "Lyra, Test Renamed"
+	require(scene.call("_apply_quest_npc_visuals", renamed, manifest),
+		"authoritative NPC displayName change rejected")
+	first = npcs_root.get_node_or_null("QuestNPC_lyra") as Node3D
+	if first != null and ModularNpcVisual.available():
+		require(first.get_child(0).get("character_display_name") == "Lyra, Test Renamed",
+			"updated authoritative NPC displayName kept stale MCS appearance")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == before,
+		"source/name-only changes mutated canonical zone state")
 	scene._reset_projection()
 	require(npcs_root.get_child_count() == 0,
 		"quest NPCs survived zone logout/session reset")
