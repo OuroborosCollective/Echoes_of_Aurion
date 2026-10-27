@@ -2,7 +2,15 @@ import React, { useEffect, useRef, useState } from "react";
 import { AurionSoundscape } from "@/lib/soundscape";
 import { aurionAssets } from "@/lib/aurionAssets";
 import { useAdminStore } from "../core/AdminService";
-import { Volume2, VolumeX, Sliders, Music, Activity, ShieldCheck, X } from "lucide-react";
+import {
+  Volume2,
+  VolumeX,
+  Sliders,
+  Music,
+  Activity,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export const SoundManager: React.FC = () => {
@@ -22,7 +30,6 @@ export const SoundManager: React.FC = () => {
   const activeAmbientRef = useRef<string | null>(null);
   const duckingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-
   useEffect(() => {
     localStorage.setItem("aurion:audio:isMuted", JSON.stringify(isMuted));
   }, [isMuted]);
@@ -30,7 +37,6 @@ export const SoundManager: React.FC = () => {
   useEffect(() => {
     localStorage.setItem("aurion:audio:masterVolume", masterVolume.toString());
   }, [masterVolume]);
-
 
   useEffect(() => {
     // Initialize soundscape with asset mapping
@@ -46,11 +52,14 @@ export const SoundManager: React.FC = () => {
       void soundscapeRef.current.playAmbient(currentAmbient, duckedVolume);
 
       if (duckingTimeoutRef.current) clearTimeout(duckingTimeoutRef.current);
-      
+
       duckingTimeoutRef.current = setTimeout(() => {
         const latestAmbient = activeAmbientRef.current;
         if (soundscapeRef.current && latestAmbient) {
-          void soundscapeRef.current.playAmbient(latestAmbient, ambientVolumeRef.current);
+          void soundscapeRef.current.playAmbient(
+            latestAmbient,
+            ambientVolumeRef.current
+          );
         }
         duckingTimeoutRef.current = null;
       }, duration);
@@ -121,6 +130,7 @@ export const SoundManager: React.FC = () => {
             onClick={() => setShowAdminPanel(!showAdminPanel)}
             className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-500 bg-black/80 text-amber-400 shadow-lg hover:bg-amber-500 hover:text-white transition-all"
             title="Audio Admin Panel"
+            aria-label="Audio Admin Panel"
           >
             <Sliders size={20} />
           </button>
@@ -128,11 +138,12 @@ export const SoundManager: React.FC = () => {
         <button
           onClick={toggleMute}
           className={`flex h-10 w-10 items-center justify-center rounded-full border transition-all shadow-lg ${
-            isMuted 
-              ? "border-red-500 bg-red-500/20 text-red-400" 
+            isMuted
+              ? "border-red-500 bg-red-500/20 text-red-400"
               : "border-sky-500 bg-black/80 text-sky-400 hover:bg-sky-500 hover:text-white"
           }`}
           title={isMuted ? "Unmute" : "Mute"}
+          aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
         </button>
@@ -150,9 +161,16 @@ export const SoundManager: React.FC = () => {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-amber-400">
                 <ShieldCheck size={20} />
-                <h3 className="font-serif font-bold uppercase tracking-wider">Audio Authority</h3>
+                <h3 className="font-serif font-bold uppercase tracking-wider">
+                  Audio Authority
+                </h3>
               </div>
-              <button onClick={() => setShowAdminPanel(false)} className="text-gray-500 hover:text-white">
+              <button
+                onClick={() => setShowAdminPanel(false)}
+                className="text-gray-500 hover:text-white"
+                aria-label="Close Audio Admin Panel"
+                title="Close Audio Admin Panel"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -170,7 +188,7 @@ export const SoundManager: React.FC = () => {
                   max="1"
                   step="0.01"
                   value={masterVolume}
-                  onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+                  onChange={e => setMasterVolume(parseFloat(e.target.value))}
                   className="h-1.5 w-full appearance-none rounded-full bg-gray-800 accent-amber-500 cursor-pointer"
                 />
               </div>
@@ -181,18 +199,24 @@ export const SoundManager: React.FC = () => {
                   <Activity size={12} />
                   <span>Runtime Status</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-gray-500">Ambient Track</span>
+                  <span className="text-[11px] text-gray-500">
+                    Ambient Track
+                  </span>
                   <span className="text-[11px] text-sky-400 font-mono truncate max-w-[140px]">
-                    {activeAmbient ? activeAmbient.split('/').pop() : "None"}
+                    {activeAmbient ? activeAmbient.split("/").pop() : "None"}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-gray-500">Audio Context</span>
+                  <span className="text-[11px] text-gray-500">
+                    Audio Context
+                  </span>
                   <span className="flex items-center gap-1.5">
-                    <div className={`h-1.5 w-1.5 rounded-full ${soundscapeRef.current ? "bg-emerald-500" : "bg-red-500"}`} />
+                    <div
+                      className={`h-1.5 w-1.5 rounded-full ${soundscapeRef.current ? "bg-emerald-500" : "bg-red-500"}`}
+                    />
                     <span className="text-[11px] text-gray-300 uppercase tracking-tighter">
                       {soundscapeRef.current ? "Active" : "Ready"}
                     </span>
@@ -202,16 +226,38 @@ export const SoundManager: React.FC = () => {
 
               {/* Quick Cues (For testing) */}
               <div className="space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Diagnostic Cues</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                  Diagnostic Cues
+                </span>
                 <div className="grid grid-cols-2 gap-2">
-                  <button 
-                    onClick={() => window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { cue: "progression.level_up", category: "progression", level: 1 } }))}
+                  <button
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent("aurion:audio-cue", {
+                          detail: {
+                            cue: "progression.level_up",
+                            category: "progression",
+                            level: 1,
+                          },
+                        })
+                      )
+                    }
                     className="rounded bg-amber-500/10 border border-amber-500/20 py-1.5 text-[9px] font-bold text-amber-400 hover:bg-amber-500/20 transition-all"
                   >
                     LEVEL UP
                   </button>
-                  <button 
-                    onClick={() => window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { cue: "combat.spell.heal", category: "combat", spell: "heal" } }))}
+                  <button
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent("aurion:audio-cue", {
+                          detail: {
+                            cue: "combat.spell.heal",
+                            category: "combat",
+                            spell: "heal",
+                          },
+                        })
+                      )
+                    }
                     className="rounded bg-sky-500/10 border border-sky-500/20 py-1.5 text-[9px] font-bold text-sky-400 hover:bg-sky-500/20 transition-all"
                   >
                     HEAL
