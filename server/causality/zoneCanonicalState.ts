@@ -134,7 +134,7 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
   if (state.questInstances) {
     questInstances = new Array<CanonicalZoneQuestInstance>(state.questInstances.length);
     for (let i = 0; i < state.questInstances.length; i++) {
-      const quest = state.questInstances[i];
+      const quest: CanonicalZoneQuestInstance = state.questInstances[i]!;
 
       const completedNodeIds = quest.completedNodeIds.slice().sort();
 
@@ -143,10 +143,10 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
         boundRoles[j] = { ...quest.boundRoles[j] };
       }
 
-      const objectiveProgressKeys = Object.keys(quest.objectiveProgress).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+      const objectiveProgressKeys: string[] = Object.keys(quest.objectiveProgress).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
       const objectiveProgress: Record<string, string | number | boolean> = {};
       for (let j = 0; j < objectiveProgressKeys.length; j++) {
-        const key = objectiveProgressKeys[j];
+        const key = objectiveProgressKeys[j]!;
         objectiveProgress[key] = quest.objectiveProgress[key];
       }
 
