@@ -38,7 +38,7 @@ func route(event: InputEvent, permitted: bool, camera_area: Rect2, exclusions: A
 			return {"kind": "start"}
 		if event.index != _camera_finger:
 			return {}
-		var tap := not _dragged and event.position.distance_to(_start) < DRAG_THRESHOLD_PX and not _excluded(event.position, exclusions)
+		var tap: bool = not _dragged and event.position.distance_to(_start) < DRAG_THRESHOLD_PX and not _excluded(event.position, exclusions)
 		cancel()
 		return {"kind": "tap", "position": event.position} if tap else {"kind": "end"}
 	if event is InputEventScreenDrag and event.index == _camera_finger:
