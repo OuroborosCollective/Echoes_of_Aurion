@@ -25,6 +25,9 @@ const InputAdapter = preload("res://app/input_adapter.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
+const CAMERA_DISTANCE := 5.8
+const CAMERA_PITCH_MIN := 12.0
+const CAMERA_PITCH_MAX := 60.0
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
 
 @onready var card: PanelContainer = %LaunchCard
@@ -60,6 +63,9 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 
 var _diagnostics = TechnicalDiagnostics.new()
 var _movement = InputAdapter.new()
+var _camera_touch_id := -1
+var _camera_yaw := 0.0
+var _camera_pitch := deg_to_rad(18.0)
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
@@ -187,6 +193,38 @@ func _ready() -> void:
 	set_process(true)
 	resized.connect(_fit_layout)
 	_fit_layout()
+
+## G21: built-in Godot Camera3D orbit, not a gameplay or movement command.
+## Right-screen screen-touch pointer is separate from G20's left joystick ID.
+func _input(event: InputEvent) -> void:
+	if not _camera_input_allowed():
+		_reset_camera_touch()
+		return
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			var right_edge: float = maxf(size.x * 0.52, mobile_joystick.get_global_rect().end.x + 16.0)
+			if _camera_touch_id == -1 and event.position.x >= right_edge and event.position.y >= 88.0:
+				_camera_touch_id = event.index
+		elif event.index == _camera_touch_id:
+			_reset_camera_touch()
+	elif event is InputEventScreenDrag and event.index == _camera_touch_id:
+		_apply_camera_drag(event.relative)
+
+func _camera_input_allowed() -> bool:
+	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible
+
+func _apply_camera_drag(delta: Vector2) -> void:
+	if not delta.is_finite():
+		return
+	_camera_yaw = wrapf(_camera_yaw - clampf(delta.x, -80.0, 80.0) * 0.008, -PI, PI)
+	_camera_pitch = clampf(_camera_pitch - clampf(delta.y, -80.0, 80.0) * 0.006, deg_to_rad(CAMERA_PITCH_MIN), deg_to_rad(CAMERA_PITCH_MAX))
+
+func _camera_offset() -> Vector3:
+	var flat: float = cos(_camera_pitch) * CAMERA_DISTANCE
+	return Vector3(sin(_camera_yaw) * flat, sin(_camera_pitch) * CAMERA_DISTANCE, cos(_camera_yaw) * flat)
+
+func _reset_camera_touch() -> void:
+	_camera_touch_id = -1
 
 func _on_map_selection_changed(message: String) -> void:
 	map_selection.text = message if not message.is_empty() else "Berühre ein bestätigtes Objekt oder skizziere einen Punkt."
@@ -318,6 +356,9 @@ func _reset_projection() -> void:
 	_clear_3d_actors()
 	unassigned_floor.position = Vector3.ZERO
 	world_camera.transform = _initial_world_camera_transform
+	_camera_yaw = 0.0
+	_camera_pitch = deg_to_rad(18.0)
+	_reset_camera_touch()
 	world_view.visible = false
 	world_hud.visible = false
 	mobile_joystick.visible = false
@@ -572,6 +613,7 @@ func _toggle_world_diagnostics() -> void:
 	mobile_joystick.visible = not $SafeMargin.visible
 	if $SafeMargin.visible:
 		_cancel_move_intent()
+		_reset_camera_touch()
 	world_toggle.text = "3D-Ansicht" if $SafeMargin.visible else "Diagnose"
 
 
@@ -681,8 +723,9 @@ func _project_3d(now_ms: int) -> void:
 				var z: float = float(point["z"]) / 1000.0
 				# The neutral plane has no world authority; follow only the visual point.
 				unassigned_floor.position = Vector3(x, 0.0, z)
-				world_camera.position = Vector3(x, 2.8, z + 5.5)
-				world_camera.look_at(Vector3(x, 1.0, z), Vector3.UP)
+				var confirmed_target := Vector3(x, 1.0, z)
+				world_camera.position = confirmed_target + _camera_offset()
+				world_camera.look_at(confirmed_target, Vector3.UP)
 	_update_3d_status()
 func _update_3d_status() -> void:
 	if not _confirmed_zone.has_state():
@@ -872,6 +915,7 @@ func _on_app_suspended() -> void:
 	_ticket_abandoned = true
 	_ticket_pending = false
 	_cancel_move_intent()
+	_reset_camera_touch()
 	if socket_active:
 		_discarded_zone_generation_through = maxi(_discarded_zone_generation_through, _zone_socket.connection_generation())
 	_zone_socket.close_zone()
@@ -928,6 +972,7 @@ func _poll_reconnect(now_ms: int) -> void:
 func _fit_layout() -> void:
 	if not is_node_ready():
 		return
+	_reset_camera_touch()
 	card.custom_minimum_size.x = minf(600.0, maxf(240.0, size.x - 48.0))
 	title.add_theme_font_size_override("font_size", 32 if size.x < 600 else 44)
 	queue_redraw()
