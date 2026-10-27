@@ -2,7 +2,7 @@ extends SceneTree
 ## Aurion-only authoring response and confirmed-world presentation contract fixtures.
 ## Synthetic data, no production Admin approval or database effects.
 const Api = preload("res://net/api/world_authoring_api.gd")
-const Projection = preload("res://world/confirmed_world_designs.gd")
+const ConfirmedWorldDesigns = preload("res://world/confirmed_world_designs.gd")
 var failures: Array[String] = []
 
 func require(ok: bool, why: String) -> void:
@@ -40,23 +40,23 @@ func verify() -> void:
 	require(Api.valid_plan_hash("d".repeat(64)), "canonical SHA-256 rejected")
 	require(not Api.valid_plan_hash("D".repeat(64)), "uppercase hash accepted")
 	require(not Api.valid_plan_hash("g".repeat(64)), "non-hex hash accepted")
-	var visual := Projection.new()
+	var visual := ConfirmedWorldDesigns.new()
 	root.add_child(visual)
 	var valid := readback()
-	require(Projection.validate_readback(valid), "legitimate authoritative world readback rejected")
+	require(ConfirmedWorldDesigns.validate_readback(valid), "legitimate authoritative world readback rejected")
 	require(visual.apply_confirmed(valid), "confirmed world readback not applied")
 	require(visual.revision == "a".repeat(64), "readback revision lost")
 	require(visual.get_child_count() == 1, "expected one read-only placement proxy")
 	require(visual.apply_confirmed(valid) and visual.get_child_count() == 1, "same revision duplicated placement")
 	var bad := readback()
 	bad.designs[0].placements[0].xMm = -1
-	require(not Projection.validate_readback(bad), "negative placement coordinate accepted")
+	require(not ConfirmedWorldDesigns.validate_readback(bad), "negative placement coordinate accepted")
 	bad = readback()
 	bad.designs[0].placements[0].assetId = "../data"
-	require(not Projection.validate_readback(bad), "untrusted asset ID accepted")
+	require(not ConfirmedWorldDesigns.validate_readback(bad), "untrusted asset ID accepted")
 	bad = readback()
 	bad.designs[0].placements.append(bad.designs[0].placements[0].duplicate(true))
-	require(not Projection.validate_readback(bad), "duplicate placement identity accepted")
+	require(not ConfirmedWorldDesigns.validate_readback(bad), "duplicate placement identity accepted")
 	bad = readback()
 	bad.revision = "unverified"
 	require(not visual.apply_confirmed(bad), "invalid revision was rendered")
