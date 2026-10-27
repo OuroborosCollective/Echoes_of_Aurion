@@ -137,11 +137,19 @@ export function summarizeWorldChunkTerrain(chunk: BaseWorldChunk): AurionTerrain
 export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
   const matrix = canonicalTerrainMatrix(chunk);
   const summary = summarizeWorldChunkTerrain(chunk);
-  const rowStrings = new Array(matrix.length);
-  for (let i = 0; i < matrix.length; i++) {
-    rowStrings[i] = `{${matrix[i]!.join(",")}}`;
+
+  let rows = "";
+  for (let z = 0; z < matrix.length; z++) {
+    if (z > 0) rows += ",";
+    rows += "{";
+    const row = matrix[z]!;
+    for (let x = 0; x < row.length; x++) {
+      if (x > 0) rows += ",";
+      rows += row[x];
+    }
+    rows += "}";
   }
-  const rows = rowStrings.join(",");
+
   const code = `m={${rows}};dx=Abs[Differences[Transpose[m]]];dz=Abs[Differences[m]];{Min[m],Max[m],Max[dx,dz]}`;
   return Object.freeze({
     kind: "terrain_invariants",
@@ -190,20 +198,20 @@ export function summarizeWorldChunkTexturization(chunk: BaseWorldChunk): AurionT
  */
 export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
   const summary = summarizeWorldChunkTexturization(chunk);
-  const surfacesArr = new Array(chunk.tiles.length);
+  let surfaces = "";
   for (let i = 0; i < chunk.tiles.length; i++) {
+    if (i > 0) surfaces += ",";
     const t = chunk.tiles[i]!;
     switch(t.surface) {
-        case "grass": surfacesArr[i] = 1; break;
-        case "riverbank": surfacesArr[i] = 2; break;
-        case "stone": surfacesArr[i] = 3; break;
-        case "forest_floor": surfacesArr[i] = 4; break;
-        case "ash": surfacesArr[i] = 5; break;
-        case "ruin_path": surfacesArr[i] = 6; break;
+        case "grass": surfaces += "1"; break;
+        case "riverbank": surfaces += "2"; break;
+        case "stone": surfaces += "3"; break;
+        case "forest_floor": surfaces += "4"; break;
+        case "ash": surfaces += "5"; break;
+        case "ruin_path": surfaces += "6"; break;
         default: throw new Error(`unmapped surface: ${t.surface}`);
     }
   }
-  const surfaces = surfacesArr.join(",");
   const code = `surfaces={${surfaces}};Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]`;
 
   return Object.freeze({
@@ -306,17 +314,29 @@ export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk):
   const surfaceMatrix = canonicalSurfaceMatrix(chunk);
   const summary = summarizeWorldChunkTerrainContinuity(chunk);
 
-  const hRowStrings = new Array(heightMatrix.length);
-  for (let i = 0; i < heightMatrix.length; i++) {
-    hRowStrings[i] = `{${heightMatrix[i]!.join(",")}}`;
+  let hRows = "";
+  for (let z = 0; z < heightMatrix.length; z++) {
+    if (z > 0) hRows += ",";
+    hRows += "{";
+    const row = heightMatrix[z]!;
+    for (let x = 0; x < row.length; x++) {
+      if (x > 0) hRows += ",";
+      hRows += row[x];
+    }
+    hRows += "}";
   }
-  const hRows = hRowStrings.join(",");
 
-  const sRowStrings = new Array(surfaceMatrix.length);
-  for (let i = 0; i < surfaceMatrix.length; i++) {
-    sRowStrings[i] = `{${surfaceMatrix[i]!.join(",")}}`;
+  let sRows = "";
+  for (let z = 0; z < surfaceMatrix.length; z++) {
+    if (z > 0) sRows += ",";
+    sRows += "{";
+    const row = surfaceMatrix[z]!;
+    for (let x = 0; x < row.length; x++) {
+      if (x > 0) sRows += ",";
+      sRows += row[x];
+    }
+    sRows += "}";
   }
-  const sRows = sRowStrings.join(",");
 
   const code = `h={${hRows}};s={${sRows}};var=Round[Variance[Flatten[h]]];sdx=Differences[Transpose[s]];sdz=Differences[s];trans=Total[Unitize[sdx], 2]+Total[Unitize[sdz], 2];{var,trans}`;
 
