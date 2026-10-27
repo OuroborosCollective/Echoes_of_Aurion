@@ -1,7 +1,7 @@
 extends Control
 ## Owner-facing native draft/plan/explicit confirm/readback; only Aurion can apply.
 const Api = preload("res://net/api/world_authoring_api.gd")
-const Projection = preload("res://world/confirmed_world_designs.gd")
+const ConfirmedWorldDesigns = preload("res://world/confirmed_world_designs.gd")
 var _auth: Node
 var _transport: Node
 var _server := ""
@@ -171,14 +171,14 @@ func _on_completed(kind: String, data: Dictionary) -> void:
 		"worldApply":
 			var receipt: Variant = data.get("receipt")
 			var readback: Variant = data.get("readback")
-			if typeof(receipt) == TYPE_DICTIONARY and typeof(readback) == TYPE_DICTIONARY and Projection.validate_readback(readback):
+			if typeof(receipt) == TYPE_DICTIONARY and typeof(readback) == TYPE_DICTIONARY and ConfirmedWorldDesigns.validate_readback(readback):
 				_confirmed_revision = str(readback.get("revision", ""))
 				_info.text = "Apply-Receipt erhalten. Prüfe Weltstand unabhängig."
 				_readback()
 			else:
 				_info.text = "Kein gültiger Apply-Receipt; Status ungeklärt."
 		"readback":
-			if Projection.validate_readback(data) and not _confirmed_revision.is_empty() and data.revision == _confirmed_revision:
+			if ConfirmedWorldDesigns.validate_readback(data) and not _confirmed_revision.is_empty() and data.revision == _confirmed_revision:
 				_info.text = "Aurion-Weltstand unabhängig bestätigt: " + data.revision
 				emit_signal("confirmed_world", data)
 			else:
