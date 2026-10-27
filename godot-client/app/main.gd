@@ -22,6 +22,8 @@ const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
 const InputAdapter = preload("res://app/input_adapter.gd")
+const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
+const ConfirmedDesigns = preload("res://world/confirmed_world_designs.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
@@ -58,6 +60,8 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var starter_village_visuals: Node3D = $WorldView/Live3D/World/StarterVillageVisuals
 @onready var terrain3d_host: Node3D = $WorldView/Live3D/World/ConfirmedTerrain3D
 
+var _world_studio: Control
+var _world_design_proxies: Node3D
 var _diagnostics = TechnicalDiagnostics.new()
 var _movement = InputAdapter.new()
 var _config: Dictionary
@@ -174,6 +178,19 @@ func _ready() -> void:
 	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	world_toggle.pressed.connect(_toggle_world_diagnostics)
+	_world_design_proxies = ConfirmedDesigns.new()
+	_world_design_proxies.name = "ConfirmedWorldDesignProxies"
+	$WorldView/Live3D/World.add_child(_world_design_proxies)
+	_world_studio = WorldStudio.new()
+	_world_studio.name = "WorldStudio"
+	add_child(_world_studio)
+	_world_studio.confirmed_world.connect(_on_world_design_confirmed)
+	var studio_button := Button.new()
+	studio_button.name = "WorldStudioButton"
+	studio_button.text = "Weltstudio"
+	studio_button.custom_minimum_size.y = 48
+	studio_button.pressed.connect(_open_world_studio)
+	$WorldHUD/WorldBar.add_child(studio_button)
 	login.disabled = true
 	if not _configuration_valid():
 		status.text = "Konfiguration ungültig"
@@ -285,6 +302,10 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 
 func _reset_projection() -> void:
 	# An old HTTP completion/actor must not survive a new authenticated zone.
+	if _world_studio != null:
+		_world_studio.close_session()
+	if _world_design_proxies != null:
+		_world_design_proxies.clear()
 	if _appearance_api != null:
 		_appearance_api.cancel()
 	if _remote_api != null:
@@ -438,6 +459,8 @@ func _on_zone_connected() -> void:
 	login.text = "Verbunden"
 	login.disabled = true
 	_show_3d()
+	if _world_studio != null:
+		_world_studio.configure(_auth_start, _config.server_base_url, _confirmed_zone.connection_id())
 	# The authenticated optional reader cannot invalidate the v5 zone transport.
 	if _appearance_api != null and not _appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id()):
 		_appearance_diagnostic = "Erscheinung derzeit nicht abrufbar"
@@ -1191,3 +1214,15 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	_chunk_diagnostic = "" if village_ok else starter_village_visuals.diagnostic
 	_update_3d_status()
 	return true
+
+func _open_world_studio() -> void:
+	if _world_studio == null or not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended():
+		return
+	_cancel_move_intent()
+	_world_studio.open_studio()
+
+func _on_world_design_confirmed(readback: Dictionary) -> void:
+	if not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended():
+		return
+	if _world_design_proxies != null:
+		_world_design_proxies.apply_confirmed(readback)
