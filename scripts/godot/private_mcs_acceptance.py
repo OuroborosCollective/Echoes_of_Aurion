@@ -11,6 +11,7 @@ import tempfile
 
 REPO = Path(__file__).resolve().parents[2]
 EDITOR_SHA = "8d106cbe6144c2dc7e881d61d2429c1a8a76e6b22ef48bd5e48dcf934953f71e"
+STANDARD_GLB_SHA = "2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d34f3d94a0e64765cc"
 
 
 def sha256(path):
@@ -49,9 +50,17 @@ def main():
         shutil.copytree(REPO / "godot-client", project,
                         ignore=shutil.ignore_patterns(".godot", "modular_character_system"))
         stager.install(args.archive, project)
+        standard = REPO / "assets/characters/aurion-player-standard-animated.glb"
+        if sha256(standard) != STANDARD_GLB_SHA:
+            raise ValueError("standard GLB digest mismatch")
+        generated = project / "assets/generated"
+        generated.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(standard, generated / ("glb_" + STANDARD_GLB_SHA[:48] + ".glb"))
         run_godot(editor, project, ["--editor", "--import"])
         run_godot(editor, project, ["--script", "tests/test_modular_npc_private_runtime.gd"],
                   "AURION_PRIVATE_MCS_1_0_RIG_PASS")
+        run_godot(editor, project, ["--script", "tests/test_modular_npc_private_fallback.gd"],
+                  "PRIVATE_MCS_LATE_RIG_FALLBACK_PASS")
         vendor = project / "addons/modular_character_system"
         target = vendor / "README.md"
         receipt = vendor / ".aurion-mcs-install.json"
@@ -64,7 +73,7 @@ def main():
                          'func _init() -> void:\n print("MCS_FORGERY_REJECTED=", not Visual.available())\n quit()\n')
         run_godot(editor, project, ["--script", "res://mcs_integrity_probe.gd"],
                   "MCS_FORGERY_REJECTED=true")
-    print("PRIVATE_MCS_ACCEPTANCE_PASS: rig and modified-file/receipt rejection; no Android or live evidence")
+    print("PRIVATE_MCS_ACCEPTANCE_PASS: rig, late-rig GLB fallback and modified-file/receipt rejection; no Android or live evidence")
 
 
 if __name__ == "__main__":

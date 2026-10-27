@@ -20,7 +20,7 @@ node scripts/godot/bootstrap.mjs
 ```
 
 For the isolated opt-in acceptance, including a changed-file plus forged-receipt
-negative test, run `python3 scripts/godot/private_mcs_acceptance.py --archive
+negative test and a late invalid-rig GLB fallback test, run `python3 scripts/godot/private_mcs_acceptance.py --archive
 /private/path/ModularCharacterSystem.zip --godot /private/path/Godot_v4.7.2-stable_linux.x86_64`.
 The script verifies the editor digest and the archive pin, stages a temporary
 project, suppresses vendor output, and removes the temporary project on exit.

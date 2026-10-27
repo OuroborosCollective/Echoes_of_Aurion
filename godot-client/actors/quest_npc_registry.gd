@@ -147,6 +147,28 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		actor.add_child(model_instance)
 		var clips := actor.find_children("*", "AnimationPlayer", true, false)
 		var meshes := actor.find_children("*", "MeshInstance3D", true, false)
+		# The rig can change when re-entering the final scene tree. Repeat the
+		# checks here and fall back per NPC rather than clearing every actor.
+		var modular_valid := true
+		if modular != null:
+			modular_valid = modular.has_method("is_character_valid") and bool(modular.call("is_character_valid"))
+			modular_valid = modular_valid and clips.size() == 1 and not meshes.is_empty()
+			if modular_valid:
+				var modular_player: AnimationPlayer = clips[0]
+				modular_valid = modular_player.has_animation("Idle") and modular.has_method("play_animation") and bool(modular.call("play_animation", &"Idle", 0.0))
+			if not modular_valid:
+				actor.remove_child(modular)
+				modular.free()
+				modular = null
+				model_instance = packed.instantiate()
+				if not model_instance is Node3D:
+					if is_instance_valid(model_instance):
+						model_instance.free()
+					return _reject(root, "npc_model_not_3d")
+				actor.add_child(model_instance)
+				actor.set_meta("aurion_visual_source", "catalog-glb")
+				clips = actor.find_children("*", "AnimationPlayer", true, false)
+				meshes = actor.find_children("*", "MeshInstance3D", true, false)
 		if clips.size() != 1 or meshes.is_empty():
 			return _reject(root, "npc_model_rig_invalid")
 		var player: AnimationPlayer = clips[0]
