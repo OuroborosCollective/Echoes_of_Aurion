@@ -51,6 +51,8 @@ test('manual Linux pack is importable, includes pinned editor, excludes private 
     const names = checked(out, 'bash', ['-c', 'zstd -dc aurion-godot-project.tar.zst | tar -tf -']);
     assert.match(names, /godot-client\/project\.godot/);
     assert.match(names, /godot-client\/addons\/virtual_joystick\/plugin\.cfg/);
+    assert.match(names, /scripts\/godot\/check\.sh/);
+    assert.match(names, /config\/godot-toolchain\.lock\.json/);
     assert.doesNotMatch(names, /modular_character_system|PAID_VENDOR|\.godot\//);
     const source = JSON.parse(readFileSync(join(out,'manifest.json'), 'utf8'));
     assert.equal(source.sourceRevision, checked(dir, 'git', ['rev-parse', 'HEAD']));
