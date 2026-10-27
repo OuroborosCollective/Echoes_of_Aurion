@@ -98,6 +98,68 @@ export interface CanonicalZoneState {
  * retained and every domain collection has a deterministic order.
  */
 export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZoneState {
+  const players = new Array<CanonicalPlayerState>(state.players.length);
+  for (let i = 0; i < state.players.length; i++) {
+    const player = state.players[i];
+    const skillCooldownKeys = Object.keys(player.skillCooldowns).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+    const skillCooldowns: Record<string, number> = {};
+    for (let j = 0; j < skillCooldownKeys.length; j++) {
+      const key = skillCooldownKeys[j];
+      skillCooldowns[key] = player.skillCooldowns[key];
+    }
+    players[i] = { ...player, skillCooldowns };
+  }
+  players.sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0);
+
+  const mobs = new Array<CanonicalMobState>(state.mobs.length);
+  for (let i = 0; i < state.mobs.length; i++) {
+    mobs[i] = { ...state.mobs[i] };
+  }
+  mobs.sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0);
+
+  const resources = new Array<CanonicalResourceState>(state.resources.length);
+  for (let i = 0; i < state.resources.length; i++) {
+    resources[i] = { ...state.resources[i] };
+  }
+  resources.sort((a, b) => a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0);
+
+  const sourceQuestSummaries = state.questSummaries || [];
+  const questSummaries = new Array<CanonicalQuestSummary>(sourceQuestSummaries.length);
+  for (let i = 0; i < sourceQuestSummaries.length; i++) {
+    questSummaries[i] = { ...sourceQuestSummaries[i] };
+  }
+  questSummaries.sort((a, b) => a.userId - b.userId || (a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0));
+
+  let questInstances: CanonicalZoneQuestInstance[] | undefined;
+  if (state.questInstances) {
+    questInstances = new Array<CanonicalZoneQuestInstance>(state.questInstances.length);
+    for (let i = 0; i < state.questInstances.length; i++) {
+      const quest = state.questInstances[i];
+
+      const completedNodeIds = quest.completedNodeIds.slice().sort();
+
+      const boundRoles = new Array<Record<string, unknown>>(quest.boundRoles.length);
+      for (let j = 0; j < quest.boundRoles.length; j++) {
+        boundRoles[j] = { ...quest.boundRoles[j] };
+      }
+
+      const objectiveProgressKeys = Object.keys(quest.objectiveProgress).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+      const objectiveProgress: Record<string, string | number | boolean> = {};
+      for (let j = 0; j < objectiveProgressKeys.length; j++) {
+        const key = objectiveProgressKeys[j];
+        objectiveProgress[key] = quest.objectiveProgress[key];
+      }
+
+      questInstances[i] = {
+        ...quest,
+        completedNodeIds,
+        boundRoles,
+        objectiveProgress,
+      };
+    }
+    questInstances.sort((a, b) => a.instanceId < b.instanceId ? -1 : a.instanceId > b.instanceId ? 1 : 0);
+  }
+
   return {
     schema: "aurion.zone.state.v1",
     worldId: state.worldId,
@@ -105,23 +167,11 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
     tick: state.tick,
     ruleset: state.ruleset,
     combatSequence: state.combatSequence,
-    players: state.players.map(player => ({
-      ...player,
-      skillCooldowns: Object.fromEntries(Object.entries(player.skillCooldowns).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
-    })).sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
-    mobs: state.mobs.map(mob => ({ ...mob })).sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
-    resources: state.resources.map(resource => ({ ...resource })).sort((a, b) => a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0),
-    questSummaries: (state.questSummaries || []).map(quest => ({ ...quest })).sort((a, b) => a.userId - b.userId || (a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0)),
-    ...(state.questInstances
-      ? {
-          questInstances: state.questInstances.map(quest => ({
-            ...quest,
-            completedNodeIds: [...quest.completedNodeIds].sort(),
-            boundRoles: quest.boundRoles.map(role => ({ ...role })),
-            objectiveProgress: Object.fromEntries(Object.entries(quest.objectiveProgress).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
-          })).sort((a, b) => a.instanceId < b.instanceId ? -1 : a.instanceId > b.instanceId ? 1 : 0),
-        }
-      : {}),
+    players,
+    mobs,
+    resources,
+    questSummaries,
+    ...(questInstances ? { questInstances } : {}),
   };
 }
 

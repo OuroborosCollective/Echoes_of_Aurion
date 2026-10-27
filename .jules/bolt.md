@@ -40,3 +40,7 @@
 ## 2026-10-22 - Optimize Array Allocation and Matrix Lookups in Wolfram CAG Probes
 **Learning:** High-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity) suffer from garbage collection spikes when using `Map` lookups with string-concatenated keys or chained array methods like `.map().join()`. Using `Map` for grid coordinates forces O(N) string allocations and hash lookups.
 **Action:** Replace `Map` lookups and `Array.from()` with pre-allocated 2D arrays accessed via integer indices. Replace chained `.map().join()` operations with pre-allocated arrays populated via direct `for` loops or direct array instantiation for tuples.
+
+## 2026-10-27 - Remove Array.map and spread operator from Zone Canonical State Snapshots
+**Learning:** In high-frequency game loops, methods like `getCanonicalZoneState` or `sortCanonicalZoneState` that execute heavily rely on standard array mapping and filtering (`.map`, `[...arr]`). These chained dynamic array creations generate significant garbage collection spikes, heavily degrading performance when generating continuous state hashes or serializations.
+**Action:** Replaced dynamic `.map` calls and spread iterables within `sortCanonicalZoneState` with pre-allocated arrays (`new Array(length)`) populated via traditional `for` loops. Optimized sorting of inner properties by caching `Object.keys()` and manually cloning inner arrays/objects directly instead of utilizing `.map()` or spread operators `...`.
