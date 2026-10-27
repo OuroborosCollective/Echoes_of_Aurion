@@ -137,7 +137,7 @@ for (const spec of specs) {
 }
 
 test("native-auth migrations are still covered by the dedicated core schema pack", () => {
-  const source = readFileSync(".github/workflows/aurion-local-test-pack.yml", "utf8");
+  const source = readFileSync(".github/workflows/aurion-core-schema-gate.yml", "utf8");
   for (const event of ["pull_request", "push"]) {
     const paths = pathsForEvent(source, event);
     for (const file of [
