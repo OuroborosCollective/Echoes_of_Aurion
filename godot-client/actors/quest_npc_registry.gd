@@ -94,7 +94,7 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		planned[id] = {"resource": local, "assetId": catalog_asset_id, "sha": sha,
 			"npcId": raw.npcId, "position": position, "displayName": raw.displayName,
 			"allowModular": source == "audited-standard",
-			"identity": str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z)}
+			"identity": str(source) + ":" + str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z) + ":" + str(raw.displayName) + ":" + str(source == "audited-standard" and ModularVisual.available())}
 	var unchanged := _actors.size() == planned.size()
 	if unchanged:
 		for id in planned.keys():
@@ -110,7 +110,10 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		var packed: PackedScene = load(item.resource) as PackedScene
 		if packed == null:
 			return _reject(root, "npc_packed_scene_missing")
-		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if item.allowModular else null
+		var wants_modular: bool = item.allowModular and ModularVisual.available()
+		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if wants_modular else null
+		if wants_modular and modular == null:
+			return _reject(root, "npc_modular_create_failed")
 		var model_instance: Variant = modular if modular != null else packed.instantiate()
 		if not model_instance is Node3D:
 			if is_instance_valid(model_instance):
@@ -121,6 +124,8 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		actor.position = item.position
 		actor.set_meta("aurion_entity_id", id)
 		actor.set_meta("aurion_model_sha256", item.sha)
+		actor.set_meta("aurion_visual_source", "private-mcs-1.0" if modular != null else "catalog-glb")
+		actor.set_meta("aurion_catalog_asset_id", item.assetId)
 		root.add_child(actor)
 		_actors[id] = actor
 		actor.add_child(model_instance)
