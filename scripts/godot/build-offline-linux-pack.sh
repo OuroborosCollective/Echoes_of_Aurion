@@ -26,7 +26,7 @@ if [ -e "$OUT" ]; then
 fi
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd -P)"
-git archive HEAD godot-client | zstd -T0 -6 -o "$OUT/aurion-godot-project.tar.zst" >/dev/null
+git archive HEAD godot-client scripts/godot config/godot-toolchain.lock.json | zstd -T0 -6 -o "$OUT/aurion-godot-project.tar.zst" >/dev/null
 zstd -T0 -6 -f -o "$OUT/$ENGINE_FILE.zst" "$EDITOR_PATH" >/dev/null
 cp config/godot-toolchain.lock.json "$OUT/godot-toolchain.lock.json"
 cat > "$OUT/README.md" <<README
@@ -36,7 +36,7 @@ Exact Git source revision: $SOURCE_SHA
 Godot editor: $ENGINE_VERSION (Linux x86_64 only).
 
 The git-tracked godot-client project includes its project.godot, scenes, scripts,
-public add-ons, configuration, and committed assets. It does not contain .godot
+public add-ons, configuration, committed assets and original scripts/godot tooling. It does not contain .godot
 cache or private paid add-ons. This is not an Android APK or a live world.
 
 After downloading on Linux (requires zstd and tar):
