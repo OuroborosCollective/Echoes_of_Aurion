@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
-import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, Trophy, UsersRound, X } from "lucide-react";
+import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, Trophy, UsersRound, X, Bug } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { soundSynth } from "../xaurion/audio/SoundSynthesizer";
@@ -129,6 +129,10 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         soundSynth.playUiClick();
         openPanel("leaderboard");
       }} aria-label="Rangliste öffnen"><Trophy size={16}/><span>RANGLISTE</span></button>
+      <button type="button" aria-pressed={panel === "issues"} className={panel === "issues" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
+        soundSynth.playUiClick();
+        openPanel("issues");
+      }} aria-label="Fehlerberichte öffnen"><Bug size={16}/><span>FEHLER</span></button>
     </div>
 
     {message && !panel && <p className="community-feedback"><BellRing size={13}/>{message}</p>}
