@@ -26,6 +26,7 @@ function fixture() {
   put('godot-client/addons/virtual_joystick/plugin.cfg', '[plugin]\nname="joystick"\n');
   put('godot-client/actors/fake.gd', 'extends Node3D\n');
   put('scripts/godot/check.sh', '#!/bin/sh\n');
+  put('scripts/godot/THIRD_PARTY_GODOT_LICENSE.txt', 'Copyright (c) Godot Engine contributors.\n');
   put('config/godot-toolchain.lock.json', JSON.stringify({engine:{file:engineName,version:engineVersion,sha256:'a'.repeat(64)}}));
   const executable = put('.aurion-godot/editor/' + engineName, '#!/bin/sh\n[ "$1" = "--headless" ] && [ "$2" = "--version" ] && { echo 4.7.2.stable.official.ed1daf0bf; exit 0; }\nexit 2\n');
   chmodSync(executable, 0o755);
@@ -47,13 +48,14 @@ test('manual Linux pack is importable, includes pinned editor, excludes private 
     const r = run(dir, 'bash', [script, 'out/godot-linux']);
     assert.equal(r.status, 0, r.stderr || r.stdout);
     const out = join(dir, 'out/godot-linux');
-    assert.equal(checked(out, 'sha256sum', ['--check', 'SHA256SUMS']).split('\n').filter(x => x.endsWith('OK')).length, 5);
+    assert.equal(checked(out, 'sha256sum', ['--check', 'SHA256SUMS']).split('\n').filter(x => x.endsWith('OK')).length, 6);
     const names = checked(out, 'bash', ['-c', 'zstd -dc aurion-godot-project.tar.zst | tar -tf -']);
     assert.match(names, /godot-client\/project\.godot/);
     assert.match(names, /godot-client\/addons\/virtual_joystick\/plugin\.cfg/);
     assert.match(names, /scripts\/godot\/check\.sh/);
     assert.match(names, /config\/godot-toolchain\.lock\.json/);
     assert.doesNotMatch(names, /modular_character_system|PAID_VENDOR|\.godot\//);
+    assert.match(readFileSync(join(out,'LICENSE-Godot-4.7.2.txt'), 'utf8'), /Godot Engine contributors/);
     const source = JSON.parse(readFileSync(join(out,'manifest.json'), 'utf8'));
     assert.equal(source.sourceRevision, checked(dir, 'git', ['rev-parse', 'HEAD']));
     assert.equal(source.engineVersion, engineVersion);
