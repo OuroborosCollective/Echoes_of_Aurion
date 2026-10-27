@@ -43,7 +43,7 @@ static func available() -> bool:
 		var expected: Variant = files[rel]
 		if typeof(expected) != TYPE_STRING or expected.length() != 64:
 			return false
-		var absolute := VENDOR_ROOT + rel
+		var absolute: String = VENDOR_ROOT + str(rel)
 		if not FileAccess.file_exists(absolute) or FileAccess.get_sha256(absolute) != expected:
 			return false
 	return ResourceLoader.exists(ANIMATION_SCENE, "PackedScene") and ResourceLoader.exists(MALE_MODEL, "PackedScene") and ResourceLoader.exists(FEMALE_MODEL, "PackedScene")
