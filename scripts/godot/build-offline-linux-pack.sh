@@ -29,6 +29,7 @@ OUT="$(cd "$OUT" && pwd -P)"
 git archive HEAD godot-client scripts/godot config/godot-toolchain.lock.json | zstd -T0 -6 -o "$OUT/aurion-godot-project.tar.zst" >/dev/null
 zstd -T0 -6 -f -o "$OUT/$ENGINE_FILE.zst" "$EDITOR_PATH" >/dev/null
 cp config/godot-toolchain.lock.json "$OUT/godot-toolchain.lock.json"
+cp scripts/godot/THIRD_PARTY_GODOT_LICENSE.txt "$OUT/LICENSE-Godot-4.7.2.txt"
 cat > "$OUT/README.md" <<README
 # Aurion Godot Linux offline workspace
 
@@ -62,7 +63,7 @@ const result={schemaVersion:"aurion.godot-linux-offline-pack.v1",sourceRevision:
 fs.writeFileSync(path.join(dir,"manifest.json"),JSON.stringify(result,null,2)+"\n");'
 (
   cd "$OUT"
-  sha256sum manifest.json README.md godot-toolchain.lock.json aurion-godot-project.tar.zst "$ENGINE_FILE.zst" > SHA256SUMS
+  sha256sum manifest.json README.md LICENSE-Godot-4.7.2.txt godot-toolchain.lock.json aurion-godot-project.tar.zst "$ENGINE_FILE.zst" > SHA256SUMS
   sha256sum --check SHA256SUMS
 )
 echo "AURION_GODOT_OFFLINE_PACK_PASS $SOURCE_SHA $OUT"
