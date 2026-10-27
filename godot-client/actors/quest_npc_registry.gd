@@ -4,6 +4,7 @@ const STANDARD_SHA := "2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d34f3d94a0e
 const STANDARD_ASSET := "glb_2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d3"
 const VERSION := "aurion.quest-npc-visuals.v1"
 const PREPARED_VERSION := "aurion.godot-prepared-assets.v1"
+const ModularVisual = preload("res://actors/modular_npc_visual.gd")
 var diagnostic := "npc_not_loaded"
 var _actors: Dictionary = {}
 var _identities: Dictionary = {}
@@ -91,7 +92,8 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 			return _reject(root, "npc_prepared_model_missing")
 		var position := Vector3(float(coords.x) / 1000.0, 0.0, float(coords.z) / 1000.0)
 		planned[id] = {"resource": local, "assetId": catalog_asset_id, "sha": sha,
-			"npcId": raw.npcId, "position": position,
+			"npcId": raw.npcId, "position": position, "displayName": raw.displayName,
+			"allowModular": source == "audited-standard",
 			"identity": str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z)}
 	var unchanged := _actors.size() == planned.size()
 	if unchanged:
@@ -108,7 +110,8 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		var packed: PackedScene = load(item.resource) as PackedScene
 		if packed == null:
 			return _reject(root, "npc_packed_scene_missing")
-		var model_instance: Variant = packed.instantiate()
+		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if item.allowModular else null
+		var model_instance: Variant = modular if modular != null else packed.instantiate()
 		if not model_instance is Node3D:
 			if is_instance_valid(model_instance):
 				model_instance.free()
@@ -121,6 +124,8 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		root.add_child(actor)
 		_actors[id] = actor
 		actor.add_child(model_instance)
+		if modular != null and not bool(modular.call("is_character_valid")):
+			return _reject(root, "npc_modular_rig_invalid")
 		var clips := actor.find_children("*", "AnimationPlayer", true, false)
 		var meshes := actor.find_children("*", "MeshInstance3D", true, false)
 		if clips.size() != 1 or meshes.is_empty():
@@ -134,7 +139,11 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 			player.add_animation_library(name, library)
 			if library.has_animation("Idle"):
 				library.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
-		player.play("Idle")
+		if modular != null:
+			if not bool(modular.call("play_animation", &"Idle", 0.0)):
+				return _reject(root, "npc_modular_idle_missing")
+		else:
+			player.play("Idle")
 		actor.visible = true
 		_identities[id] = item.identity
 	diagnostic = ""
