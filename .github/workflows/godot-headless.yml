@@ -55,12 +55,6 @@ jobs:
           node --test scripts/godot/check.test.mjs
           node scripts/godot/check.mjs
           node scripts/godot/verify-evidence.mjs "$AURION_GODOT_EVIDENCE/evidence.json"
-      - name: Read Godot 4.7 script UID identities from real editor
-        if: always()
-        run: |
-          for file in godot-client/net/api/world_authoring_api.gd.uid godot-client/tests/test_world_authoring_contract.gd.uid godot-client/ui/screens/world_authoring_studio.gd.uid godot-client/world/confirmed_world_designs.gd.uid; do
-            if test -f "$file"; then printf 'AURION_WORLD_UID %s ' "$file"; cat "$file"; printf '\\n'; fi
-          done
       - uses: actions/upload-artifact@v4
         with:
           name: godot-headless-evidence-${{ github.event.pull_request.head.sha || github.sha }}
