@@ -64,16 +64,19 @@ def install(archive_path, project_path, expected=EXPECTED):
         target = project_path / "addons" / "modular_character_system"
         if target.parent.is_symlink() or target.is_symlink():
             raise ValueError("unsafe addons path")
-        receipt = {"version": "1.0.0", "sha256": actual, "count": len(members)}
+        receipt = {"version": "1.0.0", "sha256": actual, "count": len(members), "files": {rel: hashlib.sha256(archive.read(info)).hexdigest() for info, rel in members}}
         if target.exists():
             if not (target / ".aurion-mcs-install.json").is_file():
                 raise ValueError("unmanaged existing addon")
-            if json.loads((target / ".aurion-mcs-install.json").read_text()) != receipt:
+            recorded = json.loads((target / ".aurion-mcs-install.json").read_text())
+            if recorded != receipt and recorded != {key: receipt[key] for key in ("version", "sha256", "count")}:
                 raise ValueError("existing addon receipt mismatch")
             for info, rel in members:
                 f = target / rel
                 if f.is_symlink() or not f.is_file() or hashlib.sha256(f.read_bytes()).digest() != hashlib.sha256(archive.read(info)).digest():
                     raise ValueError("existing addon differs from purchased archive")
+            if recorded != receipt:
+                (target / ".aurion-mcs-install.json").write_text(json.dumps(receipt, sort_keys=True))
             return receipt
         target.parent.mkdir(parents=True, exist_ok=True)
         stage = Path(tempfile.mkdtemp(prefix=".mcs-stage-", dir=target.parent))
