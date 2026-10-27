@@ -8,6 +8,9 @@ The original Godot Control joystick script is copied with two small Aurion compa
 `class_name VirtualJoystick` because Godot 4.7.2 already has a built-in class
 with that name; and ignore touches when the control is hidden at `_input`.
 The scene still uses the upstream script by its pinned resource path.
+The original _ready() diagnostic requesting global mouse/touch emulation
+changes is omitted: Aurion keeps its existing ScrollContainer touch behavior.
+The physical-screen joystick handles InputEventScreenTouch directly.
 Colors/shapes are Godot-native Panel/StyleBoxFlat resources; no texture fork.
 use_input_actions=false means this visual control cannot inject duplicate
 global InputMap events. The separate shared input adapter reads .output only

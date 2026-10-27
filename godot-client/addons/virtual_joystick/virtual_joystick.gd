@@ -65,11 +65,9 @@ var _touch_index : int = -1
 # FUNCTIONS
 
 func _ready() -> void:
-	if ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch"):
-		printerr("The Project Setting 'emulate_mouse_from_touch' should be set to False")
-	if not ProjectSettings.get_setting("input_devices/pointing/emulate_touch_from_mouse"):
-		printerr("The Project Setting 'emulate_touch_from_mouse' should be set to True")
-	
+	# Aurion's established map ScrollContainer relies on default touch
+	# emulation. The visual-only joystick handles real touch events and
+	# must not demand global project setting overrides.
 	if not DisplayServer.is_touchscreen_available() and visibility_mode == Visibility_mode.TOUCHSCREEN_ONLY :
 		hide()
 	

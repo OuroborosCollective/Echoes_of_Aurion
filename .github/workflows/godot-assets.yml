@@ -63,6 +63,18 @@ jobs:
           sudo apt-get install -y xvfb xauth libgl1-mesa-dri
           xvfb-run -a -s '-screen 0 1280x1024x24' node scripts/godot/asset-import-runtime.mjs --render
           xvfb-run -a -s '-screen 0 1280x720x24' node scripts/godot/actor-runtime.mjs --render
+      - name: G20 real editor-generated script UID readback (diagnostic, no bypass)
+        if: always()
+        run: |
+          for file in godot-client/addons/virtual_joystick/virtual_joystick.gd.uid godot-client/app/input_adapter.gd.uid godot-client/tests/test_movement_input.gd.uid; do
+            if test -f "$file"; then
+              printf 'G20_UID_FILE=%s\\n' "$file"
+              cat "$file"
+              printf '\\nG20_UID_END\\n'
+            else
+              printf 'G20_UID_MISSING=%s\\n' "$file"
+            fi
+          done
       - name: Preserve source-bound asset evidence
         if: always()
         uses: actions/upload-artifact@v4
