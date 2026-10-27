@@ -12,7 +12,8 @@ const engineName = 'Godot_v4.7.2-stable_linux.x86_64';
 const engineVersion = '4.7.2.stable.official.ed1daf0bf';
 const hash = input => createHash('sha256').update(input).digest('hex');
 function run(cwd, command, args = [], options = {}) {
-  return spawnSync(command, args, { cwd, encoding: 'utf8', ...options });
+  // Nested fixture has its own HEAD; do not inherit outer CI revision.
+  return spawnSync(command, args, { cwd, encoding: 'utf8', env: { ...process.env, AURION_RELEASE_SHA: '' }, ...options });
 }
 function checked(cwd, command, args = []) {
   const r = run(cwd, command, args);
@@ -84,5 +85,14 @@ test('fail closed on altered editor binary / mismatching receipt', () => {
     const r = run(dir, 'bash', [script, 'out/godot-linux']);
     assert.notEqual(r.status, 0);
     assert.match(r.stderr + r.stdout, /checksum|sha|receipt|editor|version/i);
+  } finally { rmSync(dir, { recursive:true, force:true }); }
+});
+
+test('fail closed on explicitly requested wrong source revision', () => {
+  const {dir} = fixture();
+  try {
+    const r = run(dir, 'bash', [script, 'out/godot-linux'], {env: { ...process.env, AURION_RELEASE_SHA: 'f'.repeat(40) }});
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr + r.stdout, /Git SHA does not match/);
   } finally { rmSync(dir, { recursive:true, force:true }); }
 });
