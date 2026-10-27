@@ -67,6 +67,32 @@ func verify() -> void:
 			require(not joystick.visible, "joystick visible before authenticated zone")
 			require(joystick.get("use_input_actions") == false, "upstream joystick must not inject duplicate InputMap events")
 			require(joystick.get("deadzone_size") >= 10, "unbounded joystick deadzone")
+		if joystick != null:
+			var base: Control = joystick.get_node("Base") as Control
+			var center: Vector2 = base.get_global_rect().get_center()
+			var finger := InputEventScreenTouch.new()
+			finger.index = 17
+			finger.position = center
+			finger.pressed = true
+			joystick._input(finger)
+			require(not bool(joystick.get("is_pressed")) and joystick.get("output") == Vector2.ZERO, "hidden joystick hijacked login touch")
+			joystick.show() # Only inside this isolated G20 input fixture.
+			joystick._input(finger)
+			var drag := InputEventScreenDrag.new()
+			drag.index = 17
+			drag.position = center + Vector2(50, 0)
+			joystick._input(drag)
+			var axis: Vector2 = joystick.get("output")
+			require(bool(joystick.get("is_pressed")) and axis.x > 0.5 and absf(axis.y) < 0.01, "real screen drag did not drive native joystick")
+			var other := InputEventScreenDrag.new()
+			other.index = 18
+			other.position = center + Vector2(-50, 0)
+			joystick._input(other)
+			require((joystick.get("output") as Vector2).is_equal_approx(axis), "second finger stole primary joystick")
+			finger.pressed = false
+			joystick._input(finger)
+			require(not bool(joystick.get("is_pressed")) and joystick.get("output") == Vector2.ZERO, "finger-release leaves stuck native axis")
+			joystick.hide()
 		scene.queue_free()
 		await process_frame
 	zone.queue_free()
