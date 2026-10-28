@@ -63,6 +63,11 @@ func verify() -> void:
 	root.add_child(visual)
 	var valid := readback()
 	require(ConfirmedWorldDesigns.validate_readback(valid), "legitimate authoritative world readback rejected")
+	var json_readback: Variant = JSON.parse_string(JSON.stringify(valid))
+	require(ConfirmedWorldDesigns.validate_readback(json_readback), "valid HTTP JSON numeric fields were rejected after roundtrip")
+	var noninteger := readback()
+	noninteger.designs[0].version = 1.5
+	require(not ConfirmedWorldDesigns.validate_readback(noninteger), "fractional design version accepted")
 	require(visual.apply_confirmed(valid), "confirmed world readback not applied")
 	require(visual.revision == "a".repeat(64), "readback revision lost")
 	require(visual.get_child_count() == 1, "expected one read-only placement proxy")
@@ -149,6 +154,7 @@ func verify() -> void:
 	require(not WorldStudio._valid_apply_receipt({"receipt": receipt, "readback": readback()}, studio._pending_apply).is_empty(), "valid receipt fails binding: " + JSON.stringify(studio._pending_apply) + " receipt=" + JSON.stringify(receipt))
 	requests_before = transport.kinds.size()
 	studio._on_completed("worldApply", {"receipt": receipt, "readback": readback()})
+	require(WorldStudio._valid_apply_receipt({"receipt": receipt, "readback": readback()}, {"plan": "d".repeat(64), "key": "village.g01", "version": 1.5}).is_empty(), "fractional pending version accepted")
 	require(transport.kinds.size() == requests_before + 1 and transport.kinds[-1] == "readback",
 		"valid receipt did not request independent readback")
 	var mismatch := readback()
