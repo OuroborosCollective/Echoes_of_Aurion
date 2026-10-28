@@ -1,0 +1,31 @@
+name: Aurion Archive Accessibility
+on:
+  pull_request:
+    paths:
+      - "client/src/components/ArchiveDashboard.tsx"
+      - "client/src/components/ArchiveDashboard.test.tsx"
+      - ".github/workflows/aurion-archive-accessibility.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive-keyboard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Archive keyboard, selection and refresh regressions
+        run: pnpm exec vitest run client/src/components/ArchiveDashboard.test.tsx --reporter=verbose
+      - name: TypeScript check
+        run: pnpm check
