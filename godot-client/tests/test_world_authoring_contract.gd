@@ -49,7 +49,7 @@ func readback() -> Dictionary:
 	}
 
 func verify() -> void:
-	var trpc := {"result": {"data": {"json": {"planHash": "d".repeat(64), "requiresHumanConfirmation": true}}}}
+	var trpc := {"result": {"data": {"json": draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true})}}}
 	require(Api.unwrap_trpc(trpc).get("planHash") == "d".repeat(64), "standard tRPC response not decoded")
 	require(Api.unwrap_trpc({"result": {"data": {"planHash": "d".repeat(64)}}}).is_empty(), "non-SuperJSON envelope accepted")
 	require(Api.unwrap_trpc({"error": {"message": "FORBIDDEN"}}).is_empty(), "server admin rejection accepted")
@@ -113,14 +113,14 @@ func verify() -> void:
 	edited.title = "Edited after request while original worldPlan was in flight"
 	studio._draft.text = JSON.stringify(edited)
 	studio._invalidate_plan()
-	studio._on_completed("worldPlan", {"planHash": "d".repeat(64), "requiresHumanConfirmation": true})
+	studio._on_completed("worldPlan", draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
 	require(studio._plan_hash.is_empty() and studio._plan_draft.is_empty(),
 		"late worldPlan reply authorized an unverified edited draft")
 
 	# Synthetic wrong-plan receipt must not trigger world readback.
 	studio._draft.text = JSON.stringify(draft)
 	studio._plan()
-	studio._on_completed("worldPlan", {"planHash": "d".repeat(64), "requiresHumanConfirmation": true})
+	studio._on_completed("worldPlan", draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
 	require(studio._plan_hash == "d".repeat(64), "unchanged plan not accepted")
 	studio._apply()
 	var requests_before := transport.kinds.size()
@@ -139,7 +139,7 @@ func verify() -> void:
 	# Correct receipt still requires matching design hash in an independent GET.
 	studio._draft.text = JSON.stringify(draft)
 	studio._plan()
-	studio._on_completed("worldPlan", {"planHash": "d".repeat(64), "requiresHumanConfirmation": true})
+	studio._on_completed("worldPlan", draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
 	studio._apply()
 	receipt.planHash = "d".repeat(64)
 	requests_before = transport.kinds.size()
