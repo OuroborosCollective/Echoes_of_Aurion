@@ -6,6 +6,22 @@ const ConfirmedWorldDesigns = preload("res://world/confirmed_world_designs.gd")
 const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
 var failures: Array[String] = []
 
+class FakeAuth:
+	extends Node
+	func protected_response_allowed() -> bool:
+		return true
+	func session_generation() -> int:
+		return 1
+	func access_token() -> String:
+		return "a".repeat(43)
+
+class CaptureTransport:
+	extends Node
+	var kinds: Array[String] = []
+	func request(kind: String, _server: String, _connection: String, _payload: Dictionary = {}, _allow_local: bool = false) -> bool:
+		kinds.append(kind)
+		return true
+
 func require(ok: bool, why: String) -> void:
 	if not ok:
 		failures.append(why)
@@ -74,6 +90,72 @@ func verify() -> void:
 	studio._confirmed_revision = "f".repeat(64)
 	studio._on_completed("readback", readback())
 	require(seen.size() == 1, "mismatched post-apply revision was presented as confirmed")
+
+	# Synthetic regression: an old plan reply cannot authorize an edited draft.
+	var auth := FakeAuth.new()
+	var transport := CaptureTransport.new()
+	root.add_child(auth)
+	root.add_child(transport)
+	studio._auth = auth
+	studio._transport = transport
+	studio._server = "https://arelogic.space"
+	studio._connection = "synthetic-zone"
+	studio._confirmed_revision = ""
+	var draft := {
+		"schemaVersion": "aurion.world-design.v1",
+		"designKey": "village.g01", "version": 1, "title": "Confirmed Village",
+		"expectedCatalogRevision": "c".repeat(64), "placements": [placement()],
+	}
+	studio._draft.text = JSON.stringify(draft)
+	studio._plan()
+	require(transport.kinds == ["worldPlan"], "draft plan was not sent")
+	var edited := draft.duplicate(true)
+	edited.title = "Edited after request while original worldPlan was in flight"
+	studio._draft.text = JSON.stringify(edited)
+	studio._invalidate_plan()
+	studio._on_completed("worldPlan", {"planHash": "d".repeat(64), "requiresHumanConfirmation": true})
+	require(studio._plan_hash.is_empty() and studio._plan_draft.is_empty(),
+		"late worldPlan reply authorized an unverified edited draft")
+
+	# Synthetic wrong-plan receipt must not trigger world readback.
+	studio._draft.text = JSON.stringify(draft)
+	studio._plan()
+	studio._on_completed("worldPlan", {"planHash": "d".repeat(64), "requiresHumanConfirmation": true})
+	require(studio._plan_hash == "d".repeat(64), "unchanged plan not accepted")
+	studio._apply()
+	var requests_before := transport.kinds.size()
+	var receipt := {
+		"schemaVersion": "aurion.authoring-receipt.v1",
+		"receiptId": "authoring:world:fixture0001", "kind": "world", "action": "apply",
+		"targetId": "village.g01:v1", "actorUserId": 1,
+		"planHash": "e".repeat(64), "previousHash": null,
+		"resultHash": "b".repeat(64), "receiptHash": "e".repeat(64),
+		"humanConfirmed": true,
+	}
+	studio._on_completed("worldApply", {"receipt": receipt, "readback": readback()})
+	require(transport.kinds.size() == requests_before and studio._confirmed_revision.is_empty(),
+		"wrong-plan receipt triggered a confirmed readback")
+
+	# Correct receipt still requires matching design hash in an independent GET.
+	studio._draft.text = JSON.stringify(draft)
+	studio._plan()
+	studio._on_completed("worldPlan", {"planHash": "d".repeat(64), "requiresHumanConfirmation": true})
+	studio._apply()
+	receipt.planHash = "d".repeat(64)
+	requests_before = transport.kinds.size()
+	studio._on_completed("worldApply", {"receipt": receipt, "readback": readback()})
+	require(transport.kinds.size() == requests_before + 1 and transport.kinds[-1] == "readback",
+		"valid receipt did not request independent readback")
+	var mismatch := readback()
+	mismatch.designs[0].designHash = "f".repeat(64)
+	var projected_before := seen.size()
+	studio._on_completed("readback", mismatch)
+	require(seen.size() == projected_before, "revision-only match confirmed wrong design")
+	studio._on_completed("readback", readback())
+	require(seen.size() == projected_before + 1,
+		"matching independent world revision and design was not projected")
+	transport.queue_free()
+	auth.queue_free()
 	studio.close_session()
 	studio.queue_free()
 	if failures.is_empty():
