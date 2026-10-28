@@ -8,6 +8,8 @@ var _server := ""
 var _connection := ""
 var _plan_hash := ""
 var _plan_draft: Dictionary = {}
+var _plan_requested: Dictionary = {}
+var _pending_apply: Dictionary = {}
 var _draft: TextEdit
 var _brief: TextEdit
 var _info: Label
@@ -81,6 +83,8 @@ func open_studio() -> bool:
 func close_session() -> void:
 	_plan_hash = ""
 	_plan_draft.clear()
+	_plan_requested.clear()
+	_pending_apply.clear()
 	_confirmed_revision = ""
 	_busy = false
 	visible = false
@@ -94,6 +98,7 @@ func close_session() -> void:
 func _invalidate_plan() -> void:
 	_plan_hash = ""
 	_plan_draft.clear()
+	_plan_requested.clear()
 
 func _send(kind: String, payload: Dictionary = {}) -> bool:
 	if _busy or _transport == null or _connection.is_empty() or _auth == null or not _auth.protected_response_allowed():
@@ -119,10 +124,60 @@ func _plan() -> void:
 	if typeof(data) != TYPE_DICTIONARY:
 		_info.text = "Entwurf ist kein gültiges JSON-Objekt."
 		return
-	_send("worldPlan", data)
+	_invalidate_plan()
+	if _send("worldPlan", data):
+		_plan_requested = data.duplicate(true)
+
+static func _valid_plan_reply(data: Dictionary, draft: Dictionary) -> bool:
+	if draft.is_empty() or not Api.valid_plan_hash(data.get("planHash")) or data.get("requiresHumanConfirmation") != true:
+		return false
+	for key in ["schemaVersion", "designKey", "version", "title", "expectedCatalogRevision", "placements"]:
+		if not draft.has(key) or data.get(key) != draft[key]:
+			return false
+	var hashes: Variant = data.get("referencedAssetHashes")
+	if typeof(hashes) != TYPE_ARRAY or hashes.is_empty() or hashes.size() > 256:
+		return false
+	for digest in hashes:
+		if not Api.valid_plan_hash(digest):
+			return false
+	return true
+
+static func _valid_apply_receipt(data: Dictionary, expected: Dictionary) -> Dictionary:
+	var receipt: Variant = data.get("receipt")
+	var world: Variant = data.get("readback")
+	if expected.is_empty() or typeof(receipt) != TYPE_DICTIONARY or not ConfirmedWorldDesigns.validate_readback(world):
+		return {}
+	var fields := ["schemaVersion", "receiptId", "kind", "action", "targetId", "actorUserId", "planHash", "previousHash", "resultHash", "receiptHash", "humanConfirmed"]
+	if receipt.size() != fields.size():
+		return {}
+	for field in fields:
+		if not receipt.has(field):
+			return {}
+	if receipt.schemaVersion != "aurion.authoring-receipt.v1" or receipt.kind != "world" or receipt.action != "apply" or receipt.humanConfirmed != true:
+		return {}
+	if typeof(receipt.receiptId) != TYPE_STRING or receipt.receiptId.length() < 8 or receipt.receiptId.length() > 128 or typeof(receipt.actorUserId) != TYPE_INT or receipt.actorUserId <= 0:
+		return {}
+	if receipt.planHash != expected.get("plan") or receipt.targetId != expected.get("key", "") + ":v" + str(expected.get("version", -1)):
+		return {}
+	if not Api.valid_plan_hash(receipt.resultHash) or not Api.valid_plan_hash(receipt.receiptHash):
+		return {}
+	if receipt.previousHash != null and not Api.valid_plan_hash(receipt.previousHash):
+		return {}
+	for design in world.designs:
+		if design.designKey == expected.get("key") and design.version == expected.get("version") and design.designHash == receipt.resultHash:
+			return {"revision": world.revision, "key": design.designKey, "version": design.version, "design_hash": design.designHash}
+	return {}
+
+static func _confirmed_apply_readback(data: Dictionary, expected: Dictionary) -> bool:
+	if expected.is_empty() or not ConfirmedWorldDesigns.validate_readback(data) or data.revision != expected.get("revision"):
+		return false
+	for design in data.designs:
+		if design.designKey == expected.get("key") and design.version == expected.get("version") and design.designHash == expected.get("design_hash"):
+			return true
+	return false
 
 func _request_confirmation() -> void:
-	if not Api.valid_plan_hash(_plan_hash) or _plan_draft.is_empty() or _busy:
+	if not Api.valid_plan_hash(_plan_hash) or _plan_draft.is_empty() or _busy or not _pending_apply.is_empty():
 		return
 	var current: Variant = JSON.parse_string(_draft.text)
 	if typeof(current) != TYPE_DICTIONARY or JSON.stringify(current) != JSON.stringify(_plan_draft):
@@ -132,9 +187,16 @@ func _request_confirmation() -> void:
 	_confirm.popup_centered()
 
 func _apply() -> void:
-	if not Api.valid_plan_hash(_plan_hash) or _plan_draft.is_empty():
+	if not Api.valid_plan_hash(_plan_hash) or _plan_draft.is_empty() or _busy or not _pending_apply.is_empty():
 		return
+	var current: Variant = JSON.parse_string(_draft.text)
+	if typeof(current) != TYPE_DICTIONARY or current != _plan_draft:
+		_invalidate_plan()
+		return
+	var expected := {"plan": _plan_hash, "key": str(_plan_draft.get("designKey", "")), "version": _plan_draft.get("version", -1)}
 	var sent := _send("worldApply", {"draft": _plan_draft, "expectedPlanHash": _plan_hash, "confirmation": "APPLY_WORLD_DESIGN"})
+	if sent:
+		_pending_apply = expected
 	# Single-use confirmation even on timeout. A second attempt requires a fresh plan.
 	_plan_hash = ""
 	_plan_draft.clear()
@@ -163,29 +225,35 @@ func _on_completed(kind: String, data: Dictionary) -> void:
 			else:
 				_info.text = "KI-Entwurf nicht verwendbar."
 		"worldPlan":
-			if Api.valid_plan_hash(data.get("planHash")) and data.get("requiresHumanConfirmation") == true:
+			var draft: Variant = JSON.parse_string(_draft.text)
+			if typeof(draft) == TYPE_DICTIONARY and draft == _plan_requested and _valid_plan_reply(data, _plan_requested):
 				_plan_hash = data.planHash
-				var draft: Variant = JSON.parse_string(_draft.text)
-				_plan_draft = draft.duplicate(true) if typeof(draft) == TYPE_DICTIONARY else {}
+				_plan_draft = _plan_requested.duplicate(true)
 				_info.text = "Plan serverseitig geprüft: " + _plan_hash
 			else:
-				_info.text = "Ungültiger Plan von Aurion."
+				_invalidate_plan()
+				_info.text = "Planantwort weicht vom beantragten Entwurf ab."
+			_plan_requested.clear()
 		"worldApply":
-			var receipt: Variant = data.get("receipt")
-			var readback: Variant = data.get("readback")
-			if typeof(receipt) == TYPE_DICTIONARY and typeof(readback) == TYPE_DICTIONARY and ConfirmedWorldDesigns.validate_readback(readback):
-				_confirmed_revision = str(readback.get("revision", ""))
-				_info.text = "Apply-Receipt erhalten. Prüfe Weltstand unabhängig."
+			var matched := _valid_apply_receipt(data, _pending_apply)
+			if not matched.is_empty():
+				_pending_apply = matched
+				_confirmed_revision = str(matched.revision)
+				_info.text = "Apply-Receipt passt zum Plan. Prüfe Weltstand unabhängig."
 				_readback()
 			else:
-				_info.text = "Kein gültiger Apply-Receipt; Status ungeklärt."
+				_pending_apply.clear()
+				_confirmed_revision = ""
+				_info.text = "Apply-Ausgang ungeklärt; kein automatischer Retry."
 		"readback":
 			if ConfirmedWorldDesigns.validate_readback(data):
 				if _confirmed_revision.is_empty():
 					_info.text = "Vorhandener Aurion-Weltstand gelesen: " + data.revision
 					emit_signal("confirmed_world", data)
-				elif data.revision == _confirmed_revision:
+				elif _confirmed_apply_readback(data, _pending_apply):
 					_info.text = "Aurion-Apply unabhängig bestätigt: " + data.revision
+					_pending_apply.clear()
+					_confirmed_revision = ""
 					emit_signal("confirmed_world", data)
 				else:
 					_info.text = "Apply-Revision nicht bestätigt; Welt bleibt unverändert."
