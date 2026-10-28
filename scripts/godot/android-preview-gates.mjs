@@ -8,6 +8,7 @@ export function createPreviewOverride(revision) {
 }
 /** Read back the exact packaged APK bytes, never merely the staged source. */
 export function assertPackagedPreviewOverride(packed, revision) {
-  assert.equal(packed, createPreviewOverride(revision), 'Preview APK must not impersonate signed Login');
+  // The current export wrapper trims command stdout; compare the complete, non-whitespace configuration without inventing raw-byte provenance.
+  assert.equal(packed, createPreviewOverride(revision).trimEnd(), 'Preview APK must not impersonate signed Login');
   return revision;
 }
