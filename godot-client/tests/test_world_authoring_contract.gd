@@ -90,10 +90,34 @@ func verify() -> void:
 	visual.queue_free()
 	var studio := WorldStudio.new()
 	root.add_child(studio)
+	# A real in-game studio must not cover or consume input across the 3D world.
+	# This is deliberately RED until the editor uses a right-side capture-only dock.
+	var dock: Control = studio.get_node_or_null("WorldStudioDock") as Control
+	require(studio.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"full-screen worldstudio overlay intercepts gameplay input outside the dock")
+	require(dock != null, "live worldstudio has no independent side-by-side editor dock")
+	if dock != null:
+		require(dock.mouse_filter == Control.MOUSE_FILTER_STOP,
+			"editor dock must capture authoring controls without leaking to gameplay")
+		require(is_equal_approx(dock.anchor_right, 1.0), "editor dock must remain on the right edge")
+		var wide: bool = studio.get_viewport_rect().size.x >= 960.0
+		if wide:
+			require(dock.anchor_left >= 0.4 and dock.anchor_left <= 0.65,
+				"wide live 3D viewport is not left visible beside human/AI editor")
+		else:
+			require(is_equal_approx(dock.anchor_left, 0.0),
+				"compact fallback must preserve usable editor controls")
+		studio._layout_dock(1280.0)
+		require(is_equal_approx(dock.anchor_left, 0.55), "wide 3D/editor split anchor must be stable")
+		studio._layout_dock(800.0)
+		require(is_equal_approx(dock.anchor_left, 0.0), "small viewport fallback must remain usable")
+		studio._layout_dock()
 	var seen: Array[Dictionary] = []
 	studio.confirmed_world.connect(func(value: Dictionary) -> void: seen.append(value))
 	studio._on_completed("readback", readback())
 	require(seen.size() == 1, "existing confirmed designs were not projected on first readback")
+	studio._on_completed("readback", readback())
+	require(seen.size() == 1, "unchanged world revision emitted duplicate 3D updates")
 	studio._confirmed_revision = "f".repeat(64)
 	studio._on_completed("readback", readback())
 	require(seen.size() == 1, "mismatched post-apply revision was presented as confirmed")
@@ -173,9 +197,41 @@ func verify() -> void:
 	studio._on_completed("readback", JSON.parse_string(JSON.stringify(readback())))
 	require(seen.size() == projected_before + 1,
 		"matching independent world revision and design was not projected")
+	# Passive polling must be authenticated read-only and pause during uncertain Apply,
+	# an approved plan, or a closed studio. No automatic Apply is ever dispatched.
+	studio.visible = true
+	studio._pending_apply.clear()
+	studio._confirmed_revision = ""
+	studio._plan_hash = ""
+	studio._plan_requested.clear()
+	studio._busy = false
+	var before_poll := transport.kinds.size()
+	studio._poll_readback()
+	require(transport.kinds.size() == before_poll + 1 and transport.kinds[-1] == "readback",
+		"automatic world refresh did not use the read-only endpoint")
+	studio._on_completed("readback", readback())
+	studio._pending_apply = {"plan": "unresolved-apply"}
+	before_poll = transport.kinds.size()
+	studio._poll_readback()
+	require(transport.kinds.size() == before_poll, "background refresh bypassed uncertain apply")
+	studio._pending_apply.clear()
+	studio._plan_hash = "d".repeat(64)
+	studio._poll_readback()
+	require(transport.kinds.size() == before_poll, "background refresh bypassed approved human plan")
+	studio._plan_hash = ""
+	studio._refresh_timer.start()
+	studio._hide_studio()
+	require(studio._refresh_timer.is_stopped(), "hidden studio continued network polling")
+	studio._poll_readback()
+	require(transport.kinds.size() == before_poll, "hidden studio sent a background request")
+	# Even a read-only network failure cannot erase a prepared world-plan hash.
+	studio._plan_hash = "d".repeat(64)
+	studio._on_failed("readback", "WORLD_AUTHORING_HTTP_REJECTED")
+	require(studio._plan_hash == "d".repeat(64), "read-only refresh error invalidated human plan")
 	transport.queue_free()
 	auth.queue_free()
 	studio.close_session()
+	require(studio._refresh_timer.is_stopped(), "logout left world polling active")
 	studio.queue_free()
 	if failures.is_empty():
 		print("AURION_WORLD_AUTHORING_CONTRACT_PASS: strict tRPC and confirmed-only native world proxies")
