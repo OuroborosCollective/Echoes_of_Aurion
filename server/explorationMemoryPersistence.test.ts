@@ -1,8 +1,9 @@
 import { createPool } from "mysql2/promise";
-import { afterAll,beforeAll,beforeEach,describe,expect,it } from "vitest";
-import { eq } from "drizzle-orm";
+import { afterAll,afterEach,beforeAll,beforeEach,describe,expect,it } from "vitest";
+import { and,eq } from "drizzle-orm";
 import { getDb, resolveAndRecordGlobalWorldEpoch, recordWorldChunkDelta } from "./db";
-import { aurionExplorationMemoryProjections } from "../drizzle/schema";
+import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionExplorationMemoryProjections, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests } from "../drizzle/schema";
+import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { createExplorationMemoryRecord } from "../shared/explorationMemoryProtocol";
 import { recordExplorationDiscovery, readExplorationMemory } from "./explorationMemoryPersistence";
 import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
@@ -23,6 +24,35 @@ suite("Issue 323 Phase H exploration memory",()=>{
     await pool.query("TRUNCATE TABLE aurionExplorationMemoryProjections");
   });
   afterAll(async()=>{if(pool){await pool.query("TRUNCATE TABLE aurionExplorationMemoryProjections");await pool.end();}});
+  // This suite and worldEpochReaction.e2e share an isolated MariaDB database in CI.
+  // Keep the epoch receipt assertions strict: delete our own persisted fixtures,
+  // rather than accepting unrelated chunk receipts in the next Vitest process.
+  afterEach(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not initialized");
+    const worldId = "echoes-of-aurion-global";
+    const ownChunk = and(
+      eq(aurionWorldChunkDeltas.worldId, worldId),
+      eq(aurionWorldChunkDeltas.chunkX, 0),
+      eq(aurionWorldChunkDeltas.chunkZ, 0),
+      eq(aurionWorldChunkDeltas.targetId, "exploration-memory-proof-house"),
+    );
+    await pool.query("TRUNCATE TABLE aurionExplorationMemoryProjections");
+    await db.delete(aurionWorldChunkDeltas).where(ownChunk);
+    await db.delete(aurionSettlementRebirthCandidates).where(eq(aurionSettlementRebirthCandidates.worldId, worldId));
+    await db.delete(aurionRuinOrigins);
+    await db.delete(aurionCivilizationHistoryEvents).where(eq(aurionCivilizationHistoryEvents.worldId, worldId));
+    await db.delete(aurionActiveCivilizations).where(eq(aurionActiveCivilizations.worldId, worldId));
+    await db.delete(aurionWorldEpochReactions).where(eq(aurionWorldEpochReactions.worldId, worldId));
+    await db.delete(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.worldId, worldId));
+    await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, worldId));
+    await db.delete(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, worldId));
+    await db.delete(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, worldId));
+    await db.delete(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, worldId));
+    // Explicit readback catches cleanup regressions before the next E2E job.
+    expect(await db.select({ id: aurionWorldChunkDeltas.id }).from(aurionWorldChunkDeltas).where(ownChunk)).toHaveLength(0);
+  });
+
   it("derives stable memory hashes and never rewrites first discovery provenance",async()=>{
     const db=await getDb(); if(!db) throw new Error("Database not initialized");
     const first=await createExplorationMemoryRecord({
