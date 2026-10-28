@@ -11,6 +11,7 @@ test('public project exports exclude installed private MCS and Godot caches', ()
   assert.equal(publicProjectCopyFilter('/project/addons/modular_character_system'), false);
   assert.equal(publicProjectCopyFilter('/project/addons/modular_character_system/Assets/Models/model.gltf'), false);
   assert.equal(publicProjectCopyFilter('/project/.godot/imported/model.scn'), false);
+  assert.equal(publicProjectCopyFilter('/project/private-mcs/aurion-mcs.pck'), false);
   assert.equal(publicProjectCopyFilter('/project/actors/modular_npc_visual.gd'), true);
 });
 
@@ -20,11 +21,14 @@ test('public project copy retains adapter while excluding private contents', asy
     const source = join(temp, 'source'), dest = join(temp, 'dest');
     await mkdir(join(source, 'addons/modular_character_system'), {recursive: true});
     await mkdir(join(source, 'actors'), {recursive: true});
+    await mkdir(join(source, 'private-mcs'), {recursive: true});
     await writeFile(join(source, 'addons/modular_character_system', 'private.txt'), 'fixture');
     await writeFile(join(source, 'actors', 'adapter.gd'), 'adapter fixture');
+    await writeFile(join(source, 'private-mcs', 'aurion-mcs.pck'), 'private fixture');
     await cp(source, dest, {recursive: true, filter: publicProjectCopyFilter});
     assert.equal(await readFile(join(dest, 'actors', 'adapter.gd'), 'utf8'), 'adapter fixture');
     await assert.rejects(readFile(join(dest, 'addons/modular_character_system', 'private.txt')), {code: 'ENOENT'});
+    await assert.rejects(readFile(join(dest, 'private-mcs', 'aurion-mcs.pck')), {code: 'ENOENT'});
   } finally { await rm(temp, {recursive: true, force: true}); }
 });
 

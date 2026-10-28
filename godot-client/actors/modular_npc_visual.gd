@@ -20,35 +20,28 @@ const SKIN_TONES := [
 	Color(0.85, 0.60, 0.43), Color(0.43, 0.24, 0.14),
 ]
 
-const RECEIPT := "res://addons/modular_character_system/.aurion-mcs-install.json"
-const VENDOR_ROOT := "res://addons/modular_character_system/"
-const PINNED_ZIP_SHA := "ac72db1a5ff6985e19f1c07e4d1404560684f07aa7b9268382be8bcd2c635788"
-## SHA-256 of the deterministic installer receipt generated from that exact archive.
-## The receipt is untrusted input: its embedded archive hash is not proof by itself.
-const PINNED_RECEIPT_SHA := "c231b0c5c81157335f0a388c3190eb3d526b5ff7fac0eea9cb7574dffca4c4ab"
+const PrivatePackPin = preload("res://actors/private_mcs_pack_pin.gd")
+static var _pack_mounted := false
 
-## Never trust vendor directory presence or an unsigned/unverified receipt alone.
-## Byte-check the complete manifest (including GLTF BIN and texture dependencies).
+## A receipt beside mutable imported resources is not a trust anchor. Only a
+## pack whose digest is compiled into this application may be mounted. The
+## private builder must validate every overlay and collision before pinning it.
 static func available() -> bool:
-	if not FileAccess.file_exists(RECEIPT) or FileAccess.get_sha256(RECEIPT) != PINNED_RECEIPT_SHA:
+	if PrivatePackPin.SHA256.length() != 64 or not FileAccess.file_exists(PrivatePackPin.PATH):
 		return false
-	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(RECEIPT))
-	if typeof(raw) != TYPE_DICTIONARY or raw.get("version") != "1.0.0" or raw.get("sha256") != PINNED_ZIP_SHA:
+	if FileAccess.get_sha256(PrivatePackPin.PATH) != PrivatePackPin.SHA256:
 		return false
-	var files: Variant = raw.get("files")
-	if typeof(files) != TYPE_DICTIONARY or files.size() != raw.get("count") or files.is_empty() or files.size() > 400:
-		return false
-	var regex := RegEx.new()
-	regex.compile("^[A-Za-z0-9_./ -]+$")
-	for rel in files.keys():
-		if typeof(rel) != TYPE_STRING or rel.is_empty() or rel.begins_with("/") or rel.contains("..") or rel.contains("\\") or regex.search(rel) == null:
+	if not _pack_mounted:
+		# Refuse a host that already exposes the vendor resources, because a
+		# previously cached scene could bypass the verified pack.
+		if ResourceLoader.exists(ANIMATION_SCENE) or ResourceLoader.exists(MALE_MODEL) or ResourceLoader.exists(FEMALE_MODEL):
 			return false
-		var expected: Variant = files[rel]
-		if typeof(expected) != TYPE_STRING or expected.length() != 64:
+		for resource_path in PrivatePackPin.RESOURCE_PATHS:
+			if ResourceLoader.has_cached(resource_path):
+				return false
+		if not ProjectSettings.load_resource_pack(PrivatePackPin.PATH, true):
 			return false
-		var absolute: String = VENDOR_ROOT + str(rel)
-		if not FileAccess.file_exists(absolute) or FileAccess.get_sha256(absolute) != expected:
-			return false
+		_pack_mounted = true
 	return ResourceLoader.exists(ANIMATION_SCENE, "PackedScene") and ResourceLoader.exists(MALE_MODEL, "PackedScene") and ResourceLoader.exists(FEMALE_MODEL, "PackedScene")
 
 ## Stable, cosmetic ONLY, independent of iteration, machine time and RNG.

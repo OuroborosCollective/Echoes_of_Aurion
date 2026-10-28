@@ -157,3 +157,4 @@ scripts/__pycache__/
 # Private owner-purchased imp0str.dev Modular Character System 1.0.
 # Do not publish source, scenes, meshes or textures to public GitHub.
 /godot-client/addons/modular_character_system/
+/godot-client/private-mcs/

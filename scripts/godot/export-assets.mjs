@@ -13,7 +13,7 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 /** Public export paths must never copy locally installed licensed MCS source. */
 export function publicProjectCopyFilter(path) {
   const parts = path.split(/[\\/]+/);
-  return !parts.includes('.godot') && !parts.some((part, index) =>
+  return !parts.includes('.godot') && !parts.includes('private-mcs') && !parts.some((part, index) =>
     part === 'modular_character_system' && parts[index - 1] === 'addons');
 }
 

@@ -21,15 +21,15 @@ The archive includes source files and checked-in assets; Godot regenerates `.god
 
 ## Owner-purchased Modular Character System
 
-**Aurion may use the purchased MCS 1.0 indefinitely under its license.** The separate vendor developer toolkit is not bundled in downloadable public GitHub artifacts. Once [PR #1194](https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1194) is integrated, the archive includes our own `scripts/godot/stage_modular_npc.py` and NPC adapter; place the owner's original purchased `ModularCharacterSystem.zip` only in the **private, local** workspace and run:
+The vendor developer toolkit is not bundled in downloadable public GitHub artifacts. Copying the original archive into the project does not activate MCS. The optional private acceptance builds a disposable, digest-bound pack from the purchased archive and requires the full repository checkout, including the audited standard GLB; this smaller offline archive alone does not contain that source asset:
 
 ```bash
-python3 scripts/godot/stage_modular_npc.py --archive /private/path/ModularCharacterSystem.zip
-./Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
-./Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_modular_npc_private_runtime.gd
+python3 scripts/godot/private_mcs_acceptance.py \
+  --archive /private/path/ModularCharacterSystem.zip \
+  --godot /private/path/Godot_v4.7.2-stable_linux.x86_64
 ```
 
-Never push the paid `godot-client/addons/modular_character_system/` source to public Git, nor upload its development toolkit as a public Actions artifact. The licensed finished-game runtime has its own downstream packaging/signing review.
+Never push the paid `godot-client/addons/modular_character_system/` source or `godot-client/private-mcs/` package to public Git, nor upload the developer toolkit or private pack as public artifacts. The finished-game runtime requires separate license, Android packaging, signing and device review.
 
 ## Automatic safety checks preserved
 
