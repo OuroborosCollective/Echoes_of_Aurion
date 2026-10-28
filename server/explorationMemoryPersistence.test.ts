@@ -1,12 +1,13 @@
 import { createPool } from "mysql2/promise";
-import { afterAll,beforeAll,beforeEach,describe,expect,it } from "vitest";
-import { eq } from "drizzle-orm";
+import { afterAll,afterEach,beforeAll,beforeEach,describe,expect,it } from "vitest";
+import { and,eq } from "drizzle-orm";
 import { getDb, resolveAndRecordGlobalWorldEpoch, recordWorldChunkDelta } from "./db";
-import { aurionExplorationMemoryProjections } from "../drizzle/schema";
+import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionExplorationMemoryProjections, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests } from "../drizzle/schema";
+import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { createExplorationMemoryRecord } from "../shared/explorationMemoryProtocol";
 import { recordExplorationDiscovery, readExplorationMemory } from "./explorationMemoryPersistence";
 import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
-import { AuthoritativeMovementZone } from "./zoneRuntime";
+import { globalZoneRegistry } from "./zoneRuntime";
 
 const suite=process.env.AURION_EXPLORATION_MEMORY_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 
@@ -23,6 +24,35 @@ suite("Issue 323 Phase H exploration memory",()=>{
     await pool.query("TRUNCATE TABLE aurionExplorationMemoryProjections");
   });
   afterAll(async()=>{if(pool){await pool.query("TRUNCATE TABLE aurionExplorationMemoryProjections");await pool.end();}});
+  // This suite and worldEpochReaction.e2e share an isolated MariaDB database in CI.
+  // Keep the epoch receipt assertions strict: delete our own persisted fixtures,
+  // rather than accepting unrelated chunk receipts in the next Vitest process.
+  afterEach(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not initialized");
+    const worldId = "echoes-of-aurion-global";
+    const ownChunk = and(
+      eq(aurionWorldChunkDeltas.worldId, worldId),
+      eq(aurionWorldChunkDeltas.chunkX, 0),
+      eq(aurionWorldChunkDeltas.chunkZ, 0),
+      eq(aurionWorldChunkDeltas.targetId, "exploration-memory-proof-house"),
+    );
+    await pool.query("TRUNCATE TABLE aurionExplorationMemoryProjections");
+    await db.delete(aurionWorldChunkDeltas).where(ownChunk);
+    await db.delete(aurionSettlementRebirthCandidates).where(eq(aurionSettlementRebirthCandidates.worldId, worldId));
+    await db.delete(aurionRuinOrigins);
+    await db.delete(aurionCivilizationHistoryEvents).where(eq(aurionCivilizationHistoryEvents.worldId, worldId));
+    await db.delete(aurionActiveCivilizations).where(eq(aurionActiveCivilizations.worldId, worldId));
+    await db.delete(aurionWorldEpochReactions).where(eq(aurionWorldEpochReactions.worldId, worldId));
+    await db.delete(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.worldId, worldId));
+    await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, worldId));
+    await db.delete(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, worldId));
+    await db.delete(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, worldId));
+    await db.delete(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, worldId));
+    // Explicit readback catches cleanup regressions before the next E2E job.
+    expect(await db.select({ id: aurionWorldChunkDeltas.id }).from(aurionWorldChunkDeltas).where(ownChunk)).toHaveLength(0);
+  });
+
   it("derives stable memory hashes and never rewrites first discovery provenance",async()=>{
     const db=await getDb(); if(!db) throw new Error("Database not initialized");
     const first=await createExplorationMemoryRecord({
@@ -56,20 +86,24 @@ suite("Issue 323 Phase H exploration memory",()=>{
     const db = await getDb();
     if (!db) throw new Error("Database not initialized");
     const worldId = "echoes-of-aurion-global";
-    const chunk = { x: 777702, z: -777702 };
+    const chunk = { x: 0, z: 0 };
     const userId = 2146999970;
 
-    const causalZone = new AuthoritativeMovementZone("observatory_threshold" as any);
-    causalZone.join({
-      userId: userId + 1,
-      socket: { readyState: 1, OPEN: 1, send: () => {}, close: () => {} } as any,
+    // Isolated synthetic socket; the actual authoritative zone, tick recorder,
+    // MariaDB persistence, epoch root and readback are exercised together.
+    const causalZone = globalZoneRegistry.get("observatory_threshold");
+    const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} } as any;
+    const connected = causalZone.join({
+      userId,
+      socket,
       combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" },
-    });
+    }).connectionId;
     const causalIntents = [...causalZone.getPendingIntents()];
     causalZone.tick();
     const causalReceipt = causalZone.getLatestReceipt();
     if (!causalReceipt) throw new Error("CAUSAL_RECEIPT_EXPECTED");
     const causalAdapter = new MariaDBCausalPersistenceAdapter();
+    await causalZone.flushEvidencePersistence();
     await causalAdapter.saveReceipt(causalReceipt, causalIntents);
 
     await recordWorldChunkDelta({
@@ -89,15 +123,50 @@ suite("Issue 323 Phase H exploration memory",()=>{
     });
     const epoch = epochResult.plan.epoch;
 
+    // A confirmed world chunk does not prove that another user observed it.
+    await expect(recordExplorationDiscovery(userId + 7, {
+      epoch,
+      chunkX: chunk.x,
+      chunkZ: chunk.z,
+      observedAtLogicalFrame: 999999,
+    })).rejects.toThrow("EXPLORATION_ACTOR_NOT_CONNECTED");
+    expect((await readExplorationMemory(userId + 7, worldId, epoch)).records).toHaveLength(0);
+
+    await expect(recordExplorationDiscovery(userId, {
+      epoch, chunkX: chunk.x + 1, chunkZ: chunk.z, observedAtLogicalFrame: 999999,
+    })).rejects.toThrow("EXPLORATION_ACTOR_CHUNK_MISMATCH");
+
+    const lateConnection = causalZone.join({ userId: userId + 1, socket }).connectionId;
+    await expect(recordExplorationDiscovery(userId + 1, {
+      epoch, chunkX: chunk.x, chunkZ: chunk.z, observedAtLogicalFrame: 999999,
+    })).rejects.toThrow("EXPLORATION_ACTOR_NOT_IN_EPOCH");
+
+    // A legacy hash only proves row integrity. It must not be promoted to an
+    // actor observation or rewritten under the new contract.
+    const legacy = await createExplorationMemoryRecord({
+      userId, worldId, worldEpoch: epoch, chunkX: chunk.x, chunkZ: chunk.z,
+      firstDiscoveryReceiptHash: "sha256:" + "1".repeat(64),
+      latestConfirmedVisitSequence: 999999,
+      latestProjectionHash: "sha256:" + "2".repeat(64),
+      sourceRevision: causalReceipt.sourceRevision,
+    });
+    await db.insert(aurionExplorationMemoryProjections).values({ id: "exp_legacy", ...legacy });
+    await expect(recordExplorationDiscovery(userId, {
+      epoch, chunkX: chunk.x, chunkZ: chunk.z, observedAtLogicalFrame: 999999,
+    })).rejects.toThrow("EXPLORATION_MEMORY_PROVENANCE_MISMATCH");
+    expect((await readExplorationMemory(userId, worldId, epoch)).records).toEqual([legacy]);
+    await db.delete(aurionExplorationMemoryProjections).where(eq(aurionExplorationMemoryProjections.id, "exp_legacy"));
+
     const first = await recordExplorationDiscovery(userId, {
       epoch,
       chunkX: chunk.x,
       chunkZ: chunk.z,
-      observedAtLogicalFrame: 10,
+      observedAtLogicalFrame: 999999,
     });
     expect(first.status).toBe("VERIFIED");
     if (first.status !== "VERIFIED") throw new Error("EXPLORATION_MEMORY_NOT_VERIFIED");
-    expect(first.memory.firstDiscoveryReceiptHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(first.memory.firstDiscoveryReceiptHash).toBe(causalReceipt.receiptHash);
+    expect(first.memory.latestConfirmedVisitSequence).toBe(causalReceipt.tick);
     expect(first.memory.latestProjectionHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first.memory.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
 
@@ -109,10 +178,29 @@ suite("Issue 323 Phase H exploration memory",()=>{
     });
     expect(replay.status).toBe("VERIFIED");
     expect(replay.memory.firstDiscoveryReceiptHash).toBe(first.memory.firstDiscoveryReceiptHash);
-    expect(replay.memory.latestConfirmedVisitSequence).toBe(10);
+    expect(replay.memory.latestConfirmedVisitSequence).toBe(causalReceipt.tick);
 
     const read = await readExplorationMemory(userId, worldId, epoch);
     expect(read.records).toHaveLength(1);
     expect(read.records[0]).toEqual(first.memory);
+
+    // Once the world epoch advances, the old snapshot cannot be used as a new
+    // current discovery. The prior stored record remains independently readable.
+    const nextIntents = [...causalZone.getPendingIntents()];
+    causalZone.tick();
+    const nextReceipt = causalZone.getLatestReceipt();
+    if (!nextReceipt) throw new Error("CAUSAL_RECEIPT_EXPECTED");
+    await causalZone.flushEvidencePersistence();
+    await causalAdapter.saveReceipt(nextReceipt, nextIntents);
+    await resolveAndRecordGlobalWorldEpoch({
+      requestedByUserId: userId, idempotencyKey: "exploration-memory-e2e:epoch:0002",
+      now: new Date("2026-01-01T00:00:01.000Z"),
+    });
+    await expect(recordExplorationDiscovery(userId, {
+      epoch, chunkX: chunk.x, chunkZ: chunk.z, observedAtLogicalFrame: 1,
+    })).rejects.toThrow("EXPLORATION_WORLD_EPOCH_STALE");
+    expect((await readExplorationMemory(userId, worldId, epoch)).records).toEqual([first.memory]);
+    causalZone.leave(lateConnection);
+    causalZone.leave(connected);
   });
 });
