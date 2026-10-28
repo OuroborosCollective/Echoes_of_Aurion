@@ -66,7 +66,11 @@ try {
   const packagedTerrain3D = await readTerrain3dApk(apk, prepared.terrain3d, entries, 'debug');
   await writeFile(join(output, 'packaged-assets.json'), JSON.stringify(packagedAssets, null, 2) + '\n');
   assert.match(manifest, /screenOrientation.*0x0/, 'landscape not encoded in manifest');
-  const override = run('unzip', ['-p', apk, 'assets/override.cfg']);
+  // Capture the binary ZIP entry through a non-trimming subprocess.
+  // toolchain.run() normalizes stdout, which loses the final newline.
+  const packedConfig = spawnSync('unzip', ['-p', apk, 'assets/override.cfg'], { env, encoding: 'utf8', timeout: 30000 });
+  assert.ok(!packedConfig.error && packedConfig.status === 0, 'failed to read the packaged configuration');
+  const override = packedConfig.stdout;
   assertPackagedPreviewOverride(override, revision);
   assert.ok(!entries.some(path => path.startsWith('assets/tests/')), 'test scripts shipped');
   const readback = { 'badging.log': badging, 'manifest.log': manifest, 'signature.log': signature, 'entries.log': entries.join('\n'), 'packaged-build.log': override };

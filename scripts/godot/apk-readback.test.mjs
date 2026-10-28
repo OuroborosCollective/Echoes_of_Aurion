@@ -39,6 +39,8 @@ test('Preview APK is strictly offline while separate signed Login path remains e
   const preview = createPreviewOverride(rev);
   assert.ok(preview.includes('native_auth_start_enabled=false'));
   assert.equal(assertPackagedPreviewOverride(preview, rev), rev);
+  assert.throws(() => assertPackagedPreviewOverride(preview.slice(0, -1), rev), /Preview APK/);
+  assert.throws(() => assertPackagedPreviewOverride(preview + '\n', rev), /Preview APK/);
   for (const bad of [preview.replace('false', 'true'), createLoginOverride(rev), '[aurion]\\nclient_build="' + rev + '"\\n', preview.replace(rev, 'b'.repeat(40))])
     assert.throws(() => assertPackagedPreviewOverride(bad, rev));
   assert.throws(() => createPreviewOverride('bad'));

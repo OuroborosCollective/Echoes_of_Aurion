@@ -8,8 +8,6 @@ export function createPreviewOverride(revision) {
 }
 /** Read back the exact packaged APK bytes, never merely the staged source. */
 export function assertPackagedPreviewOverride(packed, revision) {
-  // Accept exactly the raw text or the single EOF newline removed by the current stdout wrapper; other differences fail closed.
-  const expected = createPreviewOverride(revision);
-  assert.ok(packed === expected || packed === expected.slice(0, -1), 'Preview APK must not impersonate signed Login');
+  assert.equal(packed, createPreviewOverride(revision), 'Preview APK must not impersonate signed Login');
   return revision;
 }
