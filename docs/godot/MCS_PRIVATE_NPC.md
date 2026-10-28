@@ -13,8 +13,10 @@ its receipt into a workspace cannot activate MCS: Godot's imported files can
 differ from their sources. Public Android exports exclude both the vendor
 directory and `private-mcs/`. Do not use the 0.9.1 beta ZIP.
 
-The isolated, opt-in acceptance builds a temporary PCK from the pinned archive
-using the pinned Godot 4.7.2 editor. It strips the PCK's `project.binary`,
+The isolated, opt-in acceptance requires a clean tracked source revision and
+builds the host from its Git archive, excluding ignored workspace contents. It
+builds a temporary PCK from the pinned vendor archive using the pinned Godot
+4.7.2 editor. It strips the PCK's `project.binary`,
 checks its paths, contents, and collisions with the exported host's paths,
 global classes and UIDs, and binds the resulting PCK hash to a generated source
 pin in the temporary host. It checks the real rig, GLB fallback, packed host,

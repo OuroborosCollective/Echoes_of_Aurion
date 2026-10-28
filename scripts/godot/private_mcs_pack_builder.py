@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import re
 import sys
+import tarfile
 
 sys.dont_write_bytecode = True
 from private_mcs_pack_guard import assert_compatible_overlay, inspect_pck, strip_and_validate_vendor_pack
@@ -54,11 +55,13 @@ def verified_source_revision():
     untracked = git("ls-files", "--others", "--exclude-standard", "--", "godot-client", "scripts/godot")
     if untracked:
         raise ValueError("PRIVATE_SOURCE_UNTRACKED_FILES")
+    if git("ls-files", "--", "godot-client/addons/modular_character_system/", "godot-client/private-mcs/"):
+        raise ValueError("PRIVATE_VENDOR_FILES_TRACKED")
     return revision
 
 
 def build_vendor_pack(archive, editor, private_root):
-    verified_source_revision()
+    revision = verified_source_revision()
     editor = Path(editor).resolve(strict=True)
     if sha256(editor) != EDITOR_SHA:
         raise ValueError("GODOT_EDITOR_DIGEST_MISMATCH")
@@ -82,14 +85,31 @@ def build_vendor_pack(archive, editor, private_root):
     original = private_root / "vendor-original.pck"
     godot(editor, vendor, ["--export-pack", "PrivatePack", str(original)])
     clean = strip_and_validate_vendor_pack(original.read_bytes())
-    return clean, receipt["sha256"]
+    if verified_source_revision() != revision:
+        raise ValueError("PRIVATE_SOURCE_REVISION_CHANGED")
+    return clean, receipt["sha256"], revision
 
 
-def prepare_host(editor, private_root, pack_bytes):
+def prepare_host(editor, private_root, pack_bytes, revision):
     private_root = Path(private_root)
     host = private_root / "host-project"
-    shutil.copytree(REPO / "godot-client", host,
-                    ignore=shutil.ignore_patterns(".godot", "modular_character_system", "private-mcs"))
+    if verified_source_revision() != revision:
+        raise ValueError("PRIVATE_SOURCE_REVISION_CHANGED")
+    source_tar = private_root / "host-source.tar"
+    with source_tar.open("wb") as output:
+        result = subprocess.run(["git", "-C", str(REPO), "archive", "--format=tar", revision, "godot-client"],
+                                stdout=output, stderr=subprocess.PIPE, timeout=120)
+    if result.returncode:
+        raise ValueError("PRIVATE_SOURCE_ARCHIVE_FAILED")
+    source_dir = private_root / "host-source"
+    source_dir.mkdir(mode=0o700)
+    with tarfile.open(source_tar, "r:") as archive:
+        for member in archive.getmembers():
+            parts = Path(member.name).parts
+            if not parts or parts[0] != "godot-client" or ".." in parts or not (member.isdir() or member.isfile()):
+                raise ValueError("PRIVATE_SOURCE_ARCHIVE_UNSAFE")
+        archive.extractall(source_dir, filter="data")
+    (source_dir / "godot-client").rename(host)
     pin = host / "actors/private_mcs_pack_pin.gd"
     content = pin.read_text()
     if content.count(PIN_EMPTY) != 1 or content.count(PATHS_EMPTY) != 1:
@@ -140,4 +160,6 @@ def prepare_host(editor, private_root, pack_bytes):
     embedded = inspect_pck(outer_bytes)["entries"].get("private-mcs/aurion-mcs.pck")
     if embedded is None or hashlib.sha256(embedded["content"]).hexdigest() != digest:
         raise ValueError("PRIVATE_PACK_EXPORT_MISMATCH")
+    if verified_source_revision() != revision:
+        raise ValueError("PRIVATE_SOURCE_REVISION_CHANGED")
     return host, outer, digest

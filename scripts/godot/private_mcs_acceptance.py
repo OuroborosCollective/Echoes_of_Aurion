@@ -50,8 +50,8 @@ def main():
         else:
             raise RuntimeError("MCS_ALTERED_ARCHIVE_ACCEPTED")
         invalid_archive.unlink()
-        pack_bytes, _archive_sha = build_vendor_pack(args.archive, editor, temp)
-        host, outer, _pack_sha = prepare_host(editor, temp, pack_bytes)
+        pack_bytes, _archive_sha, revision = build_vendor_pack(args.archive, editor, temp)
+        host, outer, _pack_sha = prepare_host(editor, temp, pack_bytes, revision)
         output = godot(editor, host, ["--script", "tests/test_modular_npc_private_runtime.gd"])
         require_marker(output, "AURION_PRIVATE_MCS_1_0_RIG_PASS")
         output = godot(editor, host, ["--script", "tests/test_modular_npc_private_fallback.gd"])
@@ -142,7 +142,7 @@ def main():
             require_marker(output, "MCS_AVAILABLE=false")
         finally:
             shutil.rmtree(target)
-        print("PRIVATE_MCS_ACCEPTANCE_PASS: real rig, GLB fallback, exported PCK, cache/PCK tamper and untrusted source; Android unverified")
+        print("PRIVATE_MCS_ACCEPTANCE_PASS source=" + revision + ": real rig, GLB fallback, exported PCK, cache/PCK tamper and untrusted source; Android unverified")
 
 
 if __name__ == "__main__":
