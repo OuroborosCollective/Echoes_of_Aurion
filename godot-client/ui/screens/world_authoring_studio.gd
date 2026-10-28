@@ -157,7 +157,10 @@ static func _valid_apply_receipt(data: Dictionary, expected: Dictionary) -> Dict
 		return {}
 	if typeof(receipt.receiptId) != TYPE_STRING or receipt.receiptId.length() < 8 or receipt.receiptId.length() > 128 or typeof(receipt.actorUserId) != TYPE_INT or receipt.actorUserId <= 0:
 		return {}
-	if receipt.planHash != expected.get("plan") or receipt.targetId != expected.get("key", "") + ":v" + str(expected.get("version", -1)):
+	var version: Variant = expected.get("version", -1)
+	if typeof(version) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(version)) or float(version) != floor(float(version)) or version < 1 or version > 1000000:
+		return {}
+	if receipt.planHash != expected.get("plan") or receipt.targetId != expected.get("key", "") + ":v" + str(int(version)):
 		return {}
 	if not Api.valid_plan_hash(receipt.resultHash) or not Api.valid_plan_hash(receipt.receiptHash):
 		return {}
