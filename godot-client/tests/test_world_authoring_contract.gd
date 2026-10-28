@@ -147,13 +147,21 @@ func verify() -> void:
 	# Correct receipt still requires matching design hash in an independent GET.
 	studio._draft.text = JSON.stringify(draft)
 	studio._plan()
-	studio._on_completed("worldPlan", studio._plan_requested.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
+	var wire_plan: Variant = JSON.parse_string(JSON.stringify(studio._plan_requested.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true})))
+	studio._on_completed("worldPlan", wire_plan)
 	studio._apply()
 	receipt.planHash = "d".repeat(64)
 	require(not studio._pending_apply.is_empty(), "valid apply did not retain pending receipt identity")
 	require(not WorldStudio._valid_apply_receipt({"receipt": receipt, "readback": readback()}, studio._pending_apply).is_empty(), "valid receipt fails binding: " + JSON.stringify(studio._pending_apply) + " receipt=" + JSON.stringify(receipt))
+	# Exercise the actual HTTP JSON decoding boundary, not only typed fixtures.
+	var wire_apply: Variant = JSON.parse_string(JSON.stringify({"receipt": receipt, "readback": readback()}))
+	require(not WorldStudio._valid_apply_receipt(wire_apply, studio._pending_apply).is_empty(), "valid JSON-decoded apply receipt rejected")
+	for invalid_actor in [0, -1, 1.5, "1", null, INF, NAN, 9007199254740992.0]:
+		var invalid_reply: Dictionary = wire_apply.duplicate(true)
+		invalid_reply.receipt.actorUserId = invalid_actor
+		require(WorldStudio._valid_apply_receipt(invalid_reply, studio._pending_apply).is_empty(), "invalid receipt actor ID accepted: " + str(invalid_actor))
 	requests_before = transport.kinds.size()
-	studio._on_completed("worldApply", {"receipt": receipt, "readback": readback()})
+	studio._on_completed("worldApply", wire_apply)
 	require(WorldStudio._valid_apply_receipt({"receipt": receipt, "readback": readback()}, {"plan": "d".repeat(64), "key": "village.g01", "version": 1.5}).is_empty(), "fractional pending version accepted")
 	require(transport.kinds.size() == requests_before + 1 and transport.kinds[-1] == "readback",
 		"valid receipt did not request independent readback")
@@ -162,7 +170,7 @@ func verify() -> void:
 	var projected_before := seen.size()
 	studio._on_completed("readback", mismatch)
 	require(seen.size() == projected_before, "revision-only match confirmed wrong design")
-	studio._on_completed("readback", readback())
+	studio._on_completed("readback", JSON.parse_string(JSON.stringify(readback())))
 	require(seen.size() == projected_before + 1,
 		"matching independent world revision and design was not projected")
 	transport.queue_free()

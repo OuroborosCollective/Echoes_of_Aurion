@@ -155,7 +155,11 @@ static func _valid_apply_receipt(data: Dictionary, expected: Dictionary) -> Dict
 			return {}
 	if receipt.schemaVersion != "aurion.authoring-receipt.v1" or receipt.kind != "world" or receipt.action != "apply" or receipt.humanConfirmed != true:
 		return {}
-	if typeof(receipt.receiptId) != TYPE_STRING or receipt.receiptId.length() < 8 or receipt.receiptId.length() > 128 or typeof(receipt.actorUserId) != TYPE_INT or receipt.actorUserId <= 0:
+	var actor: Variant = receipt.actorUserId
+	if typeof(receipt.receiptId) != TYPE_STRING or receipt.receiptId.length() < 8 or receipt.receiptId.length() > 128:
+		return {}
+	# Godot JSON parses numbers as floats; only exact positive integer IDs are valid.
+	if typeof(actor) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(actor)) or float(actor) != floor(float(actor)) or actor <= 0 or actor > 9007199254740991:
 		return {}
 	var version: Variant = expected.get("version", -1)
 	if typeof(version) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(version)) or float(version) != floor(float(version)) or version < 1 or version > 1000000:
