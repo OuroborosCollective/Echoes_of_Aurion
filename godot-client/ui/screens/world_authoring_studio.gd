@@ -2,6 +2,9 @@ extends Control
 ## Owner-facing native draft/plan/explicit confirm/readback; only Aurion can apply.
 const Api = preload("res://net/api/world_authoring_api.gd")
 const ConfirmedWorldDesigns = preload("res://world/confirmed_world_designs.gd")
+const DOCK_MIN_WIDTH := 960.0
+const DOCK_LEFT_EDGE := 0.55
+const READBACK_INTERVAL_SECONDS := 5.0
 var _auth: Node
 var _transport: Node
 var _server := ""
@@ -14,6 +17,9 @@ var _draft: TextEdit
 var _brief: TextEdit
 var _info: Label
 var _confirm: ConfirmationDialog
+var _dock: PanelContainer
+var _refresh_timer: Timer
+var _last_readback_revision := ""
 var _busy := false
 var _confirmed_revision := ""
 signal confirmed_world(readback: Dictionary)
@@ -31,11 +37,17 @@ func configure(auth: Node, server: String, connection: String, allow_local: bool
 
 func _ready() -> void:
 	visible = false
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# The fullscreen container never consumes gameplay input; only the dock does.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var panel := PanelContainer.new()
+	panel.name = "WorldStudioDock"
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(panel)
+	_dock = panel
+	_layout_dock()
+	get_viewport().size_changed.connect(_layout_dock)
 	var scroll := ScrollContainer.new()
 	panel.add_child(scroll)
 	var stack := VBoxContainer.new()
@@ -44,14 +56,18 @@ func _ready() -> void:
 	var heading := Label.new()
 	heading.text = "Aurion · Mensch + KI Weltstudio (Admin)"
 	stack.add_child(heading)
+	var split_hint := Label.new()
+	split_hint.text = "Spiel links · KI-Entwurf und menschliche Freigabe rechts · nur Aurion schreibt Weltzustand"
+	split_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stack.add_child(split_hint)
 	_brief = TextEdit.new()
 	_brief.placeholder_text = "Beschreibe eine Landschaft, ein Gebäude oder ein Dorf. Aurion bleibt die einzige Welt-Authority."
-	_brief.custom_minimum_size = Vector2(400, 100)
+	_brief.custom_minimum_size = Vector2(280, 100)
 	stack.add_child(_brief)
 	_button(stack, "KI-Entwurf anfordern", _propose)
 	_draft = TextEdit.new()
 	_draft.placeholder_text = "Prüfbarer Aurion-WorldDesignDraft als JSON"
-	_draft.custom_minimum_size = Vector2(400, 220)
+	_draft.custom_minimum_size = Vector2(280, 220)
 	_draft.text_changed.connect(_invalidate_plan)
 	stack.add_child(_draft)
 	_button(stack, "Entwurf serverseitig prüfen", _plan)
@@ -60,11 +76,46 @@ func _ready() -> void:
 	_info = Label.new()
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(_info)
-	_button(stack, "Zurück zum Spiel", func(): visible = false)
+	_button(stack, "Zurück zum Spiel", _hide_studio)
 	_confirm = ConfirmationDialog.new()
 	_confirm.title = "Aurion: verbindliche Weltänderung"
 	_confirm.confirmed.connect(_apply)
 	add_child(_confirm)
+	_refresh_timer = Timer.new()
+	_refresh_timer.name = "ConfirmedWorldReadbackTimer"
+	_refresh_timer.wait_time = READBACK_INTERVAL_SECONDS
+	_refresh_timer.timeout.connect(_poll_readback)
+	add_child(_refresh_timer)
+
+static func dock_left_anchor(viewport_width: float) -> float:
+	return DOCK_LEFT_EDGE if viewport_width >= DOCK_MIN_WIDTH else 0.0
+
+func _layout_dock(viewport_width: float = -1.0) -> void:
+	if not is_instance_valid(_dock):
+		return
+	var width: float = viewport_width if viewport_width > 0.0 else get_viewport_rect().size.x
+	_dock.anchor_left = dock_left_anchor(width)
+	_dock.anchor_right = 1.0
+	_dock.anchor_top = 0.0
+	_dock.anchor_bottom = 1.0
+	_dock.offset_left = 0.0
+	_dock.offset_right = 0.0
+	_dock.offset_top = 0.0
+	_dock.offset_bottom = 0.0
+
+func _hide_studio() -> void:
+	visible = false
+	if is_instance_valid(_refresh_timer):
+		_refresh_timer.stop()
+
+# Read-only world revision polling is presentation work, not a deterministic tick
+# and never invokes proposal, plan, approval or Apply. One request at a time.
+func _poll_readback() -> void:
+	if not visible or _busy or not _pending_apply.is_empty() or not _confirmed_revision.is_empty():
+		return
+	if not _plan_hash.is_empty() or not _plan_requested.is_empty() or _confirm.visible:
+		return
+	_readback()
 
 func _button(stack: VBoxContainer, label: String, callback: Callable) -> void:
 	var b := Button.new()
@@ -77,6 +128,8 @@ func open_studio() -> bool:
 	if _transport == null or _auth == null or not _auth.protected_response_allowed() or _connection.is_empty():
 		return false
 	visible = true
+	if is_instance_valid(_refresh_timer):
+		_refresh_timer.start()
 	_catalog()
 	return true
 
@@ -86,8 +139,11 @@ func close_session() -> void:
 	_plan_requested.clear()
 	_pending_apply.clear()
 	_confirmed_revision = ""
+	_last_readback_revision = ""
 	_busy = false
 	visible = false
+	if is_instance_valid(_refresh_timer):
+		_refresh_timer.stop()
 	if is_instance_valid(_transport):
 		_transport.cancel()
 		_transport.queue_free()
@@ -255,20 +311,26 @@ func _on_completed(kind: String, data: Dictionary) -> void:
 		"readback":
 			if ConfirmedWorldDesigns.validate_readback(data):
 				if _confirmed_revision.is_empty():
-					_info.text = "Vorhandener Aurion-Weltstand gelesen: " + data.revision
-					emit_signal("confirmed_world", data)
+					# Unchanged revisions need no repeated 3D projection or layout churn.
+					if _last_readback_revision != str(data.revision):
+						_last_readback_revision = str(data.revision)
+						_info.text = "Vorhandener Aurion-Weltstand gelesen: " + data.revision
+						emit_signal("confirmed_world", data)
 				elif _confirmed_apply_readback(data, _pending_apply):
 					_info.text = "Aurion-Apply unabhängig bestätigt: " + data.revision
 					_pending_apply.clear()
 					_confirmed_revision = ""
+					_last_readback_revision = str(data.revision)
 					emit_signal("confirmed_world", data)
 				else:
 					_info.text = "Apply-Revision nicht bestätigt; Welt bleibt unverändert."
 			else:
 				_info.text = "Kein gültiger kanonischer Weltstand."
 
-func _on_failed(_kind: String, reason: String) -> void:
+func _on_failed(kind: String, reason: String) -> void:
 	_busy = false
-	_plan_hash = ""
-	_plan_draft.clear()
+	# An interrupted *read-only* refresh must not erase a valid human plan.
+	if kind != "readback":
+		_plan_hash = ""
+		_plan_draft.clear()
 	_info.text = "Aurion lehnt diese Aktion ab: " + reason
