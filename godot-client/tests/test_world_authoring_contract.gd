@@ -21,6 +21,8 @@ class CaptureTransport:
 	func request(kind: String, _server: String, _connection: String, _payload: Dictionary = {}, _allow_local: bool = false) -> bool:
 		kinds.append(kind)
 		return true
+	func cancel() -> void:
+		pass
 
 func require(ok: bool, why: String) -> void:
 	if not ok:
@@ -121,7 +123,7 @@ func verify() -> void:
 	studio._draft.text = JSON.stringify(draft)
 	studio._plan()
 	studio._on_completed("worldPlan", draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
-	require(studio._plan_hash == "d".repeat(64), "unchanged plan not accepted")
+	require(studio._plan_hash == "d".repeat(64), "unchanged plan not accepted: requested=" + JSON.stringify(studio._plan_requested) + " sent=" + JSON.stringify(transport.kinds) + " busy=" + str(studio._busy) + " info=" + studio._info.text)
 	studio._apply()
 	var requests_before := transport.kinds.size()
 	var receipt := {
