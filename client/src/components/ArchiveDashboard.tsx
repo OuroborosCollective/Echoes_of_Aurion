@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Archive, Clock, History, Search, FileText, Database, ShieldCheck, Download, Loader2 } from "lucide-react";
+import { Archive, Clock, History, Search, FileText, Database, ShieldCheck, Loader2 } from "lucide-react";
 
 export default function ArchiveDashboard() {
   const [zoneId, setZoneId] = useState("aurion-nexus-01");
@@ -46,9 +46,12 @@ export default function ArchiveDashboard() {
                 <div className="space-y-3">
                   {archivesQuery.isLoading && <p className="text-center py-8 text-slate-500 italic">Reading archives...</p>}
                   {archivesQuery.data?.map((archive: any) => (
-                    <div 
-                      key={archive.id} 
-                      className={`p-4 rounded-lg border transition-colors cursor-pointer ${
+                    <button
+                      key={archive.id}
+                      type="button"
+                      aria-label={`Archiv ${archive.id} auswählen`}
+                      aria-pressed={selectedArchive?.id === archive.id}
+                      className={`block w-full text-left p-4 rounded-lg border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                         selectedArchive?.id === archive.id 
                           ? "border-cyan-500 bg-cyan-500/5" 
                           : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05]"
@@ -73,11 +76,11 @@ export default function ArchiveDashboard() {
                       </div>
                       <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
                         <p className="text-[10px] font-mono text-slate-500">Hash: {archive.archiveHash.slice(0, 16)}...</p>
-                        <Button variant="ghost" size="sm" className="h-7 text-[10px] text-cyan-400">
-                          <Download className="h-3 w-3 mr-1" /> Inspect Payload
-                        </Button>
+                        <span className="inline-flex items-center text-[10px] text-cyan-400">
+                          <FileText className="h-3 w-3 mr-1" aria-hidden="true" /> Payload summary in details
+                        </span>
                       </div>
-                    </div>
+                    </button>
                   ))}
                   {archivesQuery.data?.length === 0 && (
                     <p className="text-center py-12 text-slate-500 italic">No archives found for this zone.</p>
