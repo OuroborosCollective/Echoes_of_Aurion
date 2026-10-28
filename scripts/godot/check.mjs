@@ -107,6 +107,13 @@ await stage(
   'G16 appearance GET wire boundary verified (isolated HTTP; test auth only)',
 );
 await stage(
+  'world-authoring-http',
+  'headless',
+  process.execPath,
+  ['scripts/godot/world-authoring-http-runtime.mjs', executable, project],
+  'G21_WORLD_AUTHORING_HTTP_FIXTURE_PASS',
+);
+await stage(
   'quest-npc-api-http',
   'headless',
   process.execPath,
