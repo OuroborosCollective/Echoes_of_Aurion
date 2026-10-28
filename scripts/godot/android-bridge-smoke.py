@@ -207,6 +207,14 @@ def dispatch(component, sequence):
         "--ei", "aurion_smoke_dispatch", str(sequence))
 
 
+def begin_guard(guard):
+    # Keep completed legacy evidence, but attribute browser diagnostics only
+    # to the current guard; stale Chrome first-run screens can mislead triage.
+    PROGRESS["stage"] = guard + "_install"
+    PROGRESS["browserStates"] = []
+    PROGRESS.pop("browserPackage", None)
+
+
 def run(output):
     require(adb("get-serialno") == SERIAL, "FOREIGN_ADB_TARGET")
     require(adb("shell", "getprop", "ro.kernel.qemu") == "1", "FOREIGN_ADB_TARGET")
@@ -216,7 +224,7 @@ def run(output):
                 "syntheticExplicitIntent": True, "fullLogin": "UNVERIFIED", "physicalDevice": "UNVERIFIED",
                 "androidFingerprint": adb("shell", "getprop", "ro.build.fingerprint"), "cases": {}}
     for guard in ("legacy", "fixed"):
-        PROGRESS["stage"] = guard + "_install"
+        begin_guard(guard)
         build = json.loads((output / (guard + "-build.json")).read_text())
         require(build["guard"] == guard and build["sourceRevision"] == os.environ["AURION_EXPECTED_REVISION"], "APK_IDENTITY_MISMATCH")
         require(build["internetPermission"] is False and build["productionDomainFilter"] is False and build["configuredOrigin"] == "loopback-only", "APK_IDENTITY_MISMATCH")

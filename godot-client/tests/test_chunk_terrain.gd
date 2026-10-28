@@ -49,11 +49,38 @@ func verify() -> void:
 			require(tile_mesh.mesh.get_surface_count() == 2, "paving and forest quadrants not separated")
 			require(tile_mesh.mesh.get_aabb().size.x >= 63.9, "64m chunk surface collapsed")
 			require(is_equal_approx(tile_mesh.mesh.get_aabb().position.y, 1.25), "server heightMm was not preserved")
+			# Surface order is deterministic in chunk_terrain.gd. Verify that each
+			# confirmed material actually samples its source atlas quadrant.
+			var atlas: Texture2D = load("res://assets/world/aurion-surface-atlas.webp") as Texture2D
+			require(atlas != null, "G17 source atlas missing from confirmed chunk projection")
+			if atlas != null:
+				var atlas_image: Image = atlas.get_image()
+				var expected_offsets: Array[Vector2i] = [Vector2i(0, 0), Vector2i(512, 0)]
+				for surface_index in range(mini(tile_mesh.mesh.get_surface_count(), expected_offsets.size())):
+					var surface_material: StandardMaterial3D = tile_mesh.mesh.surface_get_material(surface_index) as StandardMaterial3D
+					require(surface_material != null, "G18 chunk surface lacks its native atlas material")
+					if surface_material == null:
+						continue
+					var projected_texture: Texture2D = surface_material.albedo_texture as Texture2D
+					require(projected_texture != null, "G18 chunk surface has no projected atlas texture")
+					if projected_texture == null:
+						continue
+					var projected_image: Image = projected_texture.get_image()
+					require(projected_image.get_width() == 512 and projected_image.get_height() == 512,
+						"G18 chunk surface texture is not an isolated 512px atlas tile")
+					for point in [Vector2i(16, 16), Vector2i(256, 256), Vector2i(496, 496)]:
+						var expected: Color = atlas_image.get_pixel(point.x + expected_offsets[surface_index].x, point.y + expected_offsets[surface_index].y)
+						var actual: Color = projected_image.get_pixel(point.x, point.y)
+						require(absf(actual.r - expected.r) < 0.025 and absf(actual.g - expected.g) < 0.025 and absf(actual.b - expected.b) < 0.025,
+							"G18 confirmed surface is bound to the wrong atlas quadrant")
 			# Godot's clockwise top-face rule differs from the cross-product
 			# orientation used to infer normals: check both explicitly.
 			for surface_index in range(tile_mesh.mesh.get_surface_count()):
 				var arrays: Array = tile_mesh.mesh.surface_get_arrays(surface_index)
 				var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				var expected_vertices: Array[int] = [384, 1152]
+				if surface_index < expected_vertices.size():
+					require(points.size() == expected_vertices[surface_index], "G18 confirmed surface IDs were assigned to the wrong tile group")
 				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 				require(points.size() >= 3 and normals.size() == points.size(), "G18 material surface lacks triangle vertices/normals")
 				if points.size() >= 3 and normals.size() == points.size():

@@ -68,6 +68,26 @@ class Reports(unittest.TestCase):
         with patch.object(smoke, "adb", side_effect=device), patch.object(smoke.FixturePage, "hits", {"/legacy"}):
             smoke.open_browser("legacy")
 
+    def test_progress_phases_clear_browser_states(self):
+        # Browser observations from legacy must not be attributed to fixed.
+        prior = dict(smoke.PROGRESS)
+        try:
+            smoke.PROGRESS.clear()
+            smoke.PROGRESS.update({
+                "stage": "legacy_callback",
+                "browserPackage": "com.android.chrome",
+                "browserStates": [{"firstRunActivity": True}],
+                "legacyRedObserved": True,
+            })
+            smoke.begin_guard("fixed")
+            self.assertEqual(smoke.PROGRESS["stage"], "fixed_install")
+            self.assertEqual(smoke.PROGRESS["browserStates"], [])
+            self.assertNotIn("browserPackage", smoke.PROGRESS)
+            self.assertTrue(smoke.PROGRESS["legacyRedObserved"])
+        finally:
+            smoke.PROGRESS.clear()
+            smoke.PROGRESS.update(prior)
+
     def test_other_variant_page_cannot_satisfy_browser_observation(self):
         def device(*args, **kwargs):
             if args[:4] == ("shell", "pm", "list", "packages"):
