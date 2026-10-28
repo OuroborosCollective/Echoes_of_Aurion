@@ -20,7 +20,7 @@ static func _asset(v: Variant) -> bool:
 	pattern.compile("^glb_[a-z0-9._:-]{4,91}$")
 	return pattern.search(v) != null
 static func _integer(v: Variant, low: int, high: int) -> bool:
-	return typeof(v) == TYPE_INT and v >= low and v <= high
+	return typeof(v) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(v)) and float(v) == floor(float(v)) and v >= low and v <= high
 static func validate_readback(value: Variant) -> bool:
 	if typeof(value) != TYPE_DICTIONARY or value.size() != 3:
 		return false
