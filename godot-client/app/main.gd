@@ -192,6 +192,7 @@ func _ready() -> void:
 	studio_button.pressed.connect(_open_world_studio)
 	$WorldHUD/WorldBar.add_child(studio_button)
 	login.disabled = true
+	development_notice.text = "Aurion Preview · Keine Online-Anmeldung in diesem Build. Für echten Login ist die gesondert signierte Aurion Login APK erforderlich."
 	if not _configuration_valid():
 		status.text = "Konfiguration ungültig"
 		destination.text = "Die Verbindung ist gesperrt. Bitte verwende einen geprüften Client-Build."
@@ -209,7 +210,7 @@ func _on_map_selection_changed(message: String) -> void:
 	map_selection.text = message if not message.is_empty() else "Berühre ein bestätigtes Objekt oder skizziere einen Punkt."
 
 func _on_copy_diagnostics_pressed() -> void:
-	var readback: String = _diagnostics.report(_config.client_build, _config.server_base_url, _zone_socket.state_name(), _zone_socket.state_name() == "connected", _confirmed_zone.has_state())
+	var readback: String = _diagnostics.report(_config.client_build, _config.server_base_url, _zone_socket.state_name(), _zone_socket.state_name() == "connected", _confirmed_zone.has_state(), _config.native_auth_start_enabled)
 	DisplayServer.clipboard_set(readback)
 	%CopyDiagnostics.text = "Diagnose kopiert"
 
