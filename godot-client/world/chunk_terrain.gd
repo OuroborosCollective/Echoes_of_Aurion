@@ -47,7 +47,7 @@ func _reject(reason: String) -> bool:
 	diagnostic = reason
 	return false
 
-func _validate(read_model: Variant) -> Dictionary:
+static func _validate(read_model: Variant) -> Dictionary:
 	if typeof(read_model) != TYPE_DICTIONARY:
 		return {"reason": "chunk_readmodel_missing"}
 	var base: Variant = read_model.get("base")
@@ -95,6 +95,9 @@ func _validate(read_model: Variant) -> Dictionary:
 	return {"status": "validated", "tiles": tiles_by_index, "coordinate": coordinate}
 
 static func _vertex(st: SurfaceTool, point: Vector3, uv: Vector2) -> void:
+	# Godot 4 uses clockwise front faces. Explicit +Y lighting is needed for
+	# horizontal tiles because clockwise XZ winding has a -Y cross product.
+	st.set_normal(Vector3.UP)
 	st.set_uv(uv)
 	st.add_vertex(point)
 
@@ -137,15 +140,15 @@ func apply_confirmed(read_model: Variant, connection_id: String) -> bool:
 			var b := Vector3(x + TILE_METERS, y, z)
 			var c := Vector3(x, y, z + TILE_METERS)
 			var d := Vector3(x + TILE_METERS, y, z + TILE_METERS)
-			# Top-facing winding, two triangles for each server height sample.
+			# Clockwise on screen when viewed from above: visible from +Y in
+			# Godot 4's Compatibility renderer; the previous order was culled.
 			_vertex(st, a, Vector2(0, 0))
-			_vertex(st, c, Vector2(0, 1))
-			_vertex(st, b, Vector2(1, 0))
 			_vertex(st, b, Vector2(1, 0))
 			_vertex(st, c, Vector2(0, 1))
+			_vertex(st, b, Vector2(1, 0))
 			_vertex(st, d, Vector2(1, 1))
+			_vertex(st, c, Vector2(0, 1))
 		if count > 0:
-			st.generate_normals()
 			st.commit(mesh)
 	if mesh.get_surface_count() == 0:
 		return _reject("chunk_mesh_empty")

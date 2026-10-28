@@ -55,6 +55,7 @@ for (const [id, script, marker] of [
   ['zone-entities', 'test_zone_entities.gd', 'Godot G11 confirmed entity registry and visual interpolation verified (headless)'],
   ['live-world-map', 'test_live_world_map.gd', 'Godot first live-world map, model inspection and local A/B/house sketches verified (headless)'],
   ['session-recovery', 'integration/test_session_recovery.gd', 'Godot G12 pause/resume, fresh-ticket recovery and bounded retry verified (headless)'],
+  ['movement-input', 'test_movement_input.gd', 'Godot G20 native input and bounded move-intent regression verified (headless fixture only)'],
   ['technical-diagnostics', 'test_technical_diagnostics.gd', 'Godot G43 safe technical diagnostics verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
@@ -68,6 +69,13 @@ await stage('material-projection', 'headless', executable,
 await stage('chunk-mesh-projection', 'headless', executable,
   godot('--script', 'tests/test_chunk_terrain.gd'),
   'G18 server-shaped chunk mesh projection verified');
+await stage('starter-village-source-contracts', 'static', process.execPath,
+  ['--test', 'scripts/godot/check-starter-village-assets.test.mjs'], '# pass 3');
+await stage('starter-village-source-provenance', 'static', process.execPath,
+  ['scripts/godot/check-starter-village-assets.mjs'], 'G19_STARTER_VILLAGE_ASSET_SHA_PASS');
+await stage('starter-village-model-projection', 'headless', executable,
+  godot('--script', 'tests/test_starter_village_visuals.gd'),
+  'G19_STARTER_VILLAGE_REAL_SCENE_BINDING_PASS');
 await stage(
   'zone-socket-node-ws-reject-close',
   'headless',

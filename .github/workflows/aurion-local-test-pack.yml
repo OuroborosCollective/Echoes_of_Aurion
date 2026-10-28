@@ -1,28 +1,16 @@
-name: Aurion Local Test Pack
+name: Aurion Local Test Pack (manual)
 
 on:
-  pull_request:
-    paths:
-      - "server/**"
-      - "client/**"
-      - "shared/**"
-      - "drizzle/**"
-      - "scripts/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/aurion-local-test-pack.yml"
-  push:
-    branches: [main]
-    paths:
-      - "server/**"
-      - "client/**"
-      - "shared/**"
-      - "drizzle/**"
-      - "scripts/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/aurion-local-test-pack.yml"
   workflow_dispatch:
+    inputs:
+      pack_type:
+        description: 'Godot project/editor only, or full offline pack plus Godot project/editor'
+        type: choice
+        required: true
+        default: godot-linux
+        options:
+          - godot-linux
+          - full
 
 permissions:
   contents: read
@@ -33,6 +21,7 @@ concurrency:
 
 jobs:
   exact-offline-pack:
+    if: ${{ inputs.pack_type == 'full' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     services:
@@ -363,3 +352,53 @@ jobs:
           retention-days: 2
           compression-level: 0
           include-hidden-files: true
+
+  godot-linux-project:
+    if: ${{ inputs.pack_type == 'godot-linux' || inputs.pack_type == 'full' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact requested revision and public scope
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          test -f godot-client/project.godot
+          test -z "$(git ls-files -- godot-client/addons/modular_character_system/)"
+      - name: Install zstd
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd
+      - name: Verify pack and workflow regressions
+        run: |
+          node --test scripts/godot/offline-linux-pack.test.mjs scripts/ci/offline-workflow-mode.test.mjs scripts/ci/workflow-impact.test.mjs
+      - name: Bootstrap SHA-pinned Godot 4.7.2 Linux editor
+        run: |
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/doctor.mjs
+      - name: Build clean, importable Godot project and editor package
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/godot/build-offline-linux-pack.sh .aurion-local-test-pack/godot-linux
+          cd .aurion-local-test-pack/godot-linux
+          sha256sum --check SHA256SUMS
+          zstd -dc aurion-godot-project.tar.zst | tar -tf - | grep -qx 'godot-client/project.godot'
+      - name: Upload SHA-verified Godot Linux offline workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-godot-linux-${{ github.sha }}
+          path: .aurion-local-test-pack/godot-linux/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

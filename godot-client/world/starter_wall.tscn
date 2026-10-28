@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/starter_village/Wall_Plaster_Straight.glb" id="1_Wall"]
+
+[node name="StarterWall" type="Node3D"]
+
+[node name="WallSegment" parent="." instance=ExtResource("1_Wall")]
+position = Vector3(0, 0, 0)
+rotation_degrees = Vector3(0, 0, 0)
