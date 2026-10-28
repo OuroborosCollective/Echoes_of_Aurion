@@ -93,6 +93,7 @@ func verify() -> void:
 		require(button.size.y >= 48, "touch target too small")
 		require(scene.get_node("%BuildIdentity").text == "Build · " + Config.current().client_build, "visible build identity missing")
 		require(button.disabled, "production-unready native login must stay disabled")
+		require(scene.get_node("SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice").text.contains("Aurion Preview"), "offline Preview not identified")
 		require(scene.get_node("%ConnectionStatus").text == "Nicht verbunden", "offline status missing")
 	scene.queue_free()
 	await process_frame
@@ -101,6 +102,7 @@ func verify() -> void:
 	root.add_child(enabled_scene)
 	await process_frame
 	require(not enabled_scene.get_node("%Login").disabled, "verified native login start was not enabled")
+	require(enabled_scene.get_node("SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice").text.contains("Systembrowser"), "enabled native login not identified")
 	var nodes: Array = []
 	for id in ZoneCodec.NODE_IDS:
 		nodes.append({"nodeId":id, "remaining":5, "depleted":false, "respawnAtTick":null})
