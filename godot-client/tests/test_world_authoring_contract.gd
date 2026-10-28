@@ -49,7 +49,7 @@ func readback() -> Dictionary:
 	}
 
 func verify() -> void:
-	var trpc := {"result": {"data": {"json": draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true})}}}
+	var trpc := {"result": {"data": {"json": {"planHash": "d".repeat(64), "requiresHumanConfirmation": true}}}}
 	require(Api.unwrap_trpc(trpc).get("planHash") == "d".repeat(64), "standard tRPC response not decoded")
 	require(Api.unwrap_trpc({"result": {"data": {"planHash": "d".repeat(64)}}}).is_empty(), "non-SuperJSON envelope accepted")
 	require(Api.unwrap_trpc({"error": {"message": "FORBIDDEN"}}).is_empty(), "server admin rejection accepted")
