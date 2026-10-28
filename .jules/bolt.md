@@ -40,3 +40,6 @@
 ## 2026-10-22 - Optimize Array Allocation and Matrix Lookups in Wolfram CAG Probes
 **Learning:** High-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity) suffer from garbage collection spikes when using `Map` lookups with string-concatenated keys or chained array methods like `.map().join()`. Using `Map` for grid coordinates forces O(N) string allocations and hash lookups.
 **Action:** Replace `Map` lookups and `Array.from()` with pre-allocated 2D arrays accessed via integer indices. Replace chained `.map().join()` operations with pre-allocated arrays populated via direct `for` loops or direct array instantiation for tuples.
+## 2026-10-28 - Array Allocation Overhead in Array.from(map.values()).reduce()
+**Learning:** Using `Array.from(map.values()).reduce(...)` creates an intermediate array allocation which triggers unnecessary garbage collection, especially in functions called frequently.
+**Action:** Replaced the chained array allocation and `reduce` callback with a single-pass `for...of` loop iterating directly over `map.values()`.
