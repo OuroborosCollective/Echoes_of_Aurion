@@ -4948,3 +4948,14 @@ Evidence:
 Gelernt: Eine echte isolierte Zwei-Client-Integration belegt die G11-Projektion, obwohl der übergeordnete G10/G09-Live-/Gerätescope separat offen bleibt; Issue-, PR- und Runtime-Evidence dürfen nicht über diese Grenze hinaus interpretiert werden.
 Offen: G09 #916 und die vollständige G10-Abnahme #917, insbesondere echte Live-WSS-/native Login-/Geräte-Readbacks. Keine Produktionspromotion oder signierte Gerätefreigabe behauptet.
 Nächster sicherer Schritt: G11 #918 nach Merge dieses Evidence-Eintrags schließen und G11 im Parent #906 als erledigt markieren; G09/G10 und den späteren G13-Checkpoint separat offen weiterführen.
+
+
+### 2026-10-28 — Godot Assistant isolated editor integration (draft)
+Status: PARTIAL — source candidate and local Node contract tests; native editor, CI and live multiplayer remain unverified.
+Task: Integrate pinned splatterfacegames/godot-assistant as an optional Codex/MCP editor-only helper for Godot 4.7.2 without creating a second world authority or changing APK/production.
+Decisions: A SHA-clean upstream checkout a6aed65584cf8cccd32a75e5a93e22b752a0b00a is copied only into a disposable Godot editor project; allow ReadOnly/AskBeforeWrite, deny FullAuto at UI, launcher and .NET relay; prevent injection into AGENTS.md/CLAUDE.md. Canonical godot-client and APK are not modified. The G21 #1199 worldPlan -> explicit human confirmation -> worldApply -> receipt -> independent readback remains the only authoring publication path; no automatic editor scene-to-world conversion is claimed.
+Touched surfaces: scripts/godot/stage-godot-assistant.mjs, stage-godot-assistant.test.mjs, smoke-godot-assistant-relay.mjs; .github/workflows/aurion-godot-assistant-editor-proof.yml; docs/godot/GODOT_ASSISTANT_EDITOR.md; this Memory.md entry.
+Tests/evidence: local Node v22.16.0 node --test stage-godot-assistant.test.mjs 9/9 passed, node --check on scripts passed; full upstream source, .NET build, actual Godot 4.7.2 import, GitHub CI and GUI Codex session pending. GitHub draft branch started from main 76afd81bac8432c3a6e7a18177cac0cbf24c94c4. No production, DB, VPS, worldApply or APK mutation.
+Learned: Native G21 #1199 renders placeholder boxes and has no proven multi-client live world-edit publication; an MCP editor operation is local, not server truth.
+Open: verify pinned upstream packaging/import and relay's actual access controls in exact-head CI; separately verify GUI Codex and G21 authenticated admin/multi-client/Tab A9. No merge or release before complete relevant gates.
+Next: inspect exact PR-head workflow logs, repair source-accurate regressions, independently read back SHA/CI; continue existing G21 #1199 acceptance separately.
