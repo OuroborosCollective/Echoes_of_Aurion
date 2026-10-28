@@ -4,6 +4,9 @@ on:
     paths:
       - "server/explorationMemoryPersistence.ts"
       - "server/explorationMemoryPersistence.test.ts"
+      - "server/explorationActorObservation.ts"
+      - "server/explorationActorObservation.test.ts"
+      - "server/zoneRuntime.ts"
       - "shared/explorationMemoryProtocol.ts"
       - "drizzle/schema.ts"
       - "drizzle/0061_aurion_exploration_memory.sql"
@@ -58,5 +61,5 @@ jobs:
       - run: pnpm verify:migrations
       - run: pnpm exec drizzle-kit migrate
       - run: pnpm check
-      - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts --reporter=verbose
+      - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts server/explorationActorObservation.test.ts --reporter=verbose
       - run: pnpm exec vitest run server/worldEpochReaction.e2e.test.ts --reporter=verbose

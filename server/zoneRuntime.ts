@@ -70,6 +70,8 @@ type PresencePeer = {
   connectionId: string;
   userId: number;
   socket: WebSocket;
+  /** Transport provenance only; omitted from canonical gameplay state. */
+  liveTransport: boolean;
   /** Last movement vector actually accepted by an authoritative tick. */
   input: ZoneMove["input"];
   /** Highest client sequence applied by authority. */
@@ -105,12 +107,14 @@ function createPresencePeer(values: {
   userId: number;
   socket: WebSocket;
   combatProfile: ZoneCombatProfile;
+  liveTransport: boolean;
 }): PresencePeer {
   const entityId = `player:${values.userId}`;
   return {
     connectionId: values.connectionId,
     userId: values.userId,
     socket: values.socket,
+    liveTransport: values.liveTransport,
     input: { x: 0, z: 0 },
     lastAcceptedClientSeq: 0,
     lastReceivedClientSeq: 0,
@@ -300,6 +304,7 @@ export class AuthoritativeMovementZone {
         connectionId,
         userId: player.userId,
         socket: dummySocket,
+        liveTransport: false,
         input: { x: player.inputX, z: player.inputZ },
         lastAcceptedClientSeq: player.lastAcceptedClientSeq,
         lastReceivedClientSeq: player.lastAcceptedClientSeq,
@@ -349,7 +354,7 @@ export class AuthoritativeMovementZone {
       previous.socket.close(1000, "superseded by authenticated reconnect");
     }
     const connectionId = makeZoneConnectionId();
-    const peer = createPresencePeer({ connectionId, userId: values.userId, socket: values.socket, combatProfile: profile });
+    const peer = createPresencePeer({ connectionId, userId: values.userId, socket: values.socket, combatProfile: profile, liveTransport: true });
     this.peers.set(connectionId, peer);
     this.peersByEntityId.set(entityId, peer);
     this.sortedPeersDirty = true;
@@ -405,6 +410,12 @@ export class AuthoritativeMovementZone {
 
   connectionIdForUser(userId: number): string | undefined {
     return this.peersByEntityId.get(`player:${userId}`)?.connectionId;
+  }
+
+  /** A replay/restored peer is not an authenticated, open live transport. */
+  liveConnectionIdForUser(userId: number): string | undefined {
+    const peer = this.peersByEntityId.get(`player:${userId}`);
+    return peer?.liveTransport && peer.socket.readyState === peer.socket.OPEN ? peer.connectionId : undefined;
   }
 
   async flushEvidencePersistence(): Promise<void> { await this.evidenceRecorder.flushPersistence(); }
@@ -612,6 +623,7 @@ export class AuthoritativeMovementZone {
             userId: intent.userId,
             socket: replaySocket,
             combatProfile: intent.combatProfile,
+            liveTransport: false,
           });
           this.peers.set(peer.connectionId, peer);
           this.peersByEntityId.set(intent.entityId, peer);
