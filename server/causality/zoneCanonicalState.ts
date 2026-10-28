@@ -97,7 +97,22 @@ export interface CanonicalZoneState {
  * Return an immutable-by-value canonical snapshot: no live map/object identity is
  * retained and every domain collection has a deterministic order.
  */
-export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZoneState {
+
+// ⚡ Bolt: Avoid Object.fromEntries(Object.entries(...).sort(...)) here because it generates intermediate
+// array/tuple allocations per tick, causing massive GC pressure in the high-frequency zone loop.
+// Direct key iteration and assignment provides a massive speedup and zero O(N) tuple allocations.
+function sortRecord<T>(obj: Record<string, T>): Record<string, T> {
+  const keys = Object.keys(obj).sort();
+  const res: Record<string, T> = {};
+  for (let i = 0; i < keys.length; i++) {
+    res[keys[i]] = obj[keys[i] as string] as T;
+  }
+  return res;
+}
+
+export function sortCanonicalZoneState(
+  state: CanonicalZoneState
+): CanonicalZoneState {
   return {
     schema: "aurion.zone.state.v1",
     worldId: state.worldId,
@@ -105,21 +120,45 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
     tick: state.tick,
     ruleset: state.ruleset,
     combatSequence: state.combatSequence,
-    players: state.players.map(player => ({
-      ...player,
-      skillCooldowns: Object.fromEntries(Object.entries(player.skillCooldowns).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
-    })).sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
-    mobs: state.mobs.map(mob => ({ ...mob })).sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
-    resources: state.resources.map(resource => ({ ...resource })).sort((a, b) => a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0),
-    questSummaries: (state.questSummaries || []).map(quest => ({ ...quest })).sort((a, b) => a.userId - b.userId || (a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0)),
+    players: state.players
+      .map(player => ({
+        ...player,
+        skillCooldowns: sortRecord(player.skillCooldowns),
+      }))
+      .sort((a, b) =>
+        a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0
+      ),
+    mobs: state.mobs
+      .map(mob => ({ ...mob }))
+      .sort((a, b) =>
+        a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0
+      ),
+    resources: state.resources
+      .map(resource => ({ ...resource }))
+      .sort((a, b) => (a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0)),
+    questSummaries: (state.questSummaries || [])
+      .map(quest => ({ ...quest }))
+      .sort(
+        (a, b) =>
+          a.userId - b.userId ||
+          (a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0)
+      ),
     ...(state.questInstances
       ? {
-          questInstances: state.questInstances.map(quest => ({
-            ...quest,
-            completedNodeIds: [...quest.completedNodeIds].sort(),
-            boundRoles: quest.boundRoles.map(role => ({ ...role })),
-            objectiveProgress: Object.fromEntries(Object.entries(quest.objectiveProgress).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
-          })).sort((a, b) => a.instanceId < b.instanceId ? -1 : a.instanceId > b.instanceId ? 1 : 0),
+          questInstances: state.questInstances
+            .map(quest => ({
+              ...quest,
+              completedNodeIds: [...quest.completedNodeIds].sort(),
+              boundRoles: quest.boundRoles.map(role => ({ ...role })),
+              objectiveProgress: sortRecord(quest.objectiveProgress),
+            }))
+            .sort((a, b) =>
+              a.instanceId < b.instanceId
+                ? -1
+                : a.instanceId > b.instanceId
+                  ? 1
+                  : 0
+            ),
         }
       : {}),
   };
