@@ -122,7 +122,8 @@ func verify() -> void:
 	# Synthetic wrong-plan receipt must not trigger world readback.
 	studio._draft.text = JSON.stringify(draft)
 	studio._plan()
-	studio._on_completed("worldPlan", draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
+	require(not studio._plan_requested.is_empty(), "current draft request must be captured before response")
+	studio._on_completed("worldPlan", studio._plan_requested.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
 	require(studio._plan_hash == "d".repeat(64), "unchanged plan not accepted: requested=" + JSON.stringify(studio._plan_requested) + " sent=" + JSON.stringify(transport.kinds) + " busy=" + str(studio._busy) + " info=" + studio._info.text)
 	studio._apply()
 	var requests_before := transport.kinds.size()
@@ -141,7 +142,7 @@ func verify() -> void:
 	# Correct receipt still requires matching design hash in an independent GET.
 	studio._draft.text = JSON.stringify(draft)
 	studio._plan()
-	studio._on_completed("worldPlan", draft.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
+	studio._on_completed("worldPlan", studio._plan_requested.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
 	studio._apply()
 	receipt.planHash = "d".repeat(64)
 	requests_before = transport.kinds.size()
