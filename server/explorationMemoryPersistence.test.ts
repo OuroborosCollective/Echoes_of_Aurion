@@ -89,6 +89,14 @@ suite("Issue 323 Phase H exploration memory",()=>{
     });
     const epoch = epochResult.plan.epoch;
 
+    // A confirmed world chunk does not prove that another user observed it.
+    await expect(recordExplorationDiscovery(userId + 7, {
+      epoch,
+      chunkX: chunk.x,
+      chunkZ: chunk.z,
+      observedAtLogicalFrame: 999999,
+    })).rejects.toThrow("EXPLORATION_ACTOR_NOT_CONNECTED");
+
     const first = await recordExplorationDiscovery(userId, {
       epoch,
       chunkX: chunk.x,
