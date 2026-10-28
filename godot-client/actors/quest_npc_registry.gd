@@ -94,7 +94,15 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		planned[id] = {"resource": local, "assetId": catalog_asset_id, "sha": sha,
 			"npcId": raw.npcId, "position": position, "displayName": raw.displayName,
 			"allowModular": source == "audited-standard",
-			"identity": str(source) + ":" + str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z) + ":" + str(raw.displayName) + ":" + str(source == "audited-standard" and ModularVisual.available())}
+			"identityBase": str(source) + ":" + str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z) + ":" + str(raw.displayName)}
+	# Validate every server row before mounting optional content. One snapshot
+	# suffices for identity; create() rechecks at each actual instantiation.
+	var has_modular_candidate := false
+	for item in planned.values():
+		has_modular_candidate = has_modular_candidate or item.allowModular
+	var modular_available: bool = ModularVisual.available() if has_modular_candidate else false
+	for item in planned.values():
+		item.identity = item.identityBase + ":" + str(item.allowModular and modular_available)
 	var unchanged := _actors.size() == planned.size()
 	if unchanged:
 		for id in planned.keys():
@@ -110,7 +118,7 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		var packed: PackedScene = load(item.resource) as PackedScene
 		if packed == null:
 			return _reject(root, "npc_packed_scene_missing")
-		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if item.allowModular and ModularVisual.available() else null
+		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if item.allowModular and modular_available else null
 		# Optional vendor presentation must never erase canonical quest NPCs.
 		# Try MCS in an isolated temporary host before installing the final actor.
 		if modular != null:
