@@ -145,6 +145,8 @@ func verify() -> void:
 	studio._on_completed("worldPlan", studio._plan_requested.merged({"planHash": "d".repeat(64), "referencedAssetHashes": ["e".repeat(64)], "requiresHumanConfirmation": true}))
 	studio._apply()
 	receipt.planHash = "d".repeat(64)
+	require(not studio._pending_apply.is_empty(), "valid apply did not retain pending receipt identity")
+	require(not WorldStudio._valid_apply_receipt({"receipt": receipt, "readback": readback()}, studio._pending_apply).is_empty(), "valid receipt fails binding: " + JSON.stringify(studio._pending_apply) + " receipt=" + JSON.stringify(receipt))
 	requests_before = transport.kinds.size()
 	studio._on_completed("worldApply", {"receipt": receipt, "readback": readback()})
 	require(transport.kinds.size() == requests_before + 1 and transport.kinds[-1] == "readback",
