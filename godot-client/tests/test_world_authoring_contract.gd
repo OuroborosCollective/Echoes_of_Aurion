@@ -90,6 +90,23 @@ func verify() -> void:
 	visual.queue_free()
 	var studio := WorldStudio.new()
 	root.add_child(studio)
+	# A real in-game studio must not cover or consume input across the 3D world.
+	# This is deliberately RED until the editor uses a right-side capture-only dock.
+	var dock: Control = studio.get_node_or_null("WorldStudioDock") as Control
+	require(studio.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"full-screen worldstudio overlay intercepts gameplay input outside the dock")
+	require(dock != null, "live worldstudio has no independent side-by-side editor dock")
+	if dock != null:
+		require(dock.mouse_filter == Control.MOUSE_FILTER_STOP,
+			"editor dock must capture authoring controls without leaking to gameplay")
+		require(is_equal_approx(dock.anchor_right, 1.0), "editor dock must remain on the right edge")
+		var wide: bool = studio.get_viewport_rect().size.x >= 960.0
+		if wide:
+			require(dock.anchor_left >= 0.4 and dock.anchor_left <= 0.65,
+				"wide live 3D viewport is not left visible beside human/AI editor")
+		else:
+			require(is_equal_approx(dock.anchor_left, 0.0),
+				"compact fallback must preserve usable editor controls")
 	var seen: Array[Dictionary] = []
 	studio.confirmed_world.connect(func(value: Dictionary) -> void: seen.append(value))
 	studio._on_completed("readback", readback())
