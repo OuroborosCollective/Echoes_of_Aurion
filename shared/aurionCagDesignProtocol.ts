@@ -137,11 +137,11 @@ export function summarizeWorldChunkTerrain(chunk: BaseWorldChunk): AurionTerrain
 export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
   const matrix = canonicalTerrainMatrix(chunk);
   const summary = summarizeWorldChunkTerrain(chunk);
-  const rowStrings = new Array(matrix.length);
+  let rows = "";
   for (let i = 0; i < matrix.length; i++) {
-    rowStrings[i] = `{${matrix[i]!.join(",")}}`;
+    if (i > 0) rows += ",";
+    rows += `{${matrix[i]!.join(",")}}`;
   }
-  const rows = rowStrings.join(",");
   const code = `m={${rows}};dx=Abs[Differences[Transpose[m]]];dz=Abs[Differences[m]];{Min[m],Max[m],Max[dx,dz]}`;
   return Object.freeze({
     kind: "terrain_invariants",
@@ -190,20 +190,16 @@ export function summarizeWorldChunkTexturization(chunk: BaseWorldChunk): AurionT
  */
 export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
   const summary = summarizeWorldChunkTexturization(chunk);
-  const surfacesArr = new Array(chunk.tiles.length);
-  for (let i = 0; i < chunk.tiles.length; i++) {
-    const t = chunk.tiles[i]!;
-    switch(t.surface) {
-        case "grass": surfacesArr[i] = 1; break;
-        case "riverbank": surfacesArr[i] = 2; break;
-        case "stone": surfacesArr[i] = 3; break;
-        case "forest_floor": surfacesArr[i] = 4; break;
-        case "ash": surfacesArr[i] = 5; break;
-        case "ruin_path": surfacesArr[i] = 6; break;
-        default: throw new Error(`unmapped surface: ${t.surface}`);
+  const matrix = canonicalSurfaceMatrix(chunk);
+  let surfaces = "";
+  let first = true;
+  for (let z = 0; z < matrix.length; z++) {
+    for (let x = 0; x < matrix[z]!.length; x++) {
+      if (!first) surfaces += ",";
+      first = false;
+      surfaces += matrix[z]![x];
     }
   }
-  const surfaces = surfacesArr.join(",");
   const code = `surfaces={${surfaces}};Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]`;
 
   return Object.freeze({
@@ -306,17 +302,17 @@ export function buildWorldChunkTerrainContinuityCagProbe(chunk: BaseWorldChunk):
   const surfaceMatrix = canonicalSurfaceMatrix(chunk);
   const summary = summarizeWorldChunkTerrainContinuity(chunk);
 
-  const hRowStrings = new Array(heightMatrix.length);
+  let hRows = "";
   for (let i = 0; i < heightMatrix.length; i++) {
-    hRowStrings[i] = `{${heightMatrix[i]!.join(",")}}`;
+    if (i > 0) hRows += ",";
+    hRows += `{${heightMatrix[i]!.join(",")}}`;
   }
-  const hRows = hRowStrings.join(",");
 
-  const sRowStrings = new Array(surfaceMatrix.length);
+  let sRows = "";
   for (let i = 0; i < surfaceMatrix.length; i++) {
-    sRowStrings[i] = `{${surfaceMatrix[i]!.join(",")}}`;
+    if (i > 0) sRows += ",";
+    sRows += `{${surfaceMatrix[i]!.join(",")}}`;
   }
-  const sRows = sRowStrings.join(",");
 
   const code = `h={${hRows}};s={${sRows}};var=Round[Variance[Flatten[h]]];sdx=Differences[Transpose[s]];sdz=Differences[s];trans=Total[Unitize[sdx], 2]+Total[Unitize[sdz], 2];{var,trans}`;
 
