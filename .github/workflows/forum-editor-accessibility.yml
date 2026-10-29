@@ -4,6 +4,7 @@ on:
     paths:
       - 'client/src/components/ForumAdminEditor*'
       - '.github/workflows/forum-editor-accessibility.yml'
+      - 'tests/forum-preview/**'
 permissions:
   contents: read
 jobs:
@@ -24,3 +25,19 @@ jobs:
         run: |
           pnpm check
           pnpm exec vitest run client/src/components/ForumAdminEditor.test.tsx
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify actual keyboard focus and selection in Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vite --config tests/forum-preview/vite.config.ts --host 127.0.0.1 --port 4174 --strictPort > /tmp/forum-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:4174/index.html >/dev/null; then break; fi
+            if ! kill -0 "$preview_pid" 2>/dev/null; then cat /tmp/forum-preview.log; exit 1; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:4174/index.html >/dev/null
+          node tests/forum-preview/keyboard.mjs
