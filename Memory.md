@@ -4933,3 +4933,34 @@ Next safe step: Kandidatenbranch als Draft-PR bereitstellen und dessen gepinnte 
 Change: Added a narrow Python regression asserting that legacy Chrome first-run observations cannot be attributed to the following fixed JNI smoke guard. Added begin_guard() to clear only browserStates/browserPackage when the guard changes, retaining legacyRedObserved. Android callback dispatch, activity checks, 20-second report deadline, security assertions and failure gates remain unchanged.
 Evidence: existing failed JNI run 40614170019 attempt 1 (SMOKE_REPORT_TIMEOUT/fixed_callback), same-head attempt 2 success; tests first committed at c577b18155aa540dfab74f8f8443314e1ce04bcc and minimal fix at c107f84abd81e1803c1f9abe39c5dcb7d3f0ce76. This corrects diagnostic provenance only; it does not prove or repair the underlying Android callback timeout. Exact final-head CI and physical-device validation pending.
 Next: read Python unit-test and Android-JNI CI on the final Memory head; if failures, diagnose actual log/receipt. No merge, deployment, APK signing, production world apply or lowering of gates.
+
+
+### 2026-10-28 — G11 (#918) bestätigte Projektion final verifiziert
+Status: VERIFIED — G11-Code-/Integrationsabnahme; keine Produktions-, TLS-Live- oder Geräteabnahme.
+Task: G11 „Bestätigte Weltprojektion mit Sequenzprüfung und visueller Interpolation“ anhand der bereits gemergten Implementierung und des tatsächlichen Mehrclient-Laufs abschließen.
+Entscheidungen: Keine doppelte Gameplay-Implementierung. PR #1158 enthält den G11-Integrationsnachweis und ist bereits gemergt; PR #1157 ergänzt die bestätigte Self-Presence-Invariante im Welcome. Aurion bleibt einzige Autorität; SnapshotInterpolator bleibt rein visuell und verändert bestätigte Integer-Positionen nicht.
+Berührte Flächen: Nur `Memory.md` in diesem Evidence-PR; keine Gameplay-, Transport-, Datenbank-, Produktions- oder Geräteänderung.
+Evidence:
+- PR [#1158](https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1158), Codehead `3b8f2b672cd9785742ea7157d56e6a2958453b77`, gemergt als `c07b35b491adf33fcb7850ed296fd52348dbb34b`; beim Merge identischer Tree `3498736f2ede845a9fca86a7f65110515442f6b`.
+- Echter isolierter Godot/WebSocketPeer-/Aurion-Gateway-/MariaDB-Integrationslauf [#40111435364](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40111435364), Job `120923835125`, abgeschlossen `success` auf dem exakten PR-Head. Der Lauf führt den bestätigten Zustand durch ZoneState, EntityRegistry und SnapshotInterpolator und vergleicht ihn mit dem unabhängig empfangenen zweiten Client-Snapshot derselben Sequenz (7/Tick 3); 100-ms-Darstellungsgrenze, unveränderte bestätigte Position, Duplikat-/Stale-Ablehnung und keine Extrapolation sind geprüft. Dies ist isolierte Integration, keine Produktions- oder Geräte-Evidence.
+- Aktueller Basis-Head dieses Evidence-PRs `54d164f7fb87623267dad03dafac0189dce1a75e`; Godot `4.7.2.stable.official.ed1daf0bf`. Auf genau diesem Head bestanden `tests/test_zone_projection.gd`, `tests/test_zone_entities.gd` und `tests/integration/test_zone_socket.gd`. Letzterer ist explizit ein lokaler Loopback-Vertragstest, kein Live-Serverlauf.
+- G10 #917 bleibt offen; seine weitergehenden G09-/Live-WSS-/Geräte-Abnahmen werden durch den G11-Test nicht als abgeschlossen ausgegeben. G09 #916 ist weiterhin offen.
+Gelernt: Eine echte isolierte Zwei-Client-Integration belegt die G11-Projektion, obwohl der übergeordnete G10/G09-Live-/Gerätescope separat offen bleibt; Issue-, PR- und Runtime-Evidence dürfen nicht über diese Grenze hinaus interpretiert werden.
+Offen: G09 #916 und die vollständige G10-Abnahme #917, insbesondere echte Live-WSS-/native Login-/Geräte-Readbacks. Keine Produktionspromotion oder signierte Gerätefreigabe behauptet.
+Nächster sicherer Schritt: G11 #918 nach Merge dieses Evidence-Eintrags schließen und G11 im Parent #906 als erledigt markieren; G09/G10 und den späteren G13-Checkpoint separat offen weiterführen.
+
+
+### 2026-10-29 — G21 Touch-Kamera und Zielaktion (#1221)
+Status: PARTIAL — Code und isolierte Godot-Laufzeit geprüft; physisches Tablet, Live-Sitzung und vollständiges mobiles HUD offen.
+Änderung: G20-Bewegung bleibt einziger Bewegungseingang; ein separater Touch-Router führt die bestätigte Position zu einer visuellen Kamera, wählt sichtbare bestätigte Ziele und sendet nur den bestehenden typisierten Angriff. Aurion bleibt einzige Autorität für Welt und Kampf. Die relevanten Kamera-, Router-, Szenen- und Multitouch-Dateien aus #1193 sind blobidentisch; der Zieltest übernimmt die Fingerisolation aus #1192.
+Evidence: Codehead `83f4d5e70ee8153420be28a1c1930cf655bb1544`, [Godot-Lauf 40835337604](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337604) Versuch 1 mit echten Godot-Headless-Tests für Bewegung, Mehrfingerrouting und Angriff über isolierten lokalen WebSocket. [Android-Preview-Build 40835337634](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337634) erfolgreich; sämtliche zehn PR-Läufe am Codehead erfolgreich. Fixtures sind keine Live-Server- oder Gerätedaten.
+Erkenntnis: Ein visueller Ziel- und Kameraadapter darf bestätigten Zustand nicht verändern und muss beim Verlust der Frische, bei Diagnose und Rotation Eingaben beenden. Der finale Memory-Head benötigt eigene CI und Readback.
+Offen: echtes Tab A9, native Touch-/Kameraergonomie, aktives Live-Login/Angriff, fehlendes eigenes Charaktermodell und das mobile HUD aus #929. Keine Produktionsfreigabe behauptet.
+
+
+### 2026-10-29 — CAG-Ausdrücke mit erhaltener Receipt-Parität (#1205)
+Status: PARTIAL — isolierte Prüfungen und Provider-Canary am Codehead bestanden; finaler Memory-Head und Merge gesondert prüfen.
+Änderung: Bestehende Aurion-Terrain-/Kontinuitäts-/Textur- und Struktur-Analyseausdrücke mit weniger Zwischenarrays gebaut. Aus #1218 nur die receipt-kompatiblen Teile übernommen; dessen abweichende Textur-/Ergebnisreihenfolge bleibt ausgeschlossen. Wolfram ist Analyse ohne Mutationsautorität; Aurion bleibt alleinige Spiel- und Zustandsautorität.
+Evidence: Codehead `19ecef6b0ff99bf36dbcb30c9b5a98c73c16226e`; [AIM-265-Lauf 40838846032](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40838846032) bestand 102 Tests, darunter acht vollständige Probe-/Hash-Paritätsfälle mit umgekehrter Reihenfolge und 14 Strukturanalysen. Die tatsächlichen Wolfram-Canaries meldeten exakt übereinstimmende Terrain-Invarianten, Kontinuität und Texturwerte ohne Mutationen. Alle fünf PR-Läufe am Codehead erfolgreich.
+Erkenntnis: Eine scheinbar kanonische Neusortierung ändert bestehende Request-/Result-Hashes und benötigt eine ausdrücklich versionierte Migration; sie darf nicht durch die Optimierung eingeführt werden.
+Offen: Exact-Head-CI und Merge-Readback; keine Aussage über produktive Geschwindigkeit oder Spieländerungen.

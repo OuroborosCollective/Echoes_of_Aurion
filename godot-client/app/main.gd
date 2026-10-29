@@ -22,6 +22,7 @@ const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
 const InputAdapter = preload("res://app/input_adapter.gd")
+const TouchRouter = preload("res://ui/mobile/touch_router.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
@@ -51,6 +52,9 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var live_3d_viewport: SubViewport = $WorldView/Live3D
 @onready var mobile_joystick: Control = $MobileJoystick
 @onready var world_camera: Camera3D = %WorldCamera
+@onready var target_hud: Control = $TargetHUD
+@onready var target_label: Label = %TargetLabel
+@onready var world_action: Button = %WorldAction
 @onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
 @onready var confirmed_terrain: Node3D = $WorldView/Live3D/World/ConfirmedTerrain
@@ -60,6 +64,8 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 
 var _diagnostics = TechnicalDiagnostics.new()
 var _movement = InputAdapter.new()
+var _camera_router = TouchRouter.new()
+var _selected_target_id := ""
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
@@ -174,6 +180,7 @@ func _ready() -> void:
 	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	world_toggle.pressed.connect(_toggle_world_diagnostics)
+	world_action.pressed.connect(_on_world_action_pressed)
 	login.disabled = true
 	if not _configuration_valid():
 		status.text = "Konfiguration ungültig"
@@ -317,7 +324,13 @@ func _reset_projection() -> void:
 	_remote_last_poll_ms = -1
 	_clear_3d_actors()
 	unassigned_floor.position = Vector3.ZERO
+	world_camera.reset_view()
 	world_camera.transform = _initial_world_camera_transform
+	_camera_router.cancel()
+	_selected_target_id = ""
+	target_hud.visible = false
+	target_label.text = "Ziel: keines"
+	world_action.disabled = true
 	world_view.visible = false
 	world_hud.visible = false
 	mobile_joystick.visible = false
@@ -550,6 +563,9 @@ func _process(_delta: float) -> void:
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
 	_poll_move_intent(now_ms)
+	if not _world_input_permitted():
+		_camera_router.cancel()
+	_refresh_target_hud()
 	if _awaiting_callback:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
@@ -560,7 +576,9 @@ func _process(_delta: float) -> void:
 func _show_3d() -> void:
 	world_view.visible = true
 	world_hud.visible = true
+	target_hud.visible = true
 	mobile_joystick.visible = true
+	_refresh_target_hud()
 	$SafeMargin.visible = false
 	world_toggle.text = "Diagnose"
 	_update_3d_status()
@@ -570,10 +588,97 @@ func _toggle_world_diagnostics() -> void:
 		return
 	$SafeMargin.visible = not $SafeMargin.visible
 	mobile_joystick.visible = not $SafeMargin.visible
+	target_hud.visible = not $SafeMargin.visible
+	_camera_router.cancel()
 	if $SafeMargin.visible:
 		_cancel_move_intent()
 	world_toggle.text = "3D-Ansicht" if $SafeMargin.visible else "Diagnose"
 
+
+## G21: camera-only gestures never send move/attack or alter confirmed state.
+## The existing G20 joystick still exclusively owns its own finger index.
+func _world_input_permitted() -> bool:
+	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible
+
+func _camera_exclusions() -> Array[Rect2]:
+	var blocked: Array[Rect2] = []
+	if mobile_joystick.visible:
+		blocked.append(mobile_joystick.get_global_rect())
+	if world_hud.visible:
+		blocked.append(world_hud.get_global_rect())
+	if target_hud.visible:
+		blocked.append(target_hud.get_global_rect())
+	return blocked
+
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventScreenTouch or event is InputEventScreenDrag):
+		return
+	var area := Rect2(
+		world_view.global_position + Vector2(world_view.size.x * 0.5, 0.0),
+		Vector2(world_view.size.x * 0.5, world_view.size.y))
+	var event_result: Dictionary = _camera_router.route(event, _world_input_permitted(), area, _camera_exclusions())
+	match str(event_result.get("kind", "")):
+		"drag":
+			world_camera.drag_orbit(event_result["delta"])
+		"tap":
+			_select_visible_target_at(event_result["position"])
+
+func _is_visible_confirmed_entity(id: String) -> bool:
+	if id.is_empty():
+		return false
+	if _entities.record("mobs", id).is_empty() and _entities.record("presences", id).is_empty():
+		return false
+	for actor in world_actors.get_children():
+		if actor is Node3D and actor.visible and actor.has_method("confirmed_mm") and str(actor.get("entity_id")) == id:
+			return true
+	return false
+
+func _select_visible_target_at(screen_point: Vector2) -> void:
+	if not _world_input_permitted():
+		return
+	_selected_target_id = ""
+	var view_rect: Rect2 = world_view.get_global_rect()
+	if view_rect.size.x <= 0.0 or view_rect.size.y <= 0.0:
+		_refresh_target_hud()
+		return
+	# SubViewport coordinates can differ from Control coordinates on tablet
+	# rotation; the click and projected model point must share one basis.
+	var relative := screen_point - view_rect.position
+	var projected_click := Vector2(
+		relative.x * float(live_3d_viewport.size.x) / view_rect.size.x,
+		relative.y * float(live_3d_viewport.size.y) / view_rect.size.y)
+	var best_distance := maxf(45.0, minf(view_rect.size.x, view_rect.size.y) * 0.075)
+	for actor in world_actors.get_children():
+		if not (actor is Node3D) or not actor.visible or not actor.has_method("confirmed_mm"):
+			continue
+		var id := str(actor.get("entity_id"))
+		if not _is_visible_confirmed_entity(id):
+			continue
+		var model_point: Vector3 = actor.global_position + Vector3(0.0, 1.0, 0.0)
+		if world_camera.is_position_behind(model_point):
+			continue
+		var distance := world_camera.unproject_position(model_point).distance_to(projected_click)
+		if distance < best_distance:
+			best_distance = distance
+			_selected_target_id = id
+	_refresh_target_hud()
+
+func _refresh_target_hud() -> void:
+	if not _is_visible_confirmed_entity(_selected_target_id):
+		_selected_target_id = ""
+	target_label.text = "Ziel: keines" if _selected_target_id.is_empty() else "Aurion bestätigt · " + _selected_target_id
+	var mob: Dictionary = _entities.record("mobs", _selected_target_id)
+	world_action.disabled = not _world_input_permitted() or mob.is_empty() or mob.get("state", "dead") == "dead"
+
+func _on_world_action_pressed() -> void:
+	# Only the existing v5 send_attack typed command; Aurion decides all
+	# reachability, damage, cooldown, and final action outcome.
+	if not _world_input_permitted():
+		return
+	_refresh_target_hud()
+	if world_action.disabled or _selected_target_id.is_empty():
+		return
+	_zone_socket.send_attack(_selected_target_id)
 
 ## G20: InputMap and the pinned native Godot joystick are presentation inputs.
 ## Only a verified v5 session may send digital intents, max once per 100 ms.
@@ -681,8 +786,7 @@ func _project_3d(now_ms: int) -> void:
 				var z: float = float(point["z"]) / 1000.0
 				# The neutral plane has no world authority; follow only the visual point.
 				unassigned_floor.position = Vector3(x, 0.0, z)
-				world_camera.position = Vector3(x, 2.8, z + 5.5)
-				world_camera.look_at(Vector3(x, 1.0, z), Vector3.UP)
+				world_camera.follow_confirmed(Vector3(x, 1.0, z))
 	_update_3d_status()
 func _update_3d_status() -> void:
 	if not _confirmed_zone.has_state():
@@ -928,6 +1032,9 @@ func _poll_reconnect(now_ms: int) -> void:
 func _fit_layout() -> void:
 	if not is_node_ready():
 		return
+	# Rotations-/resize-cancel cannot resurrect a captured camera finger.
+	_camera_router.cancel()
+	_cancel_move_intent()
 	card.custom_minimum_size.x = minf(600.0, maxf(240.0, size.x - 48.0))
 	title.add_theme_font_size_override("font_size", 32 if size.x < 600 else 44)
 	queue_redraw()
