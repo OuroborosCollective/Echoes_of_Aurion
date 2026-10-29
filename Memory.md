@@ -4998,6 +4998,14 @@ Erkenntnis: Node 2.1.0 benötigt einen kompatiblen Server ab 2.1; ein alleiniger
 Offen: Exact-Head-CI mit erneutem MCP-Regressionstest, Merge- und Laufzeit-Readback; kein Produktionsdeployment belegt.
 
 
+### 2026-10-29 — Forum-Editor zugänglicher (#1217)
+Status: PARTIAL — isolierte Komponenten- und echte Chromium-Tastaturprüfung bestanden; finaler Memory-Head und Merge separat prüfen.
+Änderung: Sichere Verbesserungen aus #1212 und #1222 konsolidiert: sichtbarer Tastaturfokus und Auswahlzustand, barrierefreier Name mit vorhandenen Titel-/Kategorie-/Pin-Angaben sowie `aria-busy` beim Speichern. Die bereits vorhandene Sperre gegen mehrfaches Absenden bleibt bestehen.
+Evidence: Codehead `16f048c2a34ac5271b47e874359c359bed5ee22a`; [Forum-CI 40955718936](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40955718936) mit Typecheck, zwei Komponententests und echtem Chromium-Tastatur-/Fokus-/Auswahltest. [Kandidatenlauf 40955719058](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40955719058) und [Containerlauf 40955718935](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40955718935) bestanden. Die Forumsfixture ist synthetisch und keine produktive Datenbank.
+Erkenntnis: Ein zusätzliches aria-label darf bereits sichtbare Kategorie- und Pin-Informationen nicht aus dem zugänglichen Namen verdrängen. Keine neue Backend-Autorität oder Mock-Wahrheit eingeführt.
+Offen: Exact-Head-CI und Merge-Readback; kein Produktivnachweis behauptet.
+
+
 ### 2026-10-29 — CAG-Ausdrücke mit erhaltener Receipt-Parität (#1205)
 Status: PARTIAL — isolierte Prüfungen und Provider-Canary am Codehead bestanden; finaler Memory-Head und Merge gesondert prüfen.
 Änderung: Bestehende Aurion-Terrain-/Kontinuitäts-/Textur- und Struktur-Analyseausdrücke mit weniger Zwischenarrays gebaut. Aus #1218 nur die receipt-kompatiblen Teile übernommen; dessen abweichende Textur-/Ergebnisreihenfolge bleibt ausgeschlossen. Wolfram ist Analyse ohne Mutationsautorität; Aurion bleibt alleinige Spiel- und Zustandsautorität.
