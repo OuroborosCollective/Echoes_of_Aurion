@@ -5006,6 +5006,15 @@ Erkenntnis: Ein zusätzliches aria-label darf bereits sichtbare Kategorie- und P
 Offen: Exact-Head-CI und Merge-Readback; kein Produktivnachweis behauptet.
 
 
+### 2026-10-29 — CAG-Ausdrücke mit erhaltener Receipt-Parität (#1205)
+Status: PARTIAL — isolierte Prüfungen und Provider-Canary am Codehead bestanden; finaler Memory-Head und Merge gesondert prüfen.
+Änderung: Bestehende Aurion-Terrain-/Kontinuitäts-/Textur- und Struktur-Analyseausdrücke mit weniger Zwischenarrays gebaut. Aus #1218 nur die receipt-kompatiblen Teile übernommen; dessen abweichende Textur-/Ergebnisreihenfolge bleibt ausgeschlossen. Wolfram ist Analyse ohne Mutationsautorität; Aurion bleibt alleinige Spiel- und Zustandsautorität.
+Evidence: Codehead `19ecef6b0ff99bf36dbcb30c9b5a98c73c16226e`; [AIM-265-Lauf 40838846032](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40838846032) bestand 102 Tests, darunter acht vollständige Probe-/Hash-Paritätsfälle mit umgekehrter Reihenfolge und 14 Strukturanalysen. Die tatsächlichen Wolfram-Canaries meldeten exakt übereinstimmende Terrain-Invarianten, Kontinuität und Texturwerte ohne Mutationen. Alle fünf PR-Läufe am Codehead erfolgreich.
+Zusätzlich: Die drei Offline-Hilfsdateien aus #1187 wurden ohne Runtime-Anbindung übernommen. [Kombinierter AIM-265-Lauf 40959613472](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40959613472) bestand Typecheck und 108 Tests, einschließlich sechs Offline-Fällen, und meldete reale CAG-Canaries.
+Erkenntnis: Eine scheinbar kanonische Neusortierung ändert bestehende Request-/Result-Hashes und benötigt eine ausdrücklich versionierte Migration; sie darf nicht durch die Optimierung eingeführt werden.
+Offen: Exact-Head-CI und Merge-Readback; keine Aussage über produktive Geschwindigkeit oder Spieländerungen.
+
+
 ### 2026-10-30 — Avatar-Profil-Elternzuordnung mit Parität (#1227)
 Status: PARTIAL — Three.js-Regressionsfixture und isolierte Kandidatenläufe bestanden; finaler Integrationshead und Live-/Gerätebezug offen.
 Änderung: Die Array-Optimierung der Web-Avatarzuordnung behält bei mehrfach aufgelösten Bones den ersten kanonischen Eltern-Treffer wie der bisherige Scan. Der dedizierte Alias-Kollisionstest und sein Workflow aus dem früheren #1223-Kandidaten sind erhalten; fremde Benchmark- und Agentennotizen werden nicht übernommen. Aurion bleibt alleinige Autorität.
