@@ -4948,3 +4948,19 @@ Evidence:
 Gelernt: Eine echte isolierte Zwei-Client-Integration belegt die G11-Projektion, obwohl der übergeordnete G10/G09-Live-/Gerätescope separat offen bleibt; Issue-, PR- und Runtime-Evidence dürfen nicht über diese Grenze hinaus interpretiert werden.
 Offen: G09 #916 und die vollständige G10-Abnahme #917, insbesondere echte Live-WSS-/native Login-/Geräte-Readbacks. Keine Produktionspromotion oder signierte Gerätefreigabe behauptet.
 Nächster sicherer Schritt: G11 #918 nach Merge dieses Evidence-Eintrags schließen und G11 im Parent #906 als erledigt markieren; G09/G10 und den späteren G13-Checkpoint separat offen weiterführen.
+
+
+### 2026-10-29 — G21 Touch-Kamera und Zielaktion (#1221)
+Status: PARTIAL — Code und isolierte Godot-Laufzeit geprüft; physisches Tablet, Live-Sitzung und vollständiges mobiles HUD offen.
+Änderung: G20-Bewegung bleibt einziger Bewegungseingang; ein separater Touch-Router führt die bestätigte Position zu einer visuellen Kamera, wählt sichtbare bestätigte Ziele und sendet nur den bestehenden typisierten Angriff. Aurion bleibt einzige Autorität für Welt und Kampf. Die relevanten Kamera-, Router-, Szenen- und Multitouch-Dateien aus #1193 sind blobidentisch; der Zieltest übernimmt die Fingerisolation aus #1192.
+Evidence: Codehead `83f4d5e70ee8153420be28a1c1930cf655bb1544`, [Godot-Lauf 40835337604](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337604) Versuch 1 mit echten Godot-Headless-Tests für Bewegung, Mehrfingerrouting und Angriff über isolierten lokalen WebSocket. [Android-Preview-Build 40835337634](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337634) erfolgreich; sämtliche zehn PR-Läufe am Codehead erfolgreich. Fixtures sind keine Live-Server- oder Gerätedaten.
+Erkenntnis: Ein visueller Ziel- und Kameraadapter darf bestätigten Zustand nicht verändern und muss beim Verlust der Frische, bei Diagnose und Rotation Eingaben beenden. Der finale Memory-Head benötigt eigene CI und Readback.
+Offen: echtes Tab A9, native Touch-/Kameraergonomie, aktives Live-Login/Angriff, fehlendes eigenes Charaktermodell und das mobile HUD aus #929. Keine Produktionsfreigabe behauptet.
+
+
+### 2026-10-29 — Optionaler Admin-MCP-Supabase-OAuth-Modus (#1216)
+Status: PARTIAL — isolierte Signatur-/HTTP- und Autorisierungsprüfungen bestanden; produktive Aktivierung und finaler Memory-Head separat offen.
+Änderung: Optionaler, ausdrücklich zu konfigurierender Supabase-OAuth-Modus mit Prüfung von Issuer, Signatur, Ablauf, exakter Ressourcen-Audience, Client-ID, nichtanonymer Identität, vertrauenswürdigen App-Rollen und Aurions bestehendem DB-Adminstatus. Ein getrenntes SQL-Skript beschreibt eine nicht automatisch aktivierte Client-/Audience-Zuordnung; kein Hook und keine Nutzer-/DB-Konfiguration werden durch den PR eingeschaltet.
+Evidence: Codehead `51be35151a8df30df8ebff120c60f3507ffa66b0`; [OAuth-CI 40838707107](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40838707107) bestand 39 Tests einschließlich echter lokaler ES256-Signaturprüfung und HTTP-Transport mit isolierten JWKS-/DB-Fixtures; alle sechs sichtbaren PR-Läufe bestanden. Laut gesondertem Laborbericht wurden PKCE/Consent/Refresh mit dem exakten SQL-Skript getestet; diese Aussage ist keine produktive Hook- oder Loginbestätigung.
+Erkenntnis: Eine allgemeine `authenticated`-Audience bindet ein Token nicht ausreichend an eine konkrete MCP-Ressource. Eine vorhandene Access-Token-Hook-Logik darf bei späterer Einrichtung nicht überschrieben werden; gespeicherte Identitäten und Charakterbindungen bleiben zu verifizieren.
+Offen: Exact-Head-CI, Review und Merge-Readback; vor irgendeiner Aktivierung getrennte Prüfung des bestehenden Auth-Hooks, Rechte, Accounts, Rollback und realen Logins. Keine produktive Änderung durch diesen Eintrag.
