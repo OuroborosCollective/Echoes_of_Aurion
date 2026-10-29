@@ -13,6 +13,7 @@ const noop = () => {};
 function App() {
   const [autoAttack, setAutoAttack] = useState(q.get("auto") !== "0");
   const [autoLoot, setAutoLoot] = useState(true);
+  const [partyOpenCount, setPartyOpenCount] = useState(0);
   const props: GameHUDProps = {
     playerName: "Kaelen Voss", playerIcon: "⚔", playerColor: "#d8b45f", points: 1280, victories: 14, progressionCount: 6,
     mastery: { name: "Ruinenklinge", level: 7, xpPercent: 0.62 }, playerState: "live", playerStateLabel: "Bestätigt",
@@ -37,13 +38,14 @@ function App() {
     movementControl: <VirtualJoystick onMove={noop} />,
     feedback: q.get("fb") === "1" ? "Ziel außerhalb der bestätigten Aurion-Reichweite." : undefined,
     pending: q.get("pending") === "1", context: (q.get("ctx") as GameHUDProps["context"]) ?? "exploration",
-    onOpenCharacter: noop, onOpenInventory: noop, onOpenCrafting: noop, onOpenQuests: noop, onOpenContacts: noop, onOpenParty: noop, onOpenDungeonFinder: noop, onOpenMap: noop,
+    onOpenCharacter: noop, onOpenInventory: noop, onOpenCrafting: noop, onOpenQuests: noop, onOpenContacts: noop, onOpenParty: () => setPartyOpenCount(count => count + 1), onOpenDungeonFinder: noop, onOpenMap: noop,
     onOpenControls: noop, onOpenDisciplines: noop, onOpenCompanion: noop, onOpenChat: noop, onOpenGuild: noop, onOpenEconomy: noop, onOpenDialogue: noop, onOpenTerritory: noop,
     onOpenHomestead: noop, onOpenDeterminism: noop, onOpenResearch: noop, onToggleAutoLoot: () => setAutoLoot(v => !v), onInteract: noop,
     onToggleAutoAttack: () => setAutoAttack(v => !v), onAttack: noop, onCastSkill: noop,
   };
   return (
     <div className="stage xaurion-runtime">
+      <output hidden data-testid="preview-party-open-count">{partyOpenCount}</output>
       <i className="tree" style={{ left: "8%" }} /><i className="tree" style={{ left: "30%", bottom: "40%", height: "12vmin" }} /><i className="tree" style={{ left: "62%" }} /><i className="rock" />
       <div className="ax1-authority-shell"><GameHUD {...props} /></div>
     </div>

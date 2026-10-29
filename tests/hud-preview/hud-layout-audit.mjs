@@ -107,6 +107,16 @@ for (const [name, d] of Object.entries(DEVICES)) {
     for (const c of contained) if (c.child.y < c.parent.y - 0.5 || c.child.y + c.child.h > c.parent.y + c.parent.h + 0.5) problems.push(`squeezed: ${c.name} does not fit inside its panel`);
     for (const c of caps) if (c.outside > 0.5) problems.push(`caption pokes out of its round button by ${c.outside.toFixed(1)}px: ${c.name}`);
     for (const t of touch) if (t.w < 43.5 || t.h < 43.5) problems.push(`touch target < 44px: ${t.name} (${t.w.toFixed(0)}x${t.h.toFixed(0)})`);
+    // Verify the real pointer path: the blocking deck closes before the group
+    // shortcut is used, and the preview callback actually receives the click.
+    if (d.touch && variant === "default") {
+      const nav = page.getByRole("navigation", { name: "Schnellnavigation" });
+      await nav.getByRole("button", { name: "Weitere Menüs", exact: true }).click({ timeout: 5000 });
+      const deck = page.getByRole("dialog", { name: "Weitere Menüs", exact: true });
+      await deck.getByRole("button", { name: "Menü schließen", exact: true }).click({ timeout: 5000 });
+      await nav.getByRole("button", { name: "Gruppe", exact: true }).click({ timeout: 5000 });
+      if (await page.getByTestId("preview-party-open-count").textContent() !== "1") problems.push("group shortcut did not invoke its callback after closing the menu");
+    }
     console.log(`${problems.length ? "FAIL" : "ok  "} ${name} · ${variant}${problems.length ? "\n   - " + [...new Set(problems)].join("\n   - ") : ""}`);
     failures += problems.length;
     await ctx.close();
