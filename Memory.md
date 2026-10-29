@@ -4966,6 +4966,14 @@ Erkenntnis: Ein gemeinsamer Lock und das dazu erzeugte Manifest bewahren Reprodu
 Offen: CI und Review am Memory-Head, Merge- und späterer Runtime-Readback; kein Produktionsdeployment oder Gerätebeweis.
 
 
+### 2026-10-29 — Terrain-Erzeugung mit Ergebnisparität (#1215)
+Status: PARTIAL — isolierte Terrain-, Replay- und Codehead-CI geprüft; finaler Memory-Head und Merge noch zu prüfen.
+Änderung: Für die feste 8×8-Terrainzuordnung werden vorbereitete Matrizen statt wiederholter Koordinaten-Strings genutzt. Die vollständigen Aurion-Zonendaten, Tile-Reihenfolge und Regeln bleiben unverändert; der aktualisierte AIM-265-Bericht trägt den neuen Quellhash.
+Evidence: Codehead `da328a21b2d13b946dc754e329b6daff6c07790f`; [Terrain-Parität 40957326202](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40957326202) bestand 24 Tests einschließlich sieben vollständiger Snapshot-Hash-Vergleiche gegen Main `76afd81bac8432c3a6e7a18177cac0cbf24c94c4`. Alle sechs PR-Läufe am Codehead bestanden; der frühere AIM-265-Replaylauf `40830349195` validierte den geänderten Bericht mit unabhängiger Rechenprüfung.
+Erkenntnis: Gleiche Terrain-Ausgabe muss vollständig einschließlich Reihenfolge und Hash nachgewiesen werden; ein isolierter Mikrobenchmark ist kein FPS- oder Live-Nachweis.
+Offen: Exact-Head-CI und Merge-Readback, keine Produktiv- oder Gerätewirkung behauptet.
+
+
 ### 2026-10-29 — Godot-Kamera ohne Eigenmodell (#1225)
 Status: PARTIAL — realer Godot-Szenentest vor und nach der Korrektur geprüft; physisches Gerät und vollständige Figurendarstellung offen.
 Änderung: Kamera und neutraler Boden folgen einer zur bestätigten Aurion-Eigensitzung passenden, endlichen Positionsprojektion unabhängig davon, ob ein Eigenmodell geladen werden konnte. Es wird kein Ersatzspieler und keine eigene Welt- oder Bewegungsautorität erzeugt.
