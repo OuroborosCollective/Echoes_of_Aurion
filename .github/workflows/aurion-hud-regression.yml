@@ -56,4 +56,12 @@ jobs:
             sleep 1
           done
           curl --silent --fail http://127.0.0.1:4173/index.html >/dev/null
-          node tests/hud-preview/hud-layout-audit.mjs
+          HUD_SCREENSHOTS=/tmp/aurion-hud-captures node tests/hud-preview/hud-layout-audit.mjs
+      - name: Archive isolated preview images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-hud-synthetic-layout-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/aurion-hud-captures/
+          if-no-files-found: warn
+          retention-days: 7

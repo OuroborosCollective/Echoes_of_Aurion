@@ -13,6 +13,7 @@
  * Serve the preview first (see hud-preview/README.md). Requires `playwright` (Chromium).
  */
 import { chromium } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
 
 const BASE = process.argv[2] ?? "http://localhost:4173/index.html";
 const DEVICES = {
@@ -85,6 +86,10 @@ for (const [name, d] of Object.entries(DEVICES)) {
     await page.waitForTimeout(300);
     await act(page);
     await page.waitForTimeout(150);
+    if (process.env.HUD_SCREENSHOTS && name.startsWith("Tab A9") && variant === "default") {
+      await mkdir(process.env.HUD_SCREENSHOTS, { recursive: true });
+      await page.screenshot({ path: `${process.env.HUD_SCREENSHOTS}/${d.w}x${d.h}.png` });
+    }
     const { solids, touch, contained, caps, vw, vh } = await measure(page);
     const problems = [];
     // In the default layout, keep the central gameplay area clear on Tab A9.
