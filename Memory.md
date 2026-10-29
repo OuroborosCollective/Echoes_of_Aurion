@@ -5013,3 +5013,11 @@ Evidence: Codehead `19ecef6b0ff99bf36dbcb30c9b5a98c73c16226e`; [AIM-265-Lauf 408
 Zusätzlich: Die drei Offline-Hilfsdateien aus #1187 wurden ohne Runtime-Anbindung übernommen. [Kombinierter AIM-265-Lauf 40959613472](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40959613472) bestand Typecheck und 108 Tests, einschließlich sechs Offline-Fällen, und meldete reale CAG-Canaries.
 Erkenntnis: Eine scheinbar kanonische Neusortierung ändert bestehende Request-/Result-Hashes und benötigt eine ausdrücklich versionierte Migration; sie darf nicht durch die Optimierung eingeführt werden.
 Offen: Exact-Head-CI und Merge-Readback; keine Aussage über produktive Geschwindigkeit oder Spieländerungen.
+
+
+### 2026-10-30 — Starter-Pilot-Artefakte an CI-Versuch binden
+Status: PARTIAL — Fehlerursache am wiederholten Lauf beobachtet; abschließende CI und Wiederholungs-Readback ausstehend.
+Änderung: Upload und unabhängiger Download des Starter-Pilot-Evidenzpakets erhalten dieselbe GitHub-Actions-Versuchsnummer im Namen. Revision, unveränderte Inhaltsprüfung und Aufbewahrung bleiben bestehen; andere Versuche werden nicht verwechselt.
+Evidence: Im [Lauf 40974887629, Versuch 2](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40974887629/job/123802031299) bestand die isolierte Spielreise, aber der Download wählte das unvollständige Artefakt 12942575936 aus Versuch 1 statt des neu hochgeladenen Artefakts 12942278303; die Validierung schlug korrekt fehl.
+Erkenntnis: Derselbe SHA kann in wiederholten Versuchen unterschiedliche Artefakte mit gleichem Namen erzeugen; für unabhängigen Readback muss auch der Versuch gebunden sein.
+Offen: Exact-Head-CI und ein tatsächlicher Wiederholungslauf mit eigenem Download, anschließend Merge-Readback. Keine Aussage über Live- oder Tablet-Runtime.
