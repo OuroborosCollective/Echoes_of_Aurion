@@ -28,3 +28,7 @@
 ## 2024-10-17 - Checkpoint Button Keyboard Focus and Screen Reader Context
 **Learning:** List items mapped as buttons (like the checkpoint replay list in `CausalStudioDashboard`) often inherit basic layout classes but forget to define explicit focus states or aria labels, leaving keyboard users unaware of their focus position and screen readers without clear contextual action descriptions.
 **Action:** When adding interactive lists built with buttons, always ensure `focus-visible:ring-2`, `focus-visible:outline-none`, and an `aria-label` are present to make the action fully accessible to all users.
+
+## 2026-10-29 - Forum Editor Accessibility
+**Learning:** Thread list items mapped as buttons lacked explicit focus rings, 'aria-label's, and 'aria-pressed' states, reducing navigability for keyboard and screen reader users. The submit button also lacked 'aria-busy' to reflect the loading state.
+**Action:** When mapping list items as interactive buttons, ensure they have 'focus-visible' styles for keyboard navigation, 'aria-label' for context, and 'aria-pressed' (or similar) to indicate selection. Also apply 'aria-busy' to form submit buttons when async requests are pending.
