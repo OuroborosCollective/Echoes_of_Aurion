@@ -4966,6 +4966,30 @@ Erkenntnis: Ein gemeinsamer Lock und das dazu erzeugte Manifest bewahren Reprodu
 Offen: CI und Review am Memory-Head, Merge- und späterer Runtime-Readback; kein Produktionsdeployment oder Gerätebeweis.
 
 
+### 2026-10-29 — Terrain-Erzeugung mit Ergebnisparität (#1215)
+Status: PARTIAL — isolierte Terrain-, Replay- und Codehead-CI geprüft; finaler Memory-Head und Merge noch zu prüfen.
+Änderung: Für die feste 8×8-Terrainzuordnung werden vorbereitete Matrizen statt wiederholter Koordinaten-Strings genutzt. Die vollständigen Aurion-Zonendaten, Tile-Reihenfolge und Regeln bleiben unverändert; der aktualisierte AIM-265-Bericht trägt den neuen Quellhash.
+Evidence: Codehead `da328a21b2d13b946dc754e329b6daff6c07790f`; [Terrain-Parität 40957326202](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40957326202) bestand 24 Tests einschließlich sieben vollständiger Snapshot-Hash-Vergleiche gegen Main `76afd81bac8432c3a6e7a18177cac0cbf24c94c4`. Alle sechs PR-Läufe am Codehead bestanden; der frühere AIM-265-Replaylauf `40830349195` validierte den geänderten Bericht mit unabhängiger Rechenprüfung.
+Erkenntnis: Gleiche Terrain-Ausgabe muss vollständig einschließlich Reihenfolge und Hash nachgewiesen werden; ein isolierter Mikrobenchmark ist kein FPS- oder Live-Nachweis.
+Offen: Exact-Head-CI und Merge-Readback, keine Produktiv- oder Gerätewirkung behauptet.
+
+
+### 2026-10-29 — Godot-Kamera ohne Eigenmodell (#1225)
+Status: PARTIAL — realer Godot-Szenentest vor und nach der Korrektur geprüft; physisches Gerät und vollständige Figurendarstellung offen.
+Änderung: Kamera und neutraler Boden folgen einer zur bestätigten Aurion-Eigensitzung passenden, endlichen Positionsprojektion unabhängig davon, ob ein Eigenmodell geladen werden konnte. Es wird kein Ersatzspieler und keine eigene Welt- oder Bewegungsautorität erzeugt.
+Evidence: Vorher-Head `2a51ac46b231b309a7c3d9cda2e0adbf860ede3f` scheiterte in [Godot-Lauf 40958357604](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40958357604) mit eingefrorener Kamera ohne Modell. Fix-Head `9a3462e67c27bd8b1142913a8c0b4fa54c624abd` bestand [Godot-Lauf 40959088510](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40959088510), einschließlich movement-input, multitouch-routing und g21-target-action sowie Software-Render und Android-Toolchain. Die Szene verwendet bestätigte Protokollfixtures und einen isolierten lokalen WebSocket.
+Erkenntnis: Der vorherige Test setzte das Kameraziel selbst und verdeckte damit eine Kopplung an das sichtbare Modell; Kameradarstellung und Modellzulassung müssen getrennt bleiben. Der [G19-Lauf 40961860689](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40961860689) auf Head `58168109b17c757da117643eafb6b6f90bed6938` scheiterte, weil die nun nachgeführte Spielkamera die fest eingestellte Testperspektive überschreibt: sichtbare entfernte Dorfobjekte änderten nur 91/4000 Pixel. Der Test verwendet deshalb eine eigene aktive und auf unveränderte Position geprüfte Aufnahmekamera bei laufender Szene und unveränderter Schwelle; [G19-Lauf 40963354766](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40963354766) auf Head `d9b35388f61281df1cd6d8f052d5293440e98af7` bestand mit 342/4000 geänderten Pixeln. Dies ist ein synthetischer Software-Render, kein Tabletbeleg.
+Offen: Exact-Head-CI dieses Memory-Eintrags, fehlende Modellursache, Live-Session und Tab-A9-Gerätenachweis; kein Produktionsdeployment behauptet.
+
+
+### 2026-10-29 — Kompaktes mobiles Aurion-Web-HUD (#1224)
+Status: PARTIAL — isolierte Browser-, Datenbank- und Layoutprüfungen bestanden; endgültiger Integrationshead, natives Godot-HUD, echtes Gerät und Livebetrieb offen.
+Änderung: Das bereitgestellte Obsidian-und-Aurum-Design wird im Webclient für Touch und kompakte Ansichten angezeigt; PC-HUD und Skillleiste bleiben für Maus/Tastatur erhalten. Bestehende Aurion-Projektionen und Aktionen bleiben maßgeblich; das Steuerkreuz hat einen Pointer-Besitzer und stoppt bei Abbruch oder Ansichtswechsel. Der Tonknopf liegt im Mobilmenü statt über Angriff. AX1-Bezeichner im historischen Inventar erzeugen keine Runtime-Autorität.
+Evidence: Codehead `ff6306f0e40cfd31be7bb5a39442a1077ecd74fb`; [HUD-Lauf 40962198475](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40962198475) bestand Typecheck und 67 Tests sowie 18 Chromium-Layoutvarianten mit ausdrücklich synthetischen Vorschaudaten, darunter Tab-A9-Auflösungen. [Gruppenlauf 40962198589](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40962198589) prüfte Browser, Eingaben und mehrere Sitzungen gegen eine isolierte Runtime und MariaDB; kein Produktionsbeleg. Alle elf PR-Workflows auf diesem Codehead erfolgreich.
+Erkenntnis: Der vorherige globale Tonknopf überlagerte im echten Browserlauf den Angriff; das mobile Menü entfernt diese Überdeckung, ohne den Audiomanager zu deaktivieren. Synthetische Bildschirmgrößen beweisen kein reales Tabletverhalten.
+Offen: Prüfungen und Review am endgültigen Head, Merge-Readback, natives HUD #929, fehlende Eigenfigur und Live-/Tab-A9-Abnahme. Kein Deployment behauptet.
+
+
 ### 2026-10-29 — MCP-Abhängigkeiten gemeinsam aktualisiert (#1219)
 Status: PARTIAL — isolierte Kompatibilitätsprüfungen bestanden; finaler Memory-Head und Merge gesondert prüfen.
 Änderung: MCP-Node 2.1.0 und MCP-Server 2.3.0 aus #1202/#1203 zusammen und exakt fixiert, einschließlich aktualisiertem pnpm-Lock. Admin-, Gateway- und Entwicklungsendpunkt erzeugen weiterhin Server und Transport je Anfrage; keine neue Spiel- oder Zustandsautorität.

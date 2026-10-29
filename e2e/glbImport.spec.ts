@@ -46,8 +46,17 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // observe its effect to a deadline instead of assuming synchronous delivery.
     const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
     const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
-    await scrollRegion.hover({ force: true });
-    await page.mouse.wheel(0, 10_000);
+    // Hover the container's own padding, not a select or another nested
+    // control. A forced hover at its centre can send the wheel to a child.
+    const scrollBox = await scrollRegion.boundingBox();
+    expect(scrollBox).not.toBeNull();
+    const wheelPoint = { x: 6, y: Math.min(50, Math.floor(scrollBox!.height / 2)) };
+    expect(await scrollRegion.evaluate((element, point) => {
+      const rect = element.getBoundingClientRect();
+      return document.elementFromPoint(rect.left + point.x, rect.top + point.y) === element;
+    }, wheelPoint)).toBe(true);
+    await scrollRegion.hover({ position: wheelPoint });
+    await page.mouse.wheel(0, 600);
     await expect.poll(async () => {
       const sample = await scrollRegion.evaluate(element => ({
         scrollTop: element.scrollTop,
@@ -56,20 +65,14 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
       wheelSamples.push(sample);
       return sample.scrollTop > initialScrollTop;
     }, { timeout: 10_000, intervals: [100, 250, 500] }).toBe(true);
-    // Independently prove that a control in the lower section remains reachable
-    // in the mobile layout, without sending another compositor wheel command.
+    // Prove both the lower control and the upload input remain reachable.
     const lowerSessionControl = page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true });
     await lowerSessionControl.scrollIntoViewIfNeeded();
-    await expect(lowerSessionControl).toBeVisible();
+    await expect(lowerSessionControl).toBeInViewport();
     const lowerSessionControlReachable = await lowerSessionControl.isVisible();
-    // Reset is test setup, not the user-scroll assertion above. Force an
-    // instantaneous reset even if a browser-level smooth-scroll preference is
-    // active; keep the independent scrollTop readback instead of skipping it.
-    await scrollRegion.evaluate(element => element.scrollTo({ top: 0, behavior: 'instant' }));
-    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
-      .toBeLessThanOrEqual(2);
-
     const input = page.locator('#smartGlbFile');
+    await input.scrollIntoViewIfNeeded();
+    await expect(input).toBeInViewport();
     await expect(input).toBeEnabled();
     const bytes = testAnimatedPlayerGlb('Aurion_Player');
     const sha256 = createHash('sha256').update(bytes).digest('hex');

@@ -780,11 +780,15 @@ func _project_3d(now_ms: int) -> void:
 				_self_actor = null
 		else:
 			_appearance_diagnostic = str(_self_actor.diagnostic)
-			var point: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
-			if not point.is_empty():
-				var x: float = float(point["x"]) / 1000.0
-				var z: float = float(point["z"]) / 1000.0
-				# The neutral plane has no world authority; follow only the visual point.
+	# Camera tracking is independent of asset availability: it can follow only
+	# a current projection of the server-confirmed self, never a guessed model.
+	if _visuals.matches(_confirmed_zone):
+		var point: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
+		if not point.is_empty():
+			var x: float = float(point["x"]) / 1000.0
+			var z: float = float(point["z"]) / 1000.0
+			if is_finite(x) and is_finite(z):
+				# The neutral plane and camera are presentation only.
 				unassigned_floor.position = Vector3(x, 0.0, z)
 				world_camera.follow_confirmed(Vector3(x, 1.0, z))
 	_update_3d_status()
