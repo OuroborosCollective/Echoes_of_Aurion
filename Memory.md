@@ -4948,3 +4948,11 @@ Evidence:
 Gelernt: Eine echte isolierte Zwei-Client-Integration belegt die G11-Projektion, obwohl der übergeordnete G10/G09-Live-/Gerätescope separat offen bleibt; Issue-, PR- und Runtime-Evidence dürfen nicht über diese Grenze hinaus interpretiert werden.
 Offen: G09 #916 und die vollständige G10-Abnahme #917, insbesondere echte Live-WSS-/native Login-/Geräte-Readbacks. Keine Produktionspromotion oder signierte Gerätefreigabe behauptet.
 Nächster sicherer Schritt: G11 #918 nach Merge dieses Evidence-Eintrags schließen und G11 im Parent #906 als erledigt markieren; G09/G10 und den späteren G13-Checkpoint separat offen weiterführen.
+
+
+### 2026-10-29 — Asset-Toolchain konsolidiert (#1220)
+Status: PARTIAL — isolierte Code- und Shipping-Reproduktionsprüfung am Codehead bestanden; neuer Memory-Head und produktive Auslieferung separat zu prüfen.
+Änderung: Die zugehörigen Updates #1175 und #1176 sind auf einem Stand vereint: sharp 0.35.5 und brace-expansion 2.1.7, zugehöriger gelockter Toolchain- und Shipping-Manifest-Hash. Keine Änderung an Weltlogik, Datenbank, Assets oder Collider-Wahrheit.
+Evidence: Codehead `ec88e0a42592fa65902727c67d3dcfe79ca17ce5`; [Shipping-CI 40832807305](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40832807305) Versuch 1 baute zwei isolierte Outputs unabhängig, verifizierte 13 Dateien bytegleich und verglich sie mit dem vorhandenen Bundle; Phone-/Tablet-/Desktop-Browserjobs gegen isolierte MariaDB erfolgreich. Lock-SHA256 `97bda456240f033841bafe34ccc2cc84d5fc4f807a9404ad4f2e174e6ef78ff4`; generierter CI-Manifesthash `9431914c89e4e0f21fe1f7ad75b287f94d18d618134af2f0b38e2c789c5de923`, Repository-Manifesthash `79284d9e0ae3df0ee1531fd3069afcf0f38fc7f9345d43ac860c841798c97b26`; abweichende Umgebungsversionen sind explizit. Alle sechs PR-Läufe am Codehead success.
+Erkenntnis: Ein gemeinsamer Lock und das dazu erzeugte Manifest bewahren Reproduktions- und Provenienzgrenzen; beide Einzelupdates allein ändern dieselbe Lockdatei und reichen für die Gesamtkette nicht.
+Offen: CI und Review am Memory-Head, Merge- und späterer Runtime-Readback; kein Produktionsdeployment oder Gerätebeweis.
