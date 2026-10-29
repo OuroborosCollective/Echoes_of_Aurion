@@ -1,0 +1,132 @@
+extends SceneTree
+## Isolated G21 UI + real local WebSocket transport; fixture state is not live Aurion.
+const Codec = preload("res://net/zone_codec.gd")
+const Actor = preload("res://actors/actor_view.tscn")
+var failures: Array[String] = []
+
+func require(ok: bool, message: String) -> void:
+	if not ok:
+		failures.append(message)
+
+func _init() -> void:
+	call_deferred("verify")
+
+func welcome() -> Dictionary:
+	var nodes: Array = []
+	for id in Codec.NODE_IDS:
+		nodes.append({"nodeId": id, "remaining": 5, "depleted": false, "respawnAtTick": null})
+	return {"type":"welcome", "protocolVersion":5, "zoneId":"observatory_threshold",
+		"connectionId":"zone_peer_g21_target_12345", "selfEntityId":"player:1", "snapshotSeq":1, "tick":1,
+		"presences":[{"entityId":"player:1", "userId":1, "position":{"x":0,"z":0}, "lastAcceptedClientSeq":0}],
+		"mobs":[{"entityId":"mob_1", "archetype":"clockwork_stalker", "level":1, "state":"idle", "position":{"x":2000,"z":0}, "targetEntityId":null, "isBoss":false, "isElite":false, "health":10, "maxHealth":10}],
+		"combatants":[], "resources":{"contractVersion":1,"contentSourceRevision":Codec.FIXED_CONTENT,"revision":1,"nodes":nodes}}
+
+func verify() -> void:
+	var listener := TCPServer.new()
+	require(listener.listen(0, "127.0.0.1") == OK, "local TCP listener failed")
+	if not listener.is_listening():
+		finish()
+		return
+	var client := WebSocketPeer.new()
+	require(client.connect_to_url("ws://127.0.0.1:%d" % listener.get_local_port()) == OK, "local WebSocket connect failed")
+	var remote: WebSocketPeer
+	for _attempt in range(300):
+		client.poll()
+		if remote == null and listener.is_connection_available():
+			remote = WebSocketPeer.new()
+			require(remote.accept_stream(listener.take_connection()) == OK, "local WebSocket accept failed")
+		if remote != null:
+			remote.poll()
+			if remote.get_ready_state() == WebSocketPeer.STATE_OPEN and client.get_ready_state() == WebSocketPeer.STATE_OPEN:
+				break
+		await create_timer(0.01).timeout
+	if remote == null or remote.get_ready_state() != WebSocketPeer.STATE_OPEN or client.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		require(false, "local WebSocket handshake did not open")
+		listener.stop()
+		finish()
+		return
+	root.size = Vector2i(1280, 800)
+	var packed := load("res://app/main.tscn") as PackedScene
+	var scene: Control = packed.instantiate()
+	root.add_child(scene)
+	await process_frame
+	scene.set_process(false)
+	scene._on_zone_welcome(welcome())
+	scene._zone_socket.set_process(false)
+	scene._zone_socket._peer = client
+	scene._zone_socket._state = "connected"
+	scene._show_3d()
+	await process_frame
+	var actor := Actor.instantiate() as Node3D
+	actor.entity_id = "mob_1" # Presentation test fixture; no model/persistence is claimed.
+	actor.visible = true
+	actor.position = Vector3(2.0, 0.0, 0.0)
+	scene.world_actors.add_child(actor)
+	scene.world_camera.position = Vector3(0.0, 2.5, 6.0)
+	scene.world_camera.look_at(Vector3(0.0, 1.0, 0.0), Vector3.UP)
+	scene.world_camera.current = true
+	await process_frame
+	var view_rect: Rect2 = scene.world_view.get_global_rect()
+	var viewport_point: Vector2 = scene.world_camera.unproject_position(actor.global_position + Vector3(0, 1, 0))
+	var screen_point := view_rect.position + Vector2(viewport_point.x * view_rect.size.x / float(scene.live_3d_viewport.size.x), viewport_point.y * view_rect.size.y / float(scene.live_3d_viewport.size.y))
+	require(screen_point.x >= view_rect.position.x + view_rect.size.x * 0.5, "fixture target not in camera touch area")
+	var touch := InputEventScreenTouch.new()
+	touch.index = 22
+	touch.position = screen_point
+	touch.pressed = true
+	scene._input(touch)
+	touch.pressed = false
+	scene._input(touch)
+	require(scene._selected_target_id == "mob_1", "confirmed visible target not selected through touch")
+	scene._refresh_target_hud()
+	require(not scene.world_action.disabled, "confirmed live mob did not enable action")
+	var before: String = JSON.stringify(scene._confirmed_zone.current_state())
+	scene.world_action.pressed.emit()
+	var packet := ""
+	for _attempt in range(200):
+		client.poll()
+		remote.poll()
+		if remote.get_available_packet_count() > 0:
+			packet = remote.get_packet().get_string_from_utf8()
+			break
+		await create_timer(0.01).timeout
+	require(Codec.wire_numbers_are_integers(packet), "attack packet encoded a fractional numeric value")
+	var expected_packet: Dictionary = JSON.parse_string(JSON.stringify({"type":"attack", "clientSeq":1, "targetEntityId":"mob_1"}))
+	require(JSON.parse_string(packet) == expected_packet, "target action did not send canonical attack packet")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == before, "action mutated confirmed world state")
+	scene._world_is_stale = true
+	scene._refresh_target_hud()
+	require(scene.world_action.disabled, "stale world left action enabled")
+	scene.world_action.pressed.emit()
+	var unexpected := false
+	for _attempt in range(20):
+		client.poll()
+		remote.poll()
+		unexpected = unexpected or remote.get_available_packet_count() > 0
+		await create_timer(0.01).timeout
+	require(not unexpected, "stale world sent another attack")
+	scene._world_is_stale = false
+	actor.entity_id = "mob_999" # Unknown to the confirmed fixture state.
+	scene._selected_target_id = "mob_999"
+	scene._refresh_target_hud()
+	require(scene.world_action.disabled, "unconfirmed target enabled action")
+	scene.world_action.pressed.emit()
+	for _attempt in range(20):
+		client.poll()
+		remote.poll()
+		unexpected = unexpected or remote.get_available_packet_count() > 0
+		await create_timer(0.01).timeout
+	require(not unexpected, "unconfirmed target sent an attack")
+	client.close()
+	remote.close()
+	listener.stop()
+	scene.queue_free()
+	await process_frame
+	finish()
+
+func finish() -> void:
+	for failure in failures:
+		push_error(failure)
+	if failures.is_empty():
+		print("G21 target UI and canonical attack over isolated local WebSocket verified (fixture, not live Aurion)")
+	quit(0 if failures.is_empty() else 1)
