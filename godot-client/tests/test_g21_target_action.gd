@@ -57,6 +57,14 @@ func verify() -> void:
 	scene._zone_socket._state = "connected"
 	scene._show_3d()
 	await process_frame
+	# A missing prepared/selected model must not freeze a confirmed player's
+	# camera; the scene must not manufacture a substitute actor.
+	require(not is_instance_valid(scene._self_actor), "fixture unexpectedly has a player model")
+	scene.world_camera.reset_view()
+	scene.world_camera.position = Vector3(30.0, 30.0, 30.0)
+	scene._project_3d(Time.get_ticks_msec())
+	require(bool(scene.world_camera.get("_has_visual_target")), "camera ignored confirmed self without a model")
+	var camera_before_orbit: Vector3 = scene.world_camera.position
 	# Carry forward #1192's simultaneous G20/G21 lifecycle checks, using the
 	# current router/camera implementation and confirmed fixture state.
 	var joystick: Control = scene.mobile_joystick
@@ -74,7 +82,6 @@ func verify() -> void:
 	var held: Vector2 = joystick.get("output")
 	require(held.x > 0.5, "left joystick failed to hold its finger")
 	var state_before: String = JSON.stringify(scene._confirmed_zone.current_state())
-	scene.world_camera.follow_confirmed(Vector3(0, 1, 0))
 	var orbit_before: float = scene.world_camera.yaw_radians
 	var camera_point := Vector2.ZERO
 	var camera_view: Rect2 = scene.world_view.get_global_rect()
@@ -102,6 +109,7 @@ func verify() -> void:
 	Input.parse_input_event(right_drag)
 	await process_frame
 	require(not is_equal_approx(scene.world_camera.yaw_radians, orbit_before), "camera did not orbit while joystick was held")
+	require(scene.world_camera.position.distance_to(camera_before_orbit) > 0.01, "camera did not move visually without player model")
 	require((joystick.get("output") as Vector2).is_equal_approx(held), "camera changed the held joystick")
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == state_before, "camera changed confirmed world state")
 	var orbit_after: float = scene.world_camera.yaw_radians
