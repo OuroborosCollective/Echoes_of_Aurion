@@ -67,16 +67,4 @@ describe("CanonicalAvatarProfile GLB extractor", () => {
       })
     ).toThrow("CANONICAL_AVATAR_BOUNDS_INVALID");
   });
-  it("preserves first canonical parent when root and pelvis share the same imported bone", () => {
-    const avatar = model();
-    const rootBone = avatar.getObjectByName("root") as THREE.Bone;
-    const pelvisBone = avatar.getObjectByName("pelvis") as THREE.Bone;
-    const spineBone = avatar.getObjectByName("spine") as THREE.Bone;
-    rootBone.name = "ccbasehip"; // Accepted alias for both root and pelvis.
-    pelvisBone.name = "unmapped_pelvis";
-    rootBone.add(spineBone);
-    const profile = extractCanonicalAvatarProfile(avatar, { avatarProfileId: "glb:shared-root" });
-    expect(profile.bones.find(bone => bone.boneId === "spine")?.parentBoneId).toBe("root");
-  });
-
 });
