@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export const SoundManager: React.FC<{ hideControls?: boolean }> = ({ hideControls = false }) => {
   const soundscapeRef = useRef<AurionSoundscape | null>(null);
   const { isAdmin } = useAdminStore();
-  const [isMuted, setIsMuted] = useState(() => {
+  const [isMuted, setIsMuted] = useState<boolean>(() => {
     const saved = localStorage.getItem("aurion:audio:isMuted");
     return saved ? JSON.parse(saved) : false;
   });
