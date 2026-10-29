@@ -217,14 +217,14 @@ describe("adminMcpProtocol", () => {
 
 describe("Supabase OAuth native claims", () => {
   const settings = readAurionAdminMcpSettings({ ...environment, AURION_ADMIN_MCP_AUTH_MODE: "supabase_oauth", AURION_ADMIN_MCP_CLIENT_ID: clientId });
-  const supabaseClaims = () => validClaims({ aud: "authenticated", client_id: clientId, role: "authenticated", is_anonymous: false, scope: "openid profile offline_access", app_metadata: { aurion_admin_roles: ["aurion_admin_read"] } });
-  it("accepts the native audience and client binding with an explicit trusted read role", () => {
+  const supabaseClaims = () => validClaims({ aud: settings.resourceUrl, client_id: clientId, role: "authenticated", is_anonymous: false, scope: "openid profile offline_access", app_metadata: { aurion_admin_roles: ["aurion_admin_read"] } });
+  it("accepts the resource-bound audience and client with an explicit trusted read role", () => {
     expect(parseAurionAdminMcpTokenClaims(supabaseClaims(), settings, 1_800_000_000_000).scopes).toEqual([AURION_ADMIN_MCP_READ_SCOPE]);
     expect(protectedResourceMetadata(settings).scopes_supported).toEqual(["openid", "profile", "offline_access"]);
     expect(adminMcpRequiredOAuthScope(settings)).toBe("openid");
   });
   it("rejects incorrect audience, client, role, anonymous users and missing read role", () => {
-    for (const overrides of [{ aud: "other" }, { client_id: "wrong" }, { role: "anon" }, { is_anonymous: true }, { is_anonymous: undefined }, { scope: "profile" }, { app_metadata: {} }, { app_metadata: { aurion_admin_roles: ["aurion_admin_assets_write"] } }, { app_metadata: {} , user_metadata: { aurion_admin_roles: ["aurion_admin_read"] } }]) {
+    for (const overrides of [{ aud: "other" }, { aud: "authenticated" }, { client_id: "wrong" }, { role: "anon" }, { is_anonymous: true }, { is_anonymous: undefined }, { scope: "profile" }, { app_metadata: {} }, { app_metadata: { aurion_admin_roles: ["aurion_admin_assets_write"] } }, { app_metadata: {} , user_metadata: { aurion_admin_roles: ["aurion_admin_read"] } }]) {
       expect(() => parseAurionAdminMcpTokenClaims({ ...supabaseClaims(), ...overrides }, settings, 1_800_000_000_000)).toThrow();
     }
   });

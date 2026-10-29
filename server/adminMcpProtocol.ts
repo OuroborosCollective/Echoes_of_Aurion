@@ -108,9 +108,7 @@ export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionA
   const subject = typeof payload.sub === "string" ? payload.sub.trim() : "";
   openIdForOidcSubject(issuer, subject);
   const audience = parseAudienceClaim(payload.aud);
-  if (settings.authMode === "supabase_oauth") {
-    if (!audience.includes("authenticated")) throw new Error("Supabase token lacks authenticated audience");
-  } else if (!audience.includes(settings.resourceUrl)) throw new Error("Admin MCP token is not bound to this resource server");
+  if (!audience.includes(settings.resourceUrl)) throw new Error("Admin MCP token is not bound to this resource server");
   let scopes: readonly string[];
   if (settings.authMode === "application_roles") {
     if (!audience.includes(settings.clientId)) throw new Error("Admin MCP token is not bound to the configured client application");
@@ -123,7 +121,8 @@ export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionA
     scopes = Object.freeze(APPLICATION_ROLE_SCOPES.filter(([role]) => roles.includes(role)).map(([, scope]) => scope).sort());
     if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Admin MCP token lacks the required aurion_admin_read application role");
   } else if (settings.authMode === "supabase_oauth") {
-    // Dedicated OAuth client and issuer bind this generic Supabase audience to this integration.
+    // The Supabase access-token hook must bind the dedicated client to this
+    // resource in aud; the generic authenticated audience is not sufficient.
     if (payload.client_id !== settings.clientId) throw new Error("Supabase token client_id does not match the dedicated client");
     if (payload.role !== "authenticated" || payload.is_anonymous !== false) throw new Error("Supabase token must represent an authenticated user");
     if (!parseScopeClaim(payload.scope).includes("openid")) throw new Error("Supabase token lacks openid scope");
