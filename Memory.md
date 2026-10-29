@@ -4964,3 +4964,11 @@ Status: PARTIAL — isolierte Code- und Shipping-Reproduktionsprüfung am Codehe
 Evidence: Codehead `ec88e0a42592fa65902727c67d3dcfe79ca17ce5`; [Shipping-CI 40832807305](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40832807305) Versuch 1 baute zwei isolierte Outputs unabhängig, verifizierte 13 Dateien bytegleich und verglich sie mit dem vorhandenen Bundle; Phone-/Tablet-/Desktop-Browserjobs gegen isolierte MariaDB erfolgreich. Lock-SHA256 `97bda456240f033841bafe34ccc2cc84d5fc4f807a9404ad4f2e174e6ef78ff4`; generierter CI-Manifesthash `9431914c89e4e0f21fe1f7ad75b287f94d18d618134af2f0b38e2c789c5de923`, Repository-Manifesthash `79284d9e0ae3df0ee1531fd3069afcf0f38fc7f9345d43ac860c841798c97b26`; abweichende Umgebungsversionen sind explizit. Alle sechs PR-Läufe am Codehead success.
 Erkenntnis: Ein gemeinsamer Lock und das dazu erzeugte Manifest bewahren Reproduktions- und Provenienzgrenzen; beide Einzelupdates allein ändern dieselbe Lockdatei und reichen für die Gesamtkette nicht.
 Offen: CI und Review am Memory-Head, Merge- und späterer Runtime-Readback; kein Produktionsdeployment oder Gerätebeweis.
+
+
+### 2026-10-29 — Terrain-Erzeugung mit Ergebnisparität (#1215)
+Status: PARTIAL — isolierte Terrain-, Replay- und Codehead-CI geprüft; finaler Memory-Head und Merge noch zu prüfen.
+Änderung: Für die feste 8×8-Terrainzuordnung werden vorbereitete Matrizen statt wiederholter Koordinaten-Strings genutzt. Die vollständigen Aurion-Zonendaten, Tile-Reihenfolge und Regeln bleiben unverändert; der aktualisierte AIM-265-Bericht trägt den neuen Quellhash.
+Evidence: Codehead `da328a21b2d13b946dc754e329b6daff6c07790f`; [Terrain-Parität 40957326202](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40957326202) bestand 24 Tests einschließlich sieben vollständiger Snapshot-Hash-Vergleiche gegen Main `76afd81bac8432c3a6e7a18177cac0cbf24c94c4`. Alle sechs PR-Läufe am Codehead bestanden; der frühere AIM-265-Replaylauf `40830349195` validierte den geänderten Bericht mit unabhängiger Rechenprüfung.
+Erkenntnis: Gleiche Terrain-Ausgabe muss vollständig einschließlich Reihenfolge und Hash nachgewiesen werden; ein isolierter Mikrobenchmark ist kein FPS- oder Live-Nachweis.
+Offen: Exact-Head-CI und Merge-Readback, keine Produktiv- oder Gerätewirkung behauptet.

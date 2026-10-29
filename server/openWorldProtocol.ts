@@ -106,9 +106,17 @@ export function maximumVisibleEnemies(level: number): number {
 }
 
 const terrainAtlasSurfaces = ["grass", "flower_meadow", "earth", "farmland", "garden_parcels", "starpath", "starpath_crossing"] as const;
-const starpathRoads = new Set(["3:0", "3:1", "3:2", "3:3", "3:4", "3:5", "3:6", "0:4", "1:4", "2:4", "4:4", "5:4", "6:4", "7:4"]);
-const fieldTiles = new Set(["0:0", "1:0", "0:1", "1:1", "0:2", "5:0", "6:0", "7:0", "5:1", "6:1", "7:1", "5:2", "6:2", "7:2", "0:5", "1:5", "0:6", "1:6", "0:7", "1:7"]);
-const gardenTiles = new Set(["5:5", "6:5", "7:5", "6:6", "7:6"]);
+const createTerrainMatrix = (coords: readonly string[]) => {
+  const matrix: boolean[][] = Array.from({ length: 8 }, () => Array(8).fill(false));
+  for (const coord of coords) {
+    const [x, z] = coord.split(":");
+    matrix[Number(z)]![Number(x)] = true;
+  }
+  return matrix;
+};
+const starpathRoads = createTerrainMatrix(["3:0", "3:1", "3:2", "3:3", "3:4", "3:5", "3:6", "0:4", "1:4", "2:4", "4:4", "5:4", "6:4", "7:4"]);
+const fieldTiles = createTerrainMatrix(["0:0", "1:0", "0:1", "1:1", "0:2", "5:0", "6:0", "7:0", "5:1", "6:1", "7:1", "5:2", "6:2", "7:2", "0:5", "1:5", "0:6", "1:6", "0:7", "1:7"]);
+const gardenTiles = createTerrainMatrix(["5:5", "6:5", "7:5", "6:6", "7:6"]);
 
 function terrainBaseFor(zoneId: OpenWorldZoneKey): TerrainSurfaceKey {
   if (zoneId === "windhollow") return "flower_meadow";
@@ -121,12 +129,11 @@ export function buildOpenWorldTerrain(zoneId: OpenWorldZoneKey): OpenWorldTerrai
   const tiles: TerrainTile[] = [];
   for (let z = 0; z < 8; z += 1) {
     for (let x = 0; x < 8; x += 1) {
-      const key = `${x}:${z}`;
       let surface: TerrainSurfaceKey = base;
-      if (key === "3:4") surface = "starpath_crossing";
-      else if (starpathRoads.has(key)) surface = "starpath";
-      else if (zoneId === "emberfall" && gardenTiles.has(key)) surface = "garden_parcels";
-      else if (fieldTiles.has(key)) surface = zoneId === "emberfall" ? "farmland" : (zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion") ? "earth" : base;
+      if (x === 3 && z === 4) surface = "starpath_crossing";
+      else if (starpathRoads[z]![x]) surface = "starpath";
+      else if (zoneId === "emberfall" && gardenTiles[z]![x]) surface = "garden_parcels";
+      else if (fieldTiles[z]![x]) surface = zoneId === "emberfall" ? "farmland" : (zoneId === "cinder_vault" || zoneId === "starfall_crater" || zoneId === "clockwork_woods" || zoneId === "sunwatch_bastion") ? "earth" : base;
       tiles.push({ x, z, surface });
     }
   }
