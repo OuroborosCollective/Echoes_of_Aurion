@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
 import { resolve, relative, join } from 'node:path';
 import { repo, root, executable, digest, run } from './toolchain.mjs';
 import { execute } from './check-runtime.mjs';
@@ -56,6 +56,7 @@ for (const [id, script, marker] of [
   ['live-world-map', 'test_live_world_map.gd', 'Godot first live-world map, model inspection and local A/B/house sketches verified (headless)'],
   ['session-recovery', 'integration/test_session_recovery.gd', 'Godot G12 pause/resume, fresh-ticket recovery and bounded retry verified (headless)'],
   ['movement-input', 'test_movement_input.gd', 'Godot G20 native input and bounded move-intent regression verified (headless fixture only)'],
+  ['multitouch-routing', 'test_multitouch_routing.gd', 'Godot G21 multitouch routing and confirmed-position camera orbit verified (headless fixture only)'],
   ['technical-diagnostics', 'test_technical_diagnostics.gd', 'Godot G43 safe technical diagnostics verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
@@ -123,4 +124,11 @@ await stage('chunk-surface-native-http', 'headless', process.execPath,
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+// TEMPORARY G21 diagnostic: read the actual Godot-4.7.2-generated UIDs.
+// This log step does not modify validation; remove it after extracting values.
+for (const path of [
+  'godot-client/tests/test_multitouch_routing.gd.uid',
+  'godot-client/ui/mobile/touch_router.gd.uid',
+  'godot-client/world/camera_rig.gd.uid',
+]) console.log('G21_REAL_GODOT_UID ' + path + ' ' + (await readFile(join(repo, path), 'utf8')).trim());
 await verifyEvidence(evidencePath);
