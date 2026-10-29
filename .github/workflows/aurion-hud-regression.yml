@@ -1,0 +1,41 @@
+name: Aurion HUD regression
+
+on:
+  pull_request:
+    paths:
+      - 'client/src/xaurion/components/**'
+      - 'client/src/xaurion/integration/**'
+      - 'architecture/donor-ledger.json'
+      - '.github/workflows/aurion-hud-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hud-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify ownership inventory
+        run: pnpm verify:donor-ledger
+      - name: Typecheck
+        run: pnpm check
+      - name: HUD and authoritative projection regression
+        run: >-
+          pnpm exec vitest run
+          client/src/xaurion/components/GameHUD.test.tsx
+          client/src/xaurion/components/hud/hudGeometry.test.ts
+          client/src/xaurion/integration/AurionAuthorityHud.test.tsx
+          client/src/xaurion/integration/AurionCombatHudRegression.test.tsx
