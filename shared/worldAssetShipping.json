@@ -8,10 +8,10 @@
       "ktxSoftware": "toktx v4.4.2",
       "ktxExecutableSha256": "2028e023a18e827e66362a9e184052f40192566b10f92655a337e2eb8ea0829b",
       "blender": null,
-      "node": "v24.19.0",
-      "python": "3.12.14",
+      "node": "v22.23.3",
+      "python": "3.12.3",
       "platform": "Linux-x86_64",
-      "dependencyLockSha256": "e132c0ed95c890e5adfcbecf4c1e232e2b7031a85f8686c527b6de887e2c0fe3",
+      "dependencyLockSha256": "fe4351304196256b04a8ec9ea08cac4f40671903970927e060728f2b5ee8feb2",
       "scriptHashes": {
         "mobile_glb_asset_pipeline.py": "2a881540af987efea7df15a3dc8e45ef3df23110450eaa2133233ea0f2ed7e76",
         "mobile_glb_blender_worker.py": "1252c65e2f4d811a2b12d2a264ac3154511fe4ba1d88d541e8f34b56c9ecc645",
@@ -522,7 +522,7 @@
         "nature": "87c6e6437ee728ae927ac55674a331eb653292de9e50b1872f9ecff3578cd25d"
       }
     },
-    "manifestSha256": "fb1c661ef0c9c891573c28c068914e002b5dd2ea194be23668224355368632ed"
+    "manifestSha256": "651f4117d60dc6356bc08d5a06bb970144886649971271f9b8c0ce7c653d1404"
   },
   "bundleSha256": "a5ed9f586e70876777e74c193057996d21a9775a77f0355779d9d4e3638c9294",
   "decoder": {
