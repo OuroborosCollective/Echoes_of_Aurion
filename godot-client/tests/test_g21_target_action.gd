@@ -57,6 +57,73 @@ func verify() -> void:
 	scene._zone_socket._state = "connected"
 	scene._show_3d()
 	await process_frame
+	# Carry forward #1192's simultaneous G20/G21 lifecycle checks, using the
+	# current router/camera implementation and confirmed fixture state.
+	var joystick: Control = scene.mobile_joystick
+	var left := InputEventScreenTouch.new()
+	left.index = 17
+	left.position = joystick.get_node("Base").get_global_rect().get_center()
+	left.pressed = true
+	Input.parse_input_event(left)
+	await process_frame
+	var left_drag := InputEventScreenDrag.new()
+	left_drag.index = 17
+	left_drag.position = left.position + Vector2(50, 0)
+	Input.parse_input_event(left_drag)
+	await process_frame
+	var held: Vector2 = joystick.get("output")
+	require(held.x > 0.5, "left joystick failed to hold its finger")
+	var state_before: String = JSON.stringify(scene._confirmed_zone.current_state())
+	scene.world_camera.follow_confirmed(Vector3(0, 1, 0))
+	var orbit_before: float = scene.world_camera.yaw_radians
+	var camera_point := Vector2.ZERO
+	var camera_view: Rect2 = scene.world_view.get_global_rect()
+	for y_part in [0.3, 0.5, 0.7]:
+		for x_part in [0.65, 0.75, 0.85, 0.95]:
+			var candidate: Vector2 = camera_view.position + camera_view.size * Vector2(x_part, y_part)
+			var excluded := false
+			for blocked: Rect2 in scene._camera_exclusions():
+				excluded = excluded or blocked.has_point(candidate)
+			if not excluded:
+				camera_point = candidate
+				break
+		if camera_point != Vector2.ZERO:
+			break
+	require(camera_point != Vector2.ZERO, "fixture has no unblocked camera area")
+	var right := InputEventScreenTouch.new()
+	right.index = 22
+	right.position = camera_point
+	right.pressed = true
+	Input.parse_input_event(right)
+	await process_frame
+	var right_drag := InputEventScreenDrag.new()
+	right_drag.index = 22
+	right_drag.position = camera_point + Vector2(40, -12)
+	Input.parse_input_event(right_drag)
+	await process_frame
+	require(not is_equal_approx(scene.world_camera.yaw_radians, orbit_before), "camera did not orbit while joystick was held")
+	require((joystick.get("output") as Vector2).is_equal_approx(held), "camera changed the held joystick")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == state_before, "camera changed confirmed world state")
+	var orbit_after: float = scene.world_camera.yaw_radians
+	var third_drag := InputEventScreenDrag.new()
+	third_drag.index = 23
+	third_drag.position = camera_point + Vector2(-100, 0)
+	Input.parse_input_event(third_drag)
+	await process_frame
+	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "third finger moved camera")
+	scene._toggle_world_diagnostics()
+	require(scene._camera_router.active_finger() == -1, "diagnostics retained camera finger")
+	require((joystick.get("output") as Vector2).is_zero_approx(), "diagnostics retained joystick input")
+	Input.parse_input_event(right_drag)
+	await process_frame
+	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "camera moved while diagnostics were open")
+	scene._toggle_world_diagnostics()
+	right.pressed = false
+	Input.parse_input_event(right)
+	await process_frame
+	left.pressed = false
+	Input.parse_input_event(left)
+	await process_frame
 	var actor := Actor.instantiate() as Node3D
 	actor.entity_id = "mob_1" # Presentation test fixture; no model/persistence is claimed.
 	actor.visible = true
