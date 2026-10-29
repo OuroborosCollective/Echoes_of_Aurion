@@ -41,6 +41,8 @@ jobs:
           client/src/xaurion/components/hud/hudGeometry.test.ts
           client/src/xaurion/integration/AurionAuthorityHud.test.tsx
           client/src/xaurion/integration/AurionCombatHudRegression.test.tsx
+          client/src/xaurion/integration/ax1FullCutover.test.tsx
+          client/src/xaurion/integration/ax1MobilePlayabilityContract.test.ts
 
       - name: Install browser for isolated visual layout checks
         run: pnpm exec playwright install --with-deps chromium
