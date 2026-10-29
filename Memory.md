@@ -4948,3 +4948,19 @@ Evidence:
 Gelernt: Eine echte isolierte Zwei-Client-Integration belegt die G11-Projektion, obwohl der übergeordnete G10/G09-Live-/Gerätescope separat offen bleibt; Issue-, PR- und Runtime-Evidence dürfen nicht über diese Grenze hinaus interpretiert werden.
 Offen: G09 #916 und die vollständige G10-Abnahme #917, insbesondere echte Live-WSS-/native Login-/Geräte-Readbacks. Keine Produktionspromotion oder signierte Gerätefreigabe behauptet.
 Nächster sicherer Schritt: G11 #918 nach Merge dieses Evidence-Eintrags schließen und G11 im Parent #906 als erledigt markieren; G09/G10 und den späteren G13-Checkpoint separat offen weiterführen.
+
+
+### 2026-10-29 — G21 Touch-Kamera und Zielaktion (#1221)
+Status: PARTIAL — Code und isolierte Godot-Laufzeit geprüft; physisches Tablet, Live-Sitzung und vollständiges mobiles HUD offen.
+Änderung: G20-Bewegung bleibt einziger Bewegungseingang; ein separater Touch-Router führt die bestätigte Position zu einer visuellen Kamera, wählt sichtbare bestätigte Ziele und sendet nur den bestehenden typisierten Angriff. Aurion bleibt einzige Autorität für Welt und Kampf. Die relevanten Kamera-, Router-, Szenen- und Multitouch-Dateien aus #1193 sind blobidentisch; der Zieltest übernimmt die Fingerisolation aus #1192.
+Evidence: Codehead `83f4d5e70ee8153420be28a1c1930cf655bb1544`, [Godot-Lauf 40835337604](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337604) Versuch 1 mit echten Godot-Headless-Tests für Bewegung, Mehrfingerrouting und Angriff über isolierten lokalen WebSocket. [Android-Preview-Build 40835337634](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337634) erfolgreich; sämtliche zehn PR-Läufe am Codehead erfolgreich. Fixtures sind keine Live-Server- oder Gerätedaten.
+Erkenntnis: Ein visueller Ziel- und Kameraadapter darf bestätigten Zustand nicht verändern und muss beim Verlust der Frische, bei Diagnose und Rotation Eingaben beenden. Der finale Memory-Head benötigt eigene CI und Readback.
+Offen: echtes Tab A9, native Touch-/Kameraergonomie, aktives Live-Login/Angriff, fehlendes eigenes Charaktermodell und das mobile HUD aus #929. Keine Produktionsfreigabe behauptet.
+
+
+### 2026-10-29 — Forum-Editor zugänglicher (#1217)
+Status: PARTIAL — isolierte Komponenten- und echte Chromium-Tastaturprüfung bestanden; finaler Memory-Head und Merge separat prüfen.
+Änderung: Sichere Verbesserungen aus #1212 und #1222 konsolidiert: sichtbarer Tastaturfokus und Auswahlzustand, barrierefreier Name mit vorhandenen Titel-/Kategorie-/Pin-Angaben sowie `aria-busy` beim Speichern. Die bereits vorhandene Sperre gegen mehrfaches Absenden bleibt bestehen.
+Evidence: Codehead `16f048c2a34ac5271b47e874359c359bed5ee22a`; [Forum-CI 40955718936](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40955718936) mit Typecheck, zwei Komponententests und echtem Chromium-Tastatur-/Fokus-/Auswahltest. [Kandidatenlauf 40955719058](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40955719058) und [Containerlauf 40955718935](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40955718935) bestanden. Die Forumsfixture ist synthetisch und keine produktive Datenbank.
+Erkenntnis: Ein zusätzliches aria-label darf bereits sichtbare Kategorie- und Pin-Informationen nicht aus dem zugänglichen Namen verdrängen. Keine neue Backend-Autorität oder Mock-Wahrheit eingeführt.
+Offen: Exact-Head-CI und Merge-Readback; kein Produktivnachweis behauptet.
