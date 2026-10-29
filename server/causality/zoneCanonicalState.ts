@@ -98,14 +98,15 @@ export interface CanonicalZoneState {
  * retained and every domain collection has a deterministic order.
  */
 
-// ⚡ Bolt: Avoid Object.fromEntries(Object.entries(...).sort(...)) here because it generates intermediate
-// array/tuple allocations per tick, causing massive GC pressure in the high-frequency zone loop.
-// Direct key iteration and assignment provides a massive speedup and zero O(N) tuple allocations.
+// Avoid allocating entry tuples while preserving Object.fromEntries semantics for every key.
 function sortRecord<T>(obj: Record<string, T>): Record<string, T> {
   const keys = Object.keys(obj).sort();
   const res: Record<string, T> = {};
   for (let i = 0; i < keys.length; i++) {
-    res[keys[i]] = obj[keys[i] as string] as T;
+    const key = keys[i] as string;
+    // Assignment to __proto__ invokes the legacy prototype setter, unlike fromEntries.
+    if (key === "__proto__") Object.defineProperty(res, key, { value: obj[key], enumerable: true, configurable: true, writable: true });
+    else res[key] = obj[key] as T;
   }
   return res;
 }
