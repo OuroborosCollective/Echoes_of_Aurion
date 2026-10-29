@@ -46,8 +46,17 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // observe its effect to a deadline instead of assuming synchronous delivery.
     const initialScrollTop = await scrollRegion.evaluate(element => element.scrollTop);
     const wheelSamples: Array<{ scrollTop: number; remaining: number }> = [];
-    await scrollRegion.hover({ force: true });
-    await page.mouse.wheel(0, 10_000);
+    // Hover the container's own padding, not a select or another nested
+    // control. A forced hover at its centre can send the wheel to a child.
+    const scrollBox = await scrollRegion.boundingBox();
+    expect(scrollBox).not.toBeNull();
+    const wheelPoint = { x: 6, y: Math.min(50, Math.floor(scrollBox!.height / 2)) };
+    expect(await scrollRegion.evaluate((element, point) => {
+      const rect = element.getBoundingClientRect();
+      return document.elementFromPoint(rect.left + point.x, rect.top + point.y) === element;
+    }, wheelPoint)).toBe(true);
+    await scrollRegion.hover({ position: wheelPoint });
+    await page.mouse.wheel(0, 600);
     await expect.poll(async () => {
       const sample = await scrollRegion.evaluate(element => ({
         scrollTop: element.scrollTop,
@@ -56,6 +65,13 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
       wheelSamples.push(sample);
       return sample.scrollTop > initialScrollTop;
     }, { timeout: 10_000, intervals: [100, 250, 500] }).toBe(true);
+    // Let the real wheel scroll settle before the later independent reset.
+    await expect.poll(async () => {
+      const first = await scrollRegion.evaluate(element => element.scrollTop);
+      await page.waitForTimeout(100);
+      const second = await scrollRegion.evaluate(element => element.scrollTop);
+      return Math.abs(second - first);
+    }, { timeout: 10_000 }).toBeLessThanOrEqual(1);
     // Independently prove that a control in the lower section remains reachable
     // in the mobile layout, without sending another compositor wheel command.
     const lowerSessionControl = page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true });
