@@ -4958,6 +4958,14 @@ Erkenntnis: Ein visueller Ziel- und Kameraadapter darf bestätigten Zustand nich
 Offen: echtes Tab A9, native Touch-/Kameraergonomie, aktives Live-Login/Angriff, fehlendes eigenes Charaktermodell und das mobile HUD aus #929. Keine Produktionsfreigabe behauptet.
 
 
+### 2026-10-29 — Asset-Toolchain konsolidiert (#1220)
+Status: PARTIAL — isolierte Code- und Shipping-Reproduktionsprüfung am Codehead bestanden; neuer Memory-Head und produktive Auslieferung separat zu prüfen.
+Änderung: Die zugehörigen Updates #1175 und #1176 sind auf einem Stand vereint: sharp 0.35.5 und brace-expansion 2.1.7, zugehöriger gelockter Toolchain- und Shipping-Manifest-Hash. Keine Änderung an Weltlogik, Datenbank, Assets oder Collider-Wahrheit.
+Evidence: Codehead `ec88e0a42592fa65902727c67d3dcfe79ca17ce5`; [Shipping-CI 40832807305](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40832807305) Versuch 1 baute zwei isolierte Outputs unabhängig, verifizierte 13 Dateien bytegleich und verglich sie mit dem vorhandenen Bundle; Phone-/Tablet-/Desktop-Browserjobs gegen isolierte MariaDB erfolgreich. Lock-SHA256 `97bda456240f033841bafe34ccc2cc84d5fc4f807a9404ad4f2e174e6ef78ff4`; generierter CI-Manifesthash `9431914c89e4e0f21fe1f7ad75b287f94d18d618134af2f0b38e2c789c5de923`, Repository-Manifesthash `79284d9e0ae3df0ee1531fd3069afcf0f38fc7f9345d43ac860c841798c97b26`; abweichende Umgebungsversionen sind explizit. Alle sechs PR-Läufe am Codehead success.
+Erkenntnis: Ein gemeinsamer Lock und das dazu erzeugte Manifest bewahren Reproduktions- und Provenienzgrenzen; beide Einzelupdates allein ändern dieselbe Lockdatei und reichen für die Gesamtkette nicht.
+Offen: CI und Review am Memory-Head, Merge- und späterer Runtime-Readback; kein Produktionsdeployment oder Gerätebeweis.
+
+
 ### 2026-10-29 — MCP-Abhängigkeiten gemeinsam aktualisiert (#1219)
 Status: PARTIAL — isolierte Kompatibilitätsprüfungen bestanden; finaler Memory-Head und Merge gesondert prüfen.
 Änderung: MCP-Node 2.1.0 und MCP-Server 2.3.0 aus #1202/#1203 zusammen und exakt fixiert, einschließlich aktualisiertem pnpm-Lock. Admin-, Gateway- und Entwicklungsendpunkt erzeugen weiterhin Server und Transport je Anfrage; keine neue Spiel- oder Zustandsautorität.
