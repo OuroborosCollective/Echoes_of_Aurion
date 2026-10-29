@@ -142,10 +142,11 @@ function resolveBones(model: THREE.Object3D): Map<BoneId, THREE.Bone> {
     BoneId,
     readonly string[],
   ][]) {
-    const bone = aliases
-      .map(normalize)
-      .map(alias => byName.get(alias))
-      .find(Boolean);
+    let bone: THREE.Bone | undefined;
+    for (const alias of aliases) {
+      bone = byName.get(normalize(alias));
+      if (bone) break;
+    }
     if (!bone) throw new Error(`CANONICAL_AVATAR_BONE_MISSING:${boneId}`);
     result.set(boneId, bone);
   }
@@ -261,12 +262,14 @@ export function extractCanonicalAvatarProfile(
         height
       )
     );
+  const inverseResolved = new Map<THREE.Object3D, BoneId>();
+  for (const [boneId, bone] of resolved) {
+    inverseResolved.set(bone, boneId);
+  }
+
   const bones: CanonicalAvatarBone[] = [...resolved.entries()]
     .map(([boneId, bone]) => {
-      const parent =
-        [...resolved.entries()].find(
-          ([, candidate]) => candidate === bone.parent
-        )?.[0] ?? null;
+      const parent = bone.parent ? inverseResolved.get(bone.parent) ?? null : null;
       return {
         boneId,
         sourceName: bone.name,
