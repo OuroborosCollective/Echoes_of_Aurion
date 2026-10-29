@@ -6,6 +6,7 @@ on:
       - 'client/src/xaurion/components/**'
       - 'client/src/xaurion/integration/**'
       - 'architecture/donor-ledger.json'
+      - 'tests/hud-preview/**'
       - '.github/workflows/aurion-hud-regression.yml'
   workflow_dispatch:
 
@@ -39,3 +40,20 @@ jobs:
           client/src/xaurion/components/hud/hudGeometry.test.ts
           client/src/xaurion/integration/AurionAuthorityHud.test.tsx
           client/src/xaurion/integration/AurionCombatHudRegression.test.tsx
+
+      - name: Install browser for isolated visual layout checks
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify responsive HUD with synthetic preview data
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vite --config tests/hud-preview/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort > /tmp/aurion-hud-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:4173/index.html >/dev/null; then break; fi
+            if ! kill -0 "$preview_pid" 2>/dev/null; then cat /tmp/aurion-hud-preview.log; exit 1; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:4173/index.html >/dev/null
+          node tests/hud-preview/hud-layout-audit.mjs
