@@ -264,7 +264,8 @@ export function extractCanonicalAvatarProfile(
     );
   const inverseResolved = new Map<THREE.Object3D, BoneId>();
   for (const [boneId, bone] of resolved) {
-    inverseResolved.set(bone, boneId);
+    // Match the original first-entry lookup when multiple canonical IDs share one bone.
+    if (!inverseResolved.has(bone)) inverseResolved.set(bone, boneId);
   }
 
   const bones: CanonicalAvatarBone[] = [...resolved.entries()]
