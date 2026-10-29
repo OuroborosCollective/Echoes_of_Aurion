@@ -1,0 +1,30 @@
+name: Aurion terrain snapshot parity
+
+on:
+  pull_request:
+    paths:
+      - 'server/openWorldProtocol.ts'
+      - 'server/openWorldTerrainParity.test.ts'
+      - 'server/openWorldProtocol.test.ts'
+      - '.github/workflows/aurion-terrain-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify real Aurion deterministic behavior
+        run: pnpm exec vitest run server/openWorldTerrainParity.test.ts server/openWorldProtocol.test.ts

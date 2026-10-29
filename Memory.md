@@ -4966,6 +4966,14 @@ Erkenntnis: Ein gemeinsamer Lock und das dazu erzeugte Manifest bewahren Reprodu
 Offen: CI und Review am Memory-Head, Merge- und späterer Runtime-Readback; kein Produktionsdeployment oder Gerätebeweis.
 
 
+### 2026-10-29 — Terrain-Erzeugung mit Ergebnisparität (#1215)
+Status: PARTIAL — isolierte Terrain-, Replay- und Codehead-CI geprüft; finaler Memory-Head und Merge noch zu prüfen.
+Änderung: Für die feste 8×8-Terrainzuordnung werden vorbereitete Matrizen statt wiederholter Koordinaten-Strings genutzt. Die vollständigen Aurion-Zonendaten, Tile-Reihenfolge und Regeln bleiben unverändert; der aktualisierte AIM-265-Bericht trägt den neuen Quellhash.
+Evidence: Codehead `da328a21b2d13b946dc754e329b6daff6c07790f`; [Terrain-Parität 40957326202](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40957326202) bestand 24 Tests einschließlich sieben vollständiger Snapshot-Hash-Vergleiche gegen Main `76afd81bac8432c3a6e7a18177cac0cbf24c94c4`. Alle sechs PR-Läufe am Codehead bestanden; der frühere AIM-265-Replaylauf `40830349195` validierte den geänderten Bericht mit unabhängiger Rechenprüfung.
+Erkenntnis: Gleiche Terrain-Ausgabe muss vollständig einschließlich Reihenfolge und Hash nachgewiesen werden; ein isolierter Mikrobenchmark ist kein FPS- oder Live-Nachweis.
+Offen: Exact-Head-CI und Merge-Readback, keine Produktiv- oder Gerätewirkung behauptet.
+
+
 ### 2026-10-29 — Forum-Editor zugänglicher (#1217)
 Status: PARTIAL — isolierte Komponenten- und echte Chromium-Tastaturprüfung bestanden; finaler Memory-Head und Merge separat prüfen.
 Änderung: Sichere Verbesserungen aus #1212 und #1222 konsolidiert: sichtbarer Tastaturfokus und Auswahlzustand, barrierefreier Name mit vorhandenen Titel-/Kategorie-/Pin-Angaben sowie `aria-busy` beim Speichern. Die bereits vorhandene Sperre gegen mehrfaches Absenden bleibt bestehen.
