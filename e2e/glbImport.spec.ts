@@ -65,27 +65,14 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
       wheelSamples.push(sample);
       return sample.scrollTop > initialScrollTop;
     }, { timeout: 10_000, intervals: [100, 250, 500] }).toBe(true);
-    // Let the real wheel scroll settle before the later independent reset.
-    await expect.poll(async () => {
-      const first = await scrollRegion.evaluate(element => element.scrollTop);
-      await page.waitForTimeout(100);
-      const second = await scrollRegion.evaluate(element => element.scrollTop);
-      return Math.abs(second - first);
-    }, { timeout: 10_000 }).toBeLessThanOrEqual(1);
-    // Independently prove that a control in the lower section remains reachable
-    // in the mobile layout, without sending another compositor wheel command.
+    // Prove both the lower control and the upload input remain reachable.
     const lowerSessionControl = page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true });
     await lowerSessionControl.scrollIntoViewIfNeeded();
-    await expect(lowerSessionControl).toBeVisible();
+    await expect(lowerSessionControl).toBeInViewport();
     const lowerSessionControlReachable = await lowerSessionControl.isVisible();
-    // Reset is test setup, not the user-scroll assertion above. Force an
-    // instantaneous reset even if a browser-level smooth-scroll preference is
-    // active; keep the independent scrollTop readback instead of skipping it.
-    await scrollRegion.evaluate(element => element.scrollTo({ top: 0, behavior: 'instant' }));
-    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
-      .toBeLessThanOrEqual(2);
-
     const input = page.locator('#smartGlbFile');
+    await input.scrollIntoViewIfNeeded();
+    await expect(input).toBeInViewport();
     await expect(input).toBeEnabled();
     const bytes = testAnimatedPlayerGlb('Aurion_Player');
     const sha256 = createHash('sha256').update(bytes).digest('hex');
