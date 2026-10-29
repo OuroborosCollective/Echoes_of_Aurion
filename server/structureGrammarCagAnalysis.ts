@@ -217,18 +217,20 @@ function projectToOpaqueAnalysis(recipe: StructureRecipe): OpaqueAnalysisProject
 
 function buildWolframAnalysisExpression(recipe: StructureRecipe, variant: string): string {
   const primitives = recipe.primitives;
-  const ptsArr = new Array(primitives.length);
-  const sizesArr = new Array(primitives.length);
-  const rotsArr = new Array(primitives.length);
+  let pts = "";
+  let sizes = "";
+  let rots = "";
   for (let i = 0; i < primitives.length; i++) {
+    if (i > 0) {
+      pts += ", ";
+      sizes += ", ";
+      rots += ", ";
+    }
     const p = primitives[i]!;
-    ptsArr[i] = `{${p.positionMm.x}, ${p.positionMm.y}, ${p.positionMm.z}}`;
-    sizesArr[i] = `{${p.sizeMm.x}, ${p.sizeMm.y}, ${p.sizeMm.z}}`;
-    rotsArr[i] = `{${p.rotationDiscrete.x}, ${p.rotationDiscrete.y}, ${p.rotationDiscrete.z}}`;
+    pts += `{${p.positionMm.x}, ${p.positionMm.y}, ${p.positionMm.z}}`;
+    sizes += `{${p.sizeMm.x}, ${p.sizeMm.y}, ${p.sizeMm.z}}`;
+    rots += `{${p.rotationDiscrete.x}, ${p.rotationDiscrete.y}, ${p.rotationDiscrete.z}}`;
   }
-  const pts = ptsArr.join(", ");
-  const sizes = sizesArr.join(", ");
-  const rots = rotsArr.join(", ");
 
   return [
     `(* variant=${escapeWolframString(variant)} *)`,
