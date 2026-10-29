@@ -1,1 +1,61 @@
-import React,{useRef,useState}from'react';export const VirtualJoystick:React.FC<{onMove:(forward:number,right:number)=>void}>=({onMove})=>{const ref=useRef<HTMLDivElement>(null),[knob,setKnob]=useState({x:0,y:0}),active=useRef(false);const update=(cx:number,cy:number)=>{const r=ref.current?.getBoundingClientRect();if(!r)return;let x=cx-(r.left+r.width/2),y=cy-(r.top+r.height/2);const max=r.width*.34,len=Math.hypot(x,y);if(len>max){x=x/len*max;y=y/len*max}setKnob({x,y});onMove(-y/max,x/max)};const end=()=>{active.current=false;setKnob({x:0,y:0});onMove(0,0)};return <div ref={ref} data-testid="ax1-movement-control" aria-label="Bewegungssteuerung" className="virtual-joystick relative h-28 w-28 rounded-full border border-cyan-300/30 bg-black/45 backdrop-blur-md touch-none" onPointerDown={e=>{active.current=true;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);update(e.clientX,e.clientY)}} onPointerMove={e=>active.current&&update(e.clientX,e.clientY)} onPointerUp={end} onPointerCancel={end}><div className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-300/60 bg-slate-950/80 shadow-[0_0_18px_rgba(34,211,238,.25)]" style={{transform:`translate(calc(-50% + ${knob.x}px),calc(-50% + ${knob.y}px))`}}/></div>};
+import React, { useRef, useState } from "react";
+
+/**
+ * Virtual movement stick. Movement maths are unchanged from the previous minified version:
+ * the knob is clamped to 34% of the base width and reports (forward, right) in [-1, 1].
+ * Only presentation changed: the base now scales with the screen (see --ax-joy) and lights up
+ * while a thumb is on it.
+ */
+export const VirtualJoystick: React.FC<{ onMove: (forward: number, right: number) => void }> = ({ onMove }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const active = useRef(false);
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const [pressed, setPressed] = useState(false);
+
+  const update = (clientX: number, clientY: number) => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = clientX - (rect.left + rect.width / 2);
+    let y = clientY - (rect.top + rect.height / 2);
+    const max = rect.width * 0.34;
+    const length = Math.hypot(x, y);
+    if (length > max) {
+      x = (x / length) * max;
+      y = (y / length) * max;
+    }
+    setKnob({ x, y });
+    onMove(-y / max, x / max);
+  };
+
+  const end = () => {
+    active.current = false;
+    setPressed(false);
+    setKnob({ x: 0, y: 0 });
+    onMove(0, 0);
+  };
+
+  return (
+    <div
+      ref={ref}
+      data-testid="ax1-movement-control"
+      aria-label="Bewegungssteuerung"
+      data-active={pressed}
+      className="virtual-joystick ax-joy"
+      onPointerDown={(event) => {
+        active.current = true;
+        setPressed(true);
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+        update(event.clientX, event.clientY);
+      }}
+      onPointerMove={(event) => active.current && update(event.clientX, event.clientY)}
+      onPointerUp={end}
+      onPointerCancel={end}
+    >
+      <i className="ax-joy__tick ax-joy__tick--n" aria-hidden />
+      <i className="ax-joy__tick ax-joy__tick--s" aria-hidden />
+      <i className="ax-joy__tick ax-joy__tick--w" aria-hidden />
+      <i className="ax-joy__tick ax-joy__tick--e" aria-hidden />
+      <div className="ax-joy__knob" style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }} />
+    </div>
+  );
+};

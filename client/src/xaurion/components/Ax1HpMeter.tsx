@@ -12,14 +12,17 @@ export const Ax1HpMeter: React.FC<Ax1HpMeterProps> = ({ hp, maxHp, className = "
   
   // Dynamic color based on health percentage
   let barColor = "bg-emerald-500";
+  let tone: "ok" | "warn" | "danger" = "ok";
   if (percentage < 25) {
     barColor = "bg-red-500";
+    tone = "danger";
   } else if (percentage < 50) {
     barColor = "bg-amber-500";
+    tone = "warn";
   }
 
   return (
-    <div className={`relative h-2 overflow-hidden rounded border border-emerald-950 bg-black/90 ${className}`}>
+    <div data-tone={tone} className={`relative h-2 overflow-hidden rounded border border-emerald-950 bg-black/90 ${className}`}>
       <div 
         className={`h-full transition-all duration-300 ease-out ${barColor} shadow-[0_0_8px_rgba(16,185,129,0.3)]`} 
         style={{ width: `${percentage}%` }} 

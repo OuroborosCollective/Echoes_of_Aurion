@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameHUD, type GameHUDProps } from "./GameHUD";
+import { arcSlots, SKILL_ARC } from "./hud/hudGeometry";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 vi.mock("./Ax1HpMeter", () => ({
@@ -99,11 +100,23 @@ describe("GameHUD", () => {
   beforeEach(() => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
-      value: vi.fn(() => ({ matches: false, media: "(max-width: 720px)", onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() })),
+      value: vi.fn(() => ({
+        matches: false,
+        media: "(max-width: 720px)",
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
     });
   });
   afterEach(() => {
-    Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: originalMatchMedia,
+    });
   });
   it("presents explicit player/world projection states instead of color-only status", async () => {
     const props = baseProps();
@@ -115,7 +128,11 @@ describe("GameHUD", () => {
 
     expect(screen.getByText("Player · Stale")).toBeTruthy();
     expect(screen.getByText("World · Unavailable")).toBeTruthy();
-    expect(screen.getByLabelText("Serverbestätigter Charakter").getAttribute("data-state")).toBe("stale");
+    expect(
+      screen
+        .getByLabelText("Serverbestätigter Charakter")
+        .getAttribute("data-state"),
+    ).toBe("stale");
   });
 
   it("keeps frequent actions visible and groups lower-frequency systems in the command deck", async () => {
@@ -139,10 +156,14 @@ describe("GameHUD", () => {
   it("renders one dominant primary objective and a compact nearby layer", () => {
     render(<GameHUD {...baseProps()} />);
 
-    expect(screen.getByRole("button", { name: "Ziele schließen" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Ziele schließen" }),
+    ).toBeTruthy();
     expect(screen.getByRole("region", { name: "Hauptziel" })).toBeTruthy();
     expect(screen.getByText("PRIMARY · SERVER PROJECTION")).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Nearby objectives" })).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Nearby objectives" }),
+    ).toBeTruthy();
     expect(screen.getByText("Nearby · 2")).toBeTruthy();
     expect(screen.getByText("Find the Observatory")).toBeTruthy();
   });
@@ -154,7 +175,9 @@ describe("GameHUD", () => {
     expect(attack.className).toContain("min-h-14");
     expect(attack.className).toContain("min-w-14");
 
-    const skill = screen.getByRole("button", { name: /First Skill · Hotbar 1/ });
+    const skill = screen.getByRole("button", {
+      name: /First Skill · Hotbar 1/,
+    });
     expect(skill.className).toContain("min-h-11");
     expect(skill.className).toContain("min-w-11");
   });
@@ -164,10 +187,14 @@ describe("GameHUD", () => {
     render(<GameHUD {...props} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
-    await waitFor(() => expect(props.onMenuOpenChange).toHaveBeenLastCalledWith(true));
+    await waitFor(() =>
+      expect(props.onMenuOpenChange).toHaveBeenLastCalledWith(true),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
-    await waitFor(() => expect(props.onMenuOpenChange).toHaveBeenLastCalledWith(false));
+    await waitFor(() =>
+      expect(props.onMenuOpenChange).toHaveBeenLastCalledWith(false),
+    );
   });
 
   it("shows a PENDING state badge with redundant label when a mutation is in flight", () => {
@@ -189,16 +216,22 @@ describe("GameHUD", () => {
     const props = baseProps();
     props.context = "combat";
     const { rerender } = render(<GameHUD {...props} />);
-    expect(screen.getByTestId("ax1-game-hud").getAttribute("data-density")).toBe("combat");
+    expect(
+      screen.getByTestId("ax1-game-hud").getAttribute("data-density"),
+    ).toBe("combat");
 
     props.context = "dialogue";
     rerender(<GameHUD {...props} />);
-    expect(screen.getByTestId("ax1-game-hud").getAttribute("data-density")).toBe("dialogue");
+    expect(
+      screen.getByTestId("ax1-game-hud").getAttribute("data-density"),
+    ).toBe("dialogue");
   });
 
   it("defaults to exploration density when no context is given", () => {
     render(<GameHUD {...baseProps()} />);
-    expect(screen.getByTestId("ax1-game-hud").getAttribute("data-density")).toBe("exploration");
+    expect(
+      screen.getByTestId("ax1-game-hud").getAttribute("data-density"),
+    ).toBe("exploration");
   });
 
   it("gives every interactive utility button an accessible label (no hover-only knowledge)", () => {
@@ -220,7 +253,9 @@ describe("GameHUD", () => {
 
   it("exposes an aria-live region for state announcements", () => {
     render(<GameHUD {...baseProps()} />);
-    expect(screen.getByTestId("ax1-game-hud").getAttribute("aria-live")).toBe("polite");
+    expect(screen.getByTestId("ax1-game-hud").getAttribute("aria-live")).toBe(
+      "polite",
+    );
   });
 
   it("keeps all touch targets at or above 44px minimum", () => {
@@ -232,7 +267,9 @@ describe("GameHUD", () => {
     const interact = screen.getByRole("button", { name: "Interaktion" });
     expect(interact.className).toContain("min-h-11");
 
-    const autoLoot = screen.getByRole("button", { name: "Auto-Loot umschalten" });
+    const autoLoot = screen.getByRole("button", {
+      name: "Auto-Loot umschalten",
+    });
     expect(autoLoot.className).toContain("min-h-11");
   });
 
@@ -242,13 +279,20 @@ describe("GameHUD", () => {
     render(<GameHUD {...props} />);
 
     expect(screen.getByTitle("Angriff [R]")).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Interaktion" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Auto-Angriff umschalten" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Interaktion" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(
+      screen.getByRole("button", { name: "Auto-Angriff umschalten" }),
+    ).toHaveProperty("disabled", true);
   });
 
   it("renders exactly one primary objective section", () => {
     render(<GameHUD {...baseProps()} />);
-    const primarySections = screen.getAllByRole("region", { name: "Hauptziel" });
+    const primarySections = screen.getAllByRole("region", {
+      name: "Hauptziel",
+    });
     expect(primarySections).toHaveLength(1);
   });
 
@@ -264,7 +308,16 @@ describe("GameHUD", () => {
     const originalMatchMedia = window.matchMedia;
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
-      value: vi.fn(() => ({ matches: true, media: "(max-width: 720px)", onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() })),
+      value: vi.fn(() => ({
+        matches: true,
+        media: "(max-width: 720px)",
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
     });
     try {
       render(<GameHUD {...baseProps()} />);
@@ -272,7 +325,134 @@ describe("GameHUD", () => {
       expect(tracker?.getAttribute("data-collapsed")).toBe("true");
       expect(screen.getByText("Find the Observatory")).toBeTruthy();
     } finally {
-      Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: originalMatchMedia,
+      });
     }
+  });
+
+  describe("thumb-zone combat layout", () => {
+    it("positions every hotbar skill from the deterministic arc, in hotbar order", () => {
+      const props = baseProps();
+      render(<GameHUD {...props} />);
+      const expected = arcSlots(
+        props.hotbar.length,
+        SKILL_ARC.fromDeg,
+        SKILL_ARC.toDeg,
+      );
+      props.hotbar.forEach((skill, index) => {
+        const button = screen.getByRole("button", {
+          name: `${skill.name} · Hotbar ${index + 1}`,
+        });
+        expect(button.style.getPropertyValue("--x")).toBe(
+          String(expected[index]!.x),
+        );
+        expect(button.style.getPropertyValue("--y")).toBe(
+          String(expected[index]!.y),
+        );
+      });
+    });
+
+    it("closes the command deck from its close button and reports the menu as closed", async () => {
+      const props = baseProps();
+      props.onMenuOpenChange = vi.fn();
+      render(<GameHUD {...props} />);
+      fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
+      await waitFor(() =>
+        expect(props.onMenuOpenChange).toHaveBeenLastCalledWith(true),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Menü schließen" }));
+      await waitFor(() =>
+        expect(props.onMenuOpenChange).toHaveBeenLastCalledWith(false),
+      );
+      expect(
+        screen.queryByRole("dialog", { name: "Weitere Menüs" }),
+      ).toBeNull();
+    });
+
+    it("never draws an XP fill that the server has not confirmed", () => {
+      const props = baseProps();
+      props.mastery = { name: "Ruinenklinge", level: 7 };
+      const { container } = render(<GameHUD {...props} />);
+      const bar = container.querySelector(".ax-mastery");
+      expect(bar?.getAttribute("data-confirmed")).toBe("false");
+      expect(
+        (bar?.querySelector(".ax-mastery__fill") as HTMLElement).style.width,
+      ).toBe("0%");
+    });
+
+    it("clamps a confirmed XP fraction into 0..100%", () => {
+      const props = baseProps();
+      props.mastery = { name: "Ruinenklinge", level: 7, xpPercent: 1.7 };
+      const { container } = render(<GameHUD {...props} />);
+      expect(
+        (container.querySelector(".ax-mastery__fill") as HTMLElement).style
+          .width,
+      ).toBe("100%");
+    });
+
+    it("fades the bottom edge of a scroll area only while more content is below", async () => {
+      const { container } = render(<GameHUD {...baseProps()} />);
+      const body = container.querySelector(".ax-tracker__body") as HTMLElement;
+      let scrollTop = 0;
+      Object.defineProperty(body, "scrollHeight", {
+        configurable: true,
+        value: 400,
+      });
+      Object.defineProperty(body, "clientHeight", {
+        configurable: true,
+        value: 100,
+      });
+      Object.defineProperty(body, "scrollTop", {
+        configurable: true,
+        get: () => scrollTop,
+      });
+      fireEvent.scroll(body);
+      await waitFor(() => expect(body.getAttribute("data-more")).toBe("true"));
+      scrollTop = 300; // scrolled to the end: 300 + 100 >= 400
+      fireEvent.scroll(body);
+      await waitFor(() => expect(body.getAttribute("data-more")).toBe("false"));
+    });
+
+    it("opens the party window instead of an inline list on a phone held sideways", () => {
+      const original = window.matchMedia;
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: (query: string) => ({
+          matches: query.includes("max-height: 520px"),
+          media: query,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+          onchange: null,
+        }),
+      });
+      try {
+        const props = baseProps();
+        props.party = [
+          {
+            id: "a",
+            name: "Mirel",
+            role: "Heilerin",
+            ready: true,
+            hp: 80,
+            maxHp: 100,
+          },
+        ];
+        props.onOpenParty = vi.fn();
+        render(<GameHUD {...props} />);
+        fireEvent.click(screen.getByRole("button", { name: "Party öffnen" }));
+        expect(props.onOpenParty).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText("Mirel")).toBeNull();
+      } finally {
+        Object.defineProperty(window, "matchMedia", {
+          configurable: true,
+          value: original,
+        });
+      }
+    });
   });
 });
