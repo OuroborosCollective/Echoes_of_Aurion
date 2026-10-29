@@ -4990,6 +4990,14 @@ Erkenntnis: Der vorherige globale Tonknopf überlagerte im echten Browserlauf de
 Offen: Prüfungen und Review am endgültigen Head, Merge-Readback, natives HUD #929, fehlende Eigenfigur und Live-/Tab-A9-Abnahme. Kein Deployment behauptet.
 
 
+### 2026-10-29 — MCP-Abhängigkeiten gemeinsam aktualisiert (#1219)
+Status: PARTIAL — isolierte Kompatibilitätsprüfungen bestanden; finaler Memory-Head und Merge gesondert prüfen.
+Änderung: MCP-Node 2.1.0 und MCP-Server 2.3.0 aus #1202/#1203 zusammen und exakt fixiert, einschließlich aktualisiertem pnpm-Lock. Admin-, Gateway- und Entwicklungsendpunkt erzeugen weiterhin Server und Transport je Anfrage; keine neue Spiel- oder Zustandsautorität.
+Evidence: Codehead `e7e2c56ba8cd11c2bf24f00303d098aff54aa803`; 32 sichtbare PR-Läufe am Codehead erfolgreich. Am identisch verifizierten lokalen Kandidatenbaum `e7910ccbca8f3a472560f4cbbbeaf050cb504e4d` wurden laut PR-Nachweis 45 Tests in sechs MCP-/Admin-/Gateway-/Kontrollsuiten bestanden, darunter gleichzeitige und spätere Aufrufe am lokalen HTTP-Endpunkt. Isolierte Identitäts- und Datenbankfixtures belegen keine produktive Authentifizierung.
+Erkenntnis: Node 2.1.0 benötigt einen kompatiblen Server ab 2.1; ein alleiniger Node-Update-PR bricht diese Kopplung. Die Lockdatei enthält zudem dokumentierte transitive Änderungen; es wird keine vollständige neue Sicherheitsabnahme behauptet. Vorgeparstes Express-JSON bleibt an die bestehende Anwendungskonfiguration gebunden, nicht an eine neu behauptete SDK-Grenze.
+Offen: Exact-Head-CI mit erneutem MCP-Regressionstest, Merge- und Laufzeit-Readback; kein Produktionsdeployment belegt.
+
+
 ### 2026-10-30 — Avatar-Profil-Elternzuordnung mit Parität (#1227)
 Status: PARTIAL — Three.js-Regressionsfixture und isolierte Kandidatenläufe bestanden; finaler Integrationshead und Live-/Gerätebezug offen.
 Änderung: Die Array-Optimierung der Web-Avatarzuordnung behält bei mehrfach aufgelösten Bones den ersten kanonischen Eltern-Treffer wie der bisherige Scan. Der dedizierte Alias-Kollisionstest und sein Workflow aus dem früheren #1223-Kandidaten sind erhalten; fremde Benchmark- und Agentennotizen werden nicht übernommen. Aurion bleibt alleinige Autorität.
