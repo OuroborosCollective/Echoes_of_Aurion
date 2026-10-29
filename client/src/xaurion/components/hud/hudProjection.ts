@@ -33,8 +33,8 @@ export function hpTone(hp: number, maxHp: number): "ok" | "warn" | "danger" {
   return pct < 25 ? "danger" : pct < 50 ? "warn" : "ok";
 }
 
-/** Short viewports (phone landscape) and narrow ones (phone portrait) start with compact panels. */
-export const COMPACT_VIEWPORT_QUERY = "(max-width: 720px), (max-height: 520px)";
+/** Compact screens and tablet portrait start with panels closed to preserve the game view. */
+export const COMPACT_VIEWPORT_QUERY = "(max-width: 720px), (max-height: 520px), (orientation: portrait) and (max-width: 900px)";
 
 export function prefersCompactPanels(): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(COMPACT_VIEWPORT_QUERY).matches;

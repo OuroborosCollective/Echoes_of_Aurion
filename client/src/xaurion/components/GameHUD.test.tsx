@@ -455,4 +455,25 @@ describe("GameHUD", () => {
       }
     });
   });
+  it("starts compact on tablet portrait and lets the player open the objective panel", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn((query: string) => ({
+        matches: query.includes("orientation: portrait") && query.includes("max-width: 900px"),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    render(<GameHUD {...baseProps()} />);
+    expect(screen.getByRole("button", { name: "Ziele öffnen" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("region", { name: "Hauptziel" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ziele öffnen" }));
+    expect(screen.getByRole("region", { name: "Hauptziel" })).toBeTruthy();
+  });
+
 });
