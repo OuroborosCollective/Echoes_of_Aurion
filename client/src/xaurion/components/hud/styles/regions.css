@@ -1,0 +1,63 @@
+/* Aurion HUD · Screen regions (grid placement) (see hud.css for the import order, which is the cascade order) */
+
+/* ───────────── regions ───────────── */
+.ax-tl {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  width: min(300px, 100%);
+  container-type: inline-size;
+  max-height: calc(
+    100dvh - var(--ax-pad-t) - var(--ax-pad-b) - var(--ax-joy) - 12px
+  );
+  max-height: calc(100cqh - var(--ax-joy) - 12px);
+}
+.ax-unit,
+.ax-status,
+.ax-metrics-chip {
+  flex: none;
+}
+.ax-tr {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 0;
+  max-height: calc(100dvh - var(--ax-pad-t) - var(--ax-arc-top));
+  max-height: calc(100cqh - var(--ax-arc-top) + var(--ax-pad-b));
+}
+.ax-cluster {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ax-tracker-slot {
+  contain: inline-size;
+  width: min(300px, 40vw);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+}
+.ax-bl {
+  position: absolute;
+  left: var(--ax-pad-l);
+  bottom: var(--ax-pad-b);
+  width: var(--ax-joy);
+  height: var(--ax-joy);
+}
+.ax-br {
+  position: absolute;
+  right: var(--ax-pad-r);
+  bottom: var(--ax-pad-b);
+}

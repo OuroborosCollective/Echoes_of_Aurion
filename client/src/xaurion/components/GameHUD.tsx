@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Ax1HpMeter } from "./Ax1HpMeter";
+import { GameHUD as MobileHUD } from "./MobileGameHUD";
+import { usePcHud } from "./hud/usePcHud";
 import {
   Activity,
   Award,
@@ -136,7 +138,7 @@ export interface GameHUDProps {
 const iconButton = "group relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-[5px] border border-slate-700/80 bg-black/75 px-1.5 text-amber-200 shadow-lg backdrop-blur-md transition-colors hover:border-amber-300/70 hover:bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300";
 const utilityButton = "flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-[5px] border px-2 text-[9px] font-mono font-bold shadow-lg backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300";
 
-export function GameHUD(props: GameHUDProps) {
+function DesktopHUD(props: GameHUDProps) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [partyCollapsed, setPartyCollapsed] = useState(false);
   const [objectivesCollapsed, setObjectivesCollapsed] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches);
@@ -621,4 +623,9 @@ function MenuButton({ title, onClick, children }: { title: string; onClick: () =
 
 function Metric({ label, value }: { label: string; value: number | string }) {
   return <div className="rounded-lg border border-stone-800 bg-stone-950/80 p-1.5"><small className="block text-[7px] text-gray-500">{label}</small><b className="text-sm text-amber-300">{value}</b></div>;
+}
+
+/** Desktop keeps the established HUD. Touch-primary or small screens use the mobile design. */
+export function GameHUD(props: GameHUDProps) {
+  return usePcHud() ? <DesktopHUD {...props} /> : <MobileHUD {...props} />;
 }
