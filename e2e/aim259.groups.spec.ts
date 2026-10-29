@@ -64,6 +64,13 @@ async function launchAx1AndOpenGroups(page: Page) {
   await expect(connected).toBeVisible({ timeout: 45_000 });
   const hud = page.getByTestId("authoritative-world-hud");
   await hud.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
+  // The mobile command deck is a blocking sheet; group is a separate quick
+  // navigation button. Close the sheet before using that shortcut. The desktop
+  // HUD keeps its existing expanded navigation without the sheet.
+  const mobileDeck = hud.getByRole("dialog", { name: "Weitere Menüs", exact: true });
+  if (await mobileDeck.isVisible()) {
+    await mobileDeck.getByRole("button", { name: "Menü schließen", exact: true }).click();
+  }
   await hud.getByRole("button", { name: "Gruppe", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Party & Adventuring Squad", exact: true });
   await expect(dialog).toBeVisible({ timeout: 15_000 });

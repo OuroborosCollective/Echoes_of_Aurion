@@ -1,0 +1,203 @@
+/* Aurion HUD · World objective tracker (see hud.css for the import order, which is the cascade order) */
+
+/* ───────────── objective tracker ───────────── */
+.ax-tracker {
+  padding: 4px;
+  max-height: min(46dvh, 380px);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ax-tracker__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.ax-tracker__head > svg:first-child {
+  color: var(--ax-aurum);
+}
+.ax-tracker__title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ax-aurum-hi);
+  white-space: nowrap;
+}
+.ax-tracker__peek {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ax-tracker__spacer {
+  flex: 1;
+}
+.ax-tracker__body {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px 6px 6px;
+}
+.ax-objective {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    rgb(216 180 95 / 0.12),
+    rgb(216 180 95 / 0.03)
+  );
+  box-shadow: inset 0 0 0 1px rgb(216 180 95 / 0.3);
+}
+.ax-objective__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ax-objective__state {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ax-muted);
+}
+.ax-objective__label {
+  margin: 4px 0 0;
+  font-family: var(--font-display, "Cinzel"), Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ax-objective__detail {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ax-muted);
+}
+.ax-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ax-aurum-hi);
+}
+.ax-progress__track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgb(0 0 0 / 0.55);
+}
+.ax-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ax-aurum-lo), var(--ax-aurum-hi));
+}
+.ax-objective__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ax-muted);
+}
+.ax-link {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ax-aurum-hi);
+}
+.ax-nearby {
+  margin-top: 6px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.3);
+}
+.ax-nearby__head {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px 2px;
+}
+.ax-nearby__poi {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ax-muted);
+}
+.ax-nearby__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.ax-diamond {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  rotate: 45deg;
+  box-shadow: inset 0 0 0 1.5px var(--ax-aurum);
+}
+.ax-nearby__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ax-nearby__label {
+  font-size: 13px;
+  font-weight: 700;
+}
+.ax-nearby__detail {
+  font-size: 11px;
+  color: var(--ax-muted);
+}
+.ax-ok {
+  color: #8ff0b8;
+}
+.ax-nearby__more {
+  padding: 0 12px 8px 29px;
+  font-size: 12px;
+  color: var(--ax-muted);
+}
+.ax-nearby__more ul {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+.ax-nearby__more p {
+  margin: 4px 0 0;
+  font-style: italic;
+}
+.ax-ledger {
+  margin-top: 6px;
+  padding: 6px 4px 0;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+.ax-ledger__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8ff0b8;
+}
+.ax-objective[data-effect="pulse"] {
+  animation: ax-objective-pulse 700ms ease-out;
+}
+.ax-objective[data-effect="shake"],
+[data-effect="shake"] > .ax-nearby__item {
+  animation: ax-objective-arrival 520ms ease-out;
+}

@@ -4982,6 +4982,14 @@ Erkenntnis: Der vorherige Test setzte das Kameraziel selbst und verdeckte damit 
 Offen: Exact-Head-CI dieses Memory-Eintrags, fehlende Modellursache, Live-Session und Tab-A9-Gerätenachweis; kein Produktionsdeployment behauptet.
 
 
+### 2026-10-29 — Kompaktes mobiles Aurion-Web-HUD (#1224)
+Status: PARTIAL — isolierte Browser-, Datenbank- und Layoutprüfungen bestanden; endgültiger Integrationshead, natives Godot-HUD, echtes Gerät und Livebetrieb offen.
+Änderung: Das bereitgestellte Obsidian-und-Aurum-Design wird im Webclient für Touch und kompakte Ansichten angezeigt; PC-HUD und Skillleiste bleiben für Maus/Tastatur erhalten. Bestehende Aurion-Projektionen und Aktionen bleiben maßgeblich; das Steuerkreuz hat einen Pointer-Besitzer und stoppt bei Abbruch oder Ansichtswechsel. Der Tonknopf liegt im Mobilmenü statt über Angriff. AX1-Bezeichner im historischen Inventar erzeugen keine Runtime-Autorität.
+Evidence: Codehead `ff6306f0e40cfd31be7bb5a39442a1077ecd74fb`; [HUD-Lauf 40962198475](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40962198475) bestand Typecheck und 67 Tests sowie 18 Chromium-Layoutvarianten mit ausdrücklich synthetischen Vorschaudaten, darunter Tab-A9-Auflösungen. [Gruppenlauf 40962198589](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40962198589) prüfte Browser, Eingaben und mehrere Sitzungen gegen eine isolierte Runtime und MariaDB; kein Produktionsbeleg. Alle elf PR-Workflows auf diesem Codehead erfolgreich.
+Erkenntnis: Der vorherige globale Tonknopf überlagerte im echten Browserlauf den Angriff; das mobile Menü entfernt diese Überdeckung, ohne den Audiomanager zu deaktivieren. Synthetische Bildschirmgrößen beweisen kein reales Tabletverhalten.
+Offen: Prüfungen und Review am endgültigen Head, Merge-Readback, natives HUD #929, fehlende Eigenfigur und Live-/Tab-A9-Abnahme. Kein Deployment behauptet.
+
+
 ### 2026-10-29 — Forum-Editor zugänglicher (#1217)
 Status: PARTIAL — isolierte Komponenten- und echte Chromium-Tastaturprüfung bestanden; finaler Memory-Head und Merge separat prüfen.
 Änderung: Sichere Verbesserungen aus #1212 und #1222 konsolidiert: sichtbarer Tastaturfokus und Auswahlzustand, barrierefreier Name mit vorhandenen Titel-/Kategorie-/Pin-Angaben sowie `aria-busy` beim Speichern. Die bereits vorhandene Sperre gegen mehrfaches Absenden bleibt bestehen.
