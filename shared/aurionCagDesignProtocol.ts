@@ -205,7 +205,7 @@ export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): Aurion
   return Object.freeze({
     kind: "terrain_texturization",
     code,
-    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.forestFloorTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
+    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.forestFloorTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
     truthNotice: "CAG verifies texturization distribution of a canonical Aurion chunk; it does not assign textures or modify world state.",
   });
 }
