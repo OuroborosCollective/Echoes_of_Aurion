@@ -4948,3 +4948,19 @@ Evidence:
 Gelernt: Eine echte isolierte Zwei-Client-Integration belegt die G11-Projektion, obwohl der übergeordnete G10/G09-Live-/Gerätescope separat offen bleibt; Issue-, PR- und Runtime-Evidence dürfen nicht über diese Grenze hinaus interpretiert werden.
 Offen: G09 #916 und die vollständige G10-Abnahme #917, insbesondere echte Live-WSS-/native Login-/Geräte-Readbacks. Keine Produktionspromotion oder signierte Gerätefreigabe behauptet.
 Nächster sicherer Schritt: G11 #918 nach Merge dieses Evidence-Eintrags schließen und G11 im Parent #906 als erledigt markieren; G09/G10 und den späteren G13-Checkpoint separat offen weiterführen.
+
+
+### 2026-10-29 — G21 Touch-Kamera und Zielaktion (#1221)
+Status: PARTIAL — Code und isolierte Godot-Laufzeit geprüft; physisches Tablet, Live-Sitzung und vollständiges mobiles HUD offen.
+Änderung: G20-Bewegung bleibt einziger Bewegungseingang; ein separater Touch-Router führt die bestätigte Position zu einer visuellen Kamera, wählt sichtbare bestätigte Ziele und sendet nur den bestehenden typisierten Angriff. Aurion bleibt einzige Autorität für Welt und Kampf. Die relevanten Kamera-, Router-, Szenen- und Multitouch-Dateien aus #1193 sind blobidentisch; der Zieltest übernimmt die Fingerisolation aus #1192.
+Evidence: Codehead `83f4d5e70ee8153420be28a1c1930cf655bb1544`, [Godot-Lauf 40835337604](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337604) Versuch 1 mit echten Godot-Headless-Tests für Bewegung, Mehrfingerrouting und Angriff über isolierten lokalen WebSocket. [Android-Preview-Build 40835337634](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40835337634) erfolgreich; sämtliche zehn PR-Läufe am Codehead erfolgreich. Fixtures sind keine Live-Server- oder Gerätedaten.
+Erkenntnis: Ein visueller Ziel- und Kameraadapter darf bestätigten Zustand nicht verändern und muss beim Verlust der Frische, bei Diagnose und Rotation Eingaben beenden. Der finale Memory-Head benötigt eigene CI und Readback.
+Offen: echtes Tab A9, native Touch-/Kameraergonomie, aktives Live-Login/Angriff, fehlendes eigenes Charaktermodell und das mobile HUD aus #929. Keine Produktionsfreigabe behauptet.
+
+
+### 2026-10-29 — MCP-Abhängigkeiten gemeinsam aktualisiert (#1219)
+Status: PARTIAL — isolierte Kompatibilitätsprüfungen bestanden; finaler Memory-Head und Merge gesondert prüfen.
+Änderung: MCP-Node 2.1.0 und MCP-Server 2.3.0 aus #1202/#1203 zusammen und exakt fixiert, einschließlich aktualisiertem pnpm-Lock. Admin-, Gateway- und Entwicklungsendpunkt erzeugen weiterhin Server und Transport je Anfrage; keine neue Spiel- oder Zustandsautorität.
+Evidence: Codehead `e7e2c56ba8cd11c2bf24f00303d098aff54aa803`; 32 sichtbare PR-Läufe am Codehead erfolgreich. Am identisch verifizierten lokalen Kandidatenbaum `e7910ccbca8f3a472560f4cbbbeaf050cb504e4d` wurden laut PR-Nachweis 45 Tests in sechs MCP-/Admin-/Gateway-/Kontrollsuiten bestanden, darunter gleichzeitige und spätere Aufrufe am lokalen HTTP-Endpunkt. Isolierte Identitäts- und Datenbankfixtures belegen keine produktive Authentifizierung.
+Erkenntnis: Node 2.1.0 benötigt einen kompatiblen Server ab 2.1; ein alleiniger Node-Update-PR bricht diese Kopplung. Die Lockdatei enthält zudem dokumentierte transitive Änderungen; es wird keine vollständige neue Sicherheitsabnahme behauptet. Vorgeparstes Express-JSON bleibt an die bestehende Anwendungskonfiguration gebunden, nicht an eine neu behauptete SDK-Grenze.
+Offen: Exact-Head-CI mit erneutem MCP-Regressionstest, Merge- und Laufzeit-Readback; kein Produktionsdeployment belegt.
