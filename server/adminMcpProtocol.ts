@@ -26,7 +26,7 @@ export type AurionAdminMcpSettings = {
   protectedResourceMetadataUrl: string;
 } & (
   | { authMode?: "scoped_oauth"; clientId?: never }
-  | { authMode: "application_roles"; clientId: string }
+  | { authMode: "application_roles" | "supabase_oauth"; clientId: string }
 );
 
 export type AurionAdminMcpTokenClaims = {
@@ -77,16 +77,16 @@ export function readAurionAdminMcpSettings(environment: NodeJS.ProcessEnv): Auri
   };
   const authMode = environment.AURION_ADMIN_MCP_AUTH_MODE?.trim() || "scoped_oauth";
   if (authMode === "scoped_oauth") return Object.freeze(settings);
-  if (authMode !== "application_roles") throw new Error("AURION_ADMIN_MCP_AUTH_MODE must be scoped_oauth or application_roles");
+  if (authMode !== "application_roles" && authMode !== "supabase_oauth") throw new Error("AURION_ADMIN_MCP_AUTH_MODE must be scoped_oauth, application_roles or supabase_oauth");
   const clientId = environment.AURION_ADMIN_MCP_CLIENT_ID?.trim().toLowerCase();
   if (!clientId || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(clientId)) {
-    throw new Error("AURION_ADMIN_MCP_CLIENT_ID must be a UUID in application_roles mode");
+    throw new Error("AURION_ADMIN_MCP_CLIENT_ID must be a UUID in application role or Supabase OAuth mode");
   }
   return Object.freeze({ ...settings, authMode, clientId });
 }
 
 export function adminMcpRequiredOAuthScope(settings: AurionAdminMcpSettings): string {
-  return settings.authMode === "application_roles" ? "openid" : AURION_ADMIN_MCP_READ_SCOPE;
+  return settings.authMode === "application_roles" || settings.authMode === "supabase_oauth" ? "openid" : AURION_ADMIN_MCP_READ_SCOPE;
 }
 
 export function hasAurionAdminMcpReadScope(scopes: readonly string[]): boolean {
@@ -108,7 +108,9 @@ export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionA
   const subject = typeof payload.sub === "string" ? payload.sub.trim() : "";
   openIdForOidcSubject(issuer, subject);
   const audience = parseAudienceClaim(payload.aud);
-  if (!audience.includes(settings.resourceUrl)) throw new Error("Admin MCP token is not bound to this resource server");
+  if (settings.authMode === "supabase_oauth") {
+    if (!audience.includes("authenticated")) throw new Error("Supabase token lacks authenticated audience");
+  } else if (!audience.includes(settings.resourceUrl)) throw new Error("Admin MCP token is not bound to this resource server");
   let scopes: readonly string[];
   if (settings.authMode === "application_roles") {
     if (!audience.includes(settings.clientId)) throw new Error("Admin MCP token is not bound to the configured client application");
@@ -120,6 +122,16 @@ export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionA
     const roles = Array.isArray(payload.roles) ? payload.roles.filter((role): role is string => typeof role === "string") : [];
     scopes = Object.freeze(APPLICATION_ROLE_SCOPES.filter(([role]) => roles.includes(role)).map(([, scope]) => scope).sort());
     if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Admin MCP token lacks the required aurion_admin_read application role");
+  } else if (settings.authMode === "supabase_oauth") {
+    // Dedicated OAuth client and issuer bind this generic Supabase audience to this integration.
+    if (payload.client_id !== settings.clientId) throw new Error("Supabase token client_id does not match the dedicated client");
+    if (payload.role !== "authenticated" || payload.is_anonymous !== false) throw new Error("Supabase token must represent an authenticated user");
+    if (!parseScopeClaim(payload.scope).includes("openid")) throw new Error("Supabase token lacks openid scope");
+    const metadata = payload.app_metadata && typeof payload.app_metadata === "object" && !Array.isArray(payload.app_metadata)
+      ? payload.app_metadata as Record<string, unknown> : {};
+    const roles = Array.isArray(metadata.aurion_admin_roles) ? metadata.aurion_admin_roles : [];
+    scopes = Object.freeze(APPLICATION_ROLE_SCOPES.filter(([role]) => roles.includes(role)).map(([, scope]) => scope).sort());
+    if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Supabase token lacks the required aurion_admin_read application role");
   } else {
     scopes = parseScopeClaim(payload.scope);
     if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Admin MCP token lacks the required read scope");
@@ -133,7 +145,7 @@ export function protectedResourceMetadata(settings: AurionAdminMcpSettings) {
   return Object.freeze({
     resource: settings.resourceUrl,
     authorization_servers: [settings.authorizationServerUrl],
-    scopes_supported: settings.authMode === "application_roles" ? [...AURION_ADMIN_MCP_STANDARD_OAUTH_SCOPES] : [...AURION_ADMIN_MCP_SCOPES],
+    scopes_supported: settings.authMode === "application_roles" || settings.authMode === "supabase_oauth" ? [...AURION_ADMIN_MCP_STANDARD_OAUTH_SCOPES] : [...AURION_ADMIN_MCP_SCOPES],
     ...(settings.authMode === "application_roles" ? {
       aurion_admin_authorization: {
         mode: "application_roles" as const,

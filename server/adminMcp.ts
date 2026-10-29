@@ -122,7 +122,7 @@ async function resolveAdminActor(token: string, settings: AurionAdminMcpSettings
   const discovery = await discoverIssuer(settings.authorizationServerUrl);
   const jwks = jwksCache.get(discovery.jwksUri) ?? createRemoteJWKSet(new URL(discovery.jwksUri));
   jwksCache.set(discovery.jwksUri, jwks);
-  const { payload } = await jwtVerify(token, jwks, { issuer: settings.authorizationServerUrl, audience: settings.resourceUrl });
+  const { payload } = await jwtVerify(token, jwks, { issuer: settings.authorizationServerUrl, audience: settings.authMode === "supabase_oauth" ? "authenticated" : settings.resourceUrl });
   const claims = parseAurionAdminMcpTokenClaims(payload, settings, operationalNow());
   const openId = openIdForOidcSubject(claims.issuer, claims.subject);
   const user = await db.getUserByOpenId(openId);
