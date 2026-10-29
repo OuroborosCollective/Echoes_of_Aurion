@@ -18,6 +18,7 @@ import {
   Swords,
   UserRound,
   Users,
+  Volume2,
   X,
 } from "lucide-react";
 import type { GameHUDProps } from "./hudTypes";
@@ -110,6 +111,7 @@ export function HudDeck(props: DeckProps) {
       title: "Social & Holdings",
       items: [
         { title: "Chat", icon: <MessageSquare />, run: props.onOpenChat },
+        { title: "Ton umschalten", icon: <Volume2 />, run: () => window.dispatchEvent(new Event("aurion:audio-toggle")) },
         { title: "Kontakte", icon: <Users />, run: props.onOpenContacts },
         { title: "Gilde", icon: <Crown />, run: props.onOpenGuild },
         { title: "Ökonomie", icon: <Coins />, run: props.onOpenEconomy },

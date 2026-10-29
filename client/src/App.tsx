@@ -17,17 +17,19 @@ import ContextStudio from "./pages/ContextStudio";
 import AurionPlayRoute from "./xaurion/integration/AurionPlayRoute";
 import Ax1PlayNavigationBridge from "./xaurion/integration/Ax1PlayNavigationBridge";
 import { SoundManager } from "./xaurion/audio/SoundManager";
+import { usePcHud } from "./xaurion/components/hud/usePcHud";
 
 function App() {
   const [location] = useLocation();
   const websiteSurface = location !== "/play";
+  const pcHud = usePcHud();
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" switchable={true}>
         <TooltipProvider>
           <Toaster />
           <CausalBackupNotifier />
-          <SoundManager />
+          <SoundManager hideControls={!websiteSurface && !pcHud} />
           <LocalAuthPanel />
           {websiteSurface && <AurionCommunityHost />}
           <Ax1PlayNavigationBridge />

@@ -151,6 +151,10 @@ describe("GameHUD", () => {
     expect(screen.getByText("Social & Holdings")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Gilde" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Kontakte" })).toBeTruthy();
+    const toggleAudio = vi.fn();
+    window.addEventListener("aurion:audio-toggle", toggleAudio, { once: true });
+    fireEvent.click(screen.getByRole("button", { name: "Ton umschalten" }));
+    expect(toggleAudio).toHaveBeenCalledTimes(1);
   });
 
   it("renders one dominant primary objective and a compact nearby layer", () => {
