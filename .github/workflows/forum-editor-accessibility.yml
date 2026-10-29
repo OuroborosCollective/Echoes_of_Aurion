@@ -1,0 +1,26 @@
+name: Forum editor accessibility
+on:
+  pull_request:
+    paths:
+      - 'client/src/components/ForumAdminEditor*'
+      - '.github/workflows/forum-editor-accessibility.yml'
+permissions:
+  contents: read
+jobs:
+  accessibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck and isolated component regression
+        run: |
+          pnpm check
+          pnpm exec vitest run client/src/components/ForumAdminEditor.test.tsx
