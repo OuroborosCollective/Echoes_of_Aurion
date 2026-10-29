@@ -101,6 +101,20 @@ describe("authenticated admin MCP HTTP requests (isolated identity fixtures)", (
     });
   });
 
+  it("serves concurrent and subsequent MCP requests independently", async () => {
+    await withAuthenticatedMcp(async call => {
+      const responses = await Promise.all(Array.from({ length: 4 }, () => call("tools/list")));
+      for (const response of responses) {
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.result.tools.map((tool: { name: string }) => tool.name)).toContain("aurion_admin_get_capabilities");
+      }
+      const later = await call("tools/list");
+      expect(later.status).toBe(200);
+      expect((await later.json()).result.tools.length).toBeGreaterThan(0);
+    });
+  });
+
   it("validates real quest templates and rejects an unreachable graph", async () => {
     await withAuthenticatedMcp(async call => {
       for (const [template, valid] of [
