@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import "./preview.css";
+import "../../client/src/xaurion/integration/ax1AuthorityHud.css";
 import { GameHUD, type GameHUDProps } from "../../client/src/xaurion/components/GameHUD";
 import { VirtualJoystick } from "../../client/src/xaurion/components/VirtualJoystick";
 import { MiniMap } from "../../client/src/xaurion/components/Ax1WorldSurfaces";

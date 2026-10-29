@@ -92,6 +92,10 @@ for (const [name, d] of Object.entries(DEVICES)) {
     }
     const { solids, touch, contained, caps, vw, vh } = await measure(page);
     const problems = [];
+    const mobileHud = await page.locator(".xaurion-game-hud.ax-hud").count();
+    const desktopHud = await page.locator(".xaurion-game-hud:not(.ax-hud)").count();
+    if (d.touch && mobileHud !== 1) problems.push("touch device did not render mobile HUD");
+    if (!d.touch && desktopHud !== 1) problems.push("desktop did not retain the desktop HUD");
     // In the default layout, keep the central gameplay area clear on Tab A9.
     // Expanded panels are allowed to cover it temporarily.
     if (name.startsWith("Tab A9") && variant === "default") {

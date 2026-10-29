@@ -816,6 +816,41 @@
       "note": "Aurion-owned HUD presentation support staged from owner-provided design; donor naming is inventory scope, not runtime authority."
     },
     {
+      "path": "client/src/xaurion/components/LegacyGameHUD.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT",
+      "note": "Presentation mode separation; Aurion remains the only runtime authority."
+    },
+    {
+      "path": "client/src/xaurion/components/MobileGameHUD.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT",
+      "note": "Presentation mode separation; Aurion remains the only runtime authority."
+    },
+    {
+      "path": "client/src/xaurion/components/LegacyVirtualJoystick.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT",
+      "note": "Presentation mode separation; Aurion remains the only runtime authority."
+    },
+    {
+      "path": "client/src/xaurion/components/MobileVirtualJoystick.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT",
+      "note": "Presentation mode separation; Aurion remains the only runtime authority."
+    },
+    {
+      "path": "client/src/xaurion/components/hud/usePcHud.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT",
+      "note": "Presentation mode separation; Aurion remains the only runtime authority."
+    },
+    {
       "path": "client/src/xaurion/components/InventoryModal.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
