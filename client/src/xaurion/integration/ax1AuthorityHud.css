@@ -1,3 +1,6 @@
+/* Shared shell plus unchanged desktop styling; mobile uses the separately scoped HUD skin. */
+.xaurion-runtime .ax1-authority-shell{position:absolute;inset:0;pointer-events:none;color:#e5e7eb;user-select:none;font-family:system-ui,sans-serif}
+@media (pointer: fine) and (hover: hover) and (min-width: 721px) {
 .xaurion-runtime .ax1-authority-shell{position:absolute;inset:0;pointer-events:none;color:#e5e7eb;user-select:none;font-family:system-ui,sans-serif}
 .xaurion-runtime .ax1-hud-top-left{position:absolute;left:16px;top:16px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .xaurion-runtime .ax1-authority-shell .aurion-authority-hud__profile{position:static;display:flex;align-items:center;gap:10px;width:272px;max-width:calc(100vw - 32px);min-height:76px;padding:8px 10px;border:1px solid #b8860b80;border-radius:16px;background:#000d;backdrop-filter:blur(12px);box-shadow:0 4px 20px #0009;pointer-events:auto}
@@ -767,5 +770,13 @@
   }
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-command-deck{
     max-height:78dvh;
+  }
+}
+
+}
+@media not all and (pointer: fine) and (hover: hover) and (min-width: 721px) {
+  .xaurion-runtime .aurion-glb-admin-toggle {
+    left: max(16px, env(safe-area-inset-left));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + clamp(124px,30vmin,176px) + 66px);
   }
 }

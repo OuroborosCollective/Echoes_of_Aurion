@@ -106,7 +106,13 @@ func verify() -> void:
         return
     scene._show_3d()
     var viewport := scene.get_node("WorldView/Live3D") as SubViewport
-    var camera := scene.get_node("WorldView/Live3D/World/WorldCamera") as Camera3D
+    # The app continues tracking confirmed self on its own camera each frame.
+    # Use a dedicated capture camera so that tracking cannot move the fixed
+    # before/after observation point; this does not alter the running rig.
+    var camera := Camera3D.new()
+    camera.name = "VillageEvidenceCamera"
+    scene.get_node("WorldView/Live3D/World").add_child(camera)
+    camera.current = true
     var village := scene.get_node_or_null("WorldView/Live3D/World/StarterVillageVisuals") as Node3D
     require(village != null, "G19 active main scene has no village projection")
     if village == null:
@@ -116,6 +122,7 @@ func verify() -> void:
     # the 6.7% pixel-difference threshold is deliberately not relaxed.
     camera.position = Vector3(29.0, 7.5, -13.0)
     camera.look_at(Vector3(22.0, 2.0, -22.0), Vector3.UP)
+    var capture_transform := camera.global_transform
     require(scene._apply_chunk_surface(chunk(), admitted.connectionId), "G19 G18 base chunk unavailable")
     var before: Image = await take_frame(viewport)
     require(not before.is_empty(), "G19 baseline framebuffer missing")
@@ -128,6 +135,8 @@ func verify() -> void:
     require(scene._apply_chunk_surface(decorated, admitted.connectionId), "G19 confirmed read model rejected")
     require(village.get_child_count() == 10, "G19 canonical ten objects not projected")
     var after: Image = await take_frame(viewport)
+    require(viewport.get_camera_3d() == camera, "G19 fixed capture camera is not active")
+    require(camera.global_transform.is_equal_approx(capture_transform), "G19 capture perspective moved between frames")
     require(not after.is_empty() and after.get_size() == before.get_size(), "G19 confirmed framebuffer missing")
     if not after.is_empty() and after.get_size() == before.get_size():
         require(after.save_png(outdir.path_join("village-after-confirmed-visuals.png")) == OK, "G19 confirmed image save error")

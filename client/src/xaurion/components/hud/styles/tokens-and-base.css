@@ -1,0 +1,187 @@
+/*
+ * Aurion HUD — "Obsidian & Aurum"
+ * Obsidian glass, aurum (bronze-gold) rims and one Aurion-turquoise signal colour.
+ * Presentation only: no authority, readback or gameplay decisions live here.
+ *
+ * Layout model (one system instead of stacked patches):
+ *   - sizes derive from the SHORT screen side (vmin), so a phone held sideways and a
+ *     tablet get proportional thumb targets instead of a shrunken desktop UI
+ *   - thumb zones: movement bottom-left, combat bottom-right (attack anchors a skill arc)
+ *   - three layouts: phone landscape, phone portrait, tablet/desktop
+ */
+
+.ax-hud {
+  --ax-ink: #05090c;
+  --ax-text: #f4ecd9;
+  --ax-muted: #a3b6b2;
+  --ax-aurum-hi: #f6dc9a;
+  --ax-aurum: #d8b45f;
+  --ax-aurum-lo: #8a6420;
+  --ax-signal: #2de2cf;
+  --ax-ember: #ff7a3d;
+  --ax-life: #3ddc84;
+  --ax-warn: #f5b942;
+  --ax-danger: #ff5d6c;
+  --ax-glass-a: rgb(17 26 31 / 0.82);
+  --ax-glass-b: rgb(6 10 13 / 0.9);
+
+  --ax-edge: 12px;
+  --ax-pad-t: max(var(--ax-edge), env(safe-area-inset-top));
+  --ax-pad-r: max(var(--ax-edge), env(safe-area-inset-right));
+  --ax-pad-b: max(var(--ax-edge), env(safe-area-inset-bottom));
+  --ax-pad-l: max(var(--ax-edge), env(safe-area-inset-left));
+  --ax-gap: clamp(6px, 1.2vmin, 12px);
+  --ax-btn: 44px;
+  --ax-attack: clamp(68px, 19vmin, 112px);
+  --ax-skill: clamp(46px, 12.4vmin, 72px);
+  --ax-util: clamp(44px, 10.2vmin, 74px);
+  --ax-joy: clamp(124px, 30vmin, 176px);
+  --ax-map: clamp(88px, 21vmin, 140px);
+  /* Skill ring: 2.72 x diameter keeps >= 8% clear space between 5 skills on a 92 degree arc
+   * (proved by hudGeometry.test.ts). Utility ring sits between attack and the skill arc. */
+  --ax-skill-ring: calc(var(--ax-skill) * 2.72);
+  --ax-util-ring: calc(
+    var(--ax-attack) / 2 + var(--ax-util) / 2 + var(--ax-gap)
+  );
+  /* highest point the skill arc reaches above the bottom edge: the top-right column must stay above it */
+  --ax-arc-top: calc(
+    var(--ax-pad-b) + var(--ax-attack) / 2 + var(--ax-skill-ring) +
+      var(--ax-skill) / 2 + 10px
+  );
+
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  container-type: size;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+  padding: var(--ax-pad-t) var(--ax-pad-r) var(--ax-pad-b) var(--ax-pad-l);
+  color: var(--ax-text);
+  font-family: var(--font-sans, "Manrope"), system-ui, sans-serif;
+  font-size: 14px;
+  text-rendering: optimizeLegibility;
+}
+.ax-hud *,
+.ax-hud *::before,
+.ax-hud *::after {
+  box-sizing: border-box;
+}
+.ax-hud button {
+  touch-action: manipulation;
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.ax-hud button:focus-visible {
+  outline: 2px solid var(--ax-signal);
+  outline-offset: 3px;
+}
+.ax-hud svg {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+.ax-hud .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.ax-hud .ax-ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* readability vignette behind the HUD edges */
+.ax-hud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(0 0 0 / 0.32),
+      transparent 24%,
+      transparent 70%,
+      rgb(0 0 0 / 0.38)
+    ),
+    radial-gradient(circle at 50% 50%, transparent 55%, rgb(0 0 0 / 0.28) 100%);
+}
+.ax-tl,
+.ax-tr,
+.ax-cluster,
+.ax-bl,
+.ax-br {
+  z-index: 1;
+}
+
+/* every interactive surface re-enables pointer events; the world stays tappable around them */
+.ax-hud button,
+.ax-glass,
+.ax-move,
+.ax-minimap {
+  pointer-events: auto;
+}
+
+/* ───────────── glass panel with a gradient aurum hairline ───────────── */
+.ax-glass {
+  position: relative;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--ax-glass-a), var(--ax-glass-b));
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+  box-shadow:
+    0 10px 28px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.ax-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    155deg,
+    var(--ax-aurum-hi),
+    rgb(216 180 95 / 0.18) 38%,
+    rgb(45 226 207 / 0.28)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.ax-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ax-aurum);
+}
+
+/* a scroll area with more content below fades its bottom edge instead of cutting the last entry mid-line */
+.ax-hud [data-more="true"] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 30px),
+    transparent
+  );
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+}

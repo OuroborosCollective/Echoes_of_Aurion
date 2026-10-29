@@ -1,0 +1,147 @@
+/* Aurion HUD · Layouts: wide, phone portrait, phone landscape (see hud.css for the import order, which is the cascade order) */
+
+/* ═════════════ LAYOUTS ═════════════ */
+
+/* wide screens: one row of navigation, labels visible */
+@media (min-width: 900px) {
+  .ax-nav {
+    grid-template-columns: repeat(7, var(--ax-btn));
+  }
+  .ax-hud {
+    --ax-btn: 48px;
+  }
+  .ax-railbtn__text {
+    display: inline;
+  }
+}
+
+/* phone portrait: minimap on top, navigation as a 2-column rail beneath it, tracker below both columns */
+@media (orientation: portrait) and (max-width: 699px) {
+  /* rows: top stack | free space for the tracker | reserve for the skill arc, so panels never run into the thumb zones */
+  .ax-hud {
+    grid-template-rows: auto minmax(0, 1fr) calc(
+        var(--ax-arc-top) - var(--ax-pad-b)
+      );
+  }
+  .ax-tr {
+    display: contents;
+  }
+  .ax-cluster {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .ax-nav {
+    grid-template-columns: repeat(2, var(--ax-btn));
+  }
+  .ax-tracker-slot {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-self: start;
+    justify-self: end;
+    width: min(300px, 100%);
+    max-height: 100%;
+  }
+  .ax-tracker {
+    max-height: 100%;
+  }
+  /* top-left stack: stay clear of the stick + rail below AND leave room for the collapsed tracker above the skill arc */
+  .ax-tl {
+    max-height: min(
+      calc(100dvh - var(--ax-pad-t) - var(--ax-pad-b) - var(--ax-joy) - 64px),
+      calc(100dvh - var(--ax-pad-t) - var(--ax-arc-top) - 68px)
+    );
+    max-height: min(
+      calc(100cqh - var(--ax-joy) - 64px),
+      calc(100cqh - var(--ax-arc-top) + var(--ax-pad-b) - 68px)
+    );
+  }
+  .ax-rail {
+    left: 0;
+    bottom: calc(100% + 10px);
+  }
+  .ax-unit {
+    padding: 6px 10px 6px 6px;
+  }
+  .ax-portrait {
+    width: 48px;
+    height: 48px;
+  }
+  .ax-portrait__icon {
+    font-size: 24px;
+  }
+  .ax-unit__name {
+    font-size: 15px;
+  }
+  .ax-party {
+    width: 100%;
+  }
+  .ax-hud {
+    --ax-skill: clamp(48px, 12.4vmin, 72px);
+    --ax-attack: clamp(76px, 19vmin, 112px);
+  }
+}
+@media (orientation: portrait) and (max-width: 370px) {
+  .ax-hud {
+    --ax-skill: 48px;
+  }
+}
+
+/* phone landscape: everything must fit in a very short screen, so panels shrink in height not in tap size */
+@media (max-height: 520px) and (orientation: landscape) {
+  .ax-hud {
+    --ax-joy: clamp(108px, 30vmin, 176px);
+  }
+  .ax-tl {
+    width: min(340px, 100%);
+    gap: 4px;
+  }
+  .ax-party {
+    min-height: 38px;
+  }
+  .ax-party__head {
+    min-height: 30px;
+  }
+  .ax-metrics-chip {
+    min-height: 30px;
+  }
+  .ax-tracker {
+    padding: 0;
+  }
+  .ax-hud .ax-hpbar {
+    height: 16px;
+  }
+  .ax-mastery {
+    height: 16px;
+  }
+  .ax-unit {
+    padding: 5px 10px 5px 6px;
+    gap: 8px;
+  }
+  .ax-portrait {
+    width: 46px;
+    height: 46px;
+  }
+  .ax-portrait__icon {
+    font-size: 23px;
+  }
+  .ax-unit__paths {
+    display: none;
+  }
+  .ax-tracker-slot {
+    width: min(280px, 38vw);
+  }
+  .ax-tracker {
+    max-height: min(56dvh, 210px);
+  }
+  .ax-deck {
+    width: min(420px, 58vw);
+  }
+  .ax-hud {
+    --ax-gap: 6px;
+  }
+}

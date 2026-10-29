@@ -1,0 +1,160 @@
+/* Aurion HUD · Adaptive density, motion, forced-colors (see hud.css for the import order, which is the cascade order) */
+
+/* ═════════════ DENSITY (presentation only; ported from the former adaptive-density rules) ═════════════ */
+.ax-hud[data-density="combat"] .ax-tracker {
+  opacity: 0.72;
+}
+.ax-hud[data-density="dialogue"] .ax-combat,
+.ax-hud[data-density="dialogue"] .ax-tracker,
+.ax-hud[data-density="dialogue"] .ax-metrics-chip {
+  opacity: 0.28;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+.ax-hud[data-density="dialogue"] .ax-combat .ax-orb {
+  pointer-events: none;
+}
+.ax-hud[data-density="management"] .ax-combat,
+.ax-hud[data-density="management"] .ax-tracker,
+.ax-hud[data-density="management"] .ax-metrics-chip {
+  opacity: 0.12;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+.ax-hud[data-density="management"] .ax-combat .ax-orb {
+  pointer-events: none;
+}
+.ax-hud[data-density="exploration"] .ax-metrics-chip {
+  opacity: 0.72;
+  transition: opacity 300ms ease;
+}
+.ax-hud[data-density="exploration"] .ax-metrics-chip:hover,
+.ax-hud[data-density="exploration"] .ax-metrics-chip:focus-visible {
+  opacity: 1;
+}
+
+/* ═════════════ MOTION ═════════════ */
+@keyframes ax-ember {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px #1a0805,
+      0 0 20px rgb(255 110 50 / 0.4),
+      inset 0 -10px 18px rgb(0 0 0 / 0.35),
+      inset 0 6px 10px rgb(255 255 255 / 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px #1a0805,
+      0 0 38px rgb(255 140 70 / 0.8),
+      inset 0 -10px 18px rgb(0 0 0 / 0.35),
+      inset 0 6px 10px rgb(255 255 255 / 0.25);
+  }
+}
+@keyframes ax-objective-pulse {
+  0% {
+    box-shadow:
+      inset 0 0 0 1px rgb(216 180 95 / 0.3),
+      0 0 0 0 rgb(216 180 95 / 0);
+  }
+  45% {
+    box-shadow:
+      inset 0 0 0 1px rgb(216 180 95 / 0.8),
+      0 0 0 5px rgb(216 180 95 / 0.18);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgb(216 180 95 / 0.3),
+      0 0 0 0 rgb(216 180 95 / 0);
+  }
+}
+@keyframes ax-objective-arrival {
+  0% {
+    transform: translateX(6px);
+    opacity: 0.6;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes ax-sheet-in {
+  from {
+    transform: translateX(18px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes ax-toast-in {
+  from {
+    opacity: 0;
+    translate: -50% 6px;
+  }
+  to {
+    opacity: 1;
+    translate: -50% 0;
+  }
+}
+@keyframes ax-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@media (orientation: portrait) and (max-width: 699px) {
+  .ax-deck {
+    left: max(var(--ax-edge), env(safe-area-inset-left));
+    right: max(var(--ax-edge), env(safe-area-inset-right));
+    top: auto;
+    width: auto;
+    max-height: 80dvh;
+    animation-name: ax-sheet-up;
+  }
+}
+@keyframes ax-sheet-up {
+  from {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-hud *,
+  .ax-hud *::before,
+  .ax-hud *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (forced-colors: active) {
+  .ax-hud::before,
+  .ax-glass::before,
+  .ax-orb::before,
+  .ax-portrait::before,
+  .ax-minimap::before {
+    display: none;
+  }
+  .ax-glass,
+  .ax-chip,
+  .ax-pill,
+  .ax-nav,
+  .ax-metrics-chip {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 1px solid CanvasText;
+  }
+  .ax-orb,
+  .ax-navbtn,
+  .ax-tile,
+  .ax-railbtn {
+    border: 2px solid ButtonText;
+  }
+}

@@ -1,0 +1,71 @@
+name: Aurion HUD regression
+
+on:
+  pull_request:
+    paths:
+      - 'client/src/xaurion/components/**'
+      - 'client/src/xaurion/integration/**'
+      - 'architecture/donor-ledger.json'
+      - 'tests/hud-preview/**'
+      - '.github/workflows/aurion-hud-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hud-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify ownership inventory
+        run: pnpm verify:donor-ledger
+      - name: Typecheck
+        run: pnpm check
+      - name: HUD and authoritative projection regression
+        run: >-
+          pnpm exec vitest run
+          client/src/xaurion/components/GameHUD.test.tsx
+          client/src/xaurion/audio/SoundManager.test.tsx
+          client/src/xaurion/components/VirtualJoystickMode.test.tsx
+          client/src/xaurion/components/hud/hudGeometry.test.ts
+          client/src/xaurion/integration/AurionAuthorityHud.test.tsx
+          client/src/xaurion/integration/AurionCombatHudRegression.test.tsx
+          client/src/xaurion/integration/ax1FullCutover.test.tsx
+          client/src/xaurion/integration/ax1MobilePlayabilityContract.test.ts
+
+      - name: Install browser for isolated visual layout checks
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify responsive HUD with synthetic preview data
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vite --config tests/hud-preview/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort > /tmp/aurion-hud-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:4173/index.html >/dev/null; then break; fi
+            if ! kill -0 "$preview_pid" 2>/dev/null; then cat /tmp/aurion-hud-preview.log; exit 1; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:4173/index.html >/dev/null
+          HUD_SCREENSHOTS=/tmp/aurion-hud-captures node tests/hud-preview/hud-layout-audit.mjs
+      - name: Archive isolated preview images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-hud-synthetic-layout-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/aurion-hud-captures/
+          if-no-files-found: warn
+          retention-days: 7
