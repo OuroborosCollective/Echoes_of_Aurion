@@ -69,6 +69,23 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     await pool.query("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
   });
 
+  it("never publishes a tick rejected by the real MariaDB receipt transaction", async () => {
+    const zoneId = `${ZONE_PREFIX}:observer-rejected`;
+    const recorder = new AurionTickRecorder(200, new MariaDBCausalPersistenceAdapter());
+    const zone = new AuthoritativeMovementZone(zoneId as any, recorder);
+    const observed: RecordedTickEntry[] = [];
+    recorder.observeCommittedTicks(entry => observed.push(entry));
+    await pool.query(`CREATE TRIGGER bridge_observer_receipt_failure BEFORE INSERT ON aurionCausalTickReceipts FOR EACH ROW BEGIN IF NEW.zoneId='${zoneId}' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='INJECTED_BRIDGE_RECEIPT_FAILURE'; END IF; END`);
+    try {
+      zone.tick();
+      await recorder.flushPersistence();
+      expect(recorder.getPersistenceStatus()).toMatchObject({ pending: 0, failures: 1 });
+      expect(observed).toHaveLength(0);
+      const [rows] = await pool.query("SELECT receiptHash FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
+      expect(rows).toEqual([]);
+    } finally { await pool.query("DROP TRIGGER bridge_observer_receipt_failure"); }
+  });
+
   it("proves 0048 base table plus 0049 columns and full journal wave are physically active", async () => {
     const [columns] = await pool.query(
       `SELECT COLUMN_NAME AS name

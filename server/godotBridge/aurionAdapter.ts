@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { activeProvenance } from "../aurionProvenance";
-import { computeReceiptHash } from "../../shared/aurionCausalTickContract";
+import { computeReceiptHash, type AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import { ZONE_FIXED_POINT_SCALE } from "../zoneProtocol";
 import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { hashCanonicalZoneState } from "../causality/zoneCanonicalState";
@@ -19,6 +19,7 @@ export interface CommittedProjection {
 /** X/Z are confirmed fixed-point values; Y=0 is explicitly a flat presentation plane. */
 export function projectCommittedTick(entry: RecordedTickEntry, observation: {
   sourceRevision: string; runtimeImageDigest: string; streamInstance: string;
+  previousReceipt?: AurionCausalTickReceipt;
 }): CommittedProjection {
   const { receipt, postState: state } = entry;
   if (!state || state.worldId !== receipt.worldId || state.zoneId !== receipt.zoneId
@@ -26,6 +27,13 @@ export function projectCommittedTick(entry: RecordedTickEntry, observation: {
     || !/^[a-f0-9]{40}$/.test(observation.sourceRevision)
     || hashCanonicalZoneState(state) !== receipt.postStateHash
     || computeReceiptHash(receipt) !== receipt.receiptHash) throw new Error("GODOT_COMMITTED_TICK_UNVERIFIED");
+  const previous = observation.previousReceipt;
+  if (receipt.tick > 1 && !previous) throw new Error("GODOT_RECEIPT_PREDECESSOR_REQUIRED");
+  if (previous && (previous.worldId !== receipt.worldId || previous.zoneId !== receipt.zoneId
+    || previous.tick + 1 !== receipt.tick || computeReceiptHash(previous) !== previous.receiptHash
+    || receipt.previousReceiptHash !== previous.receiptHash)) {
+    throw new Error("GODOT_RECEIPT_CONTINUITY_UNVERIFIED");
+  }
   const position = (x: number, z: number) => {
     if (!Number.isSafeInteger(x) || !Number.isSafeInteger(z)) throw new Error("GODOT_FIXED_POSITION_INVALID");
     return { x: x / ZONE_FIXED_POINT_SCALE, y: 0, z: z / ZONE_FIXED_POINT_SCALE };
@@ -78,6 +86,7 @@ export async function startAurionGodotFeed(
   };
   if (!/^[a-f0-9]{40}$/.test(observation.sourceRevision)) throw new Error("GODOT_FEED_SOURCE_UNVERIFIED");
   let current: CommittedProjection | undefined;
+  let lastProjectedReceipt: AurionCausalTickReceipt | undefined;
   let lastObservedAt = 0;
   const feed = attachAurionFeed({
     token, port, bind,
@@ -92,7 +101,11 @@ export async function startAurionGodotFeed(
   });
   const unsubscribe = recorder.observeCommittedTicks(entry => {
     if (entry.receipt.zoneId !== zoneId) return;
-    try { current = projectCommittedTick(entry, observation); }
+    try {
+      const previousReceipt = lastProjectedReceipt ?? recorder.getReceipt(zoneId, entry.receipt.tick - 1);
+      current = projectCommittedTick(entry, { ...observation, previousReceipt });
+      lastProjectedReceipt = structuredClone(entry.receipt);
+    }
     catch (error) { current = undefined; feed.invalidate(); throw error; }
     lastObservedAt = Date.now(); // Observer freshness only; does not enter state/receipts.
     feed.onTick(current.identity.tick);
@@ -106,3 +119,4 @@ export async function startAurionGodotFeed(
     throw error;
   }
 }
+

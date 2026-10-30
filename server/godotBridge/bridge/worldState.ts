@@ -15,6 +15,8 @@ export class WorldState extends EventEmitter {
   worldId = 'aurion';
   loaded = false;
   identity?: ProjectionIdentity;
+  // Transport invalidation clears visible data, never the accepted history fence.
+  lastConfirmedIdentity?: ProjectionIdentity;
 
   invalidate(): void {
     this.loaded = false;
@@ -70,3 +72,4 @@ export class WorldState extends EventEmitter {
     return msg;
   }
 }
+

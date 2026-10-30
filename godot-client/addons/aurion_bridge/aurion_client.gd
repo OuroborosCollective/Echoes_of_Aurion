@@ -36,6 +36,7 @@ var is_authed: bool = false
 var auth_failed: bool = false
 var has_snapshot: bool = false
 var identity: Dictionary = {}
+var _last_confirmed_identity: Dictionary = {}
 var want_connection: bool = false
 
 var _ws: WebSocketPeer = null
@@ -259,11 +260,53 @@ func _valid_identity(msg: Dictionary, full_snapshot: bool) -> bool:
             return false
     if typeof(p.get("streamInstance")) != TYPE_STRING or p.streamInstance.length() != 36:
         return false
-    if not identity.is_empty() and identity.streamInstance != p.streamInstance and not full_snapshot:
+    if not _last_confirmed_identity.is_empty() and _last_confirmed_identity.streamInstance != p.streamInstance and not full_snapshot:
         return false
-    if not identity.is_empty() and identity.streamInstance == p.streamInstance and p.tick < identity.tick:
+    if not _last_confirmed_identity.is_empty() and (p.worldId != _last_confirmed_identity.worldId or p.get("zoneId") != _last_confirmed_identity.get("zoneId") or p.tick < _last_confirmed_identity.tick):
         return false
+    if not _last_confirmed_identity.is_empty() and p.tick == _last_confirmed_identity.tick:
+        for field in ["receiptHash", "stateHash", "projectionHash"]:
+            if p[field] != _last_confirmed_identity[field]:
+                return false
     return true
+
+
+static func _projection_value(value: Variant) -> Array:
+    match typeof(value):
+        TYPE_NIL:
+            return ["null"]
+        TYPE_BOOL:
+            return ["bool", value]
+        TYPE_STRING:
+            return ["string", value]
+        TYPE_INT, TYPE_FLOAT:
+            var bytes := StreamPeerBuffer.new()
+            bytes.big_endian = true
+            bytes.put_double(0.0 if float(value) == 0.0 else float(value))
+            return ["f64", bytes.data_array.hex_encode()]
+        TYPE_ARRAY:
+            var items: Array = []
+            for item in value:
+                items.append(_projection_value(item))
+            return ["array", items]
+        TYPE_DICTIONARY:
+            var keys: Array = value.keys()
+            keys.sort()
+            var items: Array = []
+            for key in keys:
+                items.append([key, _projection_value(value[key])])
+            return ["object", items]
+    return ["invalid"]
+
+
+static func projection_hash(frame_tick: int, values: Dictionary, world_regions: Array) -> String:
+    var ids: Array = values.keys()
+    ids.sort()
+    var ordered: Array = []
+    for id in ids:
+        ordered.append(values[id])
+    var encoded := _projection_value({"tick":frame_tick, "entities":ordered, "regions":world_regions})
+    return "sha256:" + JSON.stringify(encoded, "", false).sha256_text()
 
 
 func _handle(msg: Dictionary) -> void:
@@ -300,8 +343,12 @@ func _handle(msg: Dictionary) -> void:
                     _invalid_frame()
                     return
                 next[e.id] = e.duplicate(true)
+            if projection_hash(int(msg.tick), next, msg.regions) != msg.identity.projectionHash:
+                _invalid_frame()
+                return
             entities = next
             identity = msg.identity.duplicate(true)
+            _last_confirmed_identity = identity.duplicate(true)
             regions = msg.get("regions", [])
             tick = int(msg.get("tick", 0))
             seq = int(msg.get("seq", 0))
@@ -340,9 +387,13 @@ func _handle(msg: Dictionary) -> void:
             if total.size() > MAX_ENTITIES:
                 _invalid_frame()
                 return
+            if projection_hash(int(msg.tick), total, regions) != msg.identity.projectionHash:
+                _invalid_frame()
+                return
             seq = s
             _last_observation_ms = Time.get_ticks_msec()
             identity = msg.identity.duplicate(true)
+            _last_confirmed_identity = identity.duplicate(true)
             tick = int(msg.get("tick", tick))
             for e in msg.get("upsert", []):
                 if typeof(e) == TYPE_DICTIONARY and e.has("id"):
@@ -360,3 +411,4 @@ func _handle(msg: Dictionary) -> void:
             status_changed.emit(upstream_up)
         "ack":
             ack_received.emit(str(msg.get("cmdId", "")), bool(msg.get("ok", false)), str(msg.get("error", "")), int(msg.get("tick", 0)))
+

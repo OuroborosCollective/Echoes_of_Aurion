@@ -250,11 +250,13 @@ export class UpstreamClient extends EventEmitter {
     this.lastFrameAt = Date.now();
     if (!this.opts.requireCanonical) return true; // Explicit isolated test/legacy caller, not loadConfig().
     const identity = msg.identity;
-    const previous = this.world.identity;
+    const previous = this.world.lastConfirmedIdentity;
     const sameStream = isProjectionIdentity(identity) && previous?.streamInstance === identity.streamInstance;
     if (!isProjectionIdentity(identity) || identity.tick !== msg.tick || identity.worldId !== this.world.worldId
       || entities.length > 2048 || new Set(entities.map(e => e.id)).size !== entities.length
-      || (sameStream && identity.tick < previous!.tick)
+      || (previous && (identity.worldId !== previous.worldId || identity.zoneId !== previous.zoneId || identity.tick < previous.tick))
+      || (previous && identity.tick === previous.tick && (identity.receiptHash !== previous.receiptHash
+        || identity.stateHash !== previous.stateHash || identity.projectionHash !== previous.projectionHash))
       || (previous && !sameStream && msg.t !== 'feed.snapshot')
       || projectionHash(identity.tick, entities, regions) !== identity.projectionHash) {
       this.world.invalidate();
@@ -263,6 +265,7 @@ export class UpstreamClient extends EventEmitter {
       return false;
     }
     this.world.identity = structuredClone(identity);
+    this.world.lastConfirmedIdentity = structuredClone(identity);
     return true;
   }
 
@@ -285,3 +288,4 @@ export class UpstreamClient extends EventEmitter {
     return out;
   }
 }
+
