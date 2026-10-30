@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events';
+import { randomInt } from 'node:crypto';
+import { operationalNow, hostOperationalClock, type OperationalClock } from '../../../shared/operationalClock.js';
 import WebSocket from 'ws';
 import {
   BRIDGE_PROTO,
@@ -57,6 +59,7 @@ export class UpstreamClient extends EventEmitter {
     private readonly world: WorldState,
     private readonly opts: UpstreamOptions,
     private readonly log: Logger,
+    private readonly clock: OperationalClock = hostOperationalClock,
   ) {
     super();
     this.backoff = opts.reconnectMinMs;
@@ -89,7 +92,7 @@ export class UpstreamClient extends EventEmitter {
     if (!this.canEdit || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return Promise.resolve({ ok: false, error: 'upstream_unavailable' });
     }
-    const id = `b${Date.now().toString(36)}-${++this.cmdCounter}`;
+    const id = `b${operationalNow(this.clock).toString(36)}-${++this.cmdCounter}`;
     return new Promise<CmdResult>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -134,7 +137,7 @@ export class UpstreamClient extends EventEmitter {
       clearInterval(this.pingTimer);
       clearInterval(this.freshnessTimer);
       this.freshnessTimer = setInterval(() => {
-        if (this.state === 'up' && Date.now() - this.lastFrameAt > 1500) {
+        if (this.state === 'up' && operationalNow(this.clock) - this.lastFrameAt > 1500) {
           this.world.invalidate();
           this.setState('down');
           ws.close(4000, 'stale_canonical_feed');
@@ -179,7 +182,8 @@ export class UpstreamClient extends EventEmitter {
       this.failPending('OUTCOME_UNKNOWN');
       if (this.stopped) return;
       if (code === 4003) this.log('error', 'upstream hat das Token abgelehnt (UPSTREAM_TOKEN prüfen)');
-      const delay = Math.round(this.backoff * (0.5 + Math.random() * 0.5));
+      // Transport-only jitter. Never shares or advances Aurion's gameplay RNG.
+      const delay = Math.round(this.backoff * (0.5 + randomInt(0, 0x1000000) / 0x1000000 * 0.5));
       this.backoff = Math.min(this.backoff * 2, this.opts.reconnectMaxMs);
       this.retryTimer = setTimeout(() => this.connect(), delay);
     });
@@ -243,11 +247,11 @@ export class UpstreamClient extends EventEmitter {
     const snap = genericToSnapshot(msg, this.opts.coords);
     if (!snap) return;
     this.world.applySnapshot(snap.tick || this.world.tick, snap.entities, undefined, snap.scopeKinds);
-    this.lastFrameAt = Date.now();
+    this.lastFrameAt = operationalNow(this.clock);
   }
 
   private acceptCanonicalFrame(msg: Record<string, unknown>, entities: Entity[], regions: RegionInfo[]): boolean {
-    this.lastFrameAt = Date.now();
+    this.lastFrameAt = operationalNow(this.clock);
     if (!this.opts.requireCanonical) return true; // Explicit isolated test/legacy caller, not loadConfig().
     const identity = msg.identity;
     const previous = this.world.lastConfirmedIdentity;
@@ -288,4 +292,3 @@ export class UpstreamClient extends EventEmitter {
     return out;
   }
 }
-

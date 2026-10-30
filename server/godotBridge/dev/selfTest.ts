@@ -3,6 +3,7 @@
  * Läuft ohne Netzwerk, ohne Godot.   pnpm test
  */
 import assert from 'node:assert/strict';
+import { operationalNow } from '../../../shared/operationalClock.js';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -59,11 +60,11 @@ class FakeGodot {
     this.ws.send(JSON.stringify(m));
   }
   async waitFor(pred: (m: Msg) => boolean, ms = 3000, from = 0): Promise<Msg> {
-    const end = Date.now() + ms;
+    const end = operationalNow() + ms;
     for (;;) {
       const hit = this.msgs.slice(from).find(pred);
       if (hit) return hit;
-      const left = end - Date.now();
+      const left = end - operationalNow();
       if (left <= 0) throw new Error(`timeout; bisher: ${JSON.stringify(this.msgs.map((m) => m.t))}`);
       await new Promise<void>((r) => {
         const t = setTimeout(r, left);
@@ -75,8 +76,8 @@ class FakeGodot {
     }
   }
   async waitClose(ms = 2000): Promise<number | undefined> {
-    const end = Date.now() + ms;
-    while (this.closeCode === undefined && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+    const end = operationalNow() + ms;
+    while (this.closeCode === undefined && operationalNow() < end) await new Promise((r) => setTimeout(r, 20));
     return this.closeCode;
   }
   close(): void {
