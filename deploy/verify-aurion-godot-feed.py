@@ -14,7 +14,7 @@ TOKEN = Path('/etc/aurion-godot/feed.token')
 def preflight():
     parent = TOKEN.parent.lstat()
     info = TOKEN.lstat()
-    if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0 or stat.S_IMODE(parent.st_mode) != 0o750
+    if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0 or parent.st_gid != 0 or stat.S_IMODE(parent.st_mode) != 0o750
             or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != 0 or info.st_gid != 1000
             or stat.S_IMODE(info.st_mode) != 0o440):
         raise ValueError('GODOT_FEED_PROTECTED_FILE_REQUIRED')

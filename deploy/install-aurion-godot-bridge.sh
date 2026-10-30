@@ -19,10 +19,14 @@ release_id="$(basename "$release")"
 [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+$ && "$release_id" == "${revision}-"* ]]
 bridge_base=/srv/serverin/tools/aurion-godot-bridge
 bridge_release="${bridge_base}/releases/${release_id}"
+for directory in "$bridge_base" "${bridge_base}/releases" "$bridge_release"; do
+  [[ ! -L "$directory" ]]
+done
 install -d -o root -g aurion-deploy -m 0750 "$bridge_base" "${bridge_base}/releases" "$bridge_release"
 for file in aurion-godot-bridge.mjs build-manifest.json; do
   if [[ -e "${bridge_release}/${file}" ]]; then
     [[ ! -L "${bridge_release}/${file}" ]]
+    [[ "$(stat -c '%U:%G:%a' "${bridge_release}/${file}")" == "root:aurion-deploy:440" ]]
     cmp -s "${release}/godot-bridge/${file}" "${bridge_release}/${file}"
   else
     install -o root -g aurion-deploy -m 0440 "${release}/godot-bridge/${file}" "${bridge_release}/${file}"
