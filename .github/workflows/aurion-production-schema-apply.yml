@@ -151,7 +151,7 @@ jobs:
     needs: verify-ledger-and-apply-artifact
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       EXPECTED_SHA: ${{ github.sha }}
       PLAN_SHA256: ${{ inputs.plan_sha256 }}
