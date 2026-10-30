@@ -29,7 +29,7 @@ const SCENES := {
 }
 var diagnostic := "Kein bestätigter Starterdorf-Plan"
 var _last_connection := ""
-var _last_plan: Dictionary = {}
+var _last_plan: Array = []
 
 func clear() -> void:
     for child in get_children():
@@ -45,7 +45,10 @@ func _reject(reason: String) -> bool:
     return false
 
 static func _valid_integer(value: Variant, lower: int, upper: int) -> bool:
-    return typeof(value) == TYPE_INT and int(value) >= lower and int(value) <= upper
+    if typeof(value) not in [TYPE_INT, TYPE_FLOAT]:
+        return false
+    var number := float(value)
+    return is_finite(number) and number == floor(number) and number >= lower and number <= upper
 
 static func _confirmed_height(tiles: Array, x_mm: int, z_mm: int) -> Variant:
     var col: int = clampi(floori(float(x_mm + WORLD_SIZE_MM) / float(TILE_SIZE_MM)), 0, 15)
@@ -96,10 +99,10 @@ func apply_confirmed(readback: Variant, connection_id: String) -> bool:
         if not _valid_integer(altitude, -100000, 100000):
             return _reject("VILLAGE_HEIGHT_UNVERIFIED")
         present[id] = true
-        admitted.append({"id": id, "assetId": asset_id, "xMm": item.xMm, "zMm": item.zMm, "rotation": item.rotation, "heightMm": altitude})
+        admitted.append({"id": id, "assetId": asset_id, "xMm": int(item.xMm), "zMm": int(item.zMm), "rotation": int(item.rotation), "heightMm": int(altitude)})
     if present.size() != EXPECTED.size():
         return _reject("VILLAGE_PLAN_MISSING")
-    if _last_connection == connection_id and _last_plan == region and get_child_count() == EXPECTED.size():
+    if _last_connection == connection_id and _last_plan == admitted and get_child_count() == EXPECTED.size():
         return true
     var pending: Array[Node3D] = []
     for entry in admitted:
@@ -117,6 +120,6 @@ func apply_confirmed(readback: Variant, connection_id: String) -> bool:
     for obj in pending:
         add_child(obj)
     _last_connection = connection_id
-    _last_plan = region.duplicate(true)
+    _last_plan = admitted.duplicate(true)
     diagnostic = "Aurion bestätigte Dorfobjekte: %d (nur visuelle Skins)" % pending.size()
     return true
