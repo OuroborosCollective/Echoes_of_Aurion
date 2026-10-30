@@ -100,6 +100,22 @@ func browser_url() -> String:
 		return ""
 	return SERVER_BROWSER_PREFIX + _transaction_id
 
+## Monotonic login deadline only; never feeds the deterministic world tick.
+## Count transport latency from prepare_start, not from browser presentation.
+func pending_remaining_ms(now_ms: int = -1) -> int:
+	if not _browser_ready:
+		return 0
+	var now: int = now_ms if now_ms >= 0 else Time.get_ticks_msec()
+	if now < _started_at_ms:
+		return 0
+	return maxi(0, _started_at_ms + TRANSACTION_TTL_MS - now)
+
+func expire_pending(now_ms: int = -1) -> bool:
+	if not _browser_ready or pending_remaining_ms(now_ms) > 0:
+		return false
+	clear()
+	return true
+
 ## A well-formed callback from an older browser transaction is untrusted but
 ## harmless: the Android transport consumes it while the current attempt stays
 ## pending. Malformed or expired state still fails closed in the parser.
@@ -133,3 +149,4 @@ func consume_callback(code: Variant, callback_state: Variant, now_ms: int = -1) 
 		}
 	clear()
 	return result
+
