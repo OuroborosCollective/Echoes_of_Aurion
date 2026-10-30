@@ -89,10 +89,12 @@ func verify() -> void:
 		require(last_response.get("schemaVersion") == "aurion.world-design.v1", "world-design GET lost server schema")
 	else:
 		require(last_response.get("version") == ("aurion.glb-import.v1" if catalog_mode else "aurion.quest-npc-visuals.v1"), "NPC GET lost server version")
+		if catalog_mode:
+			require(last_response.get("entries", []).size() == 500, "large LOD catalog was truncated or rejected")
 	var first_http := api.get_child(0) as HTTPRequest if api.get_child_count() > 0 else null
 	require(first_http != null, "NPC GET did not construct any HTTPRequest")
 	if first_http != null:
-		require(first_http.max_redirects == 0 and first_http.body_size_limit == (4194304 if world_design_mode else (1048576 if catalog_mode else 65536)) and first_http.timeout == 12.0,
+		require(first_http.max_redirects == 0 and first_http.body_size_limit == (4194304 if world_design_mode or catalog_mode else 65536) and first_http.timeout == 12.0,
 			"NPC GET allows redirects or unbounded responses")
 	await _request(api, "zone_npc_redirect")
 	require(not success and last_error == "NPC_REQUEST_FAILED", "NPC redirect followed or accepted")
