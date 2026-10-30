@@ -224,7 +224,7 @@ jobs:
           test "$(stat -c '%a' "$authorization_file")" = "600"
           umask 077
           set +e
-          sudo -n "$runner" "$EXPECTED_SHA" "$PLAN_SHA256" <"$authorization_file" >"$raw" 2>"$stderr_file"
+          node "$artifact/deploy/aurion-schema-apply-job-client.mjs" "$EXPECTED_SHA" "$PLAN_SHA256"
           runner_status=$?
           set -e
           APPLY_RAW="$raw" APPLY_RESULT="$result" APPLY_STATUS="$runner_status" APPLY_EXPECTED_SHA="$EXPECTED_SHA" APPLY_PLAN_SHA256="$PLAN_SHA256" node --input-type=module -e '

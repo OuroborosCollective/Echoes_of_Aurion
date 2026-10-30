@@ -17,6 +17,8 @@ expected_sha="$1"
 plan_sha256="$2"
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected revision" >&2; exit 64; }
 [[ "$plan_sha256" =~ ^[a-f0-9]{64}$ ]] || { echo "invalid plan hash" >&2; exit 64; }
+operation="${AURION_SCHEMA_APPLY_OPERATION:-}"
+[[ "$operation" =~ ^[a-f0-9]{32}$ ]] || { echo "schema apply lifecycle is required" >&2; exit 77; }
 
 base=/opt/echoes-of-aurion-schema-apply
 current="${base}/current"
@@ -46,7 +48,14 @@ repair_rehearsal_sha256=""
 
 cleanup_recovery() {
   if [[ -n "$recovery_container" ]]; then
-    docker rm -f "$recovery_container" >/dev/null 2>&1 || true
+    local ids id
+    ids="$(docker ps -aq --no-trunc --filter "name=^/${recovery_container}$" --filter "label=org.aurion.schema-apply-operation=$operation")" || return 1
+    for id in $ids; do
+      [[ "$id" =~ ^[a-f0-9]{64}$ ]] || return 1
+      docker rm -fv "$id" >/dev/null 2>&1 || true
+    done
+    ids="$(docker ps -aq --no-trunc --filter "name=^/${recovery_container}$" --filter "label=org.aurion.schema-apply-operation=$operation")" || return 1
+    [[ -z "$ids" ]] || return 1
     recovery_container=""
   fi
 }
@@ -165,7 +174,10 @@ emit_failure() {
 on_exit() {
   local status=$?
   set +e
-  cleanup_recovery
+  if ! cleanup_recovery; then
+    phase=RECOVERY_CLEANUP_FAILED
+    status=70
+  fi
   if [[ "$status" -ne 0 && "$receipt_emitted" -ne 1 ]]; then
     emit_failure "$status"
   fi
@@ -239,7 +251,10 @@ production_client() {
   local mode="$1"
   shift
   node "${release}/bin/mysql-client-config.cjs" --env-file "$env_file" --my-cnf 2>/dev/null \
-    | docker exec -i "$database_container" /bin/sh -ceu '
+    | docker run --rm -i --pull=never --read-only --user 0:0 \
+        --network "$docker_network" --label "org.aurion.schema-apply-operation=$operation" \
+        --tmpfs /tmp --tmpfs /var/lib/mysql --cap-drop ALL --security-opt no-new-privileges \
+        --entrypoint /bin/sh "$database_image_id" -ceu '
         config="$(mktemp)"
         cleanup() { rm -f "$config"; }
         trap cleanup EXIT
@@ -254,9 +269,9 @@ production_client() {
         test -n "$client"
         if [ "$mode" = dump ]; then
           timeout --foreground --signal=TERM --kill-after=30s 900s \
-            "$client" --defaults-extra-file="$config" "$@"
+            "$client" --defaults-extra-file="$config" --protocol=tcp "$@"
         else
-          "$client" --defaults-extra-file="$config" "$@"
+          "$client" --defaults-extra-file="$config" --protocol=tcp "$@"
         fi
       ' sh "$mode" "$@" 2>/dev/null
 }
@@ -286,6 +301,7 @@ run_reconcile() {
   local output="$1"
   docker run \
     --rm \
+    --label "org.aurion.schema-apply-operation=$operation" \
     --pull=never \
     --read-only \
     --user 0:0 \
@@ -323,6 +339,7 @@ run_repair() {
       --mount "type=bind,source=${repair_plan},destination=/evidence/repair-plan.json,readonly")
   fi
   docker run --rm --pull=never --read-only --user 0:0 \
+    --label "org.aurion.schema-apply-operation=$operation" \
     --network "$network" --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp \
     --mount "type=bind,source=${release},destination=/apply,readonly" \
     "${options[@]}" \
@@ -464,8 +481,10 @@ fi
 recovery_container="aurion-schema-recovery-${expected_sha:0:12}-${stamp}"
 [[ "$recovery_container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]
 docker run --detach --rm --name "$recovery_container" \
+  --label "org.aurion.schema-apply-operation=$operation" \
   --network none \
   --mount "type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly" \
+  --mount "type=bind,src=${release}/deploy/aurion-schema-restore,dst=/recovery-input/restore.sh,readonly" \
   -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 \
   "$database_image_id" >/dev/null
 # The official MariaDB entrypoint exposes a socket from its temporary
@@ -491,13 +510,7 @@ docker exec "$recovery_container" /bin/sh -ceu 'test -r /recovery-input/producti
 recovery_executed=true
 recovery_stderr="$(mktemp "${state_dir}/.recovery-restore.XXXXXX")" || { phase=RECOVERY_DIAGNOSTIC_FILE_CREATE_FAILED; exit 69; }
 set +e
-docker exec "$recovery_container" /bin/sh -ceu '
-  client="$(command -v mariadb || command -v mysql || true)"
-  test -n "$client"
-  test -r /recovery-input/production.sql.gz
-  gzip -t /recovery-input/production.sql.gz
-  gzip -cd /recovery-input/production.sql.gz | "$client" --protocol=socket -uroot
-' >/dev/null 2>"$recovery_stderr"
+recovery_restore_marker="$(docker exec "$recovery_container" /bin/sh /recovery-input/restore.sh 2>"$recovery_stderr")"
 recovery_restore_status=$?
 set -e
 recovery_stderr_bytes="$(stat -c '%s' "$recovery_stderr")" || { phase=RECOVERY_DIAGNOSTIC_READ_FAILED; rm -f "$recovery_stderr"; exit 69; }
@@ -515,6 +528,7 @@ recovery_error_class="$(node --input-type=module -e '
 ' "$recovery_stderr")" || { phase=RECOVERY_DIAGNOSTIC_CLASSIFY_FAILED; rm -f "$recovery_stderr"; exit 69; }
 rm -f "$recovery_stderr"
 [[ "$recovery_restore_status" -eq 0 ]] || { phase=RECOVERY_RESTORE_FAILED; exit "$recovery_restore_status"; }
+[[ "$recovery_restore_marker" == AURION_RECOVERY_RESTORE_COMPLETE ]] || { phase=RECOVERY_COMPLETION_MARKER_MISSING; exit 70; }
 recovery_table_count="$(recovery_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=RECOVERY_TABLE_COUNT_READ_FAILED; exit 69; }
 recovery_schema_sha256="$(recovery_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=RECOVERY_SCHEMA_FINGERPRINT_FAILED; exit 69; }
 [[ "$recovery_table_count" =~ ^[0-9]+$ && "$recovery_schema_sha256" =~ ^[a-f0-9]{64}$ && "$recovery_table_count" == "$source_table_count" && "$recovery_schema_sha256" == "$source_schema_sha256" ]] || { phase=RECOVERY_PROOF_MISMATCH; exit 70; }
@@ -552,7 +566,7 @@ if [[ "$preflight_mode" == "repair" ]]; then
 
   # Switch the rehearsal's backup identity only after the new file is sealed.
   # Retain the first backup for audit and rollback; no production DDL occurs.
-  cleanup_recovery
+  cleanup_recovery || { phase=RECOVERY_CLEANUP_FAILED; exit 70; }
   backup_basename="$refreshed_basename"
   backup_file="$refreshed_file"
   backup_sha256="$refreshed_sha256"
@@ -560,8 +574,10 @@ if [[ "$preflight_mode" == "repair" ]]; then
   phase=RESTORE_REFRESHED_PRODUCTION_SNAPSHOT
   recovery_container="aurion-schema-recovery-${expected_sha:0:12}-${refreshed_stamp}-refresh"
   docker run --detach --rm --name "$recovery_container" \
+    --label "org.aurion.schema-apply-operation=$operation" \
     --network none \
     --mount "type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly" \
+    --mount "type=bind,src=${release}/deploy/aurion-schema-restore,dst=/recovery-input/restore.sh,readonly" \
     -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 \
     "$database_image_id" >/dev/null
   recovery_ready=0
@@ -581,12 +597,7 @@ if [[ "$preflight_mode" == "repair" ]]; then
   docker exec "$recovery_container" /bin/sh -ceu 'test -r /recovery-input/production.sql.gz; command -v gzip >/dev/null' >/dev/null 2>&1 || { phase=REFRESHED_RECOVERY_TOOLING_UNAVAILABLE; exit 69; }
   recovery_stderr="$(mktemp "${state_dir}/.refreshed-restore.XXXXXX")"
   set +e
-  docker exec "$recovery_container" /bin/sh -ceu '
-    client="$(command -v mariadb || command -v mysql || true)"
-    test -n "$client"
-    gzip -t /recovery-input/production.sql.gz
-    gzip -cd /recovery-input/production.sql.gz | "$client" --protocol=socket -uroot
-  ' >/dev/null 2>"$recovery_stderr"
+  recovery_restore_marker="$(docker exec "$recovery_container" /bin/sh /recovery-input/restore.sh 2>"$recovery_stderr")"
   recovery_restore_status=$?
   set -e
   recovery_stderr_bytes="$(stat -c '%s' "$recovery_stderr")" || { phase=REFRESHED_RECOVERY_DIAGNOSTIC_FAILED; exit 69; }
@@ -603,6 +614,7 @@ if [[ "$preflight_mode" == "repair" ]]; then
   ' "$recovery_stderr")" || { phase=REFRESHED_RECOVERY_DIAGNOSTIC_FAILED; exit 69; }
   rm -f "$recovery_stderr"
   [[ "$recovery_restore_status" -eq 0 ]] || { phase=REFRESHED_RECOVERY_RESTORE_FAILED; exit "$recovery_restore_status"; }
+  [[ "$recovery_restore_marker" == AURION_RECOVERY_RESTORE_COMPLETE ]] || { phase=REFRESHED_RECOVERY_COMPLETION_MARKER_MISSING; exit 70; }
 
   phase=VERIFY_REFRESHED_RECOVERY
   refreshed_source_tables="$(production_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=REFRESHED_SOURCE_TABLE_COUNT_FAILED; exit 69; }
@@ -630,7 +642,7 @@ if [[ "$preflight_mode" == "repair" ]]; then
   ' "$repair_plan" "$repair_rehearsal" || { phase=REPAIR_REHEARSAL_READBACK_INVALID; exit 70; }
   repair_rehearsal_sha256="$(sha256sum "$repair_rehearsal" | awk '{print $1}')"
 fi
-cleanup_recovery
+cleanup_recovery || { phase=RECOVERY_CLEANUP_FAILED; exit 70; }
 
 phase=APPLY_SCHEMA
 apply_raw="$(mktemp "${state_dir}/.apply.XXXXXX")"
@@ -646,6 +658,7 @@ elif [[ "$preflight_mode" == "repair" ]]; then
 else
 docker run \
   --rm \
+  --label "org.aurion.schema-apply-operation=$operation" \
   --pull=never \
   --read-only \
   --user 0:0 \

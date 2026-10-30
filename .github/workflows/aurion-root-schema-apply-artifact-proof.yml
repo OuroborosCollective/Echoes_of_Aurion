@@ -34,6 +34,12 @@ on:
       - "scripts/aurionProductionSchemaContracts.ts"
       - "deploy/aurion-production-schema-apply"
       - "deploy/aurion-production-schema-apply-core"
+      - "deploy/aurion-schema-apply-lifecycle.mjs"
+      - "deploy/aurion-schema-apply-job-client.mjs"
+      - "deploy/aurion-schema-restore"
+      - "scripts/aurion-schema-apply-proof-client.mjs"
+      - "scripts/aurion-schema-apply-lifecycle.test.mjs"
+      - "scripts/aurion-schema-restore.test.mjs"
       - "scripts/aurion-production-schema-apply-core.test.mjs"
       - "scripts/aurion-production-schema-fingerprint.test.mjs"
       - "deploy/aurion-production-schema-apply.environment.template"
@@ -169,6 +175,82 @@ jobs:
           done
           test "$ready" -eq 1
 
+      - name: Verify real lifecycle cancellation and isolated restore
+        env:
+          AURION_SCHEMA_LIFECYCLE_TEST_IMAGE: mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
+        run: |
+          set -euo pipefail
+          sudo env AURION_SCHEMA_LIFECYCLE_TEST_IMAGE="$AURION_SCHEMA_LIFECYCLE_TEST_IMAGE" "$(command -v node)" --test --test-concurrency=1 scripts/aurion-schema-apply-lifecycle.test.mjs scripts/aurion-schema-restore.test.mjs
+
+      - name: Prepare isolated GitHub step-timeout canary
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/aurion-cancel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -m 0777 "$dir"
+          chmod 0777 "$dir"
+          printf 'AURION_CANARY_DIR=%s\n' "$dir" >> "$GITHUB_ENV"
+          printf 'aurion-cancel-proof-%s-%s' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$dir/container"
+          printf '120' > "$dir/sleep-seconds"
+          cp deploy/aurion-schema-restore "$dir/restore.sh"
+          printf 'CREATE DATABASE abort_proof; USE abort_proof; SELECT SLEEP(120); CREATE TABLE must_not_run (id INT);\n' | gzip -n > "$dir/backup.sql.gz"
+
+      - name: Let GitHub time out an active isolated restore
+        id: github_timeout
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          AURION_SCHEMA_LIFECYCLE_TEST_IMAGE: mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
+        run: |
+          set -euo pipefail
+          date +%s > "$AURION_CANARY_DIR/step-started"
+          node scripts/aurion-schema-apply-lifecycle.test.mjs --controller "$AURION_CANARY_DIR" restore &
+          controller=$!
+          printf '%s' "$controller" > "$AURION_CANARY_DIR/controller.pid"
+          for attempt in $(seq 1 40); do
+            test ! -f "$AURION_CANARY_DIR/ready" || break
+            kill -0 "$controller"
+            sleep 1
+          done
+          test -f "$AURION_CANARY_DIR/ready"
+          sudo pgrep -P "$(cat "$AURION_CANARY_DIR/guard.pid")" -f 'aurion-schema-apply-lifecycle.mjs --reaper' > "$AURION_CANARY_DIR/reaper.pid"
+          [[ "$(cat "$AURION_CANARY_DIR/reaper.pid")" =~ ^[1-9][0-9]*$ ]]
+          wait "$controller"
+          echo 'canary unexpectedly completed before the GitHub timeout' >&2
+          exit 1
+
+      - name: Independently verify the timed-out step left no processes or containers
+        if: ${{ always() && steps.github_timeout.outcome != 'skipped' && steps.github_timeout.outcome != '' }}
+        env:
+          STEP_OUTCOME: ${{ steps.github_timeout.outcome }}
+        run: |
+          set -euo pipefail
+          [[ "$STEP_OUTCOME" == failure || "$STEP_OUTCOME" == cancelled ]]
+          test -f "$AURION_CANARY_DIR/ready"
+          test "$(cat "$AURION_CANARY_DIR/guard.uid")" = 0
+          test "$(cat "$AURION_CANARY_DIR/controller.uid")" != 0
+          test $(( $(date +%s) - $(cat "$AURION_CANARY_DIR/step-started") )) -ge 55
+          name="$(cat "$AURION_CANARY_DIR/container")"
+          operation="$(cat "$AURION_CANARY_DIR/operation")"
+          guard="$(cat "$AURION_CANARY_DIR/guard.pid")"
+          worker="$(cat "$AURION_CANARY_DIR/worker.pid")"
+          reaper="$(cat "$AURION_CANARY_DIR/reaper.pid")"
+          sudo_pid="$(cat "$AURION_CANARY_DIR/sudo.pid")"
+          controller="$(cat "$AURION_CANARY_DIR/controller.pid")"
+          for attempt in $(seq 1 30); do
+            if sudo test ! -e "$AURION_CANARY_DIR/state/.active-operation" && ! docker inspect "$name" >/dev/null 2>&1 && ! sudo kill -0 "$guard" 2>/dev/null && ! sudo kill -0 "$worker" 2>/dev/null && ! sudo kill -0 "$reaper" 2>/dev/null && ! sudo kill -0 "$sudo_pid" 2>/dev/null && ! sudo kill -0 "$controller" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          sudo test ! -e "$AURION_CANARY_DIR/state/.active-operation"
+          ! docker inspect "$name" >/dev/null 2>&1
+          ! sudo kill -0 "$guard" 2>/dev/null
+          ! sudo kill -0 "$worker" 2>/dev/null
+          ! sudo kill -0 "$reaper" 2>/dev/null
+          ! sudo kill -0 "$sudo_pid" 2>/dev/null
+          ! sudo kill -0 "$controller" 2>/dev/null
+          test -z "$(docker ps -aq --filter "label=org.aurion.schema-apply-operation=$operation")"
+          test ! -f "$AURION_CANARY_DIR/after"
+          sudo rm -rf "$AURION_CANARY_DIR"
+
       - name: Establish the canonical database through journaled 0020 only
         run: |
           set -euo pipefail
@@ -289,7 +371,7 @@ jobs:
         run: |
           set -euo pipefail
           set +e
-          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > apply-receipt.json
+          node scripts/aurion-schema-apply-proof-client.mjs "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > apply-receipt.json
           apply_status=$?
           set -e
           if [[ "$apply_status" -ne 0 ]]; then
@@ -351,7 +433,7 @@ jobs:
       - name: Prove exact retry is a non-mutating no-op
         run: |
           set -euo pipefail
-          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > retry-receipt.json
+          node scripts/aurion-schema-apply-proof-client.mjs "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > retry-receipt.json
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("retry-receipt.json","utf8"));
@@ -372,7 +454,7 @@ jobs:
           fixture reject-column-contract-drift
           fixture prepare-reviewed
           fixture reject-tampered-plan
-          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > repair-receipt.json
+          node scripts/aurion-schema-apply-proof-client.mjs "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > repair-receipt.json
           node --input-type=module <<'NODE'
           import assert from "node:assert/strict";
           import fs from "node:fs";
@@ -399,7 +481,7 @@ jobs:
           fixture verify-reviewed
           fixture prepare-unknown
           set +e
-          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > blocked-repair-receipt.json
+          node scripts/aurion-schema-apply-proof-client.mjs "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > blocked-repair-receipt.json
           status=$?
           set -e
           test "$status" -ne 0
