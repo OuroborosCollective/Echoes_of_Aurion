@@ -89,8 +89,13 @@ func verify() -> void:
 	studio._plan()
 	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	require(not studio._state.planned_summary().is_empty(), "valid fixture plan not accepted")
+	root.size = Vector2i(360, 640)
+	await process_frame
 	studio._request_confirmation()
-	require(studio._confirm.visible and studio._confirm.dialog_text.contains("test-village") and studio._confirm.dialog_text.contains("d".repeat(64)), "confirmation did not show the exact target and plan")
+	await process_frame
+	require(studio._confirm.visible and studio._plan_view.text.contains("test-village") and studio._plan_view.text.contains("d".repeat(64)), "confirmation did not show the exact target and plan")
+	require(studio._confirm.size.x <= root.size.x and studio._confirm.size.y <= root.size.y and studio._confirm.position.x >= 0 and studio._confirm.position.y >= 0, "confirmation extends outside the mobile viewport")
+	require(studio._confirm.get_ok_button().get_combined_minimum_size().y >= 48 and studio._confirm.get_cancel_button().get_combined_minimum_size().y >= 48, "confirmation buttons are too small for touch")
 	require(studio._plan_view.text.contains("expectedPreviousHash") and studio._plan_view.text.contains("referencedAssetHashes"), "confirmation omitted server plan details")
 	studio._confirm.confirmed.emit()
 	require(fake.sent.back().kind == "worldApply" and fake.sent.back().payload.expectedPlanHash == "d".repeat(64), "apply did not use the confirmed plan")

@@ -37,6 +37,7 @@ func _ready() -> void:
 		margin.add_theme_constant_override(edge, 16)
 	add_child(margin)
 	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	margin.add_child(scroll)
 	var stack := VBoxContainer.new()
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -51,12 +52,14 @@ func _ready() -> void:
 	_catalog_info.text = "Admin-Zugang und Katalog noch nicht geprüft."
 	stack.add_child(_catalog_info)
 	_brief = TextEdit.new()
-	_brief.placeholder_text = "Idee für einen unverbindlichen KI-Entwurf"
+	_brief.placeholder_text = "Idee für KI-Entwurf"
+	_brief.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_brief.custom_minimum_size.y = 90
 	stack.add_child(_brief)
 	_button(stack, "KI-Entwurf anfordern", _propose)
 	_draft = TextEdit.new()
 	_draft.placeholder_text = "Aurion-Weltentwurf als JSON prüfen und bearbeiten"
+	_draft.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_draft.custom_minimum_size.y = 210
 	_draft.text_changed.connect(_on_draft_changed)
 	stack.add_child(_draft)
@@ -69,16 +72,26 @@ func _ready() -> void:
 	stack.add_child(_info)
 	_button(stack, "Zurück zum Spiel", _close_requested)
 	_confirm = ConfirmationDialog.new()
-	_confirm.title = "Weltänderung bei Aurion anwenden?"
-	_confirm.ok_button_text = "Diesen Plan anwenden"
+	_confirm.title = "Plan für Aurion prüfen"
+	_confirm.ok_button_text = "Anwenden"
 	_confirm.confirmed.connect(_apply)
 	_plan_view = TextEdit.new()
 	_plan_view.editable = false
 	_plan_view.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	_plan_view.custom_minimum_size = Vector2(240, 200)
+	_plan_view.custom_minimum_size = Vector2(200, 200)
 	_plan_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_confirm.add_child(_plan_view)
 	add_child(_confirm)
+	_touch_dialog_button(_confirm.get_ok_button())
+	_touch_dialog_button(_confirm.get_cancel_button())
+
+func _touch_dialog_button(button: Button) -> void:
+	# AcceptDialog resets custom_minimum_size when opened. Theme margins survive
+	# that reset and keep both controls comfortably touch-sized.
+	var style := button.get_theme_stylebox("normal").duplicate() as StyleBox
+	style.set_content_margin(SIDE_TOP, 16)
+	style.set_content_margin(SIDE_BOTTOM, 16)
+	button.add_theme_stylebox_override("normal", style)
 
 func _button(parent: VBoxContainer, title: String, action: Callable) -> void:
 	var button := Button.new()
@@ -202,8 +215,8 @@ func _request_confirmation() -> void:
 		_info.text = "Bitte den aktuellen Entwurf zuerst prüfen."
 		return
 	_plan_view.text = JSON.stringify(plan.plan, "\t")
-	_confirm.dialog_text = "%s · Version %d · %d Platzierungen\nPlan-SHA256: %s" % [plan.draft.designKey, int(plan.draft.version), plan.draft.placements.size(), plan.planHash]
 	_confirm.popup_centered_ratio(0.9)
+	_confirm.get_cancel_button().text = "Abbrechen"
 
 func _apply() -> void:
 	# Refresh before consuming confirmation; never retry a sent apply.
