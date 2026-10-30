@@ -1,0 +1,21 @@
+[Unit]
+Description=Aurion committed-world projection for Godot
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=aurion-deploy
+Group=aurion-deploy
+WorkingDirectory=/srv/serverin/tools/aurion-godot-bridge/current
+EnvironmentFile=/srv/serverin/config/aurion-godot-bridge.env
+ExecStart=/usr/bin/node /srv/serverin/tools/aurion-godot-bridge/current/aurion-godot-bridge.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/serverin/evidence/aurion-godot-bridge
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,48 @@
+import type { BridgeConfig } from './config.js';
+import { CommandGate } from './commands.js';
+import { DownstreamServer } from './downstream.js';
+import { defaultLogger, type Logger } from './log.js';
+import { UpstreamClient } from './upstream.js';
+import { WorldState } from './worldState.js';
+
+export interface RunningBridge {
+  world: WorldState;
+  upstream: UpstreamClient;
+  downstream: DownstreamServer;
+  port: number;
+  close(): Promise<void>;
+}
+
+export async function startBridge(cfg: BridgeConfig, log: Logger = defaultLogger): Promise<RunningBridge> {
+  const world = new WorldState();
+  const upstream = new UpstreamClient(
+    world,
+    {
+      url: cfg.upstreamUrl,
+      token: cfg.upstreamToken,
+      protocol: cfg.upstreamProtocol,
+      coords: cfg.coords,
+      reconnectMinMs: cfg.reconnectMinMs,
+      reconnectMaxMs: cfg.reconnectMaxMs,
+      requireCanonical: cfg.requireCanonical,
+    },
+    log,
+  );
+  const gate = new CommandGate({ ratePerSec: cfg.editRate, auditPath: cfg.edit ? cfg.auditLog : undefined }, log);
+  const downstream = new DownstreamServer(cfg, world, upstream, gate, log);
+
+  const port = await downstream.listen();
+  log('info', 'bridge lauscht', { host: cfg.host, port, edit: cfg.edit && upstream.supportsEdit, upstream: cfg.upstreamUrl });
+  upstream.start();
+
+  return {
+    world,
+    upstream,
+    downstream,
+    port,
+    close: async () => {
+      upstream.stop();
+      await downstream.close();
+    },
+  };
+}
