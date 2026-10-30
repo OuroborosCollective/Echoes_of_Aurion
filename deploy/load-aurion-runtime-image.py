@@ -10,6 +10,9 @@ import tarfile
 
 SHA40 = re.compile(r'[a-f0-9]{40}')
 SHA256 = re.compile(r'sha256:[a-f0-9]{64}')
+OCI_INDEX = 'application/vnd.oci.image.index.v1+json'
+OCI_MANIFEST = 'application/vnd.oci.image.manifest.v1+json'
+OCI_CONFIG = 'application/vnd.oci.image.config.v1+json'
 
 
 def file_hash(path):
@@ -57,31 +60,74 @@ def verify(directory, revision):
         if not isinstance(entries, list) or len(entries) != 1 or entries[0].get('RepoTags') != [tag]:
             raise ValueError('RUNTIME_IMAGE_TAG_SET_INVALID')
         raw, config = archive_json(archive, entries[0]['Config'])
-        if 'sha256:' + hashlib.sha256(raw).hexdigest() != image['id']:
-            raise ValueError('RUNTIME_IMAGE_CONFIG_DIGEST_MISMATCH')
+        config_digest = 'sha256:' + hashlib.sha256(raw).hexdigest()
         if (config.get('os') != 'linux' or config.get('architecture') != 'amd64'
                 or config.get('config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != revision
                 or config.get('config', {}).get('User') != 'node'):
             raise ValueError('RUNTIME_IMAGE_CONFIG_IDENTITY_MISMATCH')
-    return image
+        descriptor = None
+        # Classic Docker exposes the config digest as Id; the containerd store
+        # exposes its OCI target digest. Bind both through the sealed archive,
+        # rather than accepting an arbitrary Id carrying the same source label.
+        if any(member.name == 'index.json' for member in archive.getmembers()):
+            _, index = archive_json(archive, 'index.json')
+            targets = index.get('manifests')
+            if (index.get('schemaVersion') != 2 or index.get('mediaType') != OCI_INDEX
+                    or not isinstance(targets, list) or len(targets) != 1):
+                raise ValueError('RUNTIME_IMAGE_OCI_INDEX_INVALID')
+            target = targets[0]
+            digest = target.get('digest', '')
+            if (target.get('mediaType') != OCI_MANIFEST or not SHA256.fullmatch(digest)
+                    or type(target.get('size')) is not int or not 0 < target['size'] <= 1024 * 1024):
+                raise ValueError('RUNTIME_IMAGE_OCI_DESCRIPTOR_INVALID')
+            manifest_raw, oci = archive_json(archive, 'blobs/sha256/' + digest.removeprefix('sha256:'))
+            if len(manifest_raw) != target['size'] or 'sha256:' + hashlib.sha256(manifest_raw).hexdigest() != digest:
+                raise ValueError('RUNTIME_IMAGE_OCI_MANIFEST_DIGEST_MISMATCH')
+            config_descriptor = oci.get('config', {})
+            if (oci.get('schemaVersion') != 2 or oci.get('mediaType') != OCI_MANIFEST
+                    or entries[0]['Config'] != 'blobs/sha256/' + config_digest.removeprefix('sha256:')
+                    or config_descriptor.get('mediaType') != OCI_CONFIG
+                    or config_descriptor.get('digest') != config_digest
+                    or type(config_descriptor.get('size')) is not int or config_descriptor['size'] != len(raw)):
+                raise ValueError('RUNTIME_IMAGE_OCI_CONFIG_BINDING_MISMATCH')
+            descriptor = {key: target[key] for key in ('mediaType', 'digest', 'size')}
+        if image['id'] not in {config_digest, descriptor['digest'] if descriptor else config_digest}:
+            raise ValueError('RUNTIME_IMAGE_CONFIG_DIGEST_MISMATCH')
+    return {**image, 'verifiedConfigDigest': config_digest, 'verifiedManifestDescriptor': descriptor}
+
+
+def inspect_verified(image, revision):
+    actual = json.loads(subprocess.check_output(['docker', 'image', 'inspect', 'echoes-of-aurion:' + revision], text=True))[0]
+    descriptor = image['verifiedManifestDescriptor']
+    actual_descriptor = actual.get('Descriptor')
+    config_identity = actual.get('Id') == image['verifiedConfigDigest']
+    manifest_identity = (descriptor is not None and actual.get('Id') == descriptor['digest']
+                         and isinstance(actual_descriptor, dict)
+                         and all(actual_descriptor.get(key) == value for key, value in descriptor.items()))
+    if (not (config_identity or manifest_identity) or actual.get('Os') != 'linux' or actual.get('Architecture') != 'amd64'
+            or actual.get('Config', {}).get('User') != 'node'
+            or actual.get('Config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != revision):
+        raise ValueError('RUNTIME_IMAGE_LOADED_IDENTITY_MISMATCH')
+    return actual['Id']
+
+
+def inspect_loaded(directory, revision):
+    """Read-only identity proof for neighboring readbacks; never imports images."""
+    return inspect_verified(verify(directory, revision), revision)
 
 
 def load(directory, revision):
     image = verify(directory, revision)
     subprocess.run(['docker', 'image', 'load', '--input', str(Path(directory) / image['archive'])], check=True, stdout=subprocess.DEVNULL)
-    actual = json.loads(subprocess.check_output(['docker', 'image', 'inspect', 'echoes-of-aurion:' + revision], text=True))[0]
-    if (actual.get('Id') != image['id'] or actual.get('Os') != 'linux' or actual.get('Architecture') != 'amd64'
-            or actual.get('Config', {}).get('User') != 'node'
-            or actual.get('Config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != revision):
-        raise ValueError('RUNTIME_IMAGE_LOADED_IDENTITY_MISMATCH')
-    return image['id']
+    return inspect_verified(image, revision)
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != '--inspect-loaded'):
         return 64
     try:
-        print(load(sys.argv[1], sys.argv[2]))
+        operation = inspect_loaded if len(sys.argv) == 4 else load
+        print(operation(sys.argv[1], sys.argv[2]))
         return 0
     except Exception:
         # Never expose an image configuration, environment or Docker output.
