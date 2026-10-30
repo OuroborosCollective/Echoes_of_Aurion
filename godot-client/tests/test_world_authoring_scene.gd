@@ -28,6 +28,7 @@ func verified_plan(d: Dictionary) -> Dictionary:
 	p["planHash"] = "d".repeat(64)
 	p["requiresHumanConfirmation"] = true
 	p["referencedAssetHashes"] = [SHA]
+	p["expectedPreviousHash"] = null
 	return p
 
 func receipt_response() -> Dictionary:
@@ -73,6 +74,10 @@ func verify() -> void:
 	studio._draft.text = JSON.stringify(original)
 	studio._plan()
 	require(fake.sent.back().kind == "worldPlan", "plan was not sent")
+	fake.in_flight = true
+	studio._close_requested()
+	require(studio.visible and studio._state.phase == "planning", "studio closed while its plan was in flight")
+	fake.in_flight = false
 	var edited := original.duplicate(true)
 	edited.title = "Edited after request"
 	studio._draft.text = JSON.stringify(edited)
@@ -85,8 +90,11 @@ func verify() -> void:
 	require(not studio._state.planned_summary().is_empty(), "valid fixture plan not accepted")
 	studio._request_confirmation()
 	require(studio._confirm.visible and studio._confirm.dialog_text.contains("test-village") and studio._confirm.dialog_text.contains("d".repeat(64)), "confirmation did not show the exact target and plan")
+	require(studio._plan_view.text.contains("expectedPreviousHash") and studio._plan_view.text.contains("referencedAssetHashes"), "confirmation omitted server plan details")
 	studio._confirm.confirmed.emit()
 	require(fake.sent.back().kind == "worldApply" and fake.sent.back().payload.expectedPlanHash == "d".repeat(64), "apply did not use the confirmed plan")
+	studio._plan()
+	require(studio._state.phase == "applying", "repeated plan tap disturbed an in-flight apply")
 	var before_apply := fake.sent.size()
 	studio._apply()
 	require(fake.sent.size() == before_apply, "apply was sent twice")
@@ -97,9 +105,13 @@ func verify() -> void:
 	require(studio.visible, "studio closed during the receipt readback")
 	fake.in_flight = false
 	studio._failed("readback", "fixture", SESSION, generation)
+	studio._plan()
+	require(studio._state.phase == "awaiting_readback", "repeated plan tap discarded a received receipt")
 	studio._close_requested()
 	var sent_before_reopen := fake.sent.size()
 	require(studio.open_studio() and studio._state.phase == "awaiting_readback" and fake.sent.size() == sent_before_reopen, "reopening lost an already received receipt")
+	studio._readback()
+	require(fake.sent.size() == sent_before_reopen + 1 and fake.sent.back().kind == "readback", "reopened studio could not request a fresh readback")
 	studio._completed("readback", design(), SESSION, generation + 1)
 	require(studio._state.phase == "awaiting_readback", "different session generation confirmed apply")
 	studio._completed("readback", design(), SESSION, generation)

@@ -96,6 +96,7 @@ func verify() -> void:
 	planned["planHash"] = "d".repeat(64)
 	planned["referencedAssetHashes"] = ["b".repeat(64)]
 	planned["requiresHumanConfirmation"] = true
+	planned["expectedPreviousHash"] = null
 	require(studio._state.begin_plan(current) and studio._state.accept_plan(planned, current), "reset fixture plan rejected")
 	studio._request_confirmation()
 	studio._confirm.confirmed.emit()
@@ -118,6 +119,7 @@ func verify() -> void:
 	planned["planHash"] = "d".repeat(64)
 	planned["referencedAssetHashes"] = ["b".repeat(64)]
 	planned["requiresHumanConfirmation"] = true
+	planned["expectedPreviousHash"] = null
 	require(studio._state.begin_plan(current) and studio._state.accept_plan(planned, current), "refresh fixture plan rejected")
 	auth.token = ""
 	studio._apply()

@@ -91,6 +91,9 @@ func accept_plan(plan: Variant, current_draft: Variant) -> bool:
 		return false
 	if typeof(plan) != TYPE_DICTIONARY or not WorldProjection._hex(plan.get("planHash"), 64) or plan.get("requiresHumanConfirmation") != true:
 		return false
+	# Older servers did not bind the predecessor. Do not authorize their plans.
+	if not plan.has("expectedPreviousHash") or (plan.expectedPreviousHash != null and not WorldProjection._hex(plan.expectedPreviousHash, 64)):
+		return false
 	for key in ["schemaVersion", "designKey", "version", "title", "expectedCatalogRevision", "placements"]:
 		if JSON.stringify(plan.get(key)) != JSON.stringify(_pending_plan.get(key)):
 			return false
@@ -100,7 +103,7 @@ func accept_plan(plan: Variant, current_draft: Variant) -> bool:
 	for hash in hashes:
 		if not WorldProjection._hex(hash, 64):
 			return false
-	_planned = {"draft":_pending_plan.duplicate(true), "planHash":plan.planHash}
+	_planned = {"draft":_pending_plan.duplicate(true), "planHash":plan.planHash, "plan":plan.duplicate(true)}
 	_pending_plan.clear()
 	phase = "planned"
 	message = "Aurion-Plan geprüft; menschliche Bestätigung erforderlich."
@@ -144,6 +147,8 @@ func accept_apply(response: Variant) -> bool:
 	if not WorldProjection._hex(receipt.get("resultHash"), 64) or not WorldProjection._hex(receipt.get("receiptHash"), 64) or receipt.get("receiptId") != "authoring:world:" + str(receipt.receiptHash).substr(0, 24):
 		return false
 	if not receipt.has("previousHash") or (receipt.previousHash != null and not WorldProjection._hex(receipt.previousHash, 64)):
+		return false
+	if receipt.previousHash != _applying.plan.expectedPreviousHash:
 		return false
 	if not _target_matches(response.get("readback"), _applying.draft, receipt.resultHash):
 		return false

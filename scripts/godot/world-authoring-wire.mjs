@@ -27,7 +27,7 @@ const server = createServer(async (req, res) => {
     const payload = JSON.parse(raw).json;
     if (req.url === '/api/trpc/aurionAuthoring.worldPlan') {
       plans++;
-      send(res, envelope({ ...payload, planHash: 'd'.repeat(64), referencedAssetHashes: ['b'.repeat(64)], requiresHumanConfirmation: true }));
+      send(res, envelope({ ...payload, planHash: 'd'.repeat(64), referencedAssetHashes: ['b'.repeat(64)], expectedPreviousHash: null, requiresHumanConfirmation: true }));
       return;
     }
     assert.equal(req.url, '/api/trpc/aurionAuthoring.worldApply');

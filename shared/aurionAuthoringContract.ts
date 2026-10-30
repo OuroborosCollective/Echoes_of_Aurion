@@ -42,6 +42,9 @@ export const WorldDesignPlanSchema = WorldDesignDraftSchema.extend({
   planHash: digest,
   referencedAssetHashes: z.array(digest).min(1).max(256),
   requiresHumanConfirmation: z.literal(true),
+  // Optional only for decoding historical stored plans. New plans always bind
+  // their expected predecessor, including null for a previously absent design.
+  expectedPreviousHash: digest.nullable().optional(),
 }).strict();
 
 export type WorldDesignPlan = z.infer<typeof WorldDesignPlanSchema>;

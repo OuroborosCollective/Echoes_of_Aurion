@@ -23,6 +23,7 @@ func plan(d: Dictionary) -> Dictionary:
 	p["planHash"] = "b".repeat(64)
 	p["requiresHumanConfirmation"] = true
 	p["referencedAssetHashes"] = ["c".repeat(64)]
+	p["expectedPreviousHash"] = null
 	return p
 
 func readback() -> Dictionary:
@@ -55,6 +56,11 @@ func verify() -> void:
 	var altered := d.duplicate(true)
 	altered.title = "Changed after submission"
 	require(not state.accept_plan(plan(d), altered) and state.planned_summary().is_empty(), "changed draft inherited an old plan")
+	require(state.begin_plan(d), "legacy-plan fixture did not start")
+	var legacy := plan(d)
+	legacy.erase("expectedPreviousHash")
+	require(not state.accept_plan(legacy, d), "plan without a bound predecessor was accepted")
+	state.failed("worldPlan")
 	verified_plan(state, d)
 	require(state.begin_apply(altered).is_empty(), "changed draft applied against old plan")
 	var payload: Dictionary = state.begin_apply(d)
@@ -64,6 +70,9 @@ func verify() -> void:
 		var bad := applied()
 		bad.receipt[field] = false if field == "humanConfirmed" else (99 if field == "actorUserId" else "invalid")
 		require(not state.accept_apply(bad), "invalid receipt %s accepted" % field)
+	var wrong_predecessor := applied()
+	wrong_predecessor.receipt.previousHash = "9".repeat(64)
+	require(not state.accept_apply(wrong_predecessor), "receipt with a different predecessor was accepted")
 	require(state.accept_apply(applied()), "valid receipt rejected")
 	var wrong := readback()
 	wrong.designs[0].designHash = "9".repeat(64)

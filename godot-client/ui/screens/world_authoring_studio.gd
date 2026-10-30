@@ -176,6 +176,11 @@ func _propose() -> void:
 		_info.text = "Unverbindlicher Entwurf wird angefordert."
 
 func _plan() -> void:
+	# A journal entry for this session's in-flight apply is not an unknown
+	# earlier operation. Repeated taps must not discard the receipt state.
+	if _state.phase in ["planning", "applying", "awaiting_readback"] or (_api != null and _api.busy()):
+		_info.text = "Bitte zuerst das Ergebnis der laufenden Anfrage prüfen."
+		return
 	if not _journal.read().is_empty():
 		_state.mark_unresolved()
 		_info.text = _state.message
@@ -194,7 +199,7 @@ func _request_confirmation() -> void:
 	if plan.is_empty() or typeof(draft) != TYPE_DICTIONARY or JSON.stringify(draft) != JSON.stringify(plan.draft) or _api.busy():
 		_info.text = "Bitte den aktuellen Entwurf zuerst prüfen."
 		return
-	_plan_view.text = JSON.stringify(plan.draft, "\t")
+	_plan_view.text = JSON.stringify(plan.plan, "\t")
 	_confirm.dialog_text = "%s · Version %d · %d Platzierungen\nPlan-SHA256: %s" % [plan.draft.designKey, int(plan.draft.version), plan.draft.placements.size(), plan.planHash]
 	_confirm.popup_centered_ratio(0.9)
 
@@ -301,7 +306,9 @@ func _failed(kind: String, _reason: String, connection: String, generation: int)
 	_info.text = _state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden."
 
 func _close_requested() -> void:
-	if _state.phase == "applying" or (_state.phase == "awaiting_readback" and _api != null and _api.busy()):
+	# A hidden response is deliberately ignored, so do not hide while any
+	# request is active. Otherwise a planning response could strand the state.
+	if _state.phase == "applying" or (_api != null and _api.busy()):
 		_info.text = "Bitte auf das Ergebnis der laufenden Anfrage warten."
 		return
 	visible = false
