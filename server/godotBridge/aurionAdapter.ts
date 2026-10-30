@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { operationalNow, hostOperationalClock, type OperationalClock } from "../../shared/operationalClock";
 import { activeProvenance } from "../aurionProvenance";
 import { computeReceiptHash, type AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import { ZONE_FIXED_POINT_SCALE } from "../zoneProtocol";
@@ -71,6 +72,7 @@ export function projectCommittedTick(entry: RecordedTickEntry, observation: {
 export async function startAurionGodotFeed(
   env: NodeJS.ProcessEnv = process.env,
   recorder: AurionTickRecorder = globalTickRecorder,
+  clock: OperationalClock = hostOperationalClock,
 ): Promise<{ close(): Promise<void>; port: number } | undefined> {
   if (!env.AURION_GODOT_FEED_TOKEN_FILE) return undefined;
   const token = readFileSync(env.AURION_GODOT_FEED_TOKEN_FILE, "utf8").trim();
@@ -93,7 +95,7 @@ export async function startAurionGodotFeed(
     host: {
       worldId: GLOBAL_WORLD_ID,
       getTick: () => current?.identity.tick ?? 0,
-      getIdentity: () => Date.now() - lastObservedAt <= 1500 ? current?.identity : undefined,
+      getIdentity: () => operationalNow(clock) - lastObservedAt <= 1500 ? current?.identity : undefined,
       getEntities: () => current?.entities ?? [],
       getRegions: () => current?.regions ?? [],
       // No generic applyAdminCommand: no second command authority or invented quest handler.
@@ -107,7 +109,7 @@ export async function startAurionGodotFeed(
       lastProjectedReceipt = structuredClone(entry.receipt);
     }
     catch (error) { current = undefined; feed.invalidate(); throw error; }
-    lastObservedAt = Date.now(); // Observer freshness only; does not enter state/receipts.
+    lastObservedAt = operationalNow(clock); // Observer freshness only; never state/receipts.
     feed.onTick(current.identity.tick);
   });
   try {
@@ -119,4 +121,3 @@ export async function startAurionGodotFeed(
     throw error;
   }
 }
-

@@ -5070,3 +5070,13 @@ Evidence: Basis `9dc75f50731b1e9863760103c13fac811a6333e2`; VPS-Testausführung 
 Learned: Ein beendeter Docker-Client beweist keinen gestoppten Containerprozess; bereits angenommene DDL kann auch bei abgebrochener Verbindung teilwirksam sein.
 Open: GitHub-Step-Timeout und Exact-Head-CI, produktives Apply-Receipt und Runtime-Promotion fehlen.
 Next safe step: GitHub-CI und unabhängigen Readback abwarten; keine produktive Schema-Anwendung vor belegtem Abbruchschutz.
+
+
+### 2026-10-30 — Godot-Brücke an operative Zeitgrenze binden
+Status: PARTIAL — ursächlicher Quellfix; Exact-Head-CI und produktive Nutzung noch offen.
+Änderung: Adapter-Frische, Transportkennungen, Rate-Limit, Audit/Logger und Testtransport nutzen die bestehende OperationalClock; explizite Zeitproben sind injizierbar. Reconnect-Jitter nutzt getrennte Node-Kryptoentropie, niemals Aurions adressierbaren Gameplay-RNG. Kein Welt-/Tick-/Receipt-Owner geändert. Die Bridge-CI führt zusätzlich die unveränderte vollständige Repository-Regression aus.
+Evidence: Main-Basis `17692574e6d814ea32afcd76809282675e6ca3b0`, HTML5-Run41079279102/1 Job124143735531: zwei Fehler bei2382 bestandenen und271 übersprungenen Tests; beide bestehenden Guards melden14 Ambient-Zeit-/Zufallsstellen in der Brücke. Diese Assertions und deren Inventare bleiben unverändert. Neue isolierte Prüfungen binden Rate-Bucket, Log und echte temporäre Audit-Datei an explizite Zeitproben; Ausführung ausschließlich in GitHub Actions.
+Erkenntnis: Operative I/O-Zeit ist keine Simulationszeit; die projektionale Brücke muss trotzdem die vorhandene kanonische Zeitgrenze verwenden. Ein grüner fokussierter Bridge-Lauf ersetzte bisher nicht die volle Repository-Regression.
+Offen/Nächster Schritt: Exakte volle Regression, Receipt-Parität, reale isolierte MariaDB-/WS-/Godot-Kette und Build prüfen, danach Merge/Main separat lesen. Keine produktive Freischaltung durch diesen Fix; tatsächlicher Benutzerlogin, WorldLease, World-Apply/Receipt-/DB-Readback und physische Tablet-Abnahme bleiben offen.
+
+CI-Fortsetzung: Bridge-Run41091052028/1 am Head9d0415b99aaea55bef7ffecbc570be2452b2d373 bestand Typecheck,32 Receipt-/Zone-Regressionen und15 Original-Transporttests; der reale MariaDB-V1-Test traf CAUSAL_RECEIPT_CONFLICT. Dessen Zone verwendete den globalen asynchron persistierenden Recorder und schrieb zusätzlich manuell über einen Adapter. V1-/V2-Kompatibilitätsfixtures bekommen deshalb einen eigenen Recorder ohne automatischen DB-Schreiber; ihre manuellen echten MariaDB-Writes und alle Assertions bleiben unverändert. Produktions-Persistenz-/Konfliktlogik bleibt unangetastet.

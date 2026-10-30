@@ -16,6 +16,23 @@ on:
 permissions:
   contents: read
 jobs:
+  repository-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact lock and run unchanged full repository regression
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm check
+          pnpm test
+          git diff --check
   contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -84,5 +101,3 @@ jobs:
           path: ${{ runner.temp }}/live-bridge-evidence/
           if-no-files-found: error
           retention-days: 14
-
-
