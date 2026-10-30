@@ -268,7 +268,9 @@ jobs:
           test "$(docker image inspect --format '{{.Id}}' "${runtime_verify_image}")" = "$hosted_image_id"
           node_version="$(docker run --rm --network none "${runtime_verify_image}" node -p 'process.version')"
           test "$node_version" = "v22.23.4"
-          node scripts/godot/test-live-feed-container.mjs "${runtime_verify_image}" "$GITHUB_SHA"
+          DATABASE_URL="mysql://aurion_runtime:${runtime_verify_db_password}@mariadb:3306/aurion_runtime" \
+          AURION_FEED_TEST_DATABASE_NETWORK="${runtime_verify_database_network}" \
+            node scripts/godot/test-live-feed-container.mjs "${runtime_verify_image}" "$GITHUB_SHA"
           docker run --detach \
             --name "${runtime_verify_container}" \
             --mount "type=volume,source=${runtime_verify_glb_volume},destination=/var/lib/aurion/glb" \
