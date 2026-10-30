@@ -28,8 +28,13 @@ Production builds come only from the exact-head CI artifact and its build manife
 Generic upstream mapping and the supplied mock server are not valid production-world evidence.
 The canonical producer deliberately advertises no generic edit handler. Flipping BRIDGE_EDIT does not
 create permissions, spawn/move/remove/set semantics, quest handlers, persistence or causal receipts.
-Authoring must use Aurion's existing role-checked plan/apply/receipt/readback contract before a write path
-can be admitted. A queued-command acknowledgement is not proof of an applied change.
+The dock's authoring button launches the existing real Godot game client and its WorldStudio.
+Its workstation adapter presents the existing native App-Link PKCE handoff and accepts the exact
+HTTPS callback manually. Auth, WorldLease, terrain/asset projection, role checks, plan confirmation,
+single apply, receipt recovery and independent world readback remain in Aurion's existing client/server
+contracts. This does not assert Android hardware or an already successful operator login.
+The process-local login UI opt-in is restored on exit and never saved to project.godot.
+A queued generic-command acknowledgement is not proof of an applied change.
 
 Credentials stay in protected runtime files/process memory; the editor no longer serializes or saves
 its token. The plugin preserves other editor/autoload owners. The bridge is not enabled in the tracked

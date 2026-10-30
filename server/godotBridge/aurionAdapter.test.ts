@@ -4,6 +4,7 @@ import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { hashCanonicalZoneState } from "../causality/zoneCanonicalState";
 import { projectCommittedTick } from "./aurionAdapter";
 import { isProjectionIdentity, projectionHash } from "./shared/projectionIdentity";
+import { AURION_CAUSAL_TICK_SCHEMA_V2 } from "../../shared/aurionCausalTickContract";
 
 // Isolated real Aurion authority, not a running production zone or DB proof.
 const revision = "1".repeat(40);
@@ -46,11 +47,16 @@ describe("Aurion committed Godot projection", () => {
   it("keeps receipt chains identical with a detached, even hostile, observer", async () => {
     const baseline = fixture();
     const observed = fixture();
+    baseline.zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V2;
+    observed.zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V2;
     const captured: RecordedTickEntry[] = [];
+    let completed = 0;
     const stop = observed.recorder.observeCommittedTicks(entry => {
       captured.push(structuredClone(entry));
       entry.receipt.receiptHash = "observer-local mutation";
+      if ("stages" in entry.receipt && entry.receipt.stages.length) Object.assign(entry.receipt.stages[0], { observerMutation: true });
       if (entry.postState?.mobs[0]) entry.postState.mobs[0].x = 999999;
+      completed++;
     });
     for (let tick = 1; tick <= 100; tick++) {
       baseline.zone.tick();
@@ -60,6 +66,7 @@ describe("Aurion committed Godot projection", () => {
       expect(observed.zone.getCanonicalZoneState()).toEqual(baseline.zone.getCanonicalZoneState());
     }
     expect(captured).toHaveLength(100);
+    expect(completed).toBe(100);
     expect(observed.recorder.verifyReceiptChain().valid).toBe(true);
     stop();
     observed.zone.tick();

@@ -50,6 +50,11 @@ func _build_ui() -> void:
     _btn_connect.pressed.connect(_on_connect_pressed)
     add_child(_btn_connect)
 
+    var studio := Button.new()
+    studio.text = "Echte Welt bearbeiten (Aurion-Anmeldung)"
+    studio.pressed.connect(func(): EditorInterface.play_custom_scene("res://addons/aurion_bridge/authoring_entry.tscn"))
+    add_child(studio)
+
     add_child(HSeparator.new())
 
     _filter = LineEdit.new()
@@ -250,7 +255,7 @@ func _edit_allowed() -> bool:
         _log_line("[color=orange]Nicht verbunden.[/color]")
         return false
     if not _client.edit_enabled:
-        _log_line("[color=orange]Editing ist serverseitig aus (BRIDGE_EDIT=1 in der Bridge setzen).[/color]")
+        _log_line("[color=orange]Kein freigegebener Entity-Schreibhandler. Weltänderungen über das kanonische Weltstudio ausführen.[/color]")
         return false
     return true
 

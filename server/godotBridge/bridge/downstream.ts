@@ -192,8 +192,9 @@ export class DownstreamServer {
       this.send(c, { t: 'ack', cmdId, ok, error, tick });
 
     if (!cmdId) return ack(false, 'bad_cmd_id');
-    if (!this.cfg.edit || !this.upstream.supportsEdit) return ack(false, 'edit_disabled');
-    if (!this.upstream.canEdit) return ack(false, 'upstream_unavailable');
+    if (!this.cfg.edit || this.cfg.upstreamProtocol !== 'feed') return ack(false, 'edit_disabled');
+    if (this.upstream.state !== 'up') return ack(false, 'upstream_unavailable');
+    if (!this.upstream.supportsEdit) return ack(false, 'edit_disabled');
     if (!this.gate.allow(c.id)) return ack(false, 'rate_limited');
 
     const parsed = parseEditCommand(msg.cmd);
