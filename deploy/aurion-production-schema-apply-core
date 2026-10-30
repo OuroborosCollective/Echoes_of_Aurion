@@ -29,6 +29,7 @@ backup_dir=/var/backups/echoes-of-aurion/schema-apply
 phase=INITIALIZE
 receipt_emitted=0
 recovery_container=""
+recovery_cleanup_failed=false
 backup_created=false
 backup_basename=""
 backup_sha256=""
@@ -49,13 +50,13 @@ repair_rehearsal_sha256=""
 cleanup_recovery() {
   if [[ -n "$recovery_container" ]]; then
     local ids id
-    ids="$(docker ps -aq --no-trunc --filter "name=^/${recovery_container}$" --filter "label=org.aurion.schema-apply-operation=$operation")" || return 1
+    ids="$(docker ps -aq --no-trunc --filter "name=^/${recovery_container}$" --filter "label=org.aurion.schema-apply-operation=$operation")" || { recovery_cleanup_failed=true; return 1; }
     for id in $ids; do
-      [[ "$id" =~ ^[a-f0-9]{64}$ ]] || return 1
+      [[ "$id" =~ ^[a-f0-9]{64}$ ]] || { recovery_cleanup_failed=true; return 1; }
       docker rm -fv "$id" >/dev/null 2>&1 || true
     done
-    ids="$(docker ps -aq --no-trunc --filter "name=^/${recovery_container}$" --filter "label=org.aurion.schema-apply-operation=$operation")" || return 1
-    [[ -z "$ids" ]] || return 1
+    ids="$(docker ps -aq --no-trunc --filter "name=^/${recovery_container}$" --filter "label=org.aurion.schema-apply-operation=$operation")" || { recovery_cleanup_failed=true; return 1; }
+    [[ -z "$ids" ]] || { recovery_cleanup_failed=true; return 1; }
     recovery_container=""
   fi
 }
@@ -93,6 +94,7 @@ emit_failure() {
   APPLY_RECOVERY_ERROR_CLASS="$recovery_error_class" \
   APPLY_RECOVERY_STDERR_SHA256="$recovery_stderr_sha256" \
   APPLY_RECOVERY_STDERR_BYTES="$recovery_stderr_bytes" \
+  APPLY_RECOVERY_CLEANUP_FAILED="$recovery_cleanup_failed" \
   APPLY_FAILURE_RECEIPT="$apply_failure_receipt" \
   APPLY_REPAIR_PLAN_PATH="$repair_plan" \
   APPLY_REPAIR_FRESH_PATH="$repair_plan_fresh" \
@@ -161,6 +163,7 @@ emit_failure() {
       runnerStatus:Number(process.env.APPLY_FAILURE_STATUS),
       backup,
       recovery,
+      cleanup:process.env.APPLY_RECOVERY_CLEANUP_FAILED==="true"?{recoveryCleanupFailed:true}:null,
       apply,
       repair,
       rehearsal,
@@ -175,8 +178,11 @@ on_exit() {
   local status=$?
   set +e
   if ! cleanup_recovery; then
-    phase=RECOVERY_CLEANUP_FAILED
-    status=70
+    recovery_cleanup_failed=true
+    if [[ "$status" -eq 0 ]]; then
+      phase=RECOVERY_CLEANUP_FAILED
+      status=70
+    fi
   fi
   if [[ "$status" -ne 0 && "$receipt_emitted" -ne 1 ]]; then
     emit_failure "$status"

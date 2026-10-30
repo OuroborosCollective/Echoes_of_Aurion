@@ -246,6 +246,7 @@ jobs:
               output.failureStage=receipt.failureStage??null;
               output.backup=receipt.backup??null;
               output.recovery=receipt.recovery??null;
+              output.cleanup=receipt.cleanup?.recoveryCleanupFailed===true?{recoveryCleanupFailed:true}:null;
               output.apply=receipt.apply??null;
               output.repair=receipt.repair??null;
               output.rehearsal=receipt.rehearsal??null;
@@ -257,6 +258,7 @@ jobs:
               output.failureStage=null;
               output.backup=null;
               output.recovery=null;
+              output.cleanup=null;
               output.apply=null;
               output.repair=null;
               output.preflight=null;

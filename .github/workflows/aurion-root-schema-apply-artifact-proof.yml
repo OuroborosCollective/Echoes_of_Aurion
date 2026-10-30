@@ -397,6 +397,7 @@ jobs:
             exit "$apply_status"
           fi
           test ! -s /tmp/aurion-schema-apply-untrusted
+          test -s apply-receipt.json || { echo 'schema apply proof returned no receipt' >&2; exit 1; }
           AURION_APPLY_TEST_PLAN="$AURION_APPLY_TEST_PLAN" node --input-type=module <<'NODE'
           import fs from "node:fs";
           const raw=fs.readFileSync("apply-receipt.json","utf8");

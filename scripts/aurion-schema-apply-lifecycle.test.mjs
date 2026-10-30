@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -89,7 +89,7 @@ if (process.argv[2] === "--guard") {
     wait "$client"
     touch "$dir/after"`;
   try {
-    process.exitCode = await supervise({ command: "bash", args: ["-c", worker, "fixture", name, directory, image, mode], stateDir: path.join(directory, "state") });
+    process.exitCode = await supervise({ command: "bash", args: ["-c", worker, "fixture", name, directory, image, mode], stateDir: path.join(directory, "state"), reaperCommand: mode === "reaper-start-error" ? "/nonexistent-aurion-reaper" : process.execPath });
   } catch { process.exitCode = 125; }
 } else if (process.argv[2] === "--controller") {
   const directory = process.argv[3];
@@ -107,6 +107,17 @@ if (process.argv[2] === "--guard") {
   writeFileSync(path.join(directory, "controller.pid"), String(controller.pid));
   await new Promise(resolve => controller.once("exit", resolve));
 } else {
+  test("symlinked entrypoints cannot silently exit successfully without running their CLI", t => {
+    const directory = mkdtempSync(path.join(tmpdir(), "aurion-symlink-"));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    for (const filename of ["aurion-schema-apply-lifecycle.mjs", "aurion-schema-apply-job-client.mjs"]) {
+      const alias = path.join(directory, filename);
+      symlinkSync(fileURLToPath(new URL(`../deploy/${filename}`, import.meta.url)), alias);
+      const result = spawnSync(process.execPath, [alias], { encoding: "utf8" });
+      assert.equal(result.status, 64, `${filename} must reject missing CLI arguments`);
+    }
+  });
+
   test("successful supervised operation finishes and releases its fence", { timeout: 30000 }, async t => {
     const directory = mkdtempSync(path.join(tmpdir(), "aurion-lifecycle-"));
     const name = `aurion-proof-${randomBytes(8).toString("hex")}`;
@@ -125,6 +136,22 @@ if (process.argv[2] === "--guard") {
     assert.equal(result.code, 0, errors);
     assert.equal(existsSync(path.join(directory, "after")), true);
     assert.equal(existsSync(path.join(directory, "state", ".active-operation")), false);
+  });
+
+  test("a real reaper spawn error stops the gated worker and clears the fence", { timeout: 30000 }, async t => {
+    const directory = mkdtempSync(path.join(tmpdir(), "aurion-lifecycle-"));
+    const name = `aurion-proof-${randomBytes(8).toString("hex")}`;
+    writeFileSync(path.join(directory, "container"), name);
+    const guard = spawn(process.execPath, [self, "--guard", directory, "reaper-start-error"], { stdio: ["pipe", "ignore", "pipe"] });
+    let errors = "";
+    guard.stderr.on("data", chunk => { errors += chunk; });
+    t.after(async () => { if (guard.exitCode === null && guard.signalCode === null) guard.kill("SIGKILL"); docker("rm", "-fv", name); await delay(1200); rmSync(directory, { recursive: true, force: true }); });
+    const result = await new Promise(resolve => guard.once("exit", (code, signal) => resolve({ code, signal })));
+    guard.stdin.destroy();
+    assert.equal(result.code, 125, errors);
+    assert.equal(existsSync(path.join(directory, "operation")), false, "worker must not cross the start gate");
+    assert.equal(existsSync(path.join(directory, "state", ".active-operation")), false);
+    assert.notEqual(docker("inspect", name).status, 0);
   });
 
   test("a killed job controller stops the real exec and its isolated container", { timeout: 45000 }, async t => {

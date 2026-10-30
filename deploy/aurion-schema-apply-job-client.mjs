@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { closeSync, openSync, readFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -34,7 +34,9 @@ export async function runJobChild({ command, args, authorization = null, stdout 
   return cancelled ? 130 : (result.code ?? 125);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+let invokedAsMain = false;
+try { invokedAsMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(realpathSync(path.resolve(process.argv[1]))).href; } catch {}
+if (invokedAsMain) {
   const [, , expectedSha, planSha256] = process.argv;
   const workspace = process.env.GITHUB_WORKSPACE;
   if (process.argv.length !== 4 || !path.isAbsolute(workspace ?? "") || !/^[a-f0-9]{40}$/.test(expectedSha ?? "") || !/^[a-f0-9]{64}$/.test(planSha256 ?? "")) process.exit(64);

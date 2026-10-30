@@ -102,7 +102,7 @@ async function reap(pid, expectedStart, operation, fence) {
  * The injectable command/state directory are for the isolated regression
  * harness. The privileged CLI below supplies only fixed production paths.
  */
-export async function supervise({ command, args, stateDir }) {
+export async function supervise({ command, args, stateDir, reaperCommand = process.execPath }) {
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const directory = lstatSync(stateDir);
   if (!directory.isDirectory() || directory.uid !== process.getuid?.() || (directory.mode & 0o077) !== 0 || realpathSync(stateDir) !== stateDir) throw new Error("LIFECYCLE_STATE_DIRECTORY_UNSAFE");
@@ -115,19 +115,28 @@ export async function supervise({ command, args, stateDir }) {
     env: { ...process.env, AURION_SCHEMA_APPLY_OPERATION: operation },
     stdio: ["pipe", "inherit", "inherit"],
   });
-  if (!child.pid) throw new Error("LIFECYCLE_WORKER_START_FAILED");
+  child.on("error", () => {});
+  if (!child.pid) {
+    clearFence(fence, operation);
+    throw new Error("LIFECYCLE_WORKER_START_FAILED");
+  }
   const expectedStart = startTime(child.pid);
   if (expectedStart === null) throw new Error("LIFECYCLE_WORKER_IDENTITY_UNAVAILABLE");
-  const reaper = spawn(process.execPath, [self, "--reaper", String(child.pid), expectedStart, operation, fence], {
+  const reaper = spawn(reaperCommand, [self, "--reaper", String(child.pid), expectedStart, operation, fence], {
     detached: true, stdio: [0, "ignore", "ignore", "ipc"],
   });
   let cancelled = false;
   let stopping = false;
+  const sendReaper = message => {
+    if (reaper.connected) {
+      try { reaper.send(message, () => {}); } catch {}
+    }
+  };
   const abort = () => {
     if (stopping) return;
     cancelled = true;
     try { signalGroup(child.pid, expectedStart, "SIGTERM"); } catch {}
-    if (reaper.connected) reaper.send("abort");
+    sendReaper("abort");
   };
   process.stdin.on("data", abort);
   process.stdin.on("end", abort);
@@ -135,7 +144,10 @@ export async function supervise({ command, args, stateDir }) {
   process.stdin.resume();
   process.on("SIGINT", abort);
   process.on("SIGTERM", abort);
-  const reaperExit = new Promise(resolve => reaper.once("exit", (code, signal) => resolve({ code, signal })));
+  const reaperExit = new Promise(resolve => {
+    reaper.on("error", error => resolve({ code: null, signal: null, error: error.code }));
+    reaper.once("exit", (code, signal) => resolve({ code, signal }));
+  });
   const childExit = new Promise(resolve => child.once("exit", (code, signal) => resolve({ code, signal })));
   let fallbackCleanup = null;
   void reaperExit.then(result => {
@@ -158,7 +170,7 @@ export async function supervise({ command, args, stateDir }) {
     } catch { abort(); }
   }
   if (cancelled) {
-    if (reaper.connected) reaper.send("abort");
+    sendReaper("abort");
     stopping = true;
     const result = await reaperExit;
     if (fallbackCleanup || result.code !== 0) {
@@ -170,7 +182,7 @@ export async function supervise({ command, args, stateDir }) {
     return 125;
   }
   stopping = true;
-  if (reaper.connected) reaper.send("finished");
+  sendReaper("finished");
   const result = await reaperExit;
   if (result.code !== 0) {
     process.stdin.pause();
@@ -183,7 +195,9 @@ export async function supervise({ command, args, stateDir }) {
   return childResult.code ?? 125;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+let invokedAsMain = false;
+try { invokedAsMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(realpathSync(path.resolve(process.argv[1]))).href; } catch {}
+if (invokedAsMain) {
   if (process.argv[2] === "--reaper") {
     const [, , , pidText, expectedStart, operation, fence] = process.argv;
     if (!/^[1-9][0-9]*$/.test(pidText ?? "") || !/^[0-9]+$/.test(expectedStart ?? "") || !/^[a-f0-9]{32}$/.test(operation ?? "") || path.basename(fence ?? "") !== ".active-operation") process.exit(64);
