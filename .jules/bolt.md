@@ -40,3 +40,7 @@
 ## 2026-10-22 - Optimize Array Allocation and Matrix Lookups in Wolfram CAG Probes
 **Learning:** High-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity) suffer from garbage collection spikes when using `Map` lookups with string-concatenated keys or chained array methods like `.map().join()`. Using `Map` for grid coordinates forces O(N) string allocations and hash lookups.
 **Action:** Replace `Map` lookups and `Array.from()` with pre-allocated 2D arrays accessed via integer indices. Replace chained `.map().join()` operations with pre-allocated arrays populated via direct `for` loops or direct array instantiation for tuples.
+
+## 2026-10-30 - Optimize Array Allocation in Zone Intents Evaluation
+**Learning:** In high-frequency paths like `nextClientSequenceForUser` and `hasQueuedPlayerCombat` inside the game loop (`server/zoneRuntime.ts`), using array callback methods like `.filter(...).map(...)` and `.some(...)` creates intermediate array allocations and incurs callback overhead. This triggers garbage collection spikes which can affect tick latency.
+**Action:** Replaced array callback methods with simple `for` loops, iterating directly over `pendingIntents` to calculate minimums, maximums, or search for items, avoiding intermediate arrays and callback invocation overhead entirely.

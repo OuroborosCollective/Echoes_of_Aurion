@@ -343,7 +343,11 @@ export class AuthoritativeMovementZone {
     const previous = this.peersByEntityId.get(entityId);
     if (!previous && this.peers.size >= ZONE_MAX_PRESENCES) throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
-      this.pendingIntents = this.pendingIntents.filter(intent => intent.entityId !== entityId);
+      const retainedIntents: AurionZoneIntent[] = [];
+      for (let i = 0; i < this.pendingIntents.length; i++) {
+        if (this.pendingIntents[i].entityId !== entityId) retainedIntents.push(this.pendingIntents[i]);
+      }
+      this.pendingIntents = retainedIntents;
       this.peers.delete(previous.connectionId);
       this.peersByEntityId.delete(entityId);
       previous.socket.close(1000, "superseded by authenticated reconnect");
@@ -411,10 +415,17 @@ export class AuthoritativeMovementZone {
   recordedTick(tick: number) { return this.evidenceRecorder.getEntry(this.zoneId, tick); }
 
   nextClientSequenceForUser(userId: number): number {
-    const peer = this.peersByEntityId.get(`player:${userId}`);
+    const entityId = `player:${userId}`;
+    const peer = this.peersByEntityId.get(entityId);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
-    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
-      ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
+    let maxSeq = Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq);
+    for (let i = 0; i < this.pendingIntents.length; i++) {
+      const intent = this.pendingIntents[i];
+      if (intent.entityId === entityId && intent.clientSeq > maxSeq) {
+        maxSeq = intent.clientSeq;
+      }
+    }
+    return maxSeq + 1;
   }
 
   nextArrivalSequence(): number {
@@ -482,8 +493,11 @@ export class AuthoritativeMovementZone {
    * ruleset, so historical tick receipts are not reinterpreted.
    */
   private hasQueuedPlayerCombat(entityId: string): boolean {
-    return this.pendingIntents.some(intent =>
-      intent.entityId === entityId && (intent.type === "attack" || intent.type === "skill"));
+    for (let i = 0; i < this.pendingIntents.length; i++) {
+      const intent = this.pendingIntents[i];
+      if (intent.entityId === entityId && (intent.type === "attack" || intent.type === "skill")) return true;
+    }
+    return false;
   }
 
   submitAttack(connectionId: string, attack: ZoneAttack): AttackResult {
