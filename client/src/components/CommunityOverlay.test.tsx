@@ -4,8 +4,42 @@ import React from "react";
 import { describe, expect, it } from "vitest";
 import CommunityOverlay from "./CommunityOverlay";
 import { RealClientHarness } from "@/test/realClientHarness";
+import { getQueryKey } from "@trpc/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { trpc } from "@/lib/trpc";
+
+// Synthetic cache fixture; the real HTTP/browser boundary also runs in CI.
+function SelectedForumFixture() {
+  const cache = useQueryClient();
+  React.useEffect(() => {
+    cache.setQueryData(getQueryKey(trpc.community.forum.list, { category: "announcements" }, "query"), [
+      { id: "test-thread", title: "Vorherige Ankündigung", authorName: "Test", authorUserId: 1 },
+    ]);
+    cache.setQueryData(getQueryKey(trpc.community.forum.get, { threadId: "test-thread" }, "query"), {
+      id: "test-thread", title: "Vorherige Ankündigung", body: "Alter Threadinhalt", authorName: "Test", authorUserId: 1, replies: [],
+    });
+  }, [cache]);
+  return null;
+}
 
 describe("CommunityOverlay", () => {
+  it("opens issue reports from a selected thread and restores focus to the dock", async () => {
+    const user = userEvent.setup();
+    render(<RealClientHarness><SelectedForumFixture /><CommunityOverlay isAuthenticated /></RealClientHarness>);
+    await user.click(screen.getByRole("button", { name: "Forum öffnen" }));
+    await user.click(await screen.findByRole("button", { name: /Vorherige Ankündigung/ }));
+    expect(await screen.findByText("Alter Threadinhalt")).toBeTruthy();
+    const issues = screen.getByRole("button", { name: "Fehlerberichte öffnen" });
+    await user.click(issues);
+    const dialog = await screen.findByRole("dialog", { name: "Fehlerberichte" });
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+    expect(screen.queryByText("Alter Threadinhalt")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Fehler melden" })).toBeTruthy();
+    expect(issues.getAttribute("aria-pressed")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Community-Konsole schließen" }));
+    expect(document.activeElement).toBe(issues);
+  });
+
   it("offers only Aurion social/read-only areas and no gameplay economy controls", () => {
     render(<RealClientHarness><CommunityOverlay isAuthenticated={false} /></RealClientHarness>);
     expect(screen.getByRole("button", { name: "Forum öffnen" })).toBeTruthy();
