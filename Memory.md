@@ -5013,3 +5013,13 @@ Evidence: Codehead `19ecef6b0ff99bf36dbcb30c9b5a98c73c16226e`; [AIM-265-Lauf 408
 Zusätzlich: Die drei Offline-Hilfsdateien aus #1187 wurden ohne Runtime-Anbindung übernommen. [Kombinierter AIM-265-Lauf 40959613472](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/40959613472) bestand Typecheck und 108 Tests, einschließlich sechs Offline-Fällen, und meldete reale CAG-Canaries.
 Erkenntnis: Eine scheinbar kanonische Neusortierung ändert bestehende Request-/Result-Hashes und benötigt eine ausdrücklich versionierte Migration; sie darf nicht durch die Optimierung eingeführt werden.
 Offen: Exact-Head-CI und Merge-Readback; keine Aussage über produktive Geschwindigkeit oder Spieländerungen.
+
+### 2026-10-30 — G22 native mobile HUD projection
+Status: PARTIAL
+Task: Integrate a compact Obsidian & Aurum Godot HUD with existing touch, target and Aurion v5 paths.
+Decisions: Present validated zone records only; preserve desktop presentation, the existing joystick and canonical attack command. Missing quest/equipment data is not invented.
+Touched surfaces: Godot presentation and touch routing; HUD, gateway, render and Android CI evidence paths; no gameplay, persistence or tick ownership changes.
+Evidence: Local Godot 4.7.2 (`8d106cbe6144c2dc7e881d61d2429c1a8a76e6b22ef48bd5e48dcf934953f71e`) passed synthetic HUD, G20/G21, projection, session and startup regressions, including an isolated local WebSocket attack. The actor test needs its prepared asset manifest.
+Learned: v5 supplies confirmed combatants and targets but the native client has no confirmed quest/equipped-skill UI readback.
+Open: Exact-head CI, isolated Aurion gateway, rendered viewport, Android APK and physical tablet/live acceptance remain separate.
+Next safe step: Read exact-head workflow and artifact evidence; do not merge on missing or failed gates.

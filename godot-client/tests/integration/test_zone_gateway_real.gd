@@ -13,6 +13,7 @@ var captured_ms := 0
 
 var failures: Array[String] = []
 var transport: Node
+var hud: Control
 var connected_count := 0
 var snapshot_count := 0
 var accepted_movement := false
@@ -30,11 +31,13 @@ func _on_welcome(welcome: Dictionary) -> void:
 	_require(world.apply_welcome(welcome), "projection rejected actual welcome")
 	_require(registry.sync(world), "registry rejected actual welcome")
 	_require(visual.capture(world, Time.get_ticks_msec()), "interpolator rejected actual welcome")
+	_check_hud_projection()
 
 func _on_snapshot(snapshot: Dictionary) -> void:
 	snapshot_count += 1
 	_require(world.apply_snapshot(snapshot), "projection rejected actual snapshot")
 	_require(registry.sync(world), "registry rejected actual snapshot")
+	_check_hud_projection()
 	captured_ms = Time.get_ticks_msec()
 	_require(visual.capture(world, captured_ms), "interpolator rejected actual snapshot")
 	for presence in snapshot.get("presences", []):
@@ -73,6 +76,18 @@ func _require(ok: bool, message: String) -> void:
 	if not ok:
 		failures.append(message)
 
+func _check_hud_projection() -> void:
+	# The actual gateway is isolated CI, not the production server. The HUD
+	# reads its validated state via the same registry used by the game scene.
+	hud.render_projection(world, registry, "", false, false, "")
+	_require(hud.player_name.text.begins_with("Spieler: " + world.self_entity_id()), "HUD lost actual gateway player identity")
+	var self_record: Dictionary = registry.record("combatants", world.self_entity_id())
+	if self_record.is_empty():
+		_require(hud.health_label.text == "HP: —" and not hud.health_bar.visible, "HUD invented absent gateway HP")
+	else:
+		var expected := "HP %d / %d" % [int(self_record["health"]), int(self_record["maxHealth"])]
+		_require(hud.health_label.text == expected and hud.health_bar.visible, "HUD diverged from actual gateway HP")
+
 func _verify() -> void:
 	var url := OS.get_environment("AURION_G13_TEST_WS_URL")
 	var ticket := OS.get_environment("AURION_G13_TEST_TICKET")
@@ -83,6 +98,9 @@ func _verify() -> void:
 	if not failures.is_empty():
 		_fail()
 		return
+	hud = (load("res://ui/screens/hud.tscn") as PackedScene).instantiate()
+	root.add_child(hud)
+	await process_frame
 	transport = Socket.new()
 	root.add_child(transport)
 	await process_frame
@@ -131,6 +149,7 @@ func _verify() -> void:
 	await process_frame
 	if failures.is_empty():
 		print("G11_CONFIRMED_PROJECTION=" + JSON.stringify(confirmed_receipt))
+		print("G22_REAL_ISOLATED_AURION_HUD_PROJECTION_PASS")
 		print("G13_REAL_AURION_GATEWAY_GODOT_PASS")
 		quit(0)
 	else:

@@ -1,0 +1,56 @@
+name: Godot HUD with isolated Aurion gateway
+on:
+  pull_request:
+    paths:
+      - 'godot-client/**'
+      - 'scripts/godot/**'
+      - 'server/zoneGateway.godot.e2e.test.ts'
+      - '.github/workflows/godot-hud-gateway.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'godot-client/**'
+      - 'scripts/godot/**'
+      - 'server/zoneGateway.godot.e2e.test.ts'
+      - '.github/workflows/godot-hud-gateway.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gateway:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-classless-test
+          MARIADB_DATABASE: aurion_classless_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-classless-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-classless-test@127.0.0.1:3306/aurion_classless_test
+      AURION_CLASSLESS_E2E: '1'
+      AURION_G13_GODOT_E2E: '1'
+      NODE_ENV: test
+      JWT_SECRET: aurion-disposable-local-pack-signing-key-never-production
+      VITE_APP_ID: aurion-local-pack-isolated-regression
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies and pinned Godot
+        run: |
+          pnpm install --frozen-lockfile
+          node scripts/godot/bootstrap.mjs
+      - name: Apply migrations to disposable database
+        run: pnpm exec drizzle-kit migrate
+      - name: Project actual isolated gateway state in Godot HUD
+        run: pnpm exec vitest run server/zoneGateway.godot.e2e.test.ts --reporter=verbose

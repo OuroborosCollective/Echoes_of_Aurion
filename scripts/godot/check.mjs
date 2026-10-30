@@ -58,6 +58,7 @@ for (const [id, script, marker] of [
   ['movement-input', 'test_movement_input.gd', 'Godot G20 native input and bounded move-intent regression verified (headless fixture only)'],
   ['multitouch-routing', 'test_multitouch_routing.gd', 'Godot G21 multitouch routing and confirmed-position camera orbit verified (headless fixture only)'],
   ['g21-target-action', 'test_g21_target_action.gd', 'G21 target UI and canonical attack over isolated local WebSocket verified (fixture, not live Aurion)'],
+  ['g22-native-hud', 'test_hud_projection.gd', 'G22_NATIVE_HUD_PROJECTION_TOUCH_PASS (synthetic fixtures; no physical device)'],
   ['technical-diagnostics', 'test_technical_diagnostics.gd', 'Godot G43 safe technical diagnostics verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
