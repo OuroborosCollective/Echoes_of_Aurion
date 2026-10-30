@@ -145,23 +145,34 @@ visible = false
 layout_mode = 0
 theme_override_styles/panel = SubResource("Panel")
 
-[node name="Content" type="VBoxContainer" parent="MenuPanel"]
+[node name="Scroll" type="ScrollContainer" parent="MenuPanel"]
 layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="MenuPanel/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="Diagnostics" type="Button" parent="MenuPanel/Content"]
+[node name="Diagnostics" type="Button" parent="MenuPanel/Scroll/Content"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Karte & Diagnose"
 
-[node name="QuestAvailability" type="Label" parent="MenuPanel/Content"]
+[node name="QuestAvailability" type="Label" parent="MenuPanel/Scroll/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Questdaten nicht verfügbar"
 autowrap_mode = 3
 
-[node name="Close" type="Button" parent="MenuPanel/Content"]
+[node name="WorldStudio" type="Button" parent="MenuPanel/Scroll/Content"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Weltstudio (Admin)"
+
+[node name="Close" type="Button" parent="MenuPanel/Scroll/Content"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16

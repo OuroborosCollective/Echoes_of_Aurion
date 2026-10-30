@@ -22,6 +22,7 @@ const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
 const WorldDesignProjection = preload("res://world/world_design_projection.gd")
 const WorldAssetApi = preload("res://net/api/world_asset_api.gd")
+const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
 const InputAdapter = preload("res://app/input_adapter.gd")
 const TouchRouter = preload("res://ui/mobile/touch_router.gd")
@@ -78,6 +79,7 @@ var _chunk_api: Node
 var _world_design_api: Node
 var _world_asset_api: Node
 var _world_design_visuals: Node3D
+var _world_studio: Control
 var _world_design_readback: Dictionary = {}
 var _world_design_surfaces: Dictionary = {}
 var _world_design_last_poll_ms := -1
@@ -178,6 +180,11 @@ func _ready() -> void:
 	_world_design_visuals = WorldDesignProjection.new()
 	_world_design_visuals.name = "WorldDesignVisuals"
 	world_actors.get_parent().add_child(_world_design_visuals)
+	_world_studio = WorldStudio.new()
+	_world_studio.name = "WorldStudio"
+	add_child(_world_studio)
+	_world_studio.confirmed_world.connect(_on_world_studio_readback)
+	_world_studio.closed.connect(_restore_mobile_joystick)
 	_chunk_api = ChunkSurfaceApi.new(_auth_start)
 	add_child(_chunk_api)
 	_chunk_api.surface_ready.connect(_on_chunk_surface_ready)
@@ -207,9 +214,16 @@ func _ready() -> void:
 	world_action.pressed.connect(_on_world_action_pressed)
 	mobile_hud.attack_requested.connect(_on_world_action_pressed)
 	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
+	mobile_hud.world_studio_requested.connect(_open_world_studio)
 	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
 	mobile_hud.exit_requested.connect(_on_mobile_exit_requested)
 	mobile_hud.exit_confirmation.canceled.connect(_restore_mobile_joystick)
+	var studio_button := Button.new()
+	studio_button.name = "WorldStudioButton"
+	studio_button.text = "Weltstudio (Admin)"
+	studio_button.custom_minimum_size.y = 48
+	studio_button.pressed.connect(_open_world_studio)
+	$WorldHUD/WorldBar.add_child(studio_button)
 	if _mobile_hud_enabled:
 		get_tree().set_quit_on_go_back(false)
 	login.disabled = true
@@ -323,6 +337,8 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 
 func _reset_projection() -> void:
 	# An old HTTP completion/actor must not survive a new authenticated zone.
+	if _world_studio != null:
+		_world_studio.close_session()
 	if _appearance_api != null:
 		_appearance_api.cancel()
 	if _remote_api != null:
@@ -497,6 +513,7 @@ func _on_zone_connected() -> void:
 	login.text = "Verbunden"
 	login.disabled = true
 	_show_3d()
+	_world_studio.configure(_auth_start, _config.server_base_url, _confirmed_zone.connection_id())
 	# The authenticated optional reader cannot invalidate the v5 zone transport.
 	if _appearance_api != null and not _appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id()):
 		_appearance_diagnostic = "Erscheinung derzeit nicht abrufbar"
@@ -666,9 +683,13 @@ func _on_mobile_menu_changed(open: bool) -> void:
 
 func _restore_mobile_joystick() -> void:
 	if _mobile_hud_enabled:
-		mobile_joystick.visible = world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible
+		mobile_joystick.visible = world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible
 
 func _handle_mobile_back() -> void:
+	if _world_studio.visible:
+		_world_studio._close_requested()
+		_restore_mobile_joystick()
+		return
 	if mobile_hud.close_transient():
 		_restore_mobile_joystick()
 		return
@@ -691,7 +712,26 @@ func _on_mobile_exit_requested() -> void:
 ## G21: camera-only gestures never send move/attack or alter confirmed state.
 ## The existing G20 joystick still exclusively owns its own finger index.
 func _world_input_permitted() -> bool:
-	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
+	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and not _world_studio.visible and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
+
+func _open_world_studio() -> void:
+	if not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended() or _world_is_stale or not _auth_start.protected_response_allowed():
+		return
+	_camera_router.cancel()
+	_cancel_move_intent()
+	_world_studio.open_studio()
+	_restore_mobile_joystick()
+
+func _on_world_studio_readback(readback: Dictionary, connection: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended() or _world_is_stale:
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation:
+		return
+	# An older polling GET must not overwrite this later independent readback.
+	_world_design_api.cancel()
+	_world_design_last_poll_ms = Time.get_ticks_msec()
+	_world_design_readback = readback.duplicate(true)
+	_sync_world_design()
 
 func _camera_exclusions() -> Array[Rect2]:
 	var blocked: Array[Rect2] = []

@@ -81,6 +81,11 @@ func verify() -> void:
 		for control: Control in [hud.player, hud.target, hud.menu_button, hud.attack_button]:
 			var rect: Rect2 = control.get_global_rect()
 			require(safe.encloses(rect), "HUD outside safe area at %s: %s" % [viewport, control.name])
+		hud.set_menu_open(true)
+		await process_frame
+		require(safe.encloses(hud.menu_panel.get_global_rect()), "scrollable menu outside safe area at %s" % viewport)
+		require(hud.get_node("MenuPanel/Scroll/Content/WorldStudio").custom_minimum_size.y >= 48.0, "world studio touch target too small")
+		hud.set_menu_open(false)
 		require(not hud.player.get_global_rect().intersects(hud.target.get_global_rect()), "player and target overlap at %s" % viewport)
 		require(not hud.menu_button.get_global_rect().intersects(hud.target.get_global_rect()), "menu and target overlap at %s" % viewport)
 		for label: Label in [hud.health_label, hud.stamina_label, hud.connection, hud.target_health]:
