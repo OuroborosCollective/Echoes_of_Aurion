@@ -281,6 +281,8 @@ func _on_auth_start_failed(error_code: String) -> void:
 	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 	if error_code == "NATIVE_AUTH_BUILD_UNSUPPORTED":
 		status.text = "Client-Aktualisierung erforderlich"
+	elif error_code == "NATIVE_AUTH_TRANSACTION_INVALID":
+		status.text = "Anmeldeversuch ungültig oder abgelaufen – bitte erneut anmelden"
 	else:
 		status.text = "Anmeldung derzeit nicht verfügbar"
 
@@ -600,7 +602,7 @@ func _on_auth_logout_terminal(_error_code: String = "") -> void:
 	login.text = "Anmelden"
 	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 
-func _on_auth_session_failed(_error_code: String) -> void:
+func _on_auth_session_failed(error_code: String) -> void:
 	_lifecycle.cancel_restore()
 	_ticket_abandoned = true
 	_ticket_pending = false
@@ -609,6 +611,8 @@ func _on_auth_session_failed(_error_code: String) -> void:
 	_zone_socket.close_zone()
 	_awaiting_callback = false
 	status.text = "Anmeldung derzeit nicht verfügbar"
+	if error_code in ["NATIVE_AUTH_TRANSACTION_INVALID", "NATIVE_AUTH_CODE_EXPIRED", "NATIVE_AUTH_CODE_CONSUMED"]:
+		status.text = "Anmelderückgabe ungültig oder abgelaufen – bitte erneut anmelden"
 	login.text = "Anmelden"
 	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 
@@ -1578,3 +1582,4 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	_chunk_diagnostic = "" if village_ok else starter_village_visuals.diagnostic
 	_update_3d_status()
 	return true
+
