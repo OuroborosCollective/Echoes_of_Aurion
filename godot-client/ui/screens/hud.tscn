@@ -1,0 +1,185 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/hud.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="Panel"]
+bg_color = Color(0.035, 0.07, 0.075, 0.94)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.69, 0.53, 0.25, 0.9)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="Button"]
+bg_color = Color(0.045, 0.09, 0.095, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8, 0.63, 0.29, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_left = 16
+corner_radius_bottom_right = 16
+
+[sub_resource type="StyleBoxFlat" id="Attack"]
+bg_color = Color(0.68, 0.19, 0.09, 0.97)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.9, 0.69, 0.32, 1)
+corner_radius_top_left = 48
+corner_radius_top_right = 48
+corner_radius_bottom_left = 48
+corner_radius_bottom_right = 48
+
+[sub_resource type="StyleBoxFlat" id="Health"]
+bg_color = Color(0.04, 0.75, 0.49, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_left = 5
+corner_radius_bottom_right = 5
+
+[node name="MobileHUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="Player" type="PanelContainer" parent="."]
+layout_mode = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Panel")
+
+[node name="Content" type="VBoxContainer" parent="Player"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="PlayerName" type="Label" parent="Player/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.91, 0.77, 1)
+theme_override_font_sizes/font_size = 16
+clip_text = true
+text = "Spieler: —"
+
+[node name="HealthLabel" type="Label" parent="Player/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+clip_text = true
+text = "HP: —"
+
+[node name="HealthBar" type="ProgressBar" parent="Player/Content"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+theme_override_styles/fill = SubResource("Health")
+show_percentage = false
+
+[node name="StaminaLabel" type="Label" parent="Player/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+clip_text = true
+text = "Ausdauer: —"
+
+[node name="Connection" type="Label" parent="Player/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.88, 0.76, 1)
+theme_override_font_sizes/font_size = 16
+clip_text = true
+text = "Nicht verbunden"
+
+[node name="Target" type="PanelContainer" parent="."]
+layout_mode = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Panel")
+
+[node name="Content" type="VBoxContainer" parent="Target"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TargetName" type="Label" parent="Target/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.83, 0.52, 1)
+theme_override_font_sizes/font_size = 16
+clip_text = true
+text = "Ziel: keines"
+
+[node name="TargetHealth" type="Label" parent="Target/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+clip_text = true
+text = ""
+
+[node name="MenuButton" type="Button" parent="."]
+layout_mode = 0
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("Button")
+theme_override_styles/hover = SubResource("Button")
+theme_override_styles/pressed = SubResource("Button")
+text = "MENÜ"
+
+[node name="AttackButton" type="Button" parent="."]
+layout_mode = 0
+disabled = true
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("Attack")
+theme_override_styles/hover = SubResource("Attack")
+theme_override_styles/pressed = SubResource("Attack")
+text = "ANGRIFF"
+
+[node name="MenuPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 0
+theme_override_styles/panel = SubResource("Panel")
+
+[node name="Content" type="VBoxContainer" parent="MenuPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Diagnostics" type="Button" parent="MenuPanel/Content"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Karte & Diagnose"
+
+[node name="QuestAvailability" type="Label" parent="MenuPanel/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Questdaten nicht verfügbar"
+autowrap_mode = 3
+
+[node name="Close" type="Button" parent="MenuPanel/Content"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Schließen"
+
+[node name="Notice" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Panel")
+
+[node name="Text" type="Label" parent="Notice"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+clip_text = true
+horizontal_alignment = 1
+
+[node name="ExitConfirmation" type="ConfirmationDialog" parent="."]
+title = "Sitzung verlassen?"
+dialog_text = "Möchtest du das Spiel verlassen?"
+ok_button_text = "Verlassen"

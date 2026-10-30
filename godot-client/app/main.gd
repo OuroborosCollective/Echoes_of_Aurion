@@ -51,6 +51,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var quest_npc_root: Node3D = %QuestNPCs
 @onready var live_3d_viewport: SubViewport = $WorldView/Live3D
 @onready var mobile_joystick: Control = $MobileJoystick
+@onready var mobile_hud: Control = $MobileHUD
 @onready var world_camera: Camera3D = %WorldCamera
 @onready var target_hud: Control = $TargetHUD
 @onready var target_label: Label = %TargetLabel
@@ -65,6 +66,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 var _diagnostics = TechnicalDiagnostics.new()
 var _movement = InputAdapter.new()
 var _camera_router = TouchRouter.new()
+var _mobile_hud_enabled := OS.has_feature("mobile")
 var _selected_target_id := ""
 var _config: Dictionary
 var _auth_start: Node
@@ -181,6 +183,13 @@ func _ready() -> void:
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	world_toggle.pressed.connect(_toggle_world_diagnostics)
 	world_action.pressed.connect(_on_world_action_pressed)
+	mobile_hud.attack_requested.connect(_on_world_action_pressed)
+	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
+	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
+	mobile_hud.exit_requested.connect(_on_mobile_exit_requested)
+	mobile_hud.exit_confirmation.canceled.connect(_restore_mobile_joystick)
+	if _mobile_hud_enabled:
+		get_tree().set_quit_on_go_back(false)
 	login.disabled = true
 	if not _configuration_valid():
 		status.text = "Konfiguration ungültig"
@@ -329,6 +338,8 @@ func _reset_projection() -> void:
 	_camera_router.cancel()
 	_selected_target_id = ""
 	target_hud.visible = false
+	mobile_hud.reset()
+	mobile_hud.visible = false
 	target_label.text = "Ziel: keines"
 	world_action.disabled = true
 	world_view.visible = false
@@ -463,6 +474,9 @@ func _on_zone_rejected(code: String) -> void:
 	# Command-level rejection is recoverable after a verified welcome.
 	if _zone_socket.state_name() == "connected":
 		status.text = "Sicher mit Aurion verbunden"
+		combat_notice.text = "Aktion abgelehnt · " + code
+		combat_notice.visible = true
+		_combat_notice_expires_at_ms = Time.get_ticks_msec() + COMBAT_NOTICE_DURATION_MS
 		return
 	_zone_reject_code = code
 	status.text = "Zonenverbindung abgelehnt"
@@ -551,6 +565,8 @@ func _notification(what: int) -> void:
 		_on_app_suspended()
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
 		_on_app_resumed()
+	elif what == NOTIFICATION_WM_GO_BACK_REQUEST and _mobile_hud_enabled and is_node_ready():
+		_handle_mobile_back()
 
 func _process(_delta: float) -> void:
 	var now_ms := Time.get_ticks_msec()
@@ -575,12 +591,14 @@ func _process(_delta: float) -> void:
 ## explicitly unassigned presentation; it is not Aurion world geometry.
 func _show_3d() -> void:
 	world_view.visible = true
-	world_hud.visible = true
-	target_hud.visible = true
+	world_hud.visible = not _mobile_hud_enabled
+	target_hud.visible = not _mobile_hud_enabled
+	mobile_hud.visible = _mobile_hud_enabled
 	mobile_joystick.visible = true
-	_refresh_target_hud()
 	$SafeMargin.visible = false
 	world_toggle.text = "Diagnose"
+	_fit_layout()
+	_refresh_target_hud()
 	_update_3d_status()
 
 func _toggle_world_diagnostics() -> void:
@@ -588,17 +606,50 @@ func _toggle_world_diagnostics() -> void:
 		return
 	$SafeMargin.visible = not $SafeMargin.visible
 	mobile_joystick.visible = not $SafeMargin.visible
-	target_hud.visible = not $SafeMargin.visible
+	target_hud.visible = not $SafeMargin.visible and not _mobile_hud_enabled
+	if _mobile_hud_enabled:
+		mobile_hud.visible = not $SafeMargin.visible
+		world_hud.visible = $SafeMargin.visible
+		mobile_hud.set_menu_open(false)
 	_camera_router.cancel()
 	if $SafeMargin.visible:
 		_cancel_move_intent()
 	world_toggle.text = "3D-Ansicht" if $SafeMargin.visible else "Diagnose"
 
+func _on_mobile_menu_changed(open: bool) -> void:
+	if open:
+		_camera_router.cancel()
+		_cancel_move_intent()
+	_restore_mobile_joystick()
+
+func _restore_mobile_joystick() -> void:
+	if _mobile_hud_enabled:
+		mobile_joystick.visible = world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible
+
+func _handle_mobile_back() -> void:
+	if mobile_hud.close_transient():
+		_restore_mobile_joystick()
+		return
+	if world_view.visible and $SafeMargin.visible:
+		_toggle_world_diagnostics()
+		return
+	if world_view.visible:
+		_camera_router.cancel()
+		_cancel_move_intent()
+		mobile_hud.request_exit_confirmation()
+		_restore_mobile_joystick()
+	else:
+		get_tree().quit()
+
+func _on_mobile_exit_requested() -> void:
+	_cancel_move_intent()
+	get_tree().quit()
+
 
 ## G21: camera-only gestures never send move/attack or alter confirmed state.
 ## The existing G20 joystick still exclusively owns its own finger index.
 func _world_input_permitted() -> bool:
-	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible
+	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
 
 func _camera_exclusions() -> Array[Rect2]:
 	var blocked: Array[Rect2] = []
@@ -608,6 +659,8 @@ func _camera_exclusions() -> Array[Rect2]:
 		blocked.append(world_hud.get_global_rect())
 	if target_hud.visible:
 		blocked.append(target_hud.get_global_rect())
+	if mobile_hud.visible:
+		blocked.append_array(mobile_hud.touch_exclusions())
 	return blocked
 
 func _input(event: InputEvent) -> void:
@@ -669,6 +722,8 @@ func _refresh_target_hud() -> void:
 	target_label.text = "Ziel: keines" if _selected_target_id.is_empty() else "Aurion bestätigt · " + _selected_target_id
 	var mob: Dictionary = _entities.record("mobs", _selected_target_id)
 	world_action.disabled = not _world_input_permitted() or mob.is_empty() or mob.get("state", "dead") == "dead"
+	if mobile_hud.visible:
+		mobile_hud.render_projection(_confirmed_zone, _entities, _selected_target_id, _world_is_stale, not world_action.disabled, combat_notice.text if combat_notice.visible else "")
 
 func _on_world_action_pressed() -> void:
 	# Only the existing v5 send_attack typed command; Aurion decides all
@@ -687,7 +742,7 @@ func _poll_move_intent(now_ms: int) -> void:
 	if _zone_socket == null:
 		return
 	var connected: bool = _zone_socket.state_name() == "connected"
-	var permitted: bool = connected and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible
+	var permitted: bool = _world_input_permitted()
 	if not permitted:
 		_movement.cancel(_zone_socket, connected)
 		return
@@ -1041,7 +1096,32 @@ func _fit_layout() -> void:
 	_cancel_move_intent()
 	card.custom_minimum_size.x = minf(600.0, maxf(240.0, size.x - 48.0))
 	title.add_theme_font_size_override("font_size", 32 if size.x < 600 else 44)
+	if _mobile_hud_enabled:
+		var safe := _mobile_safe_rect()
+		var density := clampf(float(DisplayServer.screen_get_dpi()) / 160.0, 1.0, 2.0) if OS.has_feature("mobile") else 1.0
+		mobile_hud.fit_layout(size, safe, density)
+		mobile_hud.style_joystick(mobile_joystick)
+		var joystick_scale := clampf(safe.size.y / 800.0, 0.5, 1.0)
+		mobile_joystick.scale = Vector2.ONE * joystick_scale
+		mobile_joystick.offset_left = safe.position.x + 16.0 * density
+		mobile_joystick.offset_right = mobile_joystick.offset_left + 220.0
+		mobile_joystick.offset_top = safe.end.y - size.y - 16.0 * density - 220.0 * joystick_scale
+		mobile_joystick.offset_bottom = mobile_joystick.offset_top + 220.0
 	queue_redraw()
+
+func _mobile_safe_rect() -> Rect2:
+	var fallback := Rect2(Vector2.ZERO, size)
+	if not OS.has_feature("mobile"):
+		return fallback
+	var window_size := Vector2(DisplayServer.window_get_size())
+	if window_size.x <= 0.0 or window_size.y <= 0.0:
+		return fallback
+	var window_rect := Rect2(Vector2(DisplayServer.window_get_position()), window_size)
+	var display_safe := Rect2(DisplayServer.get_display_safe_area())
+	var intersection := window_rect.intersection(display_safe)
+	if intersection.size.x <= 0.0 or intersection.size.y <= 0.0:
+		return fallback
+	return Rect2((intersection.position - window_rect.position) * size / window_size, intersection.size * size / window_size)
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color("07131c"))
