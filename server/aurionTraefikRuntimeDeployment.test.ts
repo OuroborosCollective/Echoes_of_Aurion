@@ -96,7 +96,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(hostedImageBuilder).toContain('process.env.RUNNER_ENVIRONMENT !== "github-hosted"');
     expect(hostedImageBuilder).toContain('["build", "--pull=false", "--platform=linux/amd64"');
     expect(workflow).toContain('python3 dist-traefik-runtime/deploy/load-aurion-runtime-image.py dist-traefik-runtime "$GITHUB_SHA"');
-    expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
+    expect(hostedImageBuilder).toContain('"--build-arg", `AURION_RELEASE_SHA=${revision}`');
+    expect(workflow).toContain('AURION_RELEASE_SHA: ${{ github.sha }}');
     expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
     expect(workflow).toContain('runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"');
     expect(workflow).toContain("aurion-runtime-container-verify failed state=%s health=%s category=%s");
