@@ -34,6 +34,7 @@ jobs:
       DATABASE_URL: mysql://root:aurion-disposable-classless-test@127.0.0.1:3306/aurion_classless_test
       AURION_CLASSLESS_E2E: '1'
       AURION_G13_GODOT_E2E: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       NODE_ENV: test
       JWT_SECRET: aurion-disposable-local-pack-signing-key-never-production
       VITE_APP_ID: aurion-local-pack-isolated-regression
@@ -41,6 +42,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind tested source revision
+        run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

@@ -83,6 +83,9 @@ func verify() -> void:
 			require(safe.encloses(rect), "HUD outside safe area at %s: %s" % [viewport, control.name])
 		require(not hud.player.get_global_rect().intersects(hud.target.get_global_rect()), "player and target overlap at %s" % viewport)
 		require(not hud.menu_button.get_global_rect().intersects(hud.target.get_global_rect()), "menu and target overlap at %s" % viewport)
+		for label: Label in [hud.health_label, hud.stamina_label, hud.connection, hud.target_health]:
+			var width: float = label.get_theme_font("font").get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x
+			require(width <= label.size.x, "confirmed value text clipped at %s: %s" % [viewport, label.text])
 		require(hud.attack_button.size.x >= 48.0 and hud.attack_button.size.y >= 48.0, "attack touch target too small")
 	root.size = Vector2i(1340, 800)
 	await process_frame

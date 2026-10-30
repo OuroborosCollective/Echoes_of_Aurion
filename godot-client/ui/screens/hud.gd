@@ -115,15 +115,25 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 	var player_width := minf(330.0 * scale_factor, card_space * 0.52)
 	var target_width := minf(260.0 * scale_factor, card_space - player_width)
 	var top := safe.position.y + margin
-	_place(player, Rect2(safe.position.x + margin, top, player_width, 110.0 * scale_factor))
+	var player_height := 126.0 * scale_factor
+	var target_top := top
+	if safe.size.x < 520.0 * scale_factor:
+		# On narrow portrait windows the cards share a column instead of
+		# truncating confirmed values into two unusably thin columns.
+		player_width = minf(330.0 * scale_factor, usable_width - menu_width - 8.0 * scale_factor)
+		target_width = player_width
+		target_top = top + player_height + 8.0 * scale_factor
+	_place(player, Rect2(safe.position.x + margin, top, player_width, player_height))
 	_place(menu_button, Rect2(safe.end.x - margin - menu_width, top, menu_width, 48.0 * scale_factor))
-	_place(target, Rect2(safe.end.x - margin - menu_width - 8.0 * scale_factor - target_width, top, target_width, 60.0 * scale_factor))
-	var action_size := clampf(safe.size.y * 0.12, 64.0 * scale_factor, 96.0 * scale_factor)
+	var target_left := safe.position.x + margin if target_top != top else safe.end.x - margin - menu_width - 8.0 * scale_factor - target_width
+	_place(target, Rect2(target_left, target_top, target_width, 60.0 * scale_factor))
+	var action_size := clampf(safe.size.y * 0.12, 80.0 * scale_factor, 96.0 * scale_factor)
 	_place(attack_button, Rect2(safe.end.x - margin - action_size, safe.end.y - margin - action_size, action_size, action_size))
 	var menu_panel_width := minf(240.0 * scale_factor, usable_width)
 	_place(menu_panel, Rect2(safe.end.x - margin - menu_panel_width, top + 56.0 * scale_factor, menu_panel_width, 155.0 * scale_factor))
 	var notice_width := minf(360.0 * scale_factor, usable_width * 0.55)
-	_place(notice, Rect2(safe.position.x + (safe.size.x - notice_width) * 0.5, top + 120.0 * scale_factor, notice_width, 40.0 * scale_factor))
+	var notice_top := target_top + 68.0 * scale_factor if target_top != top else top + player_height + 8.0 * scale_factor
+	_place(notice, Rect2(safe.position.x + (safe.size.x - notice_width) * 0.5, notice_top, notice_width, 40.0 * scale_factor))
 
 func _place(control: Control, rect: Rect2) -> void:
 	control.position = rect.position
