@@ -10,6 +10,7 @@
       * [Evidence — Godot gegenüber Unity](docs/godot-migration/evidence/engine-comparison.md)
     * [Netzwerkvertrag — HTTPS, JSON und WSS](docs/godot-migration/network-contract.md)
     * [Godot-Arbeitsplatz](docs/godot-migration/workspace.md)
+    * [Godot-Weltentwürfe mit Aurion prüfen](docs/godot-migration/world-authoring.md)
     * [Originalmodelle für die Godot-3D-Spielwelt](docs/godot-migration/asset-compatibility.md)
     * [Aurion Preview auf dem Tab A9](docs/godot-migration/install-tab-a9.md)
     * [Native Anmeldung — Entscheidung und Übergabe](docs/godot-migration/native-auth-decision.md)

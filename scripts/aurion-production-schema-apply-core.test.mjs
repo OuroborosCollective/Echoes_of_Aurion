@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -46,4 +46,25 @@ test("bounded MariaDB-dump command terminates a hung dump with timeout status", 
     ]),
     error => error?.code === 124,
   );
+});
+
+test("cleanup failure preserves the first stage and exit status in an isolated shell", () => {
+  const start = core.indexOf("on_exit() {");
+  const end = core.indexOf("\ntrap on_exit EXIT", start);
+  assert.ok(start >= 0 && end > start);
+  const onExit = core.slice(start, end);
+  for (const [initialStatus, expectedStatus, expectedPhase] of [[73, 73, "REPAIR_REHEARSAL_FAILED"], [0, 70, "RECOVERY_CLEANUP_FAILED"]]) {
+    const script = `phase=REPAIR_REHEARSAL_FAILED
+receipt_emitted=0
+recovery_cleanup_failed=false
+apply_raw=''
+cleanup_recovery() { return 1; }
+emit_failure() { printf '%s|%s|%s' "$phase" "$1" "$recovery_cleanup_failed"; }
+${onExit}
+trap on_exit EXIT
+exit ${initialStatus}`;
+    const result = spawnSync("bash", ["-c", script], { encoding: "utf8" });
+    assert.equal(result.status, expectedStatus);
+    assert.equal(result.stdout, `${expectedPhase}|${expectedStatus}|true`);
+  }
 });

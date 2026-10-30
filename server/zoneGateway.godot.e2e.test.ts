@@ -135,6 +135,7 @@ async function runActualGodot(url: string, ticket: string, entityId: string): Pr
   expect(sanitized).not.toContain("aurion_zone_");
   expect(output.code, "G13_GODOT_PROCESS_FAILED: " + sanitized.slice(-4_000)).toBe(0);
   expect(sanitized).toContain("G13_REAL_AURION_GATEWAY_GODOT_PASS");
+  expect(sanitized).toContain("G22_REAL_ISOLATED_AURION_HUD_PROJECTION_PASS");
   expect(sanitized).not.toMatch(/SCRIPT ERROR:|\bERROR:/);
   const receipts = sanitized.split("\n").filter(line => line.startsWith("G11_CONFIRMED_PROJECTION="));
   expect(receipts, "G11_MISSING_OR_DUPLICATE_PROJECTION_RECEIPT").toHaveLength(1);

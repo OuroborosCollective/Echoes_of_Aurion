@@ -8,6 +8,7 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), "u
 describe("Aurion production schema apply boundary", () => {
   const runner = read("deploy/aurion-production-schema-apply");
   const core = read("deploy/aurion-production-schema-apply-core");
+  const restore = read("deploy/aurion-schema-restore");
   const installer = read("deploy/install-aurion-production-schema-apply");
   const verifier = read("deploy/verify-aurion-production-schema-apply-artifact.mjs");
   const builder = read("scripts/build-aurion-production-apply-artifact.mjs");
@@ -56,7 +57,7 @@ describe("Aurion production schema apply boundary", () => {
 
   it("backs up and restores in a network-isolated disposable database before apply", () => {
     expect(core).toContain("--single-transaction --quick --skip-lock-tables --routines --events --triggers --add-drop-database --databases");
-    expect(core).toContain("gzip -t");
+    expect(restore).toContain("gzip -t");
     expect(core).toContain("--network none");
     expect(core).toContain("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1");
     expect(core).toContain("RECOVERY_PROOF_MISMATCH");
@@ -69,10 +70,15 @@ describe("Aurion production schema apply boundary", () => {
     expect(core).toContain('case "$(cat /proc/1/comm)" in');
     expect(core).toContain("mariadbd|mysqld");
     expect(core.indexOf('case "$(cat /proc/1/comm)" in')).toBeLessThan(
-      core.indexOf("gzip -t /recovery-input/production.sql.gz"),
+      core.indexOf("/bin/sh /recovery-input/restore.sh"),
     );
-    expect(core).toContain("gzip -t /recovery-input/production.sql.gz");
-    expect(core).toContain('gzip -cd /recovery-input/production.sql.gz | "$client" --protocol=socket -uroot');
+    expect(restore).toContain("gzip -t /recovery-input/production.sql.gz");
+    expect(restore).toContain("gzip -cd /recovery-input/production.sql.gz");
+    expect(restore).toContain('"$client" --protocol=socket -uroot');
+    expect(restore).toContain('test "$client_status" -eq 0');
+    expect(restore).toContain('test "$gzip_status" -eq 0');
+    expect(core).toContain("RECOVERY_COMPLETION_MARKER_MISSING");
+    expect(core).toContain("REFRESHED_RECOVERY_COMPLETION_MARKER_MISSING");
     expect(core).not.toContain('gzip -cd "$backup_file" 2>"$recovery_stderr" | docker exec -i');
     expect(core).not.toContain('cat "$recovery_stderr"');
     expect(core).toContain("schemaSha256");

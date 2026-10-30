@@ -1,11 +1,11 @@
 import { generateDeterministicTerrainChunk } from "./deterministicTerrainPipelineProtocol";
+import { WORLD_CHUNK_SIZE_MM, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkCoordinates";
+export { WORLD_CHUNK_SIZE_MM, WORLD_CHUNK_COORDINATE_LIMIT, joinWorldChunkPositionMm } from "./worldChunkCoordinates";
 
 export const AURION_WORLD_CHUNK_RULESET = "aurion-world-chunk.v1" as const;
-export const WORLD_CHUNK_SIZE_MM = 64_000 as const;
 export const WORLD_CHUNK_GRID_SIZE = 16 as const;
 export const WORLD_CHUNK_BASE_REVISION = 1 as const;
-/** ±1,000,000 chunks at 64 m: 128,000 km total span while integer world positions remain exact in JavaScript. */
-export const WORLD_CHUNK_COORDINATE_LIMIT = 1_000_000 as const;
+/** ±1,000,000 chunks at 64 m remain exact in JavaScript integer coordinates. */
 
 export type WorldChunkCoordinate = { x: number; z: number };
 

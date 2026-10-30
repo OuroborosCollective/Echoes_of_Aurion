@@ -169,6 +169,46 @@ func verify() -> void:
 	var expected_packet: Dictionary = JSON.parse_string(JSON.stringify({"type":"attack", "clientSeq":1, "targetEntityId":"mob_1"}))
 	require(JSON.parse_string(packet) == expected_packet, "target action did not send canonical attack packet")
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == before, "action mutated confirmed world state")
+	# The native mobile button must reach the same real local transport, without
+	# creating a second action path or changing the confirmed fixture state.
+	scene._mobile_hud_enabled = true
+	scene._show_3d()
+	scene._refresh_target_hud()
+	require(not scene.mobile_hud.attack_button.disabled, "mobile HUD did not enable confirmed target")
+	await process_frame
+	var mobile_press := InputEventScreenTouch.new()
+	mobile_press.index = 31
+	mobile_press.position = scene.mobile_hud.attack_button.get_global_rect().get_center()
+	mobile_press.pressed = true
+	Input.parse_input_event(mobile_press)
+	await process_frame
+	var mobile_release := InputEventScreenTouch.new()
+	mobile_release.index = 31
+	mobile_release.position = mobile_press.position
+	mobile_release.pressed = false
+	Input.parse_input_event(mobile_release)
+	await process_frame
+	packet = ""
+	for _attempt in range(200):
+		client.poll()
+		remote.poll()
+		if remote.get_available_packet_count() > 0:
+			packet = remote.get_packet().get_string_from_utf8()
+			break
+		await create_timer(0.01).timeout
+	expected_packet["clientSeq"] = 2.0 # JSON parsing represents wire numbers consistently.
+	require(JSON.parse_string(packet) == expected_packet, "mobile button did not send canonical attack packet")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == before, "mobile attack mutated confirmed state")
+	scene.mobile_hud.set_menu_open(true)
+	scene.mobile_hud.attack_button.pressed.emit()
+	var menu_sent := false
+	for _attempt in range(20):
+		client.poll()
+		remote.poll()
+		menu_sent = menu_sent or remote.get_available_packet_count() > 0
+		await create_timer(0.01).timeout
+	require(not menu_sent, "open menu sent attack")
+	scene.mobile_hud.set_menu_open(false)
 	scene._world_is_stale = true
 	scene._refresh_target_hud()
 	require(scene.world_action.disabled, "stale world left action enabled")

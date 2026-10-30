@@ -44,6 +44,9 @@ async function scripts(directory) {
 }
 await scripts(project);
 await stage('parity', 'static', process.execPath, ['scripts/godot/verify-contract-parity.mjs'], 'zone-v5 contract parity verified');
+await stage('world-chunk-coordinates', 'static', process.execPath,
+  ['--experimental-strip-types', '--test', 'scripts/godot/world-chunk-coordinate.test.mjs'],
+  'centered Aurion chunk-local placements map to their exact world millimeters');
 for (const [id, script, marker] of [
   ['contract', 'contracts/test_zone_contract.gd', 'zone-v5 Godot contract verified'],
   ['native-auth', 'test_native_auth_flow.gd', 'Godot native-auth pre-login contract verified'],
@@ -58,6 +61,14 @@ for (const [id, script, marker] of [
   ['movement-input', 'test_movement_input.gd', 'Godot G20 native input and bounded move-intent regression verified (headless fixture only)'],
   ['multitouch-routing', 'test_multitouch_routing.gd', 'Godot G21 multitouch routing and confirmed-position camera orbit verified (headless fixture only)'],
   ['g21-target-action', 'test_g21_target_action.gd', 'G21 target UI and canonical attack over isolated local WebSocket verified (fixture, not live Aurion)'],
+  ['g22-native-hud', 'test_hud_projection.gd', 'G22_NATIVE_HUD_PROJECTION_TOUCH_PASS (synthetic fixtures; no physical device)'],
+  ['world-design-projection', 'test_world_design_projection.gd', 'GODOT_WORLD_DESIGN_PROJECTION_PASS'],
+  ['world-glb-structure', 'test_world_glb_structure.gd', 'GODOT_WORLD_GLB_STRUCTURE_PASS'],
+  ['world-design-active-scene', 'test_world_design_scene.gd', 'GODOT_WORLD_DESIGN_ACTIVE_SCENE_PASS'],
+  ['world-design-large-readback', 'test_world_design_large_readback.gd', 'GODOT_WORLD_DESIGN_LARGE_READBACK_PASS'],
+  ['world-authoring-state', 'test_world_authoring_state.gd', 'GODOT_WORLD_AUTHORING_STATE_PASS'],
+  ['world-authoring-scene', 'test_world_authoring_scene.gd', 'GODOT_WORLD_AUTHORING_SCENE_PASS'],
+  ['world-editor-draft', 'test_world_editor_draft.gd', 'GODOT_WORLD_EDITOR_DRAFT_PASS'],
   ['technical-diagnostics', 'test_technical_diagnostics.gd', 'Godot G43 safe technical diagnostics verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
@@ -119,6 +130,18 @@ await stage('public-appearance-refresh-http', 'headless', process.execPath,
 await stage('monster-catalog-http', 'headless', process.execPath,
   ['scripts/godot/quest-npc-api-runtime.mjs', executable, project, '--catalog'],
   'G16 GLB catalog protected GET boundary verified');
+await stage('world-design-http', 'headless', process.execPath,
+  ['scripts/godot/quest-npc-api-runtime.mjs', executable, project, '--world-design'],
+  'GODOT_WORLD_DESIGN_HTTP_PASS');
+await stage('world-asset-http', 'headless', process.execPath,
+  ['scripts/godot/world-asset-api-runtime.mjs', executable, project],
+  'GODOT_WORLD_ASSET_HTTP_PASS');
+await stage('world-authoring-http', 'headless', process.execPath,
+  ['scripts/godot/world-authoring-api-runtime.mjs', executable, project],
+  'GODOT_WORLD_AUTHORING_HTTP_PASS');
+await stage('world-authoring-wire', 'headless', process.execPath,
+  ['scripts/godot/world-authoring-wire.mjs', executable, project],
+  'GODOT_WORLD_AUTHORING_WIRE_PASS');
 await stage('chunk-surface-native-http', 'headless', process.execPath,
   ['scripts/godot/chunk-surface-api-runtime.mjs', executable, project],
   'G18 protected chunk surface GET wire boundary verified');
