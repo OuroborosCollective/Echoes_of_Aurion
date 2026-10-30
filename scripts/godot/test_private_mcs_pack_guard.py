@@ -26,7 +26,8 @@ def pack(entries):
         body.extend(content)
         raw = name.encode()
         raw += b"\0" * ((-len(raw)) % 4)
-        records.append(struct.pack("<I", len(raw)) + raw + struct.pack("<QQ16sI", offset, len(content), hashlib.md5(content).digest(), 0))
+        records.append(struct.pack("<I", len(raw)) + raw + struct.pack("<QQ16sI", offset, len(content), # Godot PCK v4 requires this MD5 field; the fixture bytes are synthetic, not sensitive.
+        hashlib.md5(content, usedforsecurity=False).digest(), 0))
     directory = len(body)
     body.extend(struct.pack("<I", len(records)))
     for record in records:

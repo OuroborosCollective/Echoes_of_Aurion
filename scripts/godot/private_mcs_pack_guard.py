@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate private MCS Godot PCK structure before an explicitly private build.
 
+PCK v4 entry MD5 is a compatibility/corruption field, not authentication.
 PCK integrity is not authorization: the caller must bind the resulting digest
 to a separately trusted application build and independently verify its signer.
 """
@@ -70,7 +71,7 @@ def inspect_pck(data):
         if entry_flags != 0 or absolute < base or absolute + size > directory:
             _bad("PCK_ENTRY_RANGE_OR_FLAGS")
         content = data[absolute:absolute + size]
-        if hashlib.md5(content).digest() != md5:
+        if hashlib.md5(content, usedforsecurity=False).digest() != md5:
             _bad("PCK_ENTRY_INTEGRITY")
         if size:
             spans.append((absolute, absolute + size))
