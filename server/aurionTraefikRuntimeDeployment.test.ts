@@ -19,6 +19,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const migrationLedger = read(".github/workflows/aurion-wasd-migration-ledger.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
   const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
+  const hostedImageBuilder = read("scripts/build-aurion-runtime-image.mjs");
 
   it("rejects a release dispatch that resolves to a different main revision", () => {
     const guard = workflow.match(/- name: Guard repository scope\n[\s\S]*?        run: \|\n([\s\S]*?)\n      - name:/)?.[1];
@@ -91,7 +92,10 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(migrationLedger).not.toContain('cron:');
     expect(migrationLedger).toContain("eb20a85b305612eaf01c560ad0c89af96ed03295");
     expect(workflow).toContain('"runtime-node_modules.tgz"');
-    expect(workflow).toContain("docker build --pull=false");
+    expect(runtimeBuilder).toContain("await buildAurionRuntimeImage(output, revision)");
+    expect(hostedImageBuilder).toContain('process.env.RUNNER_ENVIRONMENT !== "github-hosted"');
+    expect(hostedImageBuilder).toContain('["build", "--pull=false", "--platform=linux/amd64"');
+    expect(workflow).toContain('python3 dist-traefik-runtime/deploy/load-aurion-runtime-image.py dist-traefik-runtime "$GITHUB_SHA"');
     expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
     expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
     expect(workflow).toContain('runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"');
