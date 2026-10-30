@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 
 // Real Compose rendering, including hostile stale owner env values. No server,
 // credential, zone, tick or production resource is created by this test.
@@ -35,7 +35,23 @@ try {
   assert.equal(mounts[0].source, "/etc/aurion-godot/feed.token");
   assert.equal(mounts[0].type, "bind");
   assert.equal(mounts[0].read_only, true);
-  assert.equal(mounts[0].bind.create_host_path, false);
+  // Compose omits false when normalizing long bind syntax. Verify effective
+  // behavior as well: a missing source must fail without creating that source.
+  assert.equal(mounts[0].bind.create_host_path ?? false, false);
+  const probeName = `aurion-feed-missing-${process.pid}`;
+  const probeImage = execFileSync("docker", ["image", "import", "--change", 'CMD ["/never-executed"]', "-"], { input: Buffer.alloc(10240), encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+  const missing = path.join(directory, "must-not-be-created");
+  const probe = path.join(directory, "missing-bind.json");
+  fs.writeFileSync(probe, JSON.stringify({ services: { probe: { image: probeImage, container_name: probeName, network_mode: "none", volumes: [{ ...mounts[0], source: missing }] } } }));
+  try {
+    const result = spawnSync("docker", ["compose", "-p", probeName, "-f", probe, "create", "--no-build", "--pull", "never"], { encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /bind source path does not exist/);
+    assert.equal(fs.existsSync(missing), false);
+  } finally {
+    spawnSync("docker", ["rm", "--force", probeName], { stdio: "ignore" });
+    execFileSync("docker", ["image", "rm", probeImage], { stdio: "ignore" });
+  }
   assert.equal(on.build, undefined);
   assert.equal(fs.readFileSync(file, "utf8"), previous);
   console.log("AURION_GODOT_FEED_COMPOSE_CONTRACT_PASS defaultInactive=true loopbackOnly=true protectedReadOnlyMount=true");
