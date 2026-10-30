@@ -1,0 +1,65 @@
+name: Aurion Admin MCP OAuth
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-admin-mcp-oauth.yml"
+      - "server/adminMcp*"
+      - "server/db.ts"
+      - "server/gatewayHost.ts"
+      - "shared/operationalClock.ts"
+      - "scripts/supabase/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aurion-admin-mcp-oauth.yml"
+      - "server/adminMcp*"
+      - "server/db.ts"
+      - "server/gatewayHost.ts"
+      - "shared/operationalClock.ts"
+      - "scripts/supabase/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-admin-mcp-oauth-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-contract:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify signed-token and admin authorization boundaries
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          pnpm exec vitest run \
+            server/adminMcpSupabaseJwt.test.ts \
+            server/adminMcpProtocol.test.ts \
+            server/adminMcpAuthenticated.test.ts \
+            server/adminMcpRoute.test.ts \
+            server/adminMcp.test.ts \
+            server/adminMcpReleaseMetadata.test.ts

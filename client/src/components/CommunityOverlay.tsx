@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
-import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, Trophy, UsersRound, X } from "lucide-react";
+import { BellRing, Box, Bug, CalendarDays, FileText, Menu, MessageCircle, Send, Trophy, UsersRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { soundSynth } from "../xaurion/audio/SoundSynthesizer";
@@ -76,7 +76,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
   }, []);
 
   const chat = trpc.community.chat.list.useQuery(undefined, { enabled: isAuthenticated && panel === "chat", refetchInterval: panel === "chat" ? 5000 : false });
-  const forumMode = panel === "forum" || panel === "events";
+  const forumMode = panel === "forum" || panel === "events" || panel === "issues";
   const threads = trpc.community.forum.list.useQuery({ category: forumCategory }, { enabled: forumMode, refetchInterval: forumMode ? 12000 : false });
   const thread = trpc.community.forum.get.useQuery({ threadId: selectedThreadId ?? "thread_unselected" }, { enabled: Boolean(selectedThreadId) });
   const publicAssets = trpc.assetSubmissions.publicCatalog.useQuery(undefined, { enabled: panel === "assets" });
@@ -98,7 +98,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
     restoreFocus();
   };
 
-  const panelTitle = panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "guild" ? "Gildenzugehörigkeit" : panel === "leaderboard" ? "Saison-Rangliste" : "Öffentlicher Asset-Katalog";
+  const panelTitle = panel === "chat" ? "Signalraum" : panel === "forum" ? "Sternwartenforum" : panel === "events" ? "Community-Events" : panel === "issues" ? "Fehlerberichte" : panel === "guild" ? "Gildenzugehörigkeit" : panel === "leaderboard" ? "Saison-Rangliste" : "Öffentlicher Asset-Katalog";
 
   const overlay = <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18}/><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
@@ -117,6 +117,11 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
         openPanel("events");
         setForumCategory("events");
       }} aria-label="Community-Events öffnen"><CalendarDays size={16}/><span>EVENTS</span></button>
+      <button type="button" aria-pressed={panel === "issues"} className={panel === "issues" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
+        soundSynth.playUiClick();
+        openPanel("issues");
+        setForumCategory("issues");
+      }} aria-label="Fehlerberichte öffnen"><Bug size={16}/><span>BUGS</span></button>
       <button type="button" aria-pressed={panel === "guild"} className={panel === "guild" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
         isAuthenticated ? openPanel("guild") : setMessage("Bitte anmelden, um deine Gildenzugehörigkeit zu lesen.");

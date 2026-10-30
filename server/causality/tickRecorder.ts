@@ -1,6 +1,6 @@
 import { type AurionCausalTickReceipt, computeReceiptHash } from "../../shared/aurionCausalTickContract";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
-import type { CanonicalZoneState } from "./zoneCanonicalState";
+import { hashCanonicalZoneState, type CanonicalZoneState } from "./zoneCanonicalState";
 import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContract";
 
 export interface RecordedTickEntry {
@@ -55,6 +55,7 @@ function snapshotRecordedEntry(entry: RecordedTickEntry): RecordedTickEntry {
 }
 
 export class AurionTickRecorder {
+  private readonly committedObservers = new Set<(entry: RecordedTickEntry) => void>();
   private readonly receiptsByZone = new Map<string, RecordedTickEntry[]>();
   private readonly receiptsByZoneAndTick = new Map<string, Map<number, RecordedTickEntry>>();
   private persistenceAdapter?: CausalPersistenceAdapter;
@@ -66,6 +67,12 @@ export class AurionTickRecorder {
   constructor(private readonly maxEntries = 1000, persistenceAdapter?: CausalPersistenceAdapter) { this.persistenceAdapter = persistenceAdapter; }
   setPersistenceAdapter(adapter: CausalPersistenceAdapter): void { this.persistenceAdapter = adapter; }
 
+  /** Detached observers run after durable readback, or explicitly in-memory without an adapter. */
+  observeCommittedTicks(observer: (entry: RecordedTickEntry) => void): () => void {
+    this.committedObservers.add(observer);
+    return () => { this.committedObservers.delete(observer); };
+  }
+
   /**
    * Authority-path API: capture immutable evidence synchronously, then serialize
    * durable MariaDB writes on an observer queue. Database latency never advances,
@@ -74,9 +81,9 @@ export class AurionTickRecorder {
   enqueueTick(receipt: AurionCausalTickReceipt, postState?: CanonicalZoneState, preState?: CanonicalZoneState, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): void {
     const entry = snapshotRecordedEntry({ receipt, postState, preState, intents });
     const victories = combatVictories ? clonePlainValue(combatVictories) : undefined;
-    this.recordSnapshot(entry);
+    const inserted = this.recordSnapshot(entry);
     const adapter = this.persistenceAdapter;
-    if (!adapter) return;
+    if (!adapter) { if (inserted) this.publishObservedTick(entry); return; }
     this.pendingPersistence += 1;
     this.persistenceChain = this.persistenceChain
       .then(async () => {
@@ -86,6 +93,34 @@ export class AurionTickRecorder {
         }
         if (entry.postState && entry.receipt.tick % 100 === 0) {
           await adapter.saveCheckpoint(entry.receipt.zoneId, entry.receipt.tick, entry.receipt.postStateHash, entry.postState);
+        }
+        if (this.committedObservers.size) {
+          const persisted = await adapter.getRecordedTick(entry.receipt.zoneId, entry.receipt.tick);
+          if (!persisted || computeReceiptHash(persisted.receipt) !== entry.receipt.receiptHash
+            || persisted.receipt.receiptHash !== entry.receipt.receiptHash) {
+            throw new Error("CAUSAL_OBSERVER_RECEIPT_READBACK_MISMATCH");
+          }
+          if (entry.receipt.tick > 1) {
+            const predecessor = await adapter.getRecordedTick(entry.receipt.zoneId, entry.receipt.tick - 1);
+            if (!predecessor || predecessor.receipt.worldId !== entry.receipt.worldId
+              || predecessor.receipt.tick + 1 !== entry.receipt.tick
+              || computeReceiptHash(predecessor.receipt) !== entry.receipt.previousReceiptHash
+              || predecessor.receipt.receiptHash !== entry.receipt.previousReceiptHash) {
+              throw new Error("CAUSAL_OBSERVER_PREDECESSOR_READBACK_MISMATCH");
+            }
+          }
+          const checkpointTick = entry.receipt.tick === 1 && entry.preState ? 0
+            : entry.postState && entry.receipt.tick % 100 === 0 ? entry.receipt.tick : undefined;
+          if (checkpointTick !== undefined) {
+            const checkpoint = await adapter.getCheckpoint(entry.receipt.zoneId, checkpointTick);
+            const expected = checkpointTick === 0 ? entry.receipt.preStateHash : entry.receipt.postStateHash;
+            if (!checkpoint || checkpoint.worldId !== entry.receipt.worldId
+              || checkpoint.zoneId !== entry.receipt.zoneId || checkpoint.tick !== checkpointTick
+              || checkpoint.snapshotHash !== expected || hashCanonicalZoneState(checkpoint.state) !== expected) {
+              throw new Error("CAUSAL_OBSERVER_CHECKPOINT_READBACK_MISMATCH");
+            }
+          }
+          this.publishObservedTick(entry);
         }
         // Projection/schema failures remain observable, but must not suppress
         // already valid causal checkpoints on installations before migration 0069.
@@ -109,8 +144,21 @@ export class AurionTickRecorder {
     return Object.freeze({ pending: this.pendingPersistence, failures: this.persistenceFailures, lastError: this.lastPersistenceError });
   }
 
-  record(entry: RecordedTickEntry): void { this.recordSnapshot(snapshotRecordedEntry(entry)); }
-  private recordSnapshot(entry: RecordedTickEntry): void {
+  record(entry: RecordedTickEntry): void {
+    const captured = snapshotRecordedEntry(entry);
+    const inserted = this.recordSnapshot(captured);
+    // Imported/in-memory records cannot bypass a configured persistence boundary.
+    if (inserted && !this.persistenceAdapter) this.publishObservedTick(captured);
+  }
+  private publishObservedTick(entry: RecordedTickEntry): void {
+    if (this.committedObservers.size) queueMicrotask(() => {
+      for (const observer of this.committedObservers) {
+        try { observer(clonePlainValue(entry)); }
+        catch (error) { console.error("[C-Aurion] Detached tick observer failed", error); }
+      }
+    });
+  }
+  private recordSnapshot(entry: RecordedTickEntry): boolean {
     const zoneId = entry.receipt.zoneId;
     let list = this.receiptsByZone.get(zoneId);
     if (!list) { list = []; this.receiptsByZone.set(zoneId, list); }
@@ -119,7 +167,7 @@ export class AurionTickRecorder {
     const previous = map.get(entry.receipt.tick);
     if (previous) {
       if (previous.receipt.receiptHash !== entry.receipt.receiptHash) throw new Error(`CAUSAL_TICK_CONFLICT:${zoneId}:${entry.receipt.tick}`);
-      return;
+      return false;
     }
     list.push(entry);
     map.set(entry.receipt.tick, entry);
@@ -127,6 +175,7 @@ export class AurionTickRecorder {
       const removed = list.shift();
       if (removed) map.delete(removed.receipt.tick);
     }
+    return true;
   }
 
   getEntry(zoneId: string, tick: number): RecordedTickEntry | undefined { return this.receiptsByZoneAndTick.get(zoneId)?.get(tick); }
@@ -167,3 +216,5 @@ export class AurionTickRecorder {
 }
 
 export const globalTickRecorder = new AurionTickRecorder(2000);
+
+

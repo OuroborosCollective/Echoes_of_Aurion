@@ -22,6 +22,8 @@ class ProtectedAuth:
 	var request_active := false
 	func protected_response_allowed() -> bool:
 		return allowed
+	func session_generation() -> int:
+		return 1
 	func request_in_flight() -> bool:
 		return request_active
 	func cancel() -> void:

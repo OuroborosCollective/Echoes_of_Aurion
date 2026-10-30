@@ -154,7 +154,6 @@ scripts/__pycache__/
 /godot-client/assets/starter_village/*.png
 /godot-client/assets/starter_village/*.png.import
 
-# Private owner-purchased imp0str.dev Modular Character System 1.0.
-# Do not publish source, scenes, meshes or textures to public GitHub.
+# Private owner-purchased Modular Character System 1.0: never publish vendor bytes.
 /godot-client/addons/modular_character_system/
 /godot-client/private-mcs/

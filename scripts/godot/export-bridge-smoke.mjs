@@ -4,7 +4,6 @@ import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {repo,root,executable,lock,digest,run} from './toolchain.mjs';
 import {androidReport} from './android-toolchain.mjs';
-import {publicProjectCopyFilter} from './export-assets.mjs';
 
 const revision=run('git',['-C',repo,'rev-parse','HEAD']);
 assert.equal(revision,process.env.AURION_EXPECTED_REVISION);
@@ -19,7 +18,7 @@ for(const guard of ['legacy','fixed']) {
  const job=await mkdtemp(join(root,'bridge-smoke-'));
  try {
   const project=join(job,'project');
-  await cp(join(repo,'godot-client'),project,{recursive:true,filter:publicProjectCopyFilter});
+  await cp(join(repo,'godot-client'),project,{recursive:true,filter:p=>!p.split('/').includes('.godot')});
   const preset=original.replace('architectures/arm64-v8a=true','architectures/arm64-v8a=false')
    .replace('architectures/x86_64=false','architectures/x86_64=true')
    .replace('permissions/internet=true','permissions/internet=false')

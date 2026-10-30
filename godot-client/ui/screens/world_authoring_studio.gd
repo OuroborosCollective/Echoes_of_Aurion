@@ -1,270 +1,351 @@
 extends Control
-## Owner-facing native draft/plan/explicit confirm/readback; only Aurion can apply.
-const Api = preload("res://net/api/world_authoring_api.gd")
-const ConfirmedWorldDesigns = preload("res://world/confirmed_world_designs.gd")
+## Owner-facing drafts are proposals. Only an Aurion-confirmed receipt and a
+## later independent GET may certify an apply.
+const AuthoringApi = preload("res://net/api/world_authoring_api.gd")
+const AuthoringState = preload("res://authoring/world_authoring_state.gd")
+const AuthoringJournal = preload("res://authoring/world_authoring_journal.gd")
+const WorldProjection = preload("res://world/world_design_projection.gd")
+signal confirmed_world(readback: Dictionary, connection_id: String, generation: int)
+signal closed
+
 var _auth: Node
-var _transport: Node
+var _api: Node
+var _state := AuthoringState.new()
+var _journal := AuthoringJournal.new()
 var _server := ""
 var _connection := ""
-var _plan_hash := ""
-var _plan_draft: Dictionary = {}
-var _plan_requested: Dictionary = {}
-var _pending_apply: Dictionary = {}
-var _draft: TextEdit
+var _generation := -1
+var _allow_local := false
 var _brief: TextEdit
+var _draft: TextEdit
 var _info: Label
+var _catalog_info: Label
 var _confirm: ConfirmationDialog
-var _busy := false
-var _confirmed_revision := ""
-signal confirmed_world(readback: Dictionary)
+var _plan_view: TextEdit
+
+func _ready() -> void:
+	visible = false
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.025, 0.035, 0.04, 0.97)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(backdrop)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for edge in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
+		margin.add_theme_constant_override(edge, 16)
+	add_child(margin)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
+	var stack := VBoxContainer.new()
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.add_theme_constant_override("separation", 8)
+	scroll.add_child(stack)
+	var heading := Label.new()
+	heading.text = "Aurion Weltstudio · Admin"
+	heading.add_theme_font_size_override("font_size", 22)
+	stack.add_child(heading)
+	_catalog_info = Label.new()
+	_catalog_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_catalog_info.text = "Admin-Zugang und Katalog noch nicht geprüft."
+	stack.add_child(_catalog_info)
+	_brief = TextEdit.new()
+	_brief.placeholder_text = "Idee für KI-Entwurf"
+	_brief.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_brief.custom_minimum_size.y = 90
+	stack.add_child(_brief)
+	_button(stack, "KI-Entwurf anfordern", _propose)
+	_draft = TextEdit.new()
+	_draft.placeholder_text = "Aurion-Weltentwurf als JSON prüfen und bearbeiten"
+	_draft.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_draft.custom_minimum_size.y = 210
+	_draft.text_changed.connect(_on_draft_changed)
+	stack.add_child(_draft)
+	_button(stack, "Entwurf bei Aurion prüfen", _plan)
+	_button(stack, "Geprüften Plan ansehen", _request_confirmation)
+	_button(stack, "Offenes Receipt bei Aurion suchen", _recover_receipt)
+	_button(stack, "Weltstand erneut lesen", _readback)
+	_info = Label.new()
+	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stack.add_child(_info)
+	_button(stack, "Zurück zum Spiel", _close_requested)
+	_confirm = ConfirmationDialog.new()
+	_confirm.title = "Plan für Aurion prüfen"
+	_confirm.ok_button_text = "Anwenden"
+	_confirm.confirmed.connect(_apply)
+	_plan_view = TextEdit.new()
+	_plan_view.editable = false
+	_plan_view.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_plan_view.custom_minimum_size = Vector2(200, 200)
+	_plan_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_confirm.add_child(_plan_view)
+	add_child(_confirm)
+	_touch_dialog_button(_confirm.get_ok_button())
+	_touch_dialog_button(_confirm.get_cancel_button())
+
+func _touch_dialog_button(button: Button) -> void:
+	# AcceptDialog resets custom_minimum_size when opened. Theme margins survive
+	# that reset and keep both controls comfortably touch-sized.
+	var style := button.get_theme_stylebox("normal").duplicate() as StyleBox
+	style.set_content_margin(SIDE_TOP, 16)
+	style.set_content_margin(SIDE_BOTTOM, 16)
+	button.add_theme_stylebox_override("normal", style)
+
+func _button(parent: VBoxContainer, title: String, action: Callable) -> void:
+	var button := Button.new()
+	button.text = title
+	button.custom_minimum_size.y = 48
+	button.pressed.connect(action)
+	parent.add_child(button)
 
 func configure(auth: Node, server: String, connection: String, allow_local: bool = false) -> void:
 	close_session()
 	_auth = auth
 	_server = server
 	_connection = connection
-	_transport = Api.new(auth)
-	add_child(_transport)
-	_transport.completed.connect(_on_completed)
-	_transport.failed.connect(_on_failed)
-	_transport.set_meta("allow_local", allow_local)
-
-func _ready() -> void:
-	visible = false
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(panel)
-	var scroll := ScrollContainer.new()
-	panel.add_child(scroll)
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 9)
-	scroll.add_child(stack)
-	var heading := Label.new()
-	heading.text = "Aurion · Mensch + KI Weltstudio (Admin)"
-	stack.add_child(heading)
-	_brief = TextEdit.new()
-	_brief.placeholder_text = "Beschreibe eine Landschaft, ein Gebäude oder ein Dorf. Aurion bleibt die einzige Welt-Authority."
-	_brief.custom_minimum_size = Vector2(400, 100)
-	stack.add_child(_brief)
-	_button(stack, "KI-Entwurf anfordern", _propose)
-	_draft = TextEdit.new()
-	_draft.placeholder_text = "Prüfbarer Aurion-WorldDesignDraft als JSON"
-	_draft.custom_minimum_size = Vector2(400, 220)
-	_draft.text_changed.connect(_invalidate_plan)
-	stack.add_child(_draft)
-	_button(stack, "Entwurf serverseitig prüfen", _plan)
-	_button(stack, "Geprüften Plan bestätigen", _request_confirmation)
-	_button(stack, "Weltstand aktualisieren", _readback)
-	_info = Label.new()
-	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	stack.add_child(_info)
-	_button(stack, "Zurück zum Spiel", func(): visible = false)
-	_confirm = ConfirmationDialog.new()
-	_confirm.title = "Aurion: verbindliche Weltänderung"
-	_confirm.confirmed.connect(_apply)
-	add_child(_confirm)
-
-func _button(stack: VBoxContainer, label: String, callback: Callable) -> void:
-	var b := Button.new()
-	b.text = label
-	b.custom_minimum_size.y = 48
-	b.pressed.connect(callback)
-	stack.add_child(b)
+	_allow_local = allow_local
+	_generation = auth.session_generation()
+	if auth.has_signal("refresh_succeeded") and not auth.refresh_succeeded.is_connected(_on_refresh_succeeded):
+		auth.refresh_succeeded.connect(_on_refresh_succeeded)
+	_api = AuthoringApi.new(auth)
+	add_child(_api)
+	_api.completed.connect(_completed)
+	_api.failed.connect(_failed)
 
 func open_studio() -> bool:
-	if _transport == null or _auth == null or not _auth.protected_response_allowed() or _connection.is_empty():
+	if not _session_valid() or _api == null or _api.busy():
 		return false
 	visible = true
-	_catalog()
+	if _state.session_matches(_connection, _generation):
+		_info.text = _state.message
+		return true
+	_info.text = "Admin-Sitzung wird bei Aurion geprüft."
+	_send("identity")
 	return true
 
 func close_session() -> void:
-	_plan_hash = ""
-	_plan_draft.clear()
-	_plan_requested.clear()
-	_pending_apply.clear()
-	_confirmed_revision = ""
-	_busy = false
+	var was_visible := visible
 	visible = false
-	if is_instance_valid(_transport):
-		_transport.cancel()
-		_transport.queue_free()
-	_transport = null
+	if is_instance_valid(_confirm):
+		_confirm.hide()
+	if is_instance_valid(_api):
+		_api.cancel()
+		_api.queue_free()
+	if is_instance_valid(_auth) and _auth.has_signal("refresh_succeeded") and _auth.refresh_succeeded.is_connected(_on_refresh_succeeded):
+		_auth.refresh_succeeded.disconnect(_on_refresh_succeeded)
+	_api = null
+	_state.close()
 	_connection = ""
 	_server = ""
+	_generation = -1
+	if is_instance_valid(_draft):
+		_draft.text = ""
+	if is_instance_valid(_brief):
+		_brief.text = ""
+	if was_visible:
+		closed.emit()
 
-func _invalidate_plan() -> void:
-	_plan_hash = ""
-	_plan_draft.clear()
-	_plan_requested.clear()
+func _session_valid() -> bool:
+	return _auth != null and not _connection.is_empty() and _generation >= 0 and _auth.protected_response_allowed() and _auth.session_generation() == _generation
 
-func _send(kind: String, payload: Dictionary = {}) -> bool:
-	if _busy or _transport == null or _connection.is_empty() or _auth == null or not _auth.protected_response_allowed():
+func _ensure_access() -> bool:
+	if not _session_valid():
 		return false
-	_busy = true
-	var started: bool = _transport.request(kind, _server, _connection, payload, bool(_transport.get_meta("allow_local", false)))
-	if not started:
-		_busy = false
-	return started
-
-func _catalog() -> void:
-	_send("catalog")
-
-func _propose() -> void:
-	var request := _brief.text.strip_edges()
-	if request.length() < 12 or request.length() > 4000:
-		_info.text = "KI-Brief muss 12 bis 4000 Zeichen enthalten."
-		return
-	_send("propose", {"kind": "world", "request": request})
-
-func _plan() -> void:
-	var data: Variant = JSON.parse_string(_draft.text)
-	if typeof(data) != TYPE_DICTIONARY:
-		_info.text = "Entwurf ist kein gültiges JSON-Objekt."
-		return
-	_invalidate_plan()
-	if _send("worldPlan", data):
-		_plan_requested = data.duplicate(true)
-
-static func _valid_plan_reply(data: Dictionary, draft: Dictionary) -> bool:
-	if draft.is_empty() or not Api.valid_plan_hash(data.get("planHash")) or data.get("requiresHumanConfirmation") != true:
-		return false
-	for key in ["schemaVersion", "designKey", "version", "title", "expectedCatalogRevision", "placements"]:
-		if not draft.has(key) or data.get(key) != draft[key]:
-			return false
-	var hashes: Variant = data.get("referencedAssetHashes")
-	if typeof(hashes) != TYPE_ARRAY or hashes.is_empty() or hashes.size() > 256:
-		return false
-	for digest in hashes:
-		if not Api.valid_plan_hash(digest):
-			return false
-	return true
-
-static func _valid_apply_receipt(data: Dictionary, expected: Dictionary) -> Dictionary:
-	var receipt: Variant = data.get("receipt")
-	var world: Variant = data.get("readback")
-	if expected.is_empty() or typeof(receipt) != TYPE_DICTIONARY or not ConfirmedWorldDesigns.validate_readback(world):
-		return {}
-	var fields := ["schemaVersion", "receiptId", "kind", "action", "targetId", "actorUserId", "planHash", "previousHash", "resultHash", "receiptHash", "humanConfirmed"]
-	if receipt.size() != fields.size():
-		return {}
-	for field in fields:
-		if not receipt.has(field):
-			return {}
-	if receipt.schemaVersion != "aurion.authoring-receipt.v1" or receipt.kind != "world" or receipt.action != "apply" or receipt.humanConfirmed != true:
-		return {}
-	if typeof(receipt.receiptId) != TYPE_STRING or receipt.receiptId.length() < 8 or receipt.receiptId.length() > 128 or typeof(receipt.actorUserId) != TYPE_INT or receipt.actorUserId <= 0:
-		return {}
-	var version: Variant = expected.get("version", -1)
-	if typeof(version) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(version)) or float(version) != floor(float(version)) or version < 1 or version > 1000000:
-		return {}
-	if receipt.planHash != expected.get("plan") or receipt.targetId != expected.get("key", "") + ":v" + str(int(version)):
-		return {}
-	if not Api.valid_plan_hash(receipt.resultHash) or not Api.valid_plan_hash(receipt.receiptHash):
-		return {}
-	if receipt.previousHash != null and not Api.valid_plan_hash(receipt.previousHash):
-		return {}
-	for design in world.designs:
-		if design.designKey == expected.get("key") and design.version == expected.get("version") and design.designHash == receipt.resultHash:
-			return {"revision": world.revision, "key": design.designKey, "version": design.version, "design_hash": design.designHash}
-	return {}
-
-static func _confirmed_apply_readback(data: Dictionary, expected: Dictionary) -> bool:
-	if expected.is_empty() or not ConfirmedWorldDesigns.validate_readback(data) or data.revision != expected.get("revision"):
-		return false
-	for design in data.designs:
-		if design.designKey == expected.get("key") and design.version == expected.get("version") and design.designHash == expected.get("design_hash"):
-			return true
+	if not _auth.access_token().is_empty():
+		return true
+	if not _auth.refresh_in_flight():
+		_auth.refresh()
+	_info.text = "Sitzung wird erneuert. Danach bitte die Aktion erneut auswählen."
 	return false
 
+func _on_refresh_succeeded() -> void:
+	if not visible or not _session_valid() or _api == null or _api.busy():
+		return
+	if _state.phase == "closed":
+		_send("identity")
+	else:
+		_info.text = "Sitzung erneuert. Bitte die gewünschte Aktion erneut auswählen."
+
+func _send(kind: String, payload: Dictionary = {}) -> bool:
+	if not _ensure_access() or _api == null or _api.busy():
+		return false
+	return _api.request(kind, _server, _connection, payload, _allow_local)
+
+func _on_draft_changed() -> void:
+	_state.draft_changed()
+	if is_instance_valid(_confirm):
+		_confirm.hide()
+
+func _current_draft() -> Variant:
+	return JSON.parse_string(_draft.text)
+
+func _propose() -> void:
+	var brief := _brief.text.strip_edges()
+	if _state.phase == "closed" or brief.length() < 12 or brief.length() > 4000:
+		_info.text = "Admin-Zugang und ein Text mit 12 bis 4000 Zeichen sind erforderlich."
+		return
+	if _send("propose", {"kind":"world", "request":brief}):
+		_info.text = "Unverbindlicher Entwurf wird angefordert."
+
+func _plan() -> void:
+	# A journal entry for this session's in-flight apply is not an unknown
+	# earlier operation. Repeated taps must not discard the receipt state.
+	if _state.phase in ["planning", "applying", "awaiting_readback"] or (_api != null and _api.busy()):
+		_info.text = "Bitte zuerst das Ergebnis der laufenden Anfrage prüfen."
+		return
+	if not _journal.read().is_empty():
+		_state.mark_unresolved()
+		_info.text = _state.message
+		return
+	var draft: Variant = _current_draft()
+	var operation_id := Crypto.new().generate_random_bytes(16).hex_encode()
+	if not _state.begin_plan(draft, operation_id):
+		_info.text = "Entwurf unvollständig oder Ergebnis einer früheren Änderung noch unklar."
+		return
+	if not _send("worldPlan", {"draft":draft, "operationId":operation_id}):
+		_state.failed("worldPlan")
+	_info.text = _state.message
+
 func _request_confirmation() -> void:
-	if not Api.valid_plan_hash(_plan_hash) or _plan_draft.is_empty() or _busy or not _pending_apply.is_empty():
+	var plan: Dictionary = _state.planned_summary()
+	var draft: Variant = _current_draft()
+	if plan.is_empty() or typeof(draft) != TYPE_DICTIONARY or JSON.stringify(draft) != JSON.stringify(plan.draft) or _api.busy():
+		_info.text = "Bitte den aktuellen Entwurf zuerst prüfen."
 		return
-	var current: Variant = JSON.parse_string(_draft.text)
-	if typeof(current) != TYPE_DICTIONARY or JSON.stringify(current) != JSON.stringify(_plan_draft):
-		_invalidate_plan()
-		return
-	_confirm.dialog_text = "Weltänderung dauerhaft bei Aurion anwenden?\nPlan-SHA256: " + _plan_hash + "\nKein automatischer Retry."
-	_confirm.popup_centered()
+	_plan_view.text = JSON.stringify(plan.plan, "\t")
+	_confirm.popup_centered_ratio(0.9)
+	_confirm.get_cancel_button().text = "Abbrechen"
 
 func _apply() -> void:
-	if not Api.valid_plan_hash(_plan_hash) or _plan_draft.is_empty() or _busy or not _pending_apply.is_empty():
+	# Refresh before consuming confirmation; never retry a sent apply.
+	if not _ensure_access():
 		return
-	var current: Variant = JSON.parse_string(_draft.text)
-	if typeof(current) != TYPE_DICTIONARY or current != _plan_draft:
-		_invalidate_plan()
+	var plan: Dictionary = _state.planned_summary()
+	if plan.is_empty():
+		_info.text = "Der Plan ist nicht mehr gültig."
 		return
-	var expected := {"plan": _plan_hash, "key": str(_plan_draft.get("designKey", "")), "version": _plan_draft.get("version", -1)}
-	var sent := _send("worldApply", {"draft": _plan_draft, "expectedPlanHash": _plan_hash, "confirmation": "APPLY_WORLD_DESIGN"})
-	if sent:
-		_pending_apply = expected
-	# Single-use confirmation even on timeout. A second attempt requires a fresh plan.
-	_plan_hash = ""
-	_plan_draft.clear()
-	if sent:
-		_info.text = "Aurion-Apply angefordert. Unabhängigen Readback abwarten."
+	if not _journal.read().is_empty():
+		_state.mark_unresolved()
+		_info.text = _state.message
+		return
+	var reserved_actor: int = _state.actor_id
+	var operation_id: String = plan.plan.operationId
+	if not _journal.reserve(plan.draft, reserved_actor, plan.planHash, operation_id):
+		_info.text = "Die Änderung konnte nicht sicher vorgemerkt werden; es wurde nichts gesendet."
+		if not _journal.read().is_empty():
+			_info.text += " Die lokale Vormerkung muss geklärt werden."
+		return
+	var payload: Dictionary = _state.begin_apply(_current_draft())
+	if payload.is_empty():
+		_journal.release_unsubmitted(plan.draft, reserved_actor, plan.planHash, operation_id)
+		_info.text = "Der Plan ist nicht mehr gültig; es wurde nichts gesendet."
+		return
+	if not _send("worldApply", payload):
+		# request() returns false only when this HTTP request never started.
+		if _journal.release_unsubmitted(plan.draft, reserved_actor, plan.planHash, operation_id):
+			_state.not_submitted()
+		else:
+			_state.mark_unresolved()
+	_info.text = _state.message
 
 func _readback() -> void:
-	_send("readback")
+	if not _send("readback"):
+		_info.text = "Weltstand konnte nicht angefordert werden."
 
-func _on_completed(kind: String, data: Dictionary) -> void:
-	_busy = false
+func _recover_receipt() -> void:
+	var pending: Dictionary = _journal.read()
+	if _state.phase != "unknown" or pending.is_empty() or pending.has("invalid") or int(pending.get("actorUserId", -1)) != _state.actor_id:
+		_info.text = "Keine passende, lesbare Vormerkung für diesen Aurion-Account."
+		return
+	if _send("worldReceipt", {"designKey":pending.designKey, "version":pending.version, "planHash":pending.planHash, "operationId":pending.operationId}):
+		_info.text = "Aurion sucht das Receipt; es wird kein Apply wiederholt."
+	else:
+		_info.text = "Receipt-Suche konnte nicht gestartet werden."
+
+func _completed(kind: String, data: Dictionary, connection: String, generation: int) -> void:
+	if not visible or not _session_valid() or connection != _connection or generation != _generation:
+		return
 	match kind:
+		"identity":
+			if data.get("role") != "admin" or not _state.open(connection, generation, data.get("id")):
+				_info.text = "Für das Weltstudio ist eine bestätigte Aurion-Adminrolle erforderlich."
+				return
+			if not _journal.read().is_empty():
+				_state.mark_unresolved()
+				_info.text = _state.message
+			_catalog_info.text = "Adminrolle bestätigt; Katalog wird geladen."
+			_send("catalog")
 		"catalog":
-			if data.get("glbCatalogRevision") is String:
-				_info.text = "Admin-Katalog geprüft. Revision: " + data.glbCatalogRevision
-				# Show existing confirmed world data without performing any mutation.
-				_readback()
-			else:
-				_info.text = "Admin-Katalog nicht zugelassen."
+			if not WorldProjection._hex(data.get("glbCatalogRevision"), 64) or typeof(data.get("assets")) != TYPE_ARRAY:
+				_catalog_info.text = "Katalogantwort ungültig."
+				return
+			var eligible: Array[String] = []
+			for asset in data.assets:
+				if typeof(asset) == TYPE_DICTIONARY and asset.get("assetType") == "arena" and asset.get("purpose") in ["world-environment", "world-nature"] and WorldProjection._id(asset.get("assetId"), true):
+					eligible.append(asset.assetId)
+			_catalog_info.text = "Katalog %s · %d mögliche Weltassets\n%s" % [data.glbCatalogRevision, eligible.size(), ", ".join(eligible.slice(0, 12))]
 		"propose":
 			var draft: Variant = JSON.parse_string(str(data.get("draftJson", "")))
-			if typeof(draft) == TYPE_DICTIONARY:
+			if data.get("kind") == "world" and data.get("requiresHumanReview") == true and typeof(draft) == TYPE_DICTIONARY:
 				_draft.text = JSON.stringify(draft, "\t")
-				_invalidate_plan()
-				_info.text = "KI-Entwurf ist noch unverbindlich."
+				_state.draft_changed()
+				_info.text = "Unverbindlicher KI-Entwurf; bitte prüfen."
 			else:
-				_info.text = "KI-Entwurf nicht verwendbar."
+				_info.text = "Aurion lieferte keinen verwendbaren Entwurf."
 		"worldPlan":
-			var draft: Variant = JSON.parse_string(_draft.text)
-			if typeof(draft) == TYPE_DICTIONARY and draft == _plan_requested and _valid_plan_reply(data, _plan_requested):
-				_plan_hash = data.planHash
-				_plan_draft = _plan_requested.duplicate(true)
-				_info.text = "Plan serverseitig geprüft: " + _plan_hash
+			if not _state.accept_plan(data, _current_draft()):
+				_state.failed("worldPlan")
+				_info.text = "Plan passt nicht mehr zum aktuellen Entwurf."
 			else:
-				_invalidate_plan()
-				_info.text = "Planantwort weicht vom beantragten Entwurf ab."
-			_plan_requested.clear()
+				_info.text = _state.message
 		"worldApply":
-			var matched := _valid_apply_receipt(data, _pending_apply)
-			if not matched.is_empty():
-				_pending_apply = matched
-				_confirmed_revision = str(matched.revision)
-				_info.text = "Apply-Receipt passt zum Plan. Prüfe Weltstand unabhängig."
-				_readback()
+			if not _state.accept_apply(data):
+				_state.failed("worldApply")
+				_info.text = _state.message
+			elif not _send("readback"):
+				_state.failed("readback")
+				_info.text = _state.message
 			else:
-				_pending_apply.clear()
-				_confirmed_revision = ""
-				_info.text = "Apply-Ausgang ungeklärt; kein automatischer Retry."
+				_info.text = _state.message
+		"worldReceipt":
+			if data.get("status") == "unresolved":
+				_info.text = "Kein Receipt gefunden; das Ergebnis bleibt ungeklärt."
+			elif not _state.accept_recovered(_journal.read(), data):
+				_info.text = "Receipt und Weltstand konnten nicht sicher zugeordnet werden."
+			elif not _send("readback"):
+				_state.failed("readback")
+				_info.text = _state.message
+			else:
+				_info.text = _state.message
 		"readback":
-			if ConfirmedWorldDesigns.validate_readback(data):
-				if _confirmed_revision.is_empty():
-					_info.text = "Vorhandener Aurion-Weltstand gelesen: " + data.revision
-					emit_signal("confirmed_world", data)
-				elif _confirmed_apply_readback(data, _pending_apply):
-					_info.text = "Aurion-Apply unabhängig bestätigt: " + data.revision
-					_pending_apply.clear()
-					_confirmed_revision = ""
-					emit_signal("confirmed_world", data)
+			if _state.phase == "awaiting_readback":
+				if not _state.accept_readback(data):
+					_info.text = "Receipt erhalten, aber der separate Weltstand ist ungültig oder unvollständig."
+					return
+				var applied: Dictionary = _state.applying_identity()
+				if not _journal.clear_confirmed(applied.draft, _state.actor_id, applied.planHash, applied.plan.operationId):
+					_state.mark_unresolved()
+					_info.text = "Receipt und Weltstand stimmen; die lokale Vormerkung konnte nicht entfernt werden."
 				else:
-					_info.text = "Apply-Revision nicht bestätigt; Welt bleibt unverändert."
+					_info.text = _state.message
 			else:
-				_info.text = "Kein gültiger kanonischer Weltstand."
+				_info.text = "Weltstand gelesen; ein vorheriges unbekanntes Apply wird dadurch nicht bewiesen."
+			if data.get("schemaVersion") == "aurion.world-design.v1" and WorldProjection._hex(data.get("revision"), 64) and typeof(data.get("designs")) == TYPE_ARRAY:
+				confirmed_world.emit(data, connection, generation)
 
-func _on_failed(_kind: String, reason: String) -> void:
-	_busy = false
-	_plan_hash = ""
-	_plan_draft.clear()
-	_info.text = "Aurion lehnt diese Aktion ab: " + reason
+func _failed(kind: String, _reason: String, connection: String, generation: int) -> void:
+	if not visible or not _session_valid() or connection != _connection or generation != _generation:
+		return
+	_state.failed(kind)
+	_info.text = _state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden."
+
+func _close_requested() -> void:
+	# A hidden response is deliberately ignored, so do not hide while any
+	# request is active. Otherwise a planning response could strand the state.
+	if _state.phase == "applying" or (_api != null and _api.busy()):
+		_info.text = "Bitte auf das Ergebnis der laufenden Anfrage warten."
+		return
+	visible = false
+	closed.emit()

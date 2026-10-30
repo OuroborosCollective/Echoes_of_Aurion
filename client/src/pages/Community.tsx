@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import {
   Box,
+  Bug,
   CalendarDays,
   FileText,
   MessageCircle,
@@ -124,6 +125,19 @@ export default function Community() {
             <b>Events</b>
             <p className="mt-2 text-sm text-slate-400">
               Community-Termine und Event-Threads.
+            </p>
+          </button>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            title="Fehlerberichte öffnen"
+            onClick={() => openCommunity("issues")}
+            className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
+          >
+            <Bug className="mb-3 size-5 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
+            <b>Fehlerberichte</b>
+            <p className="mt-2 text-sm text-slate-400">
+              Fehlerberichte, Bugs und technische Probleme.
             </p>
           </button>
           <button

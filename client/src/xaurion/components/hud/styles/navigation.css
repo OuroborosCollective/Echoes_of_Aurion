@@ -1,0 +1,288 @@
+/* Aurion HUD · Quick navigation, minimap, command deck (see hud.css for the import order, which is the cascade order) */
+
+/* ───────────── top-right: navigation + minimap ───────────── */
+.ax-nav {
+  display: grid;
+  grid-template-columns: repeat(4, var(--ax-btn));
+  gap: 6px;
+  padding: 5px;
+  border-radius: 16px;
+  background: rgb(5 9 12 / 0.6);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1px rgb(216 180 95 / 0.22);
+  pointer-events: auto;
+}
+.ax-navbtn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ax-btn);
+  height: var(--ax-btn);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #243238, #0a1215 75%);
+  box-shadow:
+    inset 0 0 0 1.5px rgb(216 180 95 / 0.55),
+    inset 0 0 10px rgb(0 0 0 / 0.7),
+    0 3px 8px rgb(0 0 0 / 0.5);
+  color: var(--ax-aurum-hi);
+  transition:
+    scale 90ms ease-out,
+    box-shadow 160ms;
+}
+.ax-navbtn:active {
+  scale: 0.92;
+}
+.ax-navbtn[data-active="true"] {
+  color: var(--ax-signal);
+  box-shadow:
+    inset 0 0 0 2px var(--ax-signal),
+    0 0 14px rgb(45 226 207 / 0.45),
+    0 3px 8px rgb(0 0 0 / 0.5);
+}
+.ax-navbtn__icon svg {
+  width: 22px;
+  height: 22px;
+}
+.ax-navbtn__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.ax-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #04120f;
+  background: var(--ax-signal);
+  box-shadow: 0 0 0 2px var(--ax-ink);
+}
+.ax-kbd {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ax-kbd {
+    position: absolute;
+    display: block;
+    right: -2px;
+    bottom: -2px;
+    padding: 0 4px;
+    border-radius: 5px;
+    font:
+      800 10px/14px var(--font-sans, "Manrope"),
+      system-ui,
+      sans-serif;
+    color: var(--ax-aurum-hi);
+    background: rgb(0 0 0 / 0.85);
+    box-shadow: inset 0 0 0 1px rgb(216 180 95 / 0.5);
+  }
+  .ax-kbd--inline {
+    position: static;
+    display: inline-block;
+    margin-left: 4px;
+  }
+}
+
+/* minimap restyled as a compass disc (the component keeps its own data + test contract) */
+.ax-minimap {
+  position: relative;
+  flex: none;
+  width: var(--ax-map);
+  height: var(--ax-map);
+}
+.ax-hud.ax-hud .ax-minimap .ax1-confirmed-minimap {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 42%, #14393b, #071518 70%, #03090b);
+  box-shadow:
+    inset 0 0 0 2px #050a0d,
+    inset 0 0 22px rgb(0 0 0 / 0.75),
+    0 6px 14px rgb(0 0 0 / 0.55);
+}
+.ax-minimap::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  padding: 4px;
+  z-index: 2;
+  pointer-events: none;
+  background: conic-gradient(
+    from 200deg,
+    var(--ax-aurum-hi),
+    var(--ax-aurum-lo) 18%,
+    var(--ax-aurum-hi) 36%,
+    #6f4d14 55%,
+    var(--ax-aurum-hi) 74%,
+    var(--ax-aurum-lo) 90%,
+    var(--ax-aurum-hi)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.ax-minimap .ax1-minimap-label,
+.ax-minimap .ax1-confirmed-minimap small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ───────────── command deck (sheet) ───────────── */
+.ax-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: rgb(0 0 0 / 0.5);
+  pointer-events: auto;
+}
+.ax-deck {
+  position: absolute;
+  z-index: 30;
+  right: max(var(--ax-edge), env(safe-area-inset-right));
+  top: max(var(--ax-edge), env(safe-area-inset-top));
+  bottom: max(var(--ax-edge), env(safe-area-inset-bottom));
+  width: min(440px, 62vw);
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  pointer-events: auto;
+  animation: ax-sheet-in 220ms ease-out;
+}
+.ax-deck__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgb(216 180 95 / 0.25);
+}
+.ax-deck__head > div {
+  flex: 1;
+  min-width: 0;
+}
+.ax-deck__title {
+  margin: 0;
+  font-family: var(--font-display, "Cinzel"), Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ax-aurum-hi);
+}
+.ax-deck__sub {
+  margin: 2px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ax-muted);
+}
+.ax-deck__badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ax-signal);
+  box-shadow: inset 0 0 0 1px rgb(45 226 207 / 0.4);
+}
+.ax-deck__close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.07);
+  color: var(--ax-text);
+}
+.ax-deck__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 10px 2px 4px;
+}
+.ax-deck__section {
+  margin-bottom: 12px;
+}
+.ax-deck__section h3 {
+  margin: 0 0 6px 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ax-aurum);
+}
+.ax-deck__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.ax-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.07),
+    rgb(255 255 255 / 0.02)
+  );
+  box-shadow: inset 0 0 0 1px rgb(216 180 95 / 0.25);
+  color: var(--ax-aurum-hi);
+  transition: scale 90ms ease-out;
+}
+.ax-tile:active {
+  scale: 0.95;
+  box-shadow: inset 0 0 0 1.5px var(--ax-signal);
+}
+.ax-tile svg {
+  width: 26px;
+  height: 26px;
+}
+.ax-tile span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ax-text);
+}
+.ax-deck__foot {
+  margin: 6px 2px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ax-muted);
+}

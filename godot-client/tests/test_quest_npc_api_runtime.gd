@@ -3,6 +3,7 @@ extends SceneTree
 const Api = preload("res://net/api/quest_npc_api.gd")
 const SERVER := "http://127.0.0.1:3000"
 var catalog_mode := OS.get_environment("AURION_TEST_GLB_CATALOG") == "1"
+var world_design_mode := OS.get_environment("AURION_TEST_WORLD_DESIGN") == "1"
 var failures: Array[String] = []
 var completed := false
 var success := false
@@ -76,7 +77,7 @@ func _request(api: Node, connection: String) -> void:
 func verify() -> void:
 	var auth := TestAuth.new()
 	root.add_child(auth)
-	var api := Api.new(auth, "/api/game/glb-catalog") if catalog_mode else Api.new(auth)
+	var api := Api.new(auth, "/api/game/world-design") if world_design_mode else (Api.new(auth, "/api/game/glb-catalog") if catalog_mode else Api.new(auth))
 	api.npcs_ready.connect(_good)
 	api.request_failed.connect(_bad)
 	root.add_child(api)
@@ -84,11 +85,16 @@ func verify() -> void:
 	require(api.get_child_count() == 0, "NPC API created an HTTP client without a request")
 	await _request(api, "zone_npc_one")
 	require(success and last_connection == "zone_npc_one" and last_generation == 1, "protected NPC GET lost connection/generation")
-	require(last_response.get("version") == ("aurion.glb-import.v1" if catalog_mode else "aurion.quest-npc-visuals.v1"), "NPC GET lost server version")
+	if world_design_mode:
+		require(last_response.get("schemaVersion") == "aurion.world-design.v1", "world-design GET lost server schema")
+	else:
+		require(last_response.get("version") == ("aurion.glb-import.v1" if catalog_mode else "aurion.quest-npc-visuals.v1"), "NPC GET lost server version")
+		if catalog_mode:
+			require(last_response.get("entries", []).size() == 500, "large LOD catalog was truncated or rejected")
 	var first_http := api.get_child(0) as HTTPRequest if api.get_child_count() > 0 else null
 	require(first_http != null, "NPC GET did not construct any HTTPRequest")
 	if first_http != null:
-		require(first_http.max_redirects == 0 and first_http.body_size_limit == (1048576 if catalog_mode else 65536) and first_http.timeout == 12.0,
+		require(first_http.max_redirects == 0 and first_http.body_size_limit == (4194304 if world_design_mode or catalog_mode else 65536) and first_http.timeout == 12.0,
 			"NPC GET allows redirects or unbounded responses")
 	await _request(api, "zone_npc_redirect")
 	require(not success and last_error == "NPC_REQUEST_FAILED", "NPC redirect followed or accepted")
@@ -118,7 +124,7 @@ func verify() -> void:
 	api.queue_free()
 	auth.queue_free()
 	if failures.is_empty():
-		print("G16 GLB catalog protected GET boundary verified (isolated HTTP; test auth only)" if catalog_mode else "G16 quest NPC protected GET boundary verified (isolated HTTP; test auth only)")
+		print("GODOT_WORLD_DESIGN_HTTP_PASS (isolated HTTP; test auth only)" if world_design_mode else ("G16 GLB catalog protected GET boundary verified (isolated HTTP; test auth only)" if catalog_mode else "G16 quest NPC protected GET boundary verified (isolated HTTP; test auth only)"))
 		quit(0)
 	else:
 		for message in failures:

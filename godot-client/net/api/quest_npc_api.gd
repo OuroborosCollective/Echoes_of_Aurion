@@ -18,10 +18,10 @@ var _path: String
 var _body_limit: int
 
 func _init(auth: Node, path: String = PATH) -> void:
-	assert(path in [PATH, "/api/game/glb-catalog"])
+	assert(path in [PATH, "/api/game/glb-catalog", "/api/game/world-design"])
 	_auth = auth
 	_path = path
-	_body_limit = 1048576 if path == "/api/game/glb-catalog" else MAX_RESPONSE_BYTES
+	_body_limit = 4194304 if path in ["/api/game/world-design", "/api/game/glb-catalog"] else MAX_RESPONSE_BYTES
 
 func _ready() -> void:
 	_auth.refresh_succeeded.connect(_on_refresh_succeeded)

@@ -1,0 +1,39 @@
+name: Aurion MCP dependency regression
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'server/adminMcp*.ts'
+      - 'server/gateway*.ts'
+      - 'server/devControlChannel*.ts'
+      - '.github/workflows/aurion-mcp-dependency-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mcp:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test isolated MCP, gateway and control contracts
+        run: >-
+          pnpm exec vitest run
+          server/adminMcp.test.ts
+          server/adminMcpProtocol.test.ts
+          server/adminMcpRoute.test.ts
+          server/adminMcpAuthenticated.test.ts
+          server/gatewayProtocol.test.ts
+          server/devControlChannel.test.ts

@@ -20,10 +20,12 @@ const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
 const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
 const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
+const WorldDesignProjection = preload("res://world/world_design_projection.gd")
+const WorldAssetApi = preload("res://net/api/world_asset_api.gd")
+const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
 const InputAdapter = preload("res://app/input_adapter.gd")
-const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
-const ConfirmedDesigns = preload("res://world/confirmed_world_designs.gd")
+const TouchRouter = preload("res://ui/mobile/touch_router.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
@@ -52,7 +54,11 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var quest_npc_root: Node3D = %QuestNPCs
 @onready var live_3d_viewport: SubViewport = $WorldView/Live3D
 @onready var mobile_joystick: Control = $MobileJoystick
+@onready var mobile_hud: Control = $MobileHUD
 @onready var world_camera: Camera3D = %WorldCamera
+@onready var target_hud: Control = $TargetHUD
+@onready var target_label: Label = %TargetLabel
+@onready var world_action: Button = %WorldAction
 @onready var _initial_world_camera_transform: Transform3D = %WorldCamera.transform
 @onready var unassigned_floor: MeshInstance3D = $WorldView/Live3D/World/UnassignedFloor
 @onready var confirmed_terrain: Node3D = $WorldView/Live3D/World/ConfirmedTerrain
@@ -60,15 +66,25 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var starter_village_visuals: Node3D = $WorldView/Live3D/World/StarterVillageVisuals
 @onready var terrain3d_host: Node3D = $WorldView/Live3D/World/ConfirmedTerrain3D
 
-var _world_studio: Control
-var _world_design_proxies: Node3D
 var _diagnostics = TechnicalDiagnostics.new()
 var _movement = InputAdapter.new()
+var _camera_router = TouchRouter.new()
+var _mobile_hud_enabled := OS.has_feature("mobile")
+var _selected_target_id := ""
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
 var _appearance_api: Node
 var _chunk_api: Node
+var _world_design_api: Node
+var _world_asset_api: Node
+var _world_design_visuals: Node3D
+var _world_studio: Control
+var _world_design_readback: Dictionary = {}
+var _world_design_surfaces: Dictionary = {}
+var _world_design_last_poll_ms := -1
+var _world_asset_inflight := ""
+var _world_asset_retry_after: Dictionary = {}
 var _chunk_last_request_ms := -1
 var _chunk_requested := Vector2i.ZERO
 var _chunk_center := Vector2i.ZERO
@@ -130,6 +146,7 @@ func _ready() -> void:
 	_auth_start.start_failed.connect(_on_auth_start_failed)
 	_auth_start.session_succeeded.connect(_on_auth_session_succeeded)
 	_auth_start.session_failed.connect(_on_auth_session_failed)
+	_auth_start.refresh_failed.connect(_on_auth_session_failed)
 	_auth_start.logout_succeeded.connect(_on_auth_logout_terminal)
 	_auth_start.logout_failed.connect(_on_auth_logout_terminal)
 	_api = AurionApi.new(_auth_start)
@@ -152,6 +169,22 @@ func _ready() -> void:
 	add_child(_monster_api)
 	_monster_api.npcs_ready.connect(_on_monster_catalog_ready)
 	_monster_api.request_failed.connect(_on_monster_catalog_failed)
+	_world_design_api = QuestNpcApi.new(_auth_start, "/api/game/world-design")
+	add_child(_world_design_api)
+	_world_design_api.npcs_ready.connect(_on_world_design_ready)
+	_world_design_api.request_failed.connect(_on_world_design_failed)
+	_world_asset_api = WorldAssetApi.new(_auth_start)
+	add_child(_world_asset_api)
+	_world_asset_api.asset_ready.connect(_on_world_asset_ready)
+	_world_asset_api.request_failed.connect(_on_world_asset_failed)
+	_world_design_visuals = WorldDesignProjection.new()
+	_world_design_visuals.name = "WorldDesignVisuals"
+	world_actors.get_parent().add_child(_world_design_visuals)
+	_world_studio = WorldStudio.new()
+	_world_studio.name = "WorldStudio"
+	add_child(_world_studio)
+	_world_studio.confirmed_world.connect(_on_world_studio_readback)
+	_world_studio.closed.connect(_restore_mobile_joystick)
 	_chunk_api = ChunkSurfaceApi.new(_auth_start)
 	add_child(_chunk_api)
 	_chunk_api.surface_ready.connect(_on_chunk_surface_ready)
@@ -178,19 +211,21 @@ func _ready() -> void:
 	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	world_toggle.pressed.connect(_toggle_world_diagnostics)
-	_world_design_proxies = ConfirmedDesigns.new()
-	_world_design_proxies.name = "ConfirmedWorldDesignProxies"
-	$WorldView/Live3D/World.add_child(_world_design_proxies)
-	_world_studio = WorldStudio.new()
-	_world_studio.name = "WorldStudio"
-	add_child(_world_studio)
-	_world_studio.confirmed_world.connect(_on_world_design_confirmed)
+	world_action.pressed.connect(_on_world_action_pressed)
+	mobile_hud.attack_requested.connect(_on_world_action_pressed)
+	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
+	mobile_hud.world_studio_requested.connect(_open_world_studio)
+	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
+	mobile_hud.exit_requested.connect(_on_mobile_exit_requested)
+	mobile_hud.exit_confirmation.canceled.connect(_restore_mobile_joystick)
 	var studio_button := Button.new()
 	studio_button.name = "WorldStudioButton"
-	studio_button.text = "Weltstudio"
+	studio_button.text = "Weltstudio (Admin)"
 	studio_button.custom_minimum_size.y = 48
 	studio_button.pressed.connect(_open_world_studio)
 	$WorldHUD/WorldBar.add_child(studio_button)
+	if _mobile_hud_enabled:
+		get_tree().set_quit_on_go_back(false)
 	login.disabled = true
 	if not _configuration_valid():
 		status.text = "Konfiguration ungültig"
@@ -246,6 +281,8 @@ func _on_auth_start_failed(error_code: String) -> void:
 	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 	if error_code == "NATIVE_AUTH_BUILD_UNSUPPORTED":
 		status.text = "Client-Aktualisierung erforderlich"
+	elif error_code == "NATIVE_AUTH_TRANSACTION_INVALID":
+		status.text = "Anmeldeversuch ungültig oder abgelaufen – bitte erneut anmelden"
 	else:
 		status.text = "Anmeldung derzeit nicht verfügbar"
 
@@ -304,8 +341,6 @@ func _reset_projection() -> void:
 	# An old HTTP completion/actor must not survive a new authenticated zone.
 	if _world_studio != null:
 		_world_studio.close_session()
-	if _world_design_proxies != null:
-		_world_design_proxies.clear()
 	if _appearance_api != null:
 		_appearance_api.cancel()
 	if _remote_api != null:
@@ -315,6 +350,18 @@ func _reset_projection() -> void:
 	_quest_npc_diagnostic = "nicht geladen"
 	if _monster_api != null:
 		_monster_api.cancel()
+	if _world_design_api != null:
+		_world_design_api.cancel()
+	if _world_asset_api != null:
+		_world_asset_api.cancel()
+	if _world_design_visuals != null:
+		_world_design_visuals.clear()
+		_world_design_visuals.visible = true
+	_world_design_readback.clear()
+	_world_design_surfaces.clear()
+	_world_design_last_poll_ms = -1
+	_world_asset_inflight = ""
+	_world_asset_retry_after.clear()
 	if _chunk_api != null:
 		_chunk_api.cancel()
 	confirmed_terrain.clear()
@@ -338,7 +385,15 @@ func _reset_projection() -> void:
 	_remote_last_poll_ms = -1
 	_clear_3d_actors()
 	unassigned_floor.position = Vector3.ZERO
+	world_camera.reset_view()
 	world_camera.transform = _initial_world_camera_transform
+	_camera_router.cancel()
+	_selected_target_id = ""
+	target_hud.visible = false
+	mobile_hud.reset()
+	mobile_hud.visible = false
+	target_label.text = "Ziel: keines"
+	world_action.disabled = true
 	world_view.visible = false
 	world_hud.visible = false
 	mobile_joystick.visible = false
@@ -395,6 +450,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		var now_ms := Time.get_ticks_msec()
 		_last_world_update_ms = now_ms
 		_world_is_stale = false
+		_world_design_visuals.visible = true
 		_visuals.capture(_confirmed_zone, now_ms)
 		zone_map.set_confirmed(_confirmed_zone, _entities)
 		zone_map.set_visual_positions(_visuals, now_ms)
@@ -459,8 +515,7 @@ func _on_zone_connected() -> void:
 	login.text = "Verbunden"
 	login.disabled = true
 	_show_3d()
-	if _world_studio != null:
-		_world_studio.configure(_auth_start, _config.server_base_url, _confirmed_zone.connection_id())
+	_world_studio.configure(_auth_start, _config.server_base_url, _confirmed_zone.connection_id())
 	# The authenticated optional reader cannot invalidate the v5 zone transport.
 	if _appearance_api != null and not _appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id()):
 		_appearance_diagnostic = "Erscheinung derzeit nicht abrufbar"
@@ -473,6 +528,9 @@ func _on_zone_rejected(code: String) -> void:
 	# Command-level rejection is recoverable after a verified welcome.
 	if _zone_socket.state_name() == "connected":
 		status.text = "Sicher mit Aurion verbunden"
+		combat_notice.text = "Aktion abgelehnt · " + code
+		combat_notice.visible = true
+		_combat_notice_expires_at_ms = Time.get_ticks_msec() + COMBAT_NOTICE_DURATION_MS
 		return
 	_zone_reject_code = code
 	status.text = "Zonenverbindung abgelehnt"
@@ -544,7 +602,7 @@ func _on_auth_logout_terminal(_error_code: String = "") -> void:
 	login.text = "Anmelden"
 	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 
-func _on_auth_session_failed(_error_code: String) -> void:
+func _on_auth_session_failed(error_code: String) -> void:
 	_lifecycle.cancel_restore()
 	_ticket_abandoned = true
 	_ticket_pending = false
@@ -553,6 +611,8 @@ func _on_auth_session_failed(_error_code: String) -> void:
 	_zone_socket.close_zone()
 	_awaiting_callback = false
 	status.text = "Anmeldung derzeit nicht verfügbar"
+	if error_code in ["NATIVE_AUTH_TRANSACTION_INVALID", "NATIVE_AUTH_CODE_EXPIRED", "NATIVE_AUTH_CODE_CONSUMED"]:
+		status.text = "Anmelderückgabe ungültig oder abgelaufen – bitte erneut anmelden"
 	login.text = "Anmelden"
 	login.disabled = _lifecycle.is_suspended() or not _config.native_auth_start_enabled
 
@@ -561,9 +621,16 @@ func _notification(what: int) -> void:
 		_on_app_suspended()
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
 		_on_app_resumed()
+	elif what == NOTIFICATION_WM_GO_BACK_REQUEST and _mobile_hud_enabled and is_node_ready():
+		_handle_mobile_back()
 
 func _process(_delta: float) -> void:
 	var now_ms := Time.get_ticks_msec()
+	# The socket cannot outlive the authenticated session. Token expiry can
+	# clear credentials without emitting refresh_failed, so check it as well.
+	if _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _auth_start.protected_response_allowed():
+		_on_auth_session_failed("NATIVE_AUTH_SESSION_EXPIRED")
+		return
 	if _confirmed_zone.has_state():
 		zone_map.set_visual_positions(_visuals, now_ms)
 		_project_3d(now_ms)
@@ -572,7 +639,12 @@ func _process(_delta: float) -> void:
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
+	_request_world_design(now_ms)
+	_request_world_asset(now_ms)
 	_poll_move_intent(now_ms)
+	if not _world_input_permitted():
+		_camera_router.cancel()
+	_refresh_target_hud()
 	if _awaiting_callback:
 		_intent_bridge.poll_for_callback(true)
 	if _reconnect.active() and not _lifecycle.is_suspended():
@@ -582,10 +654,14 @@ func _process(_delta: float) -> void:
 ## explicitly unassigned presentation; it is not Aurion world geometry.
 func _show_3d() -> void:
 	world_view.visible = true
-	world_hud.visible = true
+	world_hud.visible = not _mobile_hud_enabled
+	target_hud.visible = not _mobile_hud_enabled
+	mobile_hud.visible = _mobile_hud_enabled
 	mobile_joystick.visible = true
 	$SafeMargin.visible = false
 	world_toggle.text = "Diagnose"
+	_fit_layout()
+	_refresh_target_hud()
 	_update_3d_status()
 
 func _toggle_world_diagnostics() -> void:
@@ -593,10 +669,157 @@ func _toggle_world_diagnostics() -> void:
 		return
 	$SafeMargin.visible = not $SafeMargin.visible
 	mobile_joystick.visible = not $SafeMargin.visible
+	target_hud.visible = not $SafeMargin.visible and not _mobile_hud_enabled
+	if _mobile_hud_enabled:
+		mobile_hud.visible = not $SafeMargin.visible
+		world_hud.visible = $SafeMargin.visible
+		mobile_hud.set_menu_open(false)
+	_camera_router.cancel()
 	if $SafeMargin.visible:
 		_cancel_move_intent()
 	world_toggle.text = "3D-Ansicht" if $SafeMargin.visible else "Diagnose"
 
+func _on_mobile_menu_changed(open: bool) -> void:
+	if open:
+		_camera_router.cancel()
+		_cancel_move_intent()
+	_restore_mobile_joystick()
+
+func _restore_mobile_joystick() -> void:
+	if _mobile_hud_enabled:
+		mobile_joystick.visible = world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible
+
+func _handle_mobile_back() -> void:
+	if _world_studio.visible:
+		_world_studio._close_requested()
+		_restore_mobile_joystick()
+		return
+	if mobile_hud.close_transient():
+		_restore_mobile_joystick()
+		return
+	if world_view.visible and $SafeMargin.visible:
+		_toggle_world_diagnostics()
+		return
+	if world_view.visible:
+		_camera_router.cancel()
+		_cancel_move_intent()
+		mobile_hud.request_exit_confirmation()
+		_restore_mobile_joystick()
+	else:
+		get_tree().quit()
+
+func _on_mobile_exit_requested() -> void:
+	_cancel_move_intent()
+	get_tree().quit()
+
+
+## G21: camera-only gestures never send move/attack or alter confirmed state.
+## The existing G20 joystick still exclusively owns its own finger index.
+func _world_input_permitted() -> bool:
+	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and not _world_studio.visible and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
+
+func _open_world_studio() -> void:
+	if not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended() or _world_is_stale or not _auth_start.protected_response_allowed():
+		return
+	_camera_router.cancel()
+	_cancel_move_intent()
+	_world_studio.open_studio()
+	_restore_mobile_joystick()
+
+func _on_world_studio_readback(readback: Dictionary, connection: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended() or _world_is_stale:
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation:
+		return
+	# An older polling GET must not overwrite this later independent readback.
+	_world_design_api.cancel()
+	_world_design_last_poll_ms = Time.get_ticks_msec()
+	_world_design_readback = readback.duplicate(true)
+	_sync_world_design()
+
+func _camera_exclusions() -> Array[Rect2]:
+	var blocked: Array[Rect2] = []
+	if mobile_joystick.visible:
+		blocked.append(mobile_joystick.get_global_rect())
+	if world_hud.visible:
+		blocked.append(world_hud.get_global_rect())
+	if target_hud.visible:
+		blocked.append(target_hud.get_global_rect())
+	if mobile_hud.visible:
+		blocked.append_array(mobile_hud.touch_exclusions())
+	return blocked
+
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventScreenTouch or event is InputEventScreenDrag):
+		return
+	var area := Rect2(
+		world_view.global_position + Vector2(world_view.size.x * 0.5, 0.0),
+		Vector2(world_view.size.x * 0.5, world_view.size.y))
+	var event_result: Dictionary = _camera_router.route(event, _world_input_permitted(), area, _camera_exclusions())
+	match str(event_result.get("kind", "")):
+		"drag":
+			world_camera.drag_orbit(event_result["delta"])
+		"tap":
+			_select_visible_target_at(event_result["position"])
+
+func _is_visible_confirmed_entity(id: String) -> bool:
+	if id.is_empty():
+		return false
+	if _entities.record("mobs", id).is_empty() and _entities.record("presences", id).is_empty():
+		return false
+	for actor in world_actors.get_children():
+		if actor is Node3D and actor.visible and actor.has_method("confirmed_mm") and str(actor.get("entity_id")) == id:
+			return true
+	return false
+
+func _select_visible_target_at(screen_point: Vector2) -> void:
+	if not _world_input_permitted():
+		return
+	_selected_target_id = ""
+	var view_rect: Rect2 = world_view.get_global_rect()
+	if view_rect.size.x <= 0.0 or view_rect.size.y <= 0.0:
+		_refresh_target_hud()
+		return
+	# SubViewport coordinates can differ from Control coordinates on tablet
+	# rotation; the click and projected model point must share one basis.
+	var relative := screen_point - view_rect.position
+	var projected_click := Vector2(
+		relative.x * float(live_3d_viewport.size.x) / view_rect.size.x,
+		relative.y * float(live_3d_viewport.size.y) / view_rect.size.y)
+	var best_distance := maxf(45.0, minf(view_rect.size.x, view_rect.size.y) * 0.075)
+	for actor in world_actors.get_children():
+		if not (actor is Node3D) or not actor.visible or not actor.has_method("confirmed_mm"):
+			continue
+		var id := str(actor.get("entity_id"))
+		if not _is_visible_confirmed_entity(id):
+			continue
+		var model_point: Vector3 = actor.global_position + Vector3(0.0, 1.0, 0.0)
+		if world_camera.is_position_behind(model_point):
+			continue
+		var distance := world_camera.unproject_position(model_point).distance_to(projected_click)
+		if distance < best_distance:
+			best_distance = distance
+			_selected_target_id = id
+	_refresh_target_hud()
+
+func _refresh_target_hud() -> void:
+	if not _is_visible_confirmed_entity(_selected_target_id):
+		_selected_target_id = ""
+	target_label.text = "Ziel: keines" if _selected_target_id.is_empty() else "Aurion bestätigt · " + _selected_target_id
+	var mob: Dictionary = _entities.record("mobs", _selected_target_id)
+	world_action.disabled = not _world_input_permitted() or mob.is_empty() or mob.get("state", "dead") == "dead"
+	if mobile_hud.visible:
+		mobile_hud.render_projection(_confirmed_zone, _entities, _selected_target_id, _world_is_stale, not world_action.disabled, combat_notice.text if combat_notice.visible else "")
+
+func _on_world_action_pressed() -> void:
+	# Only the existing v5 send_attack typed command; Aurion decides all
+	# reachability, damage, cooldown, and final action outcome.
+	if not _world_input_permitted():
+		return
+	_refresh_target_hud()
+	if world_action.disabled or _selected_target_id.is_empty():
+		return
+	_zone_socket.send_attack(_selected_target_id)
 
 ## G20: InputMap and the pinned native Godot joystick are presentation inputs.
 ## Only a verified v5 session may send digital intents, max once per 100 ms.
@@ -605,7 +828,7 @@ func _poll_move_intent(now_ms: int) -> void:
 	if _zone_socket == null:
 		return
 	var connected: bool = _zone_socket.state_name() == "connected"
-	var permitted: bool = connected and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and world_view.visible and not $SafeMargin.visible
+	var permitted: bool = _world_input_permitted()
 	if not permitted:
 		_movement.cancel(_zone_socket, connected)
 		return
@@ -698,14 +921,17 @@ func _project_3d(now_ms: int) -> void:
 				_self_actor = null
 		else:
 			_appearance_diagnostic = str(_self_actor.diagnostic)
-			var point: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
-			if not point.is_empty():
-				var x: float = float(point["x"]) / 1000.0
-				var z: float = float(point["z"]) / 1000.0
-				# The neutral plane has no world authority; follow only the visual point.
+	# Camera tracking is independent of asset availability: it can follow only
+	# a current projection of the server-confirmed self, never a guessed model.
+	if _visuals.matches(_confirmed_zone):
+		var point: Dictionary = _visuals.visual_precise_mm(_confirmed_zone.self_entity_id(), now_ms)
+		if not point.is_empty():
+			var x: float = float(point["x"]) / 1000.0
+			var z: float = float(point["z"]) / 1000.0
+			if is_finite(x) and is_finite(z):
+				# The neutral plane and camera are presentation only.
 				unassigned_floor.position = Vector3(x, 0.0, z)
-				world_camera.position = Vector3(x, 2.8, z + 5.5)
-				world_camera.look_at(Vector3(x, 1.0, z), Vector3.UP)
+				world_camera.follow_confirmed(Vector3(x, 1.0, z))
 	_update_3d_status()
 func _update_3d_status() -> void:
 	if not _confirmed_zone.has_state():
@@ -824,6 +1050,10 @@ func _update_world_freshness(now_ms: int) -> void:
 	if stale == _world_is_stale:
 		return
 	_world_is_stale = stale
+	_world_design_visuals.visible = not stale
+	if stale and _world_asset_api != null:
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
 	zone_map.set_stale(stale)
 	_update_entity_presentation()
 	_update_vitals_presentation()
@@ -951,9 +1181,37 @@ func _poll_reconnect(now_ms: int) -> void:
 func _fit_layout() -> void:
 	if not is_node_ready():
 		return
+	# Rotations-/resize-cancel cannot resurrect a captured camera finger.
+	_camera_router.cancel()
+	_cancel_move_intent()
 	card.custom_minimum_size.x = minf(600.0, maxf(240.0, size.x - 48.0))
 	title.add_theme_font_size_override("font_size", 32 if size.x < 600 else 44)
+	if _mobile_hud_enabled:
+		var safe := _mobile_safe_rect()
+		var density := clampf(float(DisplayServer.screen_get_dpi()) / 160.0, 1.0, 2.0) if OS.has_feature("mobile") else 1.0
+		mobile_hud.fit_layout(size, safe, density)
+		mobile_hud.style_joystick(mobile_joystick)
+		var joystick_scale := clampf(safe.size.y / 800.0, 0.5, 1.0)
+		mobile_joystick.scale = Vector2.ONE * joystick_scale
+		mobile_joystick.offset_left = safe.position.x + 16.0 * density
+		mobile_joystick.offset_right = mobile_joystick.offset_left + 220.0
+		mobile_joystick.offset_top = safe.end.y - size.y - 16.0 * density - 220.0 * joystick_scale
+		mobile_joystick.offset_bottom = mobile_joystick.offset_top + 220.0
 	queue_redraw()
+
+func _mobile_safe_rect() -> Rect2:
+	var fallback := Rect2(Vector2.ZERO, size)
+	if not OS.has_feature("mobile"):
+		return fallback
+	var window_size := Vector2(DisplayServer.window_get_size())
+	if window_size.x <= 0.0 or window_size.y <= 0.0:
+		return fallback
+	var window_rect := Rect2(Vector2(DisplayServer.window_get_position()), window_size)
+	var display_safe := Rect2(DisplayServer.get_display_safe_area())
+	var intersection := window_rect.intersection(display_safe)
+	if intersection.size.x <= 0.0 or intersection.size.y <= 0.0:
+		return fallback
+	return Rect2((intersection.position - window_rect.position) * size / window_size, intersection.size * size / window_size)
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color("07131c"))
@@ -967,8 +1225,14 @@ func _draw() -> void:
 		draw_circle(star * size, 2.0, Color(0.77, 0.69, 0.46, 0.6))
 
 func _request_monster_catalog(now_ms: int) -> void:
-	if not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or _entities.ids("mobs").is_empty():
+	if not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
 		return
+	# Preserve monster refresh behavior without downloading the full asset
+	# catalog for a world that has no published authored designs.
+	if _entities.ids("mobs").is_empty():
+		var designs: Variant = _world_design_readback.get("designs", [])
+		if typeof(designs) != TYPE_ARRAY or designs.is_empty():
+			return
 	if _monster_last_poll_ms >= 0 and now_ms - _monster_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS:
 		return
 	_monster_last_poll_ms = now_ms
@@ -981,12 +1245,16 @@ func _on_monster_catalog_ready(response: Dictionary, connection_id: String, gene
 		return
 	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
 	_apply_monster_catalog(response, manifest if manifest is Dictionary else {})
+	_sync_world_design()
 
 func _on_monster_catalog_failed(reason: String, connection_id: String) -> void:
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
 		return
 	_monster_actors.clear(world_actors)
 	_monster_catalog.clear()
+	_world_design_visuals.clear()
+	_world_asset_api.cancel()
+	_world_asset_inflight = ""
 	_monster_diagnostic = reason
 	_update_3d_status()
 
@@ -996,6 +1264,86 @@ func _apply_monster_catalog(catalog: Dictionary, manifest: Dictionary) -> void:
 	_monster_manifest = manifest.duplicate(true)
 	_sync_monsters()
 	_project_3d(Time.get_ticks_msec())
+
+func _request_world_design(now_ms: int) -> void:
+	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed():
+		return
+	if _world_design_last_poll_ms >= 0 and now_ms - _world_design_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS:
+		return
+	_world_design_last_poll_ms = now_ms
+	_world_design_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
+
+func _on_world_design_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	_world_design_readback = response.duplicate(true)
+	_sync_world_design()
+
+func _on_world_design_failed(_reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	_world_design_readback.clear()
+	_world_design_visuals.clear()
+	_world_asset_api.cancel()
+	_world_asset_inflight = ""
+
+## The callback above is the production entry point; tests may use this seam
+## only with explicitly synthetic source data and a confirmed fixture zone.
+func _sync_world_design() -> void:
+	if not _confirmed_zone.has_state():
+		return
+	if _world_design_readback.is_empty() or _monster_catalog.is_empty():
+		_world_design_visuals.clear()
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
+		return
+	var connection_id: String = _confirmed_zone.connection_id()
+	var center: Variant = _current_confirmed_chunk()
+	if typeof(center) != TYPE_VECTOR2I:
+		return
+	if not _world_design_visuals.bind_confirmed(_world_design_readback, _monster_catalog, connection_id):
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
+		return
+	for coordinate in _world_design_surfaces:
+		_world_design_visuals.accept_surface(_world_design_surfaces[coordinate], connection_id, center)
+
+func _remember_world_design_surface(readback: Dictionary, connection_id: String, coordinate: Vector2i, center: Vector2i) -> void:
+	_world_design_surfaces[coordinate] = readback.duplicate(true)
+	_world_design_visuals.accept_surface(readback, connection_id, center)
+
+func _request_world_asset(now_ms: int) -> void:
+	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed() or _world_asset_api.busy():
+		return
+	for request in _world_design_visuals.needed_assets():
+		var sha: String = request.sha256
+		if _world_asset_retry_after.has(sha) and now_ms < int(_world_asset_retry_after[sha]):
+			continue
+		_world_asset_inflight = sha
+		if not _world_asset_api.request_asset(_config.server_base_url, request, _confirmed_zone.connection_id()):
+			_world_asset_retry_after[sha] = now_ms + 30000
+			_world_asset_inflight = ""
+		return
+
+func _on_world_asset_ready(sha: String, bytes: PackedByteArray, connection_id: String, generation: int) -> void:
+	_world_asset_inflight = ""
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended() or _world_is_stale:
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	if not _world_design_visuals.supply_asset(sha, bytes, connection_id):
+		_world_asset_retry_after[sha] = Time.get_ticks_msec() + 30000
+		_world_design_visuals.try_next_asset(sha, connection_id)
+
+func _on_world_asset_failed(_reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	if not _world_asset_inflight.is_empty():
+		_world_asset_retry_after[_world_asset_inflight] = Time.get_ticks_msec() + 30000
+		_world_design_visuals.try_next_asset(_world_asset_inflight, connection_id)
+	_world_asset_inflight = ""
 
 func _sync_monsters() -> void:
 	_monster_actors.apply(_confirmed_zone, world_actors, {}, _monster_catalog, _monster_manifest)
@@ -1057,6 +1405,9 @@ func _clear_neighbor_chunks() -> void:
 ## An invalid or failed authenticated refresh must not leave old visual
 ## terrain masquerading as the latest readback. Presentation only.
 func _evict_neighbor_chunk(coordinate: Vector2i) -> void:
+	_world_design_surfaces.erase(coordinate)
+	if _confirmed_zone.has_state():
+		_world_design_visuals.remove_surface(coordinate, _confirmed_zone.connection_id())
 	var key := "Chunk_%d_%d" % [coordinate.x, coordinate.y]
 	var existing: Node3D = confirmed_neighbors.get_node_or_null(key) as Node3D
 	if existing != null:
@@ -1076,6 +1427,10 @@ func _request_chunk_surface(now_ms: int) -> void:
 	var coordinate: Vector2i = value
 	if _chunk_center != coordinate:
 		_chunk_api.cancel()
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
+		_world_design_surfaces.clear()
+		_world_design_visuals.reset_surfaces(_confirmed_zone.connection_id())
 		confirmed_terrain.clear()
 		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
@@ -1147,6 +1502,10 @@ func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
 		return
 	var center: Variant = _current_confirmed_chunk()
 	if _chunk_requested == center:
+		_world_design_surfaces.clear()
+		_world_design_visuals.reset_surfaces(connection_id)
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
 		confirmed_terrain.clear()
 		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
@@ -1167,9 +1526,9 @@ func _apply_neighbor_chunk_surface(readback: Dictionary, connection_id: String) 
 	if typeof(center) != TYPE_VECTOR2I or typeof(base) != TYPE_DICTIONARY or typeof(base.get("coordinate")) != TYPE_DICTIONARY:
 		return false
 	var coordinates: Dictionary = base.coordinate
-	if typeof(coordinates.get("x")) != TYPE_INT or typeof(coordinates.get("z")) != TYPE_INT:
+	if not ChunkTerrain._whole(coordinates.get("x"), -1000000, 1000000) or not ChunkTerrain._whole(coordinates.get("z"), -1000000, 1000000):
 		return false
-	var coordinate := Vector2i(coordinates.x, coordinates.z)
+	var coordinate := Vector2i(int(coordinates.x), int(coordinates.z))
 	if coordinate == center or maxi(absi(coordinate.x - center.x), absi(coordinate.y - center.y)) > 1:
 		return false
 	var key := "Chunk_%d_%d" % [coordinate.x, coordinate.y]
@@ -1183,9 +1542,13 @@ func _apply_neighbor_chunk_surface(readback: Dictionary, connection_id: String) 
 		_evict_neighbor_chunk(coordinate)
 		return false
 	if existing != null:
-		_evict_neighbor_chunk(coordinate)
+		# Replace an accepted mesh atomically. Evicting the matching design
+		# surface here would discard its loaded models on every refresh.
+		confirmed_neighbors.remove_child(existing)
+		existing.queue_free()
 	confirmed_neighbors.add_child(painter)
 	_apply_terrain3d_presentation(readback, connection_id)
+	_remember_world_design_surface(readback, connection_id, coordinate, center)
 	return true
 
 ## Fixture seam for the real Godot active-scene test only. Runtime callers
@@ -1200,6 +1563,10 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	if base.coordinate.get("x") != coordinate.x or base.coordinate.get("z") != coordinate.y:
 		return false
 	if not confirmed_terrain.apply_confirmed(readback, connection_id):
+		_world_design_surfaces.clear()
+		_world_design_visuals.reset_surfaces(connection_id)
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
 		starter_village_visuals.clear()
 		unassigned_floor.visible = true
 		_clear_terrain3d_presentation()
@@ -1208,6 +1575,7 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 		return false
 	unassigned_floor.visible = false
 	_apply_terrain3d_presentation(readback, connection_id)
+	_remember_world_design_surface(readback, connection_id, coordinate, coordinate)
 	# The authenticated chunk contains an optional server-owned visual plan.
 	# A missing or invalid plan never fabricates a client-owned settlement.
 	var village_ok: bool = starter_village_visuals.apply_confirmed(readback, connection_id)
@@ -1215,14 +1583,3 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	_update_3d_status()
 	return true
 
-func _open_world_studio() -> void:
-	if _world_studio == null or not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended():
-		return
-	_cancel_move_intent()
-	_world_studio.open_studio()
-
-func _on_world_design_confirmed(readback: Dictionary) -> void:
-	if not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended():
-		return
-	if _world_design_proxies != null:
-		_world_design_proxies.apply_confirmed(readback)

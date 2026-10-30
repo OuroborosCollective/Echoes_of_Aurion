@@ -1,9 +1,31 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { dispatchSchemaPlan } from "./dispatch-aurion-schema-plan.mjs";
+import { dispatchSchemaPlan, SCHEMA_DISPATCH_MAX_ATTEMPTS, SCHEMA_DISPATCH_POLL_INTERVAL_MS } from "./dispatch-aurion-schema-plan.mjs";
 
 const input = { manifest: JSON.parse(await readFile(new URL("../config/aurion-migration-wave-manifest.json", import.meta.url), "utf8")), expectedSha: "a".repeat(40), planSha256: "b".repeat(64), ledgerRunId: "123" };
+
+test("dispatch and parent budgets leave time for both bounded child jobs", async () => {
+  const child = await readFile(new URL("../.github/workflows/aurion-production-schema-apply.yml", import.meta.url), "utf8");
+  const parent = await readFile(new URL("../.github/workflows/deploy-aurion-zone-runtime.yml", import.meta.url), "utf8");
+  function timeoutMinutes(workflow, job) {
+    const lines = workflow.split("\n");
+    const start = lines.indexOf(`  ${job}:`);
+    assert.notEqual(start, -1, `missing job ${job}`);
+    for (const line of lines.slice(start + 1)) {
+      if (/^  [a-zA-Z][\w-]*:/.test(line)) break;
+      const match = line.match(/^    timeout-minutes: (\d+)\s*$/);
+      if (match) return Number(match[1]);
+    }
+    assert.fail(`missing timeout for ${job}`);
+  }
+  const verify = timeoutMinutes(child, "verify-ledger-and-apply-artifact");
+  const apply = timeoutMinutes(child, "apply-on-production");
+  const parentBudget = timeoutMinutes(parent, "apply-reviewed-schema-plan");
+  const pollBudget = SCHEMA_DISPATCH_MAX_ATTEMPTS * SCHEMA_DISPATCH_POLL_INTERVAL_MS / 60_000;
+  assert.ok(pollBudget >= verify + apply + 10, "dispatch polling must include both child timeouts and 10 minutes of scheduling slack");
+  assert.ok(parentBudget >= pollBudget + 10, "parent job must outlive polling by at least 10 minutes");
+});
 function harness(overrides = {}) {
   const writes = [];
   return { writes, pause: async () => {}, attempts: 2, request: async (path, method, body) => {

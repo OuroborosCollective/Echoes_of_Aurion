@@ -21,6 +21,7 @@ import { registerGlbAssetRoutes } from "../glbAssetRoutes";
 import { registerConfirmedEquipmentVisualRoutes } from "../confirmedEquipmentVisualRoutes";
 import { registerStarterGlbRuntimeAssets } from "../starterGlbRuntimeAssets";
 import { registerZoneGateway } from "../zoneGateway";
+import { startAurionGodotFeed } from "../godotBridge/aurionAdapter";
 import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
 import { registerGuildBankRoutes } from "../guildBankRoutes";
 import { registerGameDevelopmentStudioRuntime, resolveGameDevelopmentStudioRuntimeReadback } from "../gameDevelopmentStudioRuntime";
@@ -104,6 +105,10 @@ async function startServer(){
   app.get("/api/health", (_req, res) => res.status(200).json(healthPayload()));
   registerGameDevelopmentStudioRuntime(app,gameDevelopmentStudio);registerGlbSmartUpload(app);registerGlbZipUpload(app);registerGlbAssetRoutes(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerNativeAuthHttpRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
   const zoneGateway=registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
+  const godotFeed = await startAurionGodotFeed().catch(error => {
+    console.error("[Aurion Godot] Read-only observer unavailable", error);
+    return undefined;
+  });
   app.use("/api/trpc",createExpressMiddleware({router:appRouter,createContext}));if(process.env.NODE_ENV==="development")await setupVite(app,server);else serveStatic(app);
   const rawPort=process.env.PORT,preferredPort=(rawPort&&rawPort!=="8080")?parseInt(rawPort,10):3000,strictPort=process.env.STRICT_PORT==="true"||rawPort==="8080",port=strictPort?preferredPort:await findAvailablePort(preferredPort),host=process.env.HOST||"0.0.0.0";if(port!==preferredPort)console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   let shuttingDown=false;
@@ -112,6 +117,7 @@ async function startServer(){
     shuttingDown=true;
     console.info(`[Aurion] graceful shutdown requested: ${signal}`);
     try{
+      await godotFeed?.close();
       await drainAurionRuntimeForShutdown({
         closeZoneGateway:()=>zoneGateway.close(),
         stopObservers:[
@@ -136,3 +142,4 @@ async function startServer(){
   server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
 startServer().catch(error=>{console.error(error);process.exit(1);});
+

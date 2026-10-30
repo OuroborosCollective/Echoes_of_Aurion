@@ -7,29 +7,24 @@ import { tmpdir } from 'node:os';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 import { includeAssetManifest, verifyPackagedAssets, publicProjectCopyFilter } from './export-assets.mjs';
 
-test('public project exports exclude installed private MCS and Godot caches', () => {
-  assert.equal(publicProjectCopyFilter('/project/addons/modular_character_system'), false);
-  assert.equal(publicProjectCopyFilter('/project/addons/modular_character_system/Assets/Models/model.gltf'), false);
-  assert.equal(publicProjectCopyFilter('/project/.godot/imported/model.scn'), false);
-  assert.equal(publicProjectCopyFilter('/project/private-mcs/aurion-mcs.pck'), false);
-  assert.equal(publicProjectCopyFilter('/project/actors/modular_npc_visual.gd'), true);
-});
-
-test('public project copy retains adapter while excluding private contents', async () => {
-  const temp = await mkdtemp(join(tmpdir(), 'aurion-export-filter-'));
+test('public export excludes private MCS and cache files while retaining public project files', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'aurion-public-export-filter-'));
   try {
-    const source = join(temp, 'source'), dest = join(temp, 'dest');
-    await mkdir(join(source, 'addons/modular_character_system'), {recursive: true});
-    await mkdir(join(source, 'actors'), {recursive: true});
-    await mkdir(join(source, 'private-mcs'), {recursive: true});
-    await writeFile(join(source, 'addons/modular_character_system', 'private.txt'), 'fixture');
-    await writeFile(join(source, 'actors', 'adapter.gd'), 'adapter fixture');
-    await writeFile(join(source, 'private-mcs', 'aurion-mcs.pck'), 'private fixture');
-    await cp(source, dest, {recursive: true, filter: publicProjectCopyFilter});
-    assert.equal(await readFile(join(dest, 'actors', 'adapter.gd'), 'utf8'), 'adapter fixture');
-    await assert.rejects(readFile(join(dest, 'addons/modular_character_system', 'private.txt')), {code: 'ENOENT'});
-    await assert.rejects(readFile(join(dest, 'private-mcs', 'aurion-mcs.pck')), {code: 'ENOENT'});
-  } finally { await rm(temp, {recursive: true, force: true}); }
+    const source = join(root, 'source'), dest = join(root, 'dest');
+    for (const path of ['addons/modular_character_system', 'private-mcs', '.godot', 'actors']) {
+      await mkdir(join(source, path), { recursive: true });
+    }
+    await writeFile(join(source, 'addons/modular_character_system/private.txt'), 'synthetic private addon');
+    await writeFile(join(source, 'private-mcs/private.pck'), 'synthetic private pack');
+    await writeFile(join(source, '.godot/cache.txt'), 'synthetic cache');
+    await writeFile(join(source, 'actors/public.gd'), 'synthetic public adapter');
+    await cp(source, dest, { recursive: true, filter: publicProjectCopyFilter });
+    for (const path of ['addons/modular_character_system/private.txt', 'private-mcs/private.pck', '.godot/cache.txt']) {
+      await assert.rejects(readFile(join(dest, path)), { code: 'ENOENT' });
+    }
+    assert.equal(await readFile(join(dest, 'actors/public.gd'), 'utf8'), 'synthetic public adapter');
+    assert.equal(publicProjectCopyFilter('C:\\project\\addons\\modular_character_system\\private.txt'), false);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 function fixture() {
