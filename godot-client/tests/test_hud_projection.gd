@@ -86,6 +86,8 @@ func verify() -> void:
 		for label: Label in [hud.health_label, hud.stamina_label, hud.connection, hud.target_health]:
 			var width: float = label.get_theme_font("font").get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x
 			require(width <= label.size.x, "confirmed value text clipped at %s: %s" % [viewport, label.text])
+		var attack_text_width: float = hud.attack_button.get_theme_font("font").get_string_size(hud.attack_button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, hud.attack_button.get_theme_font_size("font_size")).x
+		require(attack_text_width <= hud.attack_button.size.x, "attack label clipped at %s" % viewport)
 		require(hud.attack_button.size.x >= 48.0 and hud.attack_button.size.y >= 48.0, "attack touch target too small")
 	root.size = Vector2i(1340, 800)
 	await process_frame

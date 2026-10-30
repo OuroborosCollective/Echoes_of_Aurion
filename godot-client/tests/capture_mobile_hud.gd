@@ -34,11 +34,11 @@ func capture() -> void:
 	var watermark := Label.new()
 	watermark.text = "TESTDATEN · KEIN LIVE-SERVER"
 	watermark.add_theme_font_size_override("font_size", 16)
-	watermark.position = Vector2(20, 140)
 	scene.add_child(watermark)
 	for viewport_size in [Vector2i(1340, 800), Vector2i(640, 360), Vector2i(360, 640)]:
 		root.size = viewport_size
 		DisplayServer.window_set_size(viewport_size)
+		watermark.position = Vector2(20, viewport_size.y * 0.5)
 		await process_frame
 		await process_frame
 		scene._fit_layout()
