@@ -27,7 +27,14 @@ try {
   const bindings = installed.HostConfig.PortBindings["39220/tcp"];
   assert.equal(bindings.length, 1);
   assert.equal(bindings[0].HostIp, "127.0.0.1");
-  const endpoint = `ws://127.0.0.1:${bindings[0].HostPort}/feed`;
+  // HostConfig retains the requested empty port for an ephemeral publication.
+  // Only NetworkSettings reports the host port Docker actually assigned.
+  const published = installed.NetworkSettings.Ports["39220/tcp"];
+  assert.equal(published?.length, 1);
+  assert.equal(published[0].HostIp, "127.0.0.1");
+  assert.match(published[0].HostPort, /^[1-9][0-9]{0,4}$/);
+  assert.ok(Number(published[0].HostPort) <= 65535);
+  const endpoint = `ws://127.0.0.1:${published[0].HostPort}/feed`;
   const exchange = (credential, checkWrite = false) => new Promise((resolve, reject) => {
     const ws = new WebSocket(endpoint);
     let hello;
@@ -59,6 +66,10 @@ try {
   for (let attempt = 0; attempt < 30; attempt++) {
     try { accepted = await exchange(token, true); break; }
     catch (error) { if (error.message !== "FEED_CONTAINER_NOT_READY") throw error; await new Promise(resolve => setTimeout(resolve, 500)); }
+  }
+  if (accepted === undefined) {
+    const observed = JSON.parse(docker(["inspect", container]))[0];
+    console.error(JSON.stringify({ status: "FEED_CONTAINER_READINESS_NOT_ESTABLISHED", containerStatus: observed.State.Status, exitCode: observed.State.ExitCode, health: observed.State.Health?.Status ?? null }));
   }
   assert.deepEqual(accepted, { accepted: true, writeRejected: true });
   assert.deepEqual(await exchange("incorrect-disposable-test-credential"), { accepted: false });
