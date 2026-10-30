@@ -34,6 +34,7 @@ jobs:
           AURION_CAPTURE_DIR: ${{ runner.temp }}/aurion-g18-world-pixels
         run: |
           xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_confirmed_world.gd
+          xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_world_design.gd
       - name: Upload original render evidence
         if: always()
         uses: actions/upload-artifact@v4

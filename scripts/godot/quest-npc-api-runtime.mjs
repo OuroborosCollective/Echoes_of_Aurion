@@ -4,8 +4,10 @@ import { spawn } from 'node:child_process';
 
 const [godot, project] = process.argv.slice(2);
 const catalogMode = process.argv.includes('--catalog');
+const worldDesignMode = process.argv.includes('--world-design');
 assert.ok(godot && project, 'pinned Godot editor and project are required');
 const payload = JSON.stringify({
+  schemaVersion: worldDesignMode ? 'aurion.world-design.v1' : undefined,
   version: catalogMode ? 'aurion.glb-import.v1' : 'aurion.quest-npc-visuals.v1',
   zoneId: 'observatory_threshold',
   stateSource: 'aurion-canonical-quest-anchors',
@@ -16,7 +18,7 @@ const server = createServer((req, res) => {
   try {
     if (req.url === '/redirect-leak') { redirectLeaked = true; res.end(); return; }
     assert.equal(req.method, 'GET', 'NPC visual readmodel must remain GET-only');
-    assert.equal(req.url, catalogMode ? '/api/game/glb-catalog' : '/api/game/quest-npc-visuals');
+    assert.equal(req.url, worldDesignMode ? '/api/game/world-design' : (catalogMode ? '/api/game/glb-catalog' : '/api/game/quest-npc-visuals'));
     assert.equal(req.headers['content-type'], undefined);
     assert.equal(req.headers.cookie, undefined);
     calls++;
@@ -38,7 +40,7 @@ await new Promise((resolve, reject) => {
 });
 let output = '', timedOut = false;
 const child = spawn(godot, ['--headless', '--path', project, '--script',
-  'tests/test_quest_npc_api_runtime.gd'], { stdio: ['ignore', 'pipe', 'pipe'], env: {...process.env, AURION_TEST_GLB_CATALOG: catalogMode ? '1' : '0'} });
+  'tests/test_quest_npc_api_runtime.gd'], { stdio: ['ignore', 'pipe', 'pipe'], env: {...process.env, AURION_TEST_GLB_CATALOG: catalogMode ? '1' : '0', AURION_TEST_WORLD_DESIGN: worldDesignMode ? '1' : '0'} });
 child.stdout.on('data', bytes => { output += bytes; });
 child.stderr.on('data', bytes => { output += bytes; });
 const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, 23000);
@@ -51,4 +53,4 @@ assert.equal(timedOut, false, 'NPC GET runtime exceeded deadline; calls=' + call
 assert.equal(exit, 0, 'NPC GET actual engine HTTP regression failed');
 assert.equal(calls, 8, 'expected all eight real HTTP requests');
 assert.equal(redirectLeaked, false, 'NPC redirected bearer leaked to redirect endpoint');
-assert.match(output, catalogMode ? /G16 GLB catalog protected GET boundary verified/ : /G16 quest NPC protected GET boundary verified/);
+assert.match(output, worldDesignMode ? /GODOT_WORLD_DESIGN_HTTP_PASS/ : (catalogMode ? /G16 GLB catalog protected GET boundary verified/ : /G16 quest NPC protected GET boundary verified/));

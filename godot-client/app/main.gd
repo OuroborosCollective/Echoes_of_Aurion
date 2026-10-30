@@ -20,6 +20,8 @@ const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
 const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
 const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
+const WorldDesignProjection = preload("res://world/world_design_projection.gd")
+const WorldAssetApi = preload("res://net/api/world_asset_api.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
 const InputAdapter = preload("res://app/input_adapter.gd")
 const TouchRouter = preload("res://ui/mobile/touch_router.gd")
@@ -73,6 +75,14 @@ var _auth_start: Node
 var _api: Node
 var _appearance_api: Node
 var _chunk_api: Node
+var _world_design_api: Node
+var _world_asset_api: Node
+var _world_design_visuals: Node3D
+var _world_design_readback: Dictionary = {}
+var _world_design_surfaces: Dictionary = {}
+var _world_design_last_poll_ms := -1
+var _world_asset_inflight := ""
+var _world_asset_retry_after: Dictionary = {}
 var _chunk_last_request_ms := -1
 var _chunk_requested := Vector2i.ZERO
 var _chunk_center := Vector2i.ZERO
@@ -134,6 +144,7 @@ func _ready() -> void:
 	_auth_start.start_failed.connect(_on_auth_start_failed)
 	_auth_start.session_succeeded.connect(_on_auth_session_succeeded)
 	_auth_start.session_failed.connect(_on_auth_session_failed)
+	_auth_start.refresh_failed.connect(_on_auth_session_failed)
 	_auth_start.logout_succeeded.connect(_on_auth_logout_terminal)
 	_auth_start.logout_failed.connect(_on_auth_logout_terminal)
 	_api = AurionApi.new(_auth_start)
@@ -156,6 +167,17 @@ func _ready() -> void:
 	add_child(_monster_api)
 	_monster_api.npcs_ready.connect(_on_monster_catalog_ready)
 	_monster_api.request_failed.connect(_on_monster_catalog_failed)
+	_world_design_api = QuestNpcApi.new(_auth_start, "/api/game/world-design")
+	add_child(_world_design_api)
+	_world_design_api.npcs_ready.connect(_on_world_design_ready)
+	_world_design_api.request_failed.connect(_on_world_design_failed)
+	_world_asset_api = WorldAssetApi.new(_auth_start)
+	add_child(_world_asset_api)
+	_world_asset_api.asset_ready.connect(_on_world_asset_ready)
+	_world_asset_api.request_failed.connect(_on_world_asset_failed)
+	_world_design_visuals = WorldDesignProjection.new()
+	_world_design_visuals.name = "WorldDesignVisuals"
+	world_actors.get_parent().add_child(_world_design_visuals)
 	_chunk_api = ChunkSurfaceApi.new(_auth_start)
 	add_child(_chunk_api)
 	_chunk_api.surface_ready.connect(_on_chunk_surface_ready)
@@ -310,6 +332,18 @@ func _reset_projection() -> void:
 	_quest_npc_diagnostic = "nicht geladen"
 	if _monster_api != null:
 		_monster_api.cancel()
+	if _world_design_api != null:
+		_world_design_api.cancel()
+	if _world_asset_api != null:
+		_world_asset_api.cancel()
+	if _world_design_visuals != null:
+		_world_design_visuals.clear()
+		_world_design_visuals.visible = true
+	_world_design_readback.clear()
+	_world_design_surfaces.clear()
+	_world_design_last_poll_ms = -1
+	_world_asset_inflight = ""
+	_world_asset_retry_after.clear()
 	if _chunk_api != null:
 		_chunk_api.cancel()
 	confirmed_terrain.clear()
@@ -398,6 +432,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		var now_ms := Time.get_ticks_msec()
 		_last_world_update_ms = now_ms
 		_world_is_stale = false
+		_world_design_visuals.visible = true
 		_visuals.capture(_confirmed_zone, now_ms)
 		zone_map.set_confirmed(_confirmed_zone, _entities)
 		zone_map.set_visual_positions(_visuals, now_ms)
@@ -570,6 +605,11 @@ func _notification(what: int) -> void:
 
 func _process(_delta: float) -> void:
 	var now_ms := Time.get_ticks_msec()
+	# The socket cannot outlive the authenticated session. Token expiry can
+	# clear credentials without emitting refresh_failed, so check it as well.
+	if _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _auth_start.protected_response_allowed():
+		_on_auth_session_failed("NATIVE_AUTH_SESSION_EXPIRED")
+		return
 	if _confirmed_zone.has_state():
 		zone_map.set_visual_positions(_visuals, now_ms)
 		_project_3d(now_ms)
@@ -578,6 +618,8 @@ func _process(_delta: float) -> void:
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
+	_request_world_design(now_ms)
+	_request_world_asset(now_ms)
 	_poll_move_intent(now_ms)
 	if not _world_input_permitted():
 		_camera_router.cancel()
@@ -964,6 +1006,10 @@ func _update_world_freshness(now_ms: int) -> void:
 	if stale == _world_is_stale:
 		return
 	_world_is_stale = stale
+	_world_design_visuals.visible = not stale
+	if stale and _world_asset_api != null:
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
 	zone_map.set_stale(stale)
 	_update_entity_presentation()
 	_update_vitals_presentation()
@@ -1135,8 +1181,14 @@ func _draw() -> void:
 		draw_circle(star * size, 2.0, Color(0.77, 0.69, 0.46, 0.6))
 
 func _request_monster_catalog(now_ms: int) -> void:
-	if not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or _entities.ids("mobs").is_empty():
+	if not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
 		return
+	# Preserve monster refresh behavior without downloading the full asset
+	# catalog for a world that has no published authored designs.
+	if _entities.ids("mobs").is_empty():
+		var designs: Variant = _world_design_readback.get("designs", [])
+		if typeof(designs) != TYPE_ARRAY or designs.is_empty():
+			return
 	if _monster_last_poll_ms >= 0 and now_ms - _monster_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS:
 		return
 	_monster_last_poll_ms = now_ms
@@ -1149,12 +1201,16 @@ func _on_monster_catalog_ready(response: Dictionary, connection_id: String, gene
 		return
 	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
 	_apply_monster_catalog(response, manifest if manifest is Dictionary else {})
+	_sync_world_design()
 
 func _on_monster_catalog_failed(reason: String, connection_id: String) -> void:
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
 		return
 	_monster_actors.clear(world_actors)
 	_monster_catalog.clear()
+	_world_design_visuals.clear()
+	_world_asset_api.cancel()
+	_world_asset_inflight = ""
 	_monster_diagnostic = reason
 	_update_3d_status()
 
@@ -1164,6 +1220,86 @@ func _apply_monster_catalog(catalog: Dictionary, manifest: Dictionary) -> void:
 	_monster_manifest = manifest.duplicate(true)
 	_sync_monsters()
 	_project_3d(Time.get_ticks_msec())
+
+func _request_world_design(now_ms: int) -> void:
+	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed():
+		return
+	if _world_design_last_poll_ms >= 0 and now_ms - _world_design_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS:
+		return
+	_world_design_last_poll_ms = now_ms
+	_world_design_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
+
+func _on_world_design_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	_world_design_readback = response.duplicate(true)
+	_sync_world_design()
+
+func _on_world_design_failed(_reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	_world_design_readback.clear()
+	_world_design_visuals.clear()
+	_world_asset_api.cancel()
+	_world_asset_inflight = ""
+
+## The callback above is the production entry point; tests may use this seam
+## only with explicitly synthetic source data and a confirmed fixture zone.
+func _sync_world_design() -> void:
+	if not _confirmed_zone.has_state():
+		return
+	if _world_design_readback.is_empty() or _monster_catalog.is_empty():
+		_world_design_visuals.clear()
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
+		return
+	var connection_id: String = _confirmed_zone.connection_id()
+	var center: Variant = _current_confirmed_chunk()
+	if typeof(center) != TYPE_VECTOR2I:
+		return
+	if not _world_design_visuals.bind_confirmed(_world_design_readback, _monster_catalog, connection_id):
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
+		return
+	for coordinate in _world_design_surfaces:
+		_world_design_visuals.accept_surface(_world_design_surfaces[coordinate], connection_id, center)
+
+func _remember_world_design_surface(readback: Dictionary, connection_id: String, coordinate: Vector2i, center: Vector2i) -> void:
+	_world_design_surfaces[coordinate] = readback.duplicate(true)
+	_world_design_visuals.accept_surface(readback, connection_id, center)
+
+func _request_world_asset(now_ms: int) -> void:
+	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed() or _world_asset_api.busy():
+		return
+	for request in _world_design_visuals.needed_assets():
+		var sha: String = request.sha256
+		if _world_asset_retry_after.has(sha) and now_ms < int(_world_asset_retry_after[sha]):
+			continue
+		_world_asset_inflight = sha
+		if not _world_asset_api.request_asset(_config.server_base_url, request, _confirmed_zone.connection_id()):
+			_world_asset_retry_after[sha] = now_ms + 30000
+			_world_asset_inflight = ""
+		return
+
+func _on_world_asset_ready(sha: String, bytes: PackedByteArray, connection_id: String, generation: int) -> void:
+	_world_asset_inflight = ""
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended() or _world_is_stale:
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	if not _world_design_visuals.supply_asset(sha, bytes, connection_id):
+		_world_asset_retry_after[sha] = Time.get_ticks_msec() + 30000
+		_world_design_visuals.try_next_asset(sha, connection_id)
+
+func _on_world_asset_failed(_reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
+		return
+	if not _world_asset_inflight.is_empty():
+		_world_asset_retry_after[_world_asset_inflight] = Time.get_ticks_msec() + 30000
+		_world_design_visuals.try_next_asset(_world_asset_inflight, connection_id)
+	_world_asset_inflight = ""
 
 func _sync_monsters() -> void:
 	_monster_actors.apply(_confirmed_zone, world_actors, {}, _monster_catalog, _monster_manifest)
@@ -1225,6 +1361,9 @@ func _clear_neighbor_chunks() -> void:
 ## An invalid or failed authenticated refresh must not leave old visual
 ## terrain masquerading as the latest readback. Presentation only.
 func _evict_neighbor_chunk(coordinate: Vector2i) -> void:
+	_world_design_surfaces.erase(coordinate)
+	if _confirmed_zone.has_state():
+		_world_design_visuals.remove_surface(coordinate, _confirmed_zone.connection_id())
 	var key := "Chunk_%d_%d" % [coordinate.x, coordinate.y]
 	var existing: Node3D = confirmed_neighbors.get_node_or_null(key) as Node3D
 	if existing != null:
@@ -1244,6 +1383,10 @@ func _request_chunk_surface(now_ms: int) -> void:
 	var coordinate: Vector2i = value
 	if _chunk_center != coordinate:
 		_chunk_api.cancel()
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
+		_world_design_surfaces.clear()
+		_world_design_visuals.reset_surfaces(_confirmed_zone.connection_id())
 		confirmed_terrain.clear()
 		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
@@ -1315,6 +1458,10 @@ func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
 		return
 	var center: Variant = _current_confirmed_chunk()
 	if _chunk_requested == center:
+		_world_design_surfaces.clear()
+		_world_design_visuals.reset_surfaces(connection_id)
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
 		confirmed_terrain.clear()
 		starter_village_visuals.clear()
 		_clear_neighbor_chunks()
@@ -1335,9 +1482,9 @@ func _apply_neighbor_chunk_surface(readback: Dictionary, connection_id: String) 
 	if typeof(center) != TYPE_VECTOR2I or typeof(base) != TYPE_DICTIONARY or typeof(base.get("coordinate")) != TYPE_DICTIONARY:
 		return false
 	var coordinates: Dictionary = base.coordinate
-	if typeof(coordinates.get("x")) != TYPE_INT or typeof(coordinates.get("z")) != TYPE_INT:
+	if not ChunkTerrain._whole(coordinates.get("x"), -1000000, 1000000) or not ChunkTerrain._whole(coordinates.get("z"), -1000000, 1000000):
 		return false
-	var coordinate := Vector2i(coordinates.x, coordinates.z)
+	var coordinate := Vector2i(int(coordinates.x), int(coordinates.z))
 	if coordinate == center or maxi(absi(coordinate.x - center.x), absi(coordinate.y - center.y)) > 1:
 		return false
 	var key := "Chunk_%d_%d" % [coordinate.x, coordinate.y]
@@ -1351,9 +1498,13 @@ func _apply_neighbor_chunk_surface(readback: Dictionary, connection_id: String) 
 		_evict_neighbor_chunk(coordinate)
 		return false
 	if existing != null:
-		_evict_neighbor_chunk(coordinate)
+		# Replace an accepted mesh atomically. Evicting the matching design
+		# surface here would discard its loaded models on every refresh.
+		confirmed_neighbors.remove_child(existing)
+		existing.queue_free()
 	confirmed_neighbors.add_child(painter)
 	_apply_terrain3d_presentation(readback, connection_id)
+	_remember_world_design_surface(readback, connection_id, coordinate, center)
 	return true
 
 ## Fixture seam for the real Godot active-scene test only. Runtime callers
@@ -1368,6 +1519,10 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	if base.coordinate.get("x") != coordinate.x or base.coordinate.get("z") != coordinate.y:
 		return false
 	if not confirmed_terrain.apply_confirmed(readback, connection_id):
+		_world_design_surfaces.clear()
+		_world_design_visuals.reset_surfaces(connection_id)
+		_world_asset_api.cancel()
+		_world_asset_inflight = ""
 		starter_village_visuals.clear()
 		unassigned_floor.visible = true
 		_clear_terrain3d_presentation()
@@ -1376,6 +1531,7 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 		return false
 	unassigned_floor.visible = false
 	_apply_terrain3d_presentation(readback, connection_id)
+	_remember_world_design_surface(readback, connection_id, coordinate, coordinate)
 	# The authenticated chunk contains an optional server-owned visual plan.
 	# A missing or invalid plan never fabricates a client-owned settlement.
 	var village_ok: bool = starter_village_visuals.apply_confirmed(readback, connection_id)
