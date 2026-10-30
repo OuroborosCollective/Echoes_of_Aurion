@@ -240,6 +240,17 @@ jobs:
             if sudo test ! -e "$AURION_CANARY_DIR/state/.active-operation" && ! docker inspect "$name" >/dev/null 2>&1 && ! sudo kill -0 "$guard" 2>/dev/null && ! sudo kill -0 "$worker" 2>/dev/null && ! sudo kill -0 "$reaper" 2>/dev/null && ! sudo kill -0 "$sudo_pid" 2>/dev/null && ! sudo kill -0 "$controller" 2>/dev/null; then break; fi
             sleep 1
           done
+          if sudo test -e "$AURION_CANARY_DIR/state/.active-operation"; then echo 'canary fence: present'; else echo 'canary fence: absent'; fi
+          if docker inspect "$name" >/dev/null 2>&1; then docker inspect --format 'canary container: {{.State.Status}}' "$name"; else echo 'canary container: absent'; fi
+          for role in guard worker reaper sudo_pid controller; do
+            pid="${!role}"
+            if sudo kill -0 "$pid" 2>/dev/null; then
+              echo "canary $role still has PID $pid:"
+              sudo ps -o pid,ppid,pgid,stat,comm -p "$pid" || true
+            else
+              echo "canary $role: absent"
+            fi
+          done
           sudo test ! -e "$AURION_CANARY_DIR/state/.active-operation"
           ! docker inspect "$name" >/dev/null 2>&1
           ! sudo kill -0 "$guard" 2>/dev/null

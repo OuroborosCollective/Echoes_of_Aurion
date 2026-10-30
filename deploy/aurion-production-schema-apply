@@ -72,7 +72,7 @@ node "$installed_verifier" "$release" "$expected_sha"
 # The only sudo-exposed entrypoint consumes a short-lived GitHub Actions OIDC
 # JWT from stdin. The token binds the exact revision and ledger plan hash via
 # its audience and is independently verified against GitHub's issuer JWKS.
-if ! node --input-type=module -e '
+if ! timeout --foreground --signal=TERM --kill-after=5s 20s node --input-type=module -e '
   import { createPublicKey, verify } from "node:crypto";
   import { readSync } from "node:fs";
   const fail=()=>process.exit(2);

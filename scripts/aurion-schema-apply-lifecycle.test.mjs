@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { supervise } from "../deploy/aurion-schema-apply-lifecycle.mjs";
+import { runJobChild } from "../deploy/aurion-schema-apply-job-client.mjs";
 
 const self = fileURLToPath(import.meta.url);
 const image = process.env.AURION_SCHEMA_LIFECYCLE_TEST_IMAGE ?? "node:20-alpine";
@@ -93,10 +94,18 @@ if (process.argv[2] === "--guard") {
 } else if (process.argv[2] === "--controller") {
   const directory = process.argv[3];
   writeFileSync(path.join(directory, "controller.uid"), String(process.getuid()));
-  const guard = spawn("sudo", ["-n", "env", `AURION_SCHEMA_LIFECYCLE_TEST_IMAGE=${image}`, process.execPath, self, "--guard", directory, process.argv[4] ?? "cancel"], { stdio: ["pipe", "ignore", "ignore"] });
-  writeFileSync(path.join(directory, "sudo.pid"), String(guard.pid));
-  guard.stdin.on("error", () => {});
-  guard.once("exit", code => { guard.stdin.destroy(); process.exitCode = code ?? 125; });
+  process.exitCode = await runJobChild({
+    command: "sudo",
+    args: ["-n", "env", `AURION_SCHEMA_LIFECYCLE_TEST_IMAGE=${image}`, process.execPath, self, "--guard", directory, process.argv[4] ?? "cancel"],
+    stdout: "ignore",
+    stderr: "ignore",
+    onSpawn: guard => writeFileSync(path.join(directory, "sudo.pid"), String(guard.pid)),
+  });
+} else if (process.argv[2] === "--step") {
+  const directory = process.argv[3];
+  const controller = spawn(process.execPath, [self, "--controller", directory, process.argv[4] ?? "cancel"], { stdio: "ignore" });
+  writeFileSync(path.join(directory, "controller.pid"), String(controller.pid));
+  await new Promise(resolve => controller.once("exit", resolve));
 } else {
   test("successful supervised operation finishes and releases its fence", { timeout: 30000 }, async t => {
     const directory = mkdtempSync(path.join(tmpdir(), "aurion-lifecycle-"));
@@ -134,6 +143,19 @@ if (process.argv[2] === "--guard") {
     const remaining = docker("ps", "-aq", "--filter", `label=org.aurion.schema-apply-operation=${operation}`);
     assert.equal(remaining.status, 0);
     assert.equal(remaining.stdout.trim(), "");
+  });
+
+  test("loss of the step parent closes the actual job-client lease", { timeout: 45000 }, async t => {
+    const directory = mkdtempSync(path.join(tmpdir(), "aurion-lifecycle-"));
+    const name = `aurion-proof-${randomBytes(8).toString("hex")}`;
+    writeFileSync(path.join(directory, "container"), name);
+    const step = spawn(process.execPath, [self, "--step", directory], { stdio: "ignore" });
+    t.after(() => { try { step.kill("SIGKILL"); } catch {} docker("rm", "-fv", name); rmSync(directory, { recursive: true, force: true }); });
+    await until(() => existsSync(path.join(directory, "ready")), "worker did not start");
+    step.kill("SIGKILL");
+    await until(() => !existsSync(path.join(directory, "state", ".active-operation")), "lost-parent cleanup fence remained");
+    assert.notEqual(docker("inspect", name).status, 0);
+    assert.equal(existsSync(path.join(directory, "after")), false);
   });
 
   test("a killed privileged supervisor leaves its independent reaper to clean up", { timeout: 45000 }, async t => {
