@@ -10,6 +10,7 @@ import {
 } from "../../shared/aurionCausalTickContract";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { MariaDBCausalPersistenceAdapter } from "./persistence";
+import { AurionTickRecorder, type RecordedTickEntry } from "./tickRecorder";
 
 const suite =
   process.env.AURION_CLASSLESS_E2E === "1" && process.env.DATABASE_URL
@@ -45,6 +46,44 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
       if (isolated) await clean();
       await pool.end();
     }
+  });
+
+  it("publishes an observer only after real MariaDB receipt and checkpoint readback", async () => {
+    const adapter = new MariaDBCausalPersistenceAdapter();
+    const recorder = new AurionTickRecorder(200, adapter);
+    const zoneId = `${ZONE_PREFIX}:observer`;
+    await pool.query("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
+    const zone = new AuthoritativeMovementZone(zoneId as any, recorder);
+    const observed: RecordedTickEntry[] = [];
+    recorder.observeCommittedTicks(entry => observed.push(entry));
+    zone.tick();
+    expect(observed).toHaveLength(0);
+    await recorder.flushPersistence();
+    expect(recorder.getPersistenceStatus()).toMatchObject({ pending: 0, failures: 0 });
+    expect(observed).toHaveLength(1);
+    const restored = await adapter.getRecordedTick(zoneId, 1);
+    expect(restored?.receipt).toEqual(observed[0].receipt);
+    expect((await adapter.getCheckpoint(zoneId, 0))?.snapshotHash).toBe(observed[0].receipt.preStateHash);
+    const [rows] = await pool.query("SELECT receiptHash FROM aurionCausalTickReceipts WHERE zoneId=? AND tick=1", [zoneId]);
+    expect(rows).toEqual([expect.objectContaining({ receiptHash: observed[0].receipt.receiptHash })]);
+    await pool.query("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
+  });
+
+  it("never publishes a tick rejected by the real MariaDB receipt transaction", async () => {
+    const zoneId = `${ZONE_PREFIX}:observer-rejected`;
+    const recorder = new AurionTickRecorder(200, new MariaDBCausalPersistenceAdapter());
+    const zone = new AuthoritativeMovementZone(zoneId as any, recorder);
+    const observed: RecordedTickEntry[] = [];
+    recorder.observeCommittedTicks(entry => observed.push(entry));
+    await pool.query(`CREATE TRIGGER bridge_observer_receipt_failure BEFORE INSERT ON aurionCausalTickReceipts FOR EACH ROW BEGIN IF NEW.zoneId='${zoneId}' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='INJECTED_BRIDGE_RECEIPT_FAILURE'; END IF; END`);
+    try {
+      zone.tick();
+      await recorder.flushPersistence();
+      expect(recorder.getPersistenceStatus()).toMatchObject({ pending: 0, failures: 1 });
+      expect(observed).toHaveLength(0);
+      const [rows] = await pool.query("SELECT receiptHash FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
+      expect(rows).toEqual([]);
+    } finally { await pool.query("DROP TRIGGER bridge_observer_receipt_failure"); }
   });
 
   it("proves 0048 base table plus 0049 columns and full journal wave are physically active", async () => {
@@ -86,7 +125,9 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
 
   it("round-trips v2 stage evidence through MariaDB and verifies the persisted receipt hash", async () => {
     const zoneId = `${ZONE_PREFIX}:v2`;
-    const zone = new AuthoritativeMovementZone(zoneId as any);
+    // This case persists explicitly below. The global recorder would also
+    // enqueue a database write, racing the manual compatibility readback.
+    const zone = new AuthoritativeMovementZone(zoneId as any, new AurionTickRecorder());
     const { connectionId } = zone.join({
       userId: 9_304_901,
       socket,
@@ -119,7 +160,7 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
 
   it("keeps a persisted v1 receipt valid after 0049", async () => {
     const zoneId = `${ZONE_PREFIX}:v1`;
-    const zone = new AuthoritativeMovementZone(zoneId as any);
+    const zone = new AuthoritativeMovementZone(zoneId as any, new AurionTickRecorder());
     zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V1;
     zone.join({
       userId: 9_304_902,

@@ -73,7 +73,11 @@ describe("post-recovery repair plan freshness", () => {
     expect(refreshPath).toContain('backup_file="$refreshed_file"');
     expect(refreshPath).toContain('cleanup_recovery');
     expect(refreshPath).toContain('--mount "type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly"');
-    expect(refreshPath).toContain('gzip -cd /recovery-input/production.sql.gz');
+    expect(refreshPath).toContain('/bin/sh /recovery-input/restore.sh');
+    const restoreScript = readFileSync(new URL("../deploy/aurion-schema-restore", import.meta.url), "utf8");
+    expect(restoreScript).toContain('gzip -cd /recovery-input/production.sql.gz');
+    expect(restoreScript).toContain('test "$gzip_status" -eq 0');
+    expect(restoreScript).toContain('test "$client_status" -eq 0');
     expect(refreshPath).toContain('recovery_restore_status=$?');
     expect(refreshPath).toContain('[[ "$recovery_restore_status" -eq 0 ]]');
     expect(refreshPath).toContain('phase=REFRESHED_RECOVERY_PROOF_MISMATCH');

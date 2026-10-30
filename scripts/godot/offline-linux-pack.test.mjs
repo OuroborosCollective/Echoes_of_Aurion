@@ -27,6 +27,7 @@ function fixture() {
   put('godot-client/addons/virtual_joystick/plugin.cfg', '[plugin]\nname="joystick"\n');
   put('godot-client/actors/fake.gd', 'extends Node3D\n');
   put('scripts/godot/check.sh', '#!/bin/sh\n');
+  put('shared/worldChunkCoordinates.ts', 'export const WORLD_CHUNK_SIZE_MM = 64000;\n');
   put('scripts/godot/THIRD_PARTY_GODOT_LICENSE.txt', 'Copyright (c) Godot Engine contributors.\n');
   put('config/godot-toolchain.lock.json', JSON.stringify({engine:{file:engineName,version:engineVersion,sha256:'a'.repeat(64)}}));
   const executable = put('.aurion-godot/editor/' + engineName, '#!/bin/sh\n[ "$1" = "--headless" ] && [ "$2" = "--version" ] && { echo 4.7.2.stable.official.ed1daf0bf; exit 0; }\nexit 2\n');
@@ -37,7 +38,7 @@ function fixture() {
   checked(dir, 'git', ['init', '-q']);
   checked(dir, 'git', ['config', 'user.name', 'Fixture']);
   checked(dir, 'git', ['config', 'user.email', 'fixture@example.invalid']);
-  checked(dir, 'git', ['add', 'config', 'godot-client', 'scripts', '.gitignore']);
+  checked(dir, 'git', ['add', 'config', 'godot-client', 'scripts', 'shared', '.gitignore']);
   checked(dir, 'git', ['commit', '-qm', 'fixture']);
   put('godot-client/addons/modular_character_system/PAID_VENDOR.gd', 'PRIVATE LICENSED SOURCE\n');
   return { dir, put };
@@ -55,6 +56,7 @@ test('manual Linux pack is importable, includes pinned editor, excludes private 
     assert.match(names, /godot-client\/addons\/virtual_joystick\/plugin\.cfg/);
     assert.match(names, /scripts\/godot\/check\.sh/);
     assert.match(names, /config\/godot-toolchain\.lock\.json/);
+    assert.match(names, /shared\/worldChunkCoordinates\.ts/);
     assert.doesNotMatch(names, /modular_character_system|PAID_VENDOR|\.godot\//);
     assert.match(readFileSync(join(out,'LICENSE-Godot-4.7.2.txt'), 'utf8'), /Godot Engine contributors/);
     const source = JSON.parse(readFileSync(join(out,'manifest.json'), 'utf8'));
@@ -94,5 +96,15 @@ test('fail closed on explicitly requested wrong source revision', () => {
     const r = run(dir, 'bash', [script, 'out/godot-linux'], {env: { ...process.env, AURION_RELEASE_SHA: 'f'.repeat(40) }});
     assert.notEqual(r.status, 0);
     assert.match(r.stderr + r.stdout, /Git SHA does not match/);
+  } finally { rmSync(dir, { recursive:true, force:true }); }
+});
+
+test('fail closed if the shared coordinate dependency was modified', () => {
+  const {dir,put} = fixture();
+  try {
+    put('shared/worldChunkCoordinates.ts', 'export const WORLD_CHUNK_SIZE_MM = 1;\n');
+    const r = run(dir, 'bash', [script, 'out/godot-linux']);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr + r.stdout, /dirty source files/);
   } finally { rmSync(dir, { recursive:true, force:true }); }
 });
