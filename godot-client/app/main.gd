@@ -244,7 +244,12 @@ func _on_map_selection_changed(message: String) -> void:
 	map_selection.text = message if not message.is_empty() else "Berühre ein bestätigtes Objekt oder skizziere einen Punkt."
 
 func _on_copy_diagnostics_pressed() -> void:
-	var readback: String = _diagnostics.report(_config.client_build, _config.server_base_url, _zone_socket.state_name(), _zone_socket.state_name() == "connected", _confirmed_zone.has_state())
+	var presentation := {
+		"terrain": confirmed_terrain.get_child_count() > 0,
+		"avatar": is_instance_valid(_self_actor) and _self_actor.visible,
+		"npcs": _quest_npc_diagnostic.is_empty(),
+	}
+	var readback: String = _diagnostics.report(_config.client_build, _config.server_base_url, _zone_socket.state_name(), _zone_socket.state_name() == "connected", _confirmed_zone.has_state() and not _world_is_stale, presentation)
 	DisplayServer.clipboard_set(readback)
 	%CopyDiagnostics.text = "Diagnose kopiert"
 
