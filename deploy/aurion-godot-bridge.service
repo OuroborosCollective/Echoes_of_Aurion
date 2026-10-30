@@ -7,7 +7,11 @@ Type=simple
 User=aurion-deploy
 Group=aurion-deploy
 WorkingDirectory=/srv/serverin/tools/aurion-godot-bridge/current
-EnvironmentFile=/srv/serverin/config/aurion-godot-bridge.env
+EnvironmentFile=/etc/aurion-godot-bridge.env
+LoadCredential=aurion-upstream:/etc/aurion-godot/feed.token
+LoadCredential=aurion-editor:/etc/aurion-godot/editor.token
+Environment=UPSTREAM_TOKEN_FILE=%d/aurion-upstream
+Environment=BRIDGE_TOKEN_FILE=%d/aurion-editor
 ExecStart=/usr/bin/node /srv/serverin/tools/aurion-godot-bridge/current/aurion-godot-bridge.mjs
 Restart=on-failure
 RestartSec=3
@@ -19,3 +23,4 @@ ReadWritePaths=/srv/serverin/evidence/aurion-godot-bridge
 
 [Install]
 WantedBy=multi-user.target
+

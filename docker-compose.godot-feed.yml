@@ -1,0 +1,19 @@
+# Selected only by the canonical promoter after explicit root-managed opt-in.
+services:
+  aurion:
+    environment:
+      AURION_GODOT_FEED_TOKEN_FILE: /run/secrets/aurion-godot-feed.token
+      AURION_GODOT_FEED_BIND: 0.0.0.0
+      AURION_GODOT_FEED_PORT: "39220"
+    ports:
+      - target: 39220
+        published: "39220"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /etc/aurion-godot/feed.token
+        target: /run/secrets/aurion-godot-feed.token
+        read_only: true
+        bind:
+          create_host_path: false

@@ -14,6 +14,11 @@ services:
       # Companion memory is local-first. Clear the retired external Redis URL
       # inherited from the owner-managed env_file; retain the memory volume below.
       REDIS_URL: ""
+      # The canonical promoter selects the separate, loopback-only overlay.
+      # A stale application env_file must never activate this listener.
+      AURION_GODOT_FEED_TOKEN_FILE: ""
+      AURION_GODOT_FEED_BIND: "127.0.0.1"
+      AURION_GODOT_FEED_PORT: "39220"
       # Apply the same V8 old-space ceiling on every immutable Aurion release.
       # Override any stale NODE_OPTIONS value from the owner-managed env_file.
       NODE_OPTIONS: "--max-old-space-size=8800"
@@ -63,3 +68,4 @@ networks:
   database-private:
     external: true
     name: ${AURION_DATABASE_NETWORK:-echoes-of-aurion-internal}
+

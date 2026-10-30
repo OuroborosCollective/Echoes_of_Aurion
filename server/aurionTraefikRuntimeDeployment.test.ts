@@ -256,7 +256,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('compose_digest_env=(');
     expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" config --quiet');
     expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion');
-    expect(promoter).toContain("docker build --pull=false");
+    expect(promoter).toContain('load-aurion-runtime-image.py');
+    expect(promoter).not.toMatch(/docker\s+(?:build|buildx\s+build)\b/);
+    expect(promoter).toContain('"$runtime_image_id" == "$expected_runtime_image_id"');
     expect(promoter).toContain("traefik.enable");
     expect(promoter).toContain("traefik.docker.network");
     expect(promoter).toContain("traefik.http.services.aurion.loadbalancer.server.port");
@@ -298,3 +300,4 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('systemctl disable --now "$legacy_service"');
   });
 });
+

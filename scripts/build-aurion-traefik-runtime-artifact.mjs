@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { writeAurionBuildInputManifest } from "./aurion-build-input-manifest.mjs";
+import { buildAurionRuntimeImage } from "./build-aurion-runtime-image.mjs";
 
 const revision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase() ?? "";
 if (!/^[a-f0-9]{40}$/.test(revision)) {
@@ -22,6 +24,12 @@ const filesToCopy = [
   "deploy/aurion-revision-alignment-controller.env.template",
   "Dockerfile",
   "docker-compose.traefik.yml",
+  "docker-compose.godot-feed.yml",
+  "deploy/load-aurion-runtime-image.py",
+  "deploy/verify-aurion-godot-feed.py",
+  "deploy/install-aurion-godot-bridge.sh",
+  "deploy/aurion-godot-bridge.service",
+  "deploy/aurion-godot-bridge.environment.template",
   "package.json",
   "pnpm-lock.yaml",
   "deploy/promote-aurion-zone-runtime.sh",
@@ -103,6 +111,15 @@ if ((await stat(path.join(output, "game-dev-runtime.tgz"))).size < 1) {
   throw new Error("Game Development Studio runtime archive is empty");
 }
 
+// Seal the exact bridge build into the same attested release, without enabling
+// a producer or service on the hosted builder.
+execFileSync(process.execPath, ["scripts/godot/live-bridge-package.mjs"], {
+  cwd: root,
+  env: { ...process.env, AURION_EXPECTED_REVISION: revision, AURION_BRIDGE_EVIDENCE: path.join(output, "godot-bridge") },
+  stdio: "inherit",
+});
+const runtimeImage = await buildAurionRuntimeImage(output, revision);
+
 execFileSync(process.execPath, [
   "scripts/scan-aurion-release-secrets.mjs",
   output,
@@ -113,7 +130,9 @@ execFileSync(process.execPath, [
 });
 
 async function sha256(filePath) {
-  return createHash("sha256").update(await readFile(filePath)).digest("hex");
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  return hash.digest("hex");
 }
 
 async function listFiles(directory, relative = "") {
@@ -143,6 +162,7 @@ const manifest = {
   recordType: "aurion_traefik_runtime_artifact",
   dependencyClosure: "hosted-lockfile-install",
   revision,
+  runtimeImage,
   buildInputDigest: buildInput.digest,
   buildInputManifest: "build-input-manifest.json",
   buildInputManifestSha256: files["build-input-manifest.json"],
@@ -172,3 +192,4 @@ for (const relative of Object.keys(files)) {
   const metadata = await stat(path.join(output, relative));
   if (!metadata.isFile()) throw new Error(`artifact entry is not a regular file: ${relative}`);
 }
+

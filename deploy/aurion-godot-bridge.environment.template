@@ -1,9 +1,8 @@
 # Protected paths only. Generate credentials locally; do not put values in Git.
 UPSTREAM_PROTOCOL=feed
 UPSTREAM_URL=ws://127.0.0.1:39220/feed
-UPSTREAM_TOKEN_FILE=/srv/serverin/config/aurion-godot-feed.token
 BRIDGE_HOST=127.0.0.1
 BRIDGE_PORT=8765
-BRIDGE_TOKEN_FILE=/srv/serverin/config/aurion-godot-editor.token
 BRIDGE_EDIT=0
 BRIDGE_AUDIT_LOG=/srv/serverin/evidence/aurion-godot-bridge/edit-audit.jsonl
+

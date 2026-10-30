@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
   cp,
   mkdtemp,
@@ -14,6 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
+import { buildAurionRuntimeImage } from "./build-aurion-runtime-image.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -61,10 +63,11 @@ if (!(await stat(source)).isDirectory()) {
   throw new Error("bootstrap artifact source directory is missing");
 }
 
-const sha256 = async filePath =>
-  createHash("sha256")
-    .update(await readFile(filePath))
-    .digest("hex");
+const sha256 = async filePath => {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  return hash.digest("hex");
+};
 
 async function listRegularFiles(directory, relative = "") {
   const files = [];
@@ -280,6 +283,8 @@ async function buildLegacyCompatibleRuntimeArchive() {
     );
 
     manifest.revision = bootstrapRevision;
+    // A compatibility source identity must never reuse the canonical image.
+    manifest.runtimeImage = await buildAurionRuntimeImage(temporary, bootstrapRevision);
     await refreshRuntimeMetadata(temporary, manifest);
     await validateRuntimeMetadata(
       temporary,
@@ -429,3 +434,4 @@ console.log(
     mode: "bootstrap-only",
   })
 );
+
