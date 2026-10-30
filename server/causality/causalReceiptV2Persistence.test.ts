@@ -125,7 +125,9 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
 
   it("round-trips v2 stage evidence through MariaDB and verifies the persisted receipt hash", async () => {
     const zoneId = `${ZONE_PREFIX}:v2`;
-    const zone = new AuthoritativeMovementZone(zoneId as any);
+    // This case persists explicitly below. The global recorder would also
+    // enqueue a database write, racing the manual compatibility readback.
+    const zone = new AuthoritativeMovementZone(zoneId as any, new AurionTickRecorder());
     const { connectionId } = zone.join({
       userId: 9_304_901,
       socket,
@@ -158,7 +160,7 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
 
   it("keeps a persisted v1 receipt valid after 0049", async () => {
     const zoneId = `${ZONE_PREFIX}:v1`;
-    const zone = new AuthoritativeMovementZone(zoneId as any);
+    const zone = new AuthoritativeMovementZone(zoneId as any, new AurionTickRecorder());
     zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V1;
     zone.join({
       userId: 9_304_902,
@@ -183,4 +185,3 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     expect(row?.stageReceiptsJson).toBeNull();
   });
 });
-
