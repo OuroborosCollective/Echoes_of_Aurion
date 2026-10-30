@@ -5080,3 +5080,11 @@ Erkenntnis: Operative I/O-Zeit ist keine Simulationszeit; die projektionale Brü
 Offen/Nächster Schritt: Exakte volle Regression, Receipt-Parität, reale isolierte MariaDB-/WS-/Godot-Kette und Build prüfen, danach Merge/Main separat lesen. Keine produktive Freischaltung durch diesen Fix; tatsächlicher Benutzerlogin, WorldLease, World-Apply/Receipt-/DB-Readback und physische Tablet-Abnahme bleiben offen.
 
 CI-Fortsetzung: Bridge-Run41091052028/1 am Head9d0415b99aaea55bef7ffecbc570be2452b2d373 bestand Typecheck,32 Receipt-/Zone-Regressionen und15 Original-Transporttests; der reale MariaDB-V1-Test traf CAUSAL_RECEIPT_CONFLICT. Dessen Zone verwendete den globalen asynchron persistierenden Recorder und schrieb zusätzlich manuell über einen Adapter. V1-/V2-Kompatibilitätsfixtures bekommen deshalb einen eigenen Recorder ohne automatischen DB-Schreiber; ihre manuellen echten MariaDB-Writes und alle Assertions bleiben unverändert. Produktions-Persistenz-/Konfliktlogik bleibt unangetastet.
+
+
+### 2026-10-30 — Fehlerberichte nach Kategorie- und Fokuswechsel korrekt öffnen
+Status: PARTIAL — lokale RED/GREEN-Regression und Typprüfung bestanden; echte HTTP-/Browser-CI offen.
+Änderung: Beim Wechsel über Community-Dock oder öffentliche Einstiege wird ein zuvor ausgewählter Forenthread verworfen; Schließen stellt den Fokus auf den zuletzt benutzten Dock-Auslöser zurück. Bestehende Barrierefreiheits- und Bewegungspräferenzregeln bleiben erhalten. Der Workflow prüft zusätzlich Navigation, volle Regression und echten Forum-HTTP-/Browser-Readback.
+Evidence: Neue synthetische Cache-Probe am ursprünglichen #1228-Code RED (1/7); nach zentralem Reset/Fokuskorrektur 20 lokale UI-Tests GREEN. Separate Typprüfung Exit0. Lokale volle Suite2383 bestanden/271 übersprungen/7 Fehler ausschließlich in unverändertem ProductionProbeApproval; dieselben7 Fehler isoliert reproduziert. Eine reale HTTP-Minimalprobe belegt Node24/JSDOM-AbortSignal-Inkompatibilität, nicht einen produktiven Backendausfall.
+Erkenntnis: Ein neuer Titel beweist keinen Inhaltswechsel; Auswahl und Fokus müssen gemeinsam wechseln. Browser- und Node-Transport besitzen unterschiedliche AbortSignal-Klassen.
+Offen/Nächster Schritt: Gepinnte Node22-CI, isolierte MariaDB und echter HTTP-/Browser-Test; danach PR/Merge/main separat lesen. Keine produktiven Fehlerberichte angelegt.

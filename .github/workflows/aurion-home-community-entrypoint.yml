@@ -8,6 +8,8 @@ on:
       - "client/src/components/AurionCommunityHost.tsx"
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
+      - "client/src/pages/Community.tsx"
+      - "client/src/pages/Community.navigation.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
       - "client/src/components/CommunityOverlay.test.tsx"
       - "server/leaderboardPrivacy.test.ts"
@@ -24,6 +26,8 @@ on:
       - "client/src/components/AurionCommunityHost.tsx"
       - "client/src/pages/Home.tsx"
       - "client/src/pages/Home.test.tsx"
+      - "client/src/pages/Community.tsx"
+      - "client/src/pages/Community.navigation.test.tsx"
       - "client/src/components/CommunityOverlay.tsx"
       - "client/src/components/CommunityOverlay.test.tsx"
       - "server/leaderboardPrivacy.test.ts"
@@ -64,7 +68,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
       - run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
       - run: pnpm install --frozen-lockfile
       - name: Verify and apply committed database migrations
@@ -80,7 +83,9 @@ jobs:
           fi
           pnpm exec drizzle-kit migrate
       - name: Focused component contract
-        run: pnpm exec vitest run client/src/pages/Home.test.tsx client/src/components/CommunityOverlay.test.tsx server/leaderboardPrivacy.test.ts --reporter=verbose
+        run: pnpm exec vitest run client/src/pages/Home.test.tsx client/src/pages/Community.navigation.test.tsx client/src/components/CommunityOverlay.test.tsx server/leaderboardPrivacy.test.ts --reporter=verbose
+      - name: Full repository regression
+        run: pnpm test
       - name: TypeScript and production build
         run: pnpm check && pnpm build
       - name: Install Chromium
@@ -118,7 +123,7 @@ jobs:
             },
           });
           EOF
-          pnpm exec playwright test e2e/guest-smoke.spec.ts --grep "guest opens Home (Events|Rangliste)" --config=playwright.home-community.config.ts
+          pnpm exec playwright test e2e/guest-smoke.spec.ts --grep "guest opens Home (Events|Rangliste|Fehlerberichte)" --config=playwright.home-community.config.ts
       - name: Upload runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
