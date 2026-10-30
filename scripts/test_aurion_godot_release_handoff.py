@@ -20,6 +20,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class HostBuildBoundary(unittest.TestCase):
+    def test_bridge_credential_files_match_systemd249_load_directory(self):
+        unit = ROOT / 'deploy/aurion-godot-bridge.service'
+        environment = dict(line.removeprefix('Environment=').split('=', 1)
+                           for line in unit.read_text().splitlines() if line.startswith('Environment='))
+        directory = Path('/run/credentials') / unit.name
+        self.assertEqual(environment['UPSTREAM_TOKEN_FILE'], str(directory / 'aurion-upstream'))
+        self.assertEqual(environment['BRIDGE_TOKEN_FILE'], str(directory / 'aurion-editor'))
+        self.assertIn('LoadCredential=aurion-upstream:/etc/aurion-godot/feed.token', unit.read_text())
+        self.assertIn('LoadCredential=aurion-editor:/etc/aurion-godot/editor.token', unit.read_text())
+
     def test_promoter_only_imports_a_hosted_image(self):
         source = (ROOT / 'deploy/promote-aurion-zone-runtime.sh').read_text()
         commands = '\n'.join(line for line in source.splitlines() if not line.lstrip().startswith('#'))
