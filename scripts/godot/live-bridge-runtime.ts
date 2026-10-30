@@ -37,7 +37,10 @@ const bridge = await startBridge({
 }, silentLogger);
 const timer = setInterval(() => {
   zone.tick();
-  projection = projectCommittedTick(recorder.getEntry(zone.zoneId, zone.getTickNumber())!, identity);
+  const entry = recorder.getEntry(zone.zoneId, zone.getTickNumber())!;
+  projection = projectCommittedTick(entry, { ...identity,
+    previousReceipt: recorder.getReceipt(zone.zoneId, entry.receipt.tick - 1),
+  });
   feed.onTick(zone.getTickNumber());
 }, ZONE_TICK_MS);
 let stdout = "", stderr = "";
@@ -73,3 +76,4 @@ try {
   await bridge.close();
   await feed.close();
 }
+
