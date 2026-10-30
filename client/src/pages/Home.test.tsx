@@ -60,6 +60,17 @@ describe("Home", () => {
     }
   });
 
+  it("opens Fehlerberichte through the existing community event", () => {
+    const opened: unknown[] = [];
+    const listener = (event: Event) => opened.push((event as CustomEvent).detail);
+    window.addEventListener("aurion:open-community", listener);
+    try {
+      render(<RealClientHarness><Home /></RealClientHarness>);
+      fireEvent.click(screen.getByRole("button", { name: "Fehler" }));
+      expect(opened).toEqual([{ panel: "issues" }]);
+    } finally { window.removeEventListener("aurion:open-community", listener); }
+  });
+
   it("owns neither AX1 return nor legacy gameplay action handlers", () => {
     render(<RealClientHarness><Home /></RealClientHarness>);
     let returns = 0;

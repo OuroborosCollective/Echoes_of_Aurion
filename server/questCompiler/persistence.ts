@@ -486,8 +486,19 @@ export class QuestPersistenceEngine {
 
         const current = QuestInstanceSchema.parse(JSON.parse(instanceRow.instanceJson));
         const currentHash = computeQuestStateHash(current);
-        if (currentHash !== input.expectedStateHash || input.receipt.previousStateHash !== currentHash) {
+        if (
+          currentHash !== input.expectedStateHash ||
+          input.receipt.previousStateHash !== currentHash ||
+          input.updatedInstance.id !== current.id ||
+          input.updatedInstance.worldId !== current.worldId ||
+          input.updatedInstance.playerUserId !== current.playerUserId ||
+          input.updatedInstance.planHash !== current.planHash ||
+          input.updatedInstance.graphHash !== current.graphHash
+        ) {
           throw new Error("QUEST_RUNTIME_STALE_STATE");
+        }
+        if (computeQuestStateHash(input.updatedInstance) !== input.receipt.resultStateHash) {
+          throw new Error("QUEST_RESULT_STATE_HASH_MISMATCH");
         }
         const lastReceipt = (await tx.select().from(aurionQuestReceipts)
           .where(eq(aurionQuestReceipts.instanceId, input.instanceId))
@@ -512,9 +523,28 @@ export class QuestPersistenceEngine {
           instanceJson: JSON.stringify(input.updatedInstance),
         }).where(eq(aurionQuestInstances.id, input.instanceId));
         if (input.causalClosure) await persistCausalClosure(tx, input.causalClosure);
+        // The first response and later retries must describe the same durable row,
+        // including the database-owned operational timestamp.
+        const persistedRow = (await tx.select().from(aurionQuestReceipts)
+          .where(eq(aurionQuestReceipts.id, input.receipt.id)).limit(1))[0];
+        if (!persistedRow || persistedRow.receiptHash !== input.receipt.receiptHash) {
+          throw new Error("QUEST_RECEIPT_PERSISTED_IDENTITY_MISMATCH");
+        }
+        const receipt = QuestReceiptSchema.parse({
+          id: persistedRow.id,
+          instanceId: persistedRow.instanceId,
+          eventSequence: persistedRow.eventSequence,
+          planHash: persistedRow.planHash,
+          graphHash: persistedRow.graphHash,
+          previousStateHash: persistedRow.previousStateHash,
+          resultStateHash: persistedRow.resultStateHash,
+          idempotencyKey: persistedRow.idempotencyKey,
+          receiptHash: persistedRow.receiptHash,
+          createdAt: persistedRow.createdAt.toISOString(),
+        });
         this.instances.set(input.instanceId, input.updatedInstance);
-        this.receipts.set(input.receipt.id, input.receipt);
-        return { updatedInstance: input.updatedInstance, receipt: input.receipt, replayed: false };
+        this.receipts.set(receipt.id, receipt);
+        return { updatedInstance: input.updatedInstance, receipt, replayed: false };
       });
     });
   }

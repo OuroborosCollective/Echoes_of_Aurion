@@ -79,3 +79,23 @@ test("production portal does not load Babylon from an external CDN", async ({ pa
   expect(externalBabylonRequests).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+
+test("guest opens Home Fehlerberichte through the real forum endpoint", async ({ page }) => {
+  await page.goto("/");
+  const listed = page.waitForResponse(response => response.url().includes("community.forum.list") && response.request().method() === "GET");
+  const button = page.getByRole("button", { name: "Fehler", exact: true });
+  await button.click();
+  const dialog = page.getByRole("dialog", { name: "Fehlerberichte", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeFocused();
+  const response = await listed;
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/json");
+  const payload = await response.json();
+  expect(Array.isArray(payload)).toBe(true);
+  expect(payload.some((item: { error?: unknown }) => item.error !== undefined)).toBe(false);
+  await expect(dialog.getByRole("button", { name: "Fehlerberichte", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Community-Konsole schließen" }).click();
+  await expect(button).toBeFocused();
+});

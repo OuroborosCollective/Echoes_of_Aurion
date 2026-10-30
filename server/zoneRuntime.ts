@@ -70,6 +70,8 @@ type PresencePeer = {
   connectionId: string;
   userId: number;
   socket: WebSocket;
+  /** Transport provenance only; omitted from canonical gameplay state. */
+  liveTransport: boolean;
   /** Last movement vector actually accepted by an authoritative tick. */
   input: ZoneMove["input"];
   /** Highest client sequence applied by authority. */
@@ -105,12 +107,14 @@ function createPresencePeer(values: {
   userId: number;
   socket: WebSocket;
   combatProfile: ZoneCombatProfile;
+  liveTransport: boolean;
 }): PresencePeer {
   const entityId = `player:${values.userId}`;
   return {
     connectionId: values.connectionId,
     userId: values.userId,
     socket: values.socket,
+    liveTransport: values.liveTransport,
     input: { x: 0, z: 0 },
     lastAcceptedClientSeq: 0,
     lastReceivedClientSeq: 0,
@@ -300,6 +304,7 @@ export class AuthoritativeMovementZone {
         connectionId,
         userId: player.userId,
         socket: dummySocket,
+        liveTransport: false,
         input: { x: player.inputX, z: player.inputZ },
         lastAcceptedClientSeq: player.lastAcceptedClientSeq,
         lastReceivedClientSeq: player.lastAcceptedClientSeq,
@@ -343,13 +348,17 @@ export class AuthoritativeMovementZone {
     const previous = this.peersByEntityId.get(entityId);
     if (!previous && this.peers.size >= ZONE_MAX_PRESENCES) throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
-      this.pendingIntents = this.pendingIntents.filter(intent => intent.entityId !== entityId);
+      const retainedIntents: AurionZoneIntent[] = [];
+      for (let i = 0; i < this.pendingIntents.length; i++) {
+        if (this.pendingIntents[i].entityId !== entityId) retainedIntents.push(this.pendingIntents[i]);
+      }
+      this.pendingIntents = retainedIntents;
       this.peers.delete(previous.connectionId);
       this.peersByEntityId.delete(entityId);
       previous.socket.close(1000, "superseded by authenticated reconnect");
     }
     const connectionId = makeZoneConnectionId();
-    const peer = createPresencePeer({ connectionId, userId: values.userId, socket: values.socket, combatProfile: profile });
+    const peer = createPresencePeer({ connectionId, userId: values.userId, socket: values.socket, combatProfile: profile, liveTransport: true });
     this.peers.set(connectionId, peer);
     this.peersByEntityId.set(entityId, peer);
     this.sortedPeersDirty = true;
@@ -407,14 +416,27 @@ export class AuthoritativeMovementZone {
     return this.peersByEntityId.get(`player:${userId}`)?.connectionId;
   }
 
+  /** A replay/restored peer is not an authenticated, open live transport. */
+  liveConnectionIdForUser(userId: number): string | undefined {
+    const peer = this.peersByEntityId.get(`player:${userId}`);
+    return peer?.liveTransport && peer.socket.readyState === peer.socket.OPEN ? peer.connectionId : undefined;
+  }
+
   async flushEvidencePersistence(): Promise<void> { await this.evidenceRecorder.flushPersistence(); }
   recordedTick(tick: number) { return this.evidenceRecorder.getEntry(this.zoneId, tick); }
 
   nextClientSequenceForUser(userId: number): number {
-    const peer = this.peersByEntityId.get(`player:${userId}`);
+    const entityId = `player:${userId}`;
+    const peer = this.peersByEntityId.get(entityId);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
-    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
-      ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
+    let maxSeq = Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq);
+    for (let i = 0; i < this.pendingIntents.length; i++) {
+      const intent = this.pendingIntents[i];
+      if (intent.entityId === entityId && intent.clientSeq > maxSeq) {
+        maxSeq = intent.clientSeq;
+      }
+    }
+    return maxSeq + 1;
   }
 
   nextArrivalSequence(): number {
@@ -482,8 +504,11 @@ export class AuthoritativeMovementZone {
    * ruleset, so historical tick receipts are not reinterpreted.
    */
   private hasQueuedPlayerCombat(entityId: string): boolean {
-    return this.pendingIntents.some(intent =>
-      intent.entityId === entityId && (intent.type === "attack" || intent.type === "skill"));
+    for (let i = 0; i < this.pendingIntents.length; i++) {
+      const intent = this.pendingIntents[i];
+      if (intent.entityId === entityId && (intent.type === "attack" || intent.type === "skill")) return true;
+    }
+    return false;
   }
 
   submitAttack(connectionId: string, attack: ZoneAttack): AttackResult {
@@ -612,6 +637,7 @@ export class AuthoritativeMovementZone {
             userId: intent.userId,
             socket: replaySocket,
             combatProfile: intent.combatProfile,
+            liveTransport: false,
           });
           this.peers.set(peer.connectionId, peer);
           this.peersByEntityId.set(intent.entityId, peer);

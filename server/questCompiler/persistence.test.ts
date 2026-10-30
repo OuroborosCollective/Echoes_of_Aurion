@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { computeCanonicalHash, computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import type { QuestInstance, QuestReceipt } from "../../shared/aurionQuestContract";
 import { QuestPersistenceEngine } from "./persistence";
@@ -23,6 +23,10 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     updatedAt: "2026-09-22T00:00:00.000Z",
   };
 
+  // Each case owns its rows when the suite runs against a real shared database.
+  let caseNumber = 0;
+  beforeEach(() => { instance.id = `qi_test_458_case_${++caseNumber}`; });
+
   function transition(sourceInstance: QuestInstance = instance) {
     const previousStateHash = computeQuestStateHash(sourceInstance);
     const updatedInstance: QuestInstance = {
@@ -32,7 +36,7 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     };
     const resultStateHash = computeQuestStateHash(updatedInstance);
     const receipt: QuestReceipt = {
-      id: "rcpt_test_458",
+      id: `rcpt_${sourceInstance.id}`,
       instanceId: sourceInstance.id,
       eventSequence: 1,
       planHash: sourceInstance.planHash,
@@ -69,6 +73,10 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     expect(committed.replayed).toBe(false);
     expect(replay.replayed).toBe(true);
     expect(replay.receipt).toEqual(committed.receipt);
+    const restarted = new QuestPersistenceEngine();
+    if (process.env.DATABASE_URL) {
+      expect(await restarted.getReceiptByIdempotencyKey(first.receipt.idempotencyKey)).toEqual(committed.receipt);
+    }
     expect(replay.updatedInstance.objectiveProgress.investigate).toBe(1);
     expect((await persistence.getReceiptsForInstance(instance.id))).toHaveLength(1);
     expect(await persistence.getReceiptByIdempotencyKey(first.receipt.idempotencyKey)).toEqual(committed.receipt);

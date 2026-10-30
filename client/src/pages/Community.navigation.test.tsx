@@ -57,5 +57,6 @@ describe("productive community navigation", () => {
     render(<Community />);
     expect(openPanel(/^Forum/)).toEqual([{ panel: "forum" }]);
     expect(openPanel(/^Events/)).toEqual([{ panel: "events" }]);
+    expect(openPanel(/^Fehlerberichte/)).toEqual([{ panel: "issues" }]);
   });
 });
