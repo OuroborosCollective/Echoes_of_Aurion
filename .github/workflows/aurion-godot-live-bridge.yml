@@ -1,0 +1,103 @@
+name: Aurion Godot live bridge
+on:
+  pull_request:
+    paths:
+      - 'server/godotBridge/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'godot-client/**'
+      - 'drizzle/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - 'scripts/godot/live-bridge-*'
+      - '.github/workflows/aurion-godot-live-bridge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  repository-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact lock and run unchanged full repository regression
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm check
+          pnpm test
+          git diff --check
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-bridge-test
+          MARIADB_DATABASE: aurion_classless_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-bridge-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-bridge-test@127.0.0.1:3306/aurion_classless_test
+      AURION_CLASSLESS_E2E: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install repository lock
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Typecheck and canonical receipt parity
+        run: |
+          pnpm check
+          pnpm exec vitest run server/godotBridge/aurionAdapter.test.ts server/causality/causalTick.test.ts server/causality/persistenceIdentity.test.ts server/zoneRuntime.test.ts server/zoneRuntimeAllocation.test.ts
+      - name: Retain supplied mock-only transport regressions
+        run: pnpm exec tsx server/godotBridge/dev/selfTest.ts
+      - name: Durable observer on actual isolated MariaDB
+        run: |
+          pnpm exec drizzle-kit migrate
+          pnpm exec vitest run server/causality/causalReceiptV2Persistence.test.ts --reporter=verbose
+      - name: Install and verify pinned Godot
+        run: |
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/doctor.mjs
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import --quit
+      - name: Actual Godot protocol regression
+        run: |
+          set -o pipefail
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_live_bridge_contract.gd 2>&1 | tee "$RUNNER_TEMP/live-bridge-godot.log"
+          ! grep -E 'SCRIPT ERROR|Parse Error' "$RUNNER_TEMP/live-bridge-godot.log"
+          grep -q AURION_LIVE_BRIDGE_PROTOCOL_FIXTURES_PASS "$RUNNER_TEMP/live-bridge-godot.log"
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --script tests/test_live_bridge_authoring_entry.gd 2>&1 | tee "$RUNNER_TEMP/live-bridge-authoring.log"
+          ! grep -E 'SCRIPT ERROR|Parse Error' "$RUNNER_TEMP/live-bridge-authoring.log"
+          grep -q AURION_LIVE_BRIDGE_AUTHORING_CLIENT_BOOT_PASS "$RUNNER_TEMP/live-bridge-authoring.log"
+      - name: Real isolated authority through WS into actual Godot
+        env:
+          AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURION_BRIDGE_EVIDENCE: ${{ runner.temp }}/live-bridge-evidence
+        run: pnpm exec tsx scripts/godot/live-bridge-runtime.ts
+      - name: Build bridge and exact-source package
+        env:
+          AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURION_BRIDGE_EVIDENCE: ${{ runner.temp }}/live-bridge-evidence
+        run: node scripts/godot/live-bridge-package.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurion-godot-live-bridge-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/live-bridge-evidence/
+          if-no-files-found: error
+          retention-days: 14

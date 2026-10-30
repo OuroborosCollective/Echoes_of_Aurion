@@ -1,9 +1,12 @@
+import {mkdtemp, mkdir, readFile, rm, symlink, writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ASSISTANT_PIN, validateAssistantSource, hardenServiceProgram,
   hardenDock, hardenLauncher, enableAssistantInStagedProject,
-  validateSourcePaths, validateEditorPolicy, assertSafeTarget,
+  validateSourcePaths, validateEditorPolicy, assertSafeTarget, stageGodotAssistant,
 } from './stage-godot-assistant.mjs';
 
 const project = '[editor_plugins]\nenabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg")\n[application]\nconfig/name="Aurion"\n';
@@ -82,4 +85,24 @@ test('stage destination must be outside source and canonical Godot project', () 
   assertSafeTarget('/tmp/editor', '/tmp/upstream', '/home/me/repo/godot-client');
   assert.throws(() => assertSafeTarget('/tmp/upstream', '/tmp/upstream', '/home/me/repo/godot-client'), /UNSAFE_TARGET/);
   assert.throws(() => assertSafeTarget('/home/me/repo/godot-client/evil', '/tmp/upstream', '/home/me/repo/godot-client'), /UNSAFE_TARGET/);
+});
+
+
+test('existing Aurion projects and symlink targets are rejected before any edit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'aurion-assistant-isolation-'));
+  try {
+    const source = join(root, 'upstream');
+    const other = join(root, 'another-real-aurion', 'godot-client');
+    await mkdir(source);
+    await mkdir(other, {recursive:true});
+    await writeFile(join(other, 'project.godot'), project);
+    await writeFile(join(other, 'AGENTS.md'), '# Echoes of Aurion\nAurion is the single and only canonical owner. Read Memory.md.');
+    await assert.rejects(stageGodotAssistant({source, target:other}), /TARGET_ALREADY_EXISTS/);
+    const link = join(root, 'target-link');
+    await symlink(other, link);
+    await assert.rejects(stageGodotAssistant({source, target:link}), /TARGET_ALREADY_EXISTS/);
+    await assert.rejects(stageGodotAssistant({source, target:join(other, '..', 'godot-client')}), /TARGET_ALREADY_EXISTS/);
+    assert.equal(await readFile(join(other, 'project.godot'), 'utf8'), project);
+    await assert.rejects(readFile(join(other, 'addons/godot_assistant/plugin.cfg')), {code:'ENOENT'});
+  } finally { await rm(root, {recursive:true, force:true}); }
 });

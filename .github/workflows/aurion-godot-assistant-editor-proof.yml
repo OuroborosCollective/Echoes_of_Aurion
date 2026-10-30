@@ -6,6 +6,10 @@ on:
       - 'scripts/godot/stage-godot-assistant.test.mjs'
       - 'scripts/godot/smoke-godot-assistant-relay.mjs'
       - 'docs/godot/GODOT_ASSISTANT_EDITOR.md'
+      - 'godot-client/**'
+      - 'AGENTS.md'
+      - 'Memory.md'
+      - 'config/godot-toolchain.lock.json'
       - '.github/workflows/aurion-godot-assistant-editor-proof.yml'
   workflow_dispatch:
 permissions:
@@ -39,9 +43,7 @@ jobs:
           STAGE_DIR: ${{ runner.temp }}/aurion-assistant-editor
         run: |
           set -euo pipefail
-          mkdir -p "$STAGE_DIR"
-          cp -a godot-client/. "$STAGE_DIR/"
-          cp AGENTS.md "$STAGE_DIR/AGENTS.md"
+          test ! -e "$STAGE_DIR"
           node scripts/godot/stage-godot-assistant.mjs --source ../upstream-godot-assistant --target "$STAGE_DIR"
           node scripts/godot/smoke-godot-assistant-relay.mjs "$STAGE_DIR"
           test -f "$STAGE_DIR/addons/godot_assistant/LICENSE.upstream.txt"

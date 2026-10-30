@@ -1,10 +1,12 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://app/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://world/confirmed_map.gd" id="2_map"]
 [ext_resource type="Script" path="res://world/chunk_terrain.gd" id="3_terrain"]
 [ext_resource type="Script" path="res://world/starter_village_visuals.gd" id="4_village"]
 [ext_resource type="PackedScene" path="res://ui/mobile/movement_controls.tscn" id="5_mobile"]
+[ext_resource type="PackedScene" path="res://world/camera_rig.tscn" id="6_camera"]
+[ext_resource type="PackedScene" path="res://ui/screens/hud.tscn" id="7_hud"]
 
 [sub_resource type="StyleBoxFlat" id="Style_card"]
 bg_color = Color(0.045, 0.085, 0.11, 0.96)
@@ -106,14 +108,45 @@ unique_name_in_owner = true
 [node name="QuestNPCs" type="Node3D" parent="WorldView/Live3D/World"]
 unique_name_in_owner = true
 
-[node name="WorldCamera" type="Camera3D" parent="WorldView/Live3D/World"]
+[node name="WorldCamera" parent="WorldView/Live3D/World" instance=ExtResource("6_camera")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 5)
-current = true
 
 [node name="WorldLight" type="DirectionalLight3D" parent="WorldView/Live3D/World"]
 rotation_degrees = Vector3(-50, -30, 0)
 light_energy = 1.0
+
+
+[node name="TargetHUD" type="VBoxContainer" parent="."]
+visible = false
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -284.0
+offset_top = -164.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 1
+
+[node name="TargetLabel" type="Label" parent="TargetHUD"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+horizontal_alignment = 2
+autowrap_mode = 3
+text = "Ziel: keines"
+
+[node name="WorldAction" type="Button" parent="TargetHUD"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+disabled = true
+mouse_filter = 0
+text = "Angreifen"
 
 [node name="MobileJoystick" parent="." instance=ExtResource("5_mobile")]
 unique_name_in_owner = true
@@ -366,3 +399,6 @@ unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(130, 48)
 text = "Diagnose"
+
+[node name="MobileHUD" parent="." instance=ExtResource("7_hud")]
+visible = false

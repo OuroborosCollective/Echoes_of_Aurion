@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import {cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
+import {basename, dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
@@ -132,11 +132,15 @@ async function mustBeAbsent(path) {
 
 export async function stageGodotAssistant({source, target}) {
   const upstream = await realpath(resolve(source));
-  const project = await realpath(resolve(target));
-  const canonical = resolve(dirname(fileURLToPath(import.meta.url)), '../../godot-client');
+  // Always create the disposable project ourselves. Existing projects, including
+  // other Aurion clones and symlinks to them, are never staging destinations.
+  const canonical = await realpath(resolve(dirname(fileURLToPath(import.meta.url)), '../../godot-client'));
+  const project = join(await realpath(dirname(resolve(target))), basename(resolve(target)));
   assertSafeTarget(project, upstream, canonical);
-  assert.ok((await stat(join(project, 'project.godot'))).isFile(), 'ASSISTANT_PROJECT_MISSING');
-  validateEditorPolicy(await readFile(join(project, 'AGENTS.md'), 'utf8'));
+  await mustBeAbsent(project);
+  await scan(canonical); // Do not copy symlinks that could escape the new project.
+  const policy = await readFile(join(dirname(canonical), 'AGENTS.md'), 'utf8');
+  validateEditorPolicy(policy);
   const sha = runGit(upstream, ['rev-parse', 'HEAD']);
   const clean = runGit(upstream, ['status', '--porcelain', '--untracked-files=all']) === '';
   const pluginConfig = await readFile(join(upstream, ASSISTANT_PIN.addon, 'plugin.cfg'), 'utf8');
@@ -150,13 +154,13 @@ export async function stageGodotAssistant({source, target}) {
   for (const required of ['plugin.cfg','plugin.gd','assistant_dock.gd','harness_launcher.gd','bridge_client.gd','tool_executor.gd']) {
     assert.ok(addonPaths.includes(required), 'ASSISTANT_ADDON_MISSING: ' + required);
   }
-  const originalProject = await readFile(join(project, 'project.godot'), 'utf8');
+  const originalProject = await readFile(join(canonical, 'project.godot'), 'utf8');
   const updatedProject = enableAssistantInStagedProject(originalProject);
   assert.notEqual(updatedProject, originalProject, 'ASSISTANT_PLUGIN_ALREADY_ENABLED');
   const destination = join(project, ASSISTANT_PIN.addon);
   await mustBeAbsent(destination);
   const temporary = await mkdtemp(join(tmpdir(), 'aurion-godot-assistant-'));
-  let installed = false;
+  let projectCreated = false;
   try {
     const addon = join(temporary, 'addon');
     const service = join(temporary, 'service-source');
@@ -177,16 +181,20 @@ export async function stageGodotAssistant({source, target}) {
     assert.ok((await stat(join(built, 'GodotAssistant.Service.dll'))).isFile(), 'ASSISTANT_RELAY_MISSING');
     assert.equal(runGit(upstream, ['rev-parse', 'HEAD']), ASSISTANT_PIN.commit, 'ASSISTANT_SOURCE_CHANGED');
     assert.equal(runGit(upstream, ['status', '--porcelain', '--untracked-files=all']), '', 'ASSISTANT_SOURCE_CHANGED');
+    await mkdir(project); // Exclusive creation; no recursive reuse of an existing target.
+    projectCreated = true;
+    await cp(canonical, project, {recursive: true, dereference: false});
+    await writeFile(join(project, 'AGENTS.md'), policy);
+    await cp(join(dirname(canonical), 'Memory.md'), join(project, 'Memory.md'));
     await mkdir(join(project, 'addons'), {recursive: true});
     await mustBeAbsent(destination);
     await rename(addon, destination);
-    installed = true;
     await writeFile(join(project, 'project.godot'), updatedProject);
     return {repository: ASSISTANT_PIN.repository, commit: sha, version: ASSISTANT_PIN.version,
       target: destination, permissionModes: ['ReadOnly', 'AskBeforeWrite'],
       license: 'MIT', editorOnly: true, runtimeAuthority: ASSISTANT_PIN.runtimeAuthority};
   } catch (error) {
-    if (installed) await rm(destination, {recursive: true, force: true});
+    if (projectCreated) await rm(project, {recursive: true, force: true});
     throw error;
   } finally {
     await rm(temporary, {recursive: true, force: true});

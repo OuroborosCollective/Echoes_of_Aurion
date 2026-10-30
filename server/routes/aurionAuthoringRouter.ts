@@ -13,6 +13,7 @@ import {
   planWorldDesign,
   readActiveDungeonDesigns,
   readActiveWorldDesign,
+  recoverWorldAuthoringReceipt,
 } from "../aurionAuthoringPersistence";
 
 export const aurionAuthoringRouter = router({
@@ -65,15 +66,30 @@ export const aurionAuthoringRouter = router({
     }),
 
   worldPlan: adminProcedure
-    .input(WorldDesignDraftSchema)
-    .mutation(({ input }) => planWorldDesign(input)),
+    .input(z.union([
+      WorldDesignDraftSchema,
+      z.object({ draft: WorldDesignDraftSchema, operationId: z.string().regex(/^[a-f0-9]{32}$/) }).strict(),
+    ]))
+    .mutation(({ input }) => "draft" in input
+      ? planWorldDesign(input.draft, undefined, input.operationId)
+      : planWorldDesign(input)),
   worldApply: adminProcedure
     .input(z.object({
       draft: WorldDesignDraftSchema,
       expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
+      operationId: z.string().regex(/^[a-f0-9]{32}$/).optional(),
       confirmation: z.literal("APPLY_WORLD_DESIGN"),
     }).strict())
-    .mutation(({ ctx, input }) => applyWorldDesign(ctx.user.id, input.draft, input.expectedPlanHash)),
+    .mutation(({ ctx, input }) => applyWorldDesign(ctx.user.id, input.draft, input.expectedPlanHash, input.operationId)),
+  // Read-only lookup; a missing row never proves that an in-flight apply failed.
+  worldReceipt: adminProcedure
+    .input(z.object({
+      designKey: z.string().regex(/^[a-z][a-z0-9._:-]{2,95}$/),
+      version: z.number().int().min(1).max(1_000_000),
+      planHash: z.string().regex(/^[a-f0-9]{64}$/),
+      operationId: z.string().regex(/^[a-f0-9]{32}$/),
+    }).strict())
+    .mutation(({ ctx, input }) => recoverWorldAuthoringReceipt(ctx.user.id, input)),
 
   dungeonPlan: adminProcedure
     .input(DungeonDesignDraftSchema)

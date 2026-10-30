@@ -25,9 +25,6 @@ ROOT="$PWD"
 WORK="$(mktemp -d)"
 git clone https://github.com/splatterfacegames/godot-assistant.git "$WORK/godot-assistant"
 git -C "$WORK/godot-assistant" checkout a6aed65584cf8cccd32a75e5a93e22b752a0b00a
-mkdir -p "$WORK/aurion-editor"
-cp -a "$ROOT/godot-client/." "$WORK/aurion-editor/"
-cp "$ROOT/AGENTS.md" "$WORK/aurion-editor/AGENTS.md"
 node "$ROOT/scripts/godot/stage-godot-assistant.mjs" \
   --source "$WORK/godot-assistant" --target "$WORK/aurion-editor"
 # Start the pinned Godot editor in a graphical desktop session:
@@ -40,6 +37,7 @@ checks allowed source paths and a minimal .NET 8 project, builds the relay from
 an isolated patched copy, installs the add-on *only* into the disposable
 project and enables its editor plugin there. It refuses a previously installed
 add-on, changed sources, missing Aurion `AGENTS.md`, or the canonical target.
+The target must not exist. The script creates it exclusively, copies the canonical project and its AGENTS.md/Memory.md, and rejects existing projects and symlink targets before any staging write. Do not pre-create or populate `--target`.
 The launcher is prevented from overwriting `AGENTS.md` and `CLAUDE.md`.
 The UI/launcher AND the .NET relay refuse `FullAuto`/YOLO and unknown modes.
 

@@ -55,7 +55,7 @@ func _ready() -> void:
 		browser_opener = Callable(self, "_open_system_browser")
 
 func begin(server_base_url: String, app_build: String, allow_local: bool = false) -> bool:
-	if _request_active or not is_inside_tree():
+	if _request_active or not is_inside_tree() or callback_pending():
 		return false
 	var server := RuntimeConfig.validated_server_url(server_base_url, allow_local)
 	var request := _flow.prepare_start(app_build)
@@ -71,6 +71,8 @@ func begin(server_base_url: String, app_build: String, allow_local: bool = false
 func complete_callback(raw_url: Variant) -> bool:
 	if _request_active or _server_base_url.is_empty() or not is_inside_tree():
 		return false
+	if expire_pending_callback():
+		return false
 	var request: Dictionary = Callback.consume(raw_url, _flow)
 	if request.is_empty():
 		# A well-formed callback for an older browser attempt is consumed by the
@@ -81,7 +83,22 @@ func complete_callback(raw_url: Variant) -> bool:
 		return false
 	return _send_json(EXCHANGE_PATH, request, "exchange")
 
-func callback_pending() -> bool:
+func _process(_delta: float) -> void:
+	expire_pending_callback()
+
+## Expiry clears PKCE/state once and reaches the same UI failure boundary as
+## a rejected start. No network retry, token issuance or world action occurs.
+func expire_pending_callback(now_ms: int = -1) -> bool:
+	if _request_active or not _flow.expire_pending(now_ms):
+		return false
+	_fail_start("NATIVE_AUTH_TRANSACTION_INVALID")
+	return true
+
+func callback_remaining_ms(now_ms: int = -1) -> int:
+	return 0 if _request_active else _flow.pending_remaining_ms(now_ms)
+
+func callback_pending(now_ms: int = -1) -> bool:
+	expire_pending_callback(now_ms)
 	return not _request_active and not _flow.browser_url().is_empty()
 
 func access_token(now_ms: int = -1) -> String:
@@ -302,3 +319,4 @@ static func _json_content_type(headers: PackedStringArray) -> bool:
 
 func _open_system_browser(url: String) -> int:
 	return OS.shell_open(url)
+

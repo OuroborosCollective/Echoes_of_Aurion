@@ -25,7 +25,7 @@ const sourcePaths = [
   "server/aurionRegionCatalog.ts", "server/aurionChunkPerformanceProtocol.ts", "server/guildBankProtocol.ts",
   "server/globalWorldProtocol.ts", "server/openWorldProtocol.ts", "server/wasdAurionWorldIntegrityProtocol.ts",
   "server/aurionAx1ContentCatalog.ts", "shared/aurionAx1ContentCatalog.json", "shared/aurionRegionProgressionCatalog.json", "shared/worldChunkProtocol.ts",
-  "shared/worldChunkStreamingProtocol.ts", "scripts/balancing/aim265-v2.ts", "scripts/balancing/replay-aim265.mjs",
+  "shared/worldChunkCoordinates.ts", "shared/worldChunkStreamingProtocol.ts", "scripts/balancing/aim265-v2.ts", "scripts/balancing/replay-aim265.mjs",
   "scripts/balancing/verify-aim265.py", "scripts/balancing/aim265-wolfram.wl",
 ];
 
