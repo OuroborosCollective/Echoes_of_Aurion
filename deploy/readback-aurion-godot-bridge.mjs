@@ -97,6 +97,8 @@ export async function readback(release, revision, containerId, enabled) {
   }
   assert.equal(service("MainPID"), pid);
   assert.equal(service("ActiveState"), "active");
+  assert.equal(service("FragmentPath"), "/etc/systemd/system/aurion-godot-bridge.service");
+  assert.equal(service("DropInPaths"), "");
   return { ...base, status: "TRANSPORT_READY", transportReady: true, worldProjectionStatus: health.ok && health.identity ? "BRIDGE_HAS_COMMITTED_SNAPSHOT" : "WAITING_FOR_COMMITTED_WORLD", bundleSha256: bundleHash, runtimeImageDigest: manifest.runtimeImage.id, mainPid: Number(pid) };
 }
 

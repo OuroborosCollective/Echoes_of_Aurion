@@ -5,6 +5,7 @@ set -euo pipefail
 release="$1"
 revision="$2"
 [[ "$(readlink -f /opt/aurion-traefik-runtime/current)" == "$release" ]]
+python3 "${release}/deploy/verify-aurion-godot-feed.py" unit-preflight
 unit=/etc/systemd/system/aurion-godot-bridge.service
 if [[ -e "$unit" || -L "$unit" ]]; then
   [[ -f "$unit" && ! -L "$unit" && "$(stat -c '%U:%G:%a' "$unit")" == root:root:644 ]]

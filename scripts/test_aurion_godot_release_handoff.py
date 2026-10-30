@@ -158,5 +158,31 @@ class ProtectedFeedFiles(unittest.TestCase):
         with self.assertRaises(ValueError): self.contract.preflight()
 
 
+class EffectiveUnitBoundary(unittest.TestCase):
+    def check(self, state, fragment='', dropins='', code=0):
+        contract = module('unit_contract', 'deploy/verify-aurion-godot-feed.py')
+        result = contract.subprocess.CompletedProcess([], code, f'LoadState={state}\nFragmentPath={fragment}\nDropInPaths={dropins}\n', '')
+        with patch.object(contract.subprocess, 'run', return_value=result):
+            contract.unit_preflight()
+
+    def test_absent_unit_is_accepted(self):
+        self.check('not-found', code=1)
+
+    def test_canonical_unit_is_accepted(self):
+        self.check('loaded', '/etc/systemd/system/aurion-godot-bridge.service')
+
+    def test_vendor_unit_collision_is_rejected(self):
+        with self.assertRaises(ValueError): self.check('loaded', '/usr/lib/systemd/system/aurion-godot-bridge.service')
+
+    def test_runtime_unit_collision_is_rejected(self):
+        with self.assertRaises(ValueError): self.check('loaded', '/run/systemd/system/aurion-godot-bridge.service')
+
+    def test_unknown_dropin_is_rejected(self):
+        with self.assertRaises(ValueError): self.check('loaded', '/etc/systemd/system/aurion-godot-bridge.service', '/etc/systemd/system/aurion-godot-bridge.service.d/override.conf')
+
+    def test_unreadable_manager_is_not_absence(self):
+        with self.assertRaises(ValueError): self.check('', code=1)
+
+
 if __name__ == '__main__':
     unittest.main()

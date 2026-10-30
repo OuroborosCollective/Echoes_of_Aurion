@@ -11,6 +11,21 @@ import sys
 TOKEN = Path('/etc/aurion-godot/feed.token')
 
 
+def unit_preflight():
+    result = subprocess.run(['systemctl', 'show', 'aurion-godot-bridge.service',
+                             '--property=LoadState', '--property=FragmentPath', '--property=DropInPaths'],
+                            capture_output=True, text=True)
+    values = dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
+    if values.get('LoadState') == 'not-found':
+        valid = result.returncode in (0, 1) and values.get('FragmentPath') == '' and values.get('DropInPaths') == ''
+    else:
+        valid = (result.returncode == 0 and values.get('LoadState') == 'loaded'
+                 and values.get('FragmentPath') == '/etc/systemd/system/aurion-godot-bridge.service'
+                 and values.get('DropInPaths') == '')
+    if not valid:
+        raise ValueError('GODOT_BRIDGE_EFFECTIVE_UNIT_COLLISION')
+
+
 def preflight():
     parent = TOKEN.parent.lstat()
     info = TOKEN.lstat()
@@ -69,6 +84,8 @@ if __name__ == '__main__':
     try:
         if sys.argv[1:] == ['preflight']:
             preflight()
+        elif sys.argv[1:] == ['unit-preflight']:
+            unit_preflight()
         elif len(sys.argv) == 5 and sys.argv[1] == 'readback' and sys.argv[3] in ['0', '1']:
             print(json.dumps(readback(sys.argv[2], sys.argv[3] == '1', sys.argv[4]), sort_keys=True))
         else:
