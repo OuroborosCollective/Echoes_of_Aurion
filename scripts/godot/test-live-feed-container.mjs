@@ -11,6 +11,19 @@ import { hello } from "../../deploy/readback-aurion-godot-bridge.mjs";
 // Authentication and the disabled write boundary are real network exchanges.
 const [image, revision] = process.argv.slice(2);
 if (!/^[a-f0-9]{40}$/.test(revision ?? "") || image !== `echoes-of-aurion:${revision}` || process.env.GITHUB_ACTIONS !== "true") throw new Error("FEED_CONTAINER_PROOF_SCOPE_INVALID");
+// The production process requires a real database. Reuse only this Actions
+// run's already-provisioned disposable MariaDB; never weaken its startup gate.
+const databaseNetwork = process.env.AURION_FEED_TEST_DATABASE_NETWORK;
+let database;
+try { database = new URL(process.env.DATABASE_URL ?? ""); }
+catch { throw new Error("FEED_CONTAINER_DATABASE_SCOPE_INVALID"); }
+const runId = process.env.GITHUB_RUN_ID ?? "";
+if (!/^\d+$/.test(runId) || databaseNetwork !== `aurion-runtime-database-verify-${runId}`
+    || database.protocol !== "mysql:" || database.hostname !== "mariadb" || database.port !== "3306"
+    || database.pathname !== "/aurion_runtime" || database.username !== "aurion_runtime"
+    || !/^[a-f0-9]{48}$/.test(database.password) || database.search || database.hash) {
+  throw new Error("FEED_CONTAINER_DATABASE_SCOPE_INVALID");
+}
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-feed-container-"));
 const tokenFile = path.join(directory, "feed.token");
 const token = randomBytes(32).toString("hex");
@@ -21,7 +34,7 @@ const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: [
 let container;
 let bridge;
 try {
-  container = docker(["run", "--detach", "--network", "bridge", "--publish", "127.0.0.1::39220", "--mount", `type=bind,source=${tokenFile},target=/run/secrets/aurion-godot-feed.token,readonly`, "-e", "AURION_GODOT_FEED_TOKEN_FILE=/run/secrets/aurion-godot-feed.token", "-e", "AURION_GODOT_FEED_BIND=0.0.0.0", "-e", "AURION_GODOT_FEED_PORT=39220", image]);
+  container = docker(["run", "--detach", "--network", databaseNetwork, "--env", "DATABASE_URL", "--publish", "127.0.0.1::39220", "--mount", `type=bind,source=${tokenFile},target=/run/secrets/aurion-godot-feed.token,readonly`, "-e", "AURION_GODOT_FEED_TOKEN_FILE=/run/secrets/aurion-godot-feed.token", "-e", "AURION_GODOT_FEED_BIND=0.0.0.0", "-e", "AURION_GODOT_FEED_PORT=39220", image]);
   assert.match(container, /^[a-f0-9]{64}$/);
   const installed = JSON.parse(docker(["inspect", container]))[0];
   const bindings = installed.HostConfig.PortBindings["39220/tcp"];
@@ -65,7 +78,12 @@ try {
   let accepted;
   for (let attempt = 0; attempt < 30; attempt++) {
     try { accepted = await exchange(token, true); break; }
-    catch (error) { if (error.message !== "FEED_CONTAINER_NOT_READY") throw error; await new Promise(resolve => setTimeout(resolve, 500)); }
+    catch (error) {
+      if (error.message !== "FEED_CONTAINER_NOT_READY") throw error;
+      const state = JSON.parse(docker(["inspect", container]))[0].State;
+      if (state.Status !== "running") throw new Error(`FEED_CONTAINER_EXITED:${state.ExitCode}`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
   if (accepted === undefined) {
     const observed = JSON.parse(docker(["inspect", container]))[0];
