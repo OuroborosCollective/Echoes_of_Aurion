@@ -69,6 +69,7 @@ for (const [id, script, marker] of [
   ['world-authoring-state', 'test_world_authoring_state.gd', 'GODOT_WORLD_AUTHORING_STATE_PASS'],
   ['world-authoring-scene', 'test_world_authoring_scene.gd', 'GODOT_WORLD_AUTHORING_SCENE_PASS'],
   ['world-editor-draft', 'test_world_editor_draft.gd', 'GODOT_WORLD_EDITOR_DRAFT_PASS'],
+  ['modular-npc-visual', 'test_modular_npc_visual.gd', 'Aurion MCS NPC cosmetic recipe and optional 1.0 rig verified (headless presentation only)'],
   ['technical-diagnostics', 'test_technical_diagnostics.gd', 'Godot G43 safe technical diagnostics verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],
   ['boot', 'test_project_boot.gd', 'Aurion project boot verified'],
