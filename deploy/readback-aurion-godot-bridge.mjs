@@ -52,11 +52,9 @@ export async function readback(release, revision, containerId, enabled) {
   assert.match(containerId, /^[a-f0-9]{64}$/);
   const manifest = JSON.parse(fs.readFileSync(path.join(release, "manifest.json"), "utf8"));
   assert.equal(manifest.revision, revision);
-  const runtimeImageDigest = execFileSync("python3", [path.join(release, "deploy/load-aurion-runtime-image.py"), release, revision, "--inspect-loaded"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-  assert.match(runtimeImageDigest, /^sha256:[a-f0-9]{64}$/);
   const [container] = JSON.parse(execFileSync("docker", ["inspect", containerId], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }));
   assert.equal(container.Config.Labels["org.opencontainers.image.revision"], revision);
-  assert.equal(container.Image, runtimeImageDigest);
+  assert.equal(container.Image, manifest.runtimeImage.id);
   const base = { schema: "aurion.godot.bridge-installation.v1", sourceRevision: revision, containerId, enabled, productionWorldEvidence: false, mutationAuthority: "none", secretValuesReturned: false };
   if (!enabled) {
     assert.equal(await listening(8765), false);
@@ -95,13 +93,13 @@ export async function readback(release, revision, containerId, enabled) {
   assert.equal(health.edit, false);
   if (health.identity) {
     assert.equal(health.identity.sourceRevision, revision);
-    assert.equal(health.identity.runtimeImageDigest, runtimeImageDigest);
+    assert.equal(health.identity.runtimeImageDigest, manifest.runtimeImage.id);
   }
   assert.equal(service("MainPID"), pid);
   assert.equal(service("ActiveState"), "active");
   assert.equal(service("FragmentPath"), "/etc/systemd/system/aurion-godot-bridge.service");
   assert.equal(service("DropInPaths"), "");
-  return { ...base, status: "TRANSPORT_READY", transportReady: true, worldProjectionStatus: health.ok && health.identity ? "BRIDGE_HAS_COMMITTED_SNAPSHOT" : "WAITING_FOR_COMMITTED_WORLD", bundleSha256: bundleHash, runtimeImageDigest, mainPid: Number(pid) };
+  return { ...base, status: "TRANSPORT_READY", transportReady: true, worldProjectionStatus: health.ok && health.identity ? "BRIDGE_HAS_COMMITTED_SNAPSHOT" : "WAITING_FOR_COMMITTED_WORLD", bundleSha256: bundleHash, runtimeImageDigest: manifest.runtimeImage.id, mainPid: Number(pid) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

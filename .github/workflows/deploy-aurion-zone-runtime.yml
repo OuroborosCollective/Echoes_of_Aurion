@@ -115,6 +115,20 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
+      - name: Match the production Docker engine and OCI image store
+        uses: docker/setup-docker-action@e43656e248c0bd0647d3f5c195d116aacf6fcaf4 # v4
+        with:
+          version: v29.9.2
+          set-host: true
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true}}
+
+      - name: Verify the selected Docker profile
+        run: |
+          set -euo pipefail
+          test "$(docker version --format '{{.Server.Version}}')" = '29.9.2'
+          docker info --format '{{json .DriverStatus}}' | grep -Fq 'io.containerd.snapshotter.v1'
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -1499,5 +1513,3 @@ jobs:
     uses: ./.github/workflows/arelogic-companion-offline-runner.yml
     with:
       source_sha: ${{ github.sha }}
-
-

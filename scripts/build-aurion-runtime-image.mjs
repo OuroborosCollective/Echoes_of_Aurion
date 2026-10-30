@@ -11,7 +11,9 @@ export async function buildAurionRuntimeImage(directory, revision) {
   const tag = `echoes-of-aurion:${revision}`;
   // A derived compatibility archive must not send its old image as build context.
   await rm(path.join(directory, "runtime-image.tar"), { force: true });
-  execFileSync("docker", ["build", "--pull=false", "--platform=linux/amd64", "--build-arg", `AURION_RELEASE_SHA=${revision}`, "--tag", tag, directory], { stdio: "inherit" });
+  // Aurion signs the finalized release separately. Keep this execution image
+  // single-platform, without a second attestation target in the image index.
+  execFileSync("docker", ["build", "--pull=false", "--platform=linux/amd64", "--provenance=false", "--build-arg", `AURION_RELEASE_SHA=${revision}`, "--tag", tag, directory], { stdio: "inherit" });
   const [image] = JSON.parse(execFileSync("docker", ["image", "inspect", tag], { encoding: "utf8" }));
   if (!/^sha256:[a-f0-9]{64}$/.test(image?.Id ?? "") || image.Os !== "linux" || image.Architecture !== "amd64"
       || image.Config?.Labels?.["org.opencontainers.image.revision"] !== revision || image.Config?.User !== "node") {
@@ -20,5 +22,10 @@ export async function buildAurionRuntimeImage(directory, revision) {
   const build = JSON.parse(await readFile(path.join(directory, "dist/.aurion-runtime-build.json"), "utf8"));
   if (build.revision !== revision) throw new Error("RUNTIME_IMAGE_BUILD_IDENTITY_MISMATCH");
   execFileSync("docker", ["image", "save", "--output", path.join(directory, "runtime-image.tar"), tag], { stdio: "inherit" });
+  if (image.Descriptor) {
+    const identity = JSON.parse(execFileSync("python3", [path.join(directory, "deploy/load-aurion-runtime-image.py"), "--describe-oci", directory, revision], { encoding: "utf8" }));
+    if (image.Id !== identity.id || image.Descriptor.digest !== identity.id) throw new Error("RUNTIME_IMAGE_OCI_STORE_IDENTITY_MISMATCH");
+    return { schema: "aurion.hosted-runtime-image.v2", sourceRevision: revision, archive: "runtime-image.tar", id: image.Id, configDigest: identity.configDigest, platform: "linux/amd64", builtBy: "github-hosted-actions" };
+  }
   return { schema: "aurion.hosted-runtime-image.v1", sourceRevision: revision, archive: "runtime-image.tar", id: image.Id, platform: "linux/amd64", builtBy: "github-hosted-actions" };
 }

@@ -1,5 +1,6 @@
 """Release boundary regressions; synthetic archive fixtures are not live evidence."""
 import hashlib
+import gzip
 import importlib.util
 import io
 import json
@@ -129,87 +130,157 @@ class ImageArchiveBoundary(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'LOADED_IDENTITY'):
                 self.loader.load(self.directory, self.revision)
 
-    def write_oci_archive(self, *, build_uses_manifest=False, mutate_index=None, mutate_manifest=None):
-        # Synthetic OCI fixture reproduces the two Docker image-store identity
-        # kinds. It is a regression input, never production image evidence.
-        config = {'os': 'linux', 'architecture': 'amd64', 'config': {'User': 'node', 'Labels': {'org.opencontainers.image.revision': self.revision}}}
+
+
+class OCIImageArchiveBoundary(unittest.TestCase):
+    setUp = ImageArchiveBoundary.setUp
+    write_archive = ImageArchiveBoundary.write_archive
+    rejected_before_docker = ImageArchiveBoundary.rejected_before_docker
+
+    def write_oci(self, *, compressed=False, mutate_manifest=None, mutate_index=None,
+                  mutate_members=None, extra=None, schema=None, claim_config=False):
+        # Graph fixtures are not executable images or production evidence.
+        # Real Docker import and container health remain separate CI gates.
+        source_layers = [b'fixture layer one\n', b'fixture layer two\n']
+        self.diff_ids = ['sha256:' + hashlib.sha256(data).hexdigest() for data in source_layers]
+        config = {'os': 'linux', 'architecture': 'amd64', 'rootfs': {'type': 'layers', 'diff_ids': self.diff_ids},
+                  'config': {'User': 'node', 'Labels': {'org.opencontainers.image.revision': self.revision}}}
         raw = json.dumps(config).encode()
         self.config_id = 'sha256:' + hashlib.sha256(raw).hexdigest()
-        config_path = 'blobs/sha256/' + self.config_id.removeprefix('sha256:')
+        config_path = 'blobs/sha256/' + self.config_id[7:]
+        members = {config_path: raw}
+        layers = []
+        for data in source_layers:
+            body = gzip.compress(data, mtime=0) if compressed else data
+            digest = 'sha256:' + hashlib.sha256(body).hexdigest()
+            members['blobs/sha256/' + digest[7:]] = body
+            layers.append({'mediaType': 'application/vnd.oci.image.layer.v1.tar' + ('+gzip' if compressed else ''), 'digest': digest, 'size': len(body)})
+        compatibility = [{'Config': config_path, 'RepoTags': ['echoes-of-aurion:' + self.revision],
+                          'Layers': ['blobs/sha256/' + layer['digest'][7:] for layer in layers]}]
         manifest = {'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.manifest.v1+json',
-                    'config': {'mediaType': 'application/vnd.oci.image.config.v1+json', 'digest': self.config_id, 'size': len(raw)}, 'layers': []}
+                    'config': {'mediaType': 'application/vnd.oci.image.config.v1+json', 'digest': self.config_id, 'size': len(raw)}, 'layers': layers}
         if mutate_manifest:
             mutate_manifest(manifest)
         manifest_raw = json.dumps(manifest).encode()
-        self.manifest_id = 'sha256:' + hashlib.sha256(manifest_raw).hexdigest()
-        self.descriptor = {'mediaType': manifest['mediaType'], 'digest': self.manifest_id, 'size': len(manifest_raw)}
-        index = {'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.index.v1+json', 'manifests': [dict(self.descriptor)]}
+        self.root_id = 'sha256:' + hashlib.sha256(manifest_raw).hexdigest()
+        self.descriptor = {'mediaType': manifest['mediaType'], 'digest': self.root_id, 'size': len(manifest_raw)}
+        target = {**self.descriptor, 'annotations': {'org.opencontainers.image.ref.name': self.revision,
+                  'io.containerd.image.name': 'docker.io/library/echoes-of-aurion:' + self.revision}}
+        index = {'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.index.v1+json', 'manifests': [target]}
         if mutate_index:
             mutate_index(index)
-        tag = 'echoes-of-aurion:' + self.revision
-        docker_manifest = [{'Config': config_path, 'RepoTags': [tag], 'Layers': []}]
-        contents = [(config_path, raw), ('manifest.json', json.dumps(docker_manifest).encode()),
-                    ('index.json', json.dumps(index).encode()), ('blobs/sha256/' + self.manifest_id.removeprefix('sha256:'), manifest_raw)]
+        members.update({'blobs/sha256/' + self.root_id[7:]: manifest_raw, 'manifest.json': json.dumps(compatibility).encode(),
+                        'index.json': json.dumps(index).encode(), 'oci-layout': b'{"imageLayoutVersion":"1.0.0"}'})
+        if mutate_members:
+            mutate_members(members, compatibility)
         with tarfile.open(self.directory / 'runtime-image.tar', 'w') as archive:
-            for name, data in contents:
-                info = tarfile.TarInfo(name); info.size = len(data); archive.addfile(info, io.BytesIO(data))
-        path = self.directory / 'manifest.json'
-        release = json.loads(path.read_text())
-        release['runtimeImage']['id'] = self.manifest_id if build_uses_manifest else self.config_id
+            for name, body in members.items():
+                info = tarfile.TarInfo(name); info.size = len(body); archive.addfile(info, io.BytesIO(body))
+            if extra:
+                archive.addfile(extra)
+        path = self.directory / 'manifest.json'; release = json.loads(path.read_text())
+        image = release['runtimeImage']; image.update(schema=schema or 'aurion.hosted-runtime-image.v2',
+                  id=self.config_id if claim_config else self.root_id, configDigest=self.config_id)
         release['files']['runtime-image.tar'] = self.loader.file_hash(self.directory / 'runtime-image.tar')
         path.write_text(json.dumps(release))
 
-    def loaded(self, image_id, descriptor=None):
-        value = {'Id': image_id, 'Os': 'linux', 'Architecture': 'amd64',
-                 'Config': {'User': 'node', 'Labels': {'org.opencontainers.image.revision': self.revision}}}
-        if descriptor is not None:
-            value['Descriptor'] = descriptor
+    def loaded(self, **changes):
+        value = {'Id': self.root_id, 'Os': 'linux', 'Architecture': 'amd64', 'Descriptor': self.descriptor,
+                 'Config': {'User': 'node', 'Labels': {'org.opencontainers.image.revision': self.revision}},
+                 'RootFS': {'Type': 'layers', 'Layers': self.diff_ids}}
+        value.update(changes)
         return json.dumps([value])
 
-    def test_legacy_loaded_config_identity_remains_accepted(self):
-        image_id = json.loads((self.directory / 'manifest.json').read_text())['runtimeImage']['id']
-        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded(image_id)):
-            self.assertEqual(self.loader.load(self.directory, self.revision), image_id)
+    def test_exact_oci_manifest_config_and_layers_are_imported(self):
+        self.write_oci()
+        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded()):
+            self.assertEqual(self.loader.load(self.directory, self.revision), self.root_id)
 
-    def test_containerd_loaded_manifest_is_bound_to_the_verified_config(self):
-        self.write_oci_archive()
-        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded(self.manifest_id, self.descriptor)):
-            self.assertEqual(self.loader.load(self.directory, self.revision), self.manifest_id)
+    def test_gzip_layers_are_bound_to_uncompressed_diff_ids(self):
+        self.write_oci(compressed=True)
+        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded()):
+            self.assertEqual(self.loader.load(self.directory, self.revision), self.root_id)
 
-    def test_containerd_build_identity_is_also_verified(self):
-        self.write_oci_archive(build_uses_manifest=True)
-        self.assertEqual(self.loader.verify(self.directory, self.revision)['id'], self.manifest_id)
-
-    def test_forged_oci_manifest_digest_is_rejected_before_docker(self):
-        self.write_oci_archive(mutate_index=lambda i: i['manifests'][0].update(digest='sha256:' + '0' * 64))
+    def test_v2_cannot_substitute_the_config_digest_for_the_root(self):
+        self.write_oci(claim_config=True)
         self.rejected_before_docker()
 
-    def test_oci_manifest_cannot_reference_an_unrelated_config(self):
-        self.write_oci_archive(mutate_manifest=lambda m: m['config'].update(digest='sha256:' + '0' * 64))
-        self.rejected_before_docker()
-
-    def test_ambiguous_oci_targets_are_rejected_before_docker(self):
-        self.write_oci_archive(mutate_index=lambda i: i['manifests'].append(dict(i['manifests'][0])))
-        self.rejected_before_docker()
-
-    def test_unrelated_loaded_digest_is_rejected(self):
-        self.write_oci_archive()
-        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded('sha256:' + '0' * 64, self.descriptor)):
+    def test_v1_retains_exact_loaded_identity_without_an_oci_fallback(self):
+        self.write_oci(schema='aurion.hosted-runtime-image.v1', claim_config=True)
+        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded()):
             with self.assertRaisesRegex(ValueError, 'LOADED_IDENTITY'):
                 self.loader.load(self.directory, self.revision)
 
-    def test_loaded_oci_descriptor_cannot_drift(self):
-        self.write_oci_archive()
-        descriptor = {**self.descriptor, 'size': self.descriptor['size'] + 1}
-        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded(self.manifest_id, descriptor)):
+    def test_oci_cannot_reference_an_unrelated_config(self):
+        self.write_oci(mutate_manifest=lambda m: m['config'].update(digest='sha256:' + '0' * 64))
+        self.rejected_before_docker()
+
+    def test_forged_manifest_digest_is_rejected(self):
+        self.write_oci(mutate_index=lambda i: i['manifests'][0].update(digest='sha256:' + '0' * 64))
+        self.rejected_before_docker()
+
+    def test_wrong_manifest_size_is_rejected(self):
+        self.write_oci(mutate_index=lambda i: i['manifests'][0].update(size=1))
+        self.rejected_before_docker()
+
+    def test_multiple_graph_targets_are_rejected(self):
+        self.write_oci(mutate_index=lambda i: i['manifests'].append(dict(i['manifests'][0])))
+        self.rejected_before_docker()
+
+    def test_oci_tag_cannot_drift_from_the_release_tag(self):
+        self.write_oci(mutate_index=lambda i: i['manifests'][0]['annotations'].update({'org.opencontainers.image.ref.name': 'unrelated'}))
+        self.rejected_before_docker()
+
+    def test_layer_order_is_bound_to_config_diff_ids(self):
+        self.write_oci(mutate_manifest=lambda m: m['layers'].reverse())
+        self.rejected_before_docker()
+
+    def test_layer_content_is_hashed_before_import(self):
+        self.write_oci(mutate_members=lambda members, compat: members.update({compat[0]['Layers'][0]: b'forged'}))
+        self.rejected_before_docker()
+
+    def test_unreferenced_traversal_entry_is_rejected(self):
+        self.write_oci(extra=tarfile.TarInfo('../outside'))
+        self.rejected_before_docker()
+
+    def test_symlink_entry_is_rejected(self):
+        link = tarfile.TarInfo('untrusted-link'); link.type = tarfile.SYMTYPE; link.linkname = '../outside'
+        self.write_oci(extra=link)
+        self.rejected_before_docker()
+
+    def test_duplicate_entry_is_rejected(self):
+        self.write_oci(extra=tarfile.TarInfo('index.json'))
+        self.rejected_before_docker()
+
+    def test_loaded_descriptor_cannot_drift(self):
+        self.write_oci()
+        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded(Descriptor={**self.descriptor, 'size': 1})):
             with self.assertRaisesRegex(ValueError, 'LOADED_IDENTITY'):
                 self.loader.load(self.directory, self.revision)
 
-    def test_inspect_loaded_is_read_only_and_returns_the_bound_digest(self):
-        self.write_oci_archive()
-        with patch.object(self.loader.subprocess, 'run') as invoke, patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded(self.manifest_id, self.descriptor)):
-            self.assertEqual(self.loader.inspect_loaded(self.directory, self.revision), self.manifest_id)
+    def test_loaded_rootfs_cannot_drift(self):
+        self.write_oci()
+        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded(RootFS={'Type': 'layers', 'Layers': list(reversed(self.diff_ids))})):
+            with self.assertRaisesRegex(ValueError, 'LOADED_IDENTITY'):
+                self.loader.load(self.directory, self.revision)
+
+    def test_v2_loaded_config_digest_is_not_the_expected_engine_identity(self):
+        self.write_oci()
+        with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value=self.loaded(Id=self.config_id)):
+            with self.assertRaisesRegex(ValueError, 'LOADED_IDENTITY'):
+                self.loader.load(self.directory, self.revision)
+
+    def test_describe_oci_is_read_only(self):
+        self.write_oci()
+        with patch.object(self.loader.subprocess, 'run') as invoke:
+            self.assertEqual(self.loader.describe_oci(self.directory, self.revision), {'id': self.root_id, 'configDigest': self.config_id})
             invoke.assert_not_called()
+
+    def test_claimed_config_digest_must_match_the_graph(self):
+        self.write_oci(); path = self.directory / 'manifest.json'
+        value = json.loads(path.read_text()); value['runtimeImage']['configDigest'] = 'sha256:' + '0' * 64
+        path.write_text(json.dumps(value))
+        self.rejected_before_docker()
 
 
 class ProtectedFeedFiles(unittest.TestCase):
