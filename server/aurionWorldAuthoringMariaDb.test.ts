@@ -3,15 +3,20 @@ import { createPool, type Pool, type ResultSetHeader, type RowDataPacket } from 
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import express from "express";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { WorldDesignDraftSchema, WorldDesignPlanSchema, type WorldDesignDraft } from "../shared/aurionAuthoringContract";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
-import { applyWorldDesign, authoringHash, planWorldDesign, readActiveWorldDesign } from "./aurionAuthoringPersistence";
+import { applyWorldDesign, authoringHash, planWorldDesign, readActiveWorldDesign, recoverWorldAuthoringReceipt } from "./aurionAuthoringPersistence";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { testGlb } from "./glbImportFixtures";
 import { glbImportStore } from "./glbImportStore";
 import { reviewPlayerGlbSubmission } from "./db";
 import * as storage from "./storage";
+import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
+import { router } from "./_core/trpc";
+import type { TrpcContext } from "./_core/context";
 
 vi.mock("./storage", async importOriginal => ({
   ...await importOriginal<typeof import("./storage")>(),
@@ -130,6 +135,79 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     expect(String(rejected.reason)).toContain("AUTHORING_WORLD_PLAN_CHANGED");
     const [rows] = await pool.execute<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionWorldDesignVersions WHERE active = 1 AND designKey = ?", [first.designKey]);
     expect(Number(rows[0]?.count)).toBe(1);
+  }, 30_000);
+
+  it("recovers only the same actor's intact receipt and treats absence as unresolved", async () => {
+    const candidate = draft("fixture-recovery");
+    const operationId = "a".repeat(32);
+    const plan = await planWorldDesign(candidate, undefined, operationId);
+    const lookup = { designKey: candidate.designKey, version: candidate.version, planHash: plan.planHash, operationId };
+    expect(await recoverWorldAuthoringReceipt(admin, lookup)).toEqual({ status: "unresolved" });
+    const applied = await applyWorldDesign(admin, candidate, plan.planHash, operationId);
+    expect(await recoverWorldAuthoringReceipt(otherAdmin, lookup)).toEqual({ status: "unresolved" });
+    expect(await recoverWorldAuthoringReceipt(admin, { ...lookup, planHash: "f".repeat(64) })).toEqual({ status: "unresolved" });
+    await expect(recoverWorldAuthoringReceipt(admin, { ...lookup, operationId: "b".repeat(32) })).rejects.toThrow("AUTHORING_RECEIPT_PLAN_INVALID");
+    const recovered = await recoverWorldAuthoringReceipt(admin, lookup);
+    expect(recovered.status).toBe("found");
+    if (recovered.status !== "found") throw new Error("EXPECTED_RECEIPT");
+    expect(recovered.receipt).toEqual(applied.receipt);
+    expect(recovered.plan).toEqual(plan);
+    expect((await readActiveWorldDesign()).designs[0]?.designHash).toBe(applied.receipt.resultHash);
+    await pool.execute("UPDATE aurionAuthoringReceipts SET receiptHash = ? WHERE id = ?", ["0".repeat(64), applied.receipt.receiptId]);
+    await expect(recoverWorldAuthoringReceipt(admin, lookup)).rejects.toThrow("AUTHORING_RECEIPT_HASH_INVALID");
+  });
+
+  it("does not confuse a previous identical no-op with a later apply attempt", async () => {
+    const candidate = draft("fixture-attempt");
+    const initial = await planWorldDesign(candidate);
+    await applyWorldDesign(admin, candidate, initial.planHash);
+    const firstId = "1".repeat(32), secondId = "2".repeat(32);
+    const first = await planWorldDesign(candidate, undefined, firstId);
+    await applyWorldDesign(admin, candidate, first.planHash, firstId);
+    const second = await planWorldDesign(candidate, undefined, secondId);
+    expect(second.planHash).not.toBe(first.planHash);
+    const lookup = { designKey: candidate.designKey, version: candidate.version, planHash: second.planHash, operationId: secondId };
+    expect(await recoverWorldAuthoringReceipt(admin, lookup)).toEqual({ status: "unresolved" });
+    await applyWorldDesign(admin, candidate, second.planHash, secondId);
+    expect((await recoverWorldAuthoringReceipt(admin, lookup)).status).toBe("found");
+    await expect(applyWorldDesign(admin, candidate, second.planHash, secondId)).rejects.toThrow("AUTHORING_OPERATION_ALREADY_USED");
+  });
+
+  it("serves attempt-bound plan, apply and receipt through the actual tRPC HTTP router", async () => {
+    const app = express();
+    const testRouter = router({ aurionAuthoring: aurionAuthoringRouter });
+    app.use("/api/trpc", createExpressMiddleware({
+      router: testRouter,
+      createContext: ({ req, res }) => ({ req, res,
+        user: req.header("authorization") === "Bearer isolated-admin" ? { id: admin, role: "admin" } : null,
+      } as TrpcContext),
+    }));
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise<void>(resolve => server.once("listening", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("ISOLATED_HTTP_ADDRESS_REQUIRED");
+      const endpoint = `http://127.0.0.1:${address.port}/api/trpc/aurionAuthoring.`;
+      const post = (method: string, json: unknown, authorized = true) => fetch(endpoint + method, {
+        method: "POST", headers: { "content-type": "application/json", ...(authorized ? { authorization: "Bearer isolated-admin" } : {}) },
+        body: JSON.stringify({ json }),
+      });
+      const candidate = draft("fixture-http");
+      const operationId = "e".repeat(32);
+      expect((await post("worldPlan", { draft: candidate, operationId }, false)).status).toBe(403);
+      const planResponse = await post("worldPlan", { draft: candidate, operationId });
+      expect(planResponse.status).toBe(200);
+      const plan = (await planResponse.json() as any).result.data.json;
+      expect(plan.operationId).toBe(operationId);
+      const applyResponse = await post("worldApply", { draft: candidate, operationId, expectedPlanHash: plan.planHash, confirmation: "APPLY_WORLD_DESIGN" });
+      expect(applyResponse.status).toBe(200);
+      const applied = (await applyResponse.json() as any).result.data.json;
+      const recovery = await post("worldReceipt", { designKey: candidate.designKey, version: candidate.version, planHash: plan.planHash, operationId });
+      expect(recovery.status).toBe(200);
+      expect((await recovery.json() as any).result.data.json).toMatchObject({ status: "found", receipt: { receiptId: applied.receipt.receiptId, actorUserId: admin } });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
   }, 30_000);
 
   it("reads the catalog on the lock holder even when the other pool slots wait", async () => {

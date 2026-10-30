@@ -31,7 +31,7 @@ static func unwrap_trpc(value: Variant) -> Dictionary:
 func request(kind: String, base_url: String, connection: String, payload: Dictionary = {}, allow_local: bool = false) -> bool:
 	if _active or not is_inside_tree() or connection.is_empty() or not _auth.protected_response_allowed():
 		return false
-	if kind not in ["identity", "catalog", "propose", "worldPlan", "worldApply", "readback"]:
+	if kind not in ["identity", "catalog", "propose", "worldPlan", "worldApply", "worldReceipt", "readback"]:
 		return false
 	var server: String = RuntimeConfig.validated_server_url(base_url, allow_local)
 	var token: String = _auth.access_token()
@@ -50,7 +50,7 @@ func request(kind: String, base_url: String, connection: String, payload: Dictio
 	var epoch := _epoch
 	_http = HTTPRequest.new()
 	_http.max_redirects = 0
-	_http.body_size_limit = MAX_WORLD if kind in ["catalog", "worldApply", "readback"] else MAX_SMALL
+	_http.body_size_limit = MAX_WORLD if kind in ["catalog", "worldApply", "worldReceipt", "readback"] else MAX_SMALL
 	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_completed.bind(epoch))

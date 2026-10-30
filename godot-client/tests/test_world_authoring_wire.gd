@@ -84,6 +84,13 @@ func verify() -> void:
 	studio._draft.text = JSON.stringify(draft(3))
 	studio._plan()
 	require(studio._state.phase == "unknown", "reopened session allowed a new plan")
+	start = Time.get_ticks_msec()
+	while studio._api.busy() and Time.get_ticks_msec() - start < 3500:
+		await process_frame
+	studio._recover_receipt()
+	await wait_for_phase(studio, "confirmed")
+	require(Journal.new(journal_path).read().is_empty(), "recovered receipt and fresh readback did not clear the pending marker")
+	require(worlds.size() == 3 and int(worlds[2].designs[0].version) == 2, "recovery did not emit the independently read world")
 	studio.close_session()
 	var reset_path := journal_path + ".reset"
 	studio._journal = Journal.new(reset_path)
@@ -97,7 +104,8 @@ func verify() -> void:
 	planned["referencedAssetHashes"] = ["b".repeat(64)]
 	planned["requiresHumanConfirmation"] = true
 	planned["expectedPreviousHash"] = null
-	require(studio._state.begin_plan(current) and studio._state.accept_plan(planned, current), "reset fixture plan rejected")
+	planned["operationId"] = "1".repeat(32)
+	require(studio._state.begin_plan(current, planned.operationId) and studio._state.accept_plan(planned, current), "reset fixture plan rejected")
 	studio._request_confirmation()
 	studio._confirm.confirmed.emit()
 	require(studio._state.phase == "applying", "reset fixture apply did not start")
@@ -120,7 +128,8 @@ func verify() -> void:
 	planned["referencedAssetHashes"] = ["b".repeat(64)]
 	planned["requiresHumanConfirmation"] = true
 	planned["expectedPreviousHash"] = null
-	require(studio._state.begin_plan(current) and studio._state.accept_plan(planned, current), "refresh fixture plan rejected")
+	planned["operationId"] = "2".repeat(32)
+	require(studio._state.begin_plan(current, planned.operationId) and studio._state.accept_plan(planned, current), "refresh fixture plan rejected")
 	auth.token = ""
 	studio._apply()
 	require(auth.refreshes == 1 and studio._state.phase == "planned", "expired access consumed an unsubmitted apply or did not refresh")

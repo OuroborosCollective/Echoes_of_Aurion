@@ -23,12 +23,13 @@ func draft() -> Dictionary:
 	d["schemaVersion"] = "aurion.world-design.v1"
 	return d
 
-func verified_plan(d: Dictionary) -> Dictionary:
+func verified_plan(d: Dictionary, operation_id: String) -> Dictionary:
 	var p: Dictionary = JSON.parse_string(JSON.stringify(d))
 	p["planHash"] = "d".repeat(64)
 	p["requiresHumanConfirmation"] = true
 	p["referencedAssetHashes"] = [SHA]
 	p["expectedPreviousHash"] = null
+	p["operationId"] = operation_id
 	return p
 
 func receipt_response() -> Dictionary:
@@ -82,11 +83,11 @@ func verify() -> void:
 	edited.title = "Edited after request"
 	studio._draft.text = JSON.stringify(edited)
 	studio._on_draft_changed()
-	studio._completed("worldPlan", verified_plan(original), SESSION, generation)
+	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	require(studio._state.planned_summary().is_empty(), "late plan authorized an edited draft")
 	studio._draft.text = JSON.stringify(original)
 	studio._plan()
-	studio._completed("worldPlan", verified_plan(original), SESSION, generation)
+	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	require(not studio._state.planned_summary().is_empty(), "valid fixture plan not accepted")
 	studio._request_confirmation()
 	require(studio._confirm.visible and studio._confirm.dialog_text.contains("test-village") and studio._confirm.dialog_text.contains("d".repeat(64)), "confirmation did not show the exact target and plan")
@@ -120,14 +121,26 @@ func verify() -> void:
 	require(scene._world_design_visuals.needed_assets().size() == 1, "confirmed readback did not request its catalog model")
 	studio._draft.text = JSON.stringify(original)
 	studio._plan()
-	studio._completed("worldPlan", verified_plan(original), SESSION, generation)
+	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
+	studio._request_confirmation()
+	studio._confirm.confirmed.emit()
+	studio._completed("worldApply", receipt_response(), SESSION, generation)
+	var replaced: Dictionary = design().duplicate(true)
+	replaced.designs[0].version = 2
+	replaced.designs[0].designHash = "9".repeat(64)
+	studio._completed("readback", replaced, SESSION, generation)
+	require(studio._state.phase == "confirmed" and studio._info.text.contains("verändert"), "superseded receipt was not distinguished from current world")
+	require(Journal.new(journal_path).read().is_empty() and scene._world_design_readback == replaced, "superseded receipt did not clear safely and project the newer world")
+	studio._draft.text = JSON.stringify(original)
+	studio._plan()
+	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	fake.start_ok = false
 	studio._request_confirmation()
 	studio._confirm.confirmed.emit()
 	require(studio._state.phase == "ready" and Journal.new(journal_path).read().is_empty(), "unstarted request retained an ambiguous apply")
 	fake.start_ok = true
 	studio._plan()
-	studio._completed("worldPlan", verified_plan(original), SESSION, generation)
+	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	fake.start_ok = false
 	fake.on_refuse = func(): studio._state.close()
 	studio._request_confirmation()

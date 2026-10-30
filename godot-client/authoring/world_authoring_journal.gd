@@ -19,21 +19,21 @@ func read() -> Dictionary:
 	if file == null or file.get_length() > MAX_BYTES:
 		return {"invalid":true}
 	var value: Variant = JSON.parse_string(file.get_as_text())
-	if typeof(value) != TYPE_DICTIONARY or value.get("schemaVersion") != "aurion.world-authoring-pending.v1" or not WorldProjection._id(value.get("designKey")) or not WorldProjection._whole(value.get("version"), 1, 1000000) or not WorldProjection._whole(value.get("actorUserId"), 1, 2147483647) or not WorldProjection._hex(value.get("planHash"), 64):
+	if typeof(value) != TYPE_DICTIONARY or value.get("schemaVersion") != "aurion.world-authoring-pending.v2" or not WorldProjection._id(value.get("designKey")) or not WorldProjection._whole(value.get("version"), 1, 1000000) or not WorldProjection._whole(value.get("actorUserId"), 1, 2147483647) or not WorldProjection._hex(value.get("planHash"), 64) or not WorldProjection._hex(value.get("operationId"), 32):
 		return {"invalid":true}
 	return value
 
 ## Must succeed before the network request is sent. Existing or unreadable
 ## records block another apply until separately reconciled.
-func reserve(draft: Dictionary, actor_id: int, plan_hash: String) -> bool:
-	if not WorldProjection._id(draft.get("designKey")) or not WorldProjection._whole(draft.get("version"), 1, 1000000) or actor_id < 1 or not WorldProjection._hex(plan_hash, 64):
+func reserve(draft: Dictionary, actor_id: int, plan_hash: String, operation_id: String) -> bool:
+	if not WorldProjection._id(draft.get("designKey")) or not WorldProjection._whole(draft.get("version"), 1, 1000000) or actor_id < 1 or not WorldProjection._hex(plan_hash, 64) or not WorldProjection._hex(operation_id, 32):
 		return false
 	# mkdir is an exclusive reservation for clients sharing this user directory.
 	# A crash before the record is complete leaves an invalid, blocking marker.
 	if DirAccess.make_dir_absolute(ProjectSettings.globalize_path(_path)) != OK:
 		return false
-	var record := {"schemaVersion":"aurion.world-authoring-pending.v1", "designKey":draft.designKey,
-		"version":int(draft.version), "actorUserId":actor_id, "planHash":plan_hash}
+	var record := {"schemaVersion":"aurion.world-authoring-pending.v2", "designKey":draft.designKey,
+		"version":int(draft.version), "actorUserId":actor_id, "planHash":plan_hash, "operationId":operation_id}
 	var file := FileAccess.open(_path.path_join("record.json"), FileAccess.WRITE)
 	if file == null:
 		_cleanup_owned_reservation()
@@ -46,7 +46,7 @@ func reserve(draft: Dictionary, actor_id: int, plan_hash: String) -> bool:
 		_cleanup_owned_reservation()
 		return false
 	var saved := read()
-	var valid: bool = not saved.is_empty() and not saved.has("invalid") and saved.get("designKey") == draft.designKey and int(saved.get("version")) == int(draft.version) and int(saved.get("actorUserId")) == actor_id and saved.get("planHash") == plan_hash
+	var valid: bool = not saved.is_empty() and not saved.has("invalid") and saved.get("designKey") == draft.designKey and int(saved.get("version")) == int(draft.version) and int(saved.get("actorUserId")) == actor_id and saved.get("planHash") == plan_hash and saved.get("operationId") == operation_id
 	if not valid:
 		_cleanup_owned_reservation()
 	return valid
@@ -60,16 +60,16 @@ func _cleanup_owned_reservation() -> void:
 
 ## Only the already-correlated receipt and subsequent independent readback may
 ## clear this marker. Failure leaves the safe pending state in place.
-func clear_confirmed(draft: Dictionary, actor_id: int, plan_hash: String) -> bool:
-	return _remove_matching(draft, actor_id, plan_hash)
+func clear_confirmed(draft: Dictionary, actor_id: int, plan_hash: String, operation_id: String) -> bool:
+	return _remove_matching(draft, actor_id, plan_hash, operation_id)
 
 ## The request was never started, so its freshly reserved marker can be undone.
-func release_unsubmitted(draft: Dictionary, actor_id: int, plan_hash: String) -> bool:
-	return _remove_matching(draft, actor_id, plan_hash)
+func release_unsubmitted(draft: Dictionary, actor_id: int, plan_hash: String, operation_id: String) -> bool:
+	return _remove_matching(draft, actor_id, plan_hash, operation_id)
 
-func _remove_matching(draft: Dictionary, actor_id: int, plan_hash: String) -> bool:
+func _remove_matching(draft: Dictionary, actor_id: int, plan_hash: String, operation_id: String) -> bool:
 	var saved := read()
-	if saved.is_empty() or saved.has("invalid") or saved.get("designKey") != draft.get("designKey") or int(saved.get("version", -1)) != int(draft.get("version", -2)) or int(saved.get("actorUserId", -1)) != actor_id or saved.get("planHash") != plan_hash:
+	if saved.is_empty() or saved.has("invalid") or saved.get("designKey") != draft.get("designKey") or int(saved.get("version", -1)) != int(draft.get("version", -2)) or int(saved.get("actorUserId", -1)) != actor_id or saved.get("planHash") != plan_hash or saved.get("operationId") != operation_id:
 		return false
 	if DirAccess.remove_absolute(ProjectSettings.globalize_path(_path.path_join("record.json"))) != OK:
 		return false

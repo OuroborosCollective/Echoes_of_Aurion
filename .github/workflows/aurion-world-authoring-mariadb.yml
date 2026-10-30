@@ -6,6 +6,7 @@ on:
       - ".github/workflows/aurion-world-authoring-mariadb.yml"
       - "server/aurionAuthoringPersistence.ts"
       - "server/aurionWorldAuthoringMariaDb.test.ts"
+      - "server/routes/aurionAuthoringRouter.ts"
       - "server/glbImportStore.ts"
       - "server/db.ts"
       - "shared/aurionAuthoringContract.ts"

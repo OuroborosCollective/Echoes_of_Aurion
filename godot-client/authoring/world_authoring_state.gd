@@ -9,6 +9,7 @@ var actor_id := 0
 var phase := "closed"
 var message := ""
 var _pending_plan: Dictionary = {}
+var _pending_operation := ""
 var _planned: Dictionary = {}
 var _applying: Dictionary = {}
 var _receipt: Dictionary = {}
@@ -30,6 +31,7 @@ func close() -> void:
 	phase = "closed"
 	message = ""
 	_pending_plan.clear()
+	_pending_operation = ""
 	_planned.clear()
 	_applying.clear()
 	_receipt.clear()
@@ -71,16 +73,18 @@ static func _draft_valid(draft: Variant) -> bool:
 
 func draft_changed() -> void:
 	_pending_plan.clear()
+	_pending_operation = ""
 	_planned.clear()
 	if phase in ["planning", "planned"]:
 		phase = "ready"
 
-func begin_plan(draft: Variant) -> bool:
-	if phase not in ["ready", "planned", "confirmed"] or not _draft_valid(draft):
+func begin_plan(draft: Variant, operation_id: String) -> bool:
+	if phase not in ["ready", "planned", "confirmed"] or not _draft_valid(draft) or not WorldProjection._hex(operation_id, 32):
 		return false
 	_applying.clear()
 	_receipt.clear()
 	_pending_plan = draft.duplicate(true)
+	_pending_operation = operation_id
 	_planned.clear()
 	phase = "planning"
 	message = "Aurion prüft den Entwurf."
@@ -89,13 +93,23 @@ func begin_plan(draft: Variant) -> bool:
 func accept_plan(plan: Variant, current_draft: Variant) -> bool:
 	if phase != "planning" or _pending_plan.is_empty() or not _draft_valid(current_draft) or JSON.stringify(current_draft) != JSON.stringify(_pending_plan):
 		return false
-	if typeof(plan) != TYPE_DICTIONARY or not WorldProjection._hex(plan.get("planHash"), 64) or plan.get("requiresHumanConfirmation") != true:
+	if not _plan_matches(plan, _pending_plan) or plan.operationId != _pending_operation:
+		return false
+	_planned = {"draft":_pending_plan.duplicate(true), "planHash":plan.planHash, "plan":plan.duplicate(true)}
+	_pending_plan.clear()
+	_pending_operation = ""
+	phase = "planned"
+	message = "Aurion-Plan geprüft; menschliche Bestätigung erforderlich."
+	return true
+
+static func _plan_matches(plan: Variant, draft: Dictionary) -> bool:
+	if typeof(plan) != TYPE_DICTIONARY or not WorldProjection._hex(plan.get("planHash"), 64) or not WorldProjection._hex(plan.get("operationId"), 32) or plan.get("requiresHumanConfirmation") != true:
 		return false
 	# Older servers did not bind the predecessor. Do not authorize their plans.
 	if not plan.has("expectedPreviousHash") or (plan.expectedPreviousHash != null and not WorldProjection._hex(plan.expectedPreviousHash, 64)):
 		return false
 	for key in ["schemaVersion", "designKey", "version", "title", "expectedCatalogRevision", "placements"]:
-		if JSON.stringify(plan.get(key)) != JSON.stringify(_pending_plan.get(key)):
+		if JSON.stringify(plan.get(key)) != JSON.stringify(draft.get(key)):
 			return false
 	var hashes: Variant = plan.get("referencedAssetHashes")
 	if typeof(hashes) != TYPE_ARRAY or hashes.is_empty() or hashes.size() > 256:
@@ -103,10 +117,6 @@ func accept_plan(plan: Variant, current_draft: Variant) -> bool:
 	for hash in hashes:
 		if not WorldProjection._hex(hash, 64):
 			return false
-	_planned = {"draft":_pending_plan.duplicate(true), "planHash":plan.planHash, "plan":plan.duplicate(true)}
-	_pending_plan.clear()
-	phase = "planned"
-	message = "Aurion-Plan geprüft; menschliche Bestätigung erforderlich."
 	return true
 
 func planned_summary() -> Dictionary:
@@ -121,7 +131,7 @@ func begin_apply(current_draft: Variant) -> Dictionary:
 	_receipt.clear()
 	phase = "applying"
 	message = "Aurion-Änderung angefordert."
-	return {"draft":_applying.draft.duplicate(true), "expectedPlanHash":_applying.planHash, "confirmation":"APPLY_WORLD_DESIGN"}
+	return {"draft":_applying.draft.duplicate(true), "expectedPlanHash":_applying.planHash, "operationId":_applying.plan.operationId, "confirmation":"APPLY_WORLD_DESIGN"}
 
 static func _target_matches(readback: Variant, draft: Dictionary, result_hash: String) -> bool:
 	if typeof(readback) != TYPE_DICTIONARY or readback.get("schemaVersion") != "aurion.world-design.v1" or not WorldProjection._hex(readback.get("revision"), 64) or typeof(readback.get("designs")) != TYPE_ARRAY or readback.designs.size() > 64:
@@ -135,6 +145,19 @@ static func _target_matches(readback: Variant, draft: Dictionary, result_hash: S
 				return false
 			matches += 1
 	return matches == 1
+
+static func _world_valid(readback: Variant) -> bool:
+	if typeof(readback) != TYPE_DICTIONARY or readback.get("schemaVersion") != "aurion.world-design.v1" or not WorldProjection._hex(readback.get("revision"), 64) or typeof(readback.get("designs")) != TYPE_ARRAY or readback.designs.size() > 64:
+		return false
+	var keys: Dictionary = {}
+	for item in readback.designs:
+		if typeof(item) != TYPE_DICTIONARY or not WorldProjection._id(item.get("designKey")) or keys.has(item.designKey) or not WorldProjection._hex(item.get("designHash"), 64):
+			return false
+		keys[item.designKey] = true
+		var draft := {"schemaVersion":"aurion.world-design.v1", "designKey":item.designKey, "version":item.get("version"), "title":item.get("title"), "expectedCatalogRevision":item.get("expectedCatalogRevision"), "placements":item.get("placements")}
+		if not _draft_valid(draft):
+			return false
+	return true
 
 func accept_apply(response: Variant) -> bool:
 	if phase != "applying" or _applying.is_empty() or typeof(response) != TYPE_DICTIONARY:
@@ -150,19 +173,41 @@ func accept_apply(response: Variant) -> bool:
 		return false
 	if receipt.previousHash != _applying.plan.expectedPreviousHash:
 		return false
-	if not _target_matches(response.get("readback"), _applying.draft, receipt.resultHash):
-		return false
 	_receipt = receipt.duplicate(true)
 	phase = "awaiting_readback"
 	message = "Receipt erhalten; unabhängiger Weltstand wird geprüft."
 	return true
 
+## Recover a committed receipt for the exact locally pending operation. A
+## missing receipt or a mismatched current world remains unresolved.
+func accept_recovered(pending: Variant, response: Variant) -> bool:
+	if phase != "unknown" or typeof(pending) != TYPE_DICTIONARY or typeof(response) != TYPE_DICTIONARY or response.get("status") != "found":
+		return false
+	if not WorldProjection._whole(pending.get("actorUserId"), actor_id, actor_id) or not WorldProjection._id(pending.get("designKey")) or not WorldProjection._whole(pending.get("version"), 1, 1000000) or not WorldProjection._hex(pending.get("planHash"), 64) or not WorldProjection._hex(pending.get("operationId"), 32):
+		return false
+	var plan: Variant = response.get("plan")
+	if typeof(plan) != TYPE_DICTIONARY:
+		return false
+	var draft: Dictionary = plan.duplicate(true)
+	for key in ["planHash", "referencedAssetHashes", "requiresHumanConfirmation", "expectedPreviousHash", "operationId"]:
+		draft.erase(key)
+	if not _draft_valid(draft) or not _plan_matches(plan, draft) or plan.planHash != pending.planHash or plan.operationId != pending.operationId or draft.designKey != pending.designKey or int(draft.version) != int(pending.version):
+		return false
+	_applying = {"draft":draft, "planHash":plan.planHash, "plan":plan.duplicate(true)}
+	phase = "applying"
+	if accept_apply(response):
+		return true
+	_applying.clear()
+	phase = "unknown"
+	message = "Das gefundene Receipt oder der Weltstand passt nicht zur Vormerkung."
+	return false
+
 ## Call only for a GET initiated after accept_apply, never a cached earlier GET.
 func accept_readback(readback: Variant) -> bool:
-	if phase != "awaiting_readback" or _receipt.is_empty() or not _target_matches(readback, _applying.draft, _receipt.resultHash):
+	if phase != "awaiting_readback" or _receipt.is_empty() or not _world_valid(readback):
 		return false
 	phase = "confirmed"
-	message = "Aurion-Receipt und unabhängiger Weltstand stimmen überein."
+	message = "Aurion-Receipt und unabhängiger Weltstand stimmen überein." if _target_matches(readback, _applying.draft, _receipt.resultHash) else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
 	return true
 
 func failed(kind: String) -> void:
@@ -171,6 +216,7 @@ func failed(kind: String) -> void:
 		message = "Ergebnis unklar: Aurion könnte bereits gespeichert haben. Nicht automatisch erneut anwenden."
 	elif kind == "worldPlan" and phase == "planning":
 		_pending_plan.clear()
+		_pending_operation = ""
 		phase = "ready"
 		message = "Plan konnte nicht geprüft werden."
 	elif kind == "readback" and phase == "awaiting_readback":

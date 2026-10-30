@@ -62,6 +62,7 @@ func _ready() -> void:
 	stack.add_child(_draft)
 	_button(stack, "Entwurf bei Aurion prüfen", _plan)
 	_button(stack, "Geprüften Plan ansehen", _request_confirmation)
+	_button(stack, "Offenes Receipt bei Aurion suchen", _recover_receipt)
 	_button(stack, "Weltstand erneut lesen", _readback)
 	_info = Label.new()
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -186,10 +187,11 @@ func _plan() -> void:
 		_info.text = _state.message
 		return
 	var draft: Variant = _current_draft()
-	if not _state.begin_plan(draft):
+	var operation_id := Crypto.new().generate_random_bytes(16).hex_encode()
+	if not _state.begin_plan(draft, operation_id):
 		_info.text = "Entwurf unvollständig oder Ergebnis einer früheren Änderung noch unklar."
 		return
-	if not _send("worldPlan", draft):
+	if not _send("worldPlan", {"draft":draft, "operationId":operation_id}):
 		_state.failed("worldPlan")
 	_info.text = _state.message
 
@@ -216,19 +218,20 @@ func _apply() -> void:
 		_info.text = _state.message
 		return
 	var reserved_actor: int = _state.actor_id
-	if not _journal.reserve(plan.draft, reserved_actor, plan.planHash):
+	var operation_id: String = plan.plan.operationId
+	if not _journal.reserve(plan.draft, reserved_actor, plan.planHash, operation_id):
 		_info.text = "Die Änderung konnte nicht sicher vorgemerkt werden; es wurde nichts gesendet."
 		if not _journal.read().is_empty():
 			_info.text += " Die lokale Vormerkung muss geklärt werden."
 		return
 	var payload: Dictionary = _state.begin_apply(_current_draft())
 	if payload.is_empty():
-		_journal.release_unsubmitted(plan.draft, reserved_actor, plan.planHash)
+		_journal.release_unsubmitted(plan.draft, reserved_actor, plan.planHash, operation_id)
 		_info.text = "Der Plan ist nicht mehr gültig; es wurde nichts gesendet."
 		return
 	if not _send("worldApply", payload):
 		# request() returns false only when this HTTP request never started.
-		if _journal.release_unsubmitted(plan.draft, reserved_actor, plan.planHash):
+		if _journal.release_unsubmitted(plan.draft, reserved_actor, plan.planHash, operation_id):
 			_state.not_submitted()
 		else:
 			_state.mark_unresolved()
@@ -237,6 +240,16 @@ func _apply() -> void:
 func _readback() -> void:
 	if not _send("readback"):
 		_info.text = "Weltstand konnte nicht angefordert werden."
+
+func _recover_receipt() -> void:
+	var pending: Dictionary = _journal.read()
+	if _state.phase != "unknown" or pending.is_empty() or pending.has("invalid") or int(pending.get("actorUserId", -1)) != _state.actor_id:
+		_info.text = "Keine passende, lesbare Vormerkung für diesen Aurion-Account."
+		return
+	if _send("worldReceipt", {"designKey":pending.designKey, "version":pending.version, "planHash":pending.planHash, "operationId":pending.operationId}):
+		_info.text = "Aurion sucht das Receipt; es wird kein Apply wiederholt."
+	else:
+		_info.text = "Receipt-Suche konnte nicht gestartet werden."
 
 func _completed(kind: String, data: Dictionary, connection: String, generation: int) -> void:
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
@@ -283,13 +296,23 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_info.text = _state.message
 			else:
 				_info.text = _state.message
+		"worldReceipt":
+			if data.get("status") == "unresolved":
+				_info.text = "Kein Receipt gefunden; das Ergebnis bleibt ungeklärt."
+			elif not _state.accept_recovered(_journal.read(), data):
+				_info.text = "Receipt und Weltstand konnten nicht sicher zugeordnet werden."
+			elif not _send("readback"):
+				_state.failed("readback")
+				_info.text = _state.message
+			else:
+				_info.text = _state.message
 		"readback":
 			if _state.phase == "awaiting_readback":
 				if not _state.accept_readback(data):
-					_info.text = "Receipt erhalten, aber der Zielentwurf ist im separaten Readback nicht bestätigt."
+					_info.text = "Receipt erhalten, aber der separate Weltstand ist ungültig oder unvollständig."
 					return
 				var applied: Dictionary = _state.applying_identity()
-				if not _journal.clear_confirmed(applied.draft, _state.actor_id, applied.planHash):
+				if not _journal.clear_confirmed(applied.draft, _state.actor_id, applied.planHash, applied.plan.operationId):
 					_state.mark_unresolved()
 					_info.text = "Receipt und Weltstand stimmen; die lokale Vormerkung konnte nicht entfernt werden."
 				else:

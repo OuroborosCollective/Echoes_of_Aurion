@@ -3,6 +3,7 @@ extends SceneTree
 const State = preload("res://authoring/world_authoring_state.gd")
 const Journal = preload("res://authoring/world_authoring_journal.gd")
 const CONNECTION := "zone_peer_authoring_fixture"
+const OP := "1234567890abcdef1234567890abcdef"
 var failures: Array[String] = []
 
 func _init() -> void:
@@ -24,6 +25,7 @@ func plan(d: Dictionary) -> Dictionary:
 	p["requiresHumanConfirmation"] = true
 	p["referencedAssetHashes"] = ["c".repeat(64)]
 	p["expectedPreviousHash"] = null
+	p["operationId"] = OP
 	return p
 
 func readback() -> Dictionary:
@@ -43,7 +45,7 @@ func fresh() -> Variant:
 	return state
 
 func verified_plan(state: Variant, d: Dictionary) -> void:
-	require(state.begin_plan(d), "plan did not start")
+	require(state.begin_plan(d, OP), "plan did not start")
 	require(state.accept_plan(plan(d), d), "valid plan rejected")
 
 func verify() -> void:
@@ -51,12 +53,12 @@ func verify() -> void:
 	var state: Variant = fresh()
 	require(state.session_matches(CONNECTION, 7), "bound session not recognized")
 	require(not state.session_matches(CONNECTION, 8), "other generation accepted")
-	require(state.begin_plan(d), "JSON integer-valued floats rejected")
+	require(state.begin_plan(d, OP), "JSON integer-valued floats rejected")
 	state.draft_changed()
 	var altered := d.duplicate(true)
 	altered.title = "Changed after submission"
 	require(not state.accept_plan(plan(d), altered) and state.planned_summary().is_empty(), "changed draft inherited an old plan")
-	require(state.begin_plan(d), "legacy-plan fixture did not start")
+	require(state.begin_plan(d, OP), "legacy-plan fixture did not start")
 	var legacy := plan(d)
 	legacy.erase("expectedPreviousHash")
 	require(not state.accept_plan(legacy, d), "plan without a bound predecessor was accepted")
@@ -64,7 +66,7 @@ func verify() -> void:
 	verified_plan(state, d)
 	require(state.begin_apply(altered).is_empty(), "changed draft applied against old plan")
 	var payload: Dictionary = state.begin_apply(d)
-	require(payload.get("expectedPlanHash") == "b".repeat(64) and payload.get("confirmation") == "APPLY_WORLD_DESIGN", "exact apply payload lost")
+	require(payload.get("expectedPlanHash") == "b".repeat(64) and payload.get("operationId") == OP and payload.get("confirmation") == "APPLY_WORLD_DESIGN", "exact apply payload lost")
 	require(state.begin_apply(d).is_empty(), "same plan was applied twice")
 	for field in ["actorUserId", "targetId", "planHash", "resultHash", "receiptHash", "humanConfirmed"]:
 		var bad := applied()
@@ -75,8 +77,8 @@ func verify() -> void:
 	require(not state.accept_apply(wrong_predecessor), "receipt with a different predecessor was accepted")
 	require(state.accept_apply(applied()), "valid receipt rejected")
 	var wrong := readback()
-	wrong.designs[0].designHash = "9".repeat(64)
-	require(not state.accept_readback(wrong), "mismatched independent readback accepted")
+	wrong.designs[0].designHash = "invalid"
+	require(not state.accept_readback(wrong), "malformed independent readback accepted")
 	var concurrent := readback()
 	concurrent.revision = "8".repeat(64)
 	require(state.accept_readback(concurrent), "same confirmed design rejected after unrelated revision change")
@@ -86,18 +88,41 @@ func verify() -> void:
 	verified_plan(state, d)
 	require(not state.begin_apply(d).is_empty(), "apply fixture did not start")
 	state.failed("worldApply")
-	require(state.phase == "unknown" and not state.begin_plan(d), "ambiguous apply allowed an automatic retry")
+	require(state.phase == "unknown" and not state.begin_plan(d, OP), "ambiguous apply allowed an automatic retry")
+	state.close()
+	state = fresh()
+	state.mark_unresolved()
+	var pending := {"designKey":d.designKey, "version":d.version, "actorUserId":42, "planHash":"b".repeat(64), "operationId":OP}
+	var found := applied()
+	found["status"] = "found"
+	found["plan"] = plan(d)
+	require(not state.accept_recovered(pending, {"status":"unresolved"}) and state.phase == "unknown", "missing receipt cleared uncertainty")
+	var foreign := pending.duplicate(true)
+	foreign.actorUserId = 43
+	require(not state.accept_recovered(foreign, found) and state.phase == "unknown", "another actor recovered the pending receipt")
+	var other_attempt := pending.duplicate(true)
+	other_attempt.operationId = "2".repeat(32)
+	require(not state.accept_recovered(other_attempt, found) and state.phase == "unknown", "another attempt recovered the pending receipt")
+	var wrong_receipt := found.duplicate(true)
+	wrong_receipt.receipt.previousHash = "9".repeat(64)
+	require(not state.accept_recovered(pending, wrong_receipt) and state.phase == "unknown", "mismatched recovered receipt accepted")
+	require(state.accept_recovered(pending, found) and state.phase == "awaiting_readback", "matching receipt could not be recovered")
+	var replaced := readback()
+	replaced.designs[0].version = 2
+	replaced.designs[0].designHash = "9".repeat(64)
+	require(state.accept_readback(replaced) and state.phase == "confirmed" and state.message.contains("verändert"), "confirmed receipt and newer world were not distinguished")
 	state.close()
 	var path := "user://aurion-test-journal-%d" % Time.get_ticks_usec()
 	var first := Journal.new(path)
 	var second := Journal.new(path)
-	require(first.reserve(d, 42, "b".repeat(64)), "pending marker could not be reserved")
-	require(not second.reserve(d, 42, "b".repeat(64)), "two clients reserved the same marker")
+	require(first.reserve(d, 42, "b".repeat(64), OP), "pending marker could not be reserved")
+	require(not second.reserve(d, 42, "b".repeat(64), OP), "two clients reserved the same marker")
 	require(Journal.new(path).read().get("designKey") == d.designKey, "new instance could not read pending marker")
-	require(not second.clear_confirmed(d, 43, "b".repeat(64)), "different actor cleared a pending marker")
-	require(first.clear_confirmed(d, 42, "b".repeat(64)) and first.read().is_empty(), "matching confirmed marker did not clear")
+	require(not second.clear_confirmed(d, 43, "b".repeat(64), OP), "different actor cleared a pending marker")
+	require(not second.clear_confirmed(d, 42, "b".repeat(64), "2".repeat(32)), "different attempt cleared a pending marker")
+	require(first.clear_confirmed(d, 42, "b".repeat(64), OP) and first.read().is_empty(), "matching confirmed marker did not clear")
 	require(DirAccess.make_dir_absolute(ProjectSettings.globalize_path(path)) == OK, "corrupt marker fixture could not be created")
-	require(first.read().get("invalid") == true and not second.reserve(d, 42, "b".repeat(64)), "incomplete marker did not fail closed")
+	require(first.read().get("invalid") == true and not second.reserve(d, 42, "b".repeat(64), OP), "incomplete marker did not fail closed")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	if failures.is_empty():
 		print("GODOT_WORLD_AUTHORING_STATE_PASS (synthetic fixtures; no live writes)")
