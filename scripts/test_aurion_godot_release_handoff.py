@@ -6,10 +6,15 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
+
+# This suite runs as root in CI; imports must not leave root-owned checkout
+# caches that block later runner-owned syntax checks.
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]
 
