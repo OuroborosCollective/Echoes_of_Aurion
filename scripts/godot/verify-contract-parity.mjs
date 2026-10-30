@@ -18,7 +18,7 @@ const [schemaText, protocol, gateway, presence, timing, movement, mob, combat, r
   read("shared/zoneTelegraphContract.ts"),
   read("shared/ax1BladeSkillProtocol.ts"),
   read("shared/ax1ResourceEcologyProtocol.ts"),
-  read("shared/worldChunkProtocol.ts"),
+  read("shared/worldChunkCoordinates.ts"),
   read("godot-client/tests/contracts/test_zone_contract.gd"),
 ]);
 const schema = JSON.parse(schemaText);

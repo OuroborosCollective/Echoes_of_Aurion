@@ -85,12 +85,12 @@ describe("schema repair failure diagnostic boundary", () => {
       const run = spawnSync(process.execPath, ["--input-type=module", "-e", script!, receiptFile], {
         encoding: "utf8", env: { ...process.env, APPLY_SOURCE_REVISION: revision, APPLY_PLAN_SHA256: ledger,
           APPLY_FAILURE_STAGE: "REPAIR_PLAN_BLOCKED", APPLY_FAILURE_STATUS: "70", APPLY_BACKUP_CREATED: "false",
-          APPLY_RECOVERY_EXECUTED: "false", APPLY_FAILURE_RECEIPT: "", APPLY_REPAIR_PLAN_PATH: planFile, APPLY_RELEASE_ROOT: root },
+          APPLY_RECOVERY_EXECUTED: "false", APPLY_RECOVERY_CLEANUP_FAILED: "true", APPLY_FAILURE_RECEIPT: "", APPLY_REPAIR_PLAN_PATH: planFile, APPLY_RELEASE_ROOT: root },
       });
       expect(run.status, run.stderr).toBe(0);
       const text = readFileSync(receiptFile, "utf8");
       expect(JSON.parse(text)).toMatchObject({ overallState: "APPLY_FAILED", failureStage: "REPAIR_PLAN_BLOCKED",
-        runnerStatus: 70, backup: { created: false }, repair: { kind: "BLOCKED_PLAN", blockers: [{ code: "JOURNAL_IDENTITY_CONFLICT" }] } });
+        runnerStatus: 70, backup: { created: false }, cleanup: { recoveryCleanupFailed: true }, repair: { kind: "BLOCKED_PLAN", blockers: [{ code: "JOURNAL_IDENTITY_CONFLICT" }] } });
       expect(text).not.toContain(secret);
       expect(statSync(receiptFile).mode & 0o777).toBe(0o600);
       writeFileSync(planFile, secret);

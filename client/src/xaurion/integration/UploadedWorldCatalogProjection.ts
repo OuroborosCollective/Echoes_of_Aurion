@@ -2,7 +2,7 @@ import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { WorldDesignReadback } from "@shared/aurionAuthoringContract";
-import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
+import { joinWorldChunkPositionMm, splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
 import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, villageStreetLampVisualPlacements, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
@@ -92,11 +92,15 @@ export class UploadedWorldCatalogProjection {
           && (entry.purpose === "world-environment" || entry.purpose === "world-nature")
         );
         if (!asset) continue;
+        const worldPosition = joinWorldChunkPositionMm({
+          coordinate: { x: placement.chunkX, z: placement.chunkZ },
+          localPositionMm: { x: placement.xMm, z: placement.zMm },
+        });
         placements.push(Object.freeze({
           id: `authored:${design.designHash.slice(0, 12)}:${placement.placementKey}`,
           asset,
-          xMm: placement.chunkX * 64_000 + placement.xMm,
-          zMm: placement.chunkZ * 64_000 + placement.zMm,
+          xMm: worldPosition.x,
+          zMm: worldPosition.z,
           rotationQuarterTurns: placement.rotationQuarterTurns,
           scalePermille: placement.scalePermille,
         }));
