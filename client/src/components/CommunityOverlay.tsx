@@ -38,7 +38,8 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
   };
   const openPanel = (nextPanel: Exclude<CommunityPanel, null>) => {
     const active = document.activeElement;
-    if (!returnFocusRef.current && active instanceof HTMLElement) returnFocusRef.current = active;
+    if (active instanceof HTMLElement && (!returnFocusRef.current || !panelRef.current?.contains(active))) returnFocusRef.current = active;
+    if (nextPanel === "forum" || nextPanel === "events" || nextPanel === "issues") setSelectedThreadId(null);
     setPanel(nextPanel);
   };
   const mountPanel = useCallback((node: HTMLElement | null) => {

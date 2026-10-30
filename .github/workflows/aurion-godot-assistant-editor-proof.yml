@@ -1,0 +1,93 @@
+name: Aurion Godot Assistant isolated editor proof
+on:
+  pull_request:
+    paths:
+      - 'scripts/godot/stage-godot-assistant.mjs'
+      - 'scripts/godot/stage-godot-assistant.test.mjs'
+      - 'scripts/godot/smoke-godot-assistant-relay.mjs'
+      - 'docs/godot/GODOT_ASSISTANT_EDITOR.md'
+      - 'godot-client/**'
+      - 'AGENTS.md'
+      - 'Memory.md'
+      - 'config/godot-toolchain.lock.json'
+      - '.github/workflows/aurion-godot-assistant-editor-proof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  assistant-editor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: aurion
+      - uses: actions/checkout@v4
+        with:
+          repository: splatterfacegames/godot-assistant
+          ref: a6aed65584cf8cccd32a75e5a93e22b752a0b00a
+          path: upstream-godot-assistant
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test fail-closed source, permission and staging contracts
+        working-directory: aurion
+        run: node --test scripts/godot/stage-godot-assistant.test.mjs
+      - name: Stage isolated Godot Assistant and prove live .NET relay permissions
+        working-directory: aurion
+        env:
+          STAGE_DIR: ${{ runner.temp }}/aurion-assistant-editor
+        run: |
+          set -euo pipefail
+          test ! -e "$STAGE_DIR"
+          node scripts/godot/stage-godot-assistant.mjs --source ../upstream-godot-assistant --target "$STAGE_DIR"
+          node scripts/godot/smoke-godot-assistant-relay.mjs "$STAGE_DIR"
+          test -f "$STAGE_DIR/addons/godot_assistant/LICENSE.upstream.txt"
+          test ! -e godot-client/addons/godot_assistant
+          if grep -Fq 'addons/godot_assistant/plugin.cfg' godot-client/project.godot; then
+            echo 'ASSISTANT_CANONICAL_RUNTIME_CONTAMINATION'
+            exit 1
+          fi
+          git diff --exit-code HEAD
+      - name: Install pinned Godot 4.7.2 editor
+        working-directory: aurion
+        run: node scripts/godot/bootstrap.mjs
+      - name: Import native baseline and isolated editor with real Godot
+        working-directory: aurion
+        env:
+          STAGE_DIR: ${{ runner.temp }}/aurion-assistant-editor
+        run: |
+          set -euo pipefail
+          godot='.aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64'
+          set +e
+          "$godot" --headless --verbose --path godot-client --editor --import > "$RUNNER_TEMP/assistant-baseline.log" 2>&1
+          baseline=$?
+          "$godot" --headless --verbose --path "$STAGE_DIR" --editor --import > "$RUNNER_TEMP/assistant-editor.log" 2>&1
+          candidate=$?
+          set -e
+          echo "AURION_ASSISTANT_BASELINE_EXIT=$baseline"
+          echo "AURION_ASSISTANT_EDITOR_EXIT=$candidate"
+          tail -n 60 "$RUNNER_TEMP/assistant-baseline.log"
+          tail -n 60 "$RUNNER_TEMP/assistant-editor.log"
+          if [ "$baseline" -ne 0 ] || grep -E 'SCRIPT ERROR:|(^|[[:space:]])ERROR:' "$RUNNER_TEMP/assistant-baseline.log"; then
+            echo 'AURION_ASSISTANT_BASELINE_FAIL'
+            exit 1
+          fi
+          if [ "$candidate" -ne 0 ] || grep -E 'SCRIPT ERROR:|(^|[[:space:]])ERROR:' "$RUNNER_TEMP/assistant-editor.log"; then
+            echo 'AURION_ASSISTANT_EDITOR_IMPORT_FAIL'
+            exit 1
+          fi
+          echo 'AURION_ASSISTANT_GODOT_472_HEADLESS_IMPORT_PASS'
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistant-editor-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/assistant-baseline.log
+            ${{ runner.temp }}/assistant-editor.log
+          if-no-files-found: warn
+          retention-days: 7
