@@ -39,6 +39,15 @@ export async function buildAurionBuildInputManifest({ root = process.cwd(), revi
     "pnpm-lock.yaml",
     "Dockerfile",
     "docker-compose.traefik.yml",
+    "docker-compose.godot-feed.yml",
+    "deploy/load-aurion-runtime-image.py",
+    "deploy/verify-aurion-godot-feed.py",
+    "deploy/readback-aurion-godot-bridge.mjs",
+    "deploy/install-aurion-godot-bridge.sh",
+    "deploy/aurion-godot-bridge.service",
+    "deploy/aurion-godot-bridge.environment.template",
+    "scripts/build-aurion-runtime-image.mjs",
+    "scripts/godot/live-bridge-package.mjs",
     "scripts/build-aurion-traefik-runtime-artifact.mjs",
     "scripts/aurion-build-input-manifest.mjs",
     "scripts/scan-aurion-release-secrets.mjs",
@@ -87,3 +96,4 @@ export async function writeAurionBuildInputManifest({ root = process.cwd(), revi
   await writeFile(output, `${JSON.stringify({ ...result.manifest, buildInputDigest: result.digest }, null, 2)}\n`, "utf8");
   return result;
 }
+

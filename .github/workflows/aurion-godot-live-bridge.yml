@@ -11,11 +11,34 @@ on:
       - 'pnpm-lock.yaml'
       - 'tsconfig.json'
       - 'scripts/godot/live-bridge-*'
+      - 'deploy/*aurion*godot*'
+      - 'deploy/load-aurion-runtime-image.py'
+      - 'scripts/build-aurion-runtime-image.mjs'
+      - 'scripts/test-aurion-godot-feed-compose.mjs'
+      - 'scripts/test_aurion_godot_release_handoff.py'
+      - 'docker-compose.godot-feed.yml'
+      - 'docker-compose.traefik.yml'
       - '.github/workflows/aurion-godot-live-bridge.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  hosted-release-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Actual Compose merge and protected image/file rejection boundaries
+        run: |
+          node scripts/test-aurion-godot-feed-compose.mjs
+          sudo python3 scripts/test_aurion_godot_release_handoff.py
+          bash -n deploy/promote-aurion-zone-runtime.sh deploy/install-aurion-godot-bridge.sh
+          git diff --check
   repository-regression:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -101,3 +124,4 @@ jobs:
           path: ${{ runner.temp }}/live-bridge-evidence/
           if-no-files-found: error
           retention-days: 14
+
