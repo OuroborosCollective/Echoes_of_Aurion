@@ -48,7 +48,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: pnpm
       - name: Install locked dependencies and pinned Godot
         run: |
           pnpm install --frozen-lockfile
@@ -57,3 +56,4 @@ jobs:
         run: pnpm exec drizzle-kit migrate
       - name: Project actual isolated gateway state in Godot HUD
         run: pnpm exec vitest run server/zoneGateway.godot.e2e.test.ts --reporter=verbose
+

@@ -37,7 +37,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: pnpm
       - name: Install locked gateway WebSocket dependency
         run: pnpm install --frozen-lockfile --prod --ignore-scripts
       - name: Bootstrap regression
@@ -93,3 +92,4 @@ jobs:
           node scripts/godot/bootstrap-android.mjs
           node scripts/godot/doctor.mjs --android
           node scripts/godot/bootstrap-android.mjs
+

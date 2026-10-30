@@ -42,7 +42,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: pnpm
       - name: Install repository lock
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Typecheck and canonical receipt parity
@@ -85,4 +84,5 @@ jobs:
           path: ${{ runner.temp }}/live-bridge-evidence/
           if-no-files-found: error
           retention-days: 14
+
 
