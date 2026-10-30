@@ -13,6 +13,8 @@ on:
       - "shared/worldIdentity.ts"
       - "server/worldEpochReaction.e2e.test.ts"
       - "server/db.ts"
+      - "server/questCompiler/**"
+      - "server/questAbortRegression.e2e.test.ts"
       - "server/explorationActorObservation.ts"
       - "server/explorationActorObservation.test.ts"
       - "server/zoneRuntime.ts"

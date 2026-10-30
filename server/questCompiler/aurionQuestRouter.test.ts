@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { adminQuestService, aurionQuestRouter } from '../routes/aurionQuestRouter';
 import { GameDevelopmentStudioQuestSupport } from '../gameDevelopmentStudioQuestSupport';
+import { WorldFactEngine } from './worldFacts';
+import { QuestTemplateRegistry } from './templateRegistry';
+import { QuestRuntimeEngine } from './runtime';
+import { QuestPersistenceEngine } from './persistence';
 
 describe('Aurion Quest Router & Admin Integration (AIM-298)', () => {
   it('fetches status via adminQuestService', async () => {
@@ -23,12 +27,25 @@ describe('Aurion Quest Router & Admin Integration (AIM-298)', () => {
   });
 
   it('lists quest instances and replays instance deterministically', async () => {
-    const instances = await adminQuestService.listInstances();
-    expect(instances.length).toBeGreaterThanOrEqual(1);
+    // Own a full-pool compiler fixture; unrelated database rows are not this
+    // service's source-event evidence and must never be selected by list order.
+    const facts = new WorldFactEngine();
+    facts.recordEvent({ id: 'evt_init_caravan', type: 'CARAVAN_ATTACKED', source: 'aurion_system_seed',
+      data: { caravanId: 'caravan_alpha', merchantId: 'npc_merchant_kaelen', playerUserId: '1' } });
+    const templates = new QuestTemplateRegistry();
+    for (const template of await adminQuestService.getTemplates()) templates.registerTemplate(template);
+    const { instance, plan } = new QuestRuntimeEngine(facts, templates).compileAndOfferQuest({
+      worldId: 'router_replay_fixture', playerUserId: 2_146_999_991, triggerEventId: 'evt_init_caravan',
+    });
+    const persistence: QuestPersistenceEngine = Reflect.get(adminQuestService, "persistenceEngine");
+    await persistence.savePlan(plan);
+    await persistence.saveInstance(instance);
+    const instances = await adminQuestService.listInstances({ playerUserId: instance.playerUserId });
+    expect(instances.some(candidate => candidate.id === instance.id)).toBe(true);
 
-    const replayResult = await adminQuestService.replayInstance(instances[0].id);
+    const replayResult = await adminQuestService.replayInstance(instance.id);
     expect(replayResult.verdict).toBe('MATCH');
-    expect(replayResult.replayedPlanHash).toBe(instances[0].planHash);
+    expect(replayResult.replayedPlanHash).toBe(instance.planHash);
   });
 
   it('creates draft proposal without direct mutation', async () => {
