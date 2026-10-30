@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+umask 077
+
+client="$(command -v mariadb || command -v mysql || true)"
+test -n "$client"
+test -r /recovery-input/production.sql.gz
+gzip -t /recovery-input/production.sql.gz
+
+# POSIX sh does not provide pipefail. Wait for both sides explicitly, so an
+# interrupted gzip cannot be hidden by a client that accepts partial input.
+work="$(mktemp -d /tmp/aurion-restore.XXXXXX)"
+cleanup() { rm -rf -- "$work"; }
+trap cleanup EXIT
+mkfifo "$work/input"
+gzip -cd /recovery-input/production.sql.gz > "$work/input" &
+gzip_pid=$!
+set +e
+"$client" --protocol=socket -uroot < "$work/input" >/dev/null
+client_status=$?
+wait "$gzip_pid"
+gzip_status=$?
+set -e
+test "$client_status" -eq 0
+test "$gzip_status" -eq 0
+printf 'AURION_RECOVERY_RESTORE_COMPLETE\n'
