@@ -5059,3 +5059,14 @@ Erkenntnis: Eine noch sichtbare Browserseite beweist keinen gültigen Anmeldever
 Offen/Nächster Schritt: Exact-Head-CI und Merge-/Main-Readback, dann gesicherter Editor-Rollout. Manueller HTTPS-Rückkanal, echte Sitzung/WorldLease und World-Apply mit Receipt-/DB-Readback bleiben offen; ebenso produktive Producer-/Release-/Schema-Kette und physische Tablet-Abnahme. Keine Änderung des 100-ms-/10-Hz-Simulationspfads.
 
 CI-Fortsetzung: Am Codehead `8606aa92e2d160c4438621d7e8ff7f192c7b835a` stoppte Headless-Run 41066293130/1 vor sämtlichen Codeprüfungen am zehnminütigen Joblimit. Job124098449302 belegt einen hängenden pnpm-Cache-Restore nach „Egress is over the account limit“. Der optionale Cache wird deshalb aus Headless, Live-Bridge und isoliertem HUD-Gateway entfernt; feste Lockfile-Installationen, Fristen, Assertions und Prüfungen bleiben vollständig erhalten. Neue Exact-Head-CI erforderlich.
+
+
+### 2026-10-30 — Schema-Apply bei Jobabbruch absichern
+Status: PARTIAL — isolierte Tests bestanden; GitHub-CI und Produktionsnachweise offen.
+Task: Verwaiste privilegierte Schema-Recovery- und Apply-Prozesse nach Jobabbruch verhindern.
+Decisions: OIDC-gebundenen Job-Lebenskanal, separaten Wächter/Reaper, laufbezogene Container und bei unbestätigtem Cleanup eine Sperre verwenden; Restore-Abschluss erst nach gzip- und MariaDB-Erfolg akzeptieren.
+Touched surfaces: Schema-Apply-Artifact, Root-Runner, Workflow und isolierte Prozess-/MariaDB-Tests; keine Änderung des Simulationsticks.
+Evidence: Basis `9dc75f50731b1e9863760103c13fac811a6333e2`; VPS-Testausführung `ee753f0dfa7d4f7db37926c0da59627a` 9/9 inklusive sudo-, Abbruch-, Restore- und Folge-SQL-Proben; unabhängiger Testcontainer-/Prozess-Readback `183fc06829df4aa8abe1011133155c74` leer; lokale Core-/Fingerprinttests 9/9. Isolierte Testdaten sind kein Produktionsnachweis.
+Learned: Ein beendeter Docker-Client beweist keinen gestoppten Containerprozess; bereits angenommene DDL kann auch bei abgebrochener Verbindung teilwirksam sein.
+Open: GitHub-Step-Timeout und Exact-Head-CI, produktives Apply-Receipt und Runtime-Promotion fehlen.
+Next safe step: GitHub-CI und unabhängigen Readback abwarten; keine produktive Schema-Anwendung vor belegtem Abbruchschutz.
