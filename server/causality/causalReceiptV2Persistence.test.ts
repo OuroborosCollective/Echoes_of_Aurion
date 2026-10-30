@@ -10,6 +10,7 @@ import {
 } from "../../shared/aurionCausalTickContract";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { MariaDBCausalPersistenceAdapter } from "./persistence";
+import { AurionTickRecorder, type RecordedTickEntry } from "./tickRecorder";
 
 const suite =
   process.env.AURION_CLASSLESS_E2E === "1" && process.env.DATABASE_URL
@@ -45,6 +46,27 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
       if (isolated) await clean();
       await pool.end();
     }
+  });
+
+  it("publishes an observer only after real MariaDB receipt and checkpoint readback", async () => {
+    const adapter = new MariaDBCausalPersistenceAdapter();
+    const recorder = new AurionTickRecorder(200, adapter);
+    const zoneId = `${ZONE_PREFIX}:observer`;
+    await pool.query("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
+    const zone = new AuthoritativeMovementZone(zoneId as any, recorder);
+    const observed: RecordedTickEntry[] = [];
+    recorder.observeCommittedTicks(entry => observed.push(entry));
+    zone.tick();
+    expect(observed).toHaveLength(0);
+    await recorder.flushPersistence();
+    expect(recorder.getPersistenceStatus()).toMatchObject({ pending: 0, failures: 0 });
+    expect(observed).toHaveLength(1);
+    const restored = await adapter.getRecordedTick(zoneId, 1);
+    expect(restored?.receipt).toEqual(observed[0].receipt);
+    expect((await adapter.getCheckpoint(zoneId, 0))?.snapshotHash).toBe(observed[0].receipt.preStateHash);
+    const [rows] = await pool.query("SELECT receiptHash FROM aurionCausalTickReceipts WHERE zoneId=? AND tick=1", [zoneId]);
+    expect(rows).toEqual([expect.objectContaining({ receiptHash: observed[0].receipt.receiptHash })]);
+    await pool.query("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
   });
 
   it("proves 0048 base table plus 0049 columns and full journal wave are physically active", async () => {
@@ -144,3 +166,4 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     expect(row?.stageReceiptsJson).toBeNull();
   });
 });
+

@@ -3,10 +3,13 @@ on:
   pull_request:
     paths:
       - 'server/godotBridge/**'
-      - 'server/causality/tickRecorder.ts'
-      - 'server/_core/index.ts'
-      - 'godot-client/addons/aurion_bridge/**'
-      - 'godot-client/tests/*live_bridge*'
+      - 'server/**'
+      - 'shared/**'
+      - 'godot-client/**'
+      - 'drizzle/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
       - 'scripts/godot/live-bridge-*'
       - '.github/workflows/aurion-godot-live-bridge.yml'
   workflow_dispatch:
@@ -16,6 +19,21 @@ jobs:
   contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-bridge-test
+          MARIADB_DATABASE: aurion_classless_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-bridge-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-bridge-test@127.0.0.1:3306/aurion_classless_test
+      AURION_CLASSLESS_E2E: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +51,10 @@ jobs:
           pnpm exec vitest run server/godotBridge/aurionAdapter.test.ts server/causality/causalTick.test.ts server/causality/persistenceIdentity.test.ts server/zoneRuntime.test.ts server/zoneRuntimeAllocation.test.ts
       - name: Retain supplied mock-only transport regressions
         run: pnpm exec tsx server/godotBridge/dev/selfTest.ts
+      - name: Durable observer on actual isolated MariaDB
+        run: |
+          pnpm exec drizzle-kit migrate
+          pnpm exec vitest run server/causality/causalReceiptV2Persistence.test.ts --reporter=verbose
       - name: Install and verify pinned Godot
         run: |
           node scripts/godot/bootstrap.mjs
@@ -63,3 +85,4 @@ jobs:
           path: ${{ runner.temp }}/live-bridge-evidence/
           if-no-files-found: error
           retention-days: 14
+
