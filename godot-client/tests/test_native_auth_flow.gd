@@ -76,6 +76,23 @@ func verify() -> void:
 	flow.clear()
 	require(flow.browser_url().is_empty(), "cancel must clear browser URL")
 	require(flow.consume_callback("c".repeat(43), fourth_start.requestState, 8100).is_empty(), "cancelled transaction accepted")
+	# Deadline is a local monotonic presentation/auth boundary, not world time.
+	if not flow.has_method("pending_remaining_ms") or not flow.has_method("expire_pending"):
+		require(false, "pending browser handoff has no expiry boundary")
+	else:
+		var pending: Dictionary = flow.prepare_start("aurion-godot-g09b", 1000)
+		require(flow.accept_start_response(valid, 1100), "expiry boundary setup")
+		require(flow.pending_remaining_ms(1100) == 599900, "start latency must count against deadline")
+		require(not flow.expire_pending(600999), "pending handoff expired before deadline")
+		require(flow.pending_remaining_ms(600999) == 1, "last valid millisecond")
+		require(flow.expire_pending(601000), "pending handoff not cleared at deadline")
+		require(flow.browser_url().is_empty(), "expired URL retained")
+		require(not flow.expire_pending(601001), "expiry reported twice")
+		require(flow.consume_callback("c".repeat(43), pending.requestState, 601001).is_empty(), "expired verifier survived")
+		flow.prepare_start("aurion-godot-g09b", 2000)
+		require(flow.accept_start_response(valid, 2100), "rollback boundary setup")
+		require(flow.expire_pending(1999), "monotonic clock rollback retained pending handoff")
+		require(flow.browser_url().is_empty(), "rollback retained URL")
 	if failures.is_empty():
 		print("Godot native-auth pre-login contract verified")
 		quit(0)
@@ -83,3 +100,4 @@ func verify() -> void:
 		for failure in failures:
 			push_error(failure)
 		quit(1)
+

@@ -10,7 +10,7 @@ import { installTerrain3D } from './install-terrain3d.mjs';
 const manifestEntry = 'assets/assets/generated/manifest.json';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
-/** Public export paths must never copy locally installed licensed MCS source. */
+/** Public exports must not copy locally installed private MCS assets or caches. */
 export function publicProjectCopyFilter(path) {
   const parts = path.split(/[\\/]+/);
   return !parts.includes('.godot') && !parts.includes('private-mcs') && !parts.some((part, index) =>

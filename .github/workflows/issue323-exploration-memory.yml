@@ -4,6 +4,15 @@ on:
     paths:
       - "server/explorationMemoryPersistence.ts"
       - "server/explorationMemoryPersistence.test.ts"
+      - "server/causality/**"
+      - "drizzle/aurionCausalitySchema.ts"
+      - "shared/aurionCausalTickContract.ts"
+      - "shared/worldCausalRootProtocol.ts"
+      - "shared/worldChunkProtocol.ts"
+      - "server/worldChunkProtocol.ts"
+      - "shared/worldIdentity.ts"
+      - "server/worldEpochReaction.e2e.test.ts"
+      - "server/db.ts"
       - "server/explorationActorObservation.ts"
       - "server/explorationActorObservation.test.ts"
       - "server/zoneRuntime.ts"
@@ -55,7 +64,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
       - run: pnpm verify:migrations
@@ -63,3 +71,8 @@ jobs:
       - run: pnpm check
       - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts server/explorationActorObservation.test.ts --reporter=verbose
       - run: pnpm exec vitest run server/worldEpochReaction.e2e.test.ts --reporter=verbose
+      - name: Full repository regression without integration-only environment
+        env:
+          AURION_EXPLORATION_MEMORY_E2E: "0"
+          AURION_WORLD_EPOCH_E2E: "0"
+        run: pnpm test

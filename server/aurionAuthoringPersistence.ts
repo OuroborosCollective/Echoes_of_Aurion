@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
+import type { PoolConnection } from "mysql2/promise";
 import { getDb } from "./db";
 import { glbImportStore } from "./glbImportStore";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
@@ -26,6 +28,7 @@ import {
   aurionAuthoringReceipts,
   aurionDungeonDesignVersions,
   aurionWorldDesignVersions,
+  users,
 } from "../drizzle/schema";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import { groupDungeonIds } from "../shared/groupInstanceProtocol";
@@ -33,6 +36,9 @@ import { groupDungeonIds } from "../shared/groupInstanceProtocol";
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DatabaseLike = Database | Transaction;
+const MAX_ACTIVE_WORLD_DESIGNS = 64;
+// Both designJson and receipt payloadJson are MariaDB TEXT columns.
+const MAX_WORLD_PLAN_BYTES = 65_535;
 
 export function authoringHash(value: unknown): string {
   return createHash("sha256").update(stableCatalogStringify(value), "utf8").digest("hex");
@@ -121,9 +127,30 @@ export async function persistAuthoringReceipt(
   });
 }
 
-export async function planWorldDesign(raw: WorldDesignDraft): Promise<WorldDesignPlan> {
+function assertCompatibleWorldVersion(
+  existing: typeof aurionWorldDesignVersions.$inferSelect,
+  candidate: WorldDesignPlan,
+): void {
+  const stored = WorldDesignPlanSchema.parse(JSON.parse(existing.designJson));
+  if (existing.id !== `${stored.designKey}:v${stored.version}` || existing.designKey !== stored.designKey || existing.version !== stored.version
+      || existing.designHash !== authoringHash({ schemaVersion: AURION_WORLD_DESIGN_SCHEMA, plan: stored })) {
+    throw new Error("AUTHORING_WORLD_STORED_HASH_INVALID");
+  }
+  // The predecessor and plan hash identify this operation, not immutable
+  // version content. This preserves reactivation of identical old versions.
+  const { planHash: _oldHash, expectedPreviousHash: _oldPrevious, operationId: _oldOperation, ...oldContent } = stored;
+  const { planHash: _newHash, expectedPreviousHash: _newPrevious, operationId: _newOperation, ...newContent } = candidate;
+  if (stableCatalogStringify(oldContent) !== stableCatalogStringify(newContent)) {
+    throw new Error("AUTHORING_WORLD_VERSION_CONFLICT");
+  }
+}
+
+export async function planWorldDesign(raw: WorldDesignDraft, catalogConnection?: PoolConnection, operationId?: string): Promise<WorldDesignPlan> {
   const draft = WorldDesignDraftSchema.parse(raw);
-  const catalog = await glbImportStore().catalog();
+  if (operationId !== undefined && !/^[a-f0-9]{32}$/.test(operationId)) throw new Error("AUTHORING_OPERATION_ID_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("AUTHORING_DATABASE_REQUIRED");
+  const catalog = await glbImportStore().catalog(catalogConnection);
   if (catalog.revision !== draft.expectedCatalogRevision) throw new Error("AUTHORING_GLB_CATALOG_CHANGED");
   const referenced = new Set<string>();
   for (const placement of draft.placements) {
@@ -132,62 +159,129 @@ export async function planWorldDesign(raw: WorldDesignDraft): Promise<WorldDesig
     referenced.add(entry.sha256);
   }
   const referencedAssetHashes = [...referenced].sort();
-  const identity = { ...draft, referencedAssetHashes, requiresHumanConfirmation: true as const };
-  return WorldDesignPlanSchema.parse({ ...identity, planHash: authoringHash(identity) });
+  const active = await db.select().from(aurionWorldDesignVersions)
+    .where(eq(aurionWorldDesignVersions.active, true));
+  const previous = active.filter(row => row.designKey === draft.designKey);
+  if (previous.length > 1) throw new Error("AUTHORING_WORLD_ACTIVE_VERSION_CORRUPT");
+  if (active.length > MAX_ACTIVE_WORLD_DESIGNS || (active.length === MAX_ACTIVE_WORLD_DESIGNS && !previous.length)) {
+    throw new Error("AUTHORING_WORLD_ACTIVE_LIMIT");
+  }
+  const identity = { ...draft, referencedAssetHashes, expectedPreviousHash: previous[0]?.designHash ?? null,
+    ...(operationId === undefined ? {} : { operationId }), requiresHumanConfirmation: true as const };
+  const plan = WorldDesignPlanSchema.parse({ ...identity, planHash: authoringHash(identity) });
+  if (Buffer.byteLength(stableCatalogStringify(plan), "utf8") > MAX_WORLD_PLAN_BYTES) {
+    throw new Error("AUTHORING_WORLD_PLAN_TOO_LARGE");
+  }
+  const id = `${plan.designKey}:v${plan.version}`;
+  const existing = (await db.select().from(aurionWorldDesignVersions).where(eq(aurionWorldDesignVersions.id, id)))[0];
+  if (existing) assertCompatibleWorldVersion(existing, plan);
+  return plan;
 }
 
 export async function applyWorldDesign(
   actorUserId: number,
   raw: WorldDesignDraft,
   expectedPlanHash: string,
+  operationId?: string,
 ): Promise<{ receipt: AuthoringReceipt; readback: WorldDesignReadback }> {
-  const plan = await planWorldDesign(raw);
-  if (plan.planHash !== expectedPlanHash) throw new Error("AUTHORING_WORLD_PLAN_CHANGED");
-  const db = await getDb();
-  if (!db) throw new Error("AUTHORING_DATABASE_REQUIRED");
-  const designHash = authoringHash({ schemaVersion: AURION_WORLD_DESIGN_SCHEMA, plan });
-  const id = `${plan.designKey}:v${plan.version}`;
-
-  const receipt = await db.transaction(async tx => {
-    const active = await tx.select().from(aurionWorldDesignVersions)
-      .where(and(eq(aurionWorldDesignVersions.designKey, plan.designKey), eq(aurionWorldDesignVersions.active, true)))
-      .for("update");
-    if (active.length > 1) throw new Error("AUTHORING_WORLD_ACTIVE_VERSION_CORRUPT");
-    const previousHash = active[0]?.designHash ?? null;
-    const existing = (await tx.select().from(aurionWorldDesignVersions).where(eq(aurionWorldDesignVersions.id, id)).for("update"))[0];
-    if (existing && existing.designHash !== designHash) throw new Error("AUTHORING_WORLD_VERSION_CONFLICT");
-    if (active[0] && active[0].id !== id) {
-      await tx.update(aurionWorldDesignVersions).set({ active: false }).where(eq(aurionWorldDesignVersions.id, active[0].id));
-    }
-    if (!existing) {
-      await tx.insert(aurionWorldDesignVersions).values({
-        id,
-        designKey: plan.designKey,
-        version: plan.version,
-        worldId: GLOBAL_WORLD_ID,
-        title: plan.title,
-        expectedCatalogRevision: plan.expectedCatalogRevision,
-        designJson: stableCatalogStringify(WorldDesignPlanSchema.parse(plan)),
-        designHash,
-        active: true,
-        createdByUserId: actorUserId,
+  const receipt = await glbImportStore().withCatalogFence(async connection => {
+    const plan = await planWorldDesign(raw, connection, operationId);
+    if (plan.planHash !== expectedPlanHash) throw new Error("AUTHORING_WORLD_PLAN_CHANGED");
+    const id = `${plan.designKey}:v${plan.version}`;
+    // The lock and transaction intentionally share a physical DB connection.
+    const db = drizzle(connection);
+    return db.transaction(async tx => {
+      const actor = (await tx.select({ role: users.role }).from(users)
+        .where(eq(users.id, actorUserId)).for("update"))[0];
+      if (actor?.role !== "admin") throw new Error("AUTHORING_ADMIN_REQUIRED");
+      if (operationId !== undefined) {
+        // The shared fence serializes all world applies. A previous receipt
+        // for this attempt-bound plan must never be reused for another apply.
+        const used = await tx.select({ id: aurionAuthoringReceipts.id }).from(aurionAuthoringReceipts)
+          .where(eq(aurionAuthoringReceipts.planHash, plan.planHash)).limit(1).for("update");
+        if (used.length) throw new Error("AUTHORING_OPERATION_ALREADY_USED");
+      }
+      const activeWorld = await tx.select().from(aurionWorldDesignVersions)
+        .where(eq(aurionWorldDesignVersions.active, true)).for("update");
+      const active = activeWorld.filter(row => row.designKey === plan.designKey);
+      if (active.length > 1) throw new Error("AUTHORING_WORLD_ACTIVE_VERSION_CORRUPT");
+      const previousHash = active[0]?.designHash ?? null;
+      if (previousHash !== plan.expectedPreviousHash) throw new Error("AUTHORING_WORLD_PREDECESSOR_CHANGED");
+      if (activeWorld.length > MAX_ACTIVE_WORLD_DESIGNS || (activeWorld.length === MAX_ACTIVE_WORLD_DESIGNS && !active.length)) {
+        throw new Error("AUTHORING_WORLD_ACTIVE_LIMIT");
+      }
+      const existing = (await tx.select().from(aurionWorldDesignVersions).where(eq(aurionWorldDesignVersions.id, id)).for("update"))[0];
+      if (existing) assertCompatibleWorldVersion(existing, plan);
+      const designHash = existing?.designHash ?? authoringHash({ schemaVersion: AURION_WORLD_DESIGN_SCHEMA, plan });
+      if (active[0] && active[0].id !== id) {
+        await tx.update(aurionWorldDesignVersions).set({ active: false }).where(eq(aurionWorldDesignVersions.id, active[0].id));
+      }
+      if (!existing) {
+        await tx.insert(aurionWorldDesignVersions).values({
+          id,
+          designKey: plan.designKey,
+          version: plan.version,
+          worldId: GLOBAL_WORLD_ID,
+          title: plan.title,
+          expectedCatalogRevision: plan.expectedCatalogRevision,
+          designJson: stableCatalogStringify(WorldDesignPlanSchema.parse(plan)),
+          designHash,
+          active: true,
+          createdByUserId: actorUserId,
+        });
+      } else if (!existing.active) {
+        await tx.update(aurionWorldDesignVersions).set({ active: true }).where(eq(aurionWorldDesignVersions.id, id));
+      }
+      const result = receiptIdentity({
+        kind: "world",
+        action: "apply",
+        targetId: id,
+        actorUserId,
+        planHash: plan.planHash,
+        previousHash,
+        resultHash: designHash,
       });
-    } else if (!existing.active) {
-      await tx.update(aurionWorldDesignVersions).set({ active: true }).where(eq(aurionWorldDesignVersions.id, id));
-    }
-    const result = receiptIdentity({
-      kind: "world",
-      action: "apply",
-      targetId: id,
-      actorUserId,
-      planHash: plan.planHash,
-      previousHash,
-      resultHash: designHash,
+      await persistAuthoringReceipt(tx, result, plan);
+      return result;
     });
-    await persistAuthoringReceipt(tx, result, plan);
-    return result;
   });
   return { receipt, readback: await readActiveWorldDesign() };
+}
+
+/** An absent receipt is ambiguous: the original request may still be running.
+ * Only the same current admin can recover its exact committed operation. */
+export async function recoverWorldAuthoringReceipt(
+  actorUserId: number,
+  input: { designKey: string; version: number; planHash: string; operationId: string },
+): Promise<{ status: "unresolved" } | { status: "found"; plan: WorldDesignPlan; receipt: AuthoringReceipt }> {
+  const db = await getDb();
+  if (!db) throw new Error("AUTHORING_DATABASE_REQUIRED");
+  const actor = (await db.select({ role: users.role }).from(users).where(eq(users.id, actorUserId)))[0];
+  if (actor?.role !== "admin") throw new Error("AUTHORING_ADMIN_REQUIRED");
+  const targetId = `${input.designKey}:v${input.version}`;
+  const rows = await db.select().from(aurionAuthoringReceipts).where(and(
+    eq(aurionAuthoringReceipts.kind, "world"),
+    eq(aurionAuthoringReceipts.action, "apply"),
+    eq(aurionAuthoringReceipts.targetId, targetId),
+    eq(aurionAuthoringReceipts.actorUserId, actorUserId),
+    eq(aurionAuthoringReceipts.planHash, input.planHash),
+  )).limit(2);
+  if (!rows.length) return { status: "unresolved" };
+  if (rows.length !== 1) throw new Error("AUTHORING_RECEIPT_AMBIGUOUS");
+  const row = rows[0]!;
+  const plan = WorldDesignPlanSchema.parse(JSON.parse(row.payloadJson));
+  const { planHash, ...identity } = plan;
+  if (!Object.hasOwn(plan, "expectedPreviousHash") || plan.operationId !== input.operationId || !/^[a-f0-9]{32}$/.test(input.operationId)
+      || plan.designKey !== input.designKey || plan.version !== input.version
+      || planHash !== input.planHash || authoringHash(identity) !== planHash || plan.expectedPreviousHash !== row.previousHash) {
+    throw new Error("AUTHORING_RECEIPT_PLAN_INVALID");
+  }
+  const receipt = receiptIdentity({
+    kind: "world", action: "apply", targetId, actorUserId, planHash,
+    previousHash: row.previousHash, resultHash: row.resultHash,
+  });
+  if (receipt.receiptId !== row.id || receipt.receiptHash !== row.receiptHash) throw new Error("AUTHORING_RECEIPT_HASH_INVALID");
+  return { status: "found", plan, receipt };
 }
 
 export async function readActiveWorldDesign(database?: DatabaseLike): Promise<WorldDesignReadback> {

@@ -56,7 +56,7 @@
       },
       {
         "path": "server/openWorldProtocol.ts",
-        "sha256": "c8c08364e640134cbf35606f386f94546b776967667684331c4f98b3e7b98f5f"
+        "sha256": "22ac211d4db74219851e409b1e176c811fa88d54d60d76f42999afe169d503e9"
       },
       {
         "path": "server/wasdAurionWorldIntegrityProtocol.ts",
@@ -76,7 +76,11 @@
       },
       {
         "path": "shared/worldChunkProtocol.ts",
-        "sha256": "4c3f05eec30cd9ca994acb249132ba7af6102cda50ed3155f8cf445882b04da4"
+        "sha256": "92c7a2da46770e8c4a4746e05bbfc905d3cd669713e5b4718b8d65b474054616"
+      },
+      {
+        "path": "shared/worldChunkCoordinates.ts",
+        "sha256": "afda8d17a0b91581bd50d70199a148a6857b3150039e058a876405f529d03f35"
       },
       {
         "path": "shared/worldChunkStreamingProtocol.ts",
@@ -84,7 +88,7 @@
       },
       {
         "path": "scripts/balancing/aim265-v2.ts",
-        "sha256": "f7a213ebadda014df989fbe35321f60c572d9758f7629d61eaa3a7ec47648ca9"
+        "sha256": "f99d06a292560645b0cf866b51e6816352a3315cf577f90cb170f440b1a15668"
       },
       {
         "path": "scripts/balancing/replay-aim265.mjs",

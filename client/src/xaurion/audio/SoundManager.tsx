@@ -5,10 +5,10 @@ import { useAdminStore } from "../core/AdminService";
 import { Volume2, VolumeX, Sliders, Music, Activity, ShieldCheck, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export const SoundManager: React.FC = () => {
+export const SoundManager: React.FC<{ hideControls?: boolean }> = ({ hideControls = false }) => {
   const soundscapeRef = useRef<AurionSoundscape | null>(null);
   const { isAdmin } = useAdminStore();
-  const [isMuted, setIsMuted] = useState(() => {
+  const [isMuted, setIsMuted] = useState<boolean>(() => {
     const saved = localStorage.getItem("aurion:audio:isMuted");
     return saved ? JSON.parse(saved) : false;
   });
@@ -110,12 +110,22 @@ export const SoundManager: React.FC = () => {
     }
   }, [isMuted, masterVolume]);
 
-  const toggleMute = () => setIsMuted(!isMuted);
+  useEffect(() => {
+    const toggle = () => setIsMuted(value => !value);
+    window.addEventListener("aurion:audio-toggle", toggle);
+    return () => window.removeEventListener("aurion:audio-toggle", toggle);
+  }, []);
+
+  useEffect(() => {
+    if (hideControls) setShowAdminPanel(false);
+  }, [hideControls]);
+
+  const toggleMute = () => setIsMuted(value => !value);
 
   return (
     <>
       {/* Basic Controls (Visible for everyone or just Admin? User said manageable for admins, but usually volume is for everyone) */}
-      <div className="fixed bottom-4 right-4 z-[1000] flex gap-2">
+      {!hideControls && <div className="fixed bottom-4 right-4 z-[1000] flex gap-2">
         {isAdmin && (
           <button
             onClick={() => setShowAdminPanel(!showAdminPanel)}
@@ -136,11 +146,11 @@ export const SoundManager: React.FC = () => {
         >
           {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
         </button>
-      </div>
+      </div>}
 
       {/* Admin Audio Panel */}
       <AnimatePresence>
-        {isAdmin && showAdminPanel && (
+        {!hideControls && isAdmin && showAdminPanel && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

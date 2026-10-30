@@ -76,6 +76,9 @@ func verify() -> void:
     decorated["starterVillageVisuals"] = plan()
     require(scene._apply_chunk_surface(decorated, SESSION), "confirmed readback with server visual plan rejected")
     require(village.get_child_count() == 10, "server-confirmed ten canonical village anchors not projected")
+    var wire_readback: Variant = JSON.parse_string(JSON.stringify(decorated))
+    require(scene._apply_chunk_surface(wire_readback, SESSION), "JSON-decoded terrain readback rejected")
+    require(village.get_child_count() == 10, "JSON-decoded integer coordinates discarded confirmed village")
     var market: Node3D = village.get_node_or_null("starter_village_market_nw") as Node3D
     var house: Node3D = village.get_node_or_null("starter_village_hut_ne") as Node3D
     require(market != null and house != null, "actual CC0 market or house prefab absent")
@@ -88,6 +91,13 @@ func verify() -> void:
     var original: Node3D = village.get_child(0) as Node3D if village.get_child_count() > 0 else null
     require(scene._apply_chunk_surface(decorated, SESSION), "identical authenticated projection replay refused")
     require(village.get_child_count() == 10 and village.get_child(0) == original, "replay duplicated village scene")
+    var raised: Dictionary = JSON.parse_string(JSON.stringify(decorated))
+    for tile in raised.base.tiles:
+        tile.heightMm = 2500
+    require(scene._apply_chunk_surface(raised, SESSION), "updated confirmed height rejected")
+    var raised_market: Node3D = village.get_node_or_null("starter_village_market_nw") as Node3D
+    require(raised_market != null and is_equal_approx(raised_market.position.y, 2.5), "village ignored updated confirmed terrain height")
+    require(scene._apply_chunk_surface(decorated, SESSION), "original confirmed height failed to restore")
     require(not scene._apply_chunk_surface(decorated, "foreign-session"), "foreign session allowed to change active scene")
     require(village.get_child_count() == 10, "foreign session evicted valid current visual plan")
     var forged := decorated.duplicate(true)

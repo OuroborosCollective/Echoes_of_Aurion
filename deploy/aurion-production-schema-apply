@@ -51,7 +51,7 @@ emit_authorization_failure() {
 [[ -L "$current" ]] || { echo "schema apply release is not installed" >&2; exit 69; }
 release="$(readlink -f "$current")"
 [[ "$release" == "${base}/releases/${expected_sha}" ]] || { echo "installed schema apply release does not match expected revision" >&2; exit 70; }
-[[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" && -x "${release}/deploy/aurion-production-schema-apply-core" && -f "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" ]] || { echo "schema apply release is incomplete" >&2; exit 70; }
+[[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" && -x "${release}/deploy/aurion-production-schema-apply-core" && -f "${release}/deploy/aurion-schema-apply-lifecycle.mjs" && -f "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" ]] || { echo "schema apply release is incomplete" >&2; exit 70; }
 [[ "$(stat -c '%U:%G' "$release")" == "root:root" ]] || { echo "schema apply release must be root-owned" >&2; exit 70; }
 if find "$release" -xdev \( -type l -o ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
   echo "schema apply release contains unsafe ownership, symlink or writable content" >&2
@@ -72,10 +72,12 @@ node "$installed_verifier" "$release" "$expected_sha"
 # The only sudo-exposed entrypoint consumes a short-lived GitHub Actions OIDC
 # JWT from stdin. The token binds the exact revision and ledger plan hash via
 # its audience and is independently verified against GitHub's issuer JWKS.
-if ! node --input-type=module -e '
+if ! timeout --foreground --signal=TERM --kill-after=5s 20s node --input-type=module -e '
   import { createPublicKey, verify } from "node:crypto";
+  import { readSync } from "node:fs";
   const fail=()=>process.exit(2);
-  const read=async()=>{let value="";for await(const chunk of process.stdin){value+=chunk;if(value.length>16384) fail();}return value.trim();};
+  // Read exactly one line; leave the pipe open as the job-lifetime lease.
+  const read=()=>{let value="";const byte=Buffer.alloc(1);for(;;){if(readSync(0,byte,0,1,null)!==1) fail();if(byte[0]===10) return value;if(byte[0]>127||value.length>=16384) fail();value+=String.fromCharCode(byte[0]);}};
   const parse=part=>JSON.parse(Buffer.from(part,"base64url").toString("utf8"));
   const expectedSha=process.argv[1];
   const planSha256=process.argv[2];
@@ -110,4 +112,4 @@ if ! node --input-type=module -e '
   exit 77
 fi
 
-exec "${release}/deploy/aurion-production-schema-apply-core" "$expected_sha" "$plan_sha256"
+exec node "${release}/deploy/aurion-schema-apply-lifecycle.mjs" "$expected_sha" "$plan_sha256"

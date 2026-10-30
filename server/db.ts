@@ -1,5 +1,6 @@
 import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
-import { glbImportStore } from "./glbImportStore";
+import { glbImportStore, MAX_PHYSICAL_CATALOG_GLBS } from "./glbImportStore";
+import type { RowDataPacket } from "mysql2/promise";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { glbStorageRoot, persistGlbBytes } from "./glbFileStore";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
@@ -2577,20 +2578,19 @@ export async function listPendingGlbSubmissions() {
 export async function reviewPlayerGlbSubmission(values: { submissionId: string; reviewedByUserId: number; decision: "approved" | "rejected"; reviewNote?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  return db.transaction(async tx => {
-    const submission = (await tx.select().from(glbAssetSubmissions).where(and(eq(glbAssetSubmissions.id, values.submissionId), eq(glbAssetSubmissions.status, "pending"))).limit(1))[0];
-    if (!submission) throw new Error("Diese Einreichung ist nicht mehr offen.");
-    const reviewedAt = operationalDate();
-    if (values.decision === "rejected") {
-      await tx.update(glbAssetSubmissions).set({ status: "rejected", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt }).where(eq(glbAssetSubmissions.id, submission.id));
-      return { approved: false as const, assetId: null };
-    }
+  const candidate = (await db.select().from(glbAssetSubmissions).where(and(eq(glbAssetSubmissions.id, values.submissionId), eq(glbAssetSubmissions.status, "pending"))).limit(1))[0];
+  if (!candidate) throw new Error("Diese Einreichung ist nicht mehr offen.");
+  const reviewer = (await db.select({ role: users.role }).from(users).where(eq(users.id, values.reviewedByUserId)))[0];
+  if (reviewer?.role !== "admin") throw new Error("GLB_ADMIN_REQUIRED");
 
-    const assetId = newEndgameId("glb");
-    if (!/^[a-f0-9]{64}$/.test(submission.sha256))
+  // External IO and GLB validation may take many seconds. Perform them before
+  // the catalog fence, then lock and revalidate the submission at commit time.
+  let importPlan: Awaited<ReturnType<typeof buildGlbImportPlan>> | null = null;
+  let preparedBytes: Buffer | null = null;
+  if (values.decision === "approved") {
+    if (!/^[a-f0-9]{64}$/.test(candidate.sha256))
       throw new Error("GLB_APPROVAL_STORAGE_IDENTITY_INVALID");
-
-    const signedUrl = await storageGetSignedUrl(submission.storageKey);
+    const signedUrl = await storageGetSignedUrl(candidate.storageKey);
     const sourceResponse = await fetch(signedUrl, {
       redirect: "error",
       signal: AbortSignal.timeout(30_000),
@@ -2598,27 +2598,48 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
     if (!sourceResponse.ok)
       throw new Error("GLB_APPROVAL_SOURCE_READ_FAILED");
     const storedBytes = Buffer.from(await sourceResponse.arrayBuffer());
-    if (storedBytes.length !== submission.bytes)
+    if (storedBytes.length !== candidate.bytes)
       throw new Error("GLB_APPROVAL_BYTE_LENGTH_MISMATCH");
 
-    const importPlan = await buildGlbImportPlan(
+    importPlan = await buildGlbImportPlan(
       storedBytes.toString("base64"),
       "auto",
-      submission.displayName,
+      candidate.displayName,
     );
     if (
-      importPlan.sha256 !== submission.sha256 ||
-      importPlan.bytes !== submission.bytes ||
-      importPlan.assetType !== submission.assetType
+      importPlan.sha256 !== candidate.sha256 ||
+      importPlan.bytes !== candidate.bytes ||
+      importPlan.assetType !== candidate.assetType
     ) {
       throw new Error("GLB_APPROVAL_IMPORT_IDENTITY_MISMATCH");
     }
+    preparedBytes = storedBytes;
+  }
 
-    await persistGlbBytes(
-      storedBytes,
-      importPlan.sha256,
-      glbStorageRoot(),
+  // Approved submissions enter the same catalog as GlbImportStore. Use the
+  // same connection for the fence and transaction, and recheck role/identity.
+  return glbImportStore().withCatalogFence(connection => drizzle(connection).transaction(async tx => {
+    const lockedReviewer = (await tx.select({ role: users.role }).from(users).where(eq(users.id, values.reviewedByUserId)).for("update"))[0];
+    if (lockedReviewer?.role !== "admin") throw new Error("GLB_ADMIN_REQUIRED");
+    const submission = (await tx.select().from(glbAssetSubmissions).where(and(eq(glbAssetSubmissions.id, values.submissionId), eq(glbAssetSubmissions.status, "pending"))).for("update"))[0];
+    if (!submission) throw new Error("Diese Einreichung ist nicht mehr offen.");
+    for (const field of ["sha256", "bytes", "assetType", "storageKey", "displayName", "submittedByUserId", "visibility"] as const) {
+      if (submission[field] !== candidate[field]) throw new Error("GLB_SUBMISSION_CHANGED");
+    }
+    const reviewedAt = operationalDate();
+    if (values.decision === "rejected") {
+      await tx.update(glbAssetSubmissions).set({ status: "rejected", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt }).where(eq(glbAssetSubmissions.id, submission.id));
+      return { approved: false as const, assetId: null };
+    }
+    if (!importPlan || !preparedBytes) throw new Error("GLB_APPROVAL_PLAN_MISSING");
+    const [count] = await connection.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS count FROM glbAssets WHERE storageKey LIKE 'local-glb/%' AND status = 'approved'",
     );
+    if (Number(count[0]?.count) >= MAX_PHYSICAL_CATALOG_GLBS) throw new Error("GLB_CATALOG_LIMIT");
+    // Reconciliation uses this same fence: do not expose final bytes before
+    // the row is ready to commit, or they could be deleted as an orphan.
+    await persistGlbBytes(preparedBytes, importPlan.sha256, glbStorageRoot());
+    const assetId = newEndgameId("glb");
     const canonicalStorageKey = "local-glb/" + importPlan.sha256 + ".glb";
     const canonicalStorageUrl = "/api/assets/glb/" + importPlan.sha256 + ".glb";
     await tx.insert(glbAssets).values({
@@ -2643,7 +2664,7 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
     }
     await tx.update(glbAssetSubmissions).set({ status: "approved", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt, approvedAssetId: assetId }).where(eq(glbAssetSubmissions.id, submission.id));
     return { approved: true as const, assetId };
-  });
+  }));
 }
 
 export async function setGlbAssetReview(values: { assetId: string; status: AssetReviewStatus; reviewedByUserId: number }) {

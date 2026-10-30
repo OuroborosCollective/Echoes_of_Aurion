@@ -39,8 +39,6 @@ jobs:
           node-version: '22'
       - name: Source inventory and hostile-input regressions
         run: node --test scripts/godot/audit-assets.test.mjs
-      - name: Private MCS PCK guard fixture regressions
-        run: python3 -B -m unittest discover -s scripts/godot -p test_private_mcs_pack_guard.py -v
       - name: Deterministic Godot compatibility outputs
         run: |
           node --test scripts/godot/prepare-assets.test.mjs

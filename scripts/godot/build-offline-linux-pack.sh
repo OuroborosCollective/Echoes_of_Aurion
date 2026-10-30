@@ -10,7 +10,7 @@ test -f config/godot-toolchain.lock.json || { echo 'Godot toolchain lock missing
 SOURCE_SHA="$(git rev-parse HEAD)"
 if [ -n "${AURION_RELEASE_SHA:-}" ] && [ "$SOURCE_SHA" != "$AURION_RELEASE_SHA" ]; then echo 'requested Git SHA does not match checkout' >&2; exit 1; fi
 if [ -n "$(git ls-files -- godot-client/addons/modular_character_system/)" ]; then echo 'private licensed vendor source found in tracked files' >&2; exit 1; fi
-if ! git diff --quiet HEAD -- godot-client config/godot-toolchain.lock.json scripts/godot; then echo 'dirty source files - refuse unpinned package' >&2; exit 1; fi
+if ! git diff --quiet HEAD -- godot-client config/godot-toolchain.lock.json scripts/godot shared/worldChunkCoordinates.ts; then echo 'dirty source files - refuse unpinned package' >&2; exit 1; fi
 IFS='|' read -r ENGINE_FILE ENGINE_VERSION ARCHIVE_SHA < <(node -e 'const a=require("./config/godot-toolchain.lock.json").engine; console.log([a.file,a.version,a.sha256].join("|"))')
 [[ "$ENGINE_FILE" =~ ^Godot_v[0-9A-Za-z._-]+$ && "$ENGINE_VERSION" =~ ^[0-9A-Za-z._-]+$ && "$ARCHIVE_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo 'invalid Godot lock' >&2; exit 1; }
 EDITOR_ROOT="${AURION_GODOT_WORKSPACE:-$ROOT/.aurion-godot}"
@@ -26,7 +26,7 @@ if [ -e "$OUT" ]; then
 fi
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd -P)"
-git archive HEAD godot-client scripts/godot config/godot-toolchain.lock.json | zstd -T0 -6 -o "$OUT/aurion-godot-project.tar.zst" >/dev/null
+git archive HEAD godot-client scripts/godot config/godot-toolchain.lock.json shared/worldChunkCoordinates.ts | zstd -T0 -6 -o "$OUT/aurion-godot-project.tar.zst" >/dev/null
 zstd -T0 -6 -f -o "$OUT/$ENGINE_FILE.zst" "$EDITOR_PATH" >/dev/null
 cp config/godot-toolchain.lock.json "$OUT/godot-toolchain.lock.json"
 cp scripts/godot/THIRD_PARTY_GODOT_LICENSE.txt "$OUT/LICENSE-Godot-4.7.2.txt"

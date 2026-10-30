@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateBaseWorldChunk, isBaseChunkRoadTile, splitWorldChunkPositionMm, WORLD_CHUNK_SIZE_MM } from "../shared/worldChunkProtocol";
+import { generateBaseWorldChunk, isBaseChunkRoadTile, joinWorldChunkPositionMm, splitWorldChunkPositionMm, WORLD_CHUNK_SIZE_MM } from "../shared/worldChunkProtocol";
 
 describe("AIM-265 exact spatial calculations", () => {
   it("reconstructs positive and negative centered chunk positions at every boundary", () => {
@@ -8,6 +8,7 @@ describe("AIM-265 exact spatial calculations", () => {
         const value = chunk * 64_000 + local - 32_000;
         const actual = splitWorldChunkPositionMm({ x: value, z: value });
         expect(actual).toEqual({ coordinate: { x: chunk, z: chunk }, localPositionMm: { x: local, z: local } });
+        expect(joinWorldChunkPositionMm(actual)).toEqual({ x: value, z: value });
       }
     }
     expect(splitWorldChunkPositionMm({ x: -32_001, z: -32_000 })).toEqual({ coordinate: { x: -1, z: 0 }, localPositionMm: { x: 63_999, z: 0 } });

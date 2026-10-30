@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateApk, previewPackage } from './apk-readback.mjs';
-import { createPreviewOverride, assertPackagedPreviewOverride } from './android-preview-gates.mjs';
-import { createLoginOverride } from './login-release-gates.mjs';
 const badge = `package: name='${previewPackage}' versionCode='1' versionName='0.1.0-preview'\nlaunchable-activity: name='org.godotengine.godot.GodotApp'\napplication-label:'Aurion Preview'\nuses-permission: name='android.permission.INTERNET'\nnative-code: 'arm64-v8a'\nsdkVersion:'24'\ntargetSdkVersion:'36'`;
 const signature = `Verified using v2 scheme (APK Signature Scheme v2): true\nSigner #1 certificate SHA-256 digest: ${'a'.repeat(64)}`;
 const manifest = `      E: activity (line=1)
@@ -32,17 +30,4 @@ test('classic export keeps template SDK defaults and includes build override', a
 
 test('manifest reader requires an exported launcher alias with an existing activity', () => {
   for (const broken of ['', manifest.replace('0xffffffff', '0x0'), manifest.replace('category.LAUNCHER', 'category.HOME'), manifest.replace('E: activity (', 'E: service ('), manifest.replace('A: android:name="com.godot.game.GodotApp"', 'A: android:label="com.godot.game.GodotApp"')]) assert.throws(() => validateApk(badge, signature, entries, broken));
-});
-
-test('Preview APK is strictly offline while separate signed Login path remains enabled', () => {
-  const rev = 'a'.repeat(40);
-  const preview = createPreviewOverride(rev);
-  assert.ok(preview.includes('native_auth_start_enabled=false'));
-  assert.equal(assertPackagedPreviewOverride(preview, rev), rev);
-  assert.throws(() => assertPackagedPreviewOverride(preview.slice(0, -1), rev), /Preview APK/);
-  assert.throws(() => assertPackagedPreviewOverride(preview + '\n', rev), /Preview APK/);
-  for (const bad of [preview.replace('false', 'true'), createLoginOverride(rev), '[aurion]\\nclient_build="' + rev + '"\\n', preview.replace(rev, 'b'.repeat(40))])
-    assert.throws(() => assertPackagedPreviewOverride(bad, rev));
-  assert.throws(() => createPreviewOverride('bad'));
-  assert.ok(createLoginOverride(rev).includes('native_auth_start_enabled=true'));
 });

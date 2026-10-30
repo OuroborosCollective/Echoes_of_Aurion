@@ -54,7 +54,7 @@ const MAX_LOGICAL_CATALOG_MODELS = 500;
 // Keep the existing admission ceiling until a separate quota migration is
 // explicitly designed. LOD families reduce visible catalog rows without
 // silently expanding how many approved physical GLBs production accepts.
-const MAX_PHYSICAL_CATALOG_GLBS = MAX_LOGICAL_CATALOG_MODELS;
+export const MAX_PHYSICAL_CATALOG_GLBS = MAX_LOGICAL_CATALOG_MODELS;
 
 function storedNormalization(row: RowDataPacket): GlbNormalizationManifest {
   const serialized = row.normalizationManifest;
@@ -229,12 +229,13 @@ export class GlbImportStore {
     await this.pool.end();
   }
 
-  private async locked<T>(
-    actorUserId: number,
-    operation: (connection: PoolConnection) => Promise<T>
-  ): Promise<T> {
+  /** Serialize world writes with every supported catalog mutation. The caller
+   * must use this same connection for its transaction, so losing the connection
+   * releases both the transaction and its advisory lock together. */
+  async withCatalogFence<T>(operation: (connection: PoolConnection) => Promise<T>): Promise<T> {
     const connection = await this.pool.getConnection();
     let acquired = false;
+    let releaseConnection = true;
     try {
       const [lock] = await connection.query<RowDataPacket[]>(
         "SELECT GET_LOCK(?, 8) AS acquired",
@@ -242,25 +243,41 @@ export class GlbImportStore {
       );
       if (lock[0]?.acquired !== 1) throw new Error("GLB_IMPORT_BUSY");
       acquired = true;
-      await connection.beginTransaction();
-      const [users] = await connection.query<RowDataPacket[]>(
-        "SELECT id, role FROM users WHERE id = ? FOR UPDATE",
-        [actorUserId]
-      );
-      if (users[0]?.role !== "admin") throw new Error("GLB_ADMIN_REQUIRED");
-      const result = await operation(connection);
-      await connection.commit();
-      return result;
-    } catch (error) {
-      await connection.rollback();
-      throw error;
+      return await operation(connection);
     } finally {
-      if (acquired)
-        await connection
-          .query("SELECT RELEASE_LOCK(?)", [this.lockName])
-          .catch(() => undefined);
-      connection.release();
+      if (acquired) {
+        try {
+          await connection.query("SELECT RELEASE_LOCK(?)", [this.lockName]);
+        } catch {
+          // Never return a connection with a potentially retained lock to the pool.
+          releaseConnection = false;
+          connection.destroy();
+        }
+      }
+      if (releaseConnection) connection.release();
     }
+  }
+
+  private async locked<T>(
+    actorUserId: number,
+    operation: (connection: PoolConnection) => Promise<T>
+  ): Promise<T> {
+    return this.withCatalogFence(async connection => {
+      try {
+        await connection.beginTransaction();
+        const [users] = await connection.query<RowDataPacket[]>(
+          "SELECT id, role FROM users WHERE id = ? FOR UPDATE",
+          [actorUserId]
+        );
+        if (users[0]?.role !== "admin") throw new Error("GLB_ADMIN_REQUIRED");
+        const result = await operation(connection);
+        await connection.commit();
+        return result;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      }
+    });
   }
 
   async ingest(
@@ -661,8 +678,10 @@ export class GlbImportStore {
     });
   }
 
-  async catalog() {
-    const [rows] = await this.pool.query<
+  async catalog(connection?: PoolConnection) {
+    // An operation holding the advisory lock must reuse its connection. Other
+    // callers may occupy the remaining pool slots while waiting for that lock.
+    const [rows] = await (connection ?? this.pool).query<
       RowDataPacket[]
     >(`SELECT g.id AS assetId, g.sha256, g.bytes, g.displayName, g.assetType, g.storageUrl, g.normalizationRevision, g.normalizationSha256, g.normalizationManifest, a.targetKey
       FROM glbAssets g
