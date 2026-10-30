@@ -106,7 +106,7 @@ node --input-type=module -e '
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "docker-compose.godot-feed.yml", "deploy/load-aurion-runtime-image.py", "deploy/verify-aurion-godot-feed.py", "deploy/install-aurion-godot-bridge.sh", "deploy/aurion-godot-bridge.service", "deploy/aurion-godot-bridge.environment.template", "godot-bridge/aurion-godot-bridge.mjs", "godot-bridge/build-manifest.json", "runtime-image.tar", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
+  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "docker-compose.godot-feed.yml", "deploy/load-aurion-runtime-image.py", "deploy/verify-aurion-godot-feed.py", "deploy/readback-aurion-godot-bridge.mjs", "deploy/install-aurion-godot-bridge.sh", "deploy/aurion-godot-bridge.service", "deploy/aurion-godot-bridge.environment.template", "godot-bridge/aurion-godot-bridge.mjs", "godot-bridge/build-manifest.json", "runtime-image.tar", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -518,14 +518,6 @@ systemctl is-active --quiet aurion-revision-alignment-controller.timer
 ln -sTfn "$release" "${runtime_base}/current.next"
 mv -Tf "${runtime_base}/current.next" "${runtime_base}/current"
 test "$(readlink -f "${runtime_base}/current")" = "$release"
-phase=godot-feed-readback
-install -d -o root -g root -m 0750 "$receipt_dir"
-umask 077
-python3 "${release}/deploy/verify-aurion-godot-feed.py" readback "$container_id" "$godot_feed_enabled" "$expected_sha" > "${receipt_dir}/${release_id}.godot-feed.json"
-if [[ "$godot_feed_enabled" == 1 ]]; then
-  phase=godot-bridge-install
-  bash "${release}/deploy/install-aurion-godot-bridge.sh" "$release" "$expected_sha"
-fi
 
 install -d -o root -g root -m 0750 "$receipt_dir"
 phase=promotion-receipt
@@ -563,6 +555,28 @@ mv -Tf "$public_readback_tmp" "$public_readback"
 # immutable revision.
 if systemctl cat "$legacy_service" >/dev/null 2>&1; then
   systemctl disable --now "$legacy_service"
+fi
+
+# The core runtime effect already has its immutable receipt and public readback.
+# Optional-projection failure must retain that truth, and still fail this job.
+phase=godot-bridge-installation
+godot_readback="${public_readback_dir}/godot-bridge.json"
+godot_readback_tmp="${public_readback_dir}/.${release_id}.godot-bridge.tmp"
+printf '{"schema":"aurion.godot.bridge-installation.v1","sourceRevision":"%s","status":"INSTALLING","productionWorldEvidence":false}\n' "$expected_sha" > "$godot_readback_tmp"
+chmod 0644 "$godot_readback_tmp"
+mv -Tf "$godot_readback_tmp" "$godot_readback"
+if python3 "${release}/deploy/verify-aurion-godot-feed.py" readback "$container_id" "$godot_feed_enabled" "$expected_sha" > "${receipt_dir}/${release_id}.godot-feed.json" &&
+   bash "${release}/deploy/install-aurion-godot-bridge.sh" "$release" "$expected_sha" "$godot_feed_enabled" &&
+   node "${release}/deploy/readback-aurion-godot-bridge.mjs" "$release" "$expected_sha" "$container_id" "$godot_feed_enabled" > "$godot_readback_tmp"; then
+  chown root:root "$godot_readback_tmp"
+  chmod 0644 "$godot_readback_tmp"
+  mv -Tf "$godot_readback_tmp" "$godot_readback"
+  install -o root -g root -m 0600 "$godot_readback" "${receipt_dir}/${release_id}.godot-bridge.json"
+else
+  printf '{"schema":"aurion.godot.bridge-installation.v1","sourceRevision":"%s","status":"FAILED","productionWorldEvidence":false}\n' "$expected_sha" > "$godot_readback_tmp"
+  chmod 0644 "$godot_readback_tmp"
+  mv -Tf "$godot_readback_tmp" "$godot_readback"
+  exit 70
 fi
 
 printf '{"service":"aurion-traefik-runtime","revision":"%s","image":"%s","container":"%s","mode":"traefik-labelled"}\n' \

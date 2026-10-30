@@ -22,6 +22,20 @@ class HostBuildBoundary(unittest.TestCase):
         self.assertIn('load-aurion-runtime-image.py', source)
         self.assertIn('--no-build', source)
 
+    def test_core_receipt_survives_a_later_bridge_failure(self):
+        source = (ROOT / 'deploy/promote-aurion-zone-runtime.sh').read_text()
+        receipt = source.index('mv -Tf "$public_readback_tmp" "$public_readback"')
+        bridge = source.index('phase=godot-bridge-installation')
+        self.assertLess(receipt, bridge)
+
+    def test_opt_out_disables_only_the_marked_canonical_unit(self):
+        source = (ROOT / 'deploy/install-aurion-godot-bridge.sh').read_text()
+        self.assertLess(source.index("grep -Fqx '# aurion-godot-bridge-release: 1'"), source.index('if [[ "$3" == 0 ]]'))
+        disabled = source.split('if [[ "$3" == 0 ]]', 1)[1].split('python3 ', 1)[0]
+        self.assertIn('systemctl disable --now aurion-godot-bridge.service', disabled)
+        self.assertIn('systemctl is-active --quiet', disabled)
+        self.assertIn('systemctl is-enabled --quiet', disabled)
+
 
 def module(name, path):
     spec = importlib.util.spec_from_file_location(name, ROOT / path)
@@ -137,6 +151,10 @@ class ProtectedFeedFiles(unittest.TestCase):
 
     def test_invalid_token_is_rejected(self):
         self.feed.write_text('too short')
+        with self.assertRaises(ValueError): self.contract.preflight()
+
+    def test_reused_effective_token_with_different_newline_is_rejected(self):
+        self.editor.write_bytes(self.feed.read_bytes().rstrip(b'\n'))
         with self.assertRaises(ValueError): self.contract.preflight()
 
 

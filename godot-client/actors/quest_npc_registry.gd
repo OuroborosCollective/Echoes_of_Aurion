@@ -4,6 +4,7 @@ const STANDARD_SHA := "2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d34f3d94a0e
 const STANDARD_ASSET := "glb_2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d3"
 const VERSION := "aurion.quest-npc-visuals.v1"
 const PREPARED_VERSION := "aurion.godot-prepared-assets.v1"
+const ModularVisual = preload("res://actors/modular_npc_visual.gd")
 var diagnostic := "npc_not_loaded"
 var _actors: Dictionary = {}
 var _identities: Dictionary = {}
@@ -91,8 +92,17 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 			return _reject(root, "npc_prepared_model_missing")
 		var position := Vector3(float(coords.x) / 1000.0, 0.0, float(coords.z) / 1000.0)
 		planned[id] = {"resource": local, "assetId": catalog_asset_id, "sha": sha,
-			"npcId": raw.npcId, "position": position,
-			"identity": str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z)}
+			"npcId": raw.npcId, "position": position, "displayName": raw.displayName,
+			"allowModular": source == "audited-standard",
+			"identityBase": str(source) + ":" + str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z) + ":" + str(raw.displayName)}
+	# Validate every server row before mounting optional content. One snapshot
+	# suffices for identity; create() rechecks at each actual instantiation.
+	var has_modular_candidate := false
+	for item in planned.values():
+		has_modular_candidate = has_modular_candidate or item.allowModular
+	var modular_available: bool = ModularVisual.available() if has_modular_candidate else false
+	for item in planned.values():
+		item.identity = item.identityBase + ":" + str(item.allowModular and modular_available)
 	var unchanged := _actors.size() == planned.size()
 	if unchanged:
 		for id in planned.keys():
@@ -108,7 +118,27 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		var packed: PackedScene = load(item.resource) as PackedScene
 		if packed == null:
 			return _reject(root, "npc_packed_scene_missing")
-		var model_instance: Variant = packed.instantiate()
+		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if item.allowModular and modular_available else null
+		# Optional vendor presentation must never erase canonical quest NPCs.
+		# Try MCS in an isolated temporary host before installing the final actor.
+		if modular != null:
+			var probe := Node3D.new()
+			probe.add_child(modular)
+			root.add_child(probe)
+			var valid_rig: bool = modular.has_method("is_character_valid") and bool(modular.call("is_character_valid"))
+			var players := modular.find_children("*", "AnimationPlayer", true, false)
+			var meshes := modular.find_children("*", "MeshInstance3D", true, false)
+			valid_rig = valid_rig and players.size() == 1 and not meshes.is_empty()
+			if valid_rig:
+				var ap: AnimationPlayer = players[0]
+				valid_rig = ap.has_animation("Idle") and bool(modular.call("play_animation", &"Idle", 0.0))
+			root.remove_child(probe)
+			probe.remove_child(modular)
+			probe.free()
+			if not valid_rig:
+				modular.free()
+				modular = null
+		var model_instance: Variant = modular if modular != null else packed.instantiate()
 		if not model_instance is Node3D:
 			if is_instance_valid(model_instance):
 				model_instance.free()
@@ -118,23 +148,48 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		actor.position = item.position
 		actor.set_meta("aurion_entity_id", id)
 		actor.set_meta("aurion_model_sha256", item.sha)
+		actor.set_meta("aurion_visual_source", "private-mcs-1.0" if modular != null else "catalog-glb")
+		actor.set_meta("aurion_catalog_asset_id", item.assetId)
 		root.add_child(actor)
 		_actors[id] = actor
 		actor.add_child(model_instance)
 		var clips := actor.find_children("*", "AnimationPlayer", true, false)
 		var meshes := actor.find_children("*", "MeshInstance3D", true, false)
+		# The rig can change when re-entering the final scene tree. Repeat the
+		# checks here and fall back per NPC rather than clearing every actor.
+		var modular_valid := true
+		if modular != null:
+			modular_valid = modular.has_method("is_character_valid") and bool(modular.call("is_character_valid"))
+			modular_valid = modular_valid and clips.size() == 1 and not meshes.is_empty()
+			if modular_valid:
+				var modular_player: AnimationPlayer = clips[0]
+				modular_valid = modular_player.has_animation("Idle") and modular.has_method("play_animation") and bool(modular.call("play_animation", &"Idle", 0.0))
+			if not modular_valid:
+				actor.remove_child(modular)
+				modular.free()
+				modular = null
+				model_instance = packed.instantiate()
+				if not model_instance is Node3D:
+					if is_instance_valid(model_instance):
+						model_instance.free()
+					return _reject(root, "npc_model_not_3d")
+				actor.add_child(model_instance)
+				actor.set_meta("aurion_visual_source", "catalog-glb")
+				clips = actor.find_children("*", "AnimationPlayer", true, false)
+				meshes = actor.find_children("*", "MeshInstance3D", true, false)
 		if clips.size() != 1 or meshes.is_empty():
 			return _reject(root, "npc_model_rig_invalid")
 		var player: AnimationPlayer = clips[0]
 		if not player.has_animation("Idle"):
 			return _reject(root, "npc_idle_missing")
-		for name in player.get_animation_library_list():
-			var library := player.get_animation_library(name).duplicate(true) as AnimationLibrary
-			player.remove_animation_library(name)
-			player.add_animation_library(name, library)
-			if library.has_animation("Idle"):
-				library.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
-		player.play("Idle")
+		if modular == null:
+			for name in player.get_animation_library_list():
+				var library := player.get_animation_library(name).duplicate(true) as AnimationLibrary
+				player.remove_animation_library(name)
+				player.add_animation_library(name, library)
+				if library.has_animation("Idle"):
+					library.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
+			player.play("Idle")
 		actor.visible = true
 		_identities[id] = item.identity
 	diagnostic = ""

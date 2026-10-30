@@ -37,7 +37,7 @@ def preflight():
         if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
             raise ValueError('GODOT_EDITOR_FILE_CHANGED')
         editor_value = stream.read(258)
-    if not re.fullmatch(rb'[A-Za-z0-9_-]{32,256}\n?', editor_value) or editor_value == value:
+    if not re.fullmatch(rb'[A-Za-z0-9_-]{32,256}\n?', editor_value) or editor_value.strip() == value.strip():
         raise ValueError('GODOT_EDITOR_TOKEN_INVALID')
 
 

@@ -1,3 +1,4 @@
+# aurion-godot-bridge-release: 1
 [Unit]
 Description=Aurion committed-world projection for Godot
 After=network.target docker.service

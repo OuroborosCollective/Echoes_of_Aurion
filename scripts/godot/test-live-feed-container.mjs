@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import WebSocket from "ws";
+import { hello } from "../../deploy/readback-aurion-godot-bridge.mjs";
 
 // Isolated hosted Docker proof. It never creates a player, zone, tick or receipt.
 // Authentication and the disabled write boundary are real network exchanges.
@@ -18,6 +19,7 @@ execFileSync("sudo", ["chown", "0:1000", tokenFile]);
 execFileSync("sudo", ["chmod", "0440", tokenFile]);
 const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 let container;
+let bridge;
 try {
   container = docker(["run", "--detach", "--network", "bridge", "--publish", "127.0.0.1::39220", "--mount", `type=bind,source=${tokenFile},target=/run/secrets/aurion-godot-feed.token,readonly`, "-e", "AURION_GODOT_FEED_TOKEN_FILE=/run/secrets/aurion-godot-feed.token", "-e", "AURION_GODOT_FEED_BIND=0.0.0.0", "-e", "AURION_GODOT_FEED_PORT=39220", image]);
   assert.match(container, /^[a-f0-9]{64}$/);
@@ -60,11 +62,37 @@ try {
   }
   assert.deepEqual(accepted, { accepted: true, writeRejected: true });
   assert.deepEqual(await exchange("incorrect-disposable-test-credential"), { accepted: false });
+  // Exercise the same builtin-WebSocket readback used after a real promotion,
+  // through the actual sealed bridge bundle and its protected credential files.
+  await hello(endpoint, "feed.auth", token);
+  const editorToken = randomBytes(32).toString("hex");
+  const hostFeed = path.join(directory, "bridge-feed.token");
+  const hostEditor = path.join(directory, "bridge-editor.token");
+  fs.writeFileSync(hostFeed, token + "\n", { mode: 0o600 });
+  fs.writeFileSync(hostEditor, editorToken + "\n", { mode: 0o600 });
+  bridge = spawn(process.execPath, [path.resolve("dist-traefik-runtime/godot-bridge/aurion-godot-bridge.mjs")], {
+    env: { ...process.env, UPSTREAM_PROTOCOL: "feed", UPSTREAM_URL: endpoint, UPSTREAM_TOKEN_FILE: hostFeed, BRIDGE_HOST: "127.0.0.1", BRIDGE_PORT: "8765", BRIDGE_TOKEN_FILE: hostEditor, BRIDGE_EDIT: "0", BRIDGE_AUDIT_LOG: path.join(directory, "audit-unused.jsonl") },
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+  let bridgeAuthenticated = false;
+  for (let attempt = 0; attempt < 15; attempt++) {
+    if (bridge.exitCode !== null) throw new Error("SEALED_BRIDGE_PROCESS_EXITED");
+    try { await hello("ws://127.0.0.1:8765/godot", "auth", editorToken); bridgeAuthenticated = true; break; }
+    catch { await new Promise(resolve => setTimeout(resolve, 300)); }
+  }
+  assert.equal(bridgeAuthenticated, true);
   assert.equal(installed.Config.Labels["org.opencontainers.image.revision"], revision);
   assert.equal(installed.Config.User, "node");
   assert.equal(installed.Image, JSON.parse(docker(["image", "inspect", image]))[0].Id);
-  console.log(JSON.stringify({ status: "AURION_GODOT_HOSTED_CONTAINER_FEED_PASS", sourceRevision: revision, imageId: installed.Image, loopbackOnly: true, protectedFileReadableByNode: true, unauthorizedRejected: true, genericWriteRejected: true, productionEvidence: false }));
+  console.log(JSON.stringify({ status: "AURION_GODOT_HOSTED_CONTAINER_FEED_PASS", sourceRevision: revision, imageId: installed.Image, loopbackOnly: true, protectedFileReadableByNode: true, unauthorizedRejected: true, genericWriteRejected: true, sealedBridgeAuthenticated: true, productionEvidence: false }));
 } finally {
+  if (bridge && bridge.exitCode === null && bridge.signalCode === null) {
+    await new Promise(resolve => {
+      const timer = setTimeout(() => { bridge.kill("SIGKILL"); resolve(); }, 3000);
+      bridge.once("exit", () => { clearTimeout(timer); resolve(); });
+      bridge.kill("SIGTERM");
+    });
+  }
   if (container) docker(["rm", "--force", container]);
   // The directory is owned by the runner; no secret bytes are printed.
   fs.rmSync(directory, { recursive: true, force: true });

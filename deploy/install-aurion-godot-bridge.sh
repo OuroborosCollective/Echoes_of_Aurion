@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
 # Invoked only inside the canonical, attested runtime promotion after its gates.
 set -euo pipefail
-[[ $# -eq 2 && "$2" =~ ^[a-f0-9]{40}$ && "$EUID" -eq 0 ]]
+[[ $# -eq 3 && "$2" =~ ^[a-f0-9]{40}$ && "$EUID" -eq 0 && "$3" =~ ^[01]$ ]]
 release="$1"
 revision="$2"
 [[ "$(readlink -f /opt/aurion-traefik-runtime/current)" == "$release" ]]
+unit=/etc/systemd/system/aurion-godot-bridge.service
+if [[ -e "$unit" || -L "$unit" ]]; then
+  [[ -f "$unit" && ! -L "$unit" && "$(stat -c '%U:%G:%a' "$unit")" == root:root:644 ]]
+  grep -Fqx '# aurion-godot-bridge-release: 1' "$unit"
+fi
+if [[ "$3" == 0 ]]; then
+  if [[ -e "$unit" ]]; then
+    systemctl disable --now aurion-godot-bridge.service >/dev/null
+    if systemctl is-active --quiet aurion-godot-bridge.service; then exit 70; fi
+    if systemctl is-enabled --quiet aurion-godot-bridge.service; then exit 70; fi
+  fi
+  exit 0
+fi
 python3 "${release}/deploy/verify-aurion-godot-feed.py" preflight
 node --input-type=module -e '
   import fs from "node:fs";

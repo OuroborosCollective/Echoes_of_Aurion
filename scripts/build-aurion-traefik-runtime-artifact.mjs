@@ -27,6 +27,7 @@ const filesToCopy = [
   "docker-compose.godot-feed.yml",
   "deploy/load-aurion-runtime-image.py",
   "deploy/verify-aurion-godot-feed.py",
+  "deploy/readback-aurion-godot-bridge.mjs",
   "deploy/install-aurion-godot-bridge.sh",
   "deploy/aurion-godot-bridge.service",
   "deploy/aurion-godot-bridge.environment.template",
