@@ -156,7 +156,14 @@ export function resolveAffixes(quality: LootQuality, roll: number): LootAffix[] 
 
 export function resolveSetKey(quality: LootQuality, baseItemKey: string): string | undefined {
   if (quality !== "set") return undefined;
-  return Object.entries(setPieces).find(([, pieces]) => pieces.includes(baseItemKey))?.[0];
+  for (const setKey in setPieces) {
+    if (Object.prototype.hasOwnProperty.call(setPieces, setKey)) {
+      if (setPieces[setKey]!.includes(baseItemKey)) {
+        return setKey;
+      }
+    }
+  }
+  return undefined;
 }
 
 export function resolveLoot(classKey: string, qualityRoll: number, affixRoll: number, magicFind = 0): LootResolution {
