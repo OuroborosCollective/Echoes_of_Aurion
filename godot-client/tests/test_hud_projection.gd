@@ -103,7 +103,18 @@ func verify() -> void:
 	touch.pressed = true
 	scene._input(touch)
 	require(scene._camera_router.active_finger() == -1, "HUD attack touch captured by camera")
-	hud.menu_button.pressed.emit()
+	var menu_touch := InputEventScreenTouch.new()
+	menu_touch.index = 36
+	menu_touch.position = hud.menu_button.get_global_rect().get_center()
+	menu_touch.pressed = true
+	Input.parse_input_event(menu_touch)
+	await process_frame
+	var menu_release := InputEventScreenTouch.new()
+	menu_release.index = 36
+	menu_release.position = menu_touch.position
+	menu_release.pressed = false
+	Input.parse_input_event(menu_release)
+	await process_frame
 	require(hud.menu_is_open() and not scene.mobile_joystick.visible and not scene._world_input_permitted(), "menu failed to suspend gameplay input")
 	scene._handle_mobile_back()
 	require(not hud.menu_is_open() and scene.mobile_joystick.visible, "Android back did not close menu first")

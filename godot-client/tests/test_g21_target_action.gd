@@ -175,7 +175,19 @@ func verify() -> void:
 	scene._show_3d()
 	scene._refresh_target_hud()
 	require(not scene.mobile_hud.attack_button.disabled, "mobile HUD did not enable confirmed target")
-	scene.mobile_hud.attack_button.pressed.emit()
+	await process_frame
+	var mobile_press := InputEventScreenTouch.new()
+	mobile_press.index = 31
+	mobile_press.position = scene.mobile_hud.attack_button.get_global_rect().get_center()
+	mobile_press.pressed = true
+	Input.parse_input_event(mobile_press)
+	await process_frame
+	var mobile_release := InputEventScreenTouch.new()
+	mobile_release.index = 31
+	mobile_release.position = mobile_press.position
+	mobile_release.pressed = false
+	Input.parse_input_event(mobile_release)
+	await process_frame
 	packet = ""
 	for _attempt in range(200):
 		client.poll()
