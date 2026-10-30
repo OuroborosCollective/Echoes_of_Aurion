@@ -148,14 +148,25 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     for (const viewport of [{ width: 412, height: 732 }, { width: 800, height: 1280 }, { width: 932, height: 430 }]) {
       await page.setViewportSize(viewport);
       const joystick = page.getByTestId('ax1-movement-control');
+      const adminButton = page.getByRole('button', { name: 'GLB-Admin öffnen', exact: true });
+      const actionGroup = page.getByRole('button', { name: 'Angriff [R]', exact: true }).locator('..');
+      type Box = { x: number; y: number; width: number; height: number };
+      const layout: { movement: Box | null; admin: Box | null; actions: Box | null } = { movement: null, admin: null, actions: null };
       await expect(joystick).toBeVisible();
+      // Responsive controls mount separately. Retain one fully measured sample
+      // so a second read cannot race the viewport transition after the poll.
       await expect.poll(async () => {
-        const box = await joystick.boundingBox();
-        return !!box && box.x >= 0 && box.x <= 32 && box.y > viewport.height * 0.6 && box.y + box.height <= viewport.height - 8;
+        [layout.movement, layout.admin, layout.actions] = await Promise.all([
+          joystick.boundingBox(), adminButton.boundingBox(), actionGroup.boundingBox(),
+        ]);
+        const { movement: box, admin, actions } = layout;
+        return !!box && !!admin && !!actions
+          && box.x >= 0 && box.x <= 32 && box.y > viewport.height * 0.6 && box.y + box.height <= viewport.height - 8
+          && admin.y + admin.height < box.y && actions.x > box.x + box.width;
       }).toBe(true);
-      const movement = (await joystick.boundingBox())!;
-      const admin = (await page.getByRole('button', { name: 'GLB-Admin öffnen', exact: true }).boundingBox())!;
-      const actions = (await page.getByRole('button', { name: 'Angriff [R]', exact: true }).locator('..').boundingBox())!;
+      const movement = layout.movement!;
+      const admin = layout.admin!;
+      const actions = layout.actions!;
       expect(admin.y + admin.height).toBeLessThan(movement.y);
       expect(actions.x).toBeGreaterThan(movement.x + movement.width);
       movementLayouts.push({ viewport, movement, admin, actions });

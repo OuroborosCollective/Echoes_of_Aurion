@@ -19,6 +19,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const migrationLedger = read(".github/workflows/aurion-wasd-migration-ledger.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
   const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
+  const hostedImageBuilder = read("scripts/build-aurion-runtime-image.mjs");
 
   it("rejects a release dispatch that resolves to a different main revision", () => {
     const guard = workflow.match(/- name: Guard repository scope\n[\s\S]*?        run: \|\n([\s\S]*?)\n      - name:/)?.[1];
@@ -91,8 +92,12 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(migrationLedger).not.toContain('cron:');
     expect(migrationLedger).toContain("eb20a85b305612eaf01c560ad0c89af96ed03295");
     expect(workflow).toContain('"runtime-node_modules.tgz"');
-    expect(workflow).toContain("docker build --pull=false");
-    expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
+    expect(runtimeBuilder).toContain("await buildAurionRuntimeImage(output, revision)");
+    expect(hostedImageBuilder).toContain('process.env.RUNNER_ENVIRONMENT !== "github-hosted"');
+    expect(hostedImageBuilder).toContain('["build", "--pull=false", "--platform=linux/amd64"');
+    expect(workflow).toContain('python3 dist-traefik-runtime/deploy/load-aurion-runtime-image.py dist-traefik-runtime "$GITHUB_SHA"');
+    expect(hostedImageBuilder).toContain('"--build-arg", `AURION_RELEASE_SHA=${revision}`');
+    expect(workflow).toContain('AURION_RELEASE_SHA: ${{ github.sha }}');
     expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
     expect(workflow).toContain('runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"');
     expect(workflow).toContain("aurion-runtime-container-verify failed state=%s health=%s category=%s");
@@ -256,7 +261,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('compose_digest_env=(');
     expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" config --quiet');
     expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion');
-    expect(promoter).toContain("docker build --pull=false");
+    expect(promoter).toContain('load-aurion-runtime-image.py');
+    expect(promoter).not.toMatch(/docker\s+(?:build|buildx\s+build)\b/);
+    expect(promoter).toContain('"$runtime_image_id" == "$expected_runtime_image_id"');
     expect(promoter).toContain("traefik.enable");
     expect(promoter).toContain("traefik.docker.network");
     expect(promoter).toContain("traefik.http.services.aurion.loadbalancer.server.port");
@@ -298,3 +305,4 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('systemctl disable --now "$legacy_service"');
   });
 });
+

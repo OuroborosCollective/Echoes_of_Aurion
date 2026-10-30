@@ -6,3 +6,7 @@ AURION_DOMAIN=arelogic.space
 TRAEFIK_NETWORK=areloria_arelorian-network
 AURION_DATABASE_NETWORK=echoes-of-aurion-internal
 TRAEFIK_CERTRESOLVER=letsencrypt
+# Enable only after provisioning the protected feed/editor files. The release
+# retains OIDC, schema, image and receipt gates. No gameplay writer is enabled.
+AURION_GODOT_FEED_ENABLED=0
+

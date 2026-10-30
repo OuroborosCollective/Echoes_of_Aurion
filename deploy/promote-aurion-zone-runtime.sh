@@ -100,12 +100,13 @@ phase=runtime-release-integrity
 )
 node --input-type=module -e '
   import { createHash } from "node:crypto";
+  import { createReadStream } from "node:fs";
   import { readFile } from "node:fs/promises";
   import path from "node:path";
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
+  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "docker-compose.godot-feed.yml", "deploy/load-aurion-runtime-image.py", "deploy/verify-aurion-godot-feed.py", "deploy/readback-aurion-godot-bridge.mjs", "deploy/install-aurion-godot-bridge.sh", "deploy/aurion-godot-bridge.service", "deploy/aurion-godot-bridge.environment.template", "godot-bridge/aurion-godot-bridge.mjs", "godot-bridge/build-manifest.json", "runtime-image.tar", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -113,7 +114,9 @@ node --input-type=module -e '
     if (!/^[A-Za-z0-9@._/:-]+$/.test(relative) || relative.split("/").includes("..")) process.exit(4);
     const absolute = path.resolve(release, relative);
     if (!absolute.startsWith(`${path.resolve(release)}${path.sep}`)) process.exit(5);
-    const actualHash = createHash("sha256").update(await readFile(absolute)).digest("hex");
+    const hash = createHash("sha256");
+    for await (const chunk of createReadStream(absolute)) hash.update(chunk);
+    const actualHash = hash.digest("hex");
     if (actualHash !== expectedHash) process.exit(6);
   }
   const runtime = JSON.parse(await readFile(path.join(release, "dist/.aurion-runtime-build.json"), "utf8"));
@@ -269,11 +272,13 @@ base_image="$pinned_image"
 [[ "$base_image" == "node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d" ]]
 
 runtime_image="echoes-of-aurion:${expected_sha}"
-phase=runtime-image-build
-docker build --pull=false --build-arg "AURION_RELEASE_SHA=${expected_sha}" --tag "$runtime_image" "$release"
+phase=runtime-image-import
+# The hosted image, config digest, source label, platform and archive hash are
+# checked before Docker can import it. No package or container build on the VPS.
+expected_runtime_image_id="$(python3 "${release}/deploy/load-aurion-runtime-image.py" "$release" "$expected_sha")"
 [[ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$runtime_image")" == "$expected_sha" ]]
 runtime_image_id="$(docker image inspect --format '{{.Id}}' "$runtime_image")"
-[[ "$runtime_image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
+[[ "$runtime_image_id" =~ ^sha256:[a-f0-9]{64}$ && "$runtime_image_id" == "$expected_runtime_image_id" ]]
 build_input_digest="$(node --input-type=module -e '
   import fs from "node:fs";
   const manifest=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
@@ -298,6 +303,13 @@ export AURION_ARTIFACT_DIGEST="$artifact_digest"
 export AURION_RUNTIME_IMAGE_DIGEST="$runtime_image_id"
 export AURION_RELEASE_ARCHIVE_DIGEST="$release_archive_digest"
 compose=(docker compose --project-name echoes-of-aurion --env-file "$runtime_env" -f "${release}/docker-compose.traefik.yml")
+godot_feed_enabled="$(read_runtime_env AURION_GODOT_FEED_ENABLED 2>/dev/null || printf '0')"
+[[ "$godot_feed_enabled" == 0 || "$godot_feed_enabled" == 1 ]]
+if [[ "$godot_feed_enabled" == 1 ]]; then
+  phase=godot-feed-preflight
+  python3 "${release}/deploy/verify-aurion-godot-feed.py" preflight
+  compose+=(-f "${release}/docker-compose.godot-feed.yml")
+fi
 # companion-memory-preflight-start
 phase=companion-memory-preflight
 previous_aurion="$(docker ps --all --quiet --no-trunc --filter 'name=^/echoes-of-aurion-aurion-1$')"
@@ -328,6 +340,7 @@ env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-re
 
 container_id="$("${compose[@]}" ps -q aurion)"
 [[ "$container_id" =~ ^[a-f0-9]{64}$ ]]
+[[ "$(docker inspect --format '{{.Image}}' "$container_id")" == "$runtime_image_id" ]]
 [[ "$(docker inspect --format '{{ index .Config.Labels "traefik.enable" }}' "$container_id")" == "true" ]]
 [[ "$(docker inspect --format '{{ index .Config.Labels "traefik.docker.network" }}' "$container_id")" == "$traefik_network" ]]
 [[ "$(docker inspect --format '{{ index .Config.Labels "traefik.http.services.aurion.loadbalancer.server.port" }}' "$container_id")" == "3000" ]]
@@ -544,5 +557,28 @@ if systemctl cat "$legacy_service" >/dev/null 2>&1; then
   systemctl disable --now "$legacy_service"
 fi
 
+# The core runtime effect already has its immutable receipt and public readback.
+# Optional-projection failure must retain that truth, and still fail this job.
+phase=godot-bridge-installation
+godot_readback="${public_readback_dir}/godot-bridge.json"
+godot_readback_tmp="${public_readback_dir}/.${release_id}.godot-bridge.tmp"
+printf '{"schema":"aurion.godot.bridge-installation.v1","sourceRevision":"%s","status":"INSTALLING","productionWorldEvidence":false}\n' "$expected_sha" > "$godot_readback_tmp"
+chmod 0644 "$godot_readback_tmp"
+mv -Tf "$godot_readback_tmp" "$godot_readback"
+if python3 "${release}/deploy/verify-aurion-godot-feed.py" readback "$container_id" "$godot_feed_enabled" "$expected_sha" > "${receipt_dir}/${release_id}.godot-feed.json" &&
+   bash "${release}/deploy/install-aurion-godot-bridge.sh" "$release" "$expected_sha" "$godot_feed_enabled" &&
+   node "${release}/deploy/readback-aurion-godot-bridge.mjs" "$release" "$expected_sha" "$container_id" "$godot_feed_enabled" > "$godot_readback_tmp"; then
+  chown root:root "$godot_readback_tmp"
+  chmod 0644 "$godot_readback_tmp"
+  mv -Tf "$godot_readback_tmp" "$godot_readback"
+  install -o root -g root -m 0600 "$godot_readback" "${receipt_dir}/${release_id}.godot-bridge.json"
+else
+  printf '{"schema":"aurion.godot.bridge-installation.v1","sourceRevision":"%s","status":"FAILED","productionWorldEvidence":false}\n' "$expected_sha" > "$godot_readback_tmp"
+  chmod 0644 "$godot_readback_tmp"
+  mv -Tf "$godot_readback_tmp" "$godot_readback"
+  exit 70
+fi
+
 printf '{"service":"aurion-traefik-runtime","revision":"%s","image":"%s","container":"%s","mode":"traefik-labelled"}\n' \
   "$expected_sha" "$runtime_image" "$container_id"
+

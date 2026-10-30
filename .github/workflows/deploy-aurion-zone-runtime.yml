@@ -12,6 +12,14 @@ on:
       - "scripts/aurion-probe-bootstrap.test.mjs"
       - "Dockerfile"
       - "docker-compose.traefik.yml"
+      - "docker-compose.godot-feed.yml"
+      - "deploy/*aurion*godot*"
+      - "deploy/load-aurion-runtime-image.py"
+      - "scripts/build-aurion-runtime-image.mjs"
+      - "scripts/test-aurion-godot-feed-compose.mjs"
+      - "scripts/test_aurion_godot_release_handoff.py"
+      - "scripts/godot/live-bridge-package.mjs"
+      - "scripts/godot/test-live-feed-container.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
       - "patches/**"
@@ -116,6 +124,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify optional Godot feed and hosted image boundaries
+        run: |
+          node scripts/test-aurion-godot-feed-compose.mjs
+          sudo python3 scripts/test_aurion_godot_release_handoff.py
+          bash -n deploy/install-aurion-godot-bridge.sh
+
       - name: Verify optional Redis configuration with actual Compose rendering
         run: node scripts/test-aurion-optional-redis-compose.mjs
 
@@ -207,7 +221,7 @@ jobs:
           for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","deploy/aurion-arelogic-companion-export","scripts/export-arelogic-companion-memory.mjs","dist/.aurion-runtime-build.json","build-input-manifest.json","release-secret-scan.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
-          runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
+          runtime_verify_image="echoes-of-aurion:${GITHUB_SHA}"
           runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"
           runtime_verify_db_container="aurion-runtime-db-verify-${GITHUB_RUN_ID}"
           runtime_verify_public_network="aurion-runtime-public-verify-${GITHUB_RUN_ID}"
@@ -247,9 +261,16 @@ jobs:
             echo "aurion-runtime-database-verify failed category=database_not_ready" >&2
             exit 1
           fi
-          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "${runtime_verify_image}" dist-traefik-runtime
+          # Remove the builder's image before importing: verification exercises
+          # the same exact archive handoff that the VPS will execute.
+          docker image rm "${runtime_verify_image}"
+          hosted_image_id="$(python3 dist-traefik-runtime/deploy/load-aurion-runtime-image.py dist-traefik-runtime "$GITHUB_SHA")"
+          test "$(docker image inspect --format '{{.Id}}' "${runtime_verify_image}")" = "$hosted_image_id"
           node_version="$(docker run --rm --network none "${runtime_verify_image}" node -p 'process.version')"
           test "$node_version" = "v22.23.4"
+          DATABASE_URL="mysql://aurion_runtime:${runtime_verify_db_password}@mariadb:3306/aurion_runtime" \
+          AURION_FEED_TEST_DATABASE_NETWORK="${runtime_verify_database_network}" \
+            node scripts/godot/test-live-feed-container.mjs "${runtime_verify_image}" "$GITHUB_SHA"
           docker run --detach \
             --name "${runtime_verify_container}" \
             --mount "type=volume,source=${runtime_verify_glb_volume},destination=/var/lib/aurion/glb" \
@@ -1478,4 +1499,5 @@ jobs:
     uses: ./.github/workflows/arelogic-companion-offline-runner.yml
     with:
       source_sha: ${{ github.sha }}
+
 
