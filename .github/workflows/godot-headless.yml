@@ -70,6 +70,7 @@ jobs:
           sudo apt-get install -y xvfb xauth libgl1-mesa-dri
           xvfb-run -a -s '-screen 0 1600x1600x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_startup.gd
           xvfb-run -a -s '-screen 0 1600x1600x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_mobile_hud.gd
+          xvfb-run -a -s '-screen 0 1600x1600x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_world_authoring.gd
       - uses: actions/upload-artifact@v4
         with:
           name: godot-startup-software-render-${{ github.event.pull_request.head.sha || github.sha }}

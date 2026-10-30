@@ -3,6 +3,7 @@ extends Control
 ## predicted here; buttons emit intents to the existing main scene.
 signal attack_requested
 signal diagnostics_requested
+signal world_studio_requested
 signal menu_changed(open: bool)
 signal exit_requested
 
@@ -25,10 +26,13 @@ signal exit_requested
 func _ready() -> void:
 	menu_button.pressed.connect(func(): set_menu_open(not menu_panel.visible))
 	attack_button.pressed.connect(func(): attack_requested.emit())
-	$MenuPanel/Content/Close.pressed.connect(func(): set_menu_open(false))
-	$MenuPanel/Content/Diagnostics.pressed.connect(func():
+	$MenuPanel/Scroll/Content/Close.pressed.connect(func(): set_menu_open(false))
+	$MenuPanel/Scroll/Content/Diagnostics.pressed.connect(func():
 		set_menu_open(false)
 		diagnostics_requested.emit())
+	$MenuPanel/Scroll/Content/WorldStudio.pressed.connect(func():
+		set_menu_open(false)
+		world_studio_requested.emit())
 	exit_confirmation.confirmed.connect(func(): exit_requested.emit())
 
 func set_menu_open(open: bool) -> void:
@@ -104,10 +108,11 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 		safe = bounds
 	var scale_factor := clampf(density, 1.0, 2.0)
 	var font_size := roundi(16.0 * scale_factor)
-	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Content/Diagnostics, $MenuPanel/Content/QuestAvailability, $MenuPanel/Content/Close, notice_text]:
+	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Scroll/Content/Diagnostics, $MenuPanel/Scroll/Content/WorldStudio, $MenuPanel/Scroll/Content/QuestAvailability, $MenuPanel/Scroll/Content/Close, notice_text]:
 		label.add_theme_font_size_override("font_size", font_size)
-	$MenuPanel/Content/Diagnostics.custom_minimum_size.y = 48.0 * scale_factor
-	$MenuPanel/Content/Close.custom_minimum_size.y = 48.0 * scale_factor
+	$MenuPanel/Scroll/Content/Diagnostics.custom_minimum_size.y = 48.0 * scale_factor
+	$MenuPanel/Scroll/Content/WorldStudio.custom_minimum_size.y = 48.0 * scale_factor
+	$MenuPanel/Scroll/Content/Close.custom_minimum_size.y = 48.0 * scale_factor
 	var margin := 16.0 * scale_factor
 	var usable_width := maxf(0.0, safe.size.x - 2.0 * margin)
 	var menu_width := 64.0 * scale_factor
@@ -130,7 +135,9 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 	var action_size := clampf(safe.size.y * 0.12, 80.0 * scale_factor, 96.0 * scale_factor)
 	_place(attack_button, Rect2(safe.end.x - margin - action_size, safe.end.y - margin - action_size, action_size, action_size))
 	var menu_panel_width := minf(240.0 * scale_factor, usable_width)
-	_place(menu_panel, Rect2(safe.end.x - margin - menu_panel_width, top + 56.0 * scale_factor, menu_panel_width, 155.0 * scale_factor))
+	var menu_top := top + 56.0 * scale_factor
+	var menu_height := minf(211.0 * scale_factor, maxf(0.0, safe.end.y - margin - menu_top))
+	_place(menu_panel, Rect2(safe.end.x - margin - menu_panel_width, menu_top, menu_panel_width, menu_height))
 	var notice_width := minf(360.0 * scale_factor, usable_width * 0.55)
 	var notice_top := target_top + 68.0 * scale_factor if target_top != top else top + player_height + 8.0 * scale_factor
 	_place(notice, Rect2(safe.position.x + (safe.size.x - notice_width) * 0.5, notice_top, notice_width, 40.0 * scale_factor))
