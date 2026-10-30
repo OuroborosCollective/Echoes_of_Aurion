@@ -89,6 +89,12 @@ class ImageArchiveBoundary(unittest.TestCase):
         self.write_archive(claimed_id='sha256:' + '0' * 64)
         self.rejected_before_docker()
 
+    def test_legacy_context_cannot_enter_the_normal_image_import(self):
+        path = self.directory / 'manifest.json'
+        value = json.loads(path.read_text()); del value['runtimeImage']
+        path.write_text(json.dumps(value))
+        self.rejected_before_docker()
+
     def test_loaded_container_identity_cannot_drift(self):
         with patch.object(self.loader.subprocess, 'run'), patch.object(self.loader.subprocess, 'check_output', return_value='[{"Id":"sha256:wrong"}]'):
             with self.assertRaisesRegex(ValueError, 'LOADED_IDENTITY'):

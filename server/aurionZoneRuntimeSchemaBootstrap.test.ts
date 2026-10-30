@@ -39,7 +39,12 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     expect(invocations?.length).toBe(2);
     expect(workflow).toContain("SCHEMA_PREPARE_CAPABILITY_REQUIRED");
     expect(workflow).toContain("needs: [verify-and-build, apply-reviewed-schema-plan, production-schema-readback]");
-    expect(promoter.indexOf('if [[ "$mode" == "--prepare-schema" ]]')).toBeLessThan(promoter.indexOf("docker build --pull=false"));
+    const preparation = promoter.indexOf('if [[ "$mode" == "--prepare-schema" ]]');
+    const imageImport = promoter.indexOf('phase=runtime-image-import');
+    expect(preparation).toBeGreaterThanOrEqual(0);
+    expect(imageImport).toBeGreaterThanOrEqual(0);
+    expect(preparation).toBeLessThan(imageImport);
+    expect(promoter).not.toMatch(/docker\s+(?:build|buildx\s+build)\b/);
     expect(workflow).not.toContain("sudo bash deploy/install-aurion-production-schema-reconcile");
     expect(workflow).not.toContain("drizzle-kit migrate");
   });
@@ -78,3 +83,4 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     expect(workflow).toContain('bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
   });
 });
+

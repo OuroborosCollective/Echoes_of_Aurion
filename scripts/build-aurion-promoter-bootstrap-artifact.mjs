@@ -283,8 +283,12 @@ async function buildLegacyCompatibleRuntimeArchive() {
     );
 
     manifest.revision = bootstrapRevision;
-    // A compatibility source identity must never reuse the canonical image.
-    manifest.runtimeImage = await buildAurionRuntimeImage(temporary, bootstrapRevision);
+    // Existing pre-image-format archives remain valid bootstrap inputs. A new
+    // hosted-image archive must rebuild instead of reusing its canonical image;
+    // the normal promoter still rejects every artifact without runtimeImage.
+    if (manifest.runtimeImage) {
+      manifest.runtimeImage = await buildAurionRuntimeImage(temporary, bootstrapRevision);
+    }
     await refreshRuntimeMetadata(temporary, manifest);
     await validateRuntimeMetadata(
       temporary,
