@@ -55,6 +55,7 @@ function snapshotRecordedEntry(entry: RecordedTickEntry): RecordedTickEntry {
 }
 
 export class AurionTickRecorder {
+  private readonly committedObservers = new Set<(entry: RecordedTickEntry) => void>();
   private readonly receiptsByZone = new Map<string, RecordedTickEntry[]>();
   private readonly receiptsByZoneAndTick = new Map<string, Map<number, RecordedTickEntry>>();
   private persistenceAdapter?: CausalPersistenceAdapter;
@@ -65,6 +66,12 @@ export class AurionTickRecorder {
 
   constructor(private readonly maxEntries = 1000, persistenceAdapter?: CausalPersistenceAdapter) { this.persistenceAdapter = persistenceAdapter; }
   setPersistenceAdapter(adapter: CausalPersistenceAdapter): void { this.persistenceAdapter = adapter; }
+
+  /** Observers receive detached copies after the synchronous authority stack. */
+  observeCommittedTicks(observer: (entry: RecordedTickEntry) => void): () => void {
+    this.committedObservers.add(observer);
+    return () => { this.committedObservers.delete(observer); };
+  }
 
   /**
    * Authority-path API: capture immutable evidence synchronously, then serialize
@@ -123,6 +130,12 @@ export class AurionTickRecorder {
     }
     list.push(entry);
     map.set(entry.receipt.tick, entry);
+    if (this.committedObservers.size) queueMicrotask(() => {
+      for (const observer of this.committedObservers) {
+        try { observer(clonePlainValue(entry)); }
+        catch (error) { console.error("[C-Aurion] Detached tick observer failed", error); }
+      }
+    });
     if (list.length > this.maxEntries) {
       const removed = list.shift();
       if (removed) map.delete(removed.receipt.tick);
@@ -167,3 +180,4 @@ export class AurionTickRecorder {
 }
 
 export const globalTickRecorder = new AurionTickRecorder(2000);
+
