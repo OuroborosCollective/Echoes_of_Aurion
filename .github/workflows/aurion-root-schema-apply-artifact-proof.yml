@@ -104,7 +104,9 @@ on:
       - "drizzle/0072_aurion_production_probe_approvals.sql"
       - "drizzle/0073_aurion_production_probe_session_fence.sql"
       - "drizzle/0074_aurion_stat_allocation_receipts.sql"
-      - "config/aurion-migration-wave-manifest.json"
+      - "drizzle/0075_aurion_native_auth_sessions.sql"
+      - "drizzle/0076_aurion_investigation_deduction_receipts.sql"
+      - "config/aurion-migration-wave-0021-0076-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -403,7 +405,7 @@ jobs:
           const raw=fs.readFileSync("apply-receipt.json","utf8");
           if(raw.includes("aurionapplyroot")||raw.includes("mysql://")) throw new Error("apply receipt leaked a credential");
           const r=JSON.parse(raw);
-          const tags=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.map(({tag})=>tag);
+          const tags=JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8")).migrations.map(({tag})=>tag);
           if(r.recordType!=="aurion_production_schema_apply"||r.schemaVersion!==1||r.sourceRevision!==process.env.GITHUB_SHA||r.planSha256!==process.env.AURION_APPLY_TEST_PLAN||r.mode!=="backup_recovery_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_SUCCEEDED") throw new Error("apply receipt identity mismatch");
           if(r.preflight?.state!=="RECONCILIATION_REQUIRED"||r.preflight?.summary?.absentCount!==tags.length) throw new Error("apply did not require an absent preflight");
           if(r.backup?.created!==true||!/^[a-f0-9]{64}$/.test(r.backup?.sha256??"")||!Number.isSafeInteger(r.backup?.bytes)||r.backup.bytes<1) throw new Error("backup receipt invalid");
@@ -488,7 +490,7 @@ jobs:
           assert.equal(r.apply.reviewedRecovery.preservedJournalRows.length,2);
           assert.ok(r.apply.repairedJournalTags.includes("0020_wasd_aurion_dialogue_quest_intents"));
           assert.ok(r.apply.operations.every(o=>o.result==="APPLIED"&&o.startedAt&&o.endedAt&&o.backupSha256===r.backup.sha256));
-          assert.deepEqual(r.postflight.summary,{migrationCount:54,matchCount:54,absentCount:0,driftCount:0});
+          assert.deepEqual(r.postflight.summary,{migrationCount:55,matchCount:55,absentCount:0,driftCount:0});
           NODE
           fixture verify-reviewed
           fixture prepare-unknown

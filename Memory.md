@@ -5301,3 +5301,40 @@ Change: The open-world runtime now passes the authenticated NPC readback into th
 Evidence: Code head `5a73dd7f7919f1fb2e45f9b8d9def7454e7ff1d8`. Exact-head full regression [run 41169415408](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415408): 476 files passed, 69 skipped; 2,417 tests passed, 271 skipped. HUD [run 41169415436](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415436), Godot protocol/isolated authority contract, and candidate container [run 41169415389](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415389) passed. Candidate source revision, build input, artifact, and immutable image digests matched; its MariaDB proofs were isolated CI evidence, not production readback.
 Learned: Having an authenticated world snapshot available did not by itself prevent seeded local NPCs from being rendered; identity admission must be bound explicitly to that readback.
 Open/next: The required architecture snapshot/drift/import-call-graph audit, broader movement/combat/effect/persistence and rendering/input review, browser `/play` validation, and production readback remain outstanding. Aurion architecture tools were unavailable through the configured connection; production access was blocked by the missing admin token. No production state changed. Issue #874 stays open until the broad architecture, browser and production evidence is independently established; no production promotion is asserted.
+
+
+### 2026-10-31 — Investigation journal HUD wiring (#784)
+Status: PARTIAL
+Task: Wire the server-confirmed investigation journal into the active Aurion HUD and resolve the production-integration finding from PR #1252.
+Decisions: Build the journal from confirmed NPC information lineage; bind deduction requests to the source projection revision; derive the actor from the authenticated server context; persist validated receipts append-only and verify them with an independent database readback. Keep the browser contract free of Node crypto and client truth.
+Touched surfaces: Authenticated journal router and persistence, deduction receipt migration/schema, browser-safe request contract, investigation modal, desktop/mobile HUD navigation, focused regression workflow and fixtures.
+Evidence: Source candidate 044c02d15fae3ae5eb2a8229a3171d0a66616fd4; HUD regression workflow 41164514378 passed typecheck, HUD/projection tests and responsive layout checks. Runtime candidate/container workflows were still pending when this entry was written. Read-only Aurion runtime identity, causality and assurance checks were blocked by AURION_ADMIN_ACCESS_TOKEN_MISSING; no production mutation occurred.
+Learned: A client import of canonical hashing pulls node:crypto into the browser bundle. Keep the client request actorless and let the authenticated server construct the validated intent.
+Open: Obtain exact-final-head journal/runtime checks and authorized runtime readback before closing #784 or making any production claim.
+Next safe step: Keep PR #1255 draft, finish exact-head CI, then capture authorized read-only runtime evidence. Do not deploy or merge as part of this work.
+
+
+### 2026-10-31 — Investigation receipt migration chain correction (#784)
+Status: PARTIAL
+Task: Correct the new deduction receipt migration after exact-revision evidence found an invalid empty statement segment.
+Decisions: Remove the trailing statement-breakpoint after the migration's single CREATE TABLE statement. Keep the migration-chain verifier unchanged and fail closed on malformed segments.
+Touched surfaces: drizzle/0076_aurion_investigation_deduction_receipts.sql.
+Evidence: Starter Village Pilot Evidence run 41164732716 at source head d0e963be351b23d70417bfef59729bd5ade189ac stopped before runtime startup. The migration verifier reported sqlCount=76, journalCount=76, no missing/duplicate tags, and emptyStatementSegments=[0076_aurion_investigation_deduction_receipts#2]. Source head 1a3fcc634b25b9f54d32ecb7ffaeeb2f93555d98 removes the empty segment; exact-head rerun is pending. No production schema or state was changed.
+Learned: Sequential tags and matching migration counts do not prove the SQL segment stream is valid; the verifier's empty-segment check caught a trailing delimiter.
+Open: Confirm the exact final head passes migration validation and the isolated MariaDB readback paths.
+Next safe step: Wait for final-head CI and keep the PR draft until journal/runtime evidence is complete.
+
+### 2026-10-31 — Register investigation receipts in a separate schema wave (#784)
+Status: PARTIAL
+Task: Extend the journal read model's additive receipt table through schema reconciliation and isolated apply evidence while preserving the existing 0075 production boundary.
+Decisions: Add wave aurion-production-0021-0076 with owner approval still required and productionWritesScheduled=false. Keep the existing 0021-0075 manifest and dispatcher pinned; make the 0075 preflight fail closed against a journal containing 0076. Align reconciliation/apply artifacts, repair policy, promotion gates and isolated MariaDB proof workflows to 55 late migrations.
+Evidence: Exact head 25ea8cbc6eb885b4490cbb1bde08b5bc2ed70303 passed Aurion Investigation Journal run 41164877909, Aurion HUD regression 41164877889, Aurion PR Runtime Candidate 41164877935, Aurion PR Runtime Container Proof 41164877888 and Starter Village Pilot Evidence 41164877799. Schema bootstrap 41164877884, journal watermark 41164877745, root schema apply 41164877815, schema reconciliation 41164877806 and root reconciliation artifact 41164877926 exposed stale 54-migration contracts against 55 journaled tags. Root reconciliation artifact run 41166243800 on head 6dc42060f56e429166270c0c3665120bba5cdb98 passed 40 of 41 focused checks; the remaining source-contract assertion showed that the apply-core receipt-validation tag list still stopped at 0075 while its preflight list already included 0076. The apply receipt-validation list is being corrected in the next commit. Other exact-head CI runs are pending. Read-only production runtime checks remain blocked by AURION_ADMIN_ACCESS_TOKEN_MISSING; no production schema or state was changed.
+Learned: A new journal tag must enter a new versioned wave contract and every isolated read/apply artifact; the 0075 approval contract must remain separate.
+Open: Verify the exact corrected head across isolated schema reconciliation, backup/recovery/apply, migration watermark, journal/runtime and HUD checks. Keep PR #1255 draft until the final evidence and authorized read-only runtime readback are available.
+Next safe step: Review exact-head Actions; do not merge, dispatch or apply a production migration as part of this work.
+
+### 2026-10-31 — Align read-only migration provenance with active 0076 wave (#784)
+Status: PARTIAL — source correction committed; exact-head verification pending.
+Finding: Deploy workflow run 41166394438 on `fb16d06254380d8d28702d4f04a21e283c31a152` failed in the read-only historical migration-provenance job with `AURION_MIGRATION_WAVE_JOURNAL_COVERAGE_MISMATCH`: the builder read the preserved 0075 manifest (54 tags) while this candidate's journal contained 55 late tags through 0076. All schema-apply, runtime-promotion and production-release jobs were skipped.
+Change: Bind the read-only provenance ledger and its fixtures to the separate `aurion-production-0021-0076` manifest, and watch that manifest in the workflow path filter. Keep the 0075 production preflight, apply and readback boundary unchanged.
+Evidence boundary: No database read/write or production promotion ran. Exact-head workflow rerun is pending.

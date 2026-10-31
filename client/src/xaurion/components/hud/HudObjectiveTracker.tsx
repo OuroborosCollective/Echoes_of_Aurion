@@ -11,11 +11,11 @@ type TrackerProps = Readonly<
     objectives: readonly Ax1HudObjective[];
     effects: ReadonlyMap<string, ObjectiveEffect>;
     ledger: readonly Ax1HudObjective[];
-  } & Pick<GameHUDProps, "worldState" | "worldStateLabel" | "onOpenQuests">
+  } & Pick<GameHUDProps, "worldState" | "worldStateLabel" | "onOpenQuests" | "onOpenInvestigations">
 >;
 
 /** World objectives. Collapsed = one readable line with the primary objective; expanded = full card. */
-export function HudObjectiveTracker({ objectives, effects, ledger, worldState, worldStateLabel, onOpenQuests }: TrackerProps) {
+export function HudObjectiveTracker({ objectives, effects, ledger, worldState, worldStateLabel, onOpenQuests, onOpenInvestigations }: TrackerProps) {
   const [collapsed, setCollapsed] = useState(prefersCompactPanels);
   const { primary, nearby } = splitObjectives(objectives);
   const worldProjection = projectionLabel(worldState);
@@ -68,7 +68,7 @@ export function HudObjectiveTracker({ objectives, effects, ledger, worldState, w
               ) : null}
               <div className="ax-objective__foot">
                 <span>World state · {worldProjection}</span>
-                <button type="button" onClick={onOpenQuests} className="ax-link">
+                <button type="button" onClick={onOpenInvestigations ?? onOpenQuests} className="ax-link">
                   Journal <kbd className="ax-kbd ax-kbd--inline">J</kbd>
                 </button>
               </div>

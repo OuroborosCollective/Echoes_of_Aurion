@@ -1,15 +1,14 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import {
-  buildDeductionIntentFromJournal,
-  guidancePresentation,
-  type InvestigationJournal,
-} from "@shared/investigationJournalProtocol";
+import type { InvestigationJournal } from "@shared/investigationJournalProtocol";
 import {
   DEDUCTION_MAX_CLAIMS,
-  type DeductionIntent,
+  guidancePresentation,
+  investigationDeductionRequestSchema,
   type DeductionType,
-} from "@shared/investigationGraphProtocol";
+  type InvestigationDeductionRequest,
+  type JournalGuidance,
+} from "@shared/investigationClientContract";
 
 const BAND_LABEL: Readonly<Record<string, string>> = Object.freeze({
   low: "fragil",
@@ -35,40 +34,45 @@ const DEDUCTION_LABEL: Readonly<Partial<Record<DeductionType, string>>> = Object
  * Aurion Investigation Journal & Rumor Board (Issue #784).
  *
  * Pure presentation of a server-confirmed readmodel: the component renders
- * the journal it receives and can assemble a deduction intent from the
- * disclosed claims. It holds no truth of its own — no localStorage, no
- * local solved flags, no invented clues. The server revalidates every
- * intent against the bound projection revision.
+ * the journal it receives and sends a revision-bound claim selection. It
+ * holds no truth of its own — no localStorage, no local solved flags, no
+ * invented clues. The server constructs and revalidates every intent against
+ * the bound projection revision.
  */
 export function InvestigationJournalModal(
   props: Readonly<{
     isOpen: boolean;
     onClose: () => void;
-    journal: InvestigationJournal;
+    journal: InvestigationJournal | null;
+    guidance: JournalGuidance;
     pending: boolean;
-    onSubmitDeduction: (intent: DeductionIntent) => void;
+    message?: string;
+    onGuidanceChange: (guidance: JournalGuidance) => void;
+    onSubmitDeduction: (request: InvestigationDeductionRequest) => void;
   }>
 ) {
-  const { isOpen, onClose, journal, pending, onSubmitDeduction } = props;
+  const { isOpen, onClose, journal, guidance, pending, message, onGuidanceChange, onSubmitDeduction } = props;
   const [selection, setSelection] = useState<{ journalHash: string; ids: readonly string[] }>({
-    journalHash: journal.journalHash,
+    journalHash: journal?.journalHash ?? "",
     ids: [],
   });
-  const selected = selection.journalHash === journal.journalHash ? selection.ids : [];
+  const selected = journal && selection.journalHash === journal.journalHash ? selection.ids : [];
   const opener = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    setSelection(current => current.journalHash === journal.journalHash
+    const journalHash = journal?.journalHash ?? "";
+    setSelection(current => current.journalHash === journalHash
       ? current
-      : { journalHash: journal.journalHash, ids: [] });
-  }, [journal.journalHash]);
+      : { journalHash, ids: [] });
+  }, [journal?.journalHash]);
   const presentation = useMemo(
-    () => guidancePresentation(journal.guidance),
-    [journal.guidance]
+    () => guidancePresentation(journal?.guidance ?? guidance),
+    [guidance, journal?.guidance]
   );
 
   if (!isOpen) return null;
 
   const toggle = (claimId: string) => {
+    if (!journal) return;
     setSelection(current => {
       const ids = current.journalHash === journal.journalHash ? current.ids : [];
       return {
@@ -81,12 +85,13 @@ export function InvestigationJournalModal(
   };
 
   const submit = (deductionType: DeductionType) => {
-    const intent = buildDeductionIntentFromJournal({
-      journal,
+    if (!journal) return;
+    const request = investigationDeductionRequestSchema.parse({
       selectedClaimIds: selected,
       deductionType,
+      sourceProjectionHash: journal.sourceProjectionHash,
     });
-    onSubmitDeduction(intent);
+    onSubmitDeduction(request);
     setSelection({ journalHash: journal.journalHash, ids: [] });
   };
 
@@ -119,6 +124,25 @@ export function InvestigationJournalModal(
             ×
           </button>
         </header>
+
+        <label style={styles.guidance}>
+          <span>Hinweisstufe</span>
+          <select
+            aria-label="Hinweisstufe"
+            value={journal?.guidance ?? guidance}
+            disabled={pending}
+            onChange={event => onGuidanceChange(event.currentTarget.value as JournalGuidance)}
+            style={styles.guidanceSelect}
+          >
+            <option value="whisper">Flüstern</option>
+            <option value="plot">Handlung</option>
+            <option value="conspiracy">Verschwörung</option>
+          </select>
+        </label>
+
+        {journal ? (
+          <>
+        {message ? <p role="status" style={styles.empty}>{message}</p> : null}
 
         {journal.investigations.length === 0 && (
           <p style={styles.empty}>
@@ -198,6 +222,14 @@ export function InvestigationJournalModal(
             </button>
           ))}
         </footer>
+          </>
+        ) : (
+          <p role={pending ? "status" : "alert"} style={styles.empty}>
+            {pending
+              ? "Bestätigter Journalstand wird vom Server geladen."
+              : message || "Der serverbestätigte Journalstand ist derzeit nicht verfügbar."}
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -230,6 +262,15 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   empty: { color: "#9fb3c8" },
+  guidance: { display: "flex", alignItems: "center", gap: 8, marginTop: 12, color: "#9fb3c8" },
+  guidanceSelect: {
+    background: "#172235",
+    border: "1px solid #2c3e50",
+    borderRadius: 4,
+    color: "#dbe4f0",
+    minHeight: 36,
+    padding: "0 8px",
+  },
   case: { marginTop: 12, borderTop: "1px solid #223046", paddingTop: 8 },
   caseTitle: { margin: "4px 0", fontSize: 15 },
   contradiction: {

@@ -109,7 +109,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
         isOpen
         onClose={vi.fn()}
         journal={journalFixture()}
-        pending={false}
+        pending={false} guidance="plot" onGuidanceChange={vi.fn()}
         onSubmitDeduction={vi.fn()}
       />
     );
@@ -128,7 +128,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
     ).toBe(true);
   });
 
-  it("assembles deduction intents from disclosed claims only", () => {
+  it("sends a revision-bound selection request over disclosed claims only", () => {
     const journal = journalFixture();
     const onSubmit = vi.fn();
     render(
@@ -136,7 +136,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
         isOpen
         onClose={vi.fn()}
         journal={journal}
-        pending={false}
+        pending={false} guidance="plot" onGuidanceChange={vi.fn()}
         onSubmitDeduction={onSubmit}
       />
     );
@@ -144,11 +144,11 @@ describe("Aurion investigation journal projection (issue #784)", () => {
     fireEvent.click(screen.getByLabelText("Behauptung false auswählen"));
     fireEvent.click(screen.getByRole("button", { name: "Anfechten" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    const intent = onSubmit.mock.calls[0][0];
-    expect(intent.actorId).toBe("player-1");
-    expect(intent.deductionType).toBe("challenge");
-    expect(intent.sourceProjectionHash).toBe(journal.sourceProjectionHash);
-    expect(intent.selectedClaimIds.length).toBe(2);
+    const request = onSubmit.mock.calls[0][0];
+    expect(request.deductionType).toBe("challenge");
+    expect(request.sourceProjectionHash).toBe(journal.sourceProjectionHash);
+    expect(request.selectedClaimIds).toHaveLength(2);
+    expect(request).not.toHaveProperty("actorId");
   });
 
   it("hides provenance hints under conspiracy guidance without changing claims", () => {
@@ -157,7 +157,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
         isOpen
         onClose={vi.fn()}
         journal={journalFixture("conspiracy")}
-        pending={false}
+        pending={false} guidance="plot" onGuidanceChange={vi.fn()}
         onSubmitDeduction={vi.fn()}
       />
     );
@@ -172,7 +172,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
         isOpen
         onClose={vi.fn()}
         journal={{ ...journal, investigations: [] }}
-        pending={false}
+        pending={false} guidance="plot" onGuidanceChange={vi.fn()}
         onSubmitDeduction={vi.fn()}
       />
     );
@@ -182,7 +182,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
   });
 
   it("caps selection at the protocol limit and permits replacing a choice", () => {
-    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={manyClaimsFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={manyClaimsFixture()} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={vi.fn()} />);
     for (let i = 0; i < 8; i++) fireEvent.click(screen.getByLabelText(`Behauptung value-${i} auswählen`));
     const ninth = screen.getByLabelText("Behauptung value-8 auswählen") as HTMLInputElement;
     expect(ninth.disabled).toBe(true);
@@ -197,28 +197,28 @@ describe("Aurion investigation journal projection (issue #784)", () => {
   it("clears selection immediately when a new journal revision removes claims", () => {
     const journal = journalFixture();
     const submit = vi.fn();
-    const { rerender } = render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journal} pending={false} onSubmitDeduction={submit} />);
+    const { rerender } = render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journal} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={submit} />);
     fireEvent.click(screen.getByLabelText("Behauptung true auswählen"));
     fireEvent.click(screen.getByLabelText("Behauptung false auswählen"));
     const projection = projectRumorClaims({ viewerId: "player-1", worldId: "world-1", atIndex: 41, receipts: [] });
     const empty = buildInvestigationJournal({ projection, graph: buildInvestigationGraph({ projection }), guidance: "whisper" });
-    rerender(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={empty} pending={false} onSubmitDeduction={submit} />);
+    rerender(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={empty} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={submit} />);
     expect(screen.getByText("0 ausgewählt")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Anfechten" }) as HTMLButtonElement).disabled).toBe(true);
     expect(submit).not.toHaveBeenCalled();
-    rerender(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journal} pending={false} onSubmitDeduction={submit} />);
+    rerender(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journal} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={submit} />);
     expect(screen.getByText("0 ausgewählt")).toBeTruthy();
     expect((screen.getByLabelText("Behauptung true auswählen") as HTMLInputElement).checked).toBe(false);
   });
 
   it("offers no blind chain action without disclosed prerequisite relations", () => {
-    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journalFixture()} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "Verketten" })).toBeNull();
   });
 
   it("uses a modal dialog and closes on Escape", () => {
     const onClose = vi.fn();
-    render(<InvestigationJournalModal isOpen onClose={onClose} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    render(<InvestigationJournalModal isOpen onClose={onClose} journal={journalFixture()} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Investigationsjournal & Gerüchtetafel" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(dialog.contains(document.activeElement)).toBe(true);
@@ -231,7 +231,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
       const [open, setOpen] = useState(false);
       return <>
         <button onClick={() => setOpen(true)}>Journal öffnen</button>
-        <InvestigationJournalModal isOpen={open} onClose={() => setOpen(false)} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />
+        <InvestigationJournalModal isOpen={open} onClose={() => setOpen(false)} journal={journalFixture()} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={vi.fn()} />
       </>;
     }
     render(<Harness />);
@@ -243,7 +243,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
   });
 
   it("wraps actions for narrow screens", () => {
-    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journalFixture()} pending={false} guidance="plot" onGuidanceChange={vi.fn()} onSubmitDeduction={vi.fn()} />);
     expect(screen.getByText("0 ausgewählt").parentElement?.style.flexWrap).toBe("wrap");
   });
 });

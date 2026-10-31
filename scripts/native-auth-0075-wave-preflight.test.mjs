@@ -8,6 +8,7 @@ import {
 const ddl=readFileSync(new URL("../fixtures/native-auth/0075_native_auth_candidate.sql",import.meta.url),"utf8");
 const manifest=JSON.parse(readFileSync(new URL("../config/aurion-migration-wave-manifest.json",import.meta.url),"utf8"));
 const journal=JSON.parse(readFileSync(new URL("../drizzle/meta/_journal.json",import.meta.url),"utf8"));
+const journalThrough0075={...journal,entries:journal.entries.filter(entry=>entry.idx<=74)};
 
 test("0075 is exactly four additive, immutable digest-authority tables",()=>{
   const audit=inspectNativeAuth0075Candidate(ddl);
@@ -28,8 +29,9 @@ test("no destructive DDL, password storage or uncontrolled schema mutations",()=
   ])assert.throws(()=>inspectNativeAuth0075Candidate(candidate));
 });
 test("production wave must have exact journal+DDL identity before a write",()=>{
-  assert.equal(assertNativeAuth0075ReleaseBoundary({manifest,journal,sql:ddl,productionApply:true}).releaseReady,true);
-  const pending=assertNativeAuth0075ReleaseBoundary({manifest,journal,sql:ddl,productionApply:false});
+  assert.equal(assertNativeAuth0075ReleaseBoundary({manifest,journal:journalThrough0075,sql:ddl,productionApply:true}).releaseReady,true);
+  assert.throws(()=>assertNativeAuth0075ReleaseBoundary({manifest,journal,sql:ddl,productionApply:true}),/NATIVE_AUTH_0075_WAVE_NOT_READY/);
+  const pending=assertNativeAuth0075ReleaseBoundary({manifest,journal:journalThrough0075,sql:ddl,productionApply:false});
   assert.equal(pending.releaseReady,true);
   assert.equal(pending.productionWrites,false);
 });

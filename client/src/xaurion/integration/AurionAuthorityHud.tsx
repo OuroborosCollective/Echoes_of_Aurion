@@ -8,6 +8,8 @@ import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import { InventoryModal } from "../components/InventoryModal";
 import { CharacterModal } from "../components/CharacterModal";
 import { QuestLogModal } from "../components/QuestLogModal";
+import { InvestigationJournalModal } from "@/components/InvestigationJournalModal";
+import type { InvestigationDeductionRequest, JournalGuidance } from "@shared/investigationClientContract";
 import { CraftingModal } from "../components/CraftingModal";
 import { ControlsModal } from "../components/ControlsModal";
 import { GameHUD } from "../components/GameHUD";
@@ -22,10 +24,10 @@ import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import { CONFIRMED_COMBAT_PRESENTATION_EVENT, reduceConfirmedCombatMetrics, validConfirmedCombatPresentation, type ConfirmedCombatPresentationEvent } from "./combatPresentation";
 import "./ax1AuthorityHud.css";
 
-type Panel = "inventory" | "character" | "disciplines" | "quests" | "map" | "crafting" | "controls" | "guild" | "economy" | "dialogue" | "territory" | "homestead" | "determinism" | "research" | null;
+type Panel = "inventory" | "character" | "disciplines" | "quests" | "investigations" | "map" | "crafting" | "controls" | "guild" | "economy" | "dialogue" | "territory" | "homestead" | "determinism" | "research" | null;
 const explorerView = { name: "Explorer", icon: "✦", color: "#fbbf24" } as const;
 const roleLabels = { tank: "Tank", healer: "Heiler", dps: "Schaden" } as const;
-const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c: "character", k: "disciplines", m: "map", j: "quests", q: "quests", g: "guild" };
+const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c: "character", k: "disciplines", m: "map", j: "investigations", q: "quests", g: "guild" };
 const community = (panel: "chat" | "market" | "guild") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
 const ax1WorldHudSchema = worldReadbackSchema.extend({
   revision: z.literal(1),
@@ -63,6 +65,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupMode, setGroupMode] = useState<"party" | "dungeon">("party");
   const [questTab, setQuestTab] = useState<"quests" | "contacts">("quests");
+  const [journalGuidance, setJournalGuidance] = useState<JournalGuidance>("plot");
   const [pending, setPending] = useState(false);
   const [autoActive, setAutoActive] = useState(false);
   const [startAfterClose, setStartAfterClose] = useState(false);
@@ -82,6 +85,15 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const manipulationQuery = trpc.crafting.manipulationRead.useQuery(undefined, { ...options, enabled: panel === "crafting" });
   const manipulate = trpc.crafting.manipulate.useMutation();
   const craftingQuery = trpc.crafting.read.useQuery(undefined, { ...options, enabled: panel === "crafting" });
+  const investigationJournalQuery = trpc.investigationJournal.read.useQuery(
+    { viewerUserId: userId, guidance: journalGuidance },
+    {
+      enabled: userId > 0 && panel === "investigations",
+      staleTime: 0,
+      refetchInterval: panel === "investigations" ? 10_000 : false,
+    },
+  );
+  const investigationDeduction = trpc.investigationJournal.submitDeduction.useMutation();
   const player = projectPlayerReadback(playerQuery, userId);
   const world = projectReadback(ax1WorldHudSchema, worldQuery);
   const ui = projectReadback(playerUiReadbackSchema.refine(value => value.userId === userId), uiQuery);
@@ -152,6 +164,30 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     } finally {
       busy.current = false;
       setPending(false);
+    }
+  };
+  const submitInvestigationDeduction = async (request: InvestigationDeductionRequest) => {
+    setMessage("");
+    try {
+      await investigationDeduction.mutateAsync(request);
+    } catch (error) {
+      const code = (error as { data?: { code?: unknown } } | null)?.data?.code;
+      await investigationJournalQuery.refetch().catch(() => undefined);
+      setMessage(code === "CONFLICT"
+        ? "Der Wissensstand hat sich geändert. Das Journal wurde neu angefordert; prüfe die Auswahl erneut."
+        : "Der Server hat die Deduktion nicht bestätigt. Das Journal wurde neu angefordert.");
+      return;
+    }
+
+    try {
+      const readback = await investigationJournalQuery.refetch();
+      if (readback.isError || !readback.data || readback.data.guidance !== journalGuidance) {
+        setMessage("Der Deduktionsbeleg wurde serverseitig bestätigt; der aktuelle Journal-Readback ist noch nicht verfügbar.");
+        return;
+      }
+      setMessage("Deduktion serverseitig geprüft und Beleg bestätigt.");
+    } catch {
+      setMessage("Der Deduktionsbeleg wurde serverseitig bestätigt; der aktuelle Journal-Readback ist noch nicht verfügbar.");
     }
   };
   const bind = (slot: number, command: SkillCommand) => {
@@ -379,6 +415,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       onOpenInventory={() => openPanel("inventory")}
       onOpenCrafting={() => openPanel("crafting")}
       onOpenQuests={() => { setQuestTab("quests"); openPanel("quests"); }}
+      onOpenInvestigations={() => openPanel("investigations")}
       onOpenContacts={() => { setQuestTab("contacts"); openPanel("quests"); }}
       onOpenParty={() => openGroup("party")}
       onOpenDungeonFinder={() => openGroup("dungeon")}
@@ -448,6 +485,22 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     />
     <ClassSelectModal open={panel === "disciplines"} onClose={() => openPanel(null)} tracks={player.data?.progression.tracks} state={projectionState} />
     {panel === "quests" && <QuestLogModal key={questTab} isOpen onClose={() => openPanel(null)} pending={false} message={message} initialTab={questTab} contacts={<><NpcStandingPanel userId={userId} /><NpcDecisionPanel userId={userId} /></>} authoredContent={<AuthoredQuestJournal />} />}
+    <InvestigationJournalModal
+      isOpen={panel === "investigations"}
+      onClose={() => openPanel(null)}
+      journal={
+        investigationJournalQuery.isError || investigationJournalQuery.data?.guidance !== journalGuidance
+          ? null
+          : investigationJournalQuery.data ?? null
+      }
+      guidance={journalGuidance}
+      onGuidanceChange={setJournalGuidance}
+      pending={investigationDeduction.isPending || investigationJournalQuery.isFetching}
+      message={investigationJournalQuery.isError
+        ? "Der serverbestätigte Journalstand ist derzeit nicht verfügbar."
+        : message}
+      onSubmitDeduction={(request: InvestigationDeductionRequest) => { void submitInvestigationDeduction(request); }}
+    />
     <CraftingModal
       isOpen={panel === "crafting"}
       onClose={() => openPanel(null)}
