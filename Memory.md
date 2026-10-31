@@ -5295,6 +5295,13 @@ Evidence: Original head c832fc28bb333907d84d854b8504a90e4c2275f8, AIM-265 run 41
 Learned: Canonical spatial iteration and material code semantics are separate invariants; do not interchange forest-floor and riverbank histogram indices.
 Open/next: Require all remaining exact-head CI checks, final documentation-head readback and normal SHA-bound merge; no production/runtime proof claimed.
 
+### 2026-10-31 — Issue #874 — Confirmed NPC roster guard
+Status: PARTIAL; bounded source/runtime candidate verified, broad architecture acceptance remains open.
+Change: The open-world runtime now passes the authenticated NPC readback into the scene engine. The engine renders only baseline identities backed by valid, non-conflicting readback records, uses the confirmed name/role, drops local quest definitions, and blocks generated envoys/guards unless confirmed. The new support module is inventoried, and an executable architecture regression connects the protected query to the rendered projection.
+Evidence: Code head `5a73dd7f7919f1fb2e45f9b8d9def7454e7ff1d8`. Exact-head full regression [run 41169415408](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415408): 476 files passed, 69 skipped; 2,417 tests passed, 271 skipped. HUD [run 41169415436](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415436), Godot protocol/isolated authority contract, and candidate container [run 41169415389](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415389) passed. Candidate source revision, build input, artifact, and immutable image digests matched; its MariaDB proofs were isolated CI evidence, not production readback.
+Learned: Having an authenticated world snapshot available did not by itself prevent seeded local NPCs from being rendered; identity admission must be bound explicitly to that readback.
+Open/next: The required architecture snapshot/drift/import-call-graph audit, broader movement/combat/effect/persistence and rendering/input review, browser `/play` validation, and production readback remain outstanding. Aurion architecture tools were unavailable through the configured connection; production access was blocked by the missing admin token. No production state changed. Issue #874 stays open until the broad architecture, browser and production evidence is independently established; no production promotion is asserted.
+
 
 ### 2026-10-31 — Investigation journal HUD wiring (#784)
 Status: PARTIAL
