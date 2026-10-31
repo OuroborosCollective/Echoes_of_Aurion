@@ -205,6 +205,95 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number, onNor
 }
 
 suite("starter village pilot over compiled HTTP/tRPC", () => {
+  it("persists real authenticated 10 Hz receipts before a cold-start recovery", async () => {
+    if (phase !== "recovery-preflight") return;
+    expect(revision).toMatch(/^[a-f0-9]{40}$/);
+    const database = new URL(process.env.DATABASE_URL!);
+    expect(database.hostname).toBe("127.0.0.1");
+    expect(database.pathname).toBe("/aurion_starter_pilot");
+
+    const registration = await rpc<any>("auth.registerLocal", "", {
+      handle: "pilot_recovery_" + revision.slice(0, 10),
+      password: "Aurion-starter-pilot-only!",
+    });
+    const issued = await rpc<any>("gameplay.issueZoneTicket", registration.cookie, {
+      zoneId: "observatory_threshold",
+      clientBuild: "starter-recovery-" + revision.slice(0, 12),
+    });
+    const socket = new WebSocket("ws://127.0.0.1:3000/v1/ws", {
+      headers: { Origin: "http://127.0.0.1:3000" },
+    });
+    let welcomed = false;
+    let observedTick = 0;
+    let rejected: string | null = null;
+    let socketError: Error | null = null;
+    socket.on("error", error => { socketError = error; });
+    socket.on("message", raw => {
+      const message = JSON.parse(raw.toString("utf8"));
+      if (message.type === "welcome") {
+        welcomed = message.selfEntityId === "player:" + registration.data.id;
+      }
+      if (message.type === "snapshot" && Number.isSafeInteger(message.tick)) {
+        observedTick = Math.max(observedTick, message.tick);
+      }
+      if (message.type === "reject") rejected = String(message.code);
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        socket.once("error", reject);
+        socket.once("open", () => {
+          socket.send(JSON.stringify({
+            type: "hello",
+            ticket: issued.data.ticket,
+            zoneId: "observatory_threshold",
+            protocolVersion: ZONE_PROTOCOL_VERSION,
+          }));
+          resolve();
+        });
+      });
+      const started = Date.now();
+      while ((!welcomed || observedTick < 12) && !rejected && !socketError && Date.now() - started < 15_000) {
+        await sleep(100);
+      }
+      expect(socketError).toBeNull();
+      expect(rejected).toBeNull();
+      expect(welcomed).toBe(true);
+      expect(observedTick).toBeGreaterThanOrEqual(12);
+    } finally {
+      if (socket.readyState === WebSocket.OPEN) {
+        const closed = new Promise<void>(resolve => socket.once("close", () => resolve()));
+        socket.close();
+        await Promise.race([closed, sleep(3_000)]);
+      } else if (socket.readyState === WebSocket.CONNECTING) {
+        socket.terminate();
+      }
+    }
+
+    // Read real rows written by this runtime, including ticks after the
+    // authenticated presence departed. No receipt/test fixture is inserted here.
+    const pool = createPool(process.env.DATABASE_URL!);
+    try {
+      let durableTick = 0;
+      let durableHash = "";
+      const started = Date.now();
+      while (Date.now() - started < 10_000) {
+        const [rows] = await pool.query<RowDataPacket[]>(
+          "SELECT tick, receiptHash FROM aurionCausalTickReceipts WHERE zoneId = ? ORDER BY tick DESC LIMIT 1",
+          ["observatory_threshold"],
+        );
+        durableTick = Number(rows[0]?.tick ?? 0);
+        durableHash = String(rows[0]?.receiptHash ?? "");
+        if (durableTick >= observedTick + 2) break;
+        await sleep(150);
+      }
+      expect(durableTick).toBeGreaterThanOrEqual(observedTick + 2);
+      expect(durableHash).toMatch(/^[a-f0-9]{64}$/);
+    } finally {
+      await pool.end();
+    }
+  }, 40_000);
+
   it("runs the current authored-quest, zone-combat and north-gate journey", async () => {
     if (phase !== "journey") return;
     expect(revision).toMatch(/^[a-f0-9]{40}$/);
