@@ -14,7 +14,7 @@ describe("Aurion post-deploy production schema readback", () => {
   it("executes the production receipt classifier against the explicitly approved production wave", () => {
     const classifier=readback.match(/RAW_PATH="\$raw"[\s\S]*?node -e '([\s\S]*?)\n            '/)?.[1];
     expect(classifier).toBeDefined();
-    const journalTags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21).map((e:{tag:string})=>e.tag);
+    const journalTags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21&&e.idx<=74).map((e:{tag:string})=>e.tag);
     const wave=JSON.parse(read("config/aurion-migration-wave-manifest.json"));
     expect(wave).toMatchObject({schemaVersion:"aurion.migration-wave-manifest.v2",recordType:"aurion_migration_wave_manifest",policy:{futureTagsRequireNewManifest:true}});
     const tags=wave.migrations.map((entry:{tag:string})=>entry.tag);

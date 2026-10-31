@@ -62,7 +62,9 @@ on:
       - "drizzle/0072_aurion_production_probe_approvals.sql"
       - "drizzle/0073_aurion_production_probe_session_fence.sql"
       - "drizzle/0074_aurion_stat_allocation_receipts.sql"
-      - "config/aurion-migration-wave-manifest.json"
+      - "drizzle/0075_aurion_native_auth_sessions.sql"
+      - "drizzle/0076_aurion_investigation_deduction_receipts.sql"
+      - "config/aurion-migration-wave-0021-0076-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -123,7 +125,9 @@ on:
       - "drizzle/0072_aurion_production_probe_approvals.sql"
       - "drizzle/0073_aurion_production_probe_session_fence.sql"
       - "drizzle/0074_aurion_stat_allocation_receipts.sql"
-      - "config/aurion-migration-wave-manifest.json"
+      - "drizzle/0075_aurion_native_auth_sessions.sql"
+      - "drizzle/0076_aurion_investigation_deduction_receipts.sql"
+      - "config/aurion-migration-wave-0021-0076-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -196,7 +200,7 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("absent.json","utf8"));
           if(receipt.overallState!=="RECONCILIATION_REQUIRED") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
+          if(receipt.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8")).migrations.length || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
           for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
           console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
           NODE
@@ -496,7 +500,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
-          const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8"));
+          const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8"));
           const remaining=manifest.migrations.filter(({tag})=>Number(tag.slice(0,4))>68);
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try {
@@ -522,7 +526,7 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
           if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
+          if(receipt.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8")).migrations.length || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
           console.log(JSON.stringify({phase:"full-match",summary:receipt.summary,drizzleJournal:receipt.drizzleJournal}));
           NODE
       - name: Prove structural drift fails closed

@@ -1,0 +1,232 @@
+{
+  "schemaVersion": "aurion.migration-wave-manifest.v2",
+  "recordType": "aurion_migration_wave_manifest",
+  "waveId": "aurion-production-0021-0076",
+  "migrations": [
+    {
+      "tag": "0021_aurion_global_world_state",
+      "source": "aurion"
+    },
+    {
+      "tag": "0022_aurion_world_chunk_deltas",
+      "source": "aurion"
+    },
+    {
+      "tag": "0023_aurion_world_presence_epochs",
+      "source": "aurion"
+    },
+    {
+      "tag": "0024_aurion_world_epoch_reactions",
+      "source": "aurion"
+    },
+    {
+      "tag": "0025_aurion_loot_mastery_ethos",
+      "source": "aurion"
+    },
+    {
+      "tag": "0026_aurion_faction_questline_state",
+      "source": "aurion"
+    },
+    {
+      "tag": "0027_aurion_faction_questline_rewards",
+      "source": "aurion"
+    },
+    {
+      "tag": "0028_aurion_world_checkpoint",
+      "source": "aurion"
+    },
+    {
+      "tag": "0029_aurion_guild_kingdom_authority",
+      "source": "aurion"
+    },
+    {
+      "tag": "0030_aurion_guild_bank_economy",
+      "source": "aurion"
+    },
+    {
+      "tag": "0031_aurion_profession_crafting_persistence",
+      "source": "aurion"
+    },
+    {
+      "tag": "0032_aurion_group_instances",
+      "source": "aurion"
+    },
+    {
+      "tag": "0033_aurion_ax1_ui_controls",
+      "source": "aurion"
+    },
+    {
+      "tag": "0034_ax1_starter_equipment_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0035_aurion_npc_memory_quest_offers",
+      "source": "aurion"
+    },
+    {
+      "tag": "0036_aurion_faction_warfront_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0037_aurion_trade_crafting_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0038_aurion_world_chunk_delta_conflicts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0039_aurion_world_epoch_materializations",
+      "source": "aurion"
+    },
+    {
+      "tag": "0040_aurion_progression_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0041_aurion_content_hash_ledger",
+      "source": "aurion"
+    },
+    {
+      "tag": "0042_aurion_npc_multi_memory",
+      "source": "aurion"
+    },
+    {
+      "tag": "0043_aurion_civilization_history",
+      "source": "aurion"
+    },
+    {
+      "tag": "0044_aurion_semantic_memory_graph",
+      "source": "aurion"
+    },
+    {
+      "tag": "0045_aurion_deterministic_quest_compiler",
+      "source": "aurion"
+    },
+    {
+      "tag": "0046_aurion_semantic_node_history_key",
+      "source": "aurion"
+    },
+    {
+      "tag": "0047_aurion_world_context_capsules",
+      "source": "aurion"
+    },
+    {
+      "tag": "0048_aurion_causal_evidence",
+      "source": "aurion"
+    },
+    {
+      "tag": "0049_aurion_causal_receipt_v2",
+      "source": "aurion"
+    },
+    {
+      "tag": "0050_aurion_human_ai_authoring",
+      "source": "aurion"
+    },
+    {
+      "tag": "0051_aurion_cross_zone_handover_v2",
+      "source": "aurion"
+    },
+    {
+      "tag": "0052_aurion_effect_intent_journal",
+      "source": "aurion"
+    },
+    {
+      "tag": "0053_aurion_npc_action_gateway_v2",
+      "source": "aurion"
+    },
+    {
+      "tag": "0054_aurion_semantic_memory_graph_v2",
+      "source": "aurion"
+    },
+    {
+      "tag": "0055_aurion_glb_external_provenance",
+      "source": "aurion"
+    },
+    {
+      "tag": "0056_aurion_temporal_history_v1",
+      "source": "aurion"
+    },
+    {
+      "tag": "0057_aurion_economic_ledger_v2",
+      "source": "aurion"
+    },
+    {
+      "tag": "0058_aurion_quest_causal_anchor",
+      "source": "aurion"
+    },
+    {
+      "tag": "0059_aurion_mobile_movement_mode",
+      "source": "aurion"
+    },
+    {
+      "tag": "0060_aurion_npc_policy_evolution",
+      "source": "aurion"
+    },
+    {
+      "tag": "0061_aurion_exploration_memory",
+      "source": "aurion"
+    },
+    {
+      "tag": "0062_aurion_world_director",
+      "source": "aurion"
+    },
+    {
+      "tag": "0063_aurion_npc_information_ecology",
+      "source": "aurion"
+    },
+    {
+      "tag": "0064_aurion_world_entity_foundation",
+      "source": "aurion"
+    },
+    {
+      "tag": "0065_aurion_glb_asset_normalization",
+      "source": "aurion"
+    },
+    {
+      "tag": "0066_aurion_inventory_transaction_kernel",
+      "source": "aurion"
+    },
+    {
+      "tag": "0067_aurion_npc_decision_log",
+      "source": "aurion"
+    },
+    {
+      "tag": "0068_aurion_item_manipulation_runtime",
+      "source": "aurion"
+    },
+    {
+      "tag": "0069_aurion_combat_victory_events",
+      "source": "aurion"
+    },
+    {
+      "tag": "0071_aurion_npc_guild_authority",
+      "source": "aurion"
+    },
+    {
+      "tag": "0072_aurion_production_probe_approvals",
+      "source": "aurion"
+    },
+    {
+      "tag": "0073_aurion_production_probe_session_fence",
+      "source": "aurion"
+    },
+    {
+      "tag": "0074_aurion_stat_allocation_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0075_aurion_native_auth_sessions",
+      "source": "aurion"
+    },
+    {
+      "tag": "0076_aurion_investigation_deduction_receipts",
+      "source": "aurion"
+    }
+  ],
+  "policy": {
+    "productionWritesScheduled": false,
+    "ownerApprovalRequired": true,
+    "futureTagsRequireNewManifest": true
+  }
+}

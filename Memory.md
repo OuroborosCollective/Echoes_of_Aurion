@@ -5302,3 +5302,12 @@ Evidence: Starter Village Pilot Evidence run 41164732716 at source head d0e963be
 Learned: Sequential tags and matching migration counts do not prove the SQL segment stream is valid; the verifier's empty-segment check caught a trailing delimiter.
 Open: Confirm the exact final head passes migration validation and the isolated MariaDB readback paths.
 Next safe step: Wait for final-head CI and keep the PR draft until journal/runtime evidence is complete.
+
+### 2026-10-31 — Register investigation receipts in a separate schema wave (#784)
+Status: PARTIAL
+Task: Extend the journal read model's additive receipt table through schema reconciliation and isolated apply evidence while preserving the existing 0075 production boundary.
+Decisions: Add wave aurion-production-0021-0076 with owner approval still required and productionWritesScheduled=false. Keep the existing 0021-0075 manifest and dispatcher pinned; make the 0075 preflight fail closed against a journal containing 0076. Align reconciliation/apply artifacts, repair policy, promotion gates and isolated MariaDB proof workflows to 55 late migrations.
+Evidence: Exact head 25ea8cbc6eb885b4490cbb1bde08b5bc2ed70303 passed Aurion Investigation Journal run 41164877909, Aurion HUD regression 41164877889, Aurion PR Runtime Candidate 41164877935, Aurion PR Runtime Container Proof 41164877888 and Starter Village Pilot Evidence 41164877799. Schema bootstrap 41164877884, journal watermark 41164877745, root schema apply 41164877815, schema reconciliation 41164877806 and root reconciliation artifact 41164877926 exposed stale 54-migration contracts against 55 journaled tags. Exact-head CI for the 0076 wave correction is pending. Read-only production runtime checks remain blocked by AURION_ADMIN_ACCESS_TOKEN_MISSING; no production schema or state was changed.
+Learned: A new journal tag must enter a new versioned wave contract and every isolated read/apply artifact; the 0075 approval contract must remain separate.
+Open: Verify the exact corrected head across isolated schema reconciliation, backup/recovery/apply, migration watermark, journal/runtime and HUD checks. Keep PR #1255 draft until the final evidence and authorized read-only runtime readback are available.
+Next safe step: Review exact-head Actions; do not merge, dispatch or apply a production migration as part of this work.
