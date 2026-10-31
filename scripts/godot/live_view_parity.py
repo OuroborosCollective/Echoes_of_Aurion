@@ -245,8 +245,13 @@ def compare(
     if isinstance(wp, dict) and isinstance(gp, dict):
         for field in ("confirmedChunks", "visibleEntityIds", "renderedAssetIds"):
             a, b = wp.get(field), gp.get(field)
-            if isinstance(a, list) and isinstance(b, list) and sorted(a) != sorted(b):
-                _fail(issues, f"WORLD_{field.upper()}_MISMATCH")
+            if isinstance(a, list) and isinstance(b, list):
+                # Malformed JSON may mix numbers with strings: never sort untrusted
+                # values before validating their types or abort the FAIL report.
+                if any(not isinstance(item, str) for item in a + b):
+                    _fail(issues, f"WORLD_{field.upper()}_INVALID")
+                elif sorted(a) != sorted(b):
+                    _fail(issues, f"WORLD_{field.upper()}_MISMATCH")
         for field in ("skyType", "skyVisible", "horizonVisible"):
             if wp.get(field) != gp.get(field):
                 _fail(issues, f"WORLD_{field.upper()}_MISMATCH")
