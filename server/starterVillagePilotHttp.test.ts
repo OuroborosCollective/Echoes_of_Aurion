@@ -288,7 +288,7 @@ suite("starter village pilot over compiled HTTP/tRPC", () => {
         await sleep(150);
       }
       expect(durableTick).toBeGreaterThanOrEqual(observedTick + 2);
-      expect(durableHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(durableHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     } finally {
       await pool.end();
     }
