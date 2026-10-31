@@ -5339,6 +5339,14 @@ Finding: Deploy workflow run 41166394438 on `fb16d06254380d8d28702d4f04a21e283c3
 Change: Bind the read-only provenance ledger and its fixtures to the separate `aurion-production-0021-0076` manifest, and watch that manifest in the workflow path filter. Keep the 0075 production preflight, apply and readback boundary unchanged.
 Evidence boundary: No database read/write or production promotion ran. Exact-head workflow rerun is pending.
 
+
+### 2026-10-31 — PR #1259 canonical zone serialization allocation reduction
+Status: PARTIAL — source optimization and historical test-file regression identified; exact final-head CI and matched allocation benchmark pending.
+Change: Replaced per-key Object.entries tuples and chained mapping in canonical zone sorting with sorted key enumeration and pre-sized arrays; preserved the 10 Hz tick protocol and canonical field order. Reconciled the optimization branch with current main (including the journal MariaDB test missing on the original head) without a force push.
+Evidence: Initial head 23533e26f024d212cecf9b78aae1d86e596efbc6 failed runtime container run 41229745765 because server/investigationJournalMariaDb.test.ts was absent; reconciled head 0a9a84c52ae31fc844a0bda5e189013b3639fff4 includes the real test, independently read from GitHub. Historical canonical snapshot and replay tests exist; final exact-head CI remains necessary.
+Learned: Source-level reduction of temporary allocations is not a measured GC or tick-performance improvement; demand identical canonical hashes and same-hardware baseline before claiming a gain.
+Open/next: Finish exact-head CI and reviewer readback before merge; separately measure matched performance. No production rollout or runtime readback claimed.
+
 ### 2026-10-31 — PR #1254 — isolated cold-zone recovery proof (#1229)
 Status: PARTIAL; production recovery and runtime assurance remain unverified.
 Change: Added authenticated Starter Village preflight that produces genuine 10 Hz zone receipts in isolated MariaDB, shuts down gracefully and lets the unchanged cold-start replay assurance check run against durable evidence; no generated receipts or assertion bypass.
