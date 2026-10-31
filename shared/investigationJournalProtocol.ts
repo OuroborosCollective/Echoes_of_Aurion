@@ -8,9 +8,10 @@
  *     -> Aurion client projection
  *     -> journal / board / map hints
  *
- * Client may group claims, show source class and confidence bands, show
- * discovered relations and submit deduction intents built from this
- * readmodel. Client may NOT invent clues, mark truth, complete
+ * Client may group claims, show source class and confidence bands, and show
+ * discovered relations. It submits only a revision-bound selection request;
+ * the authenticated server constructs and validates the actor-bound intent.
+ * Client may NOT invent clues, mark truth, complete
  * investigations locally, grant rewards or mutate NPC memory/world state —
  * and this contract carries no data that would let it: hidden/private
  * claims are absent by #781 construction, and every deduction intent is

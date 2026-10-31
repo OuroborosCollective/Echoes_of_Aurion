@@ -29,7 +29,8 @@ describe("authenticated investigation journal routes", () => {
     const caller = appRouter.createCaller(context({ id: 12, role: "user" } as NonNullable<TrpcContext["user"]>));
     await expect(caller.investigationJournal.read({ viewerUserId: 13, guidance: "plot" }))
       .rejects.toMatchObject({ code: "FORBIDDEN", message: "INVESTIGATION_VIEWER_MISMATCH" });
-    await expect(caller.investigationJournal.submitDeduction({ ...deductionRequest, actorId: "player:13" }))
+    const spoofedRequest = { ...deductionRequest, actorId: "player:13" };
+    await expect(caller.investigationJournal.submitDeduction(spoofedRequest))
       .rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
