@@ -76,7 +76,7 @@ In `godot.json` ist `source` **`godot-live-editor`**, alle übrigen Werte müsse
 
 ## Aufruf, fehlgeschlagene Nachweise und Diagnose
 
-GitHub → **Actions** → **Aurion/Godot live-world visual parity** → **Run workflow** → `capture_id`. Nur `workflow_dispatch` auf dem freigegebenen VPS-Runner `[self-hosted, Linux, X64, aurion-static]` darf den echten Capture-Vergleich ausführen. Pull Requests führen dagegen ausschließlich die explizit als synthetisch gekennzeichneten Negativtests aus.
+GitHub → **Actions** → **Aurion/Godot live-world visual parity** → **Run workflow** → `capture_id`. **Nur `workflow_dispatch`** löst die echte Paritätsprüfung aus. Dieser Workflow kann ausschließlich dann grün werden, wenn Unit-Gate **und echter Live-Bildvergleich** bestanden haben. Die separate `.github/workflows/aurion-live-godot-parity-contract.yml` führt bei Pull Requests ausschließlich synthetische Negativtests aus. Deren grüner Status ist **kein Live-Welt-Beweis**. Die reale Parität läuft auf dem freigegebenen VPS-Runner `[self-hosted, Linux, X64, aurion-static]`.
 
 Fehlende Bridge, Stale-Capture, falsche Server-SHA/Receipt-/Kameradaten, schwarzer Himmel, Neutralboden, fehlende Chunks oder inkompatible Pixel ergeben **FAIL**, nicht `skipped` oder „Probe erfolgreich". Immer wird ein Report erzeugt, soweit der Python-Schritt überhaupt starten konnte:
 

@@ -1,12 +1,8 @@
 name: Aurion/Godot live-world visual parity (fail-closed)
 
+# IMPORTANT: A green real-parity workflow run requires an actual live pair.
+# Pull-request unit-only checks live in a separate contract workflow.
 on:
-  pull_request:
-    paths:
-      - 'scripts/godot/live_view_parity.py'
-      - 'scripts/godot/test_live_view_parity.py'
-      - 'docs/godot/LIVE_WORLD_VISUAL_PARITY.md'
-      - '.github/workflows/aurion-live-godot-view-parity.yml'
   workflow_dispatch:
     inputs:
       capture_id:
@@ -40,7 +36,6 @@ jobs:
           git diff --check
 
   live-paired-readback:
-    if: github.event_name == 'workflow_dispatch'
     needs: unit-negative-controls
     runs-on: [self-hosted, Linux, X64, aurion-static]
     timeout-minutes: 8
