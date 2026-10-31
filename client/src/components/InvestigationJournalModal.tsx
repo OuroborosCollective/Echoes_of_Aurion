@@ -1,12 +1,14 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   buildDeductionIntentFromJournal,
   guidancePresentation,
   type InvestigationJournal,
 } from "@shared/investigationJournalProtocol";
-import type {
-  DeductionIntent,
-  DeductionType,
+import {
+  DEDUCTION_MAX_CLAIMS,
+  type DeductionIntent,
+  type DeductionType,
 } from "@shared/investigationGraphProtocol";
 
 const BAND_LABEL: Readonly<Record<string, string>> = Object.freeze({
@@ -22,10 +24,11 @@ const SOURCE_CLASS_LABEL: Readonly<Record<string, string>> = Object.freeze({
   HEARSAY: "Hörensagen",
 });
 
-const DEDUCTION_LABEL: Readonly<Record<DeductionType, string>> = Object.freeze({
+// REQUIRES edges are not part of the journal readmodel yet. Do not offer a
+// chain operation that the player cannot construct from disclosed relations.
+const DEDUCTION_LABEL: Readonly<Partial<Record<DeductionType, string>>> = Object.freeze({
   affirm: "Bestätigen",
   challenge: "Anfechten",
-  chain: "Verketten",
 });
 
 /**
@@ -47,7 +50,12 @@ export function InvestigationJournalModal(
   }>
 ) {
   const { isOpen, onClose, journal, pending, onSubmitDeduction } = props;
-  const [selected, setSelected] = useState<readonly string[]>([]);
+  const [selection, setSelection] = useState<{ journalHash: string; ids: readonly string[] }>({
+    journalHash: journal.journalHash,
+    ids: [],
+  });
+  const selected = selection.journalHash === journal.journalHash ? selection.ids : [];
+  const opener = useRef<HTMLElement | null>(null);
   const presentation = useMemo(
     () => guidancePresentation(journal.guidance),
     [journal.guidance]
@@ -56,11 +64,15 @@ export function InvestigationJournalModal(
   if (!isOpen) return null;
 
   const toggle = (claimId: string) => {
-    setSelected(current =>
-      current.includes(claimId)
-        ? current.filter(id => id !== claimId)
-        : [...current, claimId]
-    );
+    setSelection(current => {
+      const ids = current.journalHash === journal.journalHash ? current.ids : [];
+      return {
+        journalHash: journal.journalHash,
+        ids: ids.includes(claimId)
+          ? ids.filter(id => id !== claimId)
+          : ids.length < DEDUCTION_MAX_CLAIMS ? [...ids, claimId] : ids,
+      };
+    });
   };
 
   const submit = (deductionType: DeductionType) => {
@@ -70,18 +82,29 @@ export function InvestigationJournalModal(
       deductionType,
     });
     onSubmitDeduction(intent);
-    setSelected([]);
+    setSelection({ journalHash: journal.journalHash, ids: [] });
   };
 
   return (
-    <div
-      role="dialog"
-      aria-label="Investigationsjournal & Gerüchtetafel"
-      style={styles.overlay}
-    >
-      <div style={styles.panel}>
+    <Dialog open={isOpen} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        aria-label="Investigationsjournal & Gerüchtetafel"
+        aria-modal="true"
+        aria-describedby={undefined}
+        showCloseButton={false}
+        style={styles.panel}
+        onOpenAutoFocus={() => {
+          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={event => {
+          if (opener.current?.isConnected) {
+            event.preventDefault();
+            opener.current.focus();
+          }
+        }}
+      >
         <header style={styles.header}>
-          <h2 style={styles.title}>Investigationsjournal</h2>
+          <DialogTitle style={styles.title}>Investigationsjournal</DialogTitle>
           <button
             type="button"
             aria-label="Schließen"
@@ -118,6 +141,7 @@ export function InvestigationJournalModal(
                       type="checkbox"
                       aria-label={`Behauptung ${entry.value} auswählen`}
                       checked={selected.includes(entry.claimId)}
+                      disabled={pending || (!selected.includes(entry.claimId) && selected.length >= DEDUCTION_MAX_CLAIMS)}
                       onChange={() => toggle(entry.claimId)}
                     />
                     <span>
@@ -169,21 +193,12 @@ export function InvestigationJournalModal(
             </button>
           ))}
         </footer>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(6, 10, 18, 0.72)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 60,
-  },
   panel: {
     background: "#101826",
     color: "#dbe4f0",
@@ -193,6 +208,8 @@ const styles: Record<string, CSSProperties> = {
     width: "min(560px, 94vw)",
     maxHeight: "86vh",
     overflowY: "auto",
+    display: "block",
+    zIndex: 60,
   },
   header: {
     display: "flex",
@@ -233,7 +250,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#8fa8c0",
   },
   meta: { color: "#8fa8c0", fontSize: 12 },
-  footer: { display: "flex", gap: 8, alignItems: "center", marginTop: 14 },
+  footer: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 14 },
   action: {
     background: "#2c3e50",
     border: "1px solid #3d566e",
