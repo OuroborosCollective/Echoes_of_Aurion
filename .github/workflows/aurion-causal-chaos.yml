@@ -61,7 +61,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Isolated regression and production import exclusion
-        run: pnpm exec vitest run server/causality/causalFaultInjection.test.ts server/causality/headlessCausalOracle.test.ts server/causality/causalTick.test.ts server/causality/causalReceiptV2.test.ts server/replayVerdictContract.test.ts
+        run: pnpm exec vitest run server/causality/causalFaultInjection.test.ts server/causality/headlessCausalOracle.test.ts server/causality/causalTick.test.ts server/causality/causalReceiptV2.test.ts server/causality/zoneRecoveryDatabaseUnavailable.test.ts server/replayVerdictContract.test.ts
       - name: Build an explicitly test-only immutable subject
         run: |
           node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync("chaos-subject.bin", "aurion.causal-chaos.test-subject.v1\n"); fs.writeFileSync("chaos-predicate.json", JSON.stringify({schema:"aurion.causal-chaos.test-predicate.v1",sourceRevision:process.env.AURION_CHAOS_REVISION,workflowSourceRevision:process.env.GITHUB_SHA,productionEvidence:false}));'
