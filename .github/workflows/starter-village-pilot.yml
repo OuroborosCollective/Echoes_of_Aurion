@@ -191,12 +191,23 @@ jobs:
           # Diagnostic only: --trace-exit reports a real Node process.exit call, never changes receipts or gates.
           sudo -u aurion-netproof setsid --fork --wait env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" AURION_PRIVATE_STATE_DIR="$AURION_PRIVATE_STATE_DIR" AURION_GLB_STORAGE_DIR="$AURION_GLB_STORAGE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" --trace-exit "$RUNTIME_ENTRY" > test-results/starter-pilot-server-preflight.log 2>&1 &
           preflight_launcher_pid=$!
+          # setsid --fork --wait has a supervising parent whose argv also contains
+          # dist/index.js. Match the REAL Node executable and its exact entrypoint,
+          # never an argv-substring in sudo/setsid or a different worker process.
           for attempt in $(seq 1 50); do
-            pid="$(pgrep -u "$AURION_NET_UID" -f 'dist/index.js' | head -n 1 || true)"
+            for candidate in $(pgrep -u "$AURION_NET_UID" -x node || true); do
+              if [[ -r "/proc/$candidate/cmdline" ]] &&
+                 tr '\\0' '\\n' < "/proc/$candidate/cmdline" | grep -Fxq "$RUNTIME_ENTRY"; then
+                pid="$candidate"
+                break
+              fi
+            done
             if [[ -n "$pid" ]]; then break; fi
             sleep 0.1
           done
           test -n "$pid"
+          # Independent executable identity check before ever signaling a process.
+          test "$(ps -o comm= -p "$pid" | tr -d ' ')" = "node"
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then break; fi
             sleep 1
