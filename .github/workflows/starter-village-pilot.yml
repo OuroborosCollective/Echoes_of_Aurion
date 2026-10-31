@@ -207,6 +207,9 @@ jobs:
           done
           if [[ "$preflight_stopped" != "1" ]]; then
             echo "Authenticated preflight runtime or durable shutdown proof incomplete" >&2
+            ps -o pid,ppid,stat,comm,args -p "$pid" >&2 || true
+            pgrep -a -u "$AURION_NET_UID" -f "dist/index.js" >&2 || true
+            tail -n 12 test-results/starter-pilot-server-preflight.log >&2
             exit 1
           fi
           trap - EXIT
