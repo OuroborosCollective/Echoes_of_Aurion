@@ -149,8 +149,11 @@ async function startServer(){
       process.exit(1);
     }
   };
-  process.once("SIGTERM",()=>{void shutdown("SIGTERM");});
-  process.once("SIGINT",()=>{void shutdown("SIGINT");});
+  // A second signal during the asynchronous durable drain must not restore Node's
+  // default termination handler before persistence and HTTP closure finish.
+  // The shutdown guard above makes repeated signals idempotent.
+  process.on("SIGTERM",()=>{void shutdown("SIGTERM");});
+  process.on("SIGINT",()=>{void shutdown("SIGINT");});
   server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
 startServer().catch(error=>{console.error(error);process.exit(1);});
