@@ -12,4 +12,3 @@ CREATE TABLE `aurionInvestigationDeductionReceipts` (
   UNIQUE KEY `aurionInvestigationDeductionReceipts_hash_uq` (`receiptHash`),
   INDEX `aurionInvestigationDeductionReceipts_actor_idx` (`actorId`, `createdAt`)
 );
---> statement-breakpoint
