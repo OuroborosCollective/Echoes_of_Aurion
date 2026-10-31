@@ -1,43 +1,26 @@
-name: Aurion Live Godot Visual Parity (fail closed)
+name: Aurion LIVE Godot Visual Parity (fails without matching live views)
 
 on:
-  pull_request:
-    paths:
-      - "scripts/godot/live_visual_parity.py"
-      - "scripts/godot/test_live_visual_parity.py"
-      - ".github/workflows/aurion-live-visual-parity.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  comparator-unit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install "Pillow>=10,<12"
-      - name: Synthetic unit tests (not live evidence)
-        run: python -m unittest discover -s scripts/godot -p "test_live_visual_parity.py" -v
-
   owner-vps-live-audit:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux]
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Check exact checkout revision
+      - name: Fail closed unless comparing the exact released main checkout
         shell: bash
         run: |
           set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Capture VPS Godot desktop and compare independently evidenced live viewports
+      - name: Capture actual VPS Godot desktop and compare independent live gameplay views
         shell: bash
         env:
           DISPLAY: ":99"
@@ -46,11 +29,11 @@ jobs:
           auth="$(find /tmp -maxdepth 2 -path '/tmp/xvfb-run.*/Xauthority' -type f -readable -print -quit 2>/dev/null || :)"
           if [[ -n "$auth" ]]; then export XAUTHORITY="$auth"; fi
           python3 scripts/godot/live_visual_parity.py --capture-desktop --output "$RUNNER_TEMP/aurion-live-visual-parity"
-      - name: Upload original screenshots and diagnostics even on failure
+      - name: Upload original screenshots and fail-closed diagnosis even on failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aurion-live-visual-parity-${{ github.sha }}-${{ github.run_id }}
+          name: aurion-LIVE-parity-${{ github.sha }}-${{ github.run_id }}
           path: ${{ runner.temp }}/aurion-live-visual-parity/
           retention-days: 7
           if-no-files-found: warn

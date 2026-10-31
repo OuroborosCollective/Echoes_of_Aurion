@@ -20,6 +20,6 @@ Passing requires fresh captures (within 120 seconds), same captured tick (within
 
 Failure artifacts include report.json, report.md, difference.png when both images exist, and the original godot-workspace-desktop.png. The desktop screenshot can diagnose login, black viewport or green placeholders but is NOT accepted as the actual Godot gameplay viewport.
 
-Only GitHub-hosted synthetic unit checks run for pull requests. A manual workflow_dispatch on main runs the read-only VPS job on the existing self-hosted runner. No service restart, database change, credential extraction, asset mutation or world edit is performed. Green unit tests NEVER establish live parity.
+A distinct workflow named Aurion Visual Comparator UNIT runs GitHub-hosted synthetic tests for pull requests; its success never means live-parity success. The Aurion LIVE Godot Visual Parity workflow has ONLY one owner-VPS audit job, runs by workflow_dispatch, fails if not on main and never has a skipped live job silently reported green. No service restart, database change, credential extraction, asset mutation or world edit is performed. Green unit tests NEVER establish live parity.
 
 The current live Godot desktop observation was predominantly dark with an auth screen (~96 percent dark sample); local bridge port 8765 was not listening at inspection time. These are observations, not final causal proof. Native Godot authoring Apply/Receipt/independent readback remains a separate gate.
