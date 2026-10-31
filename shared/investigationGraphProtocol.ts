@@ -377,3 +377,21 @@ export function validateDeductionIntent(input: Readonly<{
   }).slice("sha256:".length);
   return deductionReceiptSchema.parse({ ...unsigned, id, receiptHash });
 }
+
+/** Verify the canonical identity and content hash of a persisted deduction receipt. */
+export function verifyDeductionReceipt(receipt: DeductionReceipt): DeductionReceipt {
+  const parsed = deductionReceiptSchema.parse(receipt);
+  const { id, receiptHash, ...unsigned } = parsed;
+  const expectedId = "ded_" + canonicalSha256({
+    domain: "aurion.deduction-receipt-id.v1",
+    value: unsigned,
+  }).slice("sha256:".length, "sha256:".length + 59);
+  const expectedHash = canonicalSha256({
+    domain: "aurion.deduction-receipt.v1",
+    value: { ...unsigned, id },
+  }).slice("sha256:".length);
+  if (id !== expectedId || receiptHash !== expectedHash) {
+    throw new Error("DEDUCTION_RECEIPT_HASH_MISMATCH");
+  }
+  return Object.freeze(parsed);
+}
