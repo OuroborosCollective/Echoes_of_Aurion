@@ -22,6 +22,32 @@ const cases = [
 ] as const;
 
 describe("CAG terrain probe receipt parity", () => {
+  it("preserves semantic texture-bin counts independently of chunk tile array order", () => {
+    const chunk = generateBaseWorldChunk({
+      worldId: "echoes-of-aurion-global",
+      worldSeed: "echoes-of-aurion-v1",
+      coordinate: { x: -93, z: 48 },
+    });
+    const shifted = {
+      ...chunk,
+      tiles: [...chunk.tiles.slice(73), ...chunk.tiles.slice(0, 73)].reverse(),
+    };
+    const canonical = buildTerrainTexturizationCagProbe(chunk);
+    const reordered = buildTerrainTexturizationCagProbe(shifted);
+    expect(reordered).toEqual(canonical);
+
+    const encodedSurfaces = reordered.code.split("surfaces={")[1]?.split("};")[0];
+    expect(encodedSurfaces).toBeDefined();
+    const codes = encodedSurfaces!.split(",").map(Number);
+    expect(codes).toHaveLength(chunk.tiles.length);
+
+    const order = ["grass", "riverbank", "stone", "forest_floor", "ash", "ruin_path"] as const;
+    const expectedBins = order.map(surface => chunk.tiles.filter(tile => tile.surface === surface).length);
+    const observedBins = order.map((_, index) => codes.filter(code => code === index + 1).length);
+    expect(observedBins).toEqual(expectedBins);
+    expect(reordered.expectedExact).toBe(`{${chunk.tiles.length},${expectedBins.join(",")}}`);
+  });
+
   it.each(cases)("preserves main's probe bytes for seed %s at (%i,%i), reversed=%s", (worldSeed, x, z, reversed, expected) => {
     const chunk = generateBaseWorldChunk({ worldId: "echoes-of-aurion-global", worldSeed, coordinate: { x, z } });
     const input = reversed ? { ...chunk, tiles: [...chunk.tiles].reverse() } : chunk;
