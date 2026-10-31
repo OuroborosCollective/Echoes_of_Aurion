@@ -8,7 +8,7 @@ import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import { InventoryModal } from "../components/InventoryModal";
 import { CharacterModal } from "../components/CharacterModal";
 import { QuestLogModal } from "../components/QuestLogModal";
-import { InvestigationJournalModal } from "../components/InvestigationJournalModal";
+import { InvestigationJournalModal } from "@/components/InvestigationJournalModal";
 import type { DeductionIntent } from "@shared/investigationGraphProtocol";
 import type { JournalGuidance } from "@shared/investigationJournalProtocol";
 import { CraftingModal } from "../components/CraftingModal";
@@ -500,7 +500,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       message={investigationJournalQuery.isError
         ? "Der serverbestätigte Journalstand ist derzeit nicht verfügbar."
         : message}
-      onSubmitDeduction={intent => { void submitInvestigationDeduction(intent); }}
+      onSubmitDeduction={(intent: DeductionIntent) => { void submitInvestigationDeduction(intent); }}
     />
     <CraftingModal
       isOpen={panel === "crafting"}
