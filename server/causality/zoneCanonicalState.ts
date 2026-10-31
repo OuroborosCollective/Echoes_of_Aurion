@@ -106,9 +106,13 @@ export function sortCanonicalZoneState(
     const sortedCooldowns: Record<string, number> = {};
     const keys = Object.keys(player.skillCooldowns).sort();
     for (let j = 0; j < keys.length; j++) {
-      sortedCooldowns[keys[j] as string] = player.skillCooldowns[
-        keys[j] as string
-      ] as number;
+      const key = keys[j] as string;
+      const value = player.skillCooldowns[key] as number;
+      // Object.fromEntries preserved this own key; bare {} assignment does not.
+      if (key === "__proto__") Object.defineProperty(sortedCooldowns, key, {
+        value, enumerable: true, writable: true, configurable: true,
+      });
+      else sortedCooldowns[key] = value;
     }
     players[i] = { ...player, skillCooldowns: sortedCooldowns };
   }
@@ -159,9 +163,12 @@ export function sortCanonicalZoneState(
       const sortedProgress: Record<string, string | number | boolean> = {};
       const progressKeys = Object.keys(quest.objectiveProgress).sort();
       for (let j = 0; j < progressKeys.length; j++) {
-        sortedProgress[progressKeys[j] as string] = quest.objectiveProgress[
-          progressKeys[j] as string
-        ] as string | number | boolean;
+        const key = progressKeys[j] as string;
+        const value = quest.objectiveProgress[key] as string | number | boolean;
+        if (key === "__proto__") Object.defineProperty(sortedProgress, key, {
+          value, enumerable: true, writable: true, configurable: true,
+        });
+        else sortedProgress[key] = value;
       }
       questInstances[i] = {
         ...quest,
