@@ -975,6 +975,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/core/confirmedNpcRoster.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/core/NpcGlbFallback.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
