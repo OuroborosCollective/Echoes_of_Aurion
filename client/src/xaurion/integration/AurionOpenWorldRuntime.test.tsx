@@ -32,7 +32,7 @@ const fixture = vi.hoisted(() => {
   type ZoneStatus = "connecting" | "connected" | "closed" | "rejected";
   return {
     selectedUrl,
-    engines: [] as ReturnType<typeof makeEngine>[], makeEngine,
+    engines: [] as ReturnType<typeof makeEngine>[], engineReadbacks: [] as unknown[], makeEngine,
     snapshots: [] as Array<(snapshot: ZonePresenceSnapshot) => void>,
     statuses: [] as Array<(status: ZoneStatus) => void>,
     rejects: [] as Array<(code: string) => void>,
@@ -44,7 +44,7 @@ const fixture = vi.hoisted(() => {
     deferRenderer: false,
     worldLoading: false,
     appearanceData: null as null | { assetId: string; displayName: string; storageUrl: string; visibility: "public" },
-    worldData: null as null | { globalWorld: { worldSeed: string; epoch: number }; serviceNpcs: unknown[] },
+    worldData: null as null | { globalWorld: { worldSeed: string; epoch: number }; serviceNpcs: unknown[]; npcs?: unknown[] },
   };
 });
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: 1 }, isAuthenticated: true }) }));
@@ -73,7 +73,8 @@ vi.mock("../core/RendererFactory", () => ({ createRuntimeRenderer: vi.fn((reques
   const value = { handle: { dispose: vi.fn() }, evidence: { protocol: "ax1-renderer.v1", requested, backend: requested, fallback: "disabled" } };
   return fixture.deferRenderer ? new Promise(resolve => fixture.rendererRequests.push({ resolve, signal })) : Promise.resolve(value);
 }) }));
-vi.mock("../core/MMOEngine", () => ({ MMOEngine: Object.assign(vi.fn(() => {
+vi.mock("../core/MMOEngine", () => ({ MMOEngine: Object.assign(vi.fn((...args: unknown[]) => {
+  fixture.engineReadbacks.push(args[4]);
   const engine = fixture.makeEngine(); fixture.engines.push(engine); return engine;
 }), { checkWebGLSupport: () => ({ supported: true }) }) }));
 vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn((options: {
@@ -104,10 +105,17 @@ const enter = async () => { await act(async () => { fireEvent(window, new Custom
 describe("open world session ownership", () => {
   beforeEach(() => {
     fixture.deferRenderer = false; fixture.rendererRequests = []; fixture.requestedRenderers = []; fixture.worldFetches = 0; fixture.worldLoading = false;
-    fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = [];
+    fixture.engines = []; fixture.engineReadbacks = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = [];
     window.history.replaceState({}, "", "/");
     fixture.appearanceData = { assetId: "glb_standard_male", displayName: "Aurion Standard Male", storageUrl: fixture.selectedUrl, visibility: "public" };
-    fixture.worldData = { globalWorld: { worldSeed: "fixture", epoch: 0 }, serviceNpcs: [] };
+    fixture.worldData = { globalWorld: { worldSeed: "fixture", epoch: 0 }, serviceNpcs: [], npcs: [] };
+  });
+
+  it("passes the authenticated NPC roster to the scene engine", async () => {
+    const confirmedNpcReadback = [{ id: "lyra", displayName: "Lyra from Aurion", role: "confirmed role" }];
+    fixture.worldData = { globalWorld: { worldSeed: "fixture", epoch: 0 }, serviceNpcs: [], npcs: confirmedNpcReadback };
+    render(<AurionOpenWorldRuntime />); await enter();
+    expect(fixture.engineReadbacks[0]).toBe(confirmedNpcReadback);
   });
 
   it("rebuilds a ready WebGPU projection from the observed world epoch without a recovery fetch", async () => {
