@@ -158,6 +158,11 @@ function roundMilliseconds(value: number): number {
   return Math.round(value * 1_000) / 1_000;
 }
 
+/**
+ * Diagnostic budget and parity measurement of the current implementation.
+ * Treat it as optimization evidence only when paired with a matched pre-change
+ * run on the same runner, workload, and runtime.
+ */
 describe("Aurion 10 Hz zone tick benchmark (#987)", () => {
   it("repeats one fixed authoritative workload and reports the 100 ms budget", async () => {
     const actorCount = 8;
