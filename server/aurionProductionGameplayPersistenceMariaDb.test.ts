@@ -161,7 +161,7 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
     }
   }, 30000);
 
-  it("reproduces a cold registry creating tick one over an existing durable receipt", async () => {
+  it("continues the durable receipt chain after a cold registry restart", async () => {
     const url = new URL(process.env.DATABASE_URL ?? "");
     if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("ISOLATED_TEST_DB_REQUIRED");
     const pool = createPool(url.href), adapter = new MariaDBCausalPersistenceAdapter();
@@ -173,17 +173,21 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       previous.sourceRevisionOverride = priorRevision;
       previous.tick();
       await previous.flushEvidencePersistence();
-      expect(await adapter.getLatestReceipt(zoneId)).toMatchObject({ tick: 1, sourceRevision: priorRevision });
+      const persisted = await adapter.getLatestReceipt(zoneId);
+      expect(persisted).toMatchObject({ tick: 1, sourceRevision: priorRevision });
 
       // A process restart loses the registry but keeps MariaDB's canonical tick.
       const restartedRegistry = new ZoneRegistry();
-      const stale = restartedRegistry.get(zoneId);
-      stale.sourceRevisionOverride = "b".repeat(40);
-      stale.tick();
-      await stale.flushEvidencePersistence();
+      const resumed = restartedRegistry.get(zoneId);
+      expect(resumed.getTickNumber()).toBe(1);
 
-      expect(globalTickRecorder.getPersistenceStatus().failures).toBe(failuresBefore + 1);
-      expect(await adapter.getLatestReceipt(zoneId)).toMatchObject({ tick: 1, sourceRevision: priorRevision });
+      resumed.sourceRevisionOverride = "b".repeat(40);
+      resumed.tick();
+      await resumed.flushEvidencePersistence();
+      expect(globalTickRecorder.getPersistenceStatus().failures).toBe(failuresBefore);
+      expect(await adapter.getLatestReceipt(zoneId)).toMatchObject({
+        tick: 2, sourceRevision: "b".repeat(40), previousReceiptHash: persisted!.receiptHash,
+      });
     } finally {
       await pool.execute("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
       await pool.execute("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
