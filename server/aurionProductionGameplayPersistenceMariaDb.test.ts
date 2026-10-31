@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createPool } from "mysql2/promise";
 import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
-import { AurionTickRecorder } from "./causality/tickRecorder";
+import { AurionTickRecorder, globalTickRecorder } from "./causality/tickRecorder";
 import { AuthoritativeMovementZone, ZoneRegistry } from "./zoneRuntime";
 import { prepareProductionProbeZone } from "./aurionProductionProbeZone";
 import { AurionProductionProbeStore } from "./aurionProductionProbeStore";
@@ -160,4 +160,35 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       await competingPool.end();
     }
   }, 30000);
+
+  it("reproduces a cold registry creating tick one over an existing durable receipt", async () => {
+    const url = new URL(process.env.DATABASE_URL ?? "");
+    if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("ISOLATED_TEST_DB_REQUIRED");
+    const pool = createPool(url.href), adapter = new MariaDBCausalPersistenceAdapter();
+    const zoneId = "observatory_threshold:cold-restart-regression";
+    const failuresBefore = globalTickRecorder.getPersistenceStatus().failures;
+    const previous = new AuthoritativeMovementZone(zoneId, new AurionTickRecorder(20, adapter));
+    const priorRevision = "a".repeat(40);
+    try {
+      previous.sourceRevisionOverride = priorRevision;
+      previous.tick();
+      await previous.flushEvidencePersistence();
+      expect(await adapter.getLatestReceipt(zoneId)).toMatchObject({ tick: 1, sourceRevision: priorRevision });
+
+      // A process restart loses the registry but keeps MariaDB's canonical tick.
+      const restartedRegistry = new ZoneRegistry();
+      const stale = restartedRegistry.get(zoneId);
+      stale.sourceRevisionOverride = "b".repeat(40);
+      stale.tick();
+      await stale.flushEvidencePersistence();
+
+      expect(globalTickRecorder.getPersistenceStatus().failures).toBe(failuresBefore + 1);
+      expect(await adapter.getLatestReceipt(zoneId)).toMatchObject({ tick: 1, sourceRevision: priorRevision });
+    } finally {
+      await pool.execute("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
+      await pool.execute("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
+      await pool.end();
+    }
+  }, 30000);
+
 });
