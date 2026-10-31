@@ -28,6 +28,7 @@ import {
   WorldMobEntity,
 } from '../types';
 import { INITIAL_NPCS, MMORPG_CLASSES, COMPANION_PETS_DATABASE, HOMESTEAD_BLUEPRINTS } from '../data/mmorpgData';
+import { resolveConfirmedNpcRoster, type ConfirmedNpcReadback } from './confirmedNpcRoster';
 import { OpenWorldLandscape } from '../world/OpenWorldLandscape';
 import { OpenWorldPlayer } from '../entities/OpenWorldPlayer';
 import { collisionSystem } from '../world/WorldCollisionSystem';
@@ -151,7 +152,8 @@ export class MMOEngine {
 
   // Quests & Chat State
   public quests: Quest[] = [];
-  public npcs: NPCCharacter[] = INITIAL_NPCS;
+  private readonly confirmedNpcIds: ReadonlySet<string>;
+  public npcs: NPCCharacter[] = [];
   public chatMessages: ChatMessage[] = [];
 
   // Floating Combat Texts
@@ -302,8 +304,11 @@ export class MMOEngine {
     return MMOEngine.checkWebGLSupport().supported;
   }
 
-  constructor(container: HTMLElement, startingClass: CharacterClassId, public readonly simulation: DeterministicSimulation, private readonly rendererHandle: RendererHandle) {
+  constructor(container: HTMLElement, startingClass: CharacterClassId, public readonly simulation: DeterministicSimulation, private readonly rendererHandle: RendererHandle, confirmedNpcReadback: readonly ConfirmedNpcReadback[] | null | undefined) {
     this.container = container;
+    const confirmedNpcRoster = resolveConfirmedNpcRoster(INITIAL_NPCS, confirmedNpcReadback);
+    this.confirmedNpcIds = confirmedNpcRoster.ids;
+    this.npcs = confirmedNpcRoster.npcs;
 
     // Clear any previous stale canvas or child elements from container
     while (this.container.firstChild) {
@@ -452,7 +457,7 @@ export class MMOEngine {
     this.spawnNPCVisuals();
 
     // 4. Initial Quests from NPCs
-    this.quests = INITIAL_NPCS.flatMap((n) => n.quests);
+    this.quests = [];
 
     // 5. Initial Chat Announcements
     this.addChatMessage('system', 'System', 'Welcome to the Realm of Aethelgard! Use [W,A,S,D] to move, [1-5] for skills, [Z] for Mount.');
@@ -523,7 +528,7 @@ export class MMOEngine {
   public spawnPoliticsEnvoyForChunk(chunk: any) {
     // Only one per chunk
     const npcId = `politics_envoy_${chunk.chunkKey}`;
-    if (this.npcs.find(n => n.id === npcId)) return;
+    if (!this.confirmedNpcIds.has(npcId) || this.npcs.find(n => n.id === npcId)) return;
 
     const envoyNPC: NPCCharacter = {
       id: npcId,
@@ -586,7 +591,7 @@ export class MMOEngine {
 
     for (let i = 0; i < count; i++) {
       const guardId = `guard_${chunkKey}_${i}`;
-      if (this.npcs.find(n => n.id === guardId)) continue;
+      if (!this.confirmedNpcIds.has(guardId) || this.npcs.find(n => n.id === guardId)) continue;
       
       const angle = (Math.PI * 2 / count) * i;
       const r = 10; // 10m radius around envoy

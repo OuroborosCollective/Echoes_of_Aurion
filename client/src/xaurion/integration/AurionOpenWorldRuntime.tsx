@@ -274,6 +274,7 @@ export default function AurionOpenWorldRuntime() {
 
   useEffect(() => {
     if (!activation || !containerRef.current || !selectedCharacterUrl || !worldSnapshot.data) return;
+    const confirmedNpcReadback = worldSnapshot.data.npcs;
     const support = MMOEngine.checkWebGLSupport();
     if (!support.supported) {
       setWebglError(support.error ?? "WebGL ist nicht verfügbar.");
@@ -364,7 +365,7 @@ export default function AurionOpenWorldRuntime() {
       const initialized = await createRuntimeRenderer(requested, abort.signal);
       rendererHandle = initialized.handle;
       if (disposed || !containerRef.current || rendererGeneration.current !== generation) { rendererHandle.dispose(); return; }
-      engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch), rendererHandle);
+      engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch), rendererHandle, confirmedNpcReadback);
       setRendererEvidence({ ...initialized.evidence, generation, recoveryAttempt: recoveryAttempts.current, recoveryCause: recoveryCause.current, status: "awaiting_snapshot", worldSeed: world.worldSeed, epoch: world.epoch });
       engineRef.current = engine;
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
