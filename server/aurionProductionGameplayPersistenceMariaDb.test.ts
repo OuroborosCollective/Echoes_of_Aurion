@@ -12,6 +12,20 @@ import { orderCanonicalZoneIntents, sanitizeIntentForHash } from "../shared/auri
 
 const suite = process.env.AURION_PROBE_E2E === "1" ? describe : describe.skip;
 suite("real Aurion membership receipts in isolated MariaDB (not production)", () => {
+  it("keeps a genuinely empty receipt history distinct from an unavailable database", async () => {
+    const url = new URL(process.env.DATABASE_URL ?? "");
+    if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) {
+      throw new Error("ISOLATED_TEST_DB_REQUIRED");
+    }
+    // Real migrated MariaDB, no test double and no receipt/production writes.
+    const adapter = new MariaDBCausalPersistenceAdapter();
+    const zoneId = "observatory_threshold:empty-durable-head-regression";
+    expect(await adapter.getLatestReceipt(zoneId)).toBeNull();
+    const zone = await restorePersistedZoneHead(zoneId, adapter, new AurionTickRecorder(20, adapter));
+    expect(zone.getTickNumber()).toBe(0);
+    expect(zone.getLatestReceipt()).toBeUndefined();
+  });
+
   it("flushes canonical join/leave, reads both committed ticks independently and rejects a deleted receipt", async () => {
     const url = new URL(process.env.DATABASE_URL ?? "");
     if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("ISOLATED_TEST_DB_REQUIRED");
