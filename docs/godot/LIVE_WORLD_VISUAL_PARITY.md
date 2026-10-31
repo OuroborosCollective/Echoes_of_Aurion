@@ -4,9 +4,9 @@
 
 Der Workflow `.github/workflows/aurion-live-godot-view-parity.yml` darf **nur grün** werden, wenn zwei tatsächlich aufgenommene, nicht simulierte Welt-Viewports auf demselben laufenden Aurion-Quellzustand beruhen **und** visuell übereinstimmen. Er trennt:
 
-1. **Autorität:** dieselbe live Docker-Image-ID und volle Aurion-Source-Revision, World-/Zone-ID, Tick, kausaler Receipt-Hash und State-Hash.
+1. **Autorität:** dieselbe live Docker-Image-ID und volle Aurion-Source-Revision, World-/Zone-ID, Tick, kausaler Receipt-Hash, State-Hash, serverbestätigter Projektions-Hash und Stream-Instanz. Keine Identitätswerte aus dem anderen Capture abschreiben.
 2. **Sicht:** exakt gleicher Kamerastandort, Kameraziel, Sichtfeld und Pixel-Viewport.
-3. **Weltgehalt:** mindestens ein bestätigter Terrain-Chunk, mindestens zwei echte Welt-/Actor-Assets, ein bestätigter Actor und sichtbare Himmelsprojektion auf **beiden** Clients. Platzhalter und ein einzelner Clockwork Stalker reichen ausdrücklich nicht.
+3. **Weltgehalt:** mindestens ein bestätigter Terrain-Chunk, mindestens zwei echte Welt-/Actor-Assets, ein bestätigter Actor sowie sichtbare, übereinstimmende Himmels- und Horizontprojektion auf **beiden** Clients. Platzhalter und ein einzelner Clockwork Stalker reichen ausdrücklich nicht.
 4. **Bild:** lokale tile-basierte SSIM ≥ 0,62 und normalisierter mittlerer Pixelfehler ≤ 0,22 bei identischen Pixelmaßen. Diese beiden Schwellen sind ein **konservatives Diagnose-Gate**, keine wissenschaftliche Garantie zweier äquivalenter Engines. Bei unterschiedlichen Licht-/Shader-Pipelines kann ein echter Gleichstand rot bleiben; niemals wird die Schwelle abgesenkt, um einen Lauf grün zu machen.
 5. **Frische:** beide Aufnahmen maximal 120 Sekunden alt und höchstens zwei Sekunden auseinander. Synthetische Tests belegen nur Comparator-Logik, niemals Live-Parität.
 
@@ -55,7 +55,9 @@ JSON-Vertrag pro Aufnahme (die Werte unten sind ausschließlich Feld-/Typbeispie
     "runtimeImageId": "sha256:<64-stellige Docker-Image-ID>",
     "tick": 1,
     "receiptHash": "sha256:<64 Hex-Zeichen>",
-    "stateHash": "sha256:<64 Hex-Zeichen>"
+    "stateHash": "sha256:<64 Hex-Zeichen>",
+    "projectionHash": "sha256:<serverbestätigter Projektions-Hash>",
+    "streamInstance": "<serverbestätigte Stream-Instanz>"
   },
   "camera": {
     "positionMm": [0, 2000, 6000],
@@ -68,7 +70,8 @@ JSON-Vertrag pro Aufnahme (die Werte unten sind ausschließlich Feld-/Typbeispie
     "visibleEntityIds": ["<bestätigte Entity-ID>"],
     "renderedAssetIds": ["<freigegebenes Terrain-Asset>", "<freigegebenes Modell>"],
     "skyType": "procedural",
-    "skyVisible": true
+    "skyVisible": true,
+    "horizonVisible": true
   },
   "imageSha256": "<SHA256 der unveränderten zugehörigen PNG-Bytes>"
 }
