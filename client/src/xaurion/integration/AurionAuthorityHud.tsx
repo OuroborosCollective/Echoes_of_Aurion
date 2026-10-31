@@ -28,7 +28,7 @@ import "./ax1AuthorityHud.css";
 type Panel = "inventory" | "character" | "disciplines" | "quests" | "investigations" | "map" | "crafting" | "controls" | "guild" | "economy" | "dialogue" | "territory" | "homestead" | "determinism" | "research" | null;
 const explorerView = { name: "Explorer", icon: "✦", color: "#fbbf24" } as const;
 const roleLabels = { tank: "Tank", healer: "Heiler", dps: "Schaden" } as const;
-const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c: "character", k: "disciplines", m: "map", j: "quests", q: "quests", g: "guild" };
+const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c: "character", k: "disciplines", m: "map", j: "investigations", q: "quests", g: "guild" };
 const community = (panel: "chat" | "market" | "guild") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
 const ax1WorldHudSchema = worldReadbackSchema.extend({
   revision: z.literal(1),

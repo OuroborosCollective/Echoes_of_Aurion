@@ -327,7 +327,7 @@ function DesktopHUD(props: GameHUDProps) {
             <HudNavButton label="Char" shortcut="C" title="Charakter [C]" ariaLabel="Charakter" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></HudNavButton>
             <HudNavButton label="Inventar" shortcut="I" title="Inventar [I/B]" ariaLabel="Inventar" onClick={() => closeMenu(props.onOpenInventory)}><Package /></HudNavButton>
             <HudNavButton label="Craft" title="Handwerk" ariaLabel="Handwerk" onClick={() => closeMenu(props.onOpenCrafting)}><Hammer /></HudNavButton>
-            <HudNavButton label="Quests" shortcut="J" title="Aufträge [J]" ariaLabel="Aufträge" onClick={() => closeMenu(props.onOpenQuests)}><ScrollText /></HudNavButton>
+            <HudNavButton label="Quests" shortcut="Q" title="Aufträge [Q]" ariaLabel="Aufträge" onClick={() => closeMenu(props.onOpenQuests)}><ScrollText /></HudNavButton>
             <HudNavButton label="Party" title="Gruppe" ariaLabel="Gruppe" badge={props.party?.length} onClick={() => closeMenu(props.onOpenParty)}><Users /></HudNavButton>
             <HudNavButton label="Map" shortcut="M" title="Weltatlas [M]" ariaLabel="Weltatlas" onClick={() => closeMenu(props.onOpenMap)}><MapIcon /></HudNavButton>
             <HudNavButton label={menuExpanded ? "Schließen" : "Mehr"} shortcut="/" title="Weitere Menüs" active={menuExpanded} ariaLabel="Weitere Menüs" onClick={() => setMenuExpanded(value => !value)}><Menu /></HudNavButton>

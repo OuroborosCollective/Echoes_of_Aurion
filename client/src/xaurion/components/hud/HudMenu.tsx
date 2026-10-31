@@ -45,7 +45,7 @@ export function HudNav(props: NavProps) {
       <NavButton label="Craft" title="Handwerk" ariaLabel="Handwerk" onClick={closeThen(props.onOpenCrafting)}>
         <Hammer />
       </NavButton>
-      <NavButton label="Quests" shortcut="J" title="Aufträge [J]" ariaLabel="Aufträge" onClick={closeThen(props.onOpenQuests)}>
+      <NavButton label="Quests" shortcut="Q" title="Aufträge [Q]" ariaLabel="Aufträge" onClick={closeThen(props.onOpenQuests)}>
         <ScrollText />
       </NavButton>
       <NavButton label="Party" title="Gruppe" ariaLabel="Gruppe" badge={props.party?.length} onClick={closeThen(props.onOpenParty)}>

@@ -144,6 +144,8 @@ export function InvestigationJournalModal(
 
         {journal ? (
           <>
+        {message ? <p role="status" style={styles.empty}>{message}</p> : null}
+
         {journal.investigations.length === 0 && (
           <p style={styles.empty}>
             Keine bestätigten Gerüchte im aktuellen Wissensstand.
