@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   communicateNpcInformation,
@@ -205,6 +206,9 @@ describe("Aurion investigation journal projection (issue #784)", () => {
     expect(screen.getByText("0 ausgewählt")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Anfechten" }) as HTMLButtonElement).disabled).toBe(true);
     expect(submit).not.toHaveBeenCalled();
+    rerender(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journal} pending={false} onSubmitDeduction={submit} />);
+    expect(screen.getByText("0 ausgewählt")).toBeTruthy();
+    expect((screen.getByLabelText("Behauptung true auswählen") as HTMLInputElement).checked).toBe(false);
   });
 
   it("offers no blind chain action without disclosed prerequisite relations", () => {
@@ -220,6 +224,22 @@ describe("Aurion investigation journal projection (issue #784)", () => {
     expect(dialog.contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores focus to the opening control after Escape", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <button onClick={() => setOpen(true)}>Journal öffnen</button>
+        <InvestigationJournalModal isOpen={open} onClose={() => setOpen(false)} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />
+      </>;
+    }
+    render(<Harness />);
+    const opener = screen.getByRole("button", { name: "Journal öffnen" });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it("wraps actions for narrow screens", () => {

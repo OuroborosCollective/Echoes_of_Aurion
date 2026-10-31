@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   buildDeductionIntentFromJournal,
@@ -56,6 +56,11 @@ export function InvestigationJournalModal(
   });
   const selected = selection.journalHash === journal.journalHash ? selection.ids : [];
   const opener = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setSelection(current => current.journalHash === journal.journalHash
+      ? current
+      : { journalHash: journal.journalHash, ids: [] });
+  }, [journal.journalHash]);
   const presentation = useMemo(
     () => guidancePresentation(journal.guidance),
     [journal.guidance]
@@ -104,7 +109,7 @@ export function InvestigationJournalModal(
         }}
       >
         <header style={styles.header}>
-          <DialogTitle style={styles.title}>Investigationsjournal</DialogTitle>
+          <DialogTitle style={styles.title}>Investigationsjournal &amp; Gerüchtetafel</DialogTitle>
           <button
             type="button"
             aria-label="Schließen"
