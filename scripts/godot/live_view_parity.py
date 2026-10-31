@@ -101,6 +101,10 @@ def _capture_checks(
         _fail(issues, f"{prefix}_RECEIPT_UNVERIFIED")
     if not SHA256.fullmatch(str(ident.get("stateHash", ""))):
         _fail(issues, f"{prefix}_STATE_UNVERIFIED")
+    if not SHA256.fullmatch(str(ident.get("projectionHash", ""))):
+        _fail(issues, f"{prefix}_PROJECTION_UNVERIFIED")
+    if not isinstance(ident.get("streamInstance"), str) or not 1 <= len(ident["streamInstance"]) <= 128:
+        _fail(issues, f"{prefix}_STREAM_UNVERIFIED")
     camera = meta.get("camera", {})
     if not isinstance(camera, dict) or set(camera) != {"positionMm", "targetMm", "fovMilliDeg", "viewportPx"}:
         _fail(issues, f"{prefix}_CAMERA_INVALID")
@@ -126,6 +130,8 @@ def _capture_checks(
         _fail(issues, f"{prefix}_NO_CONFIRMED_ACTORS")
     if not isinstance(proj.get("skyType"), str) or proj["skyType"] not in REQUIRED_SKY or proj.get("skyVisible") is not True:
         _fail(issues, f"{prefix}_SKY_MISSING")
+    if proj.get("horizonVisible") is not True:
+        _fail(issues, f"{prefix}_HORIZON_MISSING")
     return t
 
 
@@ -230,7 +236,7 @@ def compare(
     web, godot = manifests["aurion-web"], manifests["godot-live-editor"]
     wa, ga = web.get("identity", {}), godot.get("identity", {})
     if isinstance(wa, dict) and isinstance(ga, dict) and wa and ga:
-        for field in ("worldId", "zoneId", "sourceRevision", "runtimeImageId", "tick", "receiptHash", "stateHash"):
+        for field in ("worldId", "zoneId", "sourceRevision", "runtimeImageId", "tick", "receiptHash", "stateHash", "projectionHash", "streamInstance"):
             if wa.get(field) != ga.get(field):
                 _fail(issues, f"CANONICAL_{field.upper()}_MISMATCH")
     if web.get("camera") != godot.get("camera"):
@@ -240,6 +246,9 @@ def compare(
         for field in ("confirmedChunks", "visibleEntityIds", "renderedAssetIds"):
             a, b = wp.get(field), gp.get(field)
             if isinstance(a, list) and isinstance(b, list) and sorted(a) != sorted(b):
+                _fail(issues, f"WORLD_{field.upper()}_MISMATCH")
+        for field in ("skyType", "skyVisible", "horizonVisible"):
+            if wp.get(field) != gp.get(field):
                 _fail(issues, f"WORLD_{field.upper()}_MISMATCH")
     if dates["aurion-web"] and dates["godot-live-editor"] and abs((dates["aurion-web"] - dates["godot-live-editor"]).total_seconds()) > MAX_CAPTURE_SKEW_SECONDS:
         _fail(issues, "CAPTURE_TIME_SKEW")
