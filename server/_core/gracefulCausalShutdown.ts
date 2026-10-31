@@ -16,8 +16,13 @@ export type AurionShutdownDependencies = Readonly<{
 export async function drainAurionRuntimeForShutdown(
   dependencies: AurionShutdownDependencies,
 ): Promise<void> {
+  console.info("[Aurion] shutdown stage: zone-gateway-close");
   dependencies.closeZoneGateway();
+  console.info("[Aurion] shutdown stage: observer-stop");
   for (const stop of dependencies.stopObservers) stop();
+  console.info("[Aurion] shutdown stage: persistence-flush");
   await dependencies.flushCausalPersistence();
+  console.info("[Aurion] shutdown stage: http-close");
   await dependencies.closeHttpServer();
+  console.info("[Aurion] shutdown stage: complete");
 }
