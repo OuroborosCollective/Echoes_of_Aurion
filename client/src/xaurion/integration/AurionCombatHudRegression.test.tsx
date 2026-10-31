@@ -9,7 +9,8 @@ import { AurionAuthorityHud } from "./AurionAuthorityHud";
 
 const f = vi.hoisted(() => {
   const empty = { data: undefined, isError: false, isStale: false, refetch: vi.fn(async () => ({ isError: false })) };
-  return { empty, onMove: vi.fn(), onAction: vi.fn() };
+  const journal = { data: undefined, isError: false, isFetching: false, refetch: vi.fn(async () => ({ isError: false, data: undefined })) };
+  return { empty, journal, onMove: vi.fn(), onAction: vi.fn() };
 });
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -18,6 +19,7 @@ vi.mock("@/lib/trpc", () => ({
     gameplay: { openWorld: { useQuery: () => f.empty } },
     groups: { read: { useQuery: () => f.empty }, command: { useMutation: () => ({}) } },
     crafting: { read: { useQuery: () => f.empty }, manipulationRead: { useQuery: () => f.empty }, manipulate: { useMutation: () => ({}) }, craft: { useMutation: () => ({}) }, materializeBonus: { useMutation: () => ({}) } },
+    investigationJournal: { read: { useQuery: () => f.journal }, submitDeduction: { useMutation: () => ({ mutateAsync: vi.fn(async () => ({})), isPending: false }) } },
   },
 }));
 vi.mock("../components/VirtualJoystick", () => ({ VirtualJoystick: () => null }));

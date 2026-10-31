@@ -17,7 +17,8 @@ if (!fs.readFileSync("drizzle.config.ts", "utf8").includes('"./drizzle/nativeAut
   throw new Error("NATIVE_AUTH_SCHEMA_RELEASE_WAVE_NOT_APPROVED");
 }
 const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
-if (journal.entries.at(-1)?.tag !== "0075_aurion_native_auth_sessions") {
+if (journal.entries.at(-2)?.tag !== "0075_aurion_native_auth_sessions" ||
+    journal.entries.at(-1)?.tag !== "0076_aurion_investigation_deduction_receipts") {
   throw new Error("NATIVE_AUTH_SCHEMA_ALREADY_JOURNALED");
 }
 const statements = fs.readFileSync("fixtures/native-auth/0075_native_auth_candidate.sql", "utf8")

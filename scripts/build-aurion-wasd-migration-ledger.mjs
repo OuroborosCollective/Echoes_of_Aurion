@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 export const AURION_WASD_LEDGER_SCHEMA = "aurion.wasd-migration-ledger.v1";
 export const SOURCE_LEDGER_SCHEMA = "wasd.aurion-source-ledger.v1";
 export const MIGRATION_WAVE_MANIFEST_SCHEMA = "aurion.migration-wave-manifest.v2";
-export const MIGRATION_WAVE_MANIFEST_PATH = "config/aurion-migration-wave-manifest.json";
+export const MIGRATION_WAVE_MANIFEST_PATH = "config/aurion-migration-wave-0021-0076-manifest.json";
 export const FULL_SHA = /^[a-f0-9]{40}$/;
 
 function canonicalValue(value) {
