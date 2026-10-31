@@ -5280,3 +5280,14 @@ Change: Bound selection to journal revision and eight claims, used the existing 
 Evidence: Reproduction at test-only head `2142e82352c6c1056a9299b8f01197a34a15389c` in [run 41160157500](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41160157500) failed all five new regressions; candidate `750c8b4e5cc8f34d9c020f15d896f7d28196b9b0` passed 32 focused tests and typecheck in [run 41160341615](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41160341615). Fixtures and jsdom are not live or device evidence.
 Learned: A displayed readmodel is not runtime integration; selection and intent must remain tied to the current confirmed journal.
 Open/next: Issue #784 was reopened. Implement player-scoped persisted lineage, authenticated projection and revision-checked deduction/receipt readback through canonical Aurion, with real integration evidence. Exact final-head CI/review and live/device verification remain separate.
+
+
+### 2026-10-31 — Investigation journal HUD wiring (#784)
+Status: PARTIAL
+Task: Wire the server-confirmed investigation journal into the active Aurion HUD and resolve the production-integration finding from PR #1252.
+Decisions: Build the journal from confirmed NPC information lineage; bind deduction requests to the source projection revision; derive the actor from the authenticated server context; persist validated receipts append-only and verify them with an independent database readback. Keep the browser contract free of Node crypto and client truth.
+Touched surfaces: Authenticated journal router and persistence, deduction receipt migration/schema, browser-safe request contract, investigation modal, desktop/mobile HUD navigation, focused regression workflow and fixtures.
+Evidence: Source candidate 044c02d15fae3ae5eb2a8229a3171d0a66616fd4; HUD regression workflow 41164514378 passed typecheck, HUD/projection tests and responsive layout checks. Runtime candidate/container workflows were still pending when this entry was written. Read-only Aurion runtime identity, causality and assurance checks were blocked by AURION_ADMIN_ACCESS_TOKEN_MISSING; no production mutation occurred.
+Learned: A client import of canonical hashing pulls node:crypto into the browser bundle. Keep the client request actorless and let the authenticated server construct the validated intent.
+Open: Obtain exact-final-head journal/runtime checks and authorized runtime readback before closing #784 or making any production claim.
+Next safe step: Keep PR #1255 draft, finish exact-head CI, then capture authorized read-only runtime evidence. Do not deploy or merge as part of this work.
