@@ -23,7 +23,7 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
     expect(await adapter.getLatestReceipt(zoneId)).toBeNull();
     const zone = await restorePersistedZoneHead(zoneId, adapter, new AurionTickRecorder(20, adapter));
     expect(zone.getTickNumber()).toBe(0);
-    expect(zone.getLatestReceipt()).toBeUndefined();
+    expect(zone.getLatestReceipt()).toBeNull();
   });
 
   it("flushes canonical join/leave, reads both committed ticks independently and rejects a deleted receipt", async () => {
