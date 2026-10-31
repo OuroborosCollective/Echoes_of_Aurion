@@ -131,7 +131,7 @@ export function InvestigationJournalModal(
           <span>Hinweisstufe</span>
           <select
             aria-label="Hinweisstufe"
-            value={guidance}
+            value={journal?.guidance ?? guidance}
             disabled={pending}
             onChange={event => onGuidanceChange(event.currentTarget.value as JournalGuidance)}
             style={styles.guidanceSelect}
