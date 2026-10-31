@@ -132,7 +132,7 @@ function makeArtifact() {
     "0066_aurion_inventory_transaction_kernel",
     "0067_aurion_npc_decision_log",
     "0068_aurion_item_manipulation_runtime",
-    "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions",
+    "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
@@ -325,9 +325,9 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect(runner).toContain("environmentMountedReadOnly:true");
   });
 
-  it("keeps the backup/recovery/apply core migration allowlists aligned through 0075", () => {
+  it("keeps the backup/recovery/apply core migration allowlists aligned through 0076", () => {
     const core = read("deploy/aurion-production-schema-apply-core");
-    const migrationCount = JSON.parse(read("config/aurion-migration-wave-manifest.json")).migrations.length;
+    const migrationCount = JSON.parse(read("config/aurion-migration-wave-0021-0076-manifest.json")).migrations.length;
     // Retry receipts and promotion/rehearsal gates must describe the same closed wave.
     for (const source of [core, read("deploy/promote-aurion-zone-runtime.sh"), read(".github/workflows/aurion-root-schema-apply-artifact-proof.yml")]) {
       const counts = [...source.matchAll(/(?:migrationCount|matchCount)(?::|!==)(\d+)/g)];
@@ -344,7 +344,8 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect((core.match(/0072_aurion_production_probe_approvals/g) ?? [])).toHaveLength(2);
     expect((core.match(/0073_aurion_production_probe_session_fence/g) ?? [])).toHaveLength(2);
     expect((core.match(/0074_aurion_stat_allocation_receipts/g) ?? [])).toHaveLength(2);
-    expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n      "0064_aurion_world_entity_foundation",\n      "0065_aurion_glb_asset_normalization",\n      "0066_aurion_inventory_transaction_kernel",\n      "0067_aurion_npc_decision_log",\n      "0068_aurion_item_manipulation_runtime",\n      "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions",\n    ];');
-    expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology", "0064_aurion_world_entity_foundation", "0065_aurion_glb_asset_normalization", "0066_aurion_inventory_transaction_kernel", "0067_aurion_npc_decision_log", "0068_aurion_item_manipulation_runtime", "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions"]');
+    expect((core.match(/0076_aurion_investigation_deduction_receipts/g) ?? [])).toHaveLength(2);
+    expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n      "0064_aurion_world_entity_foundation",\n      "0065_aurion_glb_asset_normalization",\n      "0066_aurion_inventory_transaction_kernel",\n      "0067_aurion_npc_decision_log",\n      "0068_aurion_item_manipulation_runtime",\n      "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts",\n    ];');
+    expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology", "0064_aurion_world_entity_foundation", "0065_aurion_glb_asset_normalization", "0066_aurion_inventory_transaction_kernel", "0067_aurion_npc_decision_log", "0068_aurion_item_manipulation_runtime", "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts"]');
   });
 });

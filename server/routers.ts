@@ -58,6 +58,7 @@ import { CompanionMemoryStore } from "./companionMemory";
 import { globalCausalArchivingService } from "./causality/archivingService";
 import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
+import { investigationJournalRouter } from "./investigationJournalRouter";
 import { readExplorationMemory, recordExplorationDiscovery } from "./explorationMemoryPersistence";
 import { desc, eq } from "drizzle-orm";
 import { readAurionStatWallet, allocateAurionStatPoint } from "./aurionStatPointPersistence";
@@ -97,6 +98,7 @@ export const appRouter = router({
   system: systemRouter,
   causality: causalityRouter,
   sessionLogs: sessionLogRouter,
+  investigationJournal: investigationJournalRouter,
   aurionQuest: aurionQuestRouter,
   aurionAuthoring: aurionAuthoringRouter,
   aurionContext: aurionContextRouter,

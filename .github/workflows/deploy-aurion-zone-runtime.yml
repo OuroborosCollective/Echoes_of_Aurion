@@ -8,6 +8,7 @@ on:
       - ".github/workflows/aurion-wasd-migration-ledger.yml"
       - "scripts/build-aurion-wasd-migration-ledger.mjs"
       - "scripts/build-aurion-wasd-migration-ledger.test.mjs"
+      - "config/aurion-migration-wave-0021-0076-manifest.json"
       - "scripts/aurion-probe-bootstrap.mjs"
       - "scripts/aurion-probe-bootstrap.test.mjs"
       - "Dockerfile"

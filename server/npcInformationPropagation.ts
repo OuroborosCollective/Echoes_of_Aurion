@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import {
   aurionNpcActionReceipts,
   aurionNpcDecisionReceipts,
@@ -294,6 +294,29 @@ export async function readConfirmedNpcInformation(input: Readonly<{
       a.claimKey.localeCompare(b.claimKey) || a.value.localeCompare(b.value) || a.factId.localeCompare(b.factId)
     ));
   });
+}
+
+/**
+ * Read the bounded, verified receipt lineage for one world. Unlike the NPC-local
+ * current-fact readmodel above, the rumor projection needs every owner in the
+ * same bounded lineage to derive disclosure audience and corroboration.
+ */
+export async function readConfirmedNpcInformationLineage(
+  worldId: string,
+  transaction?: NpcTransaction,
+): Promise<readonly NpcInformationReceipt[]> {
+  const read = async (tx: NpcTransaction) => {
+    const rows = await tx.select().from(aurionNpcInformationReceipts)
+      .where(eq(aurionNpcInformationReceipts.worldId, worldId))
+      .orderBy(asc(aurionNpcInformationReceipts.logicalIndex), asc(aurionNpcInformationReceipts.id))
+      .limit(513);
+    if (rows.length > 512) throw new Error("NPC_INFORMATION_READBACK_PAGE_REQUIRED");
+    return Object.freeze(rows.map(assertStored));
+  };
+  if (transaction) return read(transaction);
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  return db.transaction(read);
 }
 
 export async function readConsumableNpcInformation(ownerNpcId: string, logicalIndex: number, worldId?: string) {

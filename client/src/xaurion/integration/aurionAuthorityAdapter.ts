@@ -21,20 +21,15 @@ export function aurionCommandForAx1Key(key:string,code:string):AurionGameplayCom
 export function isAx1LocalGameplayMutationKey(key:string,code:string):boolean{return aurionCommandForAx1Key(key,code)!==null||key==="z";}
 
 /**
- * AX1-first composition boundary.
- *
- * AX1 remains the game, world, render/input/UI/content scaffold. Aurion adds
- * authenticated hosting/persistence/readbacks and selected server rules; WASD
- * reducers may replace individual gameplay transitions when they are proven.
- * The integration must never empty AX1 merely to reconstruct the same world
- * from a secondary system. Instead, truth-writing methods are disabled or
- * redirected individually while AX1 presentation/content stays available.
+ * Compatibility adapter for the Aurion-authoritative gameplay runtime.
+ * The local renderer supplies presentation and input scaffolding; authenticated
+ * world readbacks and confirmed action receipts own gameplay truth.
  */
 export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{requestAction:(command:AurionGameplayCommand)=>void;requestMount:()=>void;},worldContext:AurionWorldContext):void{
   const player=engine.player;
 
-  // Synthetic realm players are not live users, so they are retired. In contrast,
-  // AX1 NPCs, quests, terrain and mob presentation remain the baseline game world.
+  // Synthetic realm players are not live users, so they are retired. NPCs are
+  // admitted only from the authenticated roster; terrain and mob meshes are views.
   engine.simPlayers.dispose();
   engine.mobManager.enableServerAuthority();
 
@@ -103,9 +98,9 @@ export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{request
     return false;
   };
 
-  // Keep AX1 controls and interaction flow, but route truth-changing actions to
-  // the confirmed action corridor. NPC interaction itself is presentation-only:
-  // opening the AX1 dialog never accepts/completes a quest or changes inventory.
+  // Keep the renderer controls and interaction affordances, but route all
+  // truth-changing actions to the confirmed action corridor. NPC interaction is
+  // presentation-only and cannot accept a quest or change inventory.
   engine.castClassSkill=index=>{if(index>=0&&index<5)handlers.requestAction(String(index+1) as AurionGameplayCommand);};
   engine.toggleMount=()=>handlers.requestMount();
   engine.interactNearby=()=>{
@@ -115,9 +110,9 @@ export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{request
   };
   engine.equipItem=()=>null;engine.unequipItem=()=>null;
 
-  // Local AX1 truth writers stay disabled in connected play. Incoming confirmed
-  // snapshots update projected fields through the integration bridges; AX1 still
-  // owns how those states look, animate and are navigated by the player.
+  // Local truth writers stay disabled in connected play. Confirmed snapshots
+  // update projected fields through the integration bridges; the renderer owns
+  // only how those states look, animate and are navigated by the player.
   player.takeDamage=()=>({damageTaken:0,isDead:false,dodged:false});
   player.heal=()=>{};player.restoreResource=()=>{};player.consumeResource=()=>false;player.gainXp=()=>false;player.useConsumable=()=>{};player.toggleMount=()=>player.stats.isMounted;player.equipItem=()=>null;player.unequipItem=()=>null;player.unequipSlot=()=>null;player.allocateStatPoint=()=>reject;player.unlockMilestoneSkill=()=>reject;player.equipSkillToHotbar=()=>{};
 }

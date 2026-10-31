@@ -5280,3 +5280,68 @@ Change: Bound selection to journal revision and eight claims, used the existing 
 Evidence: Reproduction at test-only head `2142e82352c6c1056a9299b8f01197a34a15389c` in [run 41160157500](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41160157500) failed all five new regressions; candidate `750c8b4e5cc8f34d9c020f15d896f7d28196b9b0` passed 32 focused tests and typecheck in [run 41160341615](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41160341615). Fixtures and jsdom are not live or device evidence.
 Learned: A displayed readmodel is not runtime integration; selection and intent must remain tied to the current confirmed journal.
 Open/next: Issue #784 was reopened. Implement player-scoped persisted lineage, authenticated projection and revision-checked deduction/receipt readback through canonical Aurion, with real integration evidence. Exact final-head CI/review and live/device verification remain separate.
+### 2026-10-31 — PR #1256 — Issue #987
+Status: Partial; authoritative tick implementation unchanged, and no optimization gain claimed.
+Change: Added actor-churn and seven-tick receipt/snapshot parity regressions plus a repeated 8-actor 10 Hz benchmark that logs the exact checkout SHA.
+Evidence: Code head `226702e87010cac1155ef34e599f4d2c7d50ce36`; [Godot live bridge run 41168044967](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41168044967), full repository regression job 124439775976: 476 files / 2,415 tests passed, 69 files / 271 tests skipped; benchmark file passed 3/3. Three-run p95: 5.904/4.443/4.912 ms; max: 7.197/12.142/10.585 ms; terminal hashes match and all runs meet 100 ms. No matched before/after comparison or GC-byte reduction was measured.
+Learned/next: Reused tick buffers need churn and deterministic replay coverage; #987 remains open until a matched performance comparison and final-head CI are available.
+
+
+### 2026-10-31 — PR #1258 — canonical CAG texture material bins
+Status: PARTIAL; analysis-only CAG probe, no gameplay, persistence or production mutation.
+Task: Fix order-dependent terrain texture CAG probes without changing Aurion surface semantics.
+Change: Canonical z/x traversal with explicit continuity-to-texture material-bin translation; added shuffled-tile histogram regression; restored unrelated AIM-296 BVH performance receipt byte-for-byte from main.
+Evidence: Original head c832fc28bb333907d84d854b8504a90e4c2275f8, AIM-265 run 41176008902 failed with texture counts {256,0,15,0,0,178,63} expected versus {256,0,0,15,0,178,63} observed. Reproduction at code head 498e872e5e66e10ab3286346b7807e916b533bf8 in run 41221036507 showed eight stale hash baselines fail while new independent histogram regression passed. Canonical bytes restored to main ordering; code head c4798dd66784796302c9983d4bc49a0f38984f64 passed exact-head AIM-265 real Wolfram provider and deterministic parity in run 41221281559. No simulated provider receipt or invented performance evidence.
+Learned: Canonical spatial iteration and material code semantics are separate invariants; do not interchange forest-floor and riverbank histogram indices.
+Open/next: Require all remaining exact-head CI checks, final documentation-head readback and normal SHA-bound merge; no production/runtime proof claimed.
+
+### 2026-10-31 — Issue #874 — Confirmed NPC roster guard
+Status: PARTIAL; bounded source/runtime candidate verified, broad architecture acceptance remains open.
+Change: The open-world runtime now passes the authenticated NPC readback into the scene engine. The engine renders only baseline identities backed by valid, non-conflicting readback records, uses the confirmed name/role, drops local quest definitions, and blocks generated envoys/guards unless confirmed. The new support module is inventoried, and an executable architecture regression connects the protected query to the rendered projection.
+Evidence: Code head `5a73dd7f7919f1fb2e45f9b8d9def7454e7ff1d8`. Exact-head full regression [run 41169415408](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415408): 476 files passed, 69 skipped; 2,417 tests passed, 271 skipped. HUD [run 41169415436](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415436), Godot protocol/isolated authority contract, and candidate container [run 41169415389](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41169415389) passed. Candidate source revision, build input, artifact, and immutable image digests matched; its MariaDB proofs were isolated CI evidence, not production readback.
+Learned: Having an authenticated world snapshot available did not by itself prevent seeded local NPCs from being rendered; identity admission must be bound explicitly to that readback.
+Open/next: The required architecture snapshot/drift/import-call-graph audit, broader movement/combat/effect/persistence and rendering/input review, browser `/play` validation, and production readback remain outstanding. Aurion architecture tools were unavailable through the configured connection; production access was blocked by the missing admin token. No production state changed. Issue #874 stays open until the broad architecture, browser and production evidence is independently established; no production promotion is asserted.
+
+
+### 2026-10-31 — Investigation journal HUD wiring (#784)
+Status: PARTIAL
+Task: Wire the server-confirmed investigation journal into the active Aurion HUD and resolve the production-integration finding from PR #1252.
+Decisions: Build the journal from confirmed NPC information lineage; bind deduction requests to the source projection revision; derive the actor from the authenticated server context; persist validated receipts append-only and verify them with an independent database readback. Keep the browser contract free of Node crypto and client truth.
+Touched surfaces: Authenticated journal router and persistence, deduction receipt migration/schema, browser-safe request contract, investigation modal, desktop/mobile HUD navigation, focused regression workflow and fixtures.
+Evidence: Source candidate 044c02d15fae3ae5eb2a8229a3171d0a66616fd4; HUD regression workflow 41164514378 passed typecheck, HUD/projection tests and responsive layout checks. Runtime candidate/container workflows were still pending when this entry was written. Read-only Aurion runtime identity, causality and assurance checks were blocked by AURION_ADMIN_ACCESS_TOKEN_MISSING; no production mutation occurred.
+Learned: A client import of canonical hashing pulls node:crypto into the browser bundle. Keep the client request actorless and let the authenticated server construct the validated intent.
+Open: Obtain exact-final-head journal/runtime checks and authorized runtime readback before closing #784 or making any production claim.
+Next safe step: Keep PR #1255 draft, finish exact-head CI, then capture authorized read-only runtime evidence. Do not deploy or merge as part of this work.
+
+
+### 2026-10-31 — Investigation receipt migration chain correction (#784)
+Status: PARTIAL
+Task: Correct the new deduction receipt migration after exact-revision evidence found an invalid empty statement segment.
+Decisions: Remove the trailing statement-breakpoint after the migration's single CREATE TABLE statement. Keep the migration-chain verifier unchanged and fail closed on malformed segments.
+Touched surfaces: drizzle/0076_aurion_investigation_deduction_receipts.sql.
+Evidence: Starter Village Pilot Evidence run 41164732716 at source head d0e963be351b23d70417bfef59729bd5ade189ac stopped before runtime startup. The migration verifier reported sqlCount=76, journalCount=76, no missing/duplicate tags, and emptyStatementSegments=[0076_aurion_investigation_deduction_receipts#2]. Source head 1a3fcc634b25b9f54d32ecb7ffaeeb2f93555d98 removes the empty segment; exact-head rerun is pending. No production schema or state was changed.
+Learned: Sequential tags and matching migration counts do not prove the SQL segment stream is valid; the verifier's empty-segment check caught a trailing delimiter.
+Open: Confirm the exact final head passes migration validation and the isolated MariaDB readback paths.
+Next safe step: Wait for final-head CI and keep the PR draft until journal/runtime evidence is complete.
+
+### 2026-10-31 — Register investigation receipts in a separate schema wave (#784)
+Status: PARTIAL
+Task: Extend the journal read model's additive receipt table through schema reconciliation and isolated apply evidence while preserving the existing 0075 production boundary.
+Decisions: Add wave aurion-production-0021-0076 with owner approval still required and productionWritesScheduled=false. Keep the existing 0021-0075 manifest and dispatcher pinned; make the 0075 preflight fail closed against a journal containing 0076. Align reconciliation/apply artifacts, repair policy, promotion gates and isolated MariaDB proof workflows to 55 late migrations.
+Evidence: Exact head 25ea8cbc6eb885b4490cbb1bde08b5bc2ed70303 passed Aurion Investigation Journal run 41164877909, Aurion HUD regression 41164877889, Aurion PR Runtime Candidate 41164877935, Aurion PR Runtime Container Proof 41164877888 and Starter Village Pilot Evidence 41164877799. Schema bootstrap 41164877884, journal watermark 41164877745, root schema apply 41164877815, schema reconciliation 41164877806 and root reconciliation artifact 41164877926 exposed stale 54-migration contracts against 55 journaled tags. Root reconciliation artifact run 41166243800 on head 6dc42060f56e429166270c0c3665120bba5cdb98 passed 40 of 41 focused checks; the remaining source-contract assertion showed that the apply-core receipt-validation tag list still stopped at 0075 while its preflight list already included 0076. The apply receipt-validation list is being corrected in the next commit. Other exact-head CI runs are pending. Read-only production runtime checks remain blocked by AURION_ADMIN_ACCESS_TOKEN_MISSING; no production schema or state was changed.
+Learned: A new journal tag must enter a new versioned wave contract and every isolated read/apply artifact; the 0075 approval contract must remain separate.
+Open: Verify the exact corrected head across isolated schema reconciliation, backup/recovery/apply, migration watermark, journal/runtime and HUD checks. Keep PR #1255 draft until the final evidence and authorized read-only runtime readback are available.
+Next safe step: Review exact-head Actions; do not merge, dispatch or apply a production migration as part of this work.
+
+### 2026-10-31 — Align read-only migration provenance with active 0076 wave (#784)
+Status: PARTIAL — source correction committed; exact-head verification pending.
+Finding: Deploy workflow run 41166394438 on `fb16d06254380d8d28702d4f04a21e283c31a152` failed in the read-only historical migration-provenance job with `AURION_MIGRATION_WAVE_JOURNAL_COVERAGE_MISMATCH`: the builder read the preserved 0075 manifest (54 tags) while this candidate's journal contained 55 late tags through 0076. All schema-apply, runtime-promotion and production-release jobs were skipped.
+Change: Bind the read-only provenance ledger and its fixtures to the separate `aurion-production-0021-0076` manifest, and watch that manifest in the workflow path filter. Keep the 0075 production preflight, apply and readback boundary unchanged.
+Evidence boundary: No database read/write or production promotion ran. Exact-head workflow rerun is pending.
+
+### 2026-10-31 — PR #1254 — isolated cold-zone recovery proof (#1229)
+Status: PARTIAL; production recovery and runtime assurance remain unverified.
+Change: Added authenticated Starter Village preflight that produces genuine 10 Hz zone receipts in isolated MariaDB, shuts down gracefully and lets the unchanged cold-start replay assurance check run against durable evidence; no generated receipts or assertion bypass.
+Evidence: Original candidate 715c70a9e5dee1b8fe841f89914d4e725f4966cf failed Starter Village run 41162219922 before journey with RECEIPT_CHAIN_SAMPLE_MISSING and REPLAY_SAMPLE_MISSING. First test head 8bf2eadb74441542c41cbc43e3ac341ad789a8b4 reached genuine persisted receipt readback in run 41226161523 but failed the test's unprefixed hash expectation; source correction 592c5e79244869754659b353dfbaefcf795666a4 expects canonical sha256: format. Full final-head CI and production readback pending.
+Learned: A fresh authenticated WebSocket, not a synthetic fixture, must precede persisted cold-recovery assurance in an isolated empty database.
+Open/next: Verify final exact-head CI, negative recovery regressions and real MariaDB restart/replay; keep #1229 open until authorized live runtime/receipt readback. No production writes, restarts or deploys in this work.

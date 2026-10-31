@@ -79,6 +79,7 @@ export interface GameHUDProps {
   onOpenInventory: () => void;
   onOpenCrafting: () => void;
   onOpenQuests: () => void;
+  onOpenInvestigations?: () => void;
   onOpenContacts: () => void;
   onOpenParty: () => void;
   onOpenDungeonFinder: () => void;

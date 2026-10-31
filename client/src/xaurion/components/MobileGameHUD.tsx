@@ -63,6 +63,7 @@ export function GameHUD(props: GameHUDProps) {
             worldState={props.worldState}
             worldStateLabel={props.worldStateLabel}
             onOpenQuests={props.onOpenQuests}
+            onOpenInvestigations={props.onOpenInvestigations}
           />
         </div>
       </div>

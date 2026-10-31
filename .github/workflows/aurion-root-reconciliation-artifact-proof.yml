@@ -30,7 +30,7 @@ on:
       - "server/aurionProductionSchemaReconciliation.test.ts"
       - "drizzle/meta/_journal.json"
       - "drizzle/*.sql"
-      - "config/aurion-migration-wave-manifest.json"
+      - "config/aurion-migration-wave-0021-0076-manifest.json"
       - "drizzle/0021_aurion_global_world_state.sql"
       - "drizzle/0022_aurion_world_chunk_deltas.sql"
       - "drizzle/0023_aurion_world_presence_epochs.sql"
@@ -272,7 +272,7 @@ jobs:
           if(r.sourceRevision!==process.env.GITHUB_SHA||r.readOnly!==true||r.databaseCredentialReturned!==false) throw new Error("root receipt boundary mismatch");
           if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.rootFilesystemReadOnly!==true||r.execution.releaseMountedReadOnly!==true||r.execution.environmentMountedReadOnly!==true) throw new Error("root receipt Docker execution mismatch");
           if(r.overallState==="UNREADABLE_FAIL_CLOSED"||r.errorClass==="DATABASE_HOST_UNRESOLVABLE") throw new Error("root runner did not reach the private MariaDB network");
-          if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length) throw new Error("expected the complete declared late migration wave");
+          if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8")).migrations.length) throw new Error("expected the complete declared late migration wave");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
           NODE
       - name: Apply the exact declared migration wave inside ephemeral proof database
@@ -282,7 +282,7 @@ jobs:
           docker run --rm -i --network "$AURION_RECONCILE_TEST_NETWORK" --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" --workdir /workspace --env DATABASE_URL="$root_database_url" node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
-          const tags=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.map(({tag})=>tag);
+          const tags=JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8")).migrations.map(({tag})=>tag);
           const db=await mysql.createConnection(process.env.DATABASE_URL);
           try {
             for(const tag of tags){
@@ -322,7 +322,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("root-match.json","utf8"));
-          if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length) throw new Error("root match proof failed");
+          if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8")).migrations.length) throw new Error("root match proof failed");
           if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.containerExitStatus!==0) throw new Error("root match did not use the expected Docker executor");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary,drizzleJournal:r.drizzleJournal}));
           NODE

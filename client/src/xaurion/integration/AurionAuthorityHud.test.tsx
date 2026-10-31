@@ -8,6 +8,7 @@ const fixtures = vi.hoisted(() => ({
   other: { data: undefined, refetch: vi.fn() },
   ui: { data: undefined as unknown, isError: false, isStale: false, refetch: vi.fn() },
   appearance: { data: null as unknown, isFetching: false, isError: false, refetch: vi.fn() },
+  journal: { data: undefined as unknown, isError: false, isFetching: false, refetch: vi.fn() },
   mutate: vi.fn(), onMove: vi.fn(), onAction: vi.fn(),
 }));
 vi.mock("@/lib/trpc", () => ({ trpc: {
@@ -15,6 +16,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
   assetSubmissions: { characterAppearance: { useQuery: () => fixtures.appearance } },
   groups: { read: { useQuery: () => fixtures.other }, command: { useMutation: () => ({ mutateAsync: fixtures.mutate }) } },
   crafting: { manipulationRead: { useQuery: () => fixtures.other }, manipulate: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, read: { useQuery: () => fixtures.other }, craft: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, materializeBonus: { useMutation: () => ({ mutateAsync: fixtures.mutate }) } },
+  investigationJournal: { read: { useQuery: () => fixtures.journal }, submitDeduction: { useMutation: () => ({ mutateAsync: fixtures.mutate, isPending: false }) } },
   player: { statWallet: { useQuery: () => fixtures.other }, allocateStatPoint: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, ui: { useQuery: () => fixtures.ui }, saveControls: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, collectLoot: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, equipItem: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, unequipItem: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, me: { useQuery: () => fixtures.player } },
   gameplay: { npcActions: { useQuery: () => ({}) }, npcMultiMemory: { useQuery: () => ({}) }, npcSemanticGraph: { useQuery: () => ({}) }, npcProjectionProvenance: { useQuery: () => ({}) }, npcSnapshots: { useQuery: () => ({}) }, npcUtilityScores: { useQuery: () => ({}) }, relationshipStanding: { useQuery: () => fixtures.standing }, currentEncounter: { useQuery: () => fixtures.other }, startEncounter: { useMutation: () => ({}) }, progress: { useQuery: () => fixtures.other }, openWorld: { useQuery: () => fixtures.other }, acceptQuest: { useMutation: () => ({}) }, completeQuest: { useMutation: () => ({}) } },
 } }));
@@ -35,11 +37,13 @@ describe("server-backed Aurion HUD", () => {
     fixtures.player.data = undefined; fixtures.player.isError = false; fixtures.player.isStale = false;
     fixtures.standing.data = undefined; fixtures.standing.isStale = false; fixtures.standing.isError = false;
     fixtures.appearance.data = null; fixtures.appearance.isFetching = false; fixtures.appearance.isError = false;
+    fixtures.journal.data = undefined; fixtures.journal.isError = false; fixtures.journal.isFetching = false;
     vi.clearAllMocks();
     fixtures.player.refetch.mockResolvedValue({ isError: false });
     fixtures.other.refetch.mockResolvedValue({ isError: false });
     fixtures.ui.refetch.mockImplementation(async () => ({ data: fixtures.ui.data, isError: false }));
     fixtures.appearance.refetch.mockImplementation(async () => ({ data: fixtures.appearance.data, isError: fixtures.appearance.isError }));
+    fixtures.journal.refetch.mockResolvedValue({ data: undefined, isError: false });
     fixtures.mutate.mockResolvedValue({});
     fixtures.onAction.mockResolvedValue({ confirmed: true, completed: false, message: "Aktion bestätigt." });
   });
@@ -59,7 +63,7 @@ describe("server-backed Aurion HUD", () => {
 
   it("toggles every panel shortcut once and stops movement on opening", () => {
     mount();
-    for (const [key, name] of [["i", "Inventar & Paperdoll-Rüstkammer"], ["b", "Inventar & Paperdoll-Rüstkammer"], ["c", "Charakter & Skills"], ["m", "Weltatlas"], ["j", "Quest-Buch & Lore-Chroniken"], ["q", "Quest-Buch & Lore-Chroniken"]]) {
+    for (const [key, name] of [["i", "Inventar & Paperdoll-Rüstkammer"], ["b", "Inventar & Paperdoll-Rüstkammer"], ["c", "Charakter & Skills"], ["m", "Weltatlas"], ["j", "Investigationsjournal & Gerüchtetafel"], ["q", "Quest-Buch & Lore-Chroniken"]]) {
       fireEvent.keyDown(window, { key });
       expect(screen.getByRole("dialog", { name })).toBeTruthy();
       expect(fixtures.onMove).toHaveBeenLastCalledWith(0, 0);
