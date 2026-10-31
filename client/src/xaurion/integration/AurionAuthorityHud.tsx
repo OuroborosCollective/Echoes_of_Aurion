@@ -499,7 +499,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       message={investigationJournalQuery.isError
         ? "Der serverbestätigte Journalstand ist derzeit nicht verfügbar."
         : message}
-      onSubmitDeduction={(intent: DeductionIntent) => { void submitInvestigationDeduction(intent); }}
+      onSubmitDeduction={(request: InvestigationDeductionRequest) => { void submitInvestigationDeduction(request); }}
     />
     <CraftingModal
       isOpen={panel === "crafting"}
