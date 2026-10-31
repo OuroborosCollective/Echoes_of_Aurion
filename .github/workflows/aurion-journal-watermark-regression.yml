@@ -10,6 +10,7 @@ on:
       - ".github/workflows/aurion-production-schema-apply.yml"
       - "drizzle/**"
       - ".github/workflows/aurion-journal-watermark-regression.yml"
+      - "config/aurion-migration-wave-0021-0076-manifest.json"
   push:
     branches: [main]
     paths:
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/aurion-production-schema-apply.yml"
       - "drizzle/**"
       - ".github/workflows/aurion-journal-watermark-regression.yml"
+      - "config/aurion-migration-wave-0021-0076-manifest.json"
 
 permissions:
   contents: read
@@ -171,7 +173,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const receipt = JSON.parse(fs.readFileSync("watermark-apply-receipt.json", "utf8"));
-          const tags=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.map(({tag})=>tag);
+          const tags=JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8")).migrations.map(({tag})=>tag);
           if (receipt.state !== "APPLY_SUCCEEDED") throw new Error(`unexpected apply state: ${receipt.state}`);
           if (receipt.preflight?.absentCount !== tags.length || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");
           if (receipt.postflight?.matchCount !== tags.length || receipt.postflight?.absentCount !== 0 || receipt.postflight?.driftCount !== 0) throw new Error("postflight schema mismatch");

@@ -29,6 +29,14 @@
 import { z } from "zod";
 import { canonicalSha256 } from "./aurionCanonicalHash";
 import {
+  DEDUCTION_MIN_CLAIMS,
+  DEDUCTION_MAX_CLAIMS,
+  deductionTypeSchema,
+  type DeductionType,
+} from "./investigationClientContract";
+export { DEDUCTION_MIN_CLAIMS, DEDUCTION_MAX_CLAIMS, deductionTypeSchema };
+export type { DeductionType };
+import {
   verifyRumorProjection,
   type RumorClaimProjection,
   type RumorProjection,
@@ -40,10 +48,6 @@ import {
 
 export const INVESTIGATION_GRAPH_PROTOCOL = "aurion.investigation-graph.v1" as const;
 export const INVESTIGATION_GRAPH_RULESET = "aurion.investigation-graph.ruleset.v1" as const;
-
-/** Selection bounds for a deduction intent. */
-export const DEDUCTION_MIN_CLAIMS = 2;
-export const DEDUCTION_MAX_CLAIMS = 8;
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -87,9 +91,6 @@ export const investigationGraphSchema = z.strictObject({
   graphHash: sha256,
 });
 export type InvestigationGraph = Readonly<z.infer<typeof investigationGraphSchema>>;
-
-export const deductionTypeSchema = z.enum(["affirm", "challenge", "chain"]);
-export type DeductionType = z.infer<typeof deductionTypeSchema>;
 
 export const deductionIntentSchema = z.strictObject({
   actorId: identifier,
@@ -376,4 +377,22 @@ export function validateDeductionIntent(input: Readonly<{
     value: { ...unsigned, id },
   }).slice("sha256:".length);
   return deductionReceiptSchema.parse({ ...unsigned, id, receiptHash });
+}
+
+/** Verify the canonical identity and content hash of a persisted deduction receipt. */
+export function verifyDeductionReceipt(receipt: DeductionReceipt): DeductionReceipt {
+  const parsed = deductionReceiptSchema.parse(receipt);
+  const { id, receiptHash, ...unsigned } = parsed;
+  const expectedId = "ded_" + canonicalSha256({
+    domain: "aurion.deduction-receipt-id.v1",
+    value: unsigned,
+  }).slice("sha256:".length, "sha256:".length + 59);
+  const expectedHash = canonicalSha256({
+    domain: "aurion.deduction-receipt.v1",
+    value: { ...unsigned, id },
+  }).slice("sha256:".length);
+  if (id !== expectedId || receiptHash !== expectedHash) {
+    throw new Error("DEDUCTION_RECEIPT_HASH_MISMATCH");
+  }
+  return Object.freeze(parsed);
 }

@@ -1828,6 +1828,23 @@ export const aurionNpcInformationReceipts = mysqlTable("aurionNpcInformationRece
   index("aurionNpcInformationReceipts_claim_idx").on(table.worldId, table.claimKey, table.logicalIndex),
 ]);
 
+/** Append-only, non-world-authoritative receipts for authenticated player deductions. */
+export const aurionInvestigationDeductionReceipts = mysqlTable("aurionInvestigationDeductionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  actorId: varchar("actorId", { length: 128 }).notNull(),
+  worldId: varchar("worldId", { length: 128 }).notNull(),
+  deductionType: mysqlEnum("deductionType", ["affirm", "challenge", "chain"]).notNull(),
+  selectedClaimIdsJson: text("selectedClaimIdsJson").notNull(),
+  sourceProjectionHash: varchar("sourceProjectionHash", { length: 71 }).notNull(),
+  graphHash: varchar("graphHash", { length: 71 }).notNull(),
+  result: mysqlEnum("result", ["validated"]).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionInvestigationDeductionReceipts_hash_uq").on(table.receiptHash),
+  index("aurionInvestigationDeductionReceipts_actor_idx").on(table.actorId, table.createdAt),
+]);
+
 export const aurionSemanticGraphIndexV2 = mysqlTable("aurionSemanticGraphIndexV2", {
   id: varchar("id", { length: 64 }).primaryKey(),
   graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),

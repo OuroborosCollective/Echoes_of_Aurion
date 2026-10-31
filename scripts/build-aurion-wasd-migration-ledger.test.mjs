@@ -65,7 +65,7 @@ async function createFixture() {
   await writeFile(sourceLedgerPath, `${JSON.stringify(sourceLedger, null, 2)}\n`);
 
   await mkdir(join(aurionRoot, "config"), { recursive: true });
-  await writeFile(join(aurionRoot, "config", "aurion-migration-wave-manifest.json"), `${JSON.stringify({ schemaVersion: "aurion.migration-wave-manifest.v2", recordType: "aurion_migration_wave_manifest", waveId: "fixture-wave", migrations: FIXTURE_MIGRATION_TAGS.map(tag => ({ tag, source: "aurion" })), policy: { productionWritesScheduled: false, ownerApprovalRequired: true } }, null, 2)}\n`);
+  await writeFile(join(aurionRoot, "config", "aurion-migration-wave-0021-0076-manifest.json"), `${JSON.stringify({ schemaVersion: "aurion.migration-wave-manifest.v2", recordType: "aurion_migration_wave_manifest", waveId: "fixture-wave", migrations: FIXTURE_MIGRATION_TAGS.map(tag => ({ tag, source: "aurion" })), policy: { productionWritesScheduled: false, ownerApprovalRequired: true } }, null, 2)}\n`);
   const journalEntries = FIXTURE_MIGRATION_TAGS.map((tag, index) => ({ idx: 21 + index, tag, version: "5", when: index + 1, breakpoints: true }));
   await writeFile(join(aurionRoot, "drizzle", "meta", "_journal.json"), `${JSON.stringify({ version: "7", dialect: "mysql", entries: journalEntries }, null, 2)}\n`);
   for (const tag of FIXTURE_MIGRATION_TAGS) {
@@ -133,7 +133,7 @@ test("workflow keeps the WASD ledger toolchain pinned while inventorying source 
 });
 
 async function rewriteWaveManifest(fixture, patch) {
-  const manifestPath = join(fixture.aurionRoot, "config", "aurion-migration-wave-manifest.json");
+  const manifestPath = join(fixture.aurionRoot, "config", "aurion-migration-wave-0021-0076-manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   await writeFile(manifestPath, `${JSON.stringify(patch(manifest), null, 2)}\n`);
 }
