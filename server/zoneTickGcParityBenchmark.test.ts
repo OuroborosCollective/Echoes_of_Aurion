@@ -1,5 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
 import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
@@ -223,7 +224,7 @@ describe("Aurion 10 Hz zone tick benchmark (#987)", () => {
 
     const report = {
       protocol: "aurion.zone.tick.benchmark.v1",
-      sourceHead: process.env.AURION_ZONE_TICK_HEAD ?? null,
+      sourceHead: process.env.AURION_ZONE_TICK_HEAD ?? execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
       workload: {
         actors: actorCount,
         mobRoster: "default AuthoritativeMovementZone",
@@ -242,6 +243,8 @@ describe("Aurion 10 Hz zone tick benchmark (#987)", () => {
     };
 
     expect(report.within10HzBudget).toBe(true);
+    console.info("AURION_ZONE_TICK_BENCHMARK_REPORT", JSON.stringify(report));
+
     const outputPath = process.env.AURION_ZONE_TICK_BENCHMARK_OUTPUT;
     if (outputPath) {
       await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
