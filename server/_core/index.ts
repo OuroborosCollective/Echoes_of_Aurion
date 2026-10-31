@@ -131,8 +131,9 @@ async function startServer(){
           // Operational-only readback: never feeds time or queue depth into a simulation tick.
           const logPending=()=>console.info("[Aurion] shutdown persistence status",JSON.stringify(globalTickRecorder.getPersistenceStatus()));
           logPending();
+          // Keep a referenced operational handle alive until the causal flush settles.
+          // An unresolved Promise alone cannot keep Node alive during shutdown.
           const progress=setInterval(logPending,1000);
-          progress.unref();
           try{await globalTickRecorder.flushPersistence();logPending();}
           finally{clearInterval(progress);}
         },
