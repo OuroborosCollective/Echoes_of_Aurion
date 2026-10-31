@@ -205,14 +205,7 @@ export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): Aurion
       } else {
         first = false;
       }
-      const continuityCode = matrix[z]![x]!;
-      // Continuity uses grass/forest/riverbank/stone/ash/ruin (1..6),
-      // while the texture oracle expects grass/riverbank/stone/forest/ash/ruin.
-      const textureCode = [0, 1, 4, 2, 3, 5, 6][continuityCode];
-      if (textureCode === undefined || textureCode === 0) {
-        throw new Error(`unmapped continuity surface code: ${continuityCode}`);
-      }
-      code += textureCode;
+      code += matrix[z]![x]!;
     }
   }
   code += "};Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]";
@@ -220,7 +213,7 @@ export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): Aurion
   return Object.freeze({
     kind: "terrain_texturization",
     code,
-    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.forestFloorTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
+    expectedExact: `{${summary.totalTiles},${summary.grassTiles},${summary.forestFloorTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.ashTiles},${summary.ruinPathTiles}}`,
     truthNotice: "CAG verifies texturization distribution of a canonical Aurion chunk; it does not assign textures or modify world state.",
   });
 }

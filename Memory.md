@@ -5280,17 +5280,3 @@ Change: Bound selection to journal revision and eight claims, used the existing 
 Evidence: Reproduction at test-only head `2142e82352c6c1056a9299b8f01197a34a15389c` in [run 41160157500](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41160157500) failed all five new regressions; candidate `750c8b4e5cc8f34d9c020f15d896f7d28196b9b0` passed 32 focused tests and typecheck in [run 41160341615](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41160341615). Fixtures and jsdom are not live or device evidence.
 Learned: A displayed readmodel is not runtime integration; selection and intent must remain tied to the current confirmed journal.
 Open/next: Issue #784 was reopened. Implement player-scoped persisted lineage, authenticated projection and revision-checked deduction/receipt readback through canonical Aurion, with real integration evidence. Exact final-head CI/review and live/device verification remain separate.
-### 2026-10-31 — PR #1256 — Issue #987
-Status: Partial; authoritative tick implementation unchanged, and no optimization gain claimed.
-Change: Added actor-churn and seven-tick receipt/snapshot parity regressions plus a repeated 8-actor 10 Hz benchmark that logs the exact checkout SHA.
-Evidence: Code head `226702e87010cac1155ef34e599f4d2c7d50ce36`; [Godot live bridge run 41168044967](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/41168044967), full repository regression job 124439775976: 476 files / 2,415 tests passed, 69 files / 271 tests skipped; benchmark file passed 3/3. Three-run p95: 5.904/4.443/4.912 ms; max: 7.197/12.142/10.585 ms; terminal hashes match and all runs meet 100 ms. No matched before/after comparison or GC-byte reduction was measured.
-Learned/next: Reused tick buffers need churn and deterministic replay coverage; #987 remains open until a matched performance comparison and final-head CI are available.
-
-
-### 2026-10-31 — PR #1258 — canonical CAG texture material bins
-Status: PARTIAL; analysis-only CAG probe, no gameplay, persistence or production mutation.
-Task: Fix order-dependent terrain texture CAG probes without changing Aurion surface semantics.
-Change: Canonical z/x traversal with explicit continuity-to-texture material-bin translation; added shuffled-tile histogram regression; restored unrelated AIM-296 BVH performance receipt byte-for-byte from main.
-Evidence: Original head c832fc28bb333907d84d854b8504a90e4c2275f8, AIM-265 run 41176008902 failed with texture counts {256,0,15,0,0,178,63} expected versus {256,0,0,15,0,178,63} observed. Reproduction at code head 498e872e5e66e10ab3286346b7807e916b533bf8 in run 41221036507 showed eight stale hash baselines fail while new independent histogram regression passed. Canonical bytes restored to main ordering; code head c4798dd66784796302c9983d4bc49a0f38984f64 passed exact-head AIM-265 real Wolfram provider and deterministic parity in run 41221281559. No simulated provider receipt or invented performance evidence.
-Learned: Canonical spatial iteration and material code semantics are separate invariants; do not interchange forest-floor and riverbank histogram indices.
-Open/next: Require all remaining exact-head CI checks, final documentation-head readback and normal SHA-bound merge; no production/runtime proof claimed.
