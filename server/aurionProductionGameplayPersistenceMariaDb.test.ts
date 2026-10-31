@@ -97,7 +97,10 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       // A normal consumer resumes the dormant head, never a fresh tick-zero zone.
       const adopted = await registry.getOrRecover(zoneId, async id =>
         restorePersistedZoneHead(id, adapter, new AurionTickRecorder(20, adapter)));
-      expect(adopted).toBe(prepared.zone);
+      expect(adopted.getTickNumber()).toBe(4);
+      expect(adopted.getCanonicalZoneState()).toEqual(prepared.zone.getCanonicalZoneState());
+      expect(adopted.getLatestReceipt()?.receiptHash).toBe((await adapter.getLatestReceipt(zoneId))?.receiptHash);
+      expect(registry.find(zoneId)).toBe(adopted);
       adopted.join({ userId: 77, socket: socket() }); registry.tick(); await adopted.flushEvidencePersistence();
       const playerTick = await adapter.getRecordedTick(zoneId, 5);
       expect(playerTick!.receipt.previousReceiptHash).toBe(continued[1].receipt.receiptHash);
