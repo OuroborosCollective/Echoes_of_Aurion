@@ -5291,3 +5291,14 @@ Evidence: Source candidate 044c02d15fae3ae5eb2a8229a3171d0a66616fd4; HUD regress
 Learned: A client import of canonical hashing pulls node:crypto into the browser bundle. Keep the client request actorless and let the authenticated server construct the validated intent.
 Open: Obtain exact-final-head journal/runtime checks and authorized runtime readback before closing #784 or making any production claim.
 Next safe step: Keep PR #1255 draft, finish exact-head CI, then capture authorized read-only runtime evidence. Do not deploy or merge as part of this work.
+
+
+### 2026-10-31 — Investigation receipt migration chain correction (#784)
+Status: PARTIAL
+Task: Correct the new deduction receipt migration after exact-revision evidence found an invalid empty statement segment.
+Decisions: Remove the trailing statement-breakpoint after the migration's single CREATE TABLE statement. Keep the migration-chain verifier unchanged and fail closed on malformed segments.
+Touched surfaces: drizzle/0076_aurion_investigation_deduction_receipts.sql.
+Evidence: Starter Village Pilot Evidence run 41164732716 at source head d0e963be351b23d70417bfef59729bd5ade189ac stopped before runtime startup. The migration verifier reported sqlCount=76, journalCount=76, no missing/duplicate tags, and emptyStatementSegments=[0076_aurion_investigation_deduction_receipts#2]. Source head 1a3fcc634b25b9f54d32ecb7ffaeeb2f93555d98 removes the empty segment; exact-head rerun is pending. No production schema or state was changed.
+Learned: Sequential tags and matching migration counts do not prove the SQL segment stream is valid; the verifier's empty-segment check caught a trailing delimiter.
+Open: Confirm the exact final head passes migration validation and the isolated MariaDB readback paths.
+Next safe step: Wait for final-head CI and keep the PR draft until journal/runtime evidence is complete.
