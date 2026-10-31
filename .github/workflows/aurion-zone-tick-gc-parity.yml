@@ -1,0 +1,49 @@
+name: Aurion 10Hz zone tick parity benchmark
+
+on:
+  pull_request:
+    paths:
+      - "server/zoneRuntime.ts"
+      - "server/zoneMobRuntime.ts"
+      - "server/wasdMobFsmProtocol.ts"
+      - "server/zoneRuntimeAllocation.test.ts"
+      - "server/zoneIntentScans.test.ts"
+      - "server/causality/**"
+      - "server/zoneTickGcParityBenchmark.test.ts"
+      - ".github/workflows/aurion-zone-tick-gc-parity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  zone-tick-parity-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      AURION_ZONE_TICK_HEAD: ${{ github.event.pull_request.head.sha }}
+      AURION_ZONE_TICK_BENCHMARK_OUTPUT: ${{ runner.temp }}/aurion-zone-tick-benchmark.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify exact pull request head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - run: pnpm check
+      - name: Replay parity and repeatable 10 Hz benchmark
+        run: pnpm exec vitest run server/zoneTickGcParityBenchmark.test.ts server/zoneRuntimeAllocation.test.ts server/zoneIntentScans.test.ts server/causality/causalTick.test.ts --reporter=verbose
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aurion-zone-tick-benchmark-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/aurion-zone-tick-benchmark.json
+          if-no-files-found: error
+          retention-days: 14
