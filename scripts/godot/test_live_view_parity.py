@@ -52,12 +52,13 @@ def manifest(source: str, image_hash: str) -> dict:
         "capturedAtUtc": NOW.isoformat().replace("+00:00", "Z"),
         "identity": {"worldId": "echoes-of-aurion-global", "zoneId": "observatory_threshold",
                      "sourceRevision": REV, "runtimeImageId": IMAGE_ID, "tick": 1025,
-                     "receiptHash": RECEIPT, "stateHash": STATE_HASH},
+                     "receiptHash": RECEIPT, "stateHash": STATE_HASH,
+                     "projectionHash": "sha256:" + "e" * 64, "streamInstance": "live-stream-1"},
         "camera": {"positionMm": [0, 2200, 6000], "targetMm": [0, 1400, 0], "fovMilliDeg": 60000, "viewportPx": [640, 360]},
         "projection": {"confirmedChunks": ["0:0:fnv1a-1234abcd"],
                        "visibleEntityIds": ["player:1", "mob_clockwork_2"],
                        "renderedAssetIds": ["terrain-grass", "castle-wall", "clockwork-stalker"],
-                       "skyType": "procedural", "skyVisible": True},
+                       "skyType": "procedural", "skyVisible": True, "horizonVisible": True},
         "imageSha256": image_hash,
     }
 
@@ -132,6 +133,30 @@ class ParityNegativeControls(unittest.TestCase):
     def test_camera_mismatch_invalidates_image_comparison(self):
         self.update_json("godot", lambda m: m["camera"].update(positionMm=[1000, 2200, 6000]))
         self.assertIn("CAMERA_PROJECTION_MISMATCH", self.check()["issues"])
+
+    def test_different_live_stream_instance_fails_even_with_identical_images(self):
+        self.update_json("godot", lambda m: m["identity"].update(streamInstance="other-stream"))
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("CANONICAL_STREAMINSTANCE_MISMATCH", result["issues"])
+
+    def test_missing_projection_hash_fails_closed(self):
+        self.update_json("godot", lambda m: m["identity"].pop("projectionHash"))
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("GODOT_LIVE_EDITOR_PROJECTION_UNVERIFIED", result["issues"])
+
+    def test_horizon_missing_fails_even_with_equal_pixels(self):
+        self.update_json("godot", lambda m: m["projection"].update(horizonVisible=False))
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("GODOT_LIVE_EDITOR_HORIZON_MISSING", result["issues"])
+
+    def test_different_sky_projection_fails_even_if_both_sky_types_are_valid(self):
+        self.update_json("godot", lambda m: m["projection"].update(skyType="physical"))
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("WORLD_SKYTYPE_MISMATCH", result["issues"])
 
     def test_not_same_causal_receipt_fails(self):
         self.update_json("godot", lambda m: m["identity"].update(receiptHash="sha256:" + "f" * 64))
