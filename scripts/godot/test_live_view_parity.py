@@ -124,6 +124,22 @@ class ParityNegativeControls(unittest.TestCase):
                 self.assertIn("GODOT_LIVE_EDITOR_SKY_MISSING", result["issues"])
                 self.assertTrue((self.output / "report.md").is_file())
 
+    def test_non_object_projection_generates_failure_report_instead_of_crashing(self):
+        for malformed in ([], ["untrusted"]):
+            with self.subTest(projection=malformed):
+                self.update_json("godot", lambda m, value=malformed: m.update(projection=value))
+                result = self.check()
+                self.assertEqual(result["status"], "FAIL")
+                self.assertIn("GODOT_LIVE_EDITOR_NO_CONFIRMED_TERRAIN", result["issues"])
+                self.assertTrue((self.output / "report.md").is_file())
+
+    def test_mixed_type_projection_lists_generate_failure_report(self):
+        self.update_json("godot", lambda m: m["projection"].update(confirmedChunks=["1:0:hash", 3]))
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("GODOT_LIVE_EDITOR_NO_CONFIRMED_TERRAIN", result["issues"])
+        self.assertTrue((self.output / "parity.json").is_file())
+
     def test_single_stalker_model_and_missing_sky_are_detected(self):
         self.update_json("godot", lambda m: m["projection"].update(renderedAssetIds=["clockwork-stalker"], skyType="none", skyVisible=False))
         result = self.check()
