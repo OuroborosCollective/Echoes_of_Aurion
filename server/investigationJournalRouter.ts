@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { deductionIntentSchema } from "../shared/investigationGraphProtocol";
+import { investigationDeductionRequestSchema } from "../shared/investigationClientContract";
 import { journalGuidanceSchema } from "../shared/investigationJournalProtocol";
 import { protectedProcedure, router } from "./_core/trpc";
 import {
@@ -22,7 +22,7 @@ export const investigationJournalRouter = router({
     }),
 
   submitDeduction: protectedProcedure
-    .input(deductionIntentSchema)
+    .input(investigationDeductionRequestSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         return await validateAndRecordInvestigationDeduction(ctx.user.id, input);

@@ -9,8 +9,7 @@ import { InventoryModal } from "../components/InventoryModal";
 import { CharacterModal } from "../components/CharacterModal";
 import { QuestLogModal } from "../components/QuestLogModal";
 import { InvestigationJournalModal } from "@/components/InvestigationJournalModal";
-import type { DeductionIntent } from "@shared/investigationGraphProtocol";
-import type { JournalGuidance } from "@shared/investigationJournalProtocol";
+import type { InvestigationDeductionRequest, JournalGuidance } from "@shared/investigationClientContract";
 import { CraftingModal } from "../components/CraftingModal";
 import { ControlsModal } from "../components/ControlsModal";
 import { GameHUD } from "../components/GameHUD";
@@ -167,10 +166,10 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       setPending(false);
     }
   };
-  const submitInvestigationDeduction = async (intent: DeductionIntent) => {
+  const submitInvestigationDeduction = async (request: InvestigationDeductionRequest) => {
     setMessage("");
     try {
-      await investigationDeduction.mutateAsync(intent);
+      await investigationDeduction.mutateAsync(request);
     } catch (error) {
       const code = (error as { data?: { code?: unknown } } | null)?.data?.code;
       await investigationJournalQuery.refetch().catch(() => undefined);

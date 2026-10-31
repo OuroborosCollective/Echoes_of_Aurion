@@ -3,6 +3,10 @@ import {
   aurionInvestigationDeductionReceipts,
 } from "../drizzle/schema";
 import {
+  investigationDeductionRequestSchema,
+  type InvestigationDeductionRequest,
+} from "../shared/investigationClientContract";
+import {
   buildInvestigationGraph,
   validateDeductionIntent,
   verifyDeductionReceipt,
@@ -100,15 +104,21 @@ export async function readPersistedInvestigationDeductionReceipt(id: string): Pr
  */
 export async function validateAndRecordInvestigationDeduction(
   userId: number,
-  intent: DeductionIntent,
+  request: InvestigationDeductionRequest,
 ): Promise<DeductionReceipt> {
   const viewerId = playerViewerId(userId);
-  if (intent.actorId !== viewerId) throw new Error("DEDUCTION_ACTOR_MISMATCH");
+  const selection = investigationDeductionRequestSchema.parse(request);
   const db = await getDb();
   if (!db) throw new Error("INVESTIGATION_DATABASE_UNAVAILABLE");
 
   const committed = await db.transaction(async tx => {
     const { graph } = await buildContext(viewerId, "plot", tx);
+    const intent: DeductionIntent = {
+      actorId: viewerId,
+      selectedClaimIds: selection.selectedClaimIds,
+      deductionType: selection.deductionType,
+      sourceProjectionHash: selection.sourceProjectionHash,
+    };
     const receipt = validateDeductionIntent({ intent, graph });
     const prior = (await tx.select().from(aurionInvestigationDeductionReceipts)
       .where(eq(aurionInvestigationDeductionReceipts.id, receipt.id)).limit(1))[0];

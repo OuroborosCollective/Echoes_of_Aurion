@@ -1,7 +1,6 @@
 import { createPool } from "mysql2/promise";
 import { describe, expect, it } from "vitest";
 import { createExperiencedNpcInformation } from "../shared/npcInformationEcologyProtocol";
-import { buildDeductionIntentFromJournal } from "../shared/investigationJournalProtocol";
 import { appRouter } from "./routers";
 import { readPersistedInvestigationDeductionReceipt } from "./investigationJournalPersistence";
 import { AURION_WORLD_CHECKPOINT_WORLD_ID } from "./worldCheckpointProtocol";
@@ -106,33 +105,33 @@ suite("real authenticated investigation journal + MariaDB readback (isolated, no
       expect(before.sourceProjectionHash).toBe(conspiracy.sourceProjectionHash);
       expect(conspiracy.investigations.flatMap(investigation => investigation.entries)).toEqual(entries);
 
-      const staleIntent = buildDeductionIntentFromJournal({
-        journal: before,
+      const staleRequest = {
+        sourceProjectionHash: before.sourceProjectionHash,
         selectedClaimIds: entries.map(entry => entry.claimId),
-        deductionType: "affirm",
-      });
+        deductionType: "affirm" as const,
+      };
       await seedInformation(pool, {
         witnessNpcId: "witness-c", subjectId: "gate", predicate: "opened_by",
         value: "Sable", logicalIndex: 102, receiptNumber: 4,
       });
-      await expect(caller.investigationJournal.submitDeduction(staleIntent))
+      await expect(caller.investigationJournal.submitDeduction(staleRequest))
         .rejects.toMatchObject({ code: "CONFLICT", message: "DEDUCTION_STALE_PROJECTION" });
       expect(await rowCount(pool, "aurionInvestigationDeductionReceipts")).toBe(0);
 
       const current = await caller.investigationJournal.read({ viewerUserId: userId, guidance: "plot" });
       const currentEntries = current.investigations.flatMap(investigation => investigation.entries);
-      const intent = buildDeductionIntentFromJournal({
-        journal: current,
+      const request = {
+        sourceProjectionHash: current.sourceProjectionHash,
         selectedClaimIds: currentEntries.slice(0, 2).map(entry => entry.claimId),
-        deductionType: "affirm",
-      });
-      const persisted = await caller.investigationJournal.submitDeduction(intent);
+        deductionType: "affirm" as const,
+      };
+      const persisted = await caller.investigationJournal.submitDeduction(request);
       expect(persisted.result).toBe("validated");
       expect(await readPersistedInvestigationDeductionReceipt(persisted.id)).toEqual(persisted);
       const after = await caller.investigationJournal.read({ viewerUserId: userId, guidance: "plot" });
       expect(after.journalHash).toBe(current.journalHash);
 
-      const retried = await caller.investigationJournal.submitDeduction(intent);
+      const retried = await caller.investigationJournal.submitDeduction(request);
       expect(retried.receiptHash).toBe(persisted.receiptHash);
       expect(await rowCount(pool, "aurionInvestigationDeductionReceipts")).toBe(1);
       expect(await rowCount(pool, "aurionNpcInformationReceipts")).toBe(4);

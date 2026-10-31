@@ -1,16 +1,14 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import {
-  buildDeductionIntentFromJournal,
-  guidancePresentation,
-  type InvestigationJournal,
-  type JournalGuidance,
-} from "@shared/investigationJournalProtocol";
+import type { InvestigationJournal } from "@shared/investigationJournalProtocol";
 import {
   DEDUCTION_MAX_CLAIMS,
-  type DeductionIntent,
+  guidancePresentation,
+  investigationDeductionRequestSchema,
   type DeductionType,
-} from "@shared/investigationGraphProtocol";
+  type InvestigationDeductionRequest,
+  type JournalGuidance,
+} from "@shared/investigationClientContract";
 
 const BAND_LABEL: Readonly<Record<string, string>> = Object.freeze({
   low: "fragil",
@@ -36,10 +34,10 @@ const DEDUCTION_LABEL: Readonly<Partial<Record<DeductionType, string>>> = Object
  * Aurion Investigation Journal & Rumor Board (Issue #784).
  *
  * Pure presentation of a server-confirmed readmodel: the component renders
- * the journal it receives and can assemble a deduction intent from the
- * disclosed claims. It holds no truth of its own — no localStorage, no
- * local solved flags, no invented clues. The server revalidates every
- * intent against the bound projection revision.
+ * the journal it receives and sends a revision-bound claim selection. It
+ * holds no truth of its own — no localStorage, no local solved flags, no
+ * invented clues. The server constructs and revalidates every intent against
+ * the bound projection revision.
  */
 export function InvestigationJournalModal(
   props: Readonly<{
@@ -50,7 +48,7 @@ export function InvestigationJournalModal(
     pending: boolean;
     message?: string;
     onGuidanceChange: (guidance: JournalGuidance) => void;
-    onSubmitDeduction: (intent: DeductionIntent) => void;
+    onSubmitDeduction: (request: InvestigationDeductionRequest) => void;
   }>
 ) {
   const { isOpen, onClose, journal, guidance, pending, message, onGuidanceChange, onSubmitDeduction } = props;
@@ -88,12 +86,12 @@ export function InvestigationJournalModal(
 
   const submit = (deductionType: DeductionType) => {
     if (!journal) return;
-    const intent = buildDeductionIntentFromJournal({
-      journal,
+    const request = investigationDeductionRequestSchema.parse({
       selectedClaimIds: selected,
       deductionType,
+      sourceProjectionHash: journal.sourceProjectionHash,
     });
-    onSubmitDeduction(intent);
+    onSubmitDeduction(request);
     setSelection({ journalHash: journal.journalHash, ids: [] });
   };
 

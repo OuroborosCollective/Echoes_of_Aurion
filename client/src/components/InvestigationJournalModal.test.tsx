@@ -128,7 +128,7 @@ describe("Aurion investigation journal projection (issue #784)", () => {
     ).toBe(true);
   });
 
-  it("assembles deduction intents from disclosed claims only", () => {
+  it("sends a revision-bound selection request over disclosed claims only", () => {
     const journal = journalFixture();
     const onSubmit = vi.fn();
     render(
@@ -144,11 +144,11 @@ describe("Aurion investigation journal projection (issue #784)", () => {
     fireEvent.click(screen.getByLabelText("Behauptung false auswählen"));
     fireEvent.click(screen.getByRole("button", { name: "Anfechten" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    const intent = onSubmit.mock.calls[0][0];
-    expect(intent.actorId).toBe("player-1");
-    expect(intent.deductionType).toBe("challenge");
-    expect(intent.sourceProjectionHash).toBe(journal.sourceProjectionHash);
-    expect(intent.selectedClaimIds.length).toBe(2);
+    const request = onSubmit.mock.calls[0][0];
+    expect(request.deductionType).toBe("challenge");
+    expect(request.sourceProjectionHash).toBe(journal.sourceProjectionHash);
+    expect(request.selectedClaimIds).toHaveLength(2);
+    expect(request).not.toHaveProperty("actorId");
   });
 
   it("hides provenance hints under conspiracy guidance without changing claims", () => {

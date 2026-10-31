@@ -22,6 +22,13 @@
  */
 import { z } from "zod";
 import { canonicalSha256 } from "./aurionCanonicalHash";
+import {
+  guidancePresentation,
+  journalGuidanceSchema,
+  type JournalGuidance,
+} from "./investigationClientContract";
+export { guidancePresentation, journalGuidanceSchema };
+export type { JournalGuidance };
 import { verifyRumorProjection, type RumorClaimProjection, type RumorProjection } from "./rumorProjectionProtocol";
 import {
   deductionIntentSchema,
@@ -51,9 +58,6 @@ const sha256 = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 export const journalConfidenceBandSchema = z.enum(["low", "medium", "high"]);
 export type JournalConfidenceBand = z.infer<typeof journalConfidenceBandSchema>;
-
-export const journalGuidanceSchema = z.enum(["whisper", "plot", "conspiracy"]);
-export type JournalGuidance = z.infer<typeof journalGuidanceSchema>;
 
 export const journalEntrySchema = z.strictObject({
   claimId: identifier,
@@ -108,22 +112,6 @@ export function confidenceBand(confidenceQ16: number): JournalConfidenceBand {
   if (confidenceQ16 >= JOURNAL_CONFIDENCE_HIGH_Q16) return "high";
   if (confidenceQ16 >= JOURNAL_CONFIDENCE_MEDIUM_Q16) return "medium";
   return "low";
-}
-
-/**
- * Presentation policy per guidance level. Whisper gives full provenance
- * hints, Plot keeps relations, Conspiracy is minimal guidance. Availability
- * of claims is identical on every level.
- */
-export function guidancePresentation(guidance: JournalGuidance): Readonly<{
-  showProvenance: boolean;
-  showRelations: boolean;
-}> {
-  journalGuidanceSchema.parse(guidance);
-  return Object.freeze({
-    showProvenance: guidance === "whisper",
-    showRelations: guidance !== "conspiracy",
-  });
 }
 
 // ---------------------------------------------------------------------------

@@ -11,6 +11,7 @@ on:
       - "server/investigationJournal*.ts"
       - "server/routers.ts"
       - "shared/investigation*Protocol*"
+      - "shared/investigationClientContract.ts"
       - "shared/rumorProjectionProtocol*"
       - ".github/workflows/aurion-investigation-journal.yml"
       - "package.json"

@@ -10,27 +10,26 @@ function context(user: TrpcContext["user"]): TrpcContext {
   };
 }
 
-const intent = (actorId: string) => ({
-  actorId,
+const deductionRequest = {
   selectedClaimIds: ["claim-a", "claim-b"],
   deductionType: "affirm" as const,
   sourceProjectionHash: "sha256:" + "0".repeat(64),
-});
+};
 
 describe("authenticated investigation journal routes", () => {
   it("rejects anonymous reads and deductions before touching persistence", async () => {
     const caller = appRouter.createCaller(context(null));
     await expect(caller.investigationJournal.read({ viewerUserId: 12, guidance: "plot" }))
       .rejects.toMatchObject({ code: "UNAUTHORIZED" });
-    await expect(caller.investigationJournal.submitDeduction(intent("player:12")))
+    await expect(caller.investigationJournal.submitDeduction(deductionRequest))
       .rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
-  it("binds the journal viewer and deduction actor to the authenticated account", async () => {
+  it("binds the journal viewer and derives the deduction actor from authentication", async () => {
     const caller = appRouter.createCaller(context({ id: 12, role: "user" } as NonNullable<TrpcContext["user"]>));
     await expect(caller.investigationJournal.read({ viewerUserId: 13, guidance: "plot" }))
       .rejects.toMatchObject({ code: "FORBIDDEN", message: "INVESTIGATION_VIEWER_MISMATCH" });
-    await expect(caller.investigationJournal.submitDeduction(intent("player:13")))
-      .rejects.toMatchObject({ code: "FORBIDDEN", message: "DEDUCTION_ACTOR_MISMATCH" });
+    await expect(caller.investigationJournal.submitDeduction({ ...deductionRequest, actorId: "player:13" }))
+      .rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
