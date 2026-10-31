@@ -194,22 +194,19 @@ export function summarizeWorldChunkTexturization(chunk: BaseWorldChunk): AurionT
  * CAG evaluates surface material counts without mutating world data.
  */
 export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): AurionCagProbe {
+  const matrix = canonicalSurfaceMatrix(chunk);
   const summary = summarizeWorldChunkTexturization(chunk);
   let code = "surfaces={";
-  for (let i = 0; i < chunk.tiles.length; i++) {
-    const t = chunk.tiles[i]!;
-    let val;
-    switch(t.surface) {
-        case "grass": val = 1; break;
-        case "riverbank": val = 2; break;
-        case "stone": val = 3; break;
-        case "forest_floor": val = 4; break;
-        case "ash": val = 5; break;
-        case "ruin_path": val = 6; break;
-        default: throw new Error(`unmapped surface: ${t.surface}`);
+  let first = true;
+  for (let z = 0; z < matrix.length; z++) {
+    for (let x = 0; x < matrix[z]!.length; x++) {
+      if (!first) {
+        code += ",";
+      } else {
+        first = false;
+      }
+      code += matrix[z]![x]!;
     }
-    if (i > 0) code += ",";
-    code += val;
   }
   code += "};Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]";
 

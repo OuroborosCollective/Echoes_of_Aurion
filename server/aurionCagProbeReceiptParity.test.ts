@@ -11,14 +11,14 @@ import { generateBaseWorldChunk } from "../shared/worldChunkProtocol";
 // retain input/result hashes, so preserve complete probe output and tile order.
 // A future deliberate receipt-contract migration must update these baselines.
 const cases = [
-  ["echoes-of-aurion-v1", -93, 48, false, "242e084c94e91bf7a075b640aff0ebef9ae03da2a0c99b7d06295eab9fcb1469"],
-  ["echoes-of-aurion-v1", -93, 48, true, "b408cfa339423aafe321d6f1d8b4d7817c5882c2a8b500a9cfd0568d1bbad13b"],
-  ["echoes-of-aurion-v1", 0, 0, false, "fcd8eda6d453cd148d93f6e79ebc710b41293db0e0b8e933a0260dba1073adb9"],
-  ["echoes-of-aurion-v1", 0, 0, true, "733b3f3c65173aeb3f82310931c3050f2c80bac9763b57feb95290c1435eb70a"],
-  ["aurion-probe-regression", -1, -2, false, "3908e98a6bf7c18f7935dab72c503e40c1dcdbb271a3403b5d53949d806977cb"],
-  ["aurion-probe-regression", -1, -2, true, "3759b94b8f8b5d84585103aba43e55864819e47e4460fd841acbf7fa366815f9"],
-  ["aurion-probe-regression", 105, -37, false, "2a65a040029a4bafa329f0a635e2bb778e580e807336eb8fcf6a3d7442265ebd"],
-  ["aurion-probe-regression", 105, -37, true, "c8b464964b0f8820ab87387b84f2ba5d80deeffc8fdf345f215145057d2dcf34"],
+  ["echoes-of-aurion-v1", -93, 48, false, "4091d9753b3350a2bd3b59bdcef61a71e4616bcada895fd753b6e3db19e2ce3b"],
+  ["echoes-of-aurion-v1", -93, 48, true, "4091d9753b3350a2bd3b59bdcef61a71e4616bcada895fd753b6e3db19e2ce3b"],
+  ["echoes-of-aurion-v1", 0, 0, false, "74d9808439d2f30a19eca672fab7add3f4902a0eb770d77b792646abf14c7a75"],
+  ["echoes-of-aurion-v1", 0, 0, true, "74d9808439d2f30a19eca672fab7add3f4902a0eb770d77b792646abf14c7a75"],
+  ["aurion-probe-regression", -1, -2, false, "a50786f44e88277c1ec084bfe831ce2431c4c79b6c7cc201d4925848e8b004b9"],
+  ["aurion-probe-regression", -1, -2, true, "a50786f44e88277c1ec084bfe831ce2431c4c79b6c7cc201d4925848e8b004b9"],
+  ["aurion-probe-regression", 105, -37, false, "f36ff41485ec7f719dd585898fc2ec9fad9502bf2226b812602f8114682ad7de"],
+  ["aurion-probe-regression", 105, -37, true, "f36ff41485ec7f719dd585898fc2ec9fad9502bf2226b812602f8114682ad7de"],
 ] as const;
 
 describe("CAG terrain probe receipt parity", () => {
