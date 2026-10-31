@@ -127,7 +127,15 @@ async function startServer(){
           ()=>globalCausalArchivingService.stop(),
           ()=>globalStateReconciliationService.stop(),
         ],
-        flushCausalPersistence:()=>globalTickRecorder.flushPersistence(),
+        flushCausalPersistence:async()=>{
+          // Operational-only readback: never feeds time or queue depth into a simulation tick.
+          const logPending=()=>console.info("[Aurion] shutdown persistence status",JSON.stringify(globalTickRecorder.getPersistenceStatus()));
+          logPending();
+          const progress=setInterval(logPending,1000);
+          progress.unref();
+          try{await globalTickRecorder.flushPersistence();logPending();}
+          finally{clearInterval(progress);}
+        },
         closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
       });
       console.info("[Aurion] graceful causal shutdown complete");
