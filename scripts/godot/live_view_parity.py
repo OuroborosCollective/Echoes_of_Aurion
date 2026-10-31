@@ -124,7 +124,7 @@ def _capture_checks(
         _fail(issues, f"{prefix}_ONLY_PLACEHOLDERS_OR_SINGLE_MODEL")
     if not isinstance(entities, list) or not entities or len(entities) > 2048 or any(not _is_str(e) for e in entities):
         _fail(issues, f"{prefix}_NO_CONFIRMED_ACTORS")
-    if proj.get("skyType") not in REQUIRED_SKY or proj.get("skyVisible") is not True:
+    if not isinstance(proj.get("skyType"), str) or proj["skyType"] not in REQUIRED_SKY or proj.get("skyVisible") is not True:
         _fail(issues, f"{prefix}_SKY_MISSING")
     return t
 
