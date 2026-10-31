@@ -186,7 +186,8 @@ jobs:
           # SIGTERM is still delivered to the actual Node PID and its full durable
           # shutdown receipt remains a mandatory, unmodified assertion below.
           command -v setsid >/dev/null
-          sudo -u aurion-netproof setsid --fork env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" AURION_PRIVATE_STATE_DIR="$AURION_PRIVATE_STATE_DIR" AURION_GLB_STORAGE_DIR="$AURION_GLB_STORAGE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-preflight.log 2>&1 &
+          # Diagnostic only: --trace-exit reports a real Node process.exit call, never changes receipts or gates.
+          sudo -u aurion-netproof setsid --fork env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" AURION_PRIVATE_STATE_DIR="$AURION_PRIVATE_STATE_DIR" AURION_GLB_STORAGE_DIR="$AURION_GLB_STORAGE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" --trace-exit "$RUNTIME_ENTRY" > test-results/starter-pilot-server-preflight.log 2>&1 &
           preflight_launcher_pid=$!
           for attempt in $(seq 1 50); do
             pid="$(pgrep -u "$AURION_NET_UID" -f 'dist/index.js' | head -n 1 || true)"
