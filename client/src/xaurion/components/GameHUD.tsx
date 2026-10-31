@@ -111,6 +111,7 @@ export interface GameHUDProps {
   onOpenInventory: () => void;
   onOpenCrafting: () => void;
   onOpenQuests: () => void;
+  onOpenInvestigations?: () => void;
   onOpenContacts: () => void;
   onOpenParty: () => void;
   onOpenDungeonFinder: () => void;
@@ -358,6 +359,7 @@ function DesktopHUD(props: GameHUDProps) {
                 <MenuButton title="Territorium" onClick={() => closeMenu(props.onOpenTerritory)}><Landmark /></MenuButton>
                 <MenuButton title="Homestead" onClick={() => closeMenu(props.onOpenHomestead)}><Hammer /></MenuButton>
                 <MenuButton title="Research" onClick={() => closeMenu(props.onOpenResearch)}><Sparkles /></MenuButton>
+                <MenuButton title="Ermittlungen" onClick={() => closeMenu(props.onOpenInvestigations ?? props.onOpenQuests)}><ScrollText /></MenuButton>
               </CommandSection>
 
               <CommandSection title="Social & Holdings">
@@ -428,7 +430,7 @@ function DesktopHUD(props: GameHUDProps) {
                       <span className="text-[8px] text-stone-600">World state · {worldProjectionState}</span>
                       <button
                         type="button"
-                        onClick={props.onOpenQuests}
+                        onClick={props.onOpenInvestigations ?? props.onOpenQuests}
                         className="min-h-9 rounded-[4px] px-2 text-[9px] font-semibold text-stone-300 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                       >
                         Journal <kbd className="ml-1 rounded border border-slate-700 px-1 py-0.5 font-mono text-[8px] text-stone-500">J</kbd>

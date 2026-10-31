@@ -76,6 +76,8 @@ type DeckProps = Pick<
   | "onOpenHomestead"
   | "onOpenDeterminism"
   | "onOpenResearch"
+  | "onOpenQuests"
+  | "onOpenInvestigations"
 > &
   Readonly<{
     closeThen: (action: () => void) => () => void;
@@ -105,6 +107,7 @@ export function HudDeck(props: DeckProps) {
         { title: "Territorium", icon: <Landmark />, run: props.onOpenTerritory },
         { title: "Homestead", icon: <Hammer />, run: props.onOpenHomestead },
         { title: "Research", icon: <Sparkles />, run: props.onOpenResearch },
+        { title: "Ermittlungen", icon: <ScrollText />, run: props.onOpenInvestigations ?? props.onOpenQuests },
       ],
     },
     {

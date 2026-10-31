@@ -4,6 +4,12 @@ on:
     paths:
       - "client/src/components/InvestigationJournalModal*"
       - "client/src/components/ui/dialog.tsx"
+      - "client/src/xaurion/components/GameHUD.tsx"
+      - "client/src/xaurion/components/MobileGameHUD.tsx"
+      - "client/src/xaurion/components/hud/**"
+      - "client/src/xaurion/integration/AurionAuthorityHud.tsx"
+      - "server/investigationJournal*.ts"
+      - "server/routers.ts"
       - "shared/investigation*Protocol*"
       - "shared/rumorProjectionProtocol*"
       - ".github/workflows/aurion-investigation-journal.yml"
@@ -26,6 +32,6 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Journal and neighboring protocol regressions
-        run: pnpm exec vitest run client/src/components/InvestigationJournalModal.test.tsx shared/investigationJournalProtocol.test.ts shared/investigationGraphProtocol.test.ts server/causalRumorInvestigationEvidence.test.ts
+        run: pnpm exec vitest run client/src/components/InvestigationJournalModal.test.tsx shared/investigationJournalProtocol.test.ts shared/investigationGraphProtocol.test.ts server/causalRumorInvestigationEvidence.test.ts server/investigationJournalRouter.test.ts
       - name: Typecheck
         run: pnpm check

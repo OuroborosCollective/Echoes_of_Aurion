@@ -4,6 +4,7 @@ import {
   buildDeductionIntentFromJournal,
   guidancePresentation,
   type InvestigationJournal,
+  type JournalGuidance,
 } from "@shared/investigationJournalProtocol";
 import {
   DEDUCTION_MAX_CLAIMS,
@@ -44,31 +45,36 @@ export function InvestigationJournalModal(
   props: Readonly<{
     isOpen: boolean;
     onClose: () => void;
-    journal: InvestigationJournal;
+    journal: InvestigationJournal | null;
+    guidance: JournalGuidance;
     pending: boolean;
+    message?: string;
+    onGuidanceChange: (guidance: JournalGuidance) => void;
     onSubmitDeduction: (intent: DeductionIntent) => void;
   }>
 ) {
-  const { isOpen, onClose, journal, pending, onSubmitDeduction } = props;
+  const { isOpen, onClose, journal, guidance, pending, message, onGuidanceChange, onSubmitDeduction } = props;
   const [selection, setSelection] = useState<{ journalHash: string; ids: readonly string[] }>({
-    journalHash: journal.journalHash,
+    journalHash: journal?.journalHash ?? "",
     ids: [],
   });
-  const selected = selection.journalHash === journal.journalHash ? selection.ids : [];
+  const selected = journal && selection.journalHash === journal.journalHash ? selection.ids : [];
   const opener = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    setSelection(current => current.journalHash === journal.journalHash
+    const journalHash = journal?.journalHash ?? "";
+    setSelection(current => current.journalHash === journalHash
       ? current
-      : { journalHash: journal.journalHash, ids: [] });
-  }, [journal.journalHash]);
+      : { journalHash, ids: [] });
+  }, [journal?.journalHash]);
   const presentation = useMemo(
-    () => guidancePresentation(journal.guidance),
-    [journal.guidance]
+    () => guidancePresentation(journal?.guidance ?? guidance),
+    [guidance, journal?.guidance]
   );
 
   if (!isOpen) return null;
 
   const toggle = (claimId: string) => {
+    if (!journal) return;
     setSelection(current => {
       const ids = current.journalHash === journal.journalHash ? current.ids : [];
       return {
@@ -81,6 +87,7 @@ export function InvestigationJournalModal(
   };
 
   const submit = (deductionType: DeductionType) => {
+    if (!journal) return;
     const intent = buildDeductionIntentFromJournal({
       journal,
       selectedClaimIds: selected,
@@ -120,6 +127,23 @@ export function InvestigationJournalModal(
           </button>
         </header>
 
+        <label style={styles.guidance}>
+          <span>Hinweisstufe</span>
+          <select
+            aria-label="Hinweisstufe"
+            value={guidance}
+            disabled={pending}
+            onChange={event => onGuidanceChange(event.currentTarget.value as JournalGuidance)}
+            style={styles.guidanceSelect}
+          >
+            <option value="whisper">Flüstern</option>
+            <option value="plot">Handlung</option>
+            <option value="conspiracy">Verschwörung</option>
+          </select>
+        </label>
+
+        {journal ? (
+          <>
         {journal.investigations.length === 0 && (
           <p style={styles.empty}>
             Keine bestätigten Gerüchte im aktuellen Wissensstand.
@@ -198,6 +222,14 @@ export function InvestigationJournalModal(
             </button>
           ))}
         </footer>
+          </>
+        ) : (
+          <p role={pending ? "status" : "alert"} style={styles.empty}>
+            {pending
+              ? "Bestätigter Journalstand wird vom Server geladen."
+              : message || "Der serverbestätigte Journalstand ist derzeit nicht verfügbar."}
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -230,6 +262,15 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   empty: { color: "#9fb3c8" },
+  guidance: { display: "flex", alignItems: "center", gap: 8, marginTop: 12, color: "#9fb3c8" },
+  guidanceSelect: {
+    background: "#172235",
+    border: "1px solid #2c3e50",
+    borderRadius: 4,
+    color: "#dbe4f0",
+    minHeight: 36,
+    padding: "0 8px",
+  },
   case: { marginTop: 12, borderTop: "1px solid #223046", paddingTop: 8 },
   caseTitle: { margin: "4px 0", fontSize: 15 },
   contradiction: {
