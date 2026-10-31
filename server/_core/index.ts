@@ -4,6 +4,7 @@ import { createCorsOriginResolver } from "./corsOrigin";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
+import { writeSync } from "node:fs";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -139,7 +140,9 @@ async function startServer(){
         },
         closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
       });
-      console.info("[Aurion] graceful causal shutdown complete");
+      // Emit the actual post-drain receipt synchronously before process.exit(0).
+      // Buffered console output may be lost during an immediate process exit.
+      writeSync(1, "[Aurion] graceful causal shutdown complete\n");
       process.exit(0);
     }catch(error){
       console.error("[Aurion] graceful causal shutdown failed",error);
