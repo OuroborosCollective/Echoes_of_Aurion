@@ -71,6 +71,36 @@ function journalFixture(
   return buildInvestigationJournal({ projection, graph, guidance });
 }
 
+// Synthetic protocol fixtures exercise presentation only, not live Aurion data.
+function manyClaimsFixture() {
+  const receipts = Array.from({ length: 9 }, (_, i) => {
+    const exp = createExperiencedNpcInformation({
+      worldId: "world-1",
+      witnessNpcId: `npc-${i}`,
+      subjectId: "caravan-7",
+      predicate: "destroyed",
+      value: `value-${i}`,
+      logicalIndex: 10 + i * 3,
+      expiresAtIndex: 1000,
+      confidenceBps: 9000,
+      source: { ...source, sourceReceiptId: `receipt-${i}` },
+    });
+    const rem = rememberNpcInformation(exp, 11 + i * 3);
+    const told = communicateNpcInformation({
+      source: rem,
+      receiverNpcId: "player-1",
+      logicalIndex: 12 + i * 3,
+    });
+    return [exp, rem, told];
+  }).flat();
+  const projection = projectRumorClaims({
+    viewerId: "player-1", worldId: "world-1", atIndex: 40, receipts,
+  });
+  return buildInvestigationJournal({
+    projection, graph: buildInvestigationGraph({ projection }), guidance: "whisper",
+  });
+}
+
 describe("Aurion investigation journal projection (issue #784)", () => {
   it("renders only server-confirmed claims with bands and discovered contradictions", () => {
     render(
@@ -148,5 +178,52 @@ describe("Aurion investigation journal projection (issue #784)", () => {
     expect(
       screen.getByText("Keine bestätigten Gerüchte im aktuellen Wissensstand.")
     ).toBeTruthy();
+  });
+
+  it("caps selection at the protocol limit and permits replacing a choice", () => {
+    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={manyClaimsFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    for (let i = 0; i < 8; i++) fireEvent.click(screen.getByLabelText(`Behauptung value-${i} auswählen`));
+    const ninth = screen.getByLabelText("Behauptung value-8 auswählen") as HTMLInputElement;
+    expect(ninth.disabled).toBe(true);
+    expect(screen.getByText("8 ausgewählt")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Behauptung value-0 auswählen"));
+    expect(ninth.disabled).toBe(false);
+    fireEvent.click(ninth);
+    expect(ninth.checked).toBe(true);
+    expect(screen.getByText("8 ausgewählt")).toBeTruthy();
+  });
+
+  it("clears selection immediately when a new journal revision removes claims", () => {
+    const journal = journalFixture();
+    const submit = vi.fn();
+    const { rerender } = render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journal} pending={false} onSubmitDeduction={submit} />);
+    fireEvent.click(screen.getByLabelText("Behauptung true auswählen"));
+    fireEvent.click(screen.getByLabelText("Behauptung false auswählen"));
+    const projection = projectRumorClaims({ viewerId: "player-1", worldId: "world-1", atIndex: 41, receipts: [] });
+    const empty = buildInvestigationJournal({ projection, graph: buildInvestigationGraph({ projection }), guidance: "whisper" });
+    rerender(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={empty} pending={false} onSubmitDeduction={submit} />);
+    expect(screen.getByText("0 ausgewählt")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Anfechten" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("offers no blind chain action without disclosed prerequisite relations", () => {
+    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Verketten" })).toBeNull();
+  });
+
+  it("uses a modal dialog and closes on Escape", () => {
+    const onClose = vi.fn();
+    render(<InvestigationJournalModal isOpen onClose={onClose} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    const dialog = screen.getByRole("dialog", { name: "Investigationsjournal & Gerüchtetafel" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("wraps actions for narrow screens", () => {
+    render(<InvestigationJournalModal isOpen onClose={vi.fn()} journal={journalFixture()} pending={false} onSubmitDeduction={vi.fn()} />);
+    expect(screen.getByText("0 ausgewählt").parentElement?.style.flexWrap).toBe("wrap");
   });
 });
