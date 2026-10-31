@@ -81,6 +81,10 @@ def _capture_checks(
         _fail(issues, f"{prefix}_SOURCE_SCHEMA_INVALID")
     if meta.get("captureKind") != "world-viewport" or meta.get("captureMode") != "authenticated-live":
         _fail(issues, f"{prefix}_NOT_LIVE_WORLD_VIEWPORT")
+    if meta.get("observedScreen") == "login":
+        _fail(issues, f"{prefix}_LOGIN_SCREEN_NOT_WORLD")
+    elif meta.get("observedScreen") != "gameplay-world":
+        _fail(issues, f"{prefix}_SCREEN_STATE_UNVERIFIED")
     t = _valid_utc(meta.get("capturedAtUtc"), issues, prefix, now)
     ident = meta.get("identity", {})
     if not isinstance(ident, dict):
@@ -263,6 +267,10 @@ def compare(
     diagnosis = []
     if "GODOT_LIVE_BRIDGE_NOT_LISTENING" in issues:
         diagnosis.append("Die lokale Godot-Bridge ist nicht erreichbar. Der Editor kann keine aktuelle kanonische Weltprojektion beziehen.")
+    if "GODOT_LIVE_EDITOR_LOGIN_SCREEN_NOT_WORLD" in issues:
+        diagnosis.append("Godot zeigte einen Anmeldedialog anstelle des authentifizierten Spielwelt-Viewports. Kein Live-Weltbild nachgewiesen.")
+    elif "GODOT_LIVE_EDITOR_SCREEN_STATE_UNVERIFIED" in issues or "GODOT_LIVE_EDITOR_NOT_LIVE_WORLD_VIEWPORT" in issues:
+        diagnosis.append("Der tatsächlich aufgenommene Godot-Bildschirm ist nicht als aktiver, authentifizierter Welt-Viewport nachgewiesen.")
     if any(x in issues for x in ("GODOT_LIVE_EDITOR_NO_CONFIRMED_TERRAIN", "WORLD_CONFIRMEDCHUNKS_MISMATCH")):
         diagnosis.append("Godot hat keine oder andere bestätigte Terrain-Chunks. Wahrscheinlicher Neutralboden statt Aurion-Weltgeometrie.")
     if "GODOT_LIVE_EDITOR_ONLY_PLACEHOLDERS_OR_SINGLE_MODEL" in issues:
@@ -283,7 +291,7 @@ def compare(
         "diagnosis": diagnosis, "stats": stats, "visual": visual,
         "captureNames": {k: p.name for k, p in image_paths.items()},
         "metadataSummary": {
-            k: {"capturedAtUtc": v.get("capturedAtUtc"), "worldId": v.get("identity", {}).get("worldId") if isinstance(v.get("identity"), dict) else None,
+            k: {"capturedAtUtc": v.get("capturedAtUtc"), "observedScreen": v.get("observedScreen"), "worldId": v.get("identity", {}).get("worldId") if isinstance(v.get("identity"), dict) else None,
                 "zoneId": v.get("identity", {}).get("zoneId") if isinstance(v.get("identity"), dict) else None,
                 "tick": v.get("identity", {}).get("tick") if isinstance(v.get("identity"), dict) else None,
                 "confirmedChunks": len(v.get("projection", {}).get("confirmedChunks", [])) if isinstance(v.get("projection"), dict) and isinstance(v.get("projection", {}).get("confirmedChunks"), list) else 0,

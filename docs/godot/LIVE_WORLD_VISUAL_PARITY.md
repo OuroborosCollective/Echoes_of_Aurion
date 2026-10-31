@@ -20,6 +20,7 @@ Der Aurion-Server ist die **einzige** Welt-Autorität. Der Browser und Godot lie
 - Die Editor-Bridge `server/godotBridge/aurionAdapter.ts` sendet derzeit Spieler, Monster und eine flache Zone/Region, aber **keine** bestätigten Terrain-/Asset-/Himmelsdaten. `godot-client/addons/aurion_bridge/entity_3d.gd` rendert Kapseln, Kugeln, Würfel und Labels. Dies ist nicht die volle Webgame-Welt.
 - Die im VPS-Editor laufende Godot-Projektkopie ist kein durch `.git` nachgewiesener Source-Checkout. Die lokale Editor-Ansicht ist zudem nicht identisch mit dem eigenen spielbaren Godot-Viewport `godot-client/app/main.tscn`.
 - Eine rohe Xvfb-Bildschirmaufnahme ohne die bestehende X11-Autorisierung wurde korrekt abgewiesen. Keine Umgehung der privaten Display-Authentifizierung.
+- Mit der **vorhandenen** `aurion-deploy`-X11-Berechtigung wurde anschließend eine echte Xvfb-Bildschirmaufnahme des VPS-Editors read-only geprüft. Der aktuelle Bildschirm zeigte den Aurion-Anmeldedialog, **keinen Welt-Viewport**. Im automatisierten Bildpaar ist `observedScreen: "login"` deshalb ein expliziter FAIL mit `GODOT_LIVE_EDITOR_LOGIN_SCREEN_NOT_WORLD`; die Aufnahme gehört nicht als Weltbild in ein grünes Vergleichspaar.
 
 **Bis eine autorisierte, servergebundene Capture-Lane existiert, muss der echte Workflow rot bleiben.** Ein grüner Fixture-Test ist nie ein Produktionsbeweis.
 
@@ -45,6 +46,7 @@ JSON-Vertrag pro Aufnahme (die Werte unten sind ausschließlich Feld-/Typbeispie
   "source": "aurion-web",
   "captureKind": "world-viewport",
   "captureMode": "authenticated-live",
+  "observedScreen": "gameplay-world",
   "capturedAtUtc": "<UTC-Z-Zeitstempel>",
   "identity": {
     "worldId": "<server-bestätigte Welt>",

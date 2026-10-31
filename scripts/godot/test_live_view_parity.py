@@ -48,7 +48,7 @@ def colored_world(image_path: Path, *, alternate: bool = False, dark_sky: bool =
 def manifest(source: str, image_hash: str) -> dict:
     return {
         "schema": "aurion.live-view.capture.v1", "source": source,
-        "captureKind": "world-viewport", "captureMode": "authenticated-live",
+        "captureKind": "world-viewport", "captureMode": "authenticated-live", "observedScreen": "gameplay-world",
         "capturedAtUtc": NOW.isoformat().replace("+00:00", "Z"),
         "identity": {"worldId": "echoes-of-aurion-global", "zoneId": "observatory_threshold",
                      "sourceRevision": REV, "runtimeImageId": IMAGE_ID, "tick": 1025,
@@ -106,6 +106,13 @@ class ParityNegativeControls(unittest.TestCase):
         result = self.check()
         self.assertIn("GODOT_LIVE_EDITOR_NO_CONFIRMED_TERRAIN", result["issues"])
         self.assertIn("WORLD_CONFIRMEDCHUNKS_MISMATCH", result["issues"])
+
+    def test_godot_login_dialog_is_not_accepted_as_live_world(self):
+        self.update_json("godot", lambda m: m.update(captureKind="login-dialog", observedScreen="login"))
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("GODOT_LIVE_EDITOR_LOGIN_SCREEN_NOT_WORLD", result["issues"])
+        self.assertIn("Anmeldedialog", " ".join(result["diagnosis"]))
 
     def test_single_stalker_model_and_missing_sky_are_detected(self):
         self.update_json("godot", lambda m: m["projection"].update(renderedAssetIds=["clockwork-stalker"], skyType="none", skyVisible=False))
