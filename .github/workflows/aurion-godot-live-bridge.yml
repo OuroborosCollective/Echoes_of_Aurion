@@ -1,5 +1,12 @@
 name: Aurion Godot live bridge
 on:
+  push:
+      branches:
+        - 'feat/issue-987-zone-tick-parity-benchmark-20261031'
+      paths:
+        - 'server/**'
+        - '.github/workflows/aurion-godot-live-bridge.yml'
+        - '.github/workflows/aurion-zone-tick-gc-parity.yml'
   pull_request:
     paths:
       - 'server/godotBridge/**'
