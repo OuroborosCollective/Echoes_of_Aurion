@@ -114,6 +114,15 @@ class ParityNegativeControls(unittest.TestCase):
         self.assertIn("GODOT_LIVE_EDITOR_LOGIN_SCREEN_NOT_WORLD", result["issues"])
         self.assertIn("Anmeldedialog", " ".join(result["diagnosis"]))
 
+    def test_unhashable_sky_type_is_a_diagnostic_fail_not_a_crash(self):
+        for malformed in ([], {}):
+            with self.subTest(skyType=malformed):
+                self.update_json("godot", lambda m, value=malformed: m["projection"].update(skyType=value))
+                result = self.check()
+                self.assertEqual(result["status"], "FAIL")
+                self.assertIn("GODOT_LIVE_EDITOR_SKY_MISSING", result["issues"])
+                self.assertTrue((self.output / "report.md").is_file())
+
     def test_single_stalker_model_and_missing_sky_are_detected(self):
         self.update_json("godot", lambda m: m["projection"].update(renderedAssetIds=["clockwork-stalker"], skyType="none", skyVisible=False))
         result = self.check()
