@@ -49,6 +49,32 @@ describe("Aurion single-authority architecture", () => {
     });
   });
 
+  it("binds scene NPC visuals to the protected Aurion readback", () => {
+    const router = read("server/routers.ts");
+    const worldContract = read("server/openWorldProtocol.ts");
+    const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
+    const engine = read("client/src/xaurion/core/MMOEngine.ts");
+    const roster = read("client/src/xaurion/core/confirmedNpcRoster.ts");
+    const inventory = JSON.parse(read("architecture/donor-ledger.json"));
+
+    expect(router).toContain('openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id))');
+    expect(worldContract).toMatch(/npcs: readonly \{ id: "lyra" \| "orun"/);
+    expect(runtime).toContain("const confirmedNpcReadback = worldSnapshot.data.npcs;");
+    expect(runtime).toContain("rendererHandle, confirmedNpcReadback);");
+    expect(engine).toContain("resolveConfirmedNpcRoster(INITIAL_NPCS, confirmedNpcReadback)");
+    expect(engine).toContain("this.quests = [];");
+    expect(engine).toContain("this.confirmedNpcIds.has(npcId)");
+    expect(engine).toContain("this.confirmedNpcIds.has(guardId)");
+    expect(roster).toContain("if (!Array.isArray(readback)) return new Map();");
+    expect(roster).toContain("ids: new Set(npcs.map(npc => npc.id))");
+    expect(inventory.surfaceInventory).toContainEqual({
+      path: "client/src/xaurion/core/confirmedNpcRoster.ts",
+      donor: "AX1",
+      capabilityId: "client.visible-runtime",
+      role: "SUPPORT",
+    });
+  });
+
   it("keeps visible profile progression copy under Aurion authority", () => {
     const account = read("client/src/pages/Account.tsx");
     const operations = read("client/src/pages/Operations.tsx");
