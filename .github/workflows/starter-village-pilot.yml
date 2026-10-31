@@ -183,6 +183,7 @@ jobs:
           }
           trap shutdown_preflight EXIT
           sudo -u aurion-netproof env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" AURION_PRIVATE_STATE_DIR="$AURION_PRIVATE_STATE_DIR" AURION_GLB_STORAGE_DIR="$AURION_GLB_STORAGE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" "$RUNTIME_ENTRY" > test-results/starter-pilot-server-preflight.log 2>&1 &
+          preflight_launcher_pid=$!
           for attempt in $(seq 1 50); do
             pid="$(pgrep -u "$AURION_NET_UID" -f 'dist/index.js' | head -n 1 || true)"
             if [[ -n "$pid" ]]; then break; fi
@@ -208,6 +209,15 @@ jobs:
           if [[ "$preflight_stopped" != "1" ]]; then
             echo "Authenticated preflight runtime or durable shutdown proof incomplete" >&2
             ps -o pid,ppid,stat,comm,args -p "$pid" >&2 || true
+            ps -o pid,ppid,stat,comm,args -p "$preflight_launcher_pid" >&2 || true
+            launcher_state="$(ps -o stat= -p "$preflight_launcher_pid" 2>/dev/null | tr -d " " || true)"
+            if [[ -z "$launcher_state" || "$launcher_state" == Z* ]]; then
+              set +e
+              wait "$preflight_launcher_pid"
+              launcher_exit="$?"
+              set -e
+              echo "Preflight launcher exited with status $launcher_exit" >&2
+            fi
             pgrep -a -u "$AURION_NET_UID" -f "dist/index.js" >&2 || true
             tail -n 12 test-results/starter-pilot-server-preflight.log >&2
             exit 1
