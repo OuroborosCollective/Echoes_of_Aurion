@@ -5346,3 +5346,11 @@ Change: Replaced per-key Object.entries tuples and chained mapping in canonical 
 Evidence: Initial head 23533e26f024d212cecf9b78aae1d86e596efbc6 failed runtime container run 41229745765 because server/investigationJournalMariaDb.test.ts was absent; reconciled head 0a9a84c52ae31fc844a0bda5e189013b3639fff4 includes the real test, independently read from GitHub. Historical canonical snapshot and replay tests exist; final exact-head CI remains necessary.
 Learned: Source-level reduction of temporary allocations is not a measured GC or tick-performance improvement; demand identical canonical hashes and same-hardware baseline before claiming a gain.
 Open/next: Finish exact-head CI and reviewer readback before merge; separately measure matched performance. No production rollout or runtime readback claimed.
+
+
+### 2026-10-31 — Live Aurion/Godot visual viewport parity gate
+Status: PARTIAL; comparator tests passed locally, actual live pair unverified and fail-closed.
+Change: Added manual VPS-only parity workflow, Python image/identity comparator, 12 synthetic-only negative/control tests and capture-contract documentation. No gameplay, auth, receipt, image deployment, DB or Godot world edits.
+Evidence: current main preflight 4941d78429dbe4ea436025f6ab9da13d4cc9fcac; local unit check 12/12 PASS, two visual-negative tests initially failed and were corrected. Read-only host inspection: echoes-of-aurion-aurion-1 running healthy, Godot editor/noVNC services active, aurion-godot-bridge.service inactive, port 8765 and feed 39220 not listening; Godot bridge adapter projects players/monsters only, editor uses primitive skins, no full terrain/sky. This proves a current world-projection gap, not complete live parity.
+Learned: a healthy session and one Clockwork Stalker cannot prove visual equivalence. A credible PASS needs two original authenticated world-viewport captures with same canonical receipt, server image/revision and matched camera plus meaningful terrain/sky/assets; matching blanks must fail.
+Open: independent real browser/Godot viewport capture producers with authenticated, fresh sidecars; canonical terrain/asset/sky projection and live feed/bridge activation; exact-head GitHub CI, then two-original-image live dispatch and artifacts. No live-green or production mutation claimed.

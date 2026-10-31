@@ -1,0 +1,99 @@
+name: Aurion/Godot live-world visual parity (fail-closed)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/godot/live_view_parity.py'
+      - 'scripts/godot/test_live_view_parity.py'
+      - 'docs/godot/LIVE_WORLD_VISUAL_PARITY.md'
+      - '.github/workflows/aurion-live-godot-view-parity.yml'
+  workflow_dispatch:
+    inputs:
+      capture_id:
+        description: 'Pre-captured, authenticated VPS world-view pair ID; 1..64 safe characters'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-visual-parity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  unit-negative-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned image-analysis dependency
+        run: python -m pip install --disable-pip-version-check Pillow==12.0.0
+      - name: Prove empty, mismatched, green-only and stale captures fail closed
+        run: |
+          python -m unittest discover -s scripts/godot -p test_live_view_parity.py -v
+          git diff --check
+
+  live-paired-readback:
+    if: github.event_name == 'workflow_dispatch'
+    needs: unit-negative-controls
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Read actual production revision and bridge/editor status (no mutation)
+        shell: bash
+        env:
+          AURION_CAPTURE_ID: ${{ inputs.capture_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$AURION_CAPTURE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$ ]]; then
+            echo 'AURION_CAPTURE_ID_INVALID'
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          root='/srv/serverin/evidence/aurion-live-view-parity'
+          capture="$root/$AURION_CAPTURE_ID"
+          mkdir -p "$RUNNER_TEMP/aurion-parity-analysis"
+          printf 'AURION_PARITY_CAPTURE_DIR=%s\n' "$capture" >> "$GITHUB_ENV"
+          # The image and revision are observed independently from the real
+          # running Aurion container, never supplied by the screenshot producer.
+          revision="$(docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' echoes-of-aurion-aurion-1 2>/dev/null || true)"
+          image_id="$(docker inspect -f '{{ .Image }}' echoes-of-aurion-aurion-1 2>/dev/null || true)"
+          printf 'AURION_PARITY_SERVER_REVISION=%s\n' "$revision" >> "$GITHUB_ENV"
+          printf 'AURION_PARITY_RUNTIME_IMAGE_ID=%s\n' "$image_id" >> "$GITHUB_ENV"
+          editor='false'
+          bridge='false'
+          if systemctl is-active --quiet serverin-aurion-godot-editor.service; then editor='true'; fi
+          # Only a local listening bridge is acceptable; a successful web
+          # service health check cannot substitute for a bridged world stream.
+          if ss -ltn | grep -Eq '(127\.0\.0\.1|\[::1\]):8765[[:space:]]'; then bridge='true'; fi
+          printf 'AURION_PARITY_EDITOR_UP=%s\nAURION_PARITY_BRIDGE_UP=%s\n' "$editor" "$bridge" >> "$GITHUB_ENV"
+          printf 'Runtime image ID verified locally: %s\nSource revision: %s\nBridge listening: %s\nGodot editor: %s\n' "$image_id" "$revision" "$bridge" "$editor"
+      - name: Compare original authenticated live-world captures (never synthetic)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'from PIL import Image; print("Pillow available for real capture analysis")'
+          python3 scripts/godot/live_view_parity.py \
+            --captures "$AURION_PARITY_CAPTURE_DIR" \
+            --output "$RUNNER_TEMP/aurion-parity-analysis" \
+            --expected-revision "$AURION_PARITY_SERVER_REVISION" \
+            --expected-image-id "$AURION_PARITY_RUNTIME_IMAGE_ID" \
+            --editor-up "$AURION_PARITY_EDITOR_UP" \
+            --bridge-up "$AURION_PARITY_BRIDGE_UP"
+      - if: always()
+        name: Preserve diagnostic report, Godot preview and pixel-difference image
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-godot-live-view-parity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aurion-parity-analysis/
+          if-no-files-found: error
+          retention-days: 7
