@@ -5311,3 +5311,9 @@ Evidence: Exact head 25ea8cbc6eb885b4490cbb1bde08b5bc2ed70303 passed Aurion Inve
 Learned: A new journal tag must enter a new versioned wave contract and every isolated read/apply artifact; the 0075 approval contract must remain separate.
 Open: Verify the exact corrected head across isolated schema reconciliation, backup/recovery/apply, migration watermark, journal/runtime and HUD checks. Keep PR #1255 draft until the final evidence and authorized read-only runtime readback are available.
 Next safe step: Review exact-head Actions; do not merge, dispatch or apply a production migration as part of this work.
+
+### 2026-10-31 — Align read-only migration provenance with active 0076 wave (#784)
+Status: PARTIAL — source correction committed; exact-head verification pending.
+Finding: Deploy workflow run 41166394438 on `fb16d06254380d8d28702d4f04a21e283c31a152` failed in the read-only historical migration-provenance job with `AURION_MIGRATION_WAVE_JOURNAL_COVERAGE_MISMATCH`: the builder read the preserved 0075 manifest (54 tags) while this candidate's journal contained 55 late tags through 0076. All schema-apply, runtime-promotion and production-release jobs were skipped.
+Change: Bind the read-only provenance ledger and its fixtures to the separate `aurion-production-0021-0076` manifest, and watch that manifest in the workflow path filter. Keep the 0075 production preflight, apply and readback boundary unchanged.
+Evidence boundary: No database read/write or production promotion ran. Exact-head workflow rerun is pending.
