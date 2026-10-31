@@ -31,4 +31,30 @@ describe("canonical object-key parity under allocation optimization", () => {
     )));
     expect(Object.hasOwn(cooldowns, "__proto__")).toBe(true);
   });
+  it("preserves an own __proto__ objective progress entry while sorting quest instances", () => {
+    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    zone.isReplay = true;
+    const state = zone.getCanonicalZoneState();
+    const progress = Object.fromEntries([
+      ["later", false],
+      ["__proto__", true],
+      ["first", 3],
+    ]) as Record<string, string | number | boolean>;
+    state.questInstances = [{
+      instanceId: "quest-key-parity", templateId: "test-template", templateVersion: 1,
+      worldId: state.worldId, playerUserId: 815, giverNpcId: "test-npc",
+      seedDigest: "test", planHash: "test", graphHash: "test",
+      currentNodeId: "first", completedNodeIds: [], boundRoles: [], state: "active",
+      objectiveProgress: progress, updatedAtTick: 0, createdAt: "1970-01-01",
+      updatedAt: "1970-01-01",
+    }];
+
+    const sorted = sortCanonicalZoneState(state);
+    const output = sorted.questInstances![0]!.objectiveProgress;
+    expect(Object.keys(output)).toEqual(["__proto__", "first", "later"]);
+    expect(Object.hasOwn(output, "__proto__")).toBe(true);
+    expect(output["__proto__"]).toBe(true);
+    expect(Object.hasOwn(progress, "__proto__")).toBe(true);
+  });
+
 });
