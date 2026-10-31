@@ -74,6 +74,8 @@ jobs:
       AURION_CLASSLESS_E2E: '1'
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       NODE_ENV: test
+      AURION_ZONE_TICK_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      AURION_ZONE_TICK_BENCHMARK_OUTPUT: ${{ runner.temp }}/aurion-zone-tick-benchmark.json
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,7 +89,7 @@ jobs:
       - name: Typecheck and canonical receipt parity
         run: |
           pnpm check
-          pnpm exec vitest run server/godotBridge/aurionAdapter.test.ts server/causality/causalTick.test.ts server/causality/persistenceIdentity.test.ts server/zoneRuntime.test.ts server/zoneRuntimeAllocation.test.ts
+          pnpm exec vitest run server/godotBridge/aurionAdapter.test.ts server/causality/causalTick.test.ts server/causality/persistenceIdentity.test.ts server/zoneRuntime.test.ts server/zoneRuntimeAllocation.test.ts server/zoneTickGcParityBenchmark.test.ts
       - name: Retain supplied mock-only transport regressions
         run: pnpm exec tsx server/godotBridge/dev/selfTest.ts
       - name: Durable observer on actual isolated MariaDB
@@ -118,6 +120,13 @@ jobs:
           AURION_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
           AURION_BRIDGE_EVIDENCE: ${{ runner.temp }}/live-bridge-evidence
         run: node scripts/godot/live-bridge-package.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aurion-zone-tick-benchmark-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurion-zone-tick-benchmark.json
+          if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: aurion-godot-live-bridge-${{ github.event.pull_request.head.sha || github.sha }}
