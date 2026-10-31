@@ -196,15 +196,19 @@ jobs:
           curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null
           AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=recovery-preflight pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
           shutdown_preflight
+          preflight_stopped=0
           for attempt in $(seq 1 120); do
-            if ! sudo kill -0 "$pid" 2>/dev/null; then break; fi
+            if ! sudo kill -0 "$pid" 2>/dev/null &&
+               grep -Fq '[Aurion] graceful causal shutdown complete' test-results/starter-pilot-server-preflight.log; then
+              preflight_stopped=1
+              break
+            fi
             sleep 0.1
           done
-          if sudo kill -0 "$pid" 2>/dev/null; then
-            echo "Authenticated preflight runtime failed to shut down cleanly" >&2
+          if [[ "$preflight_stopped" != "1" ]]; then
+            echo "Authenticated preflight runtime or durable shutdown proof incomplete" >&2
             exit 1
           fi
-          grep -Fq '[Aurion] graceful causal shutdown complete' test-results/starter-pilot-server-preflight.log
           trap - EXIT
       - name: Start exact runtime and execute authenticated HTTP/tRPC journey
         id: journey
