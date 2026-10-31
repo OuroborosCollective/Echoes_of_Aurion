@@ -12,9 +12,9 @@ const HELLO_TIMEOUT_MS=5_000;const MAX_MESSAGE_BYTES=2_048;
 // Give the Godot WebSocketPeer event loop time to surface the typed version
 // rejection BEFORE sending the policy-close frame. No ticket is consumed here.
 const PROTOCOL_REJECT_GRACE_MS=250;
-export type ZoneTicketReceipt={userId:number;zoneId:"observatory_threshold";clientBuild:string;expiresAt:Date;combatProfile?:ZoneCombatProfile};
-export type ZoneTicketConsumer=(values:{ticket:string;zoneId:"observatory_threshold"})=>Promise<ZoneTicketReceipt|undefined>;
-export type WorldPresenceSink={upsert(values:{userId:number;connectionId:string;zoneId:"observatory_threshold";position:{x:number;z:number}}):Promise<unknown>;release(values:{connectionId:string}):Promise<unknown>;};
+export type ZoneTicketReceipt={userId:number;zoneId:"observatory_threshold"|"windhollow";clientBuild:string;expiresAt:Date;combatProfile?:ZoneCombatProfile};
+export type ZoneTicketConsumer=(values:{ticket:string;zoneId:"observatory_threshold"|"windhollow"})=>Promise<ZoneTicketReceipt|undefined>;
+export type WorldPresenceSink={upsert(values:{userId:number;connectionId:string;zoneId:"observatory_threshold"|"windhollow";position:{x:number;z:number}}):Promise<unknown>;release(values:{connectionId:string}):Promise<unknown>;};
 export type ZoneFixedTickSink={intervalTicks:number;observe(values:{tick:number}):Promise<unknown>;};
 function closePolicyViolation(socket:WebSocket):void{socket.close(1008,"zone authorization rejected");}
 function parseMessage(data:WebSocket.RawData):unknown{if(typeof data==="string")return JSON.parse(data);if(Array.isArray(data))return JSON.parse(Buffer.concat(data).toString("utf8"));if(data instanceof ArrayBuffer)return JSON.parse(Buffer.from(new Uint8Array(data)).toString("utf8"));return JSON.parse(data.toString("utf8"));}
