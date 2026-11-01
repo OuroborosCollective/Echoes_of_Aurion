@@ -20,6 +20,7 @@ import type { TrpcContext } from "./_core/context";
 import { AdminQuestStudioService } from "./questCompiler/adminService";
 import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
+import { aurionQuestRouter } from "./routes/aurionQuestRouter";
 
 vi.mock("./storage", async importOriginal => ({
   ...await importOriginal<typeof import("./storage")>(),
@@ -137,7 +138,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const service = new AdminQuestStudioService();
     const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1 };
     if (kind === "title") template.title = "t".repeat(256);
-    else template.edges = template.edges.map((edge, i) => i === 0 ? { ...edge, priority: 9007199254740992 } : edge);
+    else template.nodes = template.nodes.map(node => node.objective ? { ...node, objective: { ...node.objective, targetValue: 9007199254740992 } } : node);
     expect(QuestTemplateVersionSchema.safeParse(template).success).toBe(false);
     await expect(service.createDraftProposal({ authorUserId: admin, templateId: template.templateId, templateVersion: 1, proposedDataJson: JSON.stringify(template) })).rejects.toThrow();
     const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionQuestAdminProposals WHERE authorUserId=?", [admin]);
@@ -184,6 +185,14 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const readback = await target.call(service, { templateId: base.templateId, version: 201 });
     expect(readback.templates).toEqual([published.template]);
     expect(Buffer.byteLength(JSON.stringify(readback), "utf8")).toBeLessThan(128_000);
+    const caller = aurionQuestRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    expect((await caller.authoringTemplates({ limit: 20 })).items.length).toBeLessThanOrEqual(20);
+    expect((await caller.authoringTemplate({ templateId: base.templateId, version: 201 })).templates).toEqual([published.template]);
+    await expect(caller.authoringTemplates({ limit: 21 })).rejects.toThrow();
+    const unauthorized = aurionQuestRouter.createCaller({ user: null } as TrpcContext);
+    await expect(unauthorized.authoringTemplate({ templateId: base.templateId, version: 201 })).rejects.toThrow();
+    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId=? AND version=201", [base.templateId]);
+    expect((await target.call(service, { templateId: base.templateId, version: 201 })).templates).toEqual([]);
   }, 60_000);
 
   it("reads historical plans and binds new plans and receipts to the actual predecessor", async () => {

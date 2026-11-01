@@ -169,6 +169,12 @@ export class QuestTemplateRegistry {
     return this.templates.get(`${templateId}:v${version}`);
   }
 
+  /** Authoring includes inactive/quarantined history; gameplay keeps its active view. */
+  public getAllTemplates(): QuestTemplateVersion[] {
+    return [...this.templates.values()].sort((a, b) => a.templateId === b.templateId
+      ? b.version - a.version : a.templateId < b.templateId ? -1 : 1);
+  }
+
   public getTemplateSetHash(): string {
     const active = this.getActiveTemplates();
     return computeCanonicalHash('aurion.quest.template.v1', active);

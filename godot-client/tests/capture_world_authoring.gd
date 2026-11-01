@@ -72,13 +72,14 @@ func capture() -> void:
 func capture_quest_editor(scene: Control, studio: Control, output: String) -> bool:
 	var editor: Control = studio.quest_editor()
 	editor.visible = true
-	editor.open_context("zone_peer_capture_fixture", 1, 42, func(_kind: String, _payload: Dictionary = {}): return false)
+	editor.open_context("zone_peer_capture_fixture", 1, 42, func(_kind: String, _payload: Dictionary = {}): return true)
 	var template := {"templateId":"quest.capture-fixture", "version":1, "title":"TESTDATEN · Vorräte für das Dorf", "description":"Synthetischer Graph, kein Live-Publish",
 		"roles":[], "prerequisiteFacts":[], "nodes":[{"id":"start", "type":"start", "title":"Auftrag erhalten"}, {"id":"end", "type":"end", "title":"Vorräte bestätigt"}],
 		"edges":[{"id":"finish", "fromNodeId":"start", "toNodeId":"end", "priority":0}], "outcomes":[],
 		"maxCompositionDepth":10, "active":true, "quarantined":false}
-	editor.completed("questTemplates", {"templates":[template]})
+	editor.completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[{"templateId":template.templateId,"version":1,"title":template.title,"active":true,"quarantined":false}], "nextCursor":null})
 	if not editor.copy_template(0): return false
+	editor.completed("questTemplate", {"templates":[template], "nextVersion":2})
 	editor.set_activation(true)
 	var draft_value: Dictionary = editor.current_draft()
 	var proposal := {"id":"prop_capture_fixture_v2", "authorUserId":42, "templateId":draft_value.templateId, "templateVersion":draft_value.version,

@@ -190,7 +190,7 @@ func inspection_entities(query: String = "") -> Array:
 	return result
 
 func _render_inspector() -> void:
-	if not is_instance_valid(_inspection_list):
+	if not is_instance_valid(_inspection_list) or not _inspection_panel.is_visible_in_tree():
 		return
 	var selected := ""
 	var indices := _inspection_list.get_selected_items()
@@ -376,6 +376,10 @@ func close_session() -> void:
 	if is_instance_valid(_asset_choice): _asset_choice.clear()
 	if is_instance_valid(_draft_import): _draft_import.text = ""
 	_inspection.clear()
+	if is_instance_valid(_inspection_list): _inspection_list.clear()
+	_inspection_rows.clear()
+	if is_instance_valid(_inspection_properties): _inspection_properties.text = ""
+	if is_instance_valid(_inspection_status): _inspection_status.text = "Keine bestätigte Zonenprojektion für diese Sitzung."
 	if is_instance_valid(_inspection_filter):
 		_inspection_filter.text = ""
 	_render_inspector()

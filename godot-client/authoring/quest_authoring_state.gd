@@ -21,7 +21,7 @@ static func _text(value: Variant, minimum: int = 1, maximum: int = 128) -> bool:
 static func same_json(left: Variant, right: Variant) -> bool:
 	if typeof(left) in [TYPE_INT, TYPE_FLOAT] and typeof(right) in [TYPE_INT, TYPE_FLOAT]:
 		if not is_finite(float(left)) or not is_finite(float(right)): return false
-		if (typeof(left) == TYPE_INT and (left < -9007199254740991 or left > 9007199254740991)) or (typeof(right) == TYPE_INT and (right < -9007199254740991 or right > 9007199254740991)): return false
+		if left < -9007199254740991 or left > 9007199254740991 or right < -9007199254740991 or right > 9007199254740991: return false
 		return float(left) == float(right)
 	if typeof(left) != typeof(right): return false
 	if typeof(left) == TYPE_DICTIONARY:
@@ -37,7 +37,7 @@ static func same_json(left: Variant, right: Variant) -> bool:
 	return left == right
 
 static func draft_valid(value: Variant) -> bool:
-	if typeof(value) != TYPE_DICTIONARY or not _text(value.get("templateId"), 1, 96) or not Guard._whole(value.get("version"), 1, 1000000) or not _text(value.get("title"), 1, 1000) or typeof(value.get("description")) != TYPE_STRING:
+	if typeof(value) != TYPE_DICTIONARY or not same_json(value, value) or not _text(value.get("templateId"), 1, 96) or not Guard._whole(value.get("version"), 1, 1000000) or not _text(value.get("title"), 1, 255) or typeof(value.get("description")) != TYPE_STRING:
 		return false
 	if JSON.stringify(value).to_utf8_buffer().size() > 120000 or typeof(value.get("active")) != TYPE_BOOL or typeof(value.get("quarantined")) != TYPE_BOOL:
 		return false

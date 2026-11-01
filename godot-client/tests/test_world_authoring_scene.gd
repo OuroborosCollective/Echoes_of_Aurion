@@ -239,10 +239,17 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 		"maxCompositionDepth":10, "active":true, "quarantined":false}
 	editor.load_templates()
 	require(transport.sent.back().kind == "questTemplates", "native quest template loader bypassed existing auth transport")
-	studio._completed("questTemplates", {"templates":[template]}, SESSION, generation)
+	var summary := {"templateId":template.templateId, "version":1, "title":template.title, "active":true, "quarantined":false}
+	var cursor := {"templateId":template.templateId, "version":1}
+	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":cursor}, SESSION, generation)
+	editor.load_more_templates()
+	require(transport.sent.back().kind == "questTemplates" and transport.sent.back().payload.get("after") == cursor, "next template page lost its canonical cursor")
+	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
 	require(editor.copy_template(0), "native quest editor could not copy the confirmed template")
+	require(transport.sent.back().kind == "questTemplate" and transport.sent.back().payload.version == 1, "quest copy did not request the selected canonical version")
+	studio._completed("questTemplate", {"templates":[template], "nextVersion":8}, SESSION, generation)
 	var inactive: Dictionary = editor.current_draft()
-	require(inactive.version == 2 and inactive.active == false and inactive.quarantined == true, "quest copy became active without explicit review")
+	require(inactive.version == 8 and inactive.active == false and inactive.quarantined == true, "quest copy ignored the server version or became active without review")
 	editor.set_activation(true)
 	var draft_value: Dictionary = editor.current_draft()
 	editor.request_plan()
@@ -270,10 +277,13 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 		"kind":"quest", "action":"publish", "targetId":proposal.id, "actorUserId":42, "planHash":plan_value.planHash,
 		"previousHash":null, "resultHash":plan_value.templateHash, "receiptHash":"f".repeat(64), "humanConfirmed":true}
 	studio._completed("questPublish", {"receipt":receipt,"template":draft_value,"templateSetHash":"d".repeat(64)}, SESSION, generation)
-	require(transport.sent.back().kind == "questTemplates" and editor._state.phase == "awaiting_readback", "publish response stood in for independent quest readback")
-	studio._completed("questTemplates", {"templates":[]}, SESSION, generation)
+	require(transport.sent.back().kind == "questReadback" and transport.sent.back().payload == {"templateId":draft_value.templateId,"version":8} and editor._state.phase == "awaiting_readback", "publish response stood in for exact-version independent readback")
+	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
+	require(not editor._journal.read().is_empty(), "a catalog page stood in for independent publication readback")
+	studio._completed("questReadback", {"templates":[]}, SESSION, generation)
 	require(not editor._journal.read().is_empty(), "absent quest readback cleared the pending marker")
 	editor.load_templates()
-	studio._completed("questTemplates", {"templates":[draft_value]}, SESSION, generation)
+	require(transport.sent.back().kind == "questReadback", "pending publication fell back to unbounded history readback")
+	studio._completed("questReadback", {"templates":[draft_value]}, SESSION, generation)
 	require(editor._state.phase == "confirmed" and editor._journal.read().is_empty(), "matching independent quest readback did not confirm/clear publication")
 	studio._close_requested()

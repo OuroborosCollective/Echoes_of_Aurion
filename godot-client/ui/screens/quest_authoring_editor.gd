@@ -7,6 +7,9 @@ var _state := State.new()
 var _journal := Journal.new()
 var _send: Callable
 var _templates: Array = []
+var _next_cursor: Dictionary = {}
+var _requested_cursor: Dictionary = {}
+var _copying: Dictionary = {}
 var _choice: OptionButton
 var _json: TextEdit
 var _graph: Tree
@@ -22,6 +25,7 @@ func _ready() -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(hint)
 	_button("Aurion-Vorlagen lesen", load_templates)
+	_button("Nächste Vorlagenseite lesen", load_more_templates)
 	_choice = OptionButton.new()
 	_choice.fit_to_longest_item = false
 	_choice.clip_text = true
@@ -98,6 +102,9 @@ func close_context() -> void:
 	_state.close()
 	_send = Callable()
 	_templates.clear()
+	_next_cursor.clear()
+	_requested_cursor.clear()
+	_copying.clear()
 	if is_instance_valid(_choice): _choice.clear()
 	if is_instance_valid(_json): _json.text = ""
 	if is_instance_valid(_graph): _graph.clear()
@@ -109,7 +116,7 @@ func _request(kind: String, payload: Dictionary = {}) -> bool:
 	return _state.phase != "closed" and _send.is_valid() and bool(_send.call(kind, payload))
 
 func _can_edit() -> bool:
-	return _state.phase in ["ready", "planned", "confirmed"] and _journal.read().is_empty()
+	return _state.phase in ["ready", "planned", "confirmed"] and _journal.read().is_empty() and _copying.is_empty()
 
 func current_draft() -> Dictionary:
 	if not is_instance_valid(_json) or _json.text.to_utf8_buffer().size() > 120000: return {}
@@ -118,17 +125,49 @@ func current_draft() -> Dictionary:
 	return parser.data.duplicate(true)
 
 func load_templates() -> void:
-	if not _request("questTemplates"):
+	if _state.phase == "awaiting_readback":
+		_readback()
+	elif _request("questTemplates", {"limit":20}):
+		_requested_cursor.clear()
+	else:
 		_set_message("Vorlagenanfrage konnte nicht gestartet werden.")
+
+func load_more_templates() -> void:
+	if _next_cursor.is_empty():
+		_set_message("Keine weitere Vorlagenseite vorhanden.")
+	elif _request("questTemplates", {"limit":20, "after":_next_cursor}):
+		_requested_cursor = _next_cursor.duplicate(true)
+	else:
+		_set_message("Nächste Vorlagenseite konnte nicht angefordert werden.")
+
+static func _summary_valid(value: Variant) -> bool:
+	return typeof(value) == TYPE_DICTIONARY and value.size() == 5 and State._text(value.get("templateId"), 1, 96) and State.Guard._whole(value.get("version"), 1, 2147483647) and State._text(value.get("title"), 1, 255) and typeof(value.get("active")) == TYPE_BOOL and typeof(value.get("quarantined")) == TYPE_BOOL
+
+static func _cursor_valid(value: Variant) -> bool:
+	return typeof(value) == TYPE_DICTIONARY and value.size() == 2 and State._text(value.get("templateId"), 1, 96) and State.Guard._whole(value.get("version"), 1, 2147483647)
 
 func copy_template(index: int) -> bool:
 	if not _can_edit() or index < 0 or index >= _templates.size(): return false
-	var value: Dictionary = _templates[index].duplicate(true)
-	var next_version := int(value.version) + 1
-	for template in _templates:
-		if template.templateId == value.templateId: next_version = maxi(next_version, int(template.version) + 1)
-	if next_version > 1000000: return false
-	value.version = next_version
+	var summary: Dictionary = _templates[index]
+	var payload := {"templateId":summary.templateId, "version":int(summary.version)}
+	if not _request("questTemplate", payload): return false
+	_copying = payload
+	_show_status()
+	return true
+
+func _accept_copy(data: Dictionary) -> void:
+	var expected := _copying.duplicate(true)
+	_copying.clear()
+	if expected.is_empty() or not _can_edit() or typeof(data.get("templates")) != TYPE_ARRAY or data.templates.size() != 1 or not State.draft_valid(data.templates[0]):
+		_show_status()
+		_set_message("Die gewählte Vorlage konnte nicht bestätigt werden.")
+		return
+	var value: Dictionary = data.templates[0].duplicate(true)
+	if value.templateId != expected.templateId or value.version != expected.version or not State.Guard._whole(data.get("nextVersion"), int(value.version) + 1, 1000000):
+		_show_status()
+		_set_message("Keine passende neue Vorlagenversion verfügbar.")
+		return
+	value.version = int(data.nextVersion)
 	value.active = false
 	value.quarantined = true
 	_json.text = JSON.stringify(value, "\t")
@@ -136,7 +175,13 @@ func copy_template(index: int) -> bool:
 	_draft_changed()
 	_render_graph()
 	_set_message("Lokale neue Version kopiert; inaktiv und quarantänisiert. Aurion hat noch nichts veröffentlicht.")
-	return true
+
+func _readback() -> void:
+	var pending: Dictionary = _state.pending_identity()
+	if _state.phase != "awaiting_readback" or not State.pending_valid(pending): return
+	if not _request("questReadback", {"templateId":pending.templateId, "version":int(pending.version)}):
+		_state.failed("questReadback")
+		_show_status()
 
 func set_activation(enabled: bool) -> void:
 	if not _can_edit():
@@ -235,13 +280,25 @@ func completed(kind: String, data: Dictionary) -> void:
 	if _state.phase == "closed": return
 	match kind:
 		"questTemplates":
-			if typeof(data.get("templates")) != TYPE_ARRAY or data.templates.size() > 4096:
+			if data.get("schemaVersion") != "aurion.quest-template-page.v1" or typeof(data.get("items")) != TYPE_ARRAY or data.items.size() > 20 or not data.has("nextCursor"):
 				failed(kind)
 				return
-			for template in data.templates:
-				if not State.draft_valid(template):
+			for template in data.items:
+				if not _summary_valid(template):
 					failed(kind)
 					return
+			if data.nextCursor != null and (not _cursor_valid(data.nextCursor) or State.same_json(data.nextCursor, _requested_cursor)):
+				failed(kind)
+				return
+			_templates = data.items.duplicate(true)
+			_next_cursor = {} if data.nextCursor == null else data.nextCursor.duplicate(true)
+			_choice.clear()
+			for template in _templates:
+				_choice.add_item(str(template.title).left(120) + " · " + str(template.templateId) + " v" + str(int(template.version)))
+		"questTemplate":
+			_accept_copy(data)
+			return
+		"questReadback":
 			if _state.phase == "awaiting_readback":
 				var pending: Dictionary = _state.pending_identity()
 				if _state.accept_readback(data):
@@ -250,10 +307,6 @@ func completed(kind: String, data: Dictionary) -> void:
 						_state.message = "Receipt und Vorlage stimmen; lokale Vormerkung konnte nicht entfernt werden."
 				else:
 					_state.message = "Receipt vorhanden; passende Vorlage im separaten Readback noch nicht bestätigt."
-			_templates = data.templates.duplicate(true)
-			_choice.clear()
-			for template in _templates:
-				_choice.add_item(str(template.title).left(120) + " · " + str(template.templateId) + " v" + str(int(template.version)))
 		"questPropose":
 			if not _state.accept_proposal(data):
 				failed(kind)
@@ -265,16 +318,17 @@ func completed(kind: String, data: Dictionary) -> void:
 		"questPublish":
 			if not _state.accept_publish(data):
 				_state.failed(kind)
-			elif not _request("questTemplates"):
-				_state.failed("questTemplates")
+			else:
+				_readback()
 		"questReceipt":
 			if _state.accept_recovered(_journal.read(), data):
-				if not _request("questTemplates"): _state.failed("questTemplates")
+				_readback()
 			else:
 				_state.message = "Kein passendes Receipt bestätigt; Ergebnis bleibt ungeklärt. Publish wird nicht wiederholt."
 	_show_status()
 
 func failed(kind: String) -> void:
+	if kind == "questTemplate": _copying.clear()
 	_state.failed(kind)
 	_show_status()
 

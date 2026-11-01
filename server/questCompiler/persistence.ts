@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, max } from "drizzle-orm";
 import {
   QuestAdminProposalSchema,
   QuestInstanceSchema,
@@ -138,6 +138,37 @@ export class QuestPersistenceEngine {
 
   private templateKey(templateId: string, version: number) { return `${templateId}:v${version}`; }
 
+  private storedTemplate(row: typeof aurionQuestTemplateVersions.$inferSelect): QuestTemplateVersion {
+    const template = QuestTemplateVersionSchema.parse(JSON.parse(row.templateJson));
+    const hash = computeCanonicalHash("aurion.quest.template.v1", template);
+    if (template.templateId !== row.templateId || template.version !== row.version || hash !== row.templateHash) throw new Error("QUEST_TEMPLATE_STORED_IDENTITY_CORRUPT");
+    return template;
+  }
+
+  public async getTemplateVersion(templateId: string, version: number): Promise<QuestTemplateVersion | undefined> {
+    const db = await getDb();
+    if (!db) return this.templates.get(this.templateKey(templateId, version));
+    const rows = await db.select().from(aurionQuestTemplateVersions).where(and(
+      eq(aurionQuestTemplateVersions.templateId, templateId), eq(aurionQuestTemplateVersions.version, version),
+    )).limit(2);
+    if (rows.length > 1) throw new Error("QUEST_TEMPLATE_STORED_IDENTITY_CORRUPT");
+    return rows[0] ? this.storedTemplate(rows[0]) : undefined;
+  }
+
+  public async nextTemplateVersion(templateId: string, knownVersion: number): Promise<number | null> {
+    const db = await getDb();
+    const latest = db ? Number((await db.select({ version: max(aurionQuestTemplateVersions.version) })
+      .from(aurionQuestTemplateVersions).where(eq(aurionQuestTemplateVersions.templateId, templateId)))[0]?.version ?? 0)
+      : [...this.templates.values()].filter(value => value.templateId === templateId).reduce((n, value) => Math.max(n, value.version), 0);
+    const version = Math.max(latest, knownVersion) + 1;
+    return Number.isSafeInteger(version) && version <= 1_000_000 ? version : null;
+  }
+
+  public async assertTemplateVersionAvailable(template: QuestTemplateVersion): Promise<void> {
+    const existing = await this.getTemplateVersion(template.templateId, template.version);
+    if (existing && computeCanonicalHash("aurion.quest.template.v1", existing) !== computeCanonicalHash("aurion.quest.template.v1", template)) throw new Error("QUEST_TEMPLATE_VERSION_CONFLICT");
+  }
+
   public seedEphemeral(plan: QuestPlan, instance: QuestInstance): void {
     const parsedPlan = QuestPlanSchema.parse(plan);
     const parsedInstance = QuestInstanceSchema.parse(instance);
@@ -176,12 +207,7 @@ export class QuestPersistenceEngine {
     if (!db) return [...this.templates.values()].sort((a,b)=>this.templateKey(a.templateId,a.version).localeCompare(this.templateKey(b.templateId,b.version)));
     const rows = await db.select().from(aurionQuestTemplateVersions)
       .orderBy(aurionQuestTemplateVersions.templateId, desc(aurionQuestTemplateVersions.version));
-    const parsed = rows.map(row => {
-      const template = QuestTemplateVersionSchema.parse(JSON.parse(row.templateJson));
-      const hash = computeCanonicalHash("aurion.quest.template.v1", template);
-      if (template.templateId !== row.templateId || template.version !== row.version || hash !== row.templateHash) throw new Error("QUEST_TEMPLATE_STORED_IDENTITY_CORRUPT");
-      return template;
-    });
+    const parsed = rows.map(row => this.storedTemplate(row));
     for (const template of parsed) this.templates.set(this.templateKey(template.templateId, template.version), template);
     return parsed;
   }

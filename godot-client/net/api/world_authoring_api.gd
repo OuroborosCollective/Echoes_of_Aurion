@@ -6,7 +6,7 @@ signal completed(kind: String, data: Dictionary, connection_id: String, generati
 signal failed(kind: String, reason: String, connection_id: String, generation: int)
 
 const ROOT := "/api/trpc/aurionAuthoring."
-const QUEST_ROUTES := {"questTemplates":"templates", "questPropose":"proposeDraft", "questPlan":"publishPlan", "questPublish":"publish", "questReceipt":"publishReceipt"}
+const QUEST_ROUTES := {"questTemplates":"authoringTemplates", "questTemplate":"authoringTemplate", "questReadback":"authoringTemplate", "questPropose":"proposeDraft", "questPlan":"publishPlan", "questPublish":"publish", "questReceipt":"publishReceipt"}
 const MAX_SMALL := 1024 * 1024
 const MAX_WORLD := 8 * 1024 * 1024
 var _auth: Node
@@ -40,7 +40,7 @@ func request(kind: String, base_url: String, connection: String, payload: Dictio
 		return false
 	var path := "/api/trpc/auth.me" if kind == "identity" else ("/api/game/world-design" if kind == "readback" else ROOT + kind)
 	if QUEST_ROUTES.has(kind): path = "/api/trpc/aurionQuest." + str(QUEST_ROUTES[kind])
-	var method := HTTPClient.METHOD_GET if kind in ["identity", "catalog", "readback", "questTemplates"] else HTTPClient.METHOD_POST
+	var method := HTTPClient.METHOD_GET if kind in ["identity", "catalog", "readback"] else HTTPClient.METHOD_POST
 	var body := "" if method == HTTPClient.METHOD_GET else JSON.stringify({"json":payload})
 	if body.to_utf8_buffer().size() > MAX_SMALL:
 		return false
@@ -52,7 +52,7 @@ func request(kind: String, base_url: String, connection: String, payload: Dictio
 	var epoch := _epoch
 	_http = HTTPRequest.new()
 	_http.max_redirects = 0
-	_http.body_size_limit = MAX_WORLD if kind in ["catalog", "worldApply", "worldReceipt", "readback", "questTemplates"] else MAX_SMALL
+	_http.body_size_limit = MAX_WORLD if kind in ["catalog", "worldApply", "worldReceipt", "readback"] else MAX_SMALL
 	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_completed.bind(epoch))
@@ -98,8 +98,6 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 		return
 	var raw: Variant = parser.data
 	var value: Dictionary = raw if _kind == "readback" and typeof(raw) == TYPE_DICTIONARY else unwrap_trpc(raw)
-	if _kind == "questTemplates" and typeof(raw) == TYPE_DICTIONARY and typeof(raw.get("result")) == TYPE_DICTIONARY and typeof(raw.result.get("data")) == TYPE_DICTIONARY and typeof(raw.result.data.get("json")) == TYPE_ARRAY:
-		value = {"templates":raw.result.data.json}
 	if value.is_empty():
 		_finish_failure("INVALID_RESPONSE")
 		return

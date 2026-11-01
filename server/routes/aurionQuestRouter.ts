@@ -16,6 +16,16 @@ export const aurionQuestRouter = router({
   templates: publicProcedure.query(async () => {
     return adminQuestService.getTemplates();
   }),
+  // Read-only native authoring views. Metadata pages never include graph JSON.
+  authoringTemplates: adminProcedure
+    .input(z.object({
+      after: z.object({ templateId: z.string().min(1).max(96), version: z.number().int().positive() }).strict().nullish(),
+      limit: z.number().int().min(1).max(20).default(20),
+    }).strict())
+    .mutation(({ input }) => adminQuestService.getAuthoringTemplatesPage(input)),
+  authoringTemplate: adminProcedure
+    .input(z.object({ templateId: z.string().min(1).max(96), version: z.number().int().positive() }).strict())
+    .mutation(({ input }) => adminQuestService.getAuthoringTemplateVersion(input)),
   instances: protectedProcedure.query(async () => {
     return adminQuestService.listInstances();
   }),
