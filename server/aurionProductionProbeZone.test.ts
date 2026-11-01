@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { AuthoritativeMovementZone, ZoneRegistry } from "./zoneRuntime";
 import { AurionTickRecorder } from "./causality/tickRecorder";
 import { prepareProductionProbeZone } from "./aurionProductionProbeZone";
-import { AURION_ZONE_RULESET_VERSION } from "../shared/aurionCausalTickContract";
+import { AURION_ZONE_RULESET_VERSION, computeReceiptHash } from "../shared/aurionCausalTickContract";
+import { hashCanonicalZoneState } from "./causality/zoneCanonicalState";
 
 function fixture(ruleset = AURION_ZONE_RULESET_VERSION as string) {
   const recorder = new AurionTickRecorder(20);
@@ -37,6 +38,21 @@ describe("probe zone preparation contract (unit evidence)", () => {
     if (damage === "gap") f.persistence.getTicksInRange = async () => [];
     if (damage === "replay") f.recorder.getEntry(f.zone.zoneId, 1)!.receipt.transitionHash = "invalid";
     await expect(prepareProductionProbeZone(registry, f.persistence, new AurionTickRecorder(20))).rejects.toThrow();
+    expect(registry.find(f.zone.zoneId)).toBeUndefined();
+  });
+  it.each(["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION])("rejects a checkpoint-head ruleset mismatch with an empty replay tail for %s", async ruleset => {
+    const f = fixture(ruleset), registry = new ZoneRegistry();
+    const state = f.zone.getCanonicalZoneState();
+    const receipt = { ...f.zone.getLatestReceipt()!, rulesetVersion: ruleset === AURION_ZONE_RULESET_VERSION ? "aurion.zone.rules.v2" : AURION_ZONE_RULESET_VERSION };
+    receipt.receiptHash = computeReceiptHash(receipt);
+    const checkpoint = { ...f.checkpoint, tick: state.tick, state, snapshotHash: hashCanonicalZoneState(state) };
+    const persistence = { ...f.persistence,
+      getLatestReceipt: async () => receipt,
+      getCheckpointAtOrBefore: async () => checkpoint,
+      getRecordedTick: async () => ({ receipt, postState: state }),
+      getTicksInRange: async () => [],
+    };
+    await expect(prepareProductionProbeZone(registry, persistence, new AurionTickRecorder(20))).rejects.toThrow("PROBE_ZONE_HEAD_INVALID");
     expect(registry.find(f.zone.zoneId)).toBeUndefined();
   });
   it("does not overwrite an already active unhydrated zone with a persisted history", async () => {
