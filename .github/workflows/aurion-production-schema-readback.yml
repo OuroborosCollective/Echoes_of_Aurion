@@ -169,9 +169,9 @@ jobs:
             "0066_aurion_inventory_transaction_kernel",
             "0067_aurion_npc_decision_log",
             "0068_aurion_item_manipulation_runtime",
-            "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions",
+            "0069_aurion_combat_victory_events","0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts",
                 ];
-                if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
+                if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);
                 if(migrations.some(m=>!allowedMigrationStates.has(m.state))) throw new Error("production migration receipt has an unsafe state");
                 const counts={matchCount:migrations.filter(m=>m.state==="PRESENT_SCHEMA_MATCH").length,absentCount:migrations.filter(m=>m.state==="ABSENT_APPLY_REQUIRED").length,driftCount:migrations.filter(m=>m.state==="PRESENT_SCHEMA_DRIFT").length};
