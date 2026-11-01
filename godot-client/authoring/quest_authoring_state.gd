@@ -16,6 +16,26 @@ var _receipt: Dictionary = {}
 static func _text(value: Variant, minimum: int = 1, maximum: int = 128) -> bool:
 	return typeof(value) == TYPE_STRING and value.length() >= minimum and value.length() <= maximum and value.strip_edges() == value
 
+## Godot parses JSON numbers as floats; an inline integer and its JSON
+## round-trip must match without treating booleans or imprecise integers alike.
+static func same_json(left: Variant, right: Variant) -> bool:
+	if typeof(left) in [TYPE_INT, TYPE_FLOAT] and typeof(right) in [TYPE_INT, TYPE_FLOAT]:
+		if not is_finite(float(left)) or not is_finite(float(right)): return false
+		if (typeof(left) == TYPE_INT and (left < -9007199254740991 or left > 9007199254740991)) or (typeof(right) == TYPE_INT and (right < -9007199254740991 or right > 9007199254740991)): return false
+		return float(left) == float(right)
+	if typeof(left) != typeof(right): return false
+	if typeof(left) == TYPE_DICTIONARY:
+		if left.size() != right.size(): return false
+		for key in left:
+			if typeof(key) != TYPE_STRING or not right.has(key) or not same_json(left[key], right[key]): return false
+		return true
+	if typeof(left) == TYPE_ARRAY:
+		if left.size() != right.size(): return false
+		for index in range(left.size()):
+			if not same_json(left[index], right[index]): return false
+		return true
+	return left == right
+
 static func draft_valid(value: Variant) -> bool:
 	if typeof(value) != TYPE_DICTIONARY or not _text(value.get("templateId"), 1, 96) or not Guard._whole(value.get("version"), 1, 1000000) or not _text(value.get("title"), 1, 1000) or typeof(value.get("description")) != TYPE_STRING:
 		return false
@@ -68,7 +88,7 @@ func accept_proposal(response: Variant) -> bool:
 	if phase != "proposing" or typeof(response) != TYPE_DICTIONARY or response.get("status") != "draft" or not _text(response.get("id"), 8, 128) or not Guard._whole(response.get("authorUserId"), actor_id, actor_id): return false
 	if response.get("templateId") != _draft.templateId or response.get("templateVersion") != _draft.version or not Guard._hex(response.get("receiptHash"), 64) or not Guard._hex(response.get("expectedTemplateSetHash"), 64) or typeof(response.get("proposedDataJson")) != TYPE_STRING or response.proposedDataJson.to_utf8_buffer().size() > 120000: return false
 	var parser := JSON.new()
-	if parser.parse(response.proposedDataJson) != OK or JSON.stringify(parser.data) != JSON.stringify(_draft): return false
+	if parser.parse(response.proposedDataJson) != OK or not same_json(parser.data, _draft): return false
 	_proposal = response.duplicate(true)
 	phase = "proposal_saved"
 	return true
@@ -80,9 +100,9 @@ func begin_plan() -> Dictionary:
 	return {"proposalId":_proposal.id}
 
 func accept_plan(response: Variant, current_draft: Variant) -> bool:
-	if phase != "planning" or not draft_valid(current_draft) or JSON.stringify(current_draft) != JSON.stringify(_draft) or typeof(response) != TYPE_DICTIONARY: return false
+	if phase != "planning" or not draft_valid(current_draft) or not same_json(current_draft, _draft) or typeof(response) != TYPE_DICTIONARY: return false
 	if response.get("schemaVersion") != "aurion.authoring.v1" or response.get("proposalId") != _proposal.id or response.get("proposalReceiptHash") != _proposal.receiptHash or response.get("expectedTemplateSetHash") != _proposal.expectedTemplateSetHash or response.get("requiresHumanConfirmation") != true: return false
-	if not Guard._hex(response.get("planHash"), 64) or not Guard._hex(response.get("templateHash"), 64) or JSON.stringify(response.get("template")) != JSON.stringify(_draft): return false
+	if not Guard._hex(response.get("planHash"), 64) or not Guard._hex(response.get("templateHash"), 64) or not same_json(response.get("template"), _draft): return false
 	_plan = response.duplicate(true)
 	phase = "planned"
 	message = "Questplan erhalten; noch nicht veröffentlicht."
@@ -99,7 +119,7 @@ func pending_identity() -> Dictionary:
 		"version":int(plan.template.version), "templateHash":plan.templateHash}
 
 func begin_publish(current_draft: Variant) -> Dictionary:
-	if phase != "planned" or _plan.is_empty() or not draft_valid(current_draft) or JSON.stringify(current_draft) != JSON.stringify(_draft) or not current_draft.active or current_draft.quarantined: return {}
+	if phase != "planned" or _plan.is_empty() or not draft_valid(current_draft) or not same_json(current_draft, _draft) or not current_draft.active or current_draft.quarantined: return {}
 	_publishing = _plan.duplicate(true)
 	_plan.clear()
 	phase = "publishing"
@@ -112,7 +132,7 @@ func accept_publish(response: Variant) -> bool:
 	if typeof(receipt) != TYPE_DICTIONARY or receipt.get("schemaVersion") != "aurion.authoring-receipt.v1" or receipt.get("kind") != "quest" or receipt.get("action") != "publish" or receipt.get("humanConfirmed") != true: return false
 	if not Guard._whole(receipt.get("actorUserId"), actor_id, actor_id) or receipt.get("targetId") != _publishing.proposalId or receipt.get("planHash") != _publishing.planHash or receipt.get("resultHash") != _publishing.templateHash: return false
 	if not Guard._hex(receipt.get("receiptHash"), 64) or receipt.get("receiptId") != "authoring:quest:" + str(receipt.receiptHash).substr(0, 24) or not receipt.has("previousHash") or (receipt.previousHash != null and not Guard._hex(receipt.previousHash, 64)): return false
-	if JSON.stringify(response.get("template")) != JSON.stringify(_publishing.template) or not Guard._hex(response.get("templateSetHash"), 64): return false
+	if not same_json(response.get("template"), _publishing.template) or not Guard._hex(response.get("templateSetHash"), 64): return false
 	_receipt = receipt.duplicate(true)
 	phase = "awaiting_readback"
 	message = "Quest-Receipt erhalten; separater Vorlagen-Readback steht aus."
@@ -124,7 +144,7 @@ func accept_readback(response: Variant) -> bool:
 	for template in response.templates:
 		if typeof(template) != TYPE_DICTIONARY: return false
 		if template.get("templateId") == _publishing.template.templateId and template.get("version") == _publishing.template.version:
-			if JSON.stringify(template) != JSON.stringify(_publishing.template): return false
+			if not same_json(template, _publishing.template): return false
 			matches += 1
 	if matches != 1: return false
 	phase = "confirmed"

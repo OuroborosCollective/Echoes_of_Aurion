@@ -14,7 +14,10 @@ func read() -> Dictionary:
 	if file == null or file.get_length() > 8192: return {"invalid":true}
 	var parser := JSON.new()
 	if parser.parse(file.get_as_text()) != OK or not State.pending_valid(parser.data): return {"invalid":true}
-	return parser.data
+	var record: Dictionary = parser.data
+	record.actorUserId = int(record.actorUserId)
+	record.version = int(record.version)
+	return record
 
 func reserve(record: Dictionary) -> bool:
 	if not State.pending_valid(record) or DirAccess.make_dir_absolute(ProjectSettings.globalize_path(_path)) != OK: return false
@@ -26,7 +29,7 @@ func reserve(record: Dictionary) -> bool:
 	file.flush()
 	var error := file.get_error()
 	file.close()
-	if error != OK or JSON.stringify(read()) != JSON.stringify(record):
+	if error != OK or not State.same_json(read(), record):
 		_cleanup_owned()
 		return false
 	return true
@@ -43,6 +46,6 @@ func release_unsubmitted(record: Dictionary) -> bool:
 	return _remove_matching(record)
 
 func _remove_matching(record: Dictionary) -> bool:
-	if not State.pending_valid(record) or JSON.stringify(read()) != JSON.stringify(record): return false
+	if not State.pending_valid(record) or not State.same_json(read(), record): return false
 	if DirAccess.remove_absolute(ProjectSettings.globalize_path(_path.path_join("record.json"))) != OK: return false
 	return DirAccess.remove_absolute(ProjectSettings.globalize_path(_path)) == OK and read().is_empty()
