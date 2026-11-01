@@ -20,7 +20,7 @@ type MemoryEnvelope = CompanionMemoryObservation & { userId: number; memoryVersi
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
+  if (value && typeof value === "object") return `{${Object.keys(value as Record<string, unknown>).sort((a, b) => a.localeCompare(b)).map(key => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
   return JSON.stringify(value);
 }
 
