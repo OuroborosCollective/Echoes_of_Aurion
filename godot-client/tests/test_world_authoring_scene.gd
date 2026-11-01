@@ -68,6 +68,19 @@ func verify() -> void:
 	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/WorldStudio").pressed.emit()
 	require(studio.visible and not scene._world_input_permitted() and not scene.mobile_joystick.visible, "open studio allowed movement or joystick")
 	require(fake.sent.size() == 1 and fake.sent[0].kind == "identity", "studio did not request confirmed identity")
+	# Inspector consumes the existing authenticated zone projection. Export and
+	# filtering must neither send gameplay commands nor invent causal evidence.
+	require(studio.has_method("inspection_export"), "WorldStudio lacks confirmed-state inspector")
+	if studio.has_method("inspection_export"):
+		var before_inspection := fake.sent.size()
+		var inspection: Dictionary = studio.inspection_export()
+		require(inspection.get("schemaVersion") == "aurion.inspection.v1" and inspection.get("zoneId") == "observatory_threshold" and inspection.get("tick") == 1, "inspector lost confirmed zone identity")
+		require(inspection.get("causalProof") == "UNVERIFIED" and inspection.get("receiptHash") == null, "zone-v5 inspector fabricated receipt evidence")
+		var rows: Array = studio.inspection_entities("player:1")
+		require(rows.size() == 1 and rows[0].get("entityId") == "player:1", "inspector filter lost the confirmed player")
+		if not rows.is_empty(): rows[0]["entityId"] = "local-only"
+		require(scene._entities.record("presences", "player:1").get("entityId") == "player:1", "inspector changed the canonical projection")
+		require(fake.sent.size() == before_inspection, "read-only inspector sent a server command")
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
 	require(fake.sent.back().kind == "catalog", "admin identity did not request catalog")
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
@@ -161,6 +174,8 @@ func verify() -> void:
 	studio._close_requested()
 	scene._reset_projection()
 	require(studio._state.phase == "closed" and studio._connection.is_empty(), "zone reset retained authoring session")
+	if studio.has_method("inspection_export"):
+		require(studio.inspection_export().is_empty(), "zone reset retained stale inspector state")
 	scene.queue_free()
 	await process_frame
 	if FileAccess.file_exists(journal_path.path_join("record.json")): DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_path.path_join("record.json")))
