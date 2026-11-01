@@ -30,6 +30,9 @@ BROWSER_IDS = {"signin_fre_dismiss_button", "signin_fre_continue_button", "terms
                "button_secondary", "negative_button", "positive_button", "ack_button", "more_button",
                "url_bar", "toolbar_url", "search_provider_logo", "fre_promo_title",
                "default_search_engine_dialog_options", "close_button", "dismiss_button", "continue_button"}
+FIRST_RUN_LABELS = {"accept & continue", "use without an account", "use without account", "no thanks", "skip",
+                   "more", "continue", "get started", "not now", "got it", "set as default",
+                   "choose your search engine", "close", "agree", "later", "dismiss"}
 
 
 def browser_diagnostics(xml, browser, foreground, fixture_observed):
@@ -62,6 +65,23 @@ def browser_target_observed(xml, browser, guard):
         if resource.startswith(browser + ":id/") and "url_bar" in resource:
             if target in text:
                 return True
+    return False
+
+
+def browser_first_run(xml, foreground):
+    if "firstrun.FirstRunActivity" in foreground:
+        return True
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        return False
+    for node in root.iter("node"):
+        text = (node.get("text", "") or "").casefold()
+        resource = node.get("resource-id", "") or ""
+        if text in FIRST_RUN_LABELS:
+            return True
+        if "firstrun" in resource or "fre_promo" in resource or "default_search_engine" in resource:
+            return True
     return False
 
 
@@ -184,6 +204,7 @@ def open_browser(guard):
     PROGRESS["browserPackage"] = browser
     target = f"http://127.0.0.1:8765/{guard}"
     deadline = time.monotonic() + 45
+    reset_count = 0
     while time.monotonic() < deadline:
         foreground = adb("shell", "dumpsys", "activity", "activities")
         resumed = [s for s in foreground.splitlines() if "ResumedActivity" in s or "topResumedActivity" in s]
@@ -197,6 +218,19 @@ def open_browser(guard):
         if not states or states[-1] != diagnostic:
             states.append(diagnostic)
             del states[:-12]
+        if browser_first_run(xml, foreground):
+            # GitHub-hosted Android emulators often leave Chrome in a first-run or
+            # welcome state. Clear the stale browser session without launching a
+            # competing app link that could race the real target URL.
+            adb("shell", "am", "force-stop", browser, tolerate=True)
+            reset_count += 1
+            if reset_count >= 3:
+                # A stale browser wizard carried by the emulator is not a valid
+                # smoke result; continue the loop to allow the next poll cycle to
+                # recover instead of waiting forever on a blocked first-run page.
+                time.sleep(1)
+            time.sleep(0.5)
+            continue
         try:
             nodes = list(ET.fromstring(xml).iter("node"))
         except ET.ParseError:
@@ -209,9 +243,7 @@ def open_browser(guard):
         for node in nodes:
             text = (node.get("text", "") or "").casefold()
             resource = node.get("resource-id", "") or ""
-            if text in {"accept & continue", "use without an account", "use without account", "no thanks", "skip", "more",
-                        "continue", "get started", "not now", "got it", "set as default", "choose your search engine",
-                        "close", "agree", "later", "dismiss", "accept"}:
+            if text in FIRST_RUN_LABELS:
                 bounds = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
                 if bounds:
                     x1, y1, x2, y2 = map(int, bounds.groups())
@@ -283,8 +315,6 @@ def run(output):
             require(after["pid"] == before["pid"] and after["callbacks"] == 1 and not after["waiting"] and after["activityPresent"] and not after["intentDataPresent"], "FIXED_WARM_FAILED")
             evidence["cases"]["fixedWarm"] = after
             (output / "runtime-evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
-            # After terminal rejection Main stops polling; another OS Intent
-            # must not recreate authority or forward a second callback.
             dispatch(component, 2)
             duplicate = wait_report(lambda r: fresh_dispatch(r, 2, before["pid"]))
             require(duplicate is not None and duplicate["pid"] == before["pid"] and duplicate["callbacks"] == 1 and not duplicate["waiting"], "DUPLICATE_CALLBACK_FORWARDED")
@@ -316,8 +346,6 @@ if __name__ == "__main__":
         (output / "runtime-evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
         print("ANDROID_JNI_BRIDGE_SMOKE_VERIFIED / FULL_LOGIN_UNVERIFIED")
     except BaseException as error:
-        # Raw subprocess/HTTP exceptions may contain URLs or process arguments.
-        # Only a fixed public failure marker crosses the CI log boundary.
         code = str(error) if isinstance(error, RuntimeError) and str(error) in FAILURES else "SMOKE_INTERNAL_FAILURE"
         (output / "failure-evidence.json").write_text(json.dumps({"code": code, **PROGRESS}) + "\n")
         print("ANDROID_JNI_BRIDGE_SMOKE_FAILED / " + code)
