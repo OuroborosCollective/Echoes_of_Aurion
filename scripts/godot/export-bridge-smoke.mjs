@@ -39,6 +39,7 @@ for(const guard of ['legacy','fixed']) {
   await writeFile(configPath,runtimeConfig.replace('const PRODUCT_SERVER := "https://arelogic.space"','const PRODUCT_SERVER := "http://127.0.0.1:1"'));
   await cp(join(repo,'scripts/godot/fixtures/native-intent-smoke.gd'),join(project,'bridge_smoke.gd'));
   await writeFile(join(project,'override.cfg'),`[autoload]\nAurionBridgeSmoke="*res://bridge_smoke.gd"\n[aurion]\nclient_build="${revision}"\nnative_auth_start_enabled=true\n[aurion_smoke]\nguard="${guard}"\n`);
+  await cp(join(repo,'scripts/godot/fixtures/test-native-intent-smoke-report.gd'),join(project,'test_bridge_smoke_report.gd'));
   const bridge=join(project,'platform/android/native_intent_bridge.gd');
   if(guard==='legacy') {
    const s=await readFile(bridge,'utf8');
@@ -52,8 +53,13 @@ for(const guard of ['legacy','fixed']) {
   await writeFile(join(config,'editor_settings-4.7.tres'),`[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/java_sdk_path = ${JSON.stringify(join(android.installation,'jdk'))}\nexport/android/android_sdk_path = ${JSON.stringify(join(android.installation,'sdk'))}\n`);
   const env={...process.env,XDG_CONFIG_HOME:join(job,'config'),XDG_DATA_HOME:join(job,'data'),JAVA_HOME:join(android.installation,'jdk'),GODOT_ANDROID_KEYSTORE_DEBUG_PATH:key,GODOT_ANDROID_KEYSTORE_DEBUG_USER:'androiddebugkey',GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD:'android'};
   const apk=join(output,guard+'.apk');
-  for(const args of [['--editor','--import'],['--export-debug','Android Preview',apk]]) {
+  for(const args of [['--editor','--import'],['--script','res://test_bridge_smoke_report.gd'],['--export-debug','Android Preview',apk]]) {
+   const overridePath=join(project,'override.cfg');
+   const smokeOverrides=await readFile(overridePath,'utf8');
+   if(args[0]==='--script') await writeFile(overridePath,smokeOverrides.replace('[autoload]\\nAurionBridgeSmoke="*res://bridge_smoke.gd"\\n',''));
    const result=spawnSync(executable,['--headless','--path',project,...args],{env,encoding:'utf8',timeout:180000,maxBuffer:8*1024*1024});
+   await writeFile(overridePath,smokeOverrides);
+   if(args[0]==='--script' && result.status!==0) console.error(result.stdout+result.stderr);
    assert.ok(!result.error&&result.status===0&&!/SCRIPT ERROR:|\bERROR:/.test(result.stdout+result.stderr),'SMOKE_APK_EXPORT_FAILED');
   }
   const tools=join(android.installation,'sdk/build-tools',lock.android.buildTools);
