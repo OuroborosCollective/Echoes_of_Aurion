@@ -11,6 +11,8 @@ import {
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { MariaDBCausalPersistenceAdapter } from "./persistence";
 import { AurionTickRecorder, type RecordedTickEntry } from "./tickRecorder";
+import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
+import { hashCanonicalZoneState } from "./zoneCanonicalState";
 
 const suite =
   process.env.AURION_CLASSLESS_E2E === "1" && process.env.DATABASE_URL
@@ -27,6 +29,7 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
   async function clean() {
     if (!isolated) throw new Error("ISOLATED_0049_TEST_DATABASE_REQUIRED");
     await pool.query("DELETE FROM aurionCausalTickReceipts WHERE zoneId LIKE ?", [`${ZONE_PREFIX}%`]);
+    await pool.query("DELETE FROM aurionCausalCheckpoints WHERE zoneId LIKE ?", [`${ZONE_PREFIX}%`]);
   }
 
   beforeAll(async () => {
@@ -46,6 +49,34 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
       if (isolated) await clean();
       await pool.end();
     }
+  });
+
+  it("recovers only the canonical world when another world shares the zone and tick", async () => {
+    const adapter = new MariaDBCausalPersistenceAdapter();
+    const zoneId = `${ZONE_PREFIX}:world-scope`;
+    const zone = new AuthoritativeMovementZone(zoneId as any, new AurionTickRecorder());
+    zone.tick();
+    const receipt = zone.getLatestReceipt()!;
+    const state = zone.getCanonicalZoneState();
+    const otherWorld = "aaa-isolated-negative-world";
+    // Deliberately overlap natural zone/tick keys in the disposable database.
+    // A newer foreign head must neither replace nor pollute canonical recovery.
+    for (const tick of [1, 2]) {
+      const foreign = { ...receipt, worldId: otherWorld, tick };
+      foreign.receiptHash = computeReceiptHash(foreign);
+      await adapter.saveReceipt(foreign, []);
+      const foreignState = { ...state, worldId: otherWorld, tick };
+      await adapter.saveCheckpoint(zoneId, tick, hashCanonicalZoneState(foreignState), foreignState);
+    }
+    await adapter.saveReceipt(receipt, []);
+    await adapter.saveCheckpoint(zoneId, state.tick, hashCanonicalZoneState(state), state);
+
+    expect.soft((await adapter.getLatestReceipt(zoneId))?.receiptHash).toBe(receipt.receiptHash);
+    expect.soft((await adapter.getRecordedTick(zoneId, 1))?.receipt.worldId).toBe(GLOBAL_WORLD_ID);
+    expect.soft((await adapter.getCheckpoint(zoneId, 1))?.state.worldId).toBe(GLOBAL_WORLD_ID);
+    expect.soft((await adapter.getCheckpointAtOrBefore(zoneId, 2))?.state).toEqual(state);
+    expect.soft((await adapter.getTicksInRange(zoneId, 1, 2)).map(entry => entry.receipt.receiptHash))
+      .toEqual([receipt.receiptHash]);
   });
 
   it("publishes an observer only after real MariaDB receipt and checkpoint readback", async () => {
