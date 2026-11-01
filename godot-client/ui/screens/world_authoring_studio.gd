@@ -22,6 +22,13 @@ var _info: Label
 var _catalog_info: Label
 var _confirm: ConfirmationDialog
 var _plan_view: TextEdit
+var _inspection: Dictionary = {}
+var _inspection_panel: VBoxContainer
+var _inspection_filter: LineEdit
+var _inspection_status: Label
+var _inspection_list: ItemList
+var _inspection_properties: TextEdit
+var _inspection_rows: Array = []
 
 func _ready() -> void:
 	visible = false
@@ -51,6 +58,8 @@ func _ready() -> void:
 	_catalog_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_catalog_info.text = "Admin-Zugang und Katalog noch nicht geprüft."
 	stack.add_child(_catalog_info)
+	_button(stack, "Bestätigte Entitäten und Diagnose", _toggle_inspector)
+	_build_inspector(stack)
 	_brief = TextEdit.new()
 	_brief.placeholder_text = "Idee für KI-Entwurf"
 	_brief.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
@@ -100,6 +109,99 @@ func _button(parent: VBoxContainer, title: String, action: Callable) -> void:
 	button.pressed.connect(action)
 	parent.add_child(button)
 
+func _build_inspector(parent: VBoxContainer) -> void:
+	_inspection_panel = VBoxContainer.new()
+	_inspection_panel.visible = false
+	parent.add_child(_inspection_panel)
+	_inspection_status = Label.new()
+	_inspection_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_inspection_panel.add_child(_inspection_status)
+	_inspection_filter = LineEdit.new()
+	_inspection_filter.placeholder_text = "Entitäten filtern: Kategorie oder ID"
+	_inspection_filter.text_changed.connect(func(_text: String): _render_inspector())
+	_inspection_panel.add_child(_inspection_filter)
+	_inspection_list = ItemList.new()
+	_inspection_list.custom_minimum_size.y = 140
+	_inspection_list.item_selected.connect(_inspect_selected)
+	_inspection_panel.add_child(_inspection_list)
+	_inspection_properties = TextEdit.new()
+	_inspection_properties.editable = false
+	_inspection_properties.custom_minimum_size.y = 120
+	_inspection_properties.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_inspection_panel.add_child(_inspection_properties)
+	_button(_inspection_panel, "Bestätigte Projektion als JSON kopieren", _copy_inspection)
+
+func _toggle_inspector() -> void:
+	_inspection_panel.visible = not _inspection_panel.visible
+	_render_inspector()
+
+## This is the existing validated zone projection, not a second world model.
+## Zone-v5 does not carry canonical receipt/state hashes: never synthesize them.
+func set_inspection_context(world: Variant, registry: Variant, stale: bool) -> void:
+	if not _session_valid() or world == null or registry == null or not world.has_state() or world.connection_id() != _connection:
+		_inspection.clear()
+		_render_inspector()
+		return
+	if _inspection.get("snapshotSeq") == world.last_seq() and _inspection.get("connectionId") == _connection and _inspection.get("stale") == stale:
+		return
+	var rows: Array = []
+	var count := 0
+	for category in ["presences", "mobs", "combatants", "resources"]:
+		for id in registry.ids(category):
+			count += 1
+			if rows.size() < 500:
+				rows.append({"category":category, "entityId":id, "properties":registry.record(category, id)})
+	_inspection = {"schemaVersion":"aurion.inspection.v1", "protocolVersion":5,
+		"connectionId":_connection, "zoneId":world.current_state().get("zoneId"),
+		"tick":world.last_tick(), "snapshotSeq":world.last_seq(), "stale":stale,
+		"causalProof":"UNVERIFIED", "sourceRevision":null, "receiptHash":null,
+		"stateHash":null, "projectionHash":null, "streamInstance":null,
+		"totalEntities":count, "truncated":count > rows.size(), "entities":rows}
+	_render_inspector()
+
+func inspection_export() -> Dictionary:
+	return _inspection.duplicate(true) if _session_valid() else {}
+
+func inspection_entities(query: String = "") -> Array:
+	var result: Array = []
+	var needle := query.strip_edges().to_lower()
+	for row in inspection_export().get("entities", []):
+		if needle.is_empty() or (str(row.category) + " " + str(row.entityId)).to_lower().contains(needle):
+			result.append(row.duplicate(true))
+	return result
+
+func _render_inspector() -> void:
+	if not is_instance_valid(_inspection_list):
+		return
+	var selected := ""
+	var indices := _inspection_list.get_selected_items()
+	if not indices.is_empty() and indices[0] < _inspection_rows.size():
+		selected = str(_inspection_rows[indices[0]].category) + ":" + str(_inspection_rows[indices[0]].entityId)
+	_inspection_list.clear()
+	_inspection_properties.text = ""
+	_inspection_rows = inspection_entities(_inspection_filter.text)
+	if _inspection.is_empty():
+		_inspection_status.text = "Keine bestätigte Zonenprojektion für diese Sitzung."
+		return
+	_inspection_status.text = "Zone %s · Tick %d · Seq %d · %s\n%d Entitäten%s · nur lesend\nServerrevision / Receipt / State-Hash: im Zonenprotokoll nicht enthalten; Kausalbeweis offen." % [
+		_inspection.zoneId, _inspection.tick, _inspection.snapshotSeq,
+		"VERALTET" if _inspection.stale else "bestätigte Projektion", _inspection.totalEntities,
+		" (Anzeige auf 500 begrenzt)" if _inspection.truncated else ""]
+	for row in _inspection_rows:
+		var index := _inspection_list.add_item(str(row.category) + " · " + str(row.entityId))
+		if str(row.category) + ":" + str(row.entityId) == selected:
+			_inspection_list.select(index)
+			_inspect_selected(index)
+
+func _inspect_selected(index: int) -> void:
+	if index >= 0 and index < _inspection_rows.size():
+		_inspection_properties.text = JSON.stringify(_inspection_rows[index].properties, "\t")
+
+func _copy_inspection() -> void:
+	var value := inspection_export()
+	if not value.is_empty():
+		DisplayServer.clipboard_set(JSON.stringify(value, "\t"))
+
 func configure(auth: Node, server: String, connection: String, allow_local: bool = false) -> void:
 	close_session()
 	_auth = auth
@@ -137,6 +239,10 @@ func close_session() -> void:
 		_auth.refresh_succeeded.disconnect(_on_refresh_succeeded)
 	_api = null
 	_state.close()
+	_inspection.clear()
+	if is_instance_valid(_inspection_filter):
+		_inspection_filter.text = ""
+	_render_inspector()
 	_connection = ""
 	_server = ""
 	_generation = -1
