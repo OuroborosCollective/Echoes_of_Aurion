@@ -9,6 +9,14 @@ var _client: Node = null
 var _dock: Control = null
 var _owns_autoload := false
 
+# Only the root-installed editor service receives this systemd credential.
+# No synthetic token, process env secret value or public endpoint is accepted.
+const PROTECTED_EDITOR_CREDENTIAL := "/run/credentials/serverin-aurion-godot-editor.service/aurion-editor"
+
+
+static func protected_editor_autoconnect_allowed(credential_path: String, credential: String) -> bool:
+    return credential_path == PROTECTED_EDITOR_CREDENTIAL and credential.length() >= 32 and credential.length() <= 256
+
 
 func _enter_tree() -> void:
     if Engine.has_meta("aurion_editor_client"):
@@ -23,6 +31,10 @@ func _enter_tree() -> void:
     _client.auto_connect = false
     add_child(_client)
     Engine.set_meta("aurion_editor_client", _client)
+    # The scene-tree _ready() has loaded the credential file, if available.
+    # This is an editor observer only; Godot gets no gameplay/write authority.
+    if protected_editor_autoconnect_allowed(OS.get_environment("AURION_BRIDGE_TOKEN_FILE"), _client.token):
+        _client.call_deferred("connect_to_bridge")
 
     _dock = EditDock.new()
     _dock.bind_client(_client)
