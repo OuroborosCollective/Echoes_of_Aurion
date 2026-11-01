@@ -23,6 +23,8 @@ func _ready() -> void:
 	add_child(hint)
 	_button("Aurion-Vorlagen lesen", load_templates)
 	_choice = OptionButton.new()
+	_choice.fit_to_longest_item = false
+	_choice.clip_text = true
 	_choice.custom_minimum_size.y = 48
 	add_child(_choice)
 	_button("Vorlage als neue, inaktive Version kopieren", func(): copy_template(_choice.selected))
@@ -44,6 +46,8 @@ func _ready() -> void:
 	_button("Lokalen Questentwurf als JSON kopieren", _copy_json)
 	_activation = CheckBox.new()
 	_activation.text = "Diese geprüfte Vorlagenversion aktiv veröffentlichen"
+	_activation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_activation.clip_text = true
 	_activation.custom_minimum_size.y = 48
 	_activation.toggled.connect(set_activation)
 	add_child(_activation)
@@ -73,6 +77,8 @@ func _ready() -> void:
 func _button(title: String, action: Callable) -> void:
 	var button := Button.new()
 	button.text = title
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.clip_text = true
 	button.custom_minimum_size.y = 48
 	button.pressed.connect(action)
 	add_child(button)

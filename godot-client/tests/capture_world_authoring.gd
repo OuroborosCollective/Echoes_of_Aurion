@@ -89,6 +89,7 @@ func capture_quest_editor(scene: Control, studio: Control, output: String) -> bo
 	if editor._state.begin_plan().is_empty() or not editor._state.accept_plan(plan, draft_value): return false
 	var watermark := Label.new()
 	watermark.text = "TESTDATEN · native Godot-Oberfläche · kein Live-Effekt"
+	watermark.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	watermark.add_theme_color_override("font_color", Color.YELLOW)
 	watermark.position = Vector2(8, 2)
 	watermark.z_index = 100
@@ -99,9 +100,13 @@ func capture_quest_editor(scene: Control, studio: Control, output: String) -> bo
 		DisplayServer.window_set_size(viewport_size)
 		await process_frame
 		await process_frame
+		watermark.size.x = viewport_size.x - 16
 		scroll.ensure_control_visible(editor._graph)
 		await process_frame
 		await RenderingServer.frame_post_draw
+		if editor.size.x > viewport_size.x - 24 or editor._graph.get_global_rect().end.x > viewport_size.x - 8:
+			push_error("Native quest controls overflow the actual viewport")
+			return false
 		if not save_image(output, "quest-graph", viewport_size): return false
 		editor.request_confirmation()
 		await process_frame

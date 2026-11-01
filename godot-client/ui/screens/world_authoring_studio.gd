@@ -122,6 +122,8 @@ func _touch_dialog_button(button: Button) -> void:
 func _button(parent: VBoxContainer, title: String, action: Callable) -> void:
 	var button := Button.new()
 	button.text = title
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.clip_text = true
 	button.custom_minimum_size.y = 48
 	button.pressed.connect(action)
 	parent.add_child(button)
@@ -244,6 +246,8 @@ func _build_catalog_tools(parent: VBoxContainer) -> void:
 		if not new_world_draft(_new_design_key.text.strip_edges(), _new_design_title.text.strip_edges(), int(_new_design_version.value)):
 			_info.text = "Entwurfsschlüssel, Titel, Katalog und Sitzung prüfen.")
 	_asset_choice = OptionButton.new()
+	_asset_choice.fit_to_longest_item = false
+	_asset_choice.clip_text = true
 	panel.add_child(_asset_choice)
 	_placement_key = LineEdit.new()
 	_placement_key.placeholder_text = "Eindeutiger Platzierungsschlüssel, z. B. village.barrel-2"
