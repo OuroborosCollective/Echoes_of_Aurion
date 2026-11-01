@@ -5,6 +5,7 @@ const AuthoringApi = preload("res://net/api/world_authoring_api.gd")
 const AuthoringState = preload("res://authoring/world_authoring_state.gd")
 const AuthoringJournal = preload("res://authoring/world_authoring_journal.gd")
 const WorldProjection = preload("res://world/world_design_projection.gd")
+const QuestEditor = preload("res://ui/screens/quest_authoring_editor.gd")
 signal confirmed_world(readback: Dictionary, connection_id: String, generation: int)
 signal closed
 
@@ -38,6 +39,7 @@ var _draft_import: TextEdit
 var _new_design_key: LineEdit
 var _new_design_title: LineEdit
 var _new_design_version: SpinBox
+var _quest_editor: VBoxContainer
 
 func _ready() -> void:
 	visible = false
@@ -69,6 +71,11 @@ func _ready() -> void:
 	stack.add_child(_catalog_info)
 	_button(stack, "Bestätigte Entitäten und Diagnose", _toggle_inspector)
 	_build_inspector(stack)
+	_quest_editor = QuestEditor.new()
+	_quest_editor.name = "QuestStudio"
+	_quest_editor.visible = false
+	_button(stack, "Questvorlagen und Graphentwürfe", func(): _quest_editor.visible = not _quest_editor.visible)
+	stack.add_child(_quest_editor)
 	_brief = TextEdit.new()
 	_brief.placeholder_text = "Idee für KI-Entwurf"
 	_brief.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
@@ -359,6 +366,7 @@ func close_session() -> void:
 		_auth.refresh_succeeded.disconnect(_on_refresh_succeeded)
 	_api = null
 	_state.close()
+	if is_instance_valid(_quest_editor): _quest_editor.close_context()
 	_catalog_revision = ""
 	_catalog_assets.clear()
 	if is_instance_valid(_asset_choice): _asset_choice.clear()
@@ -497,6 +505,9 @@ func _recover_receipt() -> void:
 func _completed(kind: String, data: Dictionary, connection: String, generation: int) -> void:
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
 		return
+	if kind.begins_with("quest"):
+		_quest_editor.completed(kind, data)
+		return
 	match kind:
 		"identity":
 			if data.get("role") != "admin" or not _state.open(connection, generation, data.get("id")):
@@ -506,6 +517,7 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_state.mark_unresolved()
 				_info.text = _state.message
 			_catalog_info.text = "Adminrolle bestätigt; Katalog wird geladen."
+			_quest_editor.open_context(connection, generation, data.get("id"), _send)
 			_send("catalog")
 		"catalog":
 			_catalog_revision = ""
@@ -577,6 +589,9 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 func _failed(kind: String, _reason: String, connection: String, generation: int) -> void:
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
 		return
+	if kind.begins_with("quest"):
+		_quest_editor.failed(kind)
+		return
 	_state.failed(kind)
 	_info.text = _state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden."
 
@@ -588,3 +603,6 @@ func _close_requested() -> void:
 		return
 	visible = false
 	closed.emit()
+
+func quest_editor() -> Control:
+	return _quest_editor
