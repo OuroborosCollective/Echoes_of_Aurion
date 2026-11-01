@@ -1,5 +1,6 @@
 import {
   QuestAdminProposalSchema,
+  QuestDraftProposalDataSchema,
   QuestTemplateVersionSchema,
   type QuestAdminProposal,
   type QuestInstance,
@@ -187,13 +188,15 @@ export class AdminQuestStudioService {
     templateVersion: number;
     proposedDataJson: string;
   }): Promise<QuestAdminProposal> {
-    let template: QuestTemplateVersion;
-    try { template = QuestTemplateVersionSchema.parse(JSON.parse(params.proposedDataJson)); }
+    let draft: Record<string, unknown>;
+    try { draft = QuestDraftProposalDataSchema.parse(JSON.parse(params.proposedDataJson)); }
     catch { throw new Error("QUEST_PROPOSAL_TEMPLATE_INVALID"); }
-    if (template.templateId !== params.templateId || template.version !== params.templateVersion) throw new Error("QUEST_PROPOSAL_TEMPLATE_IDENTITY_MISMATCH");
+    if ((draft.templateId !== undefined && draft.templateId !== params.templateId)
+        || (draft.version !== undefined && draft.version !== params.templateVersion)) throw new Error("QUEST_PROPOSAL_TEMPLATE_IDENTITY_MISMATCH");
     if (Buffer.byteLength(params.proposedDataJson, "utf8") > 65_535) throw new Error("QUEST_PROPOSAL_TOO_LARGE");
     await this.ensureHydrated();
-    await this.persistenceEngine.assertTemplateVersionAvailable(template);
+    const complete = QuestTemplateVersionSchema.safeParse(draft);
+    if (complete.success) await this.persistenceEngine.assertTemplateVersionAvailable(complete.data);
     const proposalIdentity = computeCanonicalHash("aurion.quest.proposal.identity.v1", {
       authorUserId: params.authorUserId,
       templateId: params.templateId,

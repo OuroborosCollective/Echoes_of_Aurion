@@ -150,10 +150,18 @@ function exactQuestNumbers(value: unknown): boolean {
   return true;
 }
 
+const PersistedQuestTitleSchema = z.string().refine(value => [...value].length <= 255, "Quest title exceeds the persisted 255-character limit");
+
+/** Unpublished proposals may be incomplete; persistence bounds still apply. */
+export const QuestDraftProposalDataSchema = z.object({ title: PersistedQuestTitleSchema.optional() }).passthrough()
+  .superRefine((draft, context) => {
+    if (!exactQuestNumbers(draft)) context.addIssue({ code: "custom", message: "Quest numbers must be finite and within the exact JSON range" });
+  });
+
 export const QuestTemplateVersionSchema = z.object({
   templateId: z.string(),
   version: z.number().int().positive(),
-  title: z.string().min(1).refine(value => [...value].length <= 255, "Quest title exceeds the persisted 255-character limit"),
+  title: PersistedQuestTitleSchema.refine(value => value.length > 0, "Published quest title is required"),
   description: z.string(),
   prerequisiteFacts: z.array(QuestRolePredicateSchema).default([]),
   roles: z.array(QuestRoleSchema),
