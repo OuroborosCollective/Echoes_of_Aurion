@@ -2,6 +2,7 @@ name: AIM-293 NPC Action Gateway
 on:
   pull_request:
     paths:
+      - "server/aurion/npc/ax1LivingWorldProtocol.ts"
       - "server/npcActionGatewayPersistence.ts"
       - "server/ax1LivingWorldRuntime.ts"
       - "server/autonomousNpcLifeRuntime.ts"
@@ -16,6 +17,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "server/aurion/npc/ax1LivingWorldProtocol.ts"
       - "server/npcActionGatewayPersistence.ts"
       - "server/ax1LivingWorldRuntime.ts"
       - "server/autonomousNpcLifeRuntime.ts"

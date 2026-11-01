@@ -42,10 +42,11 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
   let pool:Pool;
   let isolated=false;
 
-  async function resetEpochs() {
+  async function resetEpochs(scarceStock?:number) {
     await pool.query("TRUNCATE TABLE aurionNpcActionEpochStates");
     for(const hubId of hubs){
-      const market=merchantBootstrapMarkets[hubId];
+      const bootstrap=merchantBootstrapMarkets[hubId];
+      const market=hubId===homeHub&&scarceStock!==undefined ? {...bootstrap,stock:{grain:150,sandstone:100,bronze:80,aether:40,salve:48,rune_core:scarceStock}} : bootstrap;
       const ownerId=`market:${hubId}`;
       const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
       const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};
@@ -105,6 +106,40 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
   });
   beforeEach(cleanup);
   afterAll(async()=>{if(pool){if(isolated)await cleanup();await pool.end();}});
+
+  it("commits the scarce three-unit trade with matching DB inventory, receipt and idempotent readback",async()=>{
+    // Disposable, guarded test DB only; no production seeding or inventory repair.
+    await resetEpochs(3);
+    const request=sourceRequest(19506);
+    await resolveAndRecordNpc({...request,
+      needEvents:(["safety","resources","belonging","status","wealth","power"] as const).map(need=>({id:`scarce:${need}`,need,delta:need==="wealth" ? -1 : 1,sourceReceiptId:"scarce-source",resolutionIndex:19506})),
+      economy:{currentHubId:homeHub,wealthCopper:1781659,hungerBps:4710,fatigueBps:8210,tradeProwessBps:10500,harvestYieldBps:10000},
+    });
+    const source=await readConfirmedMerchantActionSource(npcId);
+    expect(source?.resolutionIndex).toBe(19506);
+    if(!source) throw new Error("SOURCE_FIXTURE_REQUIRED");
+    const input={worldSeed:"echoes-of-aurion-v1",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    const result=await executeConfirmedMerchantAction(input);
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed") return;
+    const [actions]=await pool.query<RowDataPacket[]>("SELECT effectSetJson,effectsHash FROM aurionNpcActionReceipts WHERE id=?",[result.actionReceiptId]);
+    const resolution=JSON.parse(actions[0].effectSetJson).resolution;
+    expect(resolution).toMatchObject({resolutionIndex:19507,commodity:"rune_core",quantity:3});
+    expect(["trade","caravan"]).toContain(resolution.action);
+    expect(resolution.npc.wealthCopper-1781659).toBe(resolution.unitPriceCopper*3-resolution.taxCopper);
+    const [epochs]=await pool.query<RowDataPacket[]>("SELECT marketJson,inventoryJson FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
+    expect(JSON.parse(epochs[0].marketJson).stock.rune_core).toBe(0);
+    expect(JSON.parse(epochs[0].inventoryJson).entries.find((entry:{itemId:string})=>entry.itemId==="rune_core").quantity).toBe(0);
+    const [readbacks]=await pool.query<RowDataPacket[]>("SELECT effectsHash FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",[result.actionReceiptId]);
+    expect(readbacks).toHaveLength(1);
+    expect(readbacks[0].effectsHash).toBe(actions[0].effectsHash);
+    expect((await readConfirmedMerchantActionSource(npcId))?.resolutionIndex).toBe(19507);
+    const before=await counts();
+    const retry=await executeConfirmedMerchantAction(input);
+    expect(retry.status).toBe("persisted");
+    if(retry.status==="persisted") expect(retry.actionReceiptId).toBe(result.actionReceiptId);
+    expect(await counts()).toEqual(before);
+  });
 
   it("revalidates a historical 0053 epoch set before atomically binding it to the current WASD source",async()=>{
     const source=await seedSource();
