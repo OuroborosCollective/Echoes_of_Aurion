@@ -180,9 +180,10 @@ function validAffix(affix: LootAffixDefinition, base: LootBaseDefinition, level:
 }
 
 function resolveAffixStats(context: ServerConfirmedLootContext, affix: LootAffixDefinition, index: number): Readonly<Record<string, number>> {
-  const entries = Object.entries(affix.statRanges).sort(([left], [right]) => textCompare(left, right));
-  if (entries.length === 0) throw new Error(`loot affix ${affix.id} requires at least one stat range`);
-  return Object.freeze(Object.fromEntries(entries.map(([stat, range]) => {
+  const keys = Object.keys(affix.statRanges).sort(textCompare);
+  if (keys.length === 0) throw new Error(`loot affix ${affix.id} requires at least one stat range`);
+  return Object.freeze(Object.fromEntries(keys.map(stat => {
+    const range = affix.statRanges[stat];
     if (!Number.isSafeInteger(range.min) || !Number.isSafeInteger(range.max) || range.min > range.max) throw new Error(`loot affix ${affix.id} has an invalid ${stat} range`);
     const value = range.min + deterministicRoll(context, `affix-stat:${affix.id}:${stat}:${index}`, range.max - range.min + 1);
     return [stat, value];
@@ -230,7 +231,7 @@ export function resolveDeterministicLoot(input: Readonly<{
   const setId = chooseSet(input.context, quality, base, input.sets);
   const itemPower = sumStats(base.baseStats) + resolvedAffixes.reduce((total, affix) => total + sumStats(affix.stats), 0);
   const resolvedContextHash = contextHash(input.context);
-  const deterministicHash = digest(AURION_LOOT_RULESET_VERSION, resolvedContextHash, base.id, quality, itemLevel.toString(10), ...resolvedAffixes.flatMap(affix => [affix.id, affix.slot, affix.groupId, ...Object.entries(affix.stats).sort(([left], [right]) => textCompare(left, right)).map(([stat, value]) => `${stat}:${value}`)]), setId ?? "none", String(itemPower));
+  const deterministicHash = digest(AURION_LOOT_RULESET_VERSION, resolvedContextHash, base.id, quality, itemLevel.toString(10), ...resolvedAffixes.flatMap(affix => [affix.id, affix.slot, affix.groupId, ...Object.keys(affix.stats).sort(textCompare).map(stat => `${stat}:${affix.stats[stat]}`)]), setId ?? "none", String(itemPower));
   return Object.freeze({ itemDefinitionId: base.id, category: base.category, equipmentSlot: base.equipmentSlot, quality, itemLevelExact: itemLevel.toString(10), affixes: resolvedAffixes, setId, itemPower, contextHash: resolvedContextHash, deterministicHash });
 }
 
@@ -294,7 +295,8 @@ export function resolveEquippedSetBonuses(input: Readonly<{ equippedBaseItemIds:
       .sort((left, right) => left.threshold - right.threshold);
     for (const { threshold, bonuses } of thresholds) {
       if (!Number.isSafeInteger(threshold) || threshold < 1 || pieces < threshold) continue;
-      for (const [stat, amount] of Object.entries(bonuses).sort(([left], [right]) => textCompare(left, right))) {
+      for (const stat of Object.keys(bonuses).sort(textCompare)) {
+        const amount = bonuses[stat];
         if (!Number.isSafeInteger(amount)) throw new Error(`set ${definition.id} has a non-integer bonus`);
         totals.set(stat, (totals.get(stat) ?? 0) + amount);
       }
