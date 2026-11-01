@@ -84,6 +84,25 @@ func verify() -> void:
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
 	require(fake.sent.back().kind == "catalog", "admin identity did not request catalog")
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
+	require(studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"), "WorldStudio lacks catalog-bound draft staging/import")
+	if studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"):
+		var before_staging := fake.sent.size()
+		studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[{"assetId":"glb_test_barrel","sha256":SHA,"assetType":"arena","purpose":"world-environment","displayName":"Fixture barrel"}]}, SESSION, generation)
+		require(studio.import_world_draft(JSON.stringify(draft())), "valid catalog-bound draft import rejected")
+		var placement: Dictionary = draft().placements[0].duplicate(true)
+		placement.placementKey = "barrel-two"
+		require(studio.stage_catalog_placement(placement), "approved catalog placement could not enter the draft")
+		require(JSON.parse_string(studio._draft.text).placements.size() == 2, "staged placement did not reach the existing reviewed draft")
+		var staged := studio._draft.text
+		require(not studio.stage_catalog_placement(placement), "duplicate placement key accepted")
+		placement.placementKey = "barrel-three"
+		placement.assetId = "glb_unknown_asset"
+		require(not studio.stage_catalog_placement(placement), "unapproved catalog asset entered the draft")
+		require(not studio.import_world_draft("{broken") and studio._draft.text == staged, "invalid import replaced the reviewed draft")
+		var stale_draft := draft()
+		stale_draft.expectedCatalogRevision = "9".repeat(64)
+		require(not studio.import_world_draft(JSON.stringify(stale_draft)), "stale catalog import accepted")
+		require(fake.sent.size() == before_staging, "local staging/import submitted a world change")
 	var original := draft()
 	studio._draft.text = JSON.stringify(original)
 	studio._plan()
