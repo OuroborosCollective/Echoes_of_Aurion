@@ -17,6 +17,7 @@ signal log_message(text: String)
 
 @export var url: String = "ws://127.0.0.1:8765/godot"
 var token: String = "" # Credential is process-local, never a serialized scene property.
+var credential_source_path: String = "" # Set only after an actual successful file read.
 @export var auto_connect: bool = true
 
 const PROTO := 1
@@ -60,6 +61,8 @@ func _ready() -> void:
         var file := FileAccess.open(token_file, FileAccess.READ)
         if file != null:
             token = file.get_as_text().strip_edges()
+            if token != "":
+                credential_source_path = token_file
     if token == "" and env_token != "":
         token = env_token
     if auto_connect and not Engine.is_editor_hint():

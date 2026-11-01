@@ -9,6 +9,14 @@ var _client: Node = null
 var _dock: Control = null
 var _owns_autoload := false
 
+# Only the root-installed editor service receives this systemd credential.
+# No synthetic token, process env secret value or public endpoint is accepted.
+const PROTECTED_EDITOR_CREDENTIAL := "/run/credentials/serverin-aurion-godot-editor.service/aurion-editor"
+
+
+static func protected_editor_autoconnect_allowed(credential_path: String, credential: String, endpoint: String = "ws://127.0.0.1:8765/godot") -> bool:
+    return credential_path == PROTECTED_EDITOR_CREDENTIAL and credential.length() >= 32 and credential.length() <= 256 and endpoint == "ws://127.0.0.1:8765/godot"
+
 
 func _enter_tree() -> void:
     if Engine.has_meta("aurion_editor_client"):
@@ -23,10 +31,17 @@ func _enter_tree() -> void:
     _client.auto_connect = false
     add_child(_client)
     Engine.set_meta("aurion_editor_client", _client)
-
     _dock = EditDock.new()
-    _dock.bind_client(_client)
     add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
+
+
+func _ready() -> void:
+    # Child _ready() has completed the actual credential read before parent _ready().
+    # Bind the dock after credentials load so manual reconnect retains the loaded value.
+    if is_instance_valid(_client) and is_instance_valid(_dock):
+        _dock.bind_client(_client)
+    if is_instance_valid(_client) and _client.is_node_ready() and protected_editor_autoconnect_allowed(_client.credential_source_path, _client.token, _client.url):
+        _client.connect_to_bridge()
 
 
 func _exit_tree() -> void:
