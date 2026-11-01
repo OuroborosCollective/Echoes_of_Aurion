@@ -1,5 +1,6 @@
 extends SceneTree
 ## Offline protocol fixtures, never a production-world or authentication proof.
+const EditorPluginBridge = preload("res://addons/aurion_bridge/plugin.gd")
 const Client = preload("res://addons/aurion_bridge/aurion_client.gd")
 const View = preload("res://addons/aurion_bridge/world_view.gd")
 const Entity2D = preload("res://addons/aurion_bridge/entity_2d.gd")
@@ -16,6 +17,12 @@ func identity_for(tick: int, payload_hash: String) -> Dictionary:
     }
 
 func _initialize() -> void:
+    # Editor-only protected credential gate. These are synthetic strings, not credentials.
+    var protected_path := "/run/credentials/serverin-aurion-godot-editor.service/aurion-editor"
+    assert(EditorPluginBridge.protected_editor_autoconnect_allowed(protected_path, "x".repeat(32)))
+    assert(not EditorPluginBridge.protected_editor_autoconnect_allowed("", "x".repeat(32)))
+    assert(not EditorPluginBridge.protected_editor_autoconnect_allowed("/tmp/aurion-editor", "x".repeat(32)))
+    assert(not EditorPluginBridge.protected_editor_autoconnect_allowed(protected_path, "too-short"))
     var client := Client.new()
     client.auto_connect = false
     client._handle({"t":"hello", "proto":1, "worldId":"fixture-world", "edit":true, "upstream":"up"})
