@@ -148,6 +148,9 @@ func verify_quest_contract() -> void:
 		"expectedTemplateSetHash":"a".repeat(64), "receiptHash":"c".repeat(64), "status":"draft"}
 	var p := {"schemaVersion":"aurion.authoring.v1", "proposalId":proposal.id, "expectedTemplateSetHash":proposal.expectedTemplateSetHash,
 		"proposalReceiptHash":proposal.receiptHash, "template":d, "templateHash":"e".repeat(64), "planHash":"b".repeat(64), "requiresHumanConfirmation":true}
+	require(state.same_json(d, JSON.parse_string(JSON.stringify(d))), "quest JSON round-trip changed semantic draft identity")
+	require(not state.same_json(true, 1) and not state.same_json(1, 2.0), "quest numeric comparison weakened type/value identity")
+	require(not state.same_json(INF, INF) and not state.same_json(9007199254740993, 9007199254740992.0), "unsafe quest numbers compared as exact JSON identity")
 	require(not state.begin_proposal(d).is_empty(), "quest draft was not staged")
 	var wrong_actor := proposal.duplicate(true)
 	wrong_actor.authorUserId = 43
