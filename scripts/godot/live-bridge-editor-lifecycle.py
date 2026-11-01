@@ -34,6 +34,10 @@ func _verify() -> void:
         push_error("EDITOR_LIFECYCLE_CREDENTIAL_NOT_LOADED")
         get_tree().quit(1)
         return
+    if client.get_parent()._dock._token.text != client.token:
+        push_error("EDITOR_LIFECYCLE_DOCK_CREDENTIAL_MISSING")
+        get_tree().quit(1)
+        return
     if not client.want_connection:
         push_error("EDITOR_LIFECYCLE_AUTOCONNECT_MISSING")
         get_tree().quit(1)

@@ -32,13 +32,14 @@ func _enter_tree() -> void:
     add_child(_client)
     Engine.set_meta("aurion_editor_client", _client)
     _dock = EditDock.new()
-    _dock.bind_client(_client)
     add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 
 
 func _ready() -> void:
     # Child _ready() has completed the actual credential read before parent _ready().
-    # The dock is already bound; no deferred connection can outlive plugin teardown.
+    # Bind the dock after credentials load so manual reconnect retains the loaded value.
+    if is_instance_valid(_client) and is_instance_valid(_dock):
+        _dock.bind_client(_client)
     if is_instance_valid(_client) and _client.is_node_ready() and protected_editor_autoconnect_allowed(_client.credential_source_path, _client.token, _client.url):
         _client.connect_to_bridge()
 
