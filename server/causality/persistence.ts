@@ -17,6 +17,7 @@ import {
   type AurionCausalTickReceipt,
 } from "../../shared/aurionCausalTickContract";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
+import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldContract";
 import { operationalDate } from "../../shared/operationalClock";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
@@ -146,14 +147,19 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
   }
 
   async getLatestReceipt(zoneId: string): Promise<AurionCausalTickReceipt | null> {
-    const db = await getDb(); if (!db) return null;
-    const [row] = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.zoneId, zoneId)).orderBy(desc(aurionCausalTickReceipts.tick)).limit(1);
+    // A missing DB is not an empty receipt history: cold activation must fail
+    // closed instead of registering a new tick-zero zone over durable receipts.
+    const db = await getDb();
+    if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
+    // Bind the complete world/zone prefix of the existing tick index. A zone-only
+    // scan sorts the full receipt history and can exceed cold-recovery deadlines.
+    const [row] = await db.select().from(aurionCausalTickReceipts).where(and(eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID), eq(aurionCausalTickReceipts.zoneId, zoneId))).orderBy(desc(aurionCausalTickReceipts.tick)).limit(1);
     return row ? this.mapReceipt(row) : null;
   }
 
   async getRecordedTick(zoneId: string, tick: number): Promise<RecordedTickEntry | null> {
     const db = await getDb(); if (!db) return null;
-    const [receiptRow] = await db.select().from(aurionCausalTickReceipts).where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), eq(aurionCausalTickReceipts.tick, tick))).limit(1);
+    const [receiptRow] = await db.select().from(aurionCausalTickReceipts).where(and(eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID), eq(aurionCausalTickReceipts.zoneId, zoneId), eq(aurionCausalTickReceipts.tick, tick))).limit(1);
     if (!receiptRow) return null;
     const checkpoint = await this.getCheckpoint(zoneId, tick - 1);
     return {
@@ -167,7 +173,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     if (!Number.isSafeInteger(tick) || tick < 0) return null;
     const db = await getDb(); if (!db) return null;
     const [row] = await db.select().from(aurionCausalCheckpoints)
-      .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.tick, tick))).limit(1);
+      .where(and(eq(aurionCausalCheckpoints.worldId, GLOBAL_WORLD_ID), eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.tick, tick))).limit(1);
     if (!row) return null;
     return {
       id: row.id,
@@ -184,7 +190,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     if (!Number.isSafeInteger(tick) || tick < 0) return null;
     const db = await getDb(); if (!db) return null;
     const [row] = await db.select().from(aurionCausalCheckpoints)
-      .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), lte(aurionCausalCheckpoints.tick, tick)))
+      .where(and(eq(aurionCausalCheckpoints.worldId, GLOBAL_WORLD_ID), eq(aurionCausalCheckpoints.zoneId, zoneId), lte(aurionCausalCheckpoints.tick, tick)))
       .orderBy(desc(aurionCausalCheckpoints.tick))
       .limit(1);
     if (!row) return null;
@@ -218,7 +224,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
   async getTicksInRange(zoneId: string, fromTick: number, toTick: number): Promise<RecordedTickEntry[]> {
     const db = await getDb(); if (!db) return [];
     const rows = await db.select().from(aurionCausalTickReceipts)
-      .where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), gt(aurionCausalTickReceipts.tick, fromTick - 1), lt(aurionCausalTickReceipts.tick, toTick + 1)))
+      .where(and(eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID), eq(aurionCausalTickReceipts.zoneId, zoneId), gt(aurionCausalTickReceipts.tick, fromTick - 1), lt(aurionCausalTickReceipts.tick, toTick + 1)))
       .orderBy(aurionCausalTickReceipts.tick);
     return rows.map(row => ({ receipt: this.mapReceipt(row), intents: row.inputJson ? JSON.parse(row.inputJson) as AurionZoneIntent[] : undefined }));
   }

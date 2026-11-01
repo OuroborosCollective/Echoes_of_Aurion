@@ -20,7 +20,7 @@ describe("Aurion authority documentation", () => {
       "GDS darf keine Quest-, Dungeon- oder World-Truth setzen.",
     );
     expect(canonicalVisualWorkflow).toContain(
-      "Genkit hat in der Authoring-Lane keine Publish-, Tool- oder Gameplay-Authority.",
+      "Auch optionales OpenAI-Authoring hat keine Publish-, Tool- oder Gameplay-Authority.",
     );
   });
 

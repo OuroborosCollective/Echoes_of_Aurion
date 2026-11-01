@@ -24,7 +24,7 @@ import { isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
 import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword, DUMMY_LOCAL_AUTH_HASH } from "./localAuth";
-import { proposeAurionDeveloperChange, proposeGameDevAssetDesign } from "./liveDeveloperGenkit";
+import { proposeAurionDeveloperChange, proposeGameDevAssetDesign } from "./liveDeveloperAuthoring";
 import { hashGameDevAssetDesignWorkOrder } from "./liveDeveloperProtocol";
 import { applyGameDevelopmentStudioLiveAsset, gameDevelopmentStudioLiveAssetInputSchema, planGameDevelopmentStudioLiveAsset } from "./gameDevelopmentStudioProduction";
 import {

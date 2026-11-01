@@ -16,9 +16,6 @@ importers:
 
   .:
     dependencies:
-      '@genkit-ai/google-genai':
-        specifier: ^1.42.0
-        version: 1.42.0(genkit@1.42.0(@google-cloud/firestore@8.7.1)(firebase-admin@14.3.0))
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.64.0(react@19.2.1))
@@ -163,9 +160,6 @@ importers:
       framer-motion:
         specifier: ^12.23.22
         version: 12.23.22(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
-      genkit:
-        specifier: ^1.42.0
-        version: 1.42.0(@google-cloud/firestore@8.7.1)(firebase-admin@14.3.0)
       helmet:
         specifier: ^8.3.0
         version: 8.3.0

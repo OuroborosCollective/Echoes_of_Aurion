@@ -168,6 +168,79 @@ jobs:
           curl --fail --silent --show-error https://api.github.com/meta >/dev/null
           mkdir -p "$AURION_EVIDENCE_DIR"
           printf '{"scope":"runtime-uid","uid":%s,"loopbackAllowed":true,"externalEgressAllowed":false,"runnerControlPlaneAffected":false}\n'             "$AURION_NET_UID" > "$AURION_EVIDENCE_DIR/network-isolation.json"
+      - name: Prove genuine authenticated zone receipts before cold-start assurance
+        id: recovery_preflight
+        run: |
+          set -euo pipefail
+          NODE_BIN="$(command -v node)"
+          RUNTIME_ENTRY="$PWD/dist/index.js"
+          test -s "$RUNTIME_ENTRY"
+          pid=""
+          shutdown_preflight() {
+            if [[ -n "$pid" ]] && sudo kill -0 "$pid" 2>/dev/null; then
+              sudo kill -TERM "$pid"
+            fi
+          }
+          trap shutdown_preflight EXIT
+          # Isolate this REAL runtime from sudo/runner process-group teardown;
+          # SIGTERM is still delivered to the actual Node PID and its full durable
+          # shutdown receipt remains a mandatory, unmodified assertion below.
+          command -v setsid >/dev/null
+          # --wait keeps the launcher's supervision attached to the real Node process;
+          # its eventual exit status now reflects Node, not a detached setsid parent.
+          # Diagnostic only: --trace-exit reports a real Node process.exit call, never changes receipts or gates.
+          sudo -u aurion-netproof setsid --fork --wait env DATABASE_URL="$DATABASE_URL" AURION_TEST_SOURCE_SHA="$AURION_TEST_SOURCE_SHA" AURION_RELEASE_SHA="$AURION_RELEASE_SHA" AURION_EVIDENCE_DIR="$AURION_EVIDENCE_DIR" AURION_PRIVATE_STATE_DIR="$AURION_PRIVATE_STATE_DIR" AURION_GLB_STORAGE_DIR="$AURION_GLB_STORAGE_DIR" JWT_SECRET="$JWT_SECRET" VITE_APP_ID="$VITE_APP_ID" HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production "$NODE_BIN" --trace-exit "$RUNTIME_ENTRY" > test-results/starter-pilot-server-preflight.log 2>&1 &
+          preflight_launcher_pid=$!
+          # setsid --fork --wait has a supervising parent whose argv also contains
+          # dist/index.js. Match the REAL Node executable and its exact entrypoint,
+          # never an argv-substring in sudo/setsid or a different worker process.
+          for attempt in $(seq 1 50); do
+            for candidate in $(pgrep -u "$AURION_NET_UID" -x node || true); do
+              if [[ -r "/proc/$candidate/cmdline" ]] &&
+                 tr '\0' '\n' < "/proc/$candidate/cmdline" | grep -Fxq "$RUNTIME_ENTRY"; then
+                pid="$candidate"
+                break
+              fi
+            done
+            if [[ -n "$pid" ]]; then break; fi
+            sleep 0.1
+          done
+          test -n "$pid"
+          # Independent executable identity check before ever signaling a process.
+          test "$(ps -o comm= -p "$pid" | tr -d ' ')" = "node"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null
+          AURION_STARTER_VILLAGE_HTTP_E2E=1 AURION_STARTER_VILLAGE_PHASE=recovery-preflight pnpm exec vitest run server/starterVillagePilotHttp.test.ts --reporter=verbose
+          shutdown_preflight
+          preflight_stopped=0
+          for attempt in $(seq 1 120); do
+            if ! sudo kill -0 "$pid" 2>/dev/null &&
+               grep -Fq '[Aurion] graceful causal shutdown complete' test-results/starter-pilot-server-preflight.log; then
+              preflight_stopped=1
+              break
+            fi
+            sleep 0.1
+          done
+          if [[ "$preflight_stopped" != "1" ]]; then
+            echo "Authenticated preflight runtime or durable shutdown proof incomplete" >&2
+            ps -o pid,ppid,stat,comm,args -p "$pid" >&2 || true
+            ps -o pid,ppid,stat,comm,args -p "$preflight_launcher_pid" >&2 || true
+            launcher_state="$(ps -o stat= -p "$preflight_launcher_pid" 2>/dev/null | tr -d " " || true)"
+            if [[ -z "$launcher_state" || "$launcher_state" == Z* ]]; then
+              set +e
+              wait "$preflight_launcher_pid"
+              launcher_exit="$?"
+              set -e
+              echo "Preflight launcher exited with status $launcher_exit" >&2
+            fi
+            pgrep -a -u "$AURION_NET_UID" -f "dist/index.js" >&2 || true
+            tail -n 12 test-results/starter-pilot-server-preflight.log >&2
+            exit 1
+          fi
+          trap - EXIT
       - name: Start exact runtime and execute authenticated HTTP/tRPC journey
         id: journey
         run: |

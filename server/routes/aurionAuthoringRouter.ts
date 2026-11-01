@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { glbImportStore } from "../glbImportStore";
-import { proposeAurionAuthoringDraft } from "../liveDeveloperGenkit";
+import { proposeAurionAuthoringDraft } from "../liveDeveloperAuthoring";
 import {
   DungeonDesignDraftSchema,
   WorldDesignDraftSchema,
@@ -31,6 +31,7 @@ export const aurionAuthoringRouter = router({
         displayName: entry.displayName,
         purpose: entry.purpose,
         assetType: entry.assetType,
+        targetKey: entry.targetKey,
         subcategory: entry.subcategory,
       })),
       world,

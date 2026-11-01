@@ -3,6 +3,8 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { PoolConnection } from "mysql2/promise";
 import { getDb } from "./db";
+import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
+import { QuestPublishPlanSchema, type QuestPublishPlan } from "./questCompiler/questPublishContract";
 import { glbImportStore } from "./glbImportStore";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
 import {
@@ -278,6 +280,42 @@ export async function recoverWorldAuthoringReceipt(
   }
   const receipt = receiptIdentity({
     kind: "world", action: "apply", targetId, actorUserId, planHash,
+    previousHash: row.previousHash, resultHash: row.resultHash,
+  });
+  if (receipt.receiptId !== row.id || receipt.receiptHash !== row.receiptHash) throw new Error("AUTHORING_RECEIPT_HASH_INVALID");
+  return { status: "found", plan, receipt };
+}
+
+/** Read-only recovery of a committed quest publication. Absence is ambiguous;
+ * it never permits an automatic publish retry or certifies a failed publish. */
+export async function recoverQuestAuthoringReceipt(
+  actorUserId: number,
+  input: { proposalId: string; planHash: string },
+): Promise<{ status: "unresolved" } | { status: "found"; plan: QuestPublishPlan; receipt: AuthoringReceipt }> {
+  const db = await getDb();
+  if (!db) throw new Error("AUTHORING_DATABASE_REQUIRED");
+  const actor = (await db.select({ role: users.role }).from(users).where(eq(users.id, actorUserId)))[0];
+  if (actor?.role !== "admin") throw new Error("AUTHORING_ADMIN_REQUIRED");
+  const rows = await db.select().from(aurionAuthoringReceipts).where(and(
+    eq(aurionAuthoringReceipts.kind, "quest"),
+    eq(aurionAuthoringReceipts.action, "publish"),
+    eq(aurionAuthoringReceipts.targetId, input.proposalId),
+    eq(aurionAuthoringReceipts.actorUserId, actorUserId),
+    eq(aurionAuthoringReceipts.planHash, input.planHash),
+  )).limit(2);
+  if (!rows.length) return { status: "unresolved" };
+  if (rows.length !== 1) throw new Error("AUTHORING_RECEIPT_AMBIGUOUS");
+  const row = rows[0]!;
+  let plan: QuestPublishPlan;
+  try { plan = QuestPublishPlanSchema.parse(JSON.parse(row.payloadJson)); }
+  catch { throw new Error("AUTHORING_RECEIPT_PLAN_INVALID"); }
+  const { planHash, ...identity } = plan;
+  if (plan.proposalId !== input.proposalId || planHash !== input.planHash
+      || authoringHash(identity) !== planHash
+      || computeCanonicalHash("aurion.quest.template.v1", plan.template) !== plan.templateHash
+      || row.resultHash !== plan.templateHash) throw new Error("AUTHORING_RECEIPT_PLAN_INVALID");
+  const receipt = receiptIdentity({
+    kind: "quest", action: "publish", targetId: input.proposalId, actorUserId, planHash,
     previousHash: row.previousHash, resultHash: row.resultHash,
   });
   if (receipt.receiptId !== row.id || receipt.receiptHash !== row.receiptHash) throw new Error("AUTHORING_RECEIPT_HASH_INVALID");

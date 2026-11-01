@@ -1,5 +1,6 @@
 import {
   QuestAdminProposalSchema,
+  QuestDraftProposalDataSchema,
   QuestTemplateVersionSchema,
   type QuestAdminProposal,
   type QuestInstance,
@@ -64,6 +65,7 @@ export class AdminQuestStudioService {
   private readonly runtimeEngine: QuestRuntimeEngine;
   private readonly persistenceEngine: QuestPersistenceEngine;
   private readonly replayEngine: QuestReplayEngine;
+  private readonly seededTemplates: QuestTemplateVersion[];
   private hydrated = false;
 
   constructor(
@@ -77,6 +79,7 @@ export class AdminQuestStudioService {
     this.replayEngine = new QuestReplayEngine(this.templateRegistry, this.clock);
     for (const template of LEGACY_CANONICAL_QUEST_TEMPLATES) this.templateRegistry.registerTemplate(template);
     this.templateRegistry.registerTemplate(PILOT_WOLF_QUEST_TEMPLATE);
+    this.seededTemplates = this.templateRegistry.getAllTemplates().map(template => structuredClone(template));
     this.seedInitialRun();
   }
 
@@ -135,6 +138,35 @@ export class AdminQuestStudioService {
     return this.templateRegistry.getActiveTemplates();
   }
 
+  public async getAuthoringTemplatesPage(input: { after?: { templateId: string; version: number } | null; limit?: number }) {
+    await this.ensureHydrated();
+    const limit = input.limit ?? 20;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error("QUEST_TEMPLATE_PAGE_LIMIT_INVALID");
+    const after = input.after;
+    const eligible = this.templateRegistry.getAllTemplates().filter(template => !after
+      || template.templateId > after.templateId || (template.templateId === after.templateId && template.version < after.version));
+    const items = eligible.slice(0, limit).map(({ templateId, version, title, active, quarantined }) => ({ templateId, version, title, active, quarantined }));
+    const last = items.at(-1);
+    return { schemaVersion: "aurion.quest-template-page.v1" as const, items,
+      nextCursor: eligible.length > limit && last ? { templateId: last.templateId, version: last.version } : null };
+  }
+
+  public async getAuthoringTemplateVersion(input: { templateId: string; version: number }) {
+    // Process-local templates cannot independently confirm a durable publish.
+    await this.requireDurableAuthoringStorage();
+    // Receipt readback after a restart must not load unrelated graph history.
+    const stored = await this.persistenceEngine.getTemplateVersion(input.templateId, input.version);
+    const template = stored ?? this.seededTemplates.find(value => value.templateId === input.templateId && value.version === input.version);
+    if (!template) return { templates: [], nextVersion: null, durable: false };
+    const knownVersion = this.templateRegistry.getAllTemplates().filter(value => value.templateId === input.templateId)
+      .reduce((n, value) => Math.max(n, value.version), input.version);
+    return { templates: [template], nextVersion: await this.persistenceEngine.nextTemplateVersion(input.templateId, knownVersion), durable: stored !== undefined };
+  }
+
+  public async requireDurableAuthoringStorage(): Promise<void> {
+    if (!await getDb()) throw new Error("QUEST_AUTHORING_DURABLE_STORAGE_REQUIRED");
+  }
+
   public async listInstances(filter?: { playerUserId?: number; state?: string }): Promise<QuestInstance[]> {
     return this.persistenceEngine.listInstances(filter);
   }
@@ -162,7 +194,15 @@ export class AdminQuestStudioService {
     templateVersion: number;
     proposedDataJson: string;
   }): Promise<QuestAdminProposal> {
+    let draft: Record<string, unknown>;
+    try { draft = QuestDraftProposalDataSchema.parse(JSON.parse(params.proposedDataJson)); }
+    catch { throw new Error("QUEST_PROPOSAL_TEMPLATE_INVALID"); }
+    if ((draft.templateId !== undefined && draft.templateId !== params.templateId)
+        || (draft.version !== undefined && draft.version !== params.templateVersion)) throw new Error("QUEST_PROPOSAL_TEMPLATE_IDENTITY_MISMATCH");
+    if (Buffer.byteLength(params.proposedDataJson, "utf8") > 65_535) throw new Error("QUEST_PROPOSAL_TOO_LARGE");
     await this.ensureHydrated();
+    const complete = QuestTemplateVersionSchema.safeParse(draft);
+    if (complete.success) await this.persistenceEngine.assertTemplateVersionAvailable(complete.data);
     const proposalIdentity = computeCanonicalHash("aurion.quest.proposal.identity.v1", {
       authorUserId: params.authorUserId,
       templateId: params.templateId,
@@ -211,6 +251,7 @@ export class AdminQuestStudioService {
     if (template.templateId !== proposal.templateId || template.version !== proposal.templateVersion) throw new Error("QUEST_PROPOSAL_TEMPLATE_IDENTITY_MISMATCH");
     const validation = QuestValidator.validateTemplate(template);
     if (!validation.valid) throw new Error(`QUEST_TEMPLATE_VALIDATION_FAILED:${JSON.stringify(validation.diagnostics)}`);
+    await this.persistenceEngine.assertTemplateVersionAvailable(template);
     const templateHash = computeCanonicalHash("aurion.quest.template.v1", template);
     const identity = {
       schemaVersion: "aurion.authoring.v1" as const,
@@ -221,7 +262,9 @@ export class AdminQuestStudioService {
       templateHash,
       requiresHumanConfirmation: true as const,
     };
-    return QuestPublishPlanSchema.parse({ ...identity, planHash: authoringHash(identity) });
+    const plan = QuestPublishPlanSchema.parse({ ...identity, planHash: authoringHash(identity) });
+    if (Buffer.byteLength(JSON.stringify(plan), "utf8") > 65_535) throw new Error("QUEST_PUBLISH_PLAN_TOO_LARGE");
+    return plan;
   }
 
   public async publishProposal(actorUserId: number, proposalId: string, expectedPlanHash: string): Promise<{
@@ -544,7 +587,8 @@ export class AdminQuestStudioService {
       roleBindingHash: updated.roleBindingHash!,
     };
     if (updated.state === "completed") return source;
-    const zone = (await import("../zoneRuntime")).globalZoneRegistry.get("observatory_threshold");
+    const zone = (await import("../zoneRuntime")).globalZoneRegistry.find("observatory_threshold");
+    if (!zone) throw new Error("QUEST_ZONE_CONNECTION_REQUIRED");
     const connectionId = zone.connectionIdForUser(userId);
     if (!connectionId) throw new Error("QUEST_ZONE_CONNECTION_REQUIRED");
     if (!zone.combatSnapshot().find(actor => actor.entityId === `player:${userId}`)?.alive) throw new Error("QUEST_LIVING_PLAYER_REQUIRED");

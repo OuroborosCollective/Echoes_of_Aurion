@@ -17,6 +17,10 @@ import * as storage from "./storage";
 import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
 import { router } from "./_core/trpc";
 import type { TrpcContext } from "./_core/context";
+import { AdminQuestStudioService } from "./questCompiler/adminService";
+import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
+import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
+import { aurionQuestRouter } from "./routes/aurionQuestRouter";
 
 vi.mock("./storage", async importOriginal => ({
   ...await importOriginal<typeof import("./storage")>(),
@@ -83,6 +87,8 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     await pool.execute("DELETE FROM glbAssetSubmissions WHERE submittedByUserId = ?", [otherAdmin]);
     await pool.execute("DELETE FROM glbAssets WHERE createdByUserId = ?", [otherAdmin]);
     await pool.execute("DELETE FROM aurionAuthoringReceipts WHERE actorUserId IN (?, ?)", [admin, otherAdmin]);
+    await pool.execute("DELETE FROM aurionQuestAdminProposals WHERE authorUserId IN (?, ?)", [admin, otherAdmin]);
+    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId = ?", ["inspector-native-quest"]);
     await pool.execute("DELETE FROM aurionWorldDesignVersions WHERE createdByUserId IN (?, ?)", [admin, otherAdmin]);
     await pool.execute("UPDATE users SET role = 'admin' WHERE id = ?", [admin]);
     await pool.execute("UPDATE users SET role = 'admin' WHERE id = ?", [otherAdmin]);
@@ -98,6 +104,121 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     if (store) await store.close();
     if (root) await rm(root, { recursive: true, force: true });
   });
+
+  it("recovers only the current admin's exact committed quest publication and rejects corrupt evidence", async () => {
+    const recovery = Reflect.get(await import("./aurionAuthoringPersistence"), "recoverQuestAuthoringReceipt");
+    expect(typeof recovery).toBe("function");
+    const service = new AdminQuestStudioService();
+    const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1, active: true, quarantined: false };
+    const proposal = await service.createDraftProposal({ authorUserId: admin, templateId: template.templateId, templateVersion: template.version, proposedDataJson: JSON.stringify(template) });
+    const plan = await service.planPublishProposal(proposal.id);
+    const caller = aurionQuestRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    expect(await caller.publishPlan({ proposalId: proposal.id })).toEqual(plan);
+    const lookup = { proposalId: proposal.id, planHash: plan.planHash };
+    expect(await recovery(admin, lookup)).toEqual({ status: "unresolved" });
+    const published = await caller.publish({ proposalId: proposal.id, expectedPlanHash: plan.planHash, confirmation: "PUBLISH_QUEST_TEMPLATE" });
+    const recovered = await recovery(admin, lookup);
+    expect(recovered).toEqual({ status: "found", plan, receipt: published.receipt });
+    expect(await recovery(admin, lookup)).toEqual(recovered);
+    expect(await recovery(otherAdmin, lookup)).toEqual({ status: "unresolved" });
+    expect(await recovery(admin, { ...lookup, planHash: "0".repeat(64) })).toEqual({ status: "unresolved" });
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT receiptHash,resultHash,payloadJson FROM aurionAuthoringReceipts WHERE id=?", [published.receipt.receiptId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.receiptHash).toBe(published.receipt.receiptHash);
+    expect(rows[0]!.resultHash).toBe(plan.templateHash);
+    await pool.execute("UPDATE aurionAuthoringReceipts SET payloadJson=? WHERE id=?", [JSON.stringify({ ...plan, template: { ...plan.template, title: "Tampered" } }), published.receipt.receiptId]);
+    await expect(recovery(admin, lookup)).rejects.toThrow("AUTHORING_RECEIPT_PLAN_INVALID");
+    await pool.execute("UPDATE aurionAuthoringReceipts SET payloadJson=?,receiptHash=? WHERE id=?", [rows[0]!.payloadJson, "0".repeat(64), published.receipt.receiptId]);
+    await expect(recovery(admin, lookup)).rejects.toThrow("AUTHORING_RECEIPT_HASH_INVALID");
+    await pool.execute("UPDATE users SET role='user' WHERE id=?", [admin]);
+    await expect(recovery(admin, lookup)).rejects.toThrow("AUTHORING_ADMIN_REQUIRED");
+    const [count] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionAuthoringReceipts WHERE kind='quest' AND actorUserId=?", [admin]);
+    expect(Number(count[0]!.n)).toBe(1);
+  });
+
+  it("exposes canonical target binding so world placements exclude assigned family assets", async () => {
+    const caller = aurionAuthoringRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    expect((await caller.catalog()).assets.find(asset => asset.assetId === assetId)).toHaveProperty("targetKey", null);
+    const assignmentId = "isolated-world-authoring-family";
+    await pool.execute("INSERT INTO glbAssignments (id,assetId,targetType,targetKey,active,assignedByUserId) VALUES (?,?,'arena','starter_lod0',1,?)", [assignmentId, assetId, admin]);
+    try {
+      const catalog = await caller.catalog();
+      expect(catalog.assets.find(asset => asset.assetId === assetId)).toHaveProperty("targetKey", "starter_lod0");
+      await expect(planWorldDesign({ ...draft("fixture-bound-family"), expectedCatalogRevision: catalog.glbCatalogRevision }))
+        .rejects.toThrow("AUTHORING_WORLD_ASSET_NOT_APPROVED");
+    } finally {
+      await pool.execute("DELETE FROM glbAssignments WHERE id=?", [assignmentId]);
+    }
+  });
+
+  it.each(["title", "unsafe-number"])("rejects unpersistable quest %s before saving a proposal", async kind => {
+    const service = new AdminQuestStudioService();
+    const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1 };
+    if (kind === "title") template.title = "t".repeat(256);
+    else template.nodes = template.nodes.map(node => node.objective ? { ...node, objective: { ...node.objective, targetValue: 9007199254740992 } } : node);
+    expect(QuestTemplateVersionSchema.safeParse(template).success).toBe(false);
+    await expect(service.createDraftProposal({ authorUserId: admin, templateId: template.templateId, templateVersion: 1, proposedDataJson: JSON.stringify(template) })).rejects.toThrow();
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionQuestAdminProposals WHERE authorUserId=?", [admin]);
+    expect(Number(rows[0]!.n)).toBe(0);
+  });
+
+  it("pages the canonical version history and reads one publication beyond an 8 MiB active history", async () => {
+    const initial = new AdminQuestStudioService();
+    const seed = (await initial.getTemplates())[0]!;
+    expect((await initial.getAuthoringTemplateVersion(seed)).durable).toBe(false);
+    const base = { ...seed, templateId: "inspector-native-quest", description: "x".repeat(55_000) };
+    const persist = async (version: number, active: boolean) => {
+      const template = QuestTemplateVersionSchema.parse({ ...base, version, active, quarantined: !active });
+      await pool.execute("INSERT INTO aurionQuestTemplateVersions (templateId,version,title,description,templateJson,templateHash,active,quarantined) VALUES (?,?,?,?,?,?,?,?)", [template.templateId, version, template.title, template.description, JSON.stringify(template), computeCanonicalHash("aurion.quest.template.v1", template), active, !active]);
+      return template;
+    };
+    for (let version = 1; version <= 160; version++) await persist(version, version < 160);
+    const service = new AdminQuestStudioService();
+    expect(Buffer.byteLength(JSON.stringify(await service.getTemplates()), "utf8")).toBeGreaterThan(8 * 1024 * 1024);
+    const page = Reflect.get(service, "getAuthoringTemplatesPage");
+    const target = Reflect.get(service, "getAuthoringTemplateVersion");
+    expect(typeof page).toBe("function");
+    expect(typeof target).toBe("function");
+    const seen: number[] = [];
+    let after: unknown = undefined;
+    do {
+      const result = await page.call(service, { after, limit: 20 });
+      expect(result.schemaVersion).toBe("aurion.quest-template-page.v1");
+      expect(result.items.length).toBeLessThanOrEqual(20);
+      expect(Buffer.byteLength(JSON.stringify(result), "utf8")).toBeLessThan(32_768);
+      for (const item of result.items) if (item.templateId === base.templateId) seen.push(item.version);
+      after = result.nextCursor;
+    } while (after);
+    expect([...new Set(seen)]).toHaveLength(160);
+    expect(seen).toContain(160); // Includes the inactive, quarantined version.
+    await persist(200, false); // A fresh DB maximum must supersede the hydrated catalog.
+    const copied = await target.call(service, { templateId: base.templateId, version: 1 });
+    expect(copied.nextVersion).toBe(201);
+    expect(copied.templates).toHaveLength(1);
+    const conflicting = { ...copied.templates[0], version: 160, title: "Changed occupied version", active: true, quarantined: false };
+    await expect(service.createDraftProposal({ authorUserId: admin, templateId: base.templateId, templateVersion: 160, proposedDataJson: JSON.stringify(conflicting) })).rejects.toThrow("QUEST_TEMPLATE_VERSION_CONFLICT");
+    const draft = { ...copied.templates[0], version: copied.nextVersion, active: true, quarantined: false };
+    const proposal = await service.createDraftProposal({ authorUserId: admin, templateId: base.templateId, templateVersion: draft.version, proposedDataJson: JSON.stringify(draft) });
+    const plan = await service.planPublishProposal(proposal.id);
+    const published = await service.publishProposal(admin, proposal.id, plan.planHash);
+    const readback = await target.call(service, { templateId: base.templateId, version: 201 });
+    expect(readback.durable).toBe(true);
+    expect(readback.templates).toEqual([published.template]);
+    expect(Buffer.byteLength(JSON.stringify(readback), "utf8")).toBeLessThan(128_000);
+    const caller = aurionQuestRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    expect((await caller.authoringTemplates({ limit: 20 })).items.length).toBeLessThanOrEqual(20);
+    expect((await caller.authoringTemplate({ templateId: base.templateId, version: 201 })).templates).toEqual([published.template]);
+    await expect(caller.authoringTemplates({ limit: 21 })).rejects.toThrow();
+    const unauthorized = aurionQuestRouter.createCaller({ user: null } as TrpcContext);
+    await expect(unauthorized.authoringTemplate({ templateId: base.templateId, version: 201 })).rejects.toThrow();
+    // A cold targeted read must not hydrate or trust unrelated graph history.
+    await pool.execute("INSERT INTO aurionQuestTemplateVersions (templateId,version,title,description,templateJson,templateHash,active,quarantined) VALUES (?,300,'Corrupt unrelated fixture','','{}',?,0,1)", [base.templateId, "0".repeat(64)]);
+    const cold = new AdminQuestStudioService();
+    expect((await cold.getAuthoringTemplateVersion({ templateId: base.templateId, version: 201 })).templates).toEqual([published.template]);
+    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId=? AND version=300", [base.templateId]);
+    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId=? AND version=201", [base.templateId]);
+    expect((await target.call(service, { templateId: base.templateId, version: 201 })).templates).toEqual([]);
+  }, 60_000);
 
   it("reads historical plans and binds new plans and receipts to the actual predecessor", async () => {
     const previous = await seedLegacy("fixture-legacy");
