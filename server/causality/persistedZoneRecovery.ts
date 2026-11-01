@@ -74,8 +74,10 @@ export async function restorePersistedZoneHead(
     previousHash = entry.receipt.receiptHash;
   }
 
+  // A verified historical head retains the ruleset already supported by
+  // restoreFromCanonicalState; the live default is not a migration command.
   if (previousHash !== latest.receiptHash || state.tick !== latest.tick
-    || state.ruleset !== AURION_ZONE_RULESET_VERSION) {
+    || !["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) {
     throw new Error(`${errorPrefix}_HEAD_INVALID`);
   }
   if (state.players.length) throw new Error(`${errorPrefix}_PRESENCE_RECOVERY_REQUIRED`);

@@ -6,6 +6,7 @@ on:
       - 'server/aurionProductionGameplaySession*'
       - 'server/aurionProductionGameplayPersistence*'
       - 'server/causality/persistence.ts'
+      - 'server/causality/persistedZoneRecovery.ts'
       - 'server/zoneRuntime.ts'
       - 'shared/aurionProductionProbeEvidence.ts'
       - 'scripts/aurion-probe-bootstrap*'
