@@ -14,8 +14,8 @@ var _owns_autoload := false
 const PROTECTED_EDITOR_CREDENTIAL := "/run/credentials/serverin-aurion-godot-editor.service/aurion-editor"
 
 
-static func protected_editor_autoconnect_allowed(credential_path: String, credential: String) -> bool:
-    return credential_path == PROTECTED_EDITOR_CREDENTIAL and credential.length() >= 32 and credential.length() <= 256
+static func protected_editor_autoconnect_allowed(credential_path: String, credential: String, endpoint: String = "ws://127.0.0.1:8765/godot") -> bool:
+    return credential_path == PROTECTED_EDITOR_CREDENTIAL and credential.length() >= 32 and credential.length() <= 256 and endpoint == "ws://127.0.0.1:8765/godot"
 
 
 func _enter_tree() -> void:
@@ -33,7 +33,7 @@ func _enter_tree() -> void:
     Engine.set_meta("aurion_editor_client", _client)
     # The scene-tree _ready() has loaded the credential file, if available.
     # This is an editor observer only; Godot gets no gameplay/write authority.
-    if protected_editor_autoconnect_allowed(OS.get_environment("AURION_BRIDGE_TOKEN_FILE"), _client.token):
+    if protected_editor_autoconnect_allowed(_client.credential_source_path, _client.token, _client.url):
         _client.call_deferred("connect_to_bridge")
 
     _dock = EditDock.new()
