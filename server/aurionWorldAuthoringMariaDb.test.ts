@@ -191,6 +191,11 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     await expect(caller.authoringTemplates({ limit: 21 })).rejects.toThrow();
     const unauthorized = aurionQuestRouter.createCaller({ user: null } as TrpcContext);
     await expect(unauthorized.authoringTemplate({ templateId: base.templateId, version: 201 })).rejects.toThrow();
+    // A cold targeted read must not hydrate or trust unrelated graph history.
+    await pool.execute("INSERT INTO aurionQuestTemplateVersions (templateId,version,title,description,templateJson,templateHash,active,quarantined) VALUES (?,300,'Corrupt unrelated fixture','','{}',?,0,1)", [base.templateId, "0".repeat(64)]);
+    const cold = new AdminQuestStudioService();
+    expect((await cold.getAuthoringTemplateVersion({ templateId: base.templateId, version: 201 })).templates).toEqual([published.template]);
+    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId=? AND version=300", [base.templateId]);
     await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId=? AND version=201", [base.templateId]);
     expect((await target.call(service, { templateId: base.templateId, version: 201 })).templates).toEqual([]);
   }, 60_000);

@@ -151,7 +151,7 @@ export class AdminQuestStudioService {
   }
 
   public async getAuthoringTemplateVersion(input: { templateId: string; version: number }) {
-    await this.ensureHydrated();
+    // Receipt readback after a restart must not load unrelated graph history.
     const template = await this.persistenceEngine.getTemplateVersion(input.templateId, input.version)
       ?? this.seededTemplates.find(value => value.templateId === input.templateId && value.version === input.version);
     if (!template) return { templates: [], nextVersion: null };
