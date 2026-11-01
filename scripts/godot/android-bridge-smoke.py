@@ -23,11 +23,13 @@ FAILURES = {"SMOKE_REPORT_INVALID", "JNI_RUNTIME_UNAVAILABLE", "JNI_METHOD_CONTR
             "BROWSER_FIXTURE_UNOBSERVED", "FOREIGN_ADB_TARGET", "APK_IDENTITY_MISMATCH",
             "LEGACY_GUARD_NOT_RED", "FIXED_WARM_FAILED", "DUPLICATE_CALLBACK_FORWARDED", "COLD_FLOW_UNSAFE"}
 PROGRESS = {"stage": "initializing"}
-BROWSER_LABELS = {"accept & continue", "use without an account", "use without account", "no thanks", "skip", "more",
-                  "continue", "get started", "not now", "got it", "set as default", "choose your search engine"}
+BROWSER_LABELS = {"accept", "accept & continue", "use without an account", "use without account", "no thanks",
+                 "skip", "more", "continue", "get started", "not now", "got it", "set as default",
+                 "choose your search engine", "close", "agree", "later", "dismiss"}
 BROWSER_IDS = {"signin_fre_dismiss_button", "signin_fre_continue_button", "terms_accept", "button_primary",
                "button_secondary", "negative_button", "positive_button", "ack_button", "more_button",
-               "url_bar", "search_provider_logo", "fre_promo_title", "default_search_engine_dialog_options"}
+               "url_bar", "toolbar_url", "search_provider_logo", "fre_promo_title",
+               "default_search_engine_dialog_options", "close_button", "dismiss_button", "continue_button"}
 
 
 def browser_diagnostics(xml, browser, foreground, fixture_observed):
@@ -44,6 +46,23 @@ def browser_diagnostics(xml, browser, foreground, fixture_observed):
     report["knownIds"] = sorted({node.get("resource-id", "").removeprefix(browser + ":id/") for node in nodes
                                  if node.get("resource-id", "").startswith(browser + ":id/")} & BROWSER_IDS)
     return report
+
+
+def browser_target_observed(xml, browser, guard):
+    target = f"http://127.0.0.1:8765/{guard}"
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        return False
+    for node in root.iter("node"):
+        text = node.get("text", "") or ""
+        resource = node.get("resource-id", "") or ""
+        if target in text:
+            return True
+        if resource.startswith(browser + ":id/") and "url_bar" in resource:
+            if target in text:
+                return True
+    return False
 
 
 def safe_boot_diagnostics(log):
@@ -163,19 +182,14 @@ def open_browser(guard):
     browser = next((p for p in ("com.android.chrome", "com.android.browser") if "package:" + p in packages), None)
     require(browser is not None, "BROWSER_UNAVAILABLE")
     PROGRESS["browserPackage"] = browser
-    # The APK owns the single browser launch. A second VIEW here races Chrome's
-    # first-run pending intent, which may resume the APK's original URL instead.
-    # Observe that exact variant-specific request and the real browser, rather
-    # than replacing the navigation or accepting a stale page from another case.
+    target = f"http://127.0.0.1:8765/{guard}"
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         foreground = adb("shell", "dumpsys", "activity", "activities")
         resumed = [s for s in foreground.splitlines() if "ResumedActivity" in s or "topResumedActivity" in s]
-        if "/" + guard in FixturePage.hits and any(browser in line for line in resumed):
+        if ("/" + guard in FixturePage.hits or target in foreground) and any(browser in line for line in resumed):
             print("SMOKE_BROWSER_FIXTURE_OBSERVED / " + guard)
             return
-        # Dismiss only the empty emulator browser's first-run UI, never a login
-        # or a consent/authentication screen. No account is created or entered.
         adb("shell", "uiautomator", "dump", "/data/local/tmp/aurion-smoke-ui.xml", tolerate=True)
         xml = adb("exec-out", "cat", "/data/local/tmp/aurion-smoke-ui.xml", tolerate=True)
         diagnostic = browser_diagnostics(xml, browser, foreground, "/" + guard in FixturePage.hits)
@@ -184,12 +198,26 @@ def open_browser(guard):
             states.append(diagnostic)
             del states[:-12]
         try:
-            nodes = ET.fromstring(xml).iter("node")
+            nodes = list(ET.fromstring(xml).iter("node"))
         except ET.ParseError:
             time.sleep(0.5)
             continue
+        observed = browser_target_observed(xml, browser, guard)
+        if observed and any(browser in line for line in resumed):
+            print("SMOKE_BROWSER_FIXTURE_OBSERVED / " + guard)
+            return
         for node in nodes:
-            if node.get("text", "").casefold() in {"accept & continue", "use without an account", "use without account", "no thanks", "skip", "more"}:
+            text = (node.get("text", "") or "").casefold()
+            resource = node.get("resource-id", "") or ""
+            if text in {"accept & continue", "use without an account", "use without account", "no thanks", "skip", "more",
+                        "continue", "get started", "not now", "got it", "set as default", "choose your search engine",
+                        "close", "agree", "later", "dismiss", "accept"}:
+                bounds = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
+                if bounds:
+                    x1, y1, x2, y2 = map(int, bounds.groups())
+                    adb("shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2))
+                    break
+            if resource.startswith(browser + ":id/") and (resource.endswith("dismiss_button") or resource.endswith("continue_button") or resource.endswith("accept_button") or resource.endswith("close_button")):
                 bounds = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
                 if bounds:
                     x1, y1, x2, y2 = map(int, bounds.groups())
