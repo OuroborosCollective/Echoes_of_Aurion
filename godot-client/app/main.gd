@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 17399)
-Total output lines: 1593
-
 extends Control
 
 const RuntimeConfig = preload("res://config/runtime_config.gd")
@@ -815,7 +812,38 @@ func _select_visible_target_at(screen_point: Vector2) -> void:
 
 func _refresh_target_hud() -> void:
 	if not _is_visible_confirmed_entity(_selected_target_id):
-		_selected_…399 tokens truncated…nd_if_due(now_ms, axes, _zone_socket, true)
+		_selected_target_id = ""
+	target_label.text = "Ziel: keines" if _selected_target_id.is_empty() else "Aurion bestätigt · " + _selected_target_id
+	var mob: Dictionary = _entities.record("mobs", _selected_target_id)
+	world_action.disabled = not _world_input_permitted() or mob.is_empty() or mob.get("state", "dead") == "dead"
+	if mobile_hud.visible:
+		mobile_hud.render_projection(_confirmed_zone, _entities, _selected_target_id, _world_is_stale, not world_action.disabled, combat_notice.text if combat_notice.visible else "")
+
+func _on_world_action_pressed() -> void:
+	# Only the existing v5 send_attack typed command; Aurion decides all
+	# reachability, damage, cooldown, and final action outcome.
+	if not _world_input_permitted():
+		return
+	_refresh_target_hud()
+	if world_action.disabled or _selected_target_id.is_empty():
+		return
+	_zone_socket.send_attack(_selected_target_id)
+
+## G20: InputMap and the pinned native Godot joystick are presentation inputs.
+## Only a verified v5 session may send digital intents, max once per 100 ms.
+## No client-side motion, velocity, coordinates or gameplay simulation.
+func _poll_move_intent(now_ms: int) -> void:
+	if _zone_socket == null:
+		return
+	var connected: bool = _zone_socket.state_name() == "connected"
+	var permitted: bool = _world_input_permitted()
+	if not permitted:
+		_movement.cancel(_zone_socket, connected)
+		return
+	var axes: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward", 0.2)
+	if mobile_joystick.visible and bool(mobile_joystick.get("is_pressed")):
+		axes = mobile_joystick.get("output")
+	_movement.send_if_due(now_ms, axes, _zone_socket, true)
 
 func _cancel_move_intent() -> void:
 	if mobile_joystick != null:
