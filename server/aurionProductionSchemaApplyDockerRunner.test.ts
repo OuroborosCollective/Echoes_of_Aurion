@@ -132,4 +132,25 @@ describe("Aurion production schema apply boundary", () => {
     expect(core).toContain(`postflight:{migrationCount:${count},matchCount:${count},absentCount:0,driftCount:0}`);
   });
 
+  it("binds production schema readback and final release to the exact applied 0076 migration wave", () => {
+    const wave = JSON.parse(read("config/aurion-migration-wave-0021-0076-manifest.json"));
+    const tags = wave.migrations.map((migration: { tag: string }) => migration.tag);
+    expect(wave.waveId).toBe("aurion-production-0021-0076");
+    expect(wave.policy.futureTagsRequireNewManifest).toBe(true);
+    expect(tags).toHaveLength(55);
+    expect(tags.at(-1)).toBe("0076_aurion_investigation_deduction_receipts");
+    expect(tags).toContain("0049_aurion_causal_receipt_v2");
+
+    const readbackWorkflow = read(".github/workflows/aurion-production-schema-readback.yml");
+    const expectedList = readbackWorkflow.match(/const expectedTags=\[([\s\S]*?)\];/);
+    expect(expectedList).not.toBeNull();
+    const actualTags = Array.from(expectedList![1].matchAll(/"([0-9]{4}_[a-z0-9_]+)"/g), (match) => match[1]);
+    expect(actualTags).toEqual(tags);
+
+    const releaseWorkflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
+    expect(releaseWorkflow).toContain(
+      'const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8"));',
+    );
+  });
+
 });
