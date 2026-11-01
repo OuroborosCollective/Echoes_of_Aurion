@@ -56,7 +56,7 @@ for(const guard of ['legacy','fixed']) {
   for(const args of [['--editor','--import'],['--script','res://test_bridge_smoke_report.gd'],['--export-debug','Android Preview',apk]]) {
    const overridePath=join(project,'override.cfg');
    const smokeOverrides=await readFile(overridePath,'utf8');
-   if(args[0]==='--script') await writeFile(overridePath,smokeOverrides.replace('[autoload]\\nAurionBridgeSmoke="*res://bridge_smoke.gd"\\n',''));
+   if(args[0]==='--script') await writeFile(overridePath,smokeOverrides.split('\n').filter(line=>!line.startsWith('AurionBridgeSmoke=')).join('\n'));
    const result=spawnSync(executable,['--headless','--path',project,...args],{env,encoding:'utf8',timeout:180000,maxBuffer:8*1024*1024});
    await writeFile(overridePath,smokeOverrides);
    if(args[0]==='--script' && result.status!==0) console.error(result.stdout+result.stderr);
