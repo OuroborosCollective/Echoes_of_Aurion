@@ -88,6 +88,8 @@ func verify() -> void:
 	if studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"):
 		var before_staging := fake.sent.size()
 		studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[{"assetId":"glb_test_barrel","sha256":SHA,"assetType":"arena","purpose":"world-environment","displayName":"Fixture barrel"}]}, SESSION, generation)
+		require(studio.new_world_draft("owner.village", "Owner village", 1), "form could not create a local catalog-bound draft")
+		require(studio.stage_catalog_placement(draft().placements[0]), "first catalog placement could not enter an empty local draft")
 		require(studio.import_world_draft(JSON.stringify(draft())), "valid catalog-bound draft import rejected")
 		var placement: Dictionary = draft().placements[0].duplicate(true)
 		placement.placementKey = "barrel-two"
