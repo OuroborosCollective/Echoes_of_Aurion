@@ -122,6 +122,16 @@ describe("Wave 2 Step 26 WASD AIM-293 action gateway contract",()=>{
     expect("requests" in blocked).toBe(false);
   });
 
+  it("keeps a fully stocked trade feasible with its requested quantity",()=>{
+    const ctx=context(19506,10);
+    const ready=planMerchantAction(ctx);
+    expect(ready.status).toBe("ready");
+    if(ready.status!=="ready") return;
+    expect(ready.resolution.quantity).toBeGreaterThan(3);
+    expect(ready.resolution.market.stock.rune_core).toBe(10-ready.resolution.quantity);
+    expect(validateMerchantAction({context:ctx,intent:ready.intent,lease:ready.proposedLease}).status).toBe("validated");
+  });
+
   it("rejects JSON look-alikes and blocked source plans before effect requests exist",()=>{
     const ctx=context();
     expect(()=>planMerchantAction({...ctx,confirmedDecision:{...ctx.confirmedDecision}} as MerchantGatewayContext)).toThrow(/CONFIRMED_SOURCE_REQUIRED/);
