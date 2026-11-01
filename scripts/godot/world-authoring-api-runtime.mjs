@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 
 const [godot, project] = process.argv.slice(2);
 assert.ok(godot && project, 'Godot and project required');
-let identity = 0, applies = 0, redirects = 0, failures;
+let identity = 0, applies = 0, questPublishes = 0, redirects = 0, failures;
 const response = (res, value) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(value));
 const envelope = json => ({ result: { data: { json } } });
 const server = createServer(async (req, res) => {
@@ -18,6 +18,11 @@ const server = createServer(async (req, res) => {
       return;
     }
     assert.equal(req.headers.authorization, 'Bearer fixture-access-token');
+    if (req.url === '/api/trpc/aurionQuest.templates') {
+      assert.equal(req.method, 'GET');
+      response(res, envelope([{ templateId: 'quest.http-fixture', version: 1 }]));
+      return;
+    }
     if (req.url === '/api/trpc/auth.me') {
       assert.equal(req.method, 'GET');
       identity++;
@@ -42,6 +47,10 @@ const server = createServer(async (req, res) => {
       assert.deepEqual(data, { fixture: 'one-shot' });
       applies++;
       res.writeHead(503, { 'Content-Type': 'application/json' }).end('{}');
+    } else if (req.url === '/api/trpc/aurionQuest.publish') {
+      assert.deepEqual(data, { proposalId: 'prop_http_fixture', expectedPlanHash: 'a'.repeat(64), confirmation: 'PUBLISH_QUEST_TEMPLATE' });
+      questPublishes++;
+      res.writeHead(503, { 'Content-Type': 'application/json' }).end('{}');
     } else throw new Error(`unexpected path ${req.url}`);
   } catch (error) { failures ||= error; if (!res.headersSent) res.writeHead(500).end(); }
 });
@@ -60,5 +69,6 @@ assert.equal(timedOut, false);
 assert.equal(exit, 0);
 assert.equal(identity, 2);
 assert.equal(applies, 1, 'an apply was automatically repeated');
+assert.equal(questPublishes, 1, 'a quest publication was automatically repeated');
 assert.equal(redirects, 0, 'redirect was followed');
 assert.match(output, /GODOT_WORLD_AUTHORING_HTTP_PASS/);

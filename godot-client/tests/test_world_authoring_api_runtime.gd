@@ -62,6 +62,10 @@ func verify() -> void:
 	require(last_value.get("schemaVersion") == "aurion.world-design.v1", "independent readback failed")
 	await send(api, "catalog")
 	require(last_error == "REDIRECT_REJECTED", "redirect was followed or accepted")
+	await send(api, "questTemplates")
+	require(last_value.get("templates", []).size() == 1, "canonical quest template array was not decoded")
+	await send(api, "questPublish", {"proposalId":"prop_http_fixture", "expectedPlanHash":"a".repeat(64), "confirmation":"PUBLISH_QUEST_TEMPLATE"})
+	require(last_error == "HTTP_503", "quest publish uncertainty was not surfaced")
 	done = false
 	last_error = ""
 	require(api.request("identity", SERVER, SESSION, {}, true), "delayed identity did not start")
