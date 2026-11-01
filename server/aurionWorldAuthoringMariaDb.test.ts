@@ -17,6 +17,7 @@ import * as storage from "./storage";
 import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
 import { router } from "./_core/trpc";
 import type { TrpcContext } from "./_core/context";
+import { AdminQuestStudioService } from "./questCompiler/adminService";
 
 vi.mock("./storage", async importOriginal => ({
   ...await importOriginal<typeof import("./storage")>(),
@@ -83,6 +84,8 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     await pool.execute("DELETE FROM glbAssetSubmissions WHERE submittedByUserId = ?", [otherAdmin]);
     await pool.execute("DELETE FROM glbAssets WHERE createdByUserId = ?", [otherAdmin]);
     await pool.execute("DELETE FROM aurionAuthoringReceipts WHERE actorUserId IN (?, ?)", [admin, otherAdmin]);
+    await pool.execute("DELETE FROM aurionQuestAdminProposals WHERE authorUserId IN (?, ?)", [admin, otherAdmin]);
+    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId = ?", ["inspector-native-quest"]);
     await pool.execute("DELETE FROM aurionWorldDesignVersions WHERE createdByUserId IN (?, ?)", [admin, otherAdmin]);
     await pool.execute("UPDATE users SET role = 'admin' WHERE id = ?", [admin]);
     await pool.execute("UPDATE users SET role = 'admin' WHERE id = ?", [otherAdmin]);
@@ -97,6 +100,35 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     }
     if (store) await store.close();
     if (root) await rm(root, { recursive: true, force: true });
+  });
+
+  it("recovers only the current admin's exact committed quest publication and rejects corrupt evidence", async () => {
+    const recovery = Reflect.get(await import("./aurionAuthoringPersistence"), "recoverQuestAuthoringReceipt");
+    expect(typeof recovery).toBe("function");
+    const service = new AdminQuestStudioService();
+    const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1, active: true, quarantined: false };
+    const proposal = await service.createDraftProposal({ authorUserId: admin, templateId: template.templateId, templateVersion: template.version, proposedDataJson: JSON.stringify(template) });
+    const plan = await service.planPublishProposal(proposal.id);
+    const lookup = { proposalId: proposal.id, planHash: plan.planHash };
+    expect(await recovery(admin, lookup)).toEqual({ status: "unresolved" });
+    const published = await service.publishProposal(admin, proposal.id, plan.planHash);
+    const recovered = await recovery(admin, lookup);
+    expect(recovered).toEqual({ status: "found", plan, receipt: published.receipt });
+    expect(await recovery(admin, lookup)).toEqual(recovered);
+    expect(await recovery(otherAdmin, lookup)).toEqual({ status: "unresolved" });
+    expect(await recovery(admin, { ...lookup, planHash: "0".repeat(64) })).toEqual({ status: "unresolved" });
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT receiptHash,resultHash,payloadJson FROM aurionAuthoringReceipts WHERE id=?", [published.receipt.receiptId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.receiptHash).toBe(published.receipt.receiptHash);
+    expect(rows[0]!.resultHash).toBe(plan.templateHash);
+    await pool.execute("UPDATE aurionAuthoringReceipts SET payloadJson=? WHERE id=?", [JSON.stringify({ ...plan, template: { ...plan.template, title: "Tampered" } }), published.receipt.receiptId]);
+    await expect(recovery(admin, lookup)).rejects.toThrow("AUTHORING_RECEIPT_PLAN_INVALID");
+    await pool.execute("UPDATE aurionAuthoringReceipts SET payloadJson=?,receiptHash=? WHERE id=?", [rows[0]!.payloadJson, "0".repeat(64), published.receipt.receiptId]);
+    await expect(recovery(admin, lookup)).rejects.toThrow("AUTHORING_RECEIPT_HASH_INVALID");
+    await pool.execute("UPDATE users SET role='user' WHERE id=?", [admin]);
+    await expect(recovery(admin, lookup)).rejects.toThrow("AUTHORING_ADMIN_REQUIRED");
+    const [count] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionAuthoringReceipts WHERE kind='quest' AND actorUserId=?", [admin]);
+    expect(Number(count[0]!.n)).toBe(1);
   });
 
   it("reads historical plans and binds new plans and receipts to the actual predecessor", async () => {
