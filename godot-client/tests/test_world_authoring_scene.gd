@@ -93,7 +93,7 @@ func verify() -> void:
 		placement.placementKey = "barrel-two"
 		require(studio.stage_catalog_placement(placement), "approved catalog placement could not enter the draft")
 		require(JSON.parse_string(studio._draft.text).placements.size() == 2, "staged placement did not reach the existing reviewed draft")
-		var staged := studio._draft.text
+		var staged: String = studio._draft.text
 		require(not studio.stage_catalog_placement(placement), "duplicate placement key accepted")
 		placement.placementKey = "barrel-three"
 		placement.assetId = "glb_unknown_asset"
