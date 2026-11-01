@@ -69,7 +69,7 @@ func verify() -> void:
 	await send(api, "questTemplate", {"templateId":"quest.http-fixture", "version":1})
 	require(last_value.get("nextVersion") == 301, "quest copy lost the server-allocated next version")
 	await send(api, "questReadback", {"templateId":"quest.http-fixture", "version":300})
-	require(last_value.get("templates", []).size() == 1 and last_value.templates[0].version == 300, "exact-version independent quest readback failed")
+	require(last_value.get("templates", []).size() == 1 and last_value.templates[0].version == 300 and last_value.get("durable") == true, "exact-version independent durable quest readback failed")
 	await send(api, "questPublish", {"proposalId":"prop_http_fixture", "expectedPlanHash":"a".repeat(64), "confirmation":"PUBLISH_QUEST_TEMPLATE"})
 	require(last_error == "HTTP_503", "quest publish uncertainty was not surfaced")
 	done = false

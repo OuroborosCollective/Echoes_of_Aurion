@@ -1,6 +1,6 @@
 extends RefCounted
 ## Native presentation of Aurion's quest proposal/plan/publish contract.
-## No quest is evaluated here. Only a receipt plus a later GET confirms a publish.
+## No quest is evaluated here. Only a receipt plus a separate server readback confirms a publish.
 const Guard = preload("res://world/world_design_projection.gd")
 var phase := "closed"
 var message := ""
@@ -15,6 +15,9 @@ var _receipt: Dictionary = {}
 
 static func _text(value: Variant, minimum: int = 1, maximum: int = 128) -> bool:
 	return typeof(value) == TYPE_STRING and value.length() >= minimum and value.length() <= maximum and value.strip_edges() == value
+
+static func title_valid(value: Variant) -> bool:
+	return typeof(value) == TYPE_STRING and value.length() >= 1 and value.length() <= 255
 
 ## Godot parses JSON numbers as floats; an inline integer and its JSON
 ## round-trip must match without treating booleans or imprecise integers alike.
@@ -37,7 +40,7 @@ static func same_json(left: Variant, right: Variant) -> bool:
 	return left == right
 
 static func draft_valid(value: Variant) -> bool:
-	if typeof(value) != TYPE_DICTIONARY or not same_json(value, value) or not _text(value.get("templateId"), 1, 96) or not Guard._whole(value.get("version"), 1, 1000000) or not _text(value.get("title"), 1, 255) or typeof(value.get("description")) != TYPE_STRING:
+	if typeof(value) != TYPE_DICTIONARY or not same_json(value, value) or not _text(value.get("templateId"), 1, 96) or not Guard._whole(value.get("version"), 1, 1000000) or not title_valid(value.get("title")) or typeof(value.get("description")) != TYPE_STRING:
 		return false
 	if JSON.stringify(value).to_utf8_buffer().size() > 120000 or typeof(value.get("active")) != TYPE_BOOL or typeof(value.get("quarantined")) != TYPE_BOOL:
 		return false
@@ -139,7 +142,7 @@ func accept_publish(response: Variant) -> bool:
 	return true
 
 func accept_readback(response: Variant) -> bool:
-	if phase != "awaiting_readback" or _receipt.is_empty() or typeof(response) != TYPE_DICTIONARY or typeof(response.get("templates")) != TYPE_ARRAY or response.templates.size() > 4096: return false
+	if phase != "awaiting_readback" or _receipt.is_empty() or typeof(response) != TYPE_DICTIONARY or typeof(response.get("durable")) != TYPE_BOOL or response.durable != true or typeof(response.get("templates")) != TYPE_ARRAY or response.templates.size() > 4096: return false
 	var matches := 0
 	for template in response.templates:
 		if typeof(template) != TYPE_DICTIONARY: return false

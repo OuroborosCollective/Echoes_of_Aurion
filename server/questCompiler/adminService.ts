@@ -152,13 +152,19 @@ export class AdminQuestStudioService {
   }
 
   public async getAuthoringTemplateVersion(input: { templateId: string; version: number }) {
+    // Process-local templates cannot independently confirm a durable publish.
+    await this.requireDurableAuthoringStorage();
     // Receipt readback after a restart must not load unrelated graph history.
-    const template = await this.persistenceEngine.getTemplateVersion(input.templateId, input.version)
-      ?? this.seededTemplates.find(value => value.templateId === input.templateId && value.version === input.version);
-    if (!template) return { templates: [], nextVersion: null };
+    const stored = await this.persistenceEngine.getTemplateVersion(input.templateId, input.version);
+    const template = stored ?? this.seededTemplates.find(value => value.templateId === input.templateId && value.version === input.version);
+    if (!template) return { templates: [], nextVersion: null, durable: false };
     const knownVersion = this.templateRegistry.getAllTemplates().filter(value => value.templateId === input.templateId)
       .reduce((n, value) => Math.max(n, value.version), input.version);
-    return { templates: [template], nextVersion: await this.persistenceEngine.nextTemplateVersion(input.templateId, knownVersion) };
+    return { templates: [template], nextVersion: await this.persistenceEngine.nextTemplateVersion(input.templateId, knownVersion), durable: stored !== undefined };
+  }
+
+  public async requireDurableAuthoringStorage(): Promise<void> {
+    if (!await getDb()) throw new Error("QUEST_AUTHORING_DURABLE_STORAGE_REQUIRED");
   }
 
   public async listInstances(filter?: { playerUserId?: number; state?: string }): Promise<QuestInstance[]> {

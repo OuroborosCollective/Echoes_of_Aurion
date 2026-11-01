@@ -185,7 +185,10 @@ func verify_quest_contract() -> void:
 	require(not state.accept_publish(bad), "wrong quest effect hash was accepted")
 	require(state.accept_publish(response) and state.phase == "awaiting_readback", "publish response incorrectly certified independent readback")
 	require(not state.accept_readback({"templates":[]}), "absent quest was reported as confirmed")
-	require(state.accept_readback({"templates":[d]}) and state.phase == "confirmed", "independent matching quest readback rejected")
+	for durability in [null, false, 1]:
+		require(not state.accept_readback({"templates":[d], "durable":durability}), "unproven storage cleared the quest publication state")
+	require(not state.accept_readback({"templates":[d]}), "missing durability evidence confirmed a quest publication")
+	require(state.accept_readback({"templates":[d], "durable":true}) and state.phase == "confirmed", "independent matching durable quest readback rejected")
 	var pending := {"schemaVersion":"aurion.quest-authoring-pending.v1", "actorUserId":42, "proposalId":proposal.id,
 		"planHash":p.planHash, "templateId":d.templateId, "version":d.version, "templateHash":p.templateHash}
 	state.close()
@@ -193,7 +196,7 @@ func verify_quest_contract() -> void:
 	require(state.begin_publish(d).is_empty() and state.begin_proposal(d).is_empty(), "ambiguous quest publish was automatically retried")
 	require(not state.accept_recovered(pending, {"status":"unresolved"}) and state.phase == "unknown", "absent receipt was treated as rejection")
 	require(state.accept_recovered(pending, {"status":"found", "plan":p, "receipt":receipt}), "exact recovered quest receipt rejected")
-	require(state.accept_readback({"templates":[d]}), "recovered quest lacked independent readback")
+	require(state.accept_readback({"templates":[d], "durable":true}), "recovered quest lacked independent durable readback")
 	var path := "user://aurion-test-quest-pending-%d" % Time.get_ticks_usec()
 	var journal: Variant = load(journal_path).new(path)
 	var second: Variant = load(journal_path).new(path)

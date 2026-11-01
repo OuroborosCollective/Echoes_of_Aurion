@@ -141,7 +141,7 @@ func load_more_templates() -> void:
 		_set_message("Nächste Vorlagenseite konnte nicht angefordert werden.")
 
 static func _summary_valid(value: Variant) -> bool:
-	return typeof(value) == TYPE_DICTIONARY and value.size() == 5 and State._text(value.get("templateId"), 1, 96) and State.Guard._whole(value.get("version"), 1, 2147483647) and State._text(value.get("title"), 1, 255) and typeof(value.get("active")) == TYPE_BOOL and typeof(value.get("quarantined")) == TYPE_BOOL
+	return typeof(value) == TYPE_DICTIONARY and value.size() == 5 and State._text(value.get("templateId"), 1, 96) and State.Guard._whole(value.get("version"), 1, 2147483647) and State.title_valid(value.get("title")) and typeof(value.get("active")) == TYPE_BOOL and typeof(value.get("quarantined")) == TYPE_BOOL
 
 static func _cursor_valid(value: Variant) -> bool:
 	return typeof(value) == TYPE_DICTIONARY and value.size() == 2 and State._text(value.get("templateId"), 1, 96) and State.Guard._whole(value.get("version"), 1, 2147483647)

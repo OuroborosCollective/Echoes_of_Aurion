@@ -536,7 +536,7 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				return
 			var eligible: Array[String] = []
 			for asset in data.assets:
-				if typeof(asset) == TYPE_DICTIONARY and asset.get("assetType") == "arena" and asset.get("purpose") in ["world-environment", "world-nature"] and WorldProjection._id(asset.get("assetId"), true) and WorldProjection._hex(asset.get("sha256"), 64):
+				if typeof(asset) == TYPE_DICTIONARY and asset.has("targetKey") and asset.targetKey == null and asset.get("assetType") == "arena" and asset.get("purpose") in ["world-environment", "world-nature"] and WorldProjection._id(asset.get("assetId"), true) and WorldProjection._hex(asset.get("sha256"), 64):
 					eligible.append(asset.assetId)
 					_catalog_assets[asset.assetId] = asset.duplicate(true)
 			_catalog_revision = data.glbCatalogRevision

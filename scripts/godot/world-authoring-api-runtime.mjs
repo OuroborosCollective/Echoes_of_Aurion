@@ -42,7 +42,7 @@ const server = createServer(async (req, res) => {
     } else if (req.url === '/api/trpc/aurionQuest.authoringTemplate') {
       templateReads++;
       assert.deepEqual(data, { templateId: 'quest.http-fixture', version: templateReads === 1 ? 1 : 300 });
-      response(res, envelope({ templates: [{ templateId: data.templateId, version: data.version }], nextVersion: 301 }));
+      response(res, envelope({ templates: [{ templateId: data.templateId, version: data.version }], nextVersion: 301, durable: true }));
     } else if (req.url === '/api/trpc/aurionAuthoring.worldPlan') {
       assert.deepEqual(data, { fixture: 'draft' });
       response(res, envelope({ planHash: 'a'.repeat(64) }));

@@ -112,9 +112,11 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1, active: true, quarantined: false };
     const proposal = await service.createDraftProposal({ authorUserId: admin, templateId: template.templateId, templateVersion: template.version, proposedDataJson: JSON.stringify(template) });
     const plan = await service.planPublishProposal(proposal.id);
+    const caller = aurionQuestRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    expect(await caller.publishPlan({ proposalId: proposal.id })).toEqual(plan);
     const lookup = { proposalId: proposal.id, planHash: plan.planHash };
     expect(await recovery(admin, lookup)).toEqual({ status: "unresolved" });
-    const published = await service.publishProposal(admin, proposal.id, plan.planHash);
+    const published = await caller.publish({ proposalId: proposal.id, expectedPlanHash: plan.planHash, confirmation: "PUBLISH_QUEST_TEMPLATE" });
     const recovered = await recovery(admin, lookup);
     expect(recovered).toEqual({ status: "found", plan, receipt: published.receipt });
     expect(await recovery(admin, lookup)).toEqual(recovered);
@@ -162,7 +164,9 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
 
   it("pages the canonical version history and reads one publication beyond an 8 MiB active history", async () => {
     const initial = new AdminQuestStudioService();
-    const base = { ...(await initial.getTemplates())[0]!, templateId: "inspector-native-quest", description: "x".repeat(55_000) };
+    const seed = (await initial.getTemplates())[0]!;
+    expect((await initial.getAuthoringTemplateVersion(seed)).durable).toBe(false);
+    const base = { ...seed, templateId: "inspector-native-quest", description: "x".repeat(55_000) };
     const persist = async (version: number, active: boolean) => {
       const template = QuestTemplateVersionSchema.parse({ ...base, version, active, quarantined: !active });
       await pool.execute("INSERT INTO aurionQuestTemplateVersions (templateId,version,title,description,templateJson,templateHash,active,quarantined) VALUES (?,?,?,?,?,?,?,?)", [template.templateId, version, template.title, template.description, JSON.stringify(template), computeCanonicalHash("aurion.quest.template.v1", template), active, !active]);
@@ -198,6 +202,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const plan = await service.planPublishProposal(proposal.id);
     const published = await service.publishProposal(admin, proposal.id, plan.planHash);
     const readback = await target.call(service, { templateId: base.templateId, version: 201 });
+    expect(readback.durable).toBe(true);
     expect(readback.templates).toEqual([published.template]);
     expect(Buffer.byteLength(JSON.stringify(readback), "utf8")).toBeLessThan(128_000);
     const caller = aurionQuestRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);

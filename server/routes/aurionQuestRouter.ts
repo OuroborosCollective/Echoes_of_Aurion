@@ -52,14 +52,20 @@ export const aurionQuestRouter = router({
     }),
   publishPlan: adminProcedure
     .input(z.object({ proposalId: z.string().min(8).max(128) }).strict())
-    .mutation(({ input }) => adminQuestService.planPublishProposal(input.proposalId)),
+    .mutation(async ({ input }) => {
+      await adminQuestService.requireDurableAuthoringStorage();
+      return adminQuestService.planPublishProposal(input.proposalId);
+    }),
   publish: adminProcedure
     .input(z.object({
       proposalId: z.string().min(8).max(128),
       expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
       confirmation: z.literal("PUBLISH_QUEST_TEMPLATE"),
     }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.publishProposal(ctx.user.id, input.proposalId, input.expectedPlanHash)),
+    .mutation(async ({ ctx, input }) => {
+      await adminQuestService.requireDurableAuthoringStorage();
+      return adminQuestService.publishProposal(ctx.user.id, input.proposalId, input.expectedPlanHash);
+    }),
   available: protectedProcedure.query(() => adminQuestService.availableQuests()),
   // A missing receipt remains unresolved; this endpoint never republishes.
   publishReceipt: adminProcedure
