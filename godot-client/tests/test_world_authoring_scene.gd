@@ -193,6 +193,7 @@ func verify() -> void:
 	scene.get_node("WorldHUD/WorldBar/WorldStudioButton").pressed.emit()
 	require(studio.visible and not scene._world_input_permitted(), "desktop studio button did not block world input")
 	studio._close_requested()
+	verify_native_quest_editor(scene, studio, generation)
 	scene._reset_projection()
 	require(studio._state.phase == "closed" and studio._connection.is_empty(), "zone reset retained authoring session")
 	if studio.has_method("inspection_export"):
@@ -205,3 +206,62 @@ func verify() -> void:
 	else:
 		for failure in failures: push_error(failure)
 	quit(0 if failures.is_empty() else 1)
+
+func verify_native_quest_editor(scene: Control, studio: Control, generation: int) -> void:
+	require(studio.has_method("quest_editor"), "existing WorldStudio lacks the native canonical quest editor")
+	if not studio.has_method("quest_editor"): return
+	studio.configure(scene._auth_start, "http://127.0.0.1:3000", SESSION, true)
+	studio._api.queue_free()
+	var transport := FakeAuthoringApi.new()
+	studio.add_child(transport)
+	studio._api = transport
+	require(studio.open_studio(), "native quest studio could not open")
+	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
+	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
+	var editor: Variant = studio.quest_editor()
+	var pending_path := "user://aurion-quest-scene-%d" % Time.get_ticks_usec()
+	editor._journal = load("res://authoring/quest_authoring_journal.gd").new(pending_path)
+	var template := {"templateId":"quest.native-editor", "version":1, "title":"Quest fixture", "description":"Synthetic native graph",
+		"roles":[], "prerequisiteFacts":[], "nodes":[{"id":"start", "type":"start", "title":"Start"}, {"id":"end", "type":"end", "title":"End"}],
+		"edges":[{"id":"finish", "fromNodeId":"start", "toNodeId":"end", "priority":0}], "outcomes":[],
+		"maxCompositionDepth":10, "active":true, "quarantined":false}
+	editor.load_templates()
+	require(transport.sent.back().kind == "questTemplates", "native quest template loader bypassed existing auth transport")
+	studio._completed("questTemplates", {"templates":[template]}, SESSION, generation)
+	require(editor.copy_template(0), "native quest editor could not copy the confirmed template")
+	var inactive: Dictionary = editor.current_draft()
+	require(inactive.version == 2 and inactive.active == false and inactive.quarantined == true, "quest copy became active without explicit review")
+	editor.set_activation(true)
+	var draft_value: Dictionary = editor.current_draft()
+	editor.request_plan()
+	require(transport.sent.back().kind == "questPropose", "native quest draft did not use canonical proposal API")
+	var proposal := {"id":"prop_native_scene_v2", "proposalType":"create_template_draft", "authorUserId":42,
+		"templateId":draft_value.templateId, "templateVersion":draft_value.version, "proposedDataJson":JSON.stringify(draft_value),
+		"expectedTemplateSetHash":"a".repeat(64), "receiptHash":"c".repeat(64), "status":"draft"}
+	studio._completed("questPropose", proposal, SESSION, generation)
+	require(transport.sent.back().kind == "questPlan", "persisted native quest draft did not request server validation")
+	var plan_value := {"schemaVersion":"aurion.authoring.v1", "proposalId":proposal.id, "expectedTemplateSetHash":proposal.expectedTemplateSetHash,
+		"proposalReceiptHash":proposal.receiptHash, "template":draft_value, "templateHash":"e".repeat(64), "planHash":"b".repeat(64), "requiresHumanConfirmation":true}
+	studio._completed("questPlan", plan_value, SESSION, generation + 1)
+	require(editor._state.phase == "planning", "another auth generation supplied a quest plan")
+	studio._completed("questPlan", plan_value, SESSION, generation)
+	require(transport.sent.back().kind == "questPlan" and editor._state.phase == "planned", "receiving a plan auto-published the quest")
+	editor.request_confirmation()
+	require(editor._confirm.visible, "native quest publish lacked the review dialog")
+	editor._confirm.confirmed.emit()
+	require(transport.sent.back().kind == "questPublish" and transport.sent.back().payload.expectedPlanHash == plan_value.planHash, "explicit native quest confirmation lost its exact plan")
+	var sent_once := transport.sent.size()
+	editor._confirm.confirmed.emit()
+	require(transport.sent.size() == sent_once, "duplicate confirmation republished a quest")
+	require(editor._journal.read().get("proposalId") == proposal.id, "quest publish did not reserve durable recovery before send")
+	var receipt := {"schemaVersion":"aurion.authoring-receipt.v1", "receiptId":"authoring:quest:" + "f".repeat(24),
+		"kind":"quest", "action":"publish", "targetId":proposal.id, "actorUserId":42, "planHash":plan_value.planHash,
+		"previousHash":null, "resultHash":plan_value.templateHash, "receiptHash":"f".repeat(64), "humanConfirmed":true}
+	studio._completed("questPublish", {"receipt":receipt,"template":draft_value,"templateSetHash":"d".repeat(64)}, SESSION, generation)
+	require(transport.sent.back().kind == "questTemplates" and editor._state.phase == "awaiting_readback", "publish response stood in for independent quest readback")
+	studio._completed("questTemplates", {"templates":[]}, SESSION, generation)
+	require(not editor._journal.read().is_empty(), "absent quest readback cleared the pending marker")
+	editor.load_templates()
+	studio._completed("questTemplates", {"templates":[draft_value]}, SESSION, generation)
+	require(editor._state.phase == "confirmed" and editor._journal.read().is_empty(), "matching independent quest readback did not confirm/clear publication")
+	studio._close_requested()
