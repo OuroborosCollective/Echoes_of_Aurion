@@ -98,10 +98,19 @@ func verify() -> void:
 	require(studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"), "WorldStudio lacks catalog-bound draft staging/import")
 	if studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"):
 		var before_staging := fake.sent.size()
-		studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[{"assetId":"glb_test_barrel","sha256":SHA,"assetType":"arena","purpose":"world-environment","displayName":"Fixture barrel"}]}, SESSION, generation)
+		studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[
+			{"assetId":"glb_test_barrel","sha256":SHA,"assetType":"arena","purpose":"world-environment","displayName":"Fixture barrel","targetKey":null},
+			{"assetId":"glb_bound_lod","sha256":SHA,"assetType":"arena","purpose":"world-environment","targetKey":"starter_lod0"},
+			{"assetId":"glb_unknown_target","sha256":SHA,"assetType":"arena","purpose":"world-environment"}]}, SESSION, generation)
+		require(studio._catalog_assets.size() == 1 and studio._asset_choice.item_count == 1, "target-bound or unclassified catalog entry entered the placement picker")
 		require(studio.new_world_draft("owner.village", "Owner village", 1), "form could not create a local catalog-bound draft")
 		require(studio.stage_catalog_placement(draft().placements[0]), "first catalog placement could not enter an empty local draft")
 		require(studio.import_world_draft(JSON.stringify(draft())), "valid catalog-bound draft import rejected")
+		for forbidden in ["glb_bound_lod", "glb_unknown_target"]:
+			var forbidden_draft := draft()
+			forbidden_draft.placements[0].assetId = forbidden
+			require(not studio.import_world_draft(JSON.stringify(forbidden_draft)), "non-placeable asset entered an imported world draft")
+			require(not studio.stage_catalog_placement(forbidden_draft.placements[0]), "non-placeable asset entered a staged world draft")
 		var placement: Dictionary = draft().placements[0].duplicate(true)
 		placement.placementKey = "barrel-two"
 		require(studio.stage_catalog_placement(placement), "approved catalog placement could not enter the draft")
@@ -241,6 +250,10 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(transport.sent.back().kind == "questTemplates", "native quest template loader bypassed existing auth transport")
 	var summary := {"templateId":template.templateId, "version":1, "title":template.title, "active":true, "quarantined":false}
 	var cursor := {"templateId":template.templateId, "version":1}
+	var spaced_summary := summary.duplicate(true)
+	spaced_summary.title = "  Canonical quest title\t"
+	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary, spaced_summary], "nextCursor":null}, SESSION, generation)
+	require(editor._templates.size() == 2 and editor._templates[1].title == spaced_summary.title, "canonical title whitespace rejected the entire metadata page")
 	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":cursor}, SESSION, generation)
 	editor.load_more_templates()
 	require(transport.sent.back().kind == "questTemplates" and transport.sent.back().payload.get("after") == cursor, "next template page lost its canonical cursor")

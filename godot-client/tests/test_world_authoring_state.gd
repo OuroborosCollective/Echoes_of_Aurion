@@ -154,6 +154,10 @@ func verify_quest_contract() -> void:
 	require(not state.draft_valid(long_title), "quest title exceeds the actual MariaDB column")
 	long_title.title = "t".repeat(255)
 	require(state.draft_valid(long_title), "persistable 255-character quest title rejected")
+	for title in ["  Canonical quest title\t", " \t "]:
+		var spaced := d.duplicate(true)
+		spaced.title = title
+		require(state.draft_valid(spaced), "canonical whitespace-bearing quest title rejected or normalized")
 	var unsafe := d.duplicate(true)
 	unsafe.edges[0].priority = JSON.parse_string("9007199254740993")
 	require(not state.same_json(unsafe, unsafe) and not state.draft_valid(unsafe), "rounded unsafe JSON float reached quest proposal validation")

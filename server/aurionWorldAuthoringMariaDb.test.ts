@@ -134,6 +134,21 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     expect(Number(count[0]!.n)).toBe(1);
   });
 
+  it("exposes canonical target binding so world placements exclude assigned family assets", async () => {
+    const caller = aurionAuthoringRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    expect((await caller.catalog()).assets.find(asset => asset.assetId === assetId)).toHaveProperty("targetKey", null);
+    const assignmentId = "isolated-world-authoring-family";
+    await pool.execute("INSERT INTO glbAssignments (id,assetId,targetType,targetKey,active,assignedByUserId) VALUES (?,?,'arena','starter_lod0',1,?)", [assignmentId, assetId, admin]);
+    try {
+      const catalog = await caller.catalog();
+      expect(catalog.assets.find(asset => asset.assetId === assetId)).toHaveProperty("targetKey", "starter_lod0");
+      await expect(planWorldDesign({ ...draft("fixture-bound-family"), expectedCatalogRevision: catalog.glbCatalogRevision }))
+        .rejects.toThrow("AUTHORING_WORLD_ASSET_NOT_APPROVED");
+    } finally {
+      await pool.execute("DELETE FROM glbAssignments WHERE id=?", [assignmentId]);
+    }
+  });
+
   it.each(["title", "unsafe-number"])("rejects unpersistable quest %s before saving a proposal", async kind => {
     const service = new AdminQuestStudioService();
     const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1 };

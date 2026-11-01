@@ -5,6 +5,7 @@ import { WorldFactEngine } from './worldFacts';
 import { QuestTemplateRegistry } from './templateRegistry';
 import { QuestRuntimeEngine } from './runtime';
 import { QuestPersistenceEngine } from './persistence';
+import type { TrpcContext } from '../_core/context';
 
 describe('Aurion Quest Router & Admin Integration (AIM-298)', () => {
   it('fetches status via adminQuestService', async () => {
@@ -76,5 +77,26 @@ describe('Aurion Quest Router & Admin Integration (AIM-298)', () => {
     expect(receipt.gameDevelopmentStudio.sourceRevision).toBe('96a0b4f34b979279ab983e9547af43133e85f310');
     expect(receipt.assetSetHash).toHaveLength(64);
     expect(receipt.assets).toHaveLength(2);
+  });
+});
+
+describe.skipIf(Boolean(process.env.DATABASE_URL))('native quest publication without durable storage', () => {
+  it.each(['plan', 'publish', 'readback'] as const)('rejects map-backed %s as publication evidence', async action => {
+    const template = { ...(await adminQuestService.getTemplates())[0]!, templateId: `native-ephemeral-${action}`, version: 1 };
+    const proposal = await adminQuestService.createDraftProposal({ authorUserId: 42, templateId: template.templateId,
+      templateVersion: 1, proposedDataJson: JSON.stringify(template) });
+    const plan = await adminQuestService.planPublishProposal(proposal.id);
+    const caller = aurionQuestRouter.createCaller({ user: { id: 42, role: 'admin' } } as TrpcContext);
+    if (action === 'readback') {
+      // Exercise the real no-DATABASE_URL publication branch, not a fake row.
+      await adminQuestService.publishProposal(42, proposal.id, plan.planHash);
+      await expect(caller.authoringTemplate({ templateId: template.templateId, version: 1 }))
+        .rejects.toThrow('QUEST_AUTHORING_DURABLE_STORAGE_REQUIRED');
+    } else if (action === 'plan') {
+      await expect(caller.publishPlan({ proposalId: proposal.id })).rejects.toThrow('QUEST_AUTHORING_DURABLE_STORAGE_REQUIRED');
+    } else {
+      await expect(caller.publish({ proposalId: proposal.id, expectedPlanHash: plan.planHash, confirmation: 'PUBLISH_QUEST_TEMPLATE' }))
+        .rejects.toThrow('QUEST_AUTHORING_DURABLE_STORAGE_REQUIRED');
+    }
   });
 });
