@@ -6,6 +6,7 @@ signal completed(kind: String, data: Dictionary, connection_id: String, generati
 signal failed(kind: String, reason: String, connection_id: String, generation: int)
 
 const ROOT := "/api/trpc/aurionAuthoring."
+const QUEST_ROUTES := {"questTemplates":"authoringTemplates", "questTemplate":"authoringTemplate", "questReadback":"authoringTemplate", "questPropose":"proposeDraft", "questPlan":"publishPlan", "questPublish":"publish", "questReceipt":"publishReceipt"}
 const MAX_SMALL := 1024 * 1024
 const MAX_WORLD := 8 * 1024 * 1024
 var _auth: Node
@@ -31,13 +32,14 @@ static func unwrap_trpc(value: Variant) -> Dictionary:
 func request(kind: String, base_url: String, connection: String, payload: Dictionary = {}, allow_local: bool = false) -> bool:
 	if _active or not is_inside_tree() or connection.is_empty() or not _auth.protected_response_allowed():
 		return false
-	if kind not in ["identity", "catalog", "propose", "worldPlan", "worldApply", "worldReceipt", "readback"]:
+	if kind not in ["identity", "catalog", "propose", "worldPlan", "worldApply", "worldReceipt", "readback"] and not QUEST_ROUTES.has(kind):
 		return false
 	var server: String = RuntimeConfig.validated_server_url(base_url, allow_local)
 	var token: String = _auth.access_token()
 	if server.is_empty() or token.is_empty():
 		return false
 	var path := "/api/trpc/auth.me" if kind == "identity" else ("/api/game/world-design" if kind == "readback" else ROOT + kind)
+	if QUEST_ROUTES.has(kind): path = "/api/trpc/aurionQuest." + str(QUEST_ROUTES[kind])
 	var method := HTTPClient.METHOD_GET if kind in ["identity", "catalog", "readback"] else HTTPClient.METHOD_POST
 	var body := "" if method == HTTPClient.METHOD_GET else JSON.stringify({"json":payload})
 	if body.to_utf8_buffer().size() > MAX_SMALL:
@@ -90,7 +92,11 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 	if not json_type or body.is_empty():
 		_finish_failure("INVALID_RESPONSE")
 		return
-	var raw: Variant = JSON.parse_string(body.get_string_from_utf8())
+	var parser := JSON.new()
+	if parser.parse(body.get_string_from_utf8()) != OK:
+		_finish_failure("INVALID_RESPONSE")
+		return
+	var raw: Variant = parser.data
 	var value: Dictionary = raw if _kind == "readback" and typeof(raw) == TYPE_DICTIONARY else unwrap_trpc(raw)
 	if value.is_empty():
 		_finish_failure("INVALID_RESPONSE")

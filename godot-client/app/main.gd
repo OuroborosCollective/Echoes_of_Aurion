@@ -644,6 +644,8 @@ func _process(_delta: float) -> void:
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
+	if _world_studio.visible:
+		_world_studio.set_inspection_context(_confirmed_zone, _entities, _world_is_stale)
 	_request_world_design(now_ms)
 	_request_world_asset(now_ms)
 	_poll_move_intent(now_ms)
@@ -729,6 +731,7 @@ func _open_world_studio() -> void:
 	_camera_router.cancel()
 	_cancel_move_intent()
 	_world_studio.open_studio()
+	_world_studio.set_inspection_context(_confirmed_zone, _entities, _world_is_stale)
 	_restore_mobile_joystick()
 
 func _on_world_studio_readback(readback: Dictionary, connection: String, generation: int) -> void:

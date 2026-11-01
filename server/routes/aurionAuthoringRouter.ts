@@ -31,6 +31,7 @@ export const aurionAuthoringRouter = router({
         displayName: entry.displayName,
         purpose: entry.purpose,
         assetType: entry.assetType,
+        targetKey: entry.targetKey,
         subcategory: entry.subcategory,
       })),
       world,

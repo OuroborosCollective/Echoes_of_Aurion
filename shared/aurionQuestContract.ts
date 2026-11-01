@@ -143,10 +143,25 @@ export const QuestOutcomeSchema = z.object({
 
 export type QuestOutcome = z.infer<typeof QuestOutcomeSchema>;
 
+function exactQuestNumbers(value: unknown): boolean {
+  if (typeof value === "number") return Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
+  if (Array.isArray(value)) return value.every(exactQuestNumbers);
+  if (value !== null && typeof value === "object") return Object.values(value).every(exactQuestNumbers);
+  return true;
+}
+
+const PersistedQuestTitleSchema = z.string().refine(value => [...value].length <= 255, "Quest title exceeds the persisted 255-character limit");
+
+/** Unpublished proposals may be incomplete; persistence bounds still apply. */
+export const QuestDraftProposalDataSchema = z.object({ title: PersistedQuestTitleSchema.optional() }).passthrough()
+  .superRefine((draft, context) => {
+    if (!exactQuestNumbers(draft)) context.addIssue({ code: "custom", message: "Quest numbers must be finite and within the exact JSON range" });
+  });
+
 export const QuestTemplateVersionSchema = z.object({
   templateId: z.string(),
   version: z.number().int().positive(),
-  title: z.string(),
+  title: PersistedQuestTitleSchema.refine(value => value.length > 0, "Published quest title is required"),
   description: z.string(),
   prerequisiteFacts: z.array(QuestRolePredicateSchema).default([]),
   roles: z.array(QuestRoleSchema),
@@ -156,6 +171,8 @@ export const QuestTemplateVersionSchema = z.object({
   maxCompositionDepth: z.number().int().positive().default(10),
   active: z.boolean().default(true),
   quarantined: z.boolean().default(false),
+}).superRefine((template, context) => {
+  if (!exactQuestNumbers(template)) context.addIssue({ code: "custom", message: "Quest numbers must be finite and within the exact JSON range" });
 });
 
 export type QuestTemplateVersion = z.infer<typeof QuestTemplateVersionSchema>;

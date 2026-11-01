@@ -134,11 +134,16 @@ def snapshot():
 
 
 def wait_report(predicate, timeout=20):
+    PROGRESS.pop("lastReport", None)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         report = snapshot()
-        if report is not None and predicate(report):
-            return report
+        if report is not None:
+            # Preserve only the strict credential-free report, including PID
+            # and sequence, when a real return fails its unchanged predicate.
+            PROGRESS["lastReport"] = validate_report(report).copy()
+            if predicate(report):
+                return report
         time.sleep(0.25)
     raise RuntimeError("SMOKE_REPORT_TIMEOUT") from None
 
@@ -213,6 +218,7 @@ def begin_guard(guard):
     PROGRESS["stage"] = guard + "_install"
     PROGRESS["browserStates"] = []
     PROGRESS.pop("browserPackage", None)
+    PROGRESS.pop("lastReport", None)
 
 
 def run(output):
