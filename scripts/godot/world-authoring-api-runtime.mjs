@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 
 const [godot, project] = process.argv.slice(2);
 assert.ok(godot && project, 'Godot and project required');
-let identity = 0, applies = 0, redirects = 0, failures;
+let identity = 0, applies = 0, questPublishes = 0, templatePages = 0, templateReads = 0, redirects = 0, failures;
 const response = (res, value) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(value));
 const envelope = json => ({ result: { data: { json } } });
 const server = createServer(async (req, res) => {
@@ -35,12 +35,24 @@ const server = createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
     const data = JSON.parse(body).json;
-    if (req.url === '/api/trpc/aurionAuthoring.worldPlan') {
+    if (req.url === '/api/trpc/aurionQuest.authoringTemplates') {
+      templatePages++;
+      assert.deepEqual(data, templatePages === 1 ? {} : { after: { templateId: 'quest.http-fixture', version: 1 } });
+      response(res, envelope({ schemaVersion: 'aurion.quest-template-page.v1', items: [{ templateId: 'quest.http-fixture', version: 1, title: 'Fixture', active: true, quarantined: false }], nextCursor: templatePages === 1 ? { templateId: 'quest.http-fixture', version: 1 } : null }));
+    } else if (req.url === '/api/trpc/aurionQuest.authoringTemplate') {
+      templateReads++;
+      assert.deepEqual(data, { templateId: 'quest.http-fixture', version: templateReads === 1 ? 1 : 300 });
+      response(res, envelope({ templates: [{ templateId: data.templateId, version: data.version }], nextVersion: 301, durable: true }));
+    } else if (req.url === '/api/trpc/aurionAuthoring.worldPlan') {
       assert.deepEqual(data, { fixture: 'draft' });
       response(res, envelope({ planHash: 'a'.repeat(64) }));
     } else if (req.url === '/api/trpc/aurionAuthoring.worldApply') {
       assert.deepEqual(data, { fixture: 'one-shot' });
       applies++;
+      res.writeHead(503, { 'Content-Type': 'application/json' }).end('{}');
+    } else if (req.url === '/api/trpc/aurionQuest.publish') {
+      assert.deepEqual(data, { proposalId: 'prop_http_fixture', expectedPlanHash: 'a'.repeat(64), confirmation: 'PUBLISH_QUEST_TEMPLATE' });
+      questPublishes++;
       res.writeHead(503, { 'Content-Type': 'application/json' }).end('{}');
     } else throw new Error(`unexpected path ${req.url}`);
   } catch (error) { failures ||= error; if (!res.headersSent) res.writeHead(500).end(); }
@@ -60,5 +72,8 @@ assert.equal(timedOut, false);
 assert.equal(exit, 0);
 assert.equal(identity, 2);
 assert.equal(applies, 1, 'an apply was automatically repeated');
+assert.equal(questPublishes, 1, 'a quest publication was automatically repeated');
+assert.equal(templatePages, 2, 'template selection did not follow bounded pages');
+assert.equal(templateReads, 2, 'copy and readback did not target exact versions');
 assert.equal(redirects, 0, 'redirect was followed');
 assert.match(output, /GODOT_WORLD_AUTHORING_HTTP_PASS/);

@@ -14,12 +14,15 @@ describe("Aurion post-deploy production schema readback", () => {
   it("executes the production receipt classifier against the explicitly approved production wave", () => {
     const classifier=readback.match(/RAW_PATH="\$raw"[\s\S]*?node -e '([\s\S]*?)\n            '/)?.[1];
     expect(classifier).toBeDefined();
-    const journalTags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21&&e.idx<=74).map((e:{tag:string})=>e.tag);
-    const wave=JSON.parse(read("config/aurion-migration-wave-manifest.json"));
+    const journalTags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21&&e.idx<=75).map((e:{tag:string})=>e.tag);
+    const wave=JSON.parse(read("config/aurion-migration-wave-0021-0076-manifest.json"));
     expect(wave).toMatchObject({schemaVersion:"aurion.migration-wave-manifest.v2",recordType:"aurion_migration_wave_manifest",policy:{futureTagsRequireNewManifest:true}});
     const tags=wave.migrations.map((entry:{tag:string})=>entry.tag);
     expect(tags).toContain("0041_aurion_content_hash_ledger");
     expect(journalTags).toEqual(tags);
+    const release=read(".github/workflows/deploy-aurion-zone-runtime.yml");
+    expect(release).toContain('const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0076-manifest.json","utf8"))');
+    expect(tags.at(-1)).toBe("0076_aurion_investigation_deduction_receipts");
     const migrationCount=tags.length;
     expect(migrationCount).toBeGreaterThan(0);
     const sourceRevision="a".repeat(40),imageDigest="sha256:"+"b".repeat(64);
@@ -36,6 +39,9 @@ describe("Aurion post-deploy production schema readback", () => {
       {...fixture,migrations:[...fixture.migrations.slice(0,-1),fixture.migrations[0]]},
       {...fixture,sourceRevision:"c".repeat(40)},
       {...fixture,readOnly:false},
+      {...fixture,migrations:[...fixture.migrations].reverse()},
+      {...fixture,migrations:[...fixture.migrations.slice(0,-1),{tag:"0076_unapproved_tag",state:"PRESENT_SCHEMA_MATCH"}]},
+      {...fixture,execution:{...fixture.execution,imageDigest:"sha256:"+"c".repeat(64)}},
       {...fixture,execution:{...fixture.execution,containerExitStatus:1}},
       {...fixture,migrations:fixture.migrations.map((m:{tag:string;state:string},i:number)=>i===0?{...m,state:"PRESENT_SCHEMA_DRIFT"}:m)},
     ])expect(()=>classify(invalid)).toThrow();

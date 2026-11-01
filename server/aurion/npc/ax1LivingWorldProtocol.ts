@@ -228,7 +228,7 @@ export function resolveLivingWorldTick(input: Readonly<{
     taxRateBasisPoints: input.market.taxRateBasisPoints,
     memoryAffinityBps,
   });
-  const quantity = Math.max(
+  const requestedQuantity = Math.max(
     1,
     Math.floor((2 + roll() * 4) * clamp(input.npc.harvestYieldBps / 1e4, 0.5, 2)),
   );
@@ -249,6 +249,13 @@ export function resolveLivingWorldTick(input: Readonly<{
     securityIndex = caravanSecurityIndex(input.market.hubId, destination, input.polityStability, rememberedThreat);
     ambushed = roll() < (100 - securityIndex) / 300;
   }
+
+  // A partial trade must declare and credit the same units that leave stock.
+  // Empty markets still produce an unavailable intent for the gateway to reject.
+  const quantity =
+    (action === "trade" || action === "caravan") && input.market.stock[commodity] > 0
+      ? Math.min(requestedQuantity, input.market.stock[commodity])
+      : requestedQuantity;
 
   const taxCopper =
     action === "trade" || action === "caravan"
