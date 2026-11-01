@@ -7,6 +7,7 @@ import {
   AURION_CAUSAL_TICK_SCHEMA_V1,
   AURION_CAUSAL_TICK_SCHEMA_V2,
   AURION_ZONE_RULESET_VERSION,
+  isSupportedAurionZoneRuleset,
   computeCausalStageReceipt,
   computeReceiptHash,
   type AurionCausalStageName,
@@ -283,7 +284,7 @@ export class AuthoritativeMovementZone {
   }
 
   restoreFromCanonicalState(state: CanonicalZoneState, previousReceiptHash?: string | null): void {
-    if (!["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
+    if (!isSupportedAurionZoneRuleset(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
     if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
     if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
     this.rulesetVersion = state.ruleset;

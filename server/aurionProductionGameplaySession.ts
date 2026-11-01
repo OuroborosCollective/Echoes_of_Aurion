@@ -209,6 +209,7 @@ export async function runProductionGameplaySessionReadback(dependencies: Gamepla
       health: healthAfter,
       worldJoin: "CONFIRMED" as const,
       zoneHandshake: "CONFIRMED" as const,
+      zoneRulesetVersion: zone.getCanonicalZoneState().ruleset,
       welcome: redactWelcome(welcome),
       snapshot: { type: snapshot.type, zoneId: snapshot.zoneId, tick: snapshot.tick, snapshotSeq: snapshot.snapshotSeq,
         presences: (snapshot as ZoneSnapshot).presences.filter(p => p.userId === AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID) },

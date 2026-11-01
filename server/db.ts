@@ -50,7 +50,7 @@ import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aur
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 import { activeProvenance } from "./aurionProvenance";
-import { AURION_ZONE_RULESET_VERSION } from "../shared/aurionCausalTickContract";
+import { AURION_ZONE_RULESET_VERSION, isSupportedAurionZoneRuleset } from "../shared/aurionCausalTickContract";
 import {
   AURION_WORLD_CAUSAL_ZONE_IDS,
   computeWorldCausalRoot,
@@ -383,11 +383,14 @@ async function buildWorldCausalRootForEpoch(
     }
   }
 
+  // Preserve the actual homogeneous supported ruleset. Keep every zone root in
+  // the comparison so mixed/unknown evidence remains UNPROVABLE.
+  const observedRuleset = zoneRoots[0]?.rulesetVersion;
   const zoneResult = computeWorldCausalRoot({
     worldId: GLOBAL_WORLD_ID,
     epoch,
     sourceRevision: activeProvenance.sourceRevision,
-    rulesetVersion: AURION_ZONE_RULESET_VERSION,
+    rulesetVersion: isSupportedAurionZoneRuleset(observedRuleset) ? observedRuleset : AURION_ZONE_RULESET_VERSION,
     expectedZoneIds: AURION_WORLD_CAUSAL_ZONE_IDS,
     zoneRoots,
     previousWorldRoot,
