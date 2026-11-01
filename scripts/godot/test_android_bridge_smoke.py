@@ -40,6 +40,20 @@ class Reports(unittest.TestCase):
     def test_fresh_native_intent_ack_matches_sequence_and_process(self):
         self.assertTrue(smoke.fresh_dispatch({**self.report(), "dispatchSequence": 2}, 2, 100))
 
+    def test_timeout_preserves_the_last_validated_report_without_accepting_it(self):
+        prior = dict(smoke.PROGRESS)
+        try:
+            smoke.PROGRESS.clear()
+            report = self.report()
+            with patch.object(smoke, "snapshot", return_value=report), \
+                    patch.object(smoke.time, "monotonic", side_effect=[0, 1, 21]), patch.object(smoke.time, "sleep"):
+                with self.assertRaisesRegex(RuntimeError, "^SMOKE_REPORT_TIMEOUT$"):
+                    smoke.wait_report(lambda _value: False)
+            self.assertEqual(smoke.PROGRESS.get("lastReport"), report)
+        finally:
+            smoke.PROGRESS.clear()
+            smoke.PROGRESS.update(prior)
+
     def test_boot_diagnostics_preserve_cause_without_urls_or_secrets(self):
         value = "ERROR invalid GPU mode swiftshader\nERROR https://example.invalid/app/auth/callback?code=not-a-real-secret\nERROR token=not-a-real-token\nPANIC opaque " + "z"*50
         result = "\n".join(smoke.safe_boot_diagnostics(value))
@@ -78,11 +92,13 @@ class Reports(unittest.TestCase):
                 "browserPackage": "com.android.chrome",
                 "browserStates": [{"firstRunActivity": True}],
                 "legacyRedObserved": True,
+                "lastReport": self.report(),
             })
             smoke.begin_guard("fixed")
             self.assertEqual(smoke.PROGRESS["stage"], "fixed_install")
             self.assertEqual(smoke.PROGRESS["browserStates"], [])
             self.assertNotIn("browserPackage", smoke.PROGRESS)
+            self.assertNotIn("lastReport", smoke.PROGRESS)
             self.assertTrue(smoke.PROGRESS["legacyRedObserved"])
         finally:
             smoke.PROGRESS.clear()
