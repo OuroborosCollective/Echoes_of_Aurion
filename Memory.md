@@ -5346,3 +5346,24 @@ Change: Replaced per-key Object.entries tuples and chained mapping in canonical 
 Evidence: Initial head 23533e26f024d212cecf9b78aae1d86e596efbc6 failed runtime container run 41229745765 because server/investigationJournalMariaDb.test.ts was absent; reconciled head 0a9a84c52ae31fc844a0bda5e189013b3639fff4 includes the real test, independently read from GitHub. Historical canonical snapshot and replay tests exist; final exact-head CI remains necessary.
 Learned: Source-level reduction of temporary allocations is not a measured GC or tick-performance improvement; demand identical canonical hashes and same-hardware baseline before claiming a gain.
 Open/next: Finish exact-head CI and reviewer readback before merge; separately measure matched performance. No production rollout or runtime readback claimed.
+
+### 2026-10-31 — PR #1254 — isolated cold-zone recovery proof (#1229)
+Status: PARTIAL; production recovery and runtime assurance remain unverified.
+Change: Added authenticated Starter Village preflight that produces genuine 10 Hz zone receipts in isolated MariaDB, shuts down gracefully and lets the unchanged cold-start replay assurance check run against durable evidence; no generated receipts or assertion bypass.
+Evidence: Original candidate 715c70a9e5dee1b8fe841f89914d4e725f4966cf failed Starter Village run 41162219922 before journey with RECEIPT_CHAIN_SAMPLE_MISSING and REPLAY_SAMPLE_MISSING. First test head 8bf2eadb74441542c41cbc43e3ac341ad789a8b4 reached genuine persisted receipt readback in run 41226161523 but failed the test's unprefixed hash expectation; source correction 592c5e79244869754659b353dfbaefcf795666a4 expects canonical sha256: format. Full final-head CI and production readback pending.
+Learned: A fresh authenticated WebSocket, not a synthetic fixture, must precede persisted cold-recovery assurance in an isolated empty database.
+Open/next: Verify final exact-head CI, negative recovery regressions and real MariaDB restart/replay; keep #1229 open until authorized live runtime/receipt readback. No production writes, restarts or deploys in this work.
+
+### 2026-10-31 — PR #1254 — Genkit-free Aurion Godot-first authoring
+Status: PARTIAL; branch integration checked, final CI and live Godot authoring unverified.
+Change: Removed active Genkit/Google GenAI server imports and direct package dependencies. Three existing admin proposal APIs now use an optional, explicitly configured OpenAI JSON proposal adapter with existing Aurion Zod checks; the native Godot World Studio, server plan/apply and independent receipt/readback remain authoritative and unchanged. Unconfigured optional model proposals fail closed.
+Evidence: Prior Starter Village Pilot 41236607022 failed after true SIGTERM with Genkit 1.42.0 invoking process.exit(0) before Aurion post-drain receipt (download artifact 13056381114). Replacement commit 23a1716e348551fd0ad76b16d313c01dda6612ce removes liveDeveloperGenkit.ts and genkit.secret.test.ts; exact Git tree and branch ref read back. Test doubles in liveDeveloperAuthoring.test.ts are explicitly unit-only; no provider account, live world or MariaDB proof is claimed. Final current-head checks pending.
+Learned: Optional design-model libraries must not own runtime signal handlers or game authority; Genkit's unconditional SIGTERM handler interrupted Aurion causal drain. Godot design drafts are proposals, never proof of a committed world change.
+Open/next: Verify frozen pnpm install, runtime import, focused proposal regressions, all required exact-head CI including real Starter Village shutdown, then independently read PR/main before considering merge. Check orphan package-lock metadata and native Godot editor/real multi-client apply separately; Issue #1229 production readback remains open.
+
+### 2026-11-01 — PR #1254 fail-closed DB recovery final CI
+Status: PARTIAL; exact-head isolated tests verified, production recovery unverified.
+Change: Distinguish unavailable MariaDB from a genuinely empty durable receipt history; add the no-DB cold-start regression to Causal Chaos and the isolated real-MariaDB empty-history countertest. Preserve singleflight, canonical replay and 100-ms tick.
+Evidence: PR head `772883d3d6090b68f698d68677e22eb05bdab2e2`; 61/61 PR workflows success, Causal Chaos run 41247866546 (43 tests), MariaDB approval run 41247866198 (60 tests), Starter Village pilot run 41247866633 (restart/replay and independent artifact readback, artifact 13059723610).
+Learned: A null receipt must not authorize a new tick-zero zone when the DB itself is unavailable; a reachable empty DB remains a separate permitted bootstrap case.
+Open/next: Validate all checks at this Memory commit before merge. Production still serves older revision `645e7d8c7886f100a78555094693e5dcd904f99f`; release, causal assurance and Godot live-world evidence remain independently gated. Issue #1229 remains open until authorized runtime/receipt readback.

@@ -544,7 +544,8 @@ export class AdminQuestStudioService {
       roleBindingHash: updated.roleBindingHash!,
     };
     if (updated.state === "completed") return source;
-    const zone = (await import("../zoneRuntime")).globalZoneRegistry.get("observatory_threshold");
+    const zone = (await import("../zoneRuntime")).globalZoneRegistry.find("observatory_threshold");
+    if (!zone) throw new Error("QUEST_ZONE_CONNECTION_REQUIRED");
     const connectionId = zone.connectionIdForUser(userId);
     if (!connectionId) throw new Error("QUEST_ZONE_CONNECTION_REQUIRED");
     if (!zone.combatSnapshot().find(actor => actor.entityId === `player:${userId}`)?.alive) throw new Error("QUEST_LIVING_PLAYER_REQUIRED");

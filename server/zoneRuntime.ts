@@ -960,6 +960,7 @@ export class ZoneRegistry {
   private readonly probeOwned = new Set<AuthoritativeMovementZone>();
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
   private readonly dormantZones = new Map<ZoneId, AuthoritativeMovementZone>();
+  private readonly recoveryByZone = new Map<ZoneId, Promise<AuthoritativeMovementZone>>();
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
 
@@ -968,6 +969,7 @@ export class ZoneRegistry {
     return this.zones.get(zoneId);
   }
 
+  /** Synchronous legacy/fixture access; production cold starts use getOrRecover. */
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
     if (existing) { this.probeOwned.delete(existing); return existing; }
@@ -976,6 +978,41 @@ export class ZoneRegistry {
     this.zones.set(zoneId, zone);
     this.sortedZonesDirty = true;
     return zone;
+  }
+
+  /**
+   * Cold production activation must restore the durable head before the zone is
+   * registered for ticking. Concurrent handshakes share one verified recovery.
+   */
+  async getOrRecover(
+    zoneId: ZoneId,
+    recover: (zoneId: ZoneId) => Promise<AuthoritativeMovementZone>,
+  ): Promise<AuthoritativeMovementZone> {
+    const active = this.zones.get(zoneId);
+    if (active) { this.probeOwned.delete(active); return active; }
+    const inFlight = this.recoveryByZone.get(zoneId);
+    if (inFlight) return inFlight;
+
+    let recovery!: Promise<AuthoritativeMovementZone>;
+    recovery = Promise.resolve().then(() => recover(zoneId)).then(zone => {
+      if (zone.zoneId !== zoneId) throw new Error("ZONE_RECOVERY_ZONE_MISMATCH");
+      if (this.zones.has(zoneId)) throw new Error("ZONE_ACTIVATION_RACE");
+      const dormant = this.dormantZones.get(zoneId);
+      if (dormant?.getLatestReceipt()) {
+        const prior = dormant.getLatestReceipt()!;
+        if (zone.getLatestReceipt()?.receiptHash !== prior.receiptHash) {
+          throw new Error("ZONE_DORMANT_HEAD_UNVERIFIED");
+        }
+      }
+      this.dormantZones.delete(zoneId);
+      this.zones.set(zoneId, zone);
+      this.sortedZonesDirty = true;
+      return zone;
+    }).finally(() => {
+      if (this.recoveryByZone.get(zoneId) === recovery) this.recoveryByZone.delete(zoneId);
+    });
+    this.recoveryByZone.set(zoneId, recovery);
+    return recovery;
   }
 
   /** Called only after scope consumption, with a verified persisted head. */
