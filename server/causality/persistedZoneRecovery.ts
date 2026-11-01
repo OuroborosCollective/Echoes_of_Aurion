@@ -1,4 +1,4 @@
-import { AURION_ZONE_RULESET_VERSION, computeReceiptHash } from "../../shared/aurionCausalTickContract";
+import { computeReceiptHash, isSupportedAurionZoneRuleset } from "../../shared/aurionCausalTickContract";
 import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import type { ZoneId } from "../zoneProtocol";
@@ -77,7 +77,7 @@ export async function restorePersistedZoneHead(
   // A verified historical head retains the ruleset already supported by
   // restoreFromCanonicalState; the live default is not a migration command.
   if (previousHash !== latest.receiptHash || state.tick !== latest.tick
-    || !["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION].includes(state.ruleset)) {
+    || state.ruleset !== latest.rulesetVersion || !isSupportedAurionZoneRuleset(state.ruleset)) {
     throw new Error(`${errorPrefix}_HEAD_INVALID`);
   }
   if (state.players.length) throw new Error(`${errorPrefix}_PRESENCE_RECOVERY_REQUIRED`);

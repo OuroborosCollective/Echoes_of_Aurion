@@ -1367,6 +1367,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import { scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
+          import { requireZoneRulesetEvidence } from "./shared/aurionZoneRulesetContract.mjs";
           const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
           const installed=JSON.parse(fs.readFileSync("runtime-attestation/aurion-installed-runtime-readback.json","utf8"));
           const runtimeMeta=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.json","utf8"));
@@ -1394,13 +1395,22 @@ jobs:
           if(installed.authority?.ruleset!=="aurion-zone-v3"||installed.authority?.tickHz!==10||installed.authority?.causalReceipts!==true) throw new Error("FINAL_INSTALLED_AUTHORITY_MISMATCH");
           if(health.authority?.ruleset!=="aurion-zone-v3"||health.authority?.tickHz!==10||health.authority?.causalReceipts!==true) throw new Error("FINAL_PUBLIC_AUTHORITY_MISMATCH");
 
+          // aurion-final-zone-ruleset-guard:start
+          const zoneRulesetVersion=requireZoneRulesetEvidence(
+            gameplay.zoneRulesetVersion, gameplay.membershipPersistence?.receipts,
+            installed.authority, health.authority
+          );
+          // aurion-final-zone-ruleset-guard:end
+
           const expected={
             revision:process.env.GITHUB_SHA,
             buildInputDigest:identity.buildInputDigest,
             artifactDigest:identity.artifactDigest,
             runtimeImageDigest:identity.runtimeImageDigest,
             releaseArchiveDigest:identity.releaseArchiveDigest,
-            authorityRuleset:"aurion-zone-v3",
+            binaryAuthorityRuleset:"aurion-zone-v3",
+            binaryAuthorityRulesetScope:"runtime-default",
+            binaryDefaultRulesetVersion:"aurion.zone.rules.v3",
             authorityTickHz:10,
             causalReceipts:true,
             databaseConnectivity:"authenticated_select_1",
@@ -1419,7 +1429,9 @@ jobs:
             artifactDigest:health.artifactDigest,
             runtimeImageDigest:health.runtimeImageDigest,
             releaseArchiveDigest:health.releaseArchiveDigest,
-            authorityRuleset:health.authority?.ruleset,
+            binaryAuthorityRuleset:health.authority?.ruleset,
+            binaryAuthorityRulesetScope:health.authority?.rulesetScope,
+            binaryDefaultRulesetVersion:health.authority?.defaultRulesetVersion,
             authorityTickHz:health.authority?.tickHz,
             causalReceipts:health.authority?.causalReceipts,
             databaseConnectivity:installed.databaseConnectivity,
@@ -1437,14 +1449,16 @@ jobs:
             schemaVersion:"aurion.milestone.gate-evidence.v1",
             gateId:"AURION-M21-B1-PRODUCTION",
             scope:"production",
-            passCriteria:["exact merged main revision promoted through canonical control plane","signed build/runtime identities bind immutable digests","root-authored installed readback and public TLS health agree","authenticated database SELECT succeeded","production schema exactly matches the canonical migration manifest and retains 0049 causal receipt v2"],
-            failCriteria:["manual or mutable promotion","revision/digest drift","missing attestation","public/internal identity mismatch","production schema drift or missing 0049 causal receipt v2"],
+            zoneRulesetVersion,
+            binaryAuthority:health.authority,
+            passCriteria:["exact merged main revision promoted through canonical control plane","signed build/runtime identities bind immutable digests","root-authored installed readback and public TLS health agree","authenticated database SELECT succeeded","production schema exactly matches the canonical migration manifest and retains 0049 causal receipt v2","executed zone ruleset matches every persisted gameplay receipt and the explicit binary support contract"],
+            failCriteria:["manual or mutable promotion","revision/digest drift","missing attestation","public/internal identity mismatch","production schema drift or missing 0049 causal receipt v2","missing, unsupported or contradictory executed zone ruleset evidence"],
             sourceRevision:identity.sourceRevision,
             mergeSha:identity.mergeSha,
             authenticatedReadback:true,
             workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
-            command:"gh attestation verify + root-authored runtime readback + public TLS /healthz + production schema reconciliation",
-            testSources:["deploy/promote-aurion-zone-runtime.sh","docker-compose.traefik.yml","scripts/aurion-release-attestation.mjs","scripts/aurion-milestone-gate-evidence.mjs",".github/workflows/deploy-aurion-zone-runtime.yml",".github/workflows/aurion-production-schema-readback.yml"],
+            command:"gh attestation verify + root-authored runtime readback + public TLS /healthz + production schema reconciliation + persisted gameplay ruleset verification",
+            testSources:["deploy/promote-aurion-zone-runtime.sh","docker-compose.traefik.yml","scripts/aurion-release-attestation.mjs","scripts/aurion-milestone-gate-evidence.mjs","shared/aurionZoneRulesetContract.mjs",".github/workflows/deploy-aurion-zone-runtime.yml",".github/workflows/aurion-production-schema-readback.yml"],
             externalId:runtimeMeta.attestationUrl,
             reproducible:true,
             releaseIdentity:{

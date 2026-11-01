@@ -2,11 +2,12 @@ import { spawnSync } from "node:child_process";
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
-import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
+import { aurionCausalCheckpoints, aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { getDb, getGlobalWorldPlan, listActiveWorldPresence, recordWorldPresenceLease, releaseWorldPresenceLease, resolveAndRecordGlobalWorldEpoch } from "./db";
 import { WORLD_PRESENCE_LEASE_MS } from "./worldPresenceProtocol";
 import { AuthoritativeMovementZone } from "./zoneRuntime";
-import { globalTickRecorder } from "./causality/tickRecorder";
+import { AurionTickRecorder, globalTickRecorder } from "./causality/tickRecorder";
+import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
 import { worldCausalRootService } from "./causality/worldCausalRootService";
 import { aurionWorldChunkDeltas } from "../drizzle/schema";
 import { recordWorldChunkDelta } from "./db";
@@ -38,6 +39,7 @@ async function cleanupEpochState() {
   await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, WORLD_ID));
   await db.delete(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
   await db.delete(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD_ID));
+  await db.delete(aurionCausalCheckpoints).where(eq(aurionCausalCheckpoints.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, WORLD_ID));
 }
 
@@ -85,7 +87,7 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     expect(new URL(process.env.DATABASE_URL!).pathname).toMatch(/_test$/);
     const releaseSha = process.env.AURION_RELEASE_SHA;
     expect(releaseSha).toMatch(/^[a-f0-9]{40}$/);
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder(20, new MariaDBCausalPersistenceAdapter()));
     zone.restoreFromCanonicalState({ ...zone.getCanonicalZoneState(), ruleset });
     zone.sourceRevisionOverride = releaseSha!;
     zone.tick();
@@ -118,7 +120,7 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     expect(new URL(process.env.DATABASE_URL!).pathname).toMatch(/_test$/);
     const releaseSha = process.env.AURION_RELEASE_SHA;
     expect(releaseSha).toMatch(/^[a-f0-9]{40}$/);
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder(20, new MariaDBCausalPersistenceAdapter()));
     zone.sourceRevisionOverride = releaseSha!;
     zone.restoreFromCanonicalState({ ...zone.getCanonicalZoneState(), ruleset: "aurion.zone.rules.v2" });
     zone.tick();

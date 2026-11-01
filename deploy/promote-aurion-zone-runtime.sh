@@ -383,6 +383,12 @@ for _attempt in $(seq 1 30); do
         health.runtimeImageDigest !== process.env.EXPECTED_RUNTIME_IMAGE_DIGEST ||
         health.releaseArchiveDigest !== process.env.EXPECTED_RELEASE_ARCHIVE_DIGEST ||
         health.authority?.ruleset !== "aurion-zone-v3" ||
+        health.authority?.rulesetScope !== "runtime-default" ||
+        health.authority?.defaultRulesetVersion !== "aurion.zone.rules.v3" ||
+        !Array.isArray(health.authority?.supportedZoneRulesets) ||
+        health.authority.supportedZoneRulesets.length !== 2 ||
+        health.authority.supportedZoneRulesets[0] !== "aurion.zone.rules.v2" ||
+        health.authority.supportedZoneRulesets[1] !== "aurion.zone.rules.v3" ||
         health.authority?.tickHz !== 10 ||
         health.authority?.causalReceipts !== true
       ) process.exit(10);
@@ -482,6 +488,12 @@ for _attempt in $(seq 1 30); do
         body.runtimeImageDigest !== runtimeImageDigest ||
         body.releaseArchiveDigest !== releaseArchiveDigest ||
         body.authority?.ruleset !== "aurion-zone-v3" ||
+        body.authority?.rulesetScope !== "runtime-default" ||
+        body.authority?.defaultRulesetVersion !== "aurion.zone.rules.v3" ||
+        !Array.isArray(body.authority?.supportedZoneRulesets) ||
+        body.authority.supportedZoneRulesets.length !== 2 ||
+        body.authority.supportedZoneRulesets[0] !== "aurion.zone.rules.v2" ||
+        body.authority.supportedZoneRulesets[1] !== "aurion.zone.rules.v3" ||
         body.authority?.tickHz !== 10 ||
         body.authority?.causalReceipts !== true
       ) process.exit(1);
@@ -525,7 +537,7 @@ receipt="${receipt_dir}/${release_id}.json"
 receipt_tmp="${receipt}.tmp"
 runtime_image_id="$(docker image inspect --format '{{.Id}}' "$runtime_image")"
 umask 077
-printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","buildInputDigest":"%s","artifactDigest":"%s","runtimeImageDigest":"%s","releaseArchiveDigest":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","authority":{"ruleset":"aurion-zone-v3","tickHz":10,"causalReceipts":true}}\n' \
+printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","buildInputDigest":"%s","artifactDigest":"%s","runtimeImageDigest":"%s","releaseArchiveDigest":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","authority":{"ruleset":"aurion-zone-v3","rulesetScope":"runtime-default","defaultRulesetVersion":"aurion.zone.rules.v3","supportedZoneRulesets":["aurion.zone.rules.v2","aurion.zone.rules.v3"],"tickHz":10,"causalReceipts":true}}\n' \
   "$expected_sha" "$release_id" "$build_input_digest" "$artifact_digest" "$runtime_image_id" "$release_archive_digest" \
   "$runtime_image_id" "$container_id" "$aurion_domain" "$traefik_network" "$database_network" > "$receipt_tmp"
 mv -Tf "$receipt_tmp" "$receipt"
@@ -543,7 +555,7 @@ schema_manifest_sha256="$(sha256sum "${schema_current}/manifest.json" | awk '{pr
 install -d -o root -g root -m 0755 "$public_readback_dir"
 public_readback_tmp="${public_readback_dir}/.${release_id}.json.tmp"
 public_readback="${public_readback_dir}/current.json"
-printf '{"recordType":"aurion_traefik_runtime_readback","revision":"%s","releaseId":"%s","buildInputDigest":"%s","artifactDigest":"%s","runtimeImageDigest":"%s","releaseArchiveDigest":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","runtimeManifestSha256":"%s","schemaManifestSha256":"%s","schemaMode":"read_only","authority":{"ruleset":"aurion-zone-v3","tickHz":10,"causalReceipts":true}}\n' \
+printf '{"recordType":"aurion_traefik_runtime_readback","revision":"%s","releaseId":"%s","buildInputDigest":"%s","artifactDigest":"%s","runtimeImageDigest":"%s","releaseArchiveDigest":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","runtimeManifestSha256":"%s","schemaManifestSha256":"%s","schemaMode":"read_only","authority":{"ruleset":"aurion-zone-v3","rulesetScope":"runtime-default","defaultRulesetVersion":"aurion.zone.rules.v3","supportedZoneRulesets":["aurion.zone.rules.v2","aurion.zone.rules.v3"],"tickHz":10,"causalReceipts":true}}\n' \
   "$expected_sha" "$release_id" "$build_input_digest" "$artifact_digest" "$runtime_image_id" "$release_archive_digest" "$runtime_image_id" "$container_id" "$aurion_domain" \
   "$traefik_network" "$database_network" "$runtime_manifest_sha256" "$schema_manifest_sha256" > "$public_readback_tmp"
 chown root:root "$public_readback_tmp"

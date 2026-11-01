@@ -4,6 +4,7 @@ import { waitForProductionGameplayApproval } from "./aurion-production-probe-cli
 import { ZONE_PROTOCOL_VERSION, validConfirmedPresences } from "../shared/zonePresenceContract";
 import { verifySnapshot } from "./aurion-production-assurance.mjs";
 import { requireProbePersistenceReadback } from "../shared/aurionProductionProbeEvidence";
+import { requireZoneRulesetEvidence } from "../shared/aurionZoneRulesetContract.mjs";
 
 const zoneId = "observatory_threshold";
 export function requireGameplayHealth(health: any, expectedSha: string) {
@@ -36,10 +37,12 @@ export function requireFunctionalProbeReceipt(observed: any, sourceRevision: str
   if (!Number.isSafeInteger(observed.guilds?.guildCount) || !Array.isArray(observed.guilds?.guilds)) throw new Error("NPC_GUILD_READBACK_FAILED");
   if (!verifySnapshot(observed.assurance) || observed.assurance.status === "CONTRADICTED") throw new Error("CAUSAL_ASSURANCE_READBACK_INVALID");
   requireProbePersistenceReadback(observed.persistence, sourceRevision, zoneId, observed.welcome.tick, snapshot.tick);
+  const zoneRulesetVersion = requireZoneRulesetEvidence(observed.zoneRulesetVersion, observed.persistence.receipts,
+    observed.healthBefore.authority, observed.health.authority);
   return { recordType: "aurion_production_gameplay_readback", schemaVersion: 1, sourceRevision,
     approvalId: observed.approvalId, runId: observed.runId, runAttempt: observed.runAttempt,
     observedAt: new Date().toISOString(), status: "PASS", worldJoin: "CONFIRMED", zoneHandshake: "CONFIRMED",
-    welcomeTick: observed.welcome.tick, snapshotTick: snapshot.tick, npcStatus: observed.health.npcLife.status,
+    zoneRulesetVersion, welcomeTick: observed.welcome.tick, snapshotTick: snapshot.tick, npcStatus: observed.health.npcLife.status,
     npcGatewayTick: observed.health.npcLife.lastGatewayTick, npcResolutionIndex: observed.health.npcLife.lastResolutionIndex,
     npcGuildCount: observed.guilds.guildCount, causalAssuranceStatus: observed.assurance.status,
     membershipPersistence: observed.persistence,

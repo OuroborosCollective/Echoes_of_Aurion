@@ -31,6 +31,7 @@ import { consumeZoneTicketWithCombatProfile } from "../zoneCombatPersistence";
 import { initialWolframCagRuntimeReadback, resolveWolframCagRuntimeReadback } from "../wolframCagRuntimeReadback";
 import { createAutonomousNpcLifeRuntime } from "../autonomousNpcLifeRuntime";
 import { activeProvenance } from "../aurionProvenance";
+import { AURION_BINARY_AUTHORITY } from "../../shared/aurionZoneRulesetContract.mjs";
 import { globalReadbackService } from "../causality/readbackService";
 import { globalSnapshotReconciliationService } from "../causality/snapshotReconciliationService";
 import { globalCausalArchivingService } from "../causality/archivingService";
@@ -90,11 +91,7 @@ async function startServer(){
     artifactDigest: activeProvenance.artifactDigest || `sha256:${process.env.AURION_ARTIFACT_DIGEST || "unknown"}`,
     runtimeImageDigest: activeProvenance.runtimeImageDigest || `sha256:${process.env.AURION_RUNTIME_IMAGE_DIGEST || "unknown"}`,
     releaseArchiveDigest: releaseArchiveDigest || "UNVERIFIED",
-    authority: {
-      ruleset: "aurion-zone-v3",
-      tickHz: 10,
-      causalReceipts: true
-    },
+    authority: AURION_BINARY_AUTHORITY,
     // Retaining operational diagnostics
     gameDevelopmentStudio,
     wolframCag,

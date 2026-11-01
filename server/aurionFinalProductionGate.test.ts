@@ -1,5 +1,7 @@
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { AURION_BINARY_AUTHORITY } from "../shared/aurionZoneRulesetContract.mjs";
 
 describe("Blocker 1 final production proof contract", () => {
   const workflow = fs.readFileSync(".github/workflows/deploy-aurion-zone-runtime.yml", "utf8");
@@ -27,6 +29,9 @@ describe("Blocker 1 final production proof contract", () => {
       "health.runtimeImageDigest",
       "health.releaseArchiveDigest",
       'health.authority?.ruleset !== "aurion-zone-v3"',
+      'health.authority?.rulesetScope !== "runtime-default"',
+      'health.authority?.defaultRulesetVersion !== "aurion.zone.rules.v3"',
+      "health.authority.supportedZoneRulesets.length !== 2",
       "health.authority?.tickHz !== 10",
       "health.authority?.causalReceipts !== true",
     ]) expect(promoter).toContain(field);
@@ -39,8 +44,66 @@ describe("Blocker 1 final production proof contract", () => {
       '"artifactDigest":"%s"',
       '"runtimeImageDigest":"%s"',
       '"releaseArchiveDigest":"%s"',
-      '"authority":{"ruleset":"aurion-zone-v3","tickHz":10,"causalReceipts":true}',
+      `"authority":${JSON.stringify(AURION_BINARY_AUTHORITY)}`,
     ]) expect(promoter).toContain(field);
+    // The root-only shell promoter keeps serialized protocol snapshots; these
+    // must stay identical to the runtime's single reviewed capability contract.
+    const snapshots = [...promoter.matchAll(/"authority":(\{[^{}\r\n]*\})/g)].map(match => JSON.parse(match[1]));
+    expect(snapshots).toHaveLength(2);
+    for (const snapshot of snapshots) expect(snapshot).toEqual(AURION_BINARY_AUTHORITY);
+  });
+
+  function runFinalRulesetGuard(input: unknown) {
+    const finalStep = workflow.split("- name: Emit final Blocker 1 production gate")[1];
+    const actualImport = finalStep?.match(/import \{ requireZoneRulesetEvidence \} from "\.\/shared\/aurionZoneRulesetContract\.mjs";/)?.[0];
+    const actualGuard = finalStep?.match(/\/\/ aurion-final-zone-ruleset-guard:start([\s\S]*?)\/\/ aurion-final-zone-ruleset-guard:end/)?.[1];
+    if (!actualImport || !actualGuard) throw new Error("FINAL_RULESET_GUARD_SOURCE_MISSING");
+    // Execute the actual workflow fragment in plain Node, the production
+    // gate's runtime, using deliberately small contract fixtures only.
+    return spawnSync(process.execPath, ["--input-type=module", "-e", `
+      import fs from "node:fs";
+      ${actualImport}
+      const {gameplay, installed, health}=JSON.parse(fs.readFileSync(0,"utf8"));
+      ${actualGuard}
+      process.stdout.write(JSON.stringify({zoneRulesetVersion}));
+    `], { input: JSON.stringify(input), encoding: "utf8", timeout: 10000,
+      env: { PATH: process.env.PATH } });
+  }
+
+  function rulesetFixture(ruleset = "aurion.zone.rules.v2") {
+    return { gameplay: { zoneRulesetVersion: ruleset, membershipPersistence: { receipts: [{ rulesetVersion: ruleset }] } },
+      installed: { authority: structuredClone(AURION_BINARY_AUTHORITY) },
+      health: { authority: structuredClone(AURION_BINARY_AUTHORITY) } };
+  }
+
+  it.each(["aurion.zone.rules.v2", "aurion.zone.rules.v3"])("final plain-Node gate certifies actual %s separately from binary default", ruleset => {
+    const result = runFinalRulesetGuard(rulesetFixture(ruleset));
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ zoneRulesetVersion: ruleset });
+    expect(workflow).toContain("binaryAuthority:health.authority");
+    expect(workflow).toContain("binaryAuthorityRulesetScope");
+    expect(workflow).not.toMatch(/\bauthorityRuleset:/);
+  });
+
+  it.each(["missing", "unsupported", "receipt", "empty", "scope", "default", "support", "tick", "causal"])("final plain-Node gate rejects %s ruleset evidence", mode => {
+    const input: any = rulesetFixture();
+    if (mode === "missing") delete input.gameplay.zoneRulesetVersion;
+    if (mode === "unsupported") {
+      input.gameplay.zoneRulesetVersion = "aurion.zone.rules.v999";
+      input.gameplay.membershipPersistence.receipts[0].rulesetVersion = "aurion.zone.rules.v999";
+      input.health.authority.supportedZoneRulesets.push("aurion.zone.rules.v999");
+      input.installed.authority.supportedZoneRulesets.push("aurion.zone.rules.v999");
+    }
+    if (mode === "receipt") input.gameplay.membershipPersistence.receipts[0].rulesetVersion = "aurion.zone.rules.v3";
+    if (mode === "empty") input.gameplay.membershipPersistence.receipts = [];
+    if (mode === "scope") input.health.authority.rulesetScope = "executed-gameplay";
+    if (mode === "default") input.installed.authority.defaultRulesetVersion = "aurion.zone.rules.v2";
+    if (mode === "support") input.health.authority.supportedZoneRulesets = ["aurion.zone.rules.v3"];
+    if (mode === "tick") input.installed.authority.tickHz = 9;
+    if (mode === "causal") input.health.authority.causalReceipts = false;
+    const result = runFinalRulesetGuard(input);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("GAMEPLAY_RULESET_MISMATCH");
   });
 
   it("requires trusted attestations and exact production schema before final PASS", () => {

@@ -9,6 +9,7 @@ on:
       - 'server/causality/persistedZoneRecovery.ts'
       - 'server/zoneRuntime.ts'
       - 'shared/aurionProductionProbeEvidence.ts'
+      - 'shared/aurionZoneRulesetContract.*'
       - 'scripts/aurion-probe-bootstrap*'
       - 'server/_core/index.ts'
       - 'scripts/aurion-production-probe-client*'
