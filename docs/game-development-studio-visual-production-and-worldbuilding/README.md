@@ -15,7 +15,7 @@ description: >-
 * **AX1** besitzt Renderer, UI, Kamera, Animation, VFX, LOD/HLOD und Presentation Content. AX1 projiziert bestätigte Aurion-Wahrheit und autorisiert keine Gameplaymutation.
 * **WASD** ist ausschließlich historische Migrations-/Provenienzquelle. Historische revisionsgebundene WASD-Belege dürfen Migrationen belegen, aber keine neue Aurion-Runtime-Wahrheit autorisieren.
 * **Game Development Studio** produziert, inspiziert, validiert, paketiert und vendort Assets. GDS darf keine Quest-, Dungeon- oder World-Truth setzen.
-* **Genkit** erzeugt strukturierte Entwürfe. Genkit hat in der Authoring-Lane keine Publish-, Tool- oder Gameplay-Authority.
+* **Godot Human/AI World Studio** erzeugt überprüfbare, vom Menschen kontrollierte Entwürfe. Auch optionales OpenAI-Authoring hat keine Publish-, Tool- oder Gameplay-Authority.
 
 {% hint style="warning" %}
 Ein KI-Vorschlag, Asset, Screenshot, Capture oder Provider-Job darf niemals Gameplay-Wahrheit erzeugen. Produktiv wird Content erst nach Aurion-Validierung, kanonischem Plan-Hash und einer separaten menschlichen Apply-/Publish-Bestätigung.
@@ -54,7 +54,7 @@ Named-NPC-Beispiel: Ein approved `npc-fallback`-Character kann nach Plan-Readbac
 Der gemeinsame Authoring-Ablauf ist für Welt, Nebenquests und Dungeons gleich:
 
 1. **Design-Brief:** Der Mensch beschreibt Ziel, Stimmung, Funktion, Geometrie, Questlogik oder Dungeonstruktur.
-2. **Genkit Draft:** Genkit liefert ausschließlich strukturiertes, untrusted Draft-JSON. Keine Tools, kein Publish, keine Lizenzbehauptung.
+2. **Godot-/Human-Entwurf:** Der native Editor exportiert einen katalogreferenzierten Vorschlag. Ein optional ausdrücklich konfigurierter OpenAI-Dienst darf nur strukturiertes, untrusted JSON für den Admin-Webeditor liefern. Keine Tools, kein Publish, keine Lizenzbehauptung; ohne Konfiguration bleibt der KI-Vorschlagspfad fail-closed.
 3. **Aurion Plan:** Aurion parst, validiert, bindet bestätigte GLB-IDs, prüft Graph/Layout/Referenzen und erzeugt einen kanonischen Plan-Hash.
 4. **Human Review:** Änderungen am Draft invalidieren den Plan und erzwingen eine neue Validierung.
 5. **Expliziter Commit:** Der Mensch bestätigt exakt eine Consequence-Grenze:
@@ -133,7 +133,7 @@ Nach `PUBLISH_DUNGEON` erscheint der Dungeon im echten Group-Finder. Das Instanc
 * Die bestätigte Aktion zeigt Plan-Hash und exakte Consequence.
 * Geänderte Inputs invalidieren den Plan.
 * Kein Client darf World-/Quest-/Dungeon-Truth frei schreiben.
-* Genkit- oder GDS-Ausgaben werden niemals direkt persistiert.
+* Godot-Editor-, OpenAI- oder GDS-Ausgaben werden niemals direkt als kanonischer Weltzustand persistiert.
 * Kein Provider-Spend in dieser Authoring-Lane.
 * Jede Mutation erzeugt Revision/Hash/Receipt und einen Readback.
 
@@ -177,4 +177,4 @@ Für Authoring-Integrationen gilt weiterhin:
 
 Für Content gilt zusätzlich:
 
-`Human Brief → Genkit Draft → Aurion Plan → Human Confirm → Persist/Receipt → Runtime Readback`
+`Human Brief → Godot World Draft (optional OpenAI proposal) → Aurion Plan → Human Confirm → Persist/Receipt → Runtime Readback`

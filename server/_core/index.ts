@@ -4,6 +4,7 @@ import { createCorsOriginResolver } from "./corsOrigin";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
+import { writeSync } from "node:fs";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -127,18 +128,32 @@ async function startServer(){
           ()=>globalCausalArchivingService.stop(),
           ()=>globalStateReconciliationService.stop(),
         ],
-        flushCausalPersistence:()=>globalTickRecorder.flushPersistence(),
+        flushCausalPersistence:async()=>{
+          // Operational-only readback: never feeds time or queue depth into a simulation tick.
+          const logPending=()=>console.info("[Aurion] shutdown persistence status",JSON.stringify(globalTickRecorder.getPersistenceStatus()));
+          logPending();
+          // Keep a referenced operational handle alive until the causal flush settles.
+          // An unresolved Promise alone cannot keep Node alive during shutdown.
+          const progress=setInterval(logPending,1000);
+          try{await globalTickRecorder.flushPersistence();logPending();}
+          finally{clearInterval(progress);}
+        },
         closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
       });
-      console.info("[Aurion] graceful causal shutdown complete");
+      // Emit the actual post-drain receipt synchronously before process.exit(0).
+      // Buffered console output may be lost during an immediate process exit.
+      writeSync(1, "[Aurion] graceful causal shutdown complete\n");
       process.exit(0);
     }catch(error){
       console.error("[Aurion] graceful causal shutdown failed",error);
       process.exit(1);
     }
   };
-  process.once("SIGTERM",()=>{void shutdown("SIGTERM");});
-  process.once("SIGINT",()=>{void shutdown("SIGINT");});
+  // A second signal during the asynchronous durable drain must not restore Node's
+  // default termination handler before persistence and HTTP closure finish.
+  // The shutdown guard above makes repeated signals idempotent.
+  process.on("SIGTERM",()=>{void shutdown("SIGTERM");});
+  process.on("SIGINT",()=>{void shutdown("SIGINT");});
   server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
 startServer().catch(error=>{console.error(error);process.exit(1);});

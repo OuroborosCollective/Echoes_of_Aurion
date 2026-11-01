@@ -146,7 +146,10 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
   }
 
   async getLatestReceipt(zoneId: string): Promise<AurionCausalTickReceipt | null> {
-    const db = await getDb(); if (!db) return null;
+    // A missing DB is not an empty receipt history: cold activation must fail
+    // closed instead of registering a new tick-zero zone over durable receipts.
+    const db = await getDb();
+    if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     const [row] = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.zoneId, zoneId)).orderBy(desc(aurionCausalTickReceipts.tick)).limit(1);
     return row ? this.mapReceipt(row) : null;
   }

@@ -3,7 +3,8 @@ import { ZONE_PROTOCOL_VERSION } from "../shared/zonePresenceContract";
 import WebSocket from "ws";
 import { describe, expect, it, vi } from "vitest";
 import { registerZoneGateway } from "./zoneGateway";
-import { ZoneRegistry } from "./zoneRuntime";
+import { AuthoritativeMovementZone, ZoneRegistry } from "./zoneRuntime";
+import { AurionTickRecorder } from "./causality/tickRecorder";
 
 function onceOpen(socket: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -40,13 +41,14 @@ describe("zoneGateway world presence bridge", () => {
     const upsert = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
     const registry = new ZoneRegistry();
+    const recoverZone = vi.fn(async (zoneId: "observatory_threshold") => new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()));
     const consumeTicket = vi.fn(async () => ({
       userId: 73,
       zoneId: "observatory_threshold" as const,
       clientBuild: "aurion-presence-test-v1",
       expiresAt: new Date(Date.now() + 60_000),
     }));
-    const gateway = registerZoneGateway(server, registry, consumeTicket, { upsert, release });
+    const gateway = registerZoneGateway(server, registry, consumeTicket, { upsert, release }, undefined, recoverZone);
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", () => resolve());
@@ -71,6 +73,7 @@ describe("zoneGateway world presence bridge", () => {
       socket.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION }));
       const welcome = await welcomePromise;
       expect(welcome.type).toBe("welcome");
+      expect(recoverZone).toHaveBeenCalledTimes(1);
       expect(welcome.protocolVersion).toBe(ZONE_PROTOCOL_VERSION);
       expect(welcome.selfEntityId).toBe("player:73");
       expect(Array.isArray(welcome.mobs)).toBe(true);
