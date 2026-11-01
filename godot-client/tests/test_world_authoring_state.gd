@@ -149,6 +149,14 @@ func verify_quest_contract() -> void:
 	var p := {"schemaVersion":"aurion.authoring.v1", "proposalId":proposal.id, "expectedTemplateSetHash":proposal.expectedTemplateSetHash,
 		"proposalReceiptHash":proposal.receiptHash, "template":d, "templateHash":"e".repeat(64), "planHash":"b".repeat(64), "requiresHumanConfirmation":true}
 	require(state.same_json(d, JSON.parse_string(JSON.stringify(d))), "quest JSON round-trip changed semantic draft identity")
+	var long_title := d.duplicate(true)
+	long_title.title = "t".repeat(256)
+	require(not state.draft_valid(long_title), "quest title exceeds the actual MariaDB column")
+	long_title.title = "t".repeat(255)
+	require(state.draft_valid(long_title), "persistable 255-character quest title rejected")
+	var unsafe := d.duplicate(true)
+	unsafe.edges[0].priority = JSON.parse_string("9007199254740993")
+	require(not state.same_json(unsafe, unsafe) and not state.draft_valid(unsafe), "rounded unsafe JSON float reached quest proposal validation")
 	require(not state.same_json(true, 1) and not state.same_json(1, 2.0), "quest numeric comparison weakened type/value identity")
 	require(not state.same_json(INF, INF) and not state.same_json(9007199254740993, 9007199254740992.0), "unsafe quest numbers compared as exact JSON identity")
 	require(not state.begin_proposal(d).is_empty(), "quest draft was not staged")

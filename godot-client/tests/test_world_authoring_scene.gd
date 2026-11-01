@@ -73,6 +73,7 @@ func verify() -> void:
 	require(studio.has_method("inspection_export"), "WorldStudio lacks confirmed-state inspector")
 	if studio.has_method("inspection_export"):
 		var before_inspection := fake.sent.size()
+		require(studio._inspection_list.item_count == 0, "hidden inspector allocated controls before it was opened")
 		var inspection: Dictionary = studio.inspection_export()
 		require(inspection.get("schemaVersion") == "aurion.inspection.v1" and inspection.get("zoneId") == "observatory_threshold" and inspection.get("tick") == 1, "inspector lost confirmed zone identity")
 		require(inspection.get("causalProof") == "UNVERIFIED" and inspection.get("receiptHash") == null, "zone-v5 inspector fabricated receipt evidence")
@@ -81,6 +82,16 @@ func verify() -> void:
 		if not rows.is_empty(): rows[0]["entityId"] = "local-only"
 		require(scene._entities.record("presences", "player:1").get("entityId") == "player:1", "inspector changed the canonical projection")
 		require(fake.sent.size() == before_inspection, "read-only inspector sent a server command")
+		studio._toggle_inspector()
+		require(studio._inspection_list.item_count > 0, "opening inspector did not display the latest model")
+		studio._toggle_inspector()
+		studio._inspection_list.clear()
+		studio._inspection["snapshotSeq"] = -1
+		studio.set_inspection_context(scene._confirmed_zone, scene._entities, false)
+		require(studio._inspection_list.item_count == 0 and not studio.inspection_export().is_empty(), "hidden snapshot rebuilt controls or lost its read-only model")
+		studio._toggle_inspector()
+		require(studio._inspection_list.item_count > 0, "reopened inspector did not render the deferred snapshot")
+		studio._toggle_inspector()
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
 	require(fake.sent.back().kind == "catalog", "admin identity did not request catalog")
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
@@ -219,6 +230,7 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
 	var editor: Variant = studio.quest_editor()
+	require(editor.has_method("load_more_templates"), "quest selection lacks bounded pagination")
 	var pending_path := "user://aurion-quest-scene-%d" % Time.get_ticks_usec()
 	editor._journal = load("res://authoring/quest_authoring_journal.gd").new(pending_path)
 	var template := {"templateId":"quest.native-editor", "version":1, "title":"Quest fixture", "description":"Synthetic native graph",

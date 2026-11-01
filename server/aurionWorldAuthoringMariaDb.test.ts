@@ -18,6 +18,8 @@ import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
 import { router } from "./_core/trpc";
 import type { TrpcContext } from "./_core/context";
 import { AdminQuestStudioService } from "./questCompiler/adminService";
+import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
+import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
 
 vi.mock("./storage", async importOriginal => ({
   ...await importOriginal<typeof import("./storage")>(),
@@ -130,6 +132,59 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const [count] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionAuthoringReceipts WHERE kind='quest' AND actorUserId=?", [admin]);
     expect(Number(count[0]!.n)).toBe(1);
   });
+
+  it.each(["title", "unsafe-number"])("rejects unpersistable quest %s before saving a proposal", async kind => {
+    const service = new AdminQuestStudioService();
+    const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1 };
+    if (kind === "title") template.title = "t".repeat(256);
+    else template.edges = template.edges.map((edge, i) => i === 0 ? { ...edge, priority: 9007199254740992 } : edge);
+    expect(QuestTemplateVersionSchema.safeParse(template).success).toBe(false);
+    await expect(service.createDraftProposal({ authorUserId: admin, templateId: template.templateId, templateVersion: 1, proposedDataJson: JSON.stringify(template) })).rejects.toThrow();
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionQuestAdminProposals WHERE authorUserId=?", [admin]);
+    expect(Number(rows[0]!.n)).toBe(0);
+  });
+
+  it("pages the canonical version history and reads one publication beyond an 8 MiB active history", async () => {
+    const initial = new AdminQuestStudioService();
+    const base = { ...(await initial.getTemplates())[0]!, templateId: "inspector-native-quest", description: "x".repeat(55_000) };
+    const persist = async (version: number, active: boolean) => {
+      const template = QuestTemplateVersionSchema.parse({ ...base, version, active, quarantined: !active });
+      await pool.execute("INSERT INTO aurionQuestTemplateVersions (templateId,version,title,description,templateJson,templateHash,active,quarantined) VALUES (?,?,?,?,?,?,?,?)", [template.templateId, version, template.title, template.description, JSON.stringify(template), computeCanonicalHash("aurion.quest.template.v1", template), active, !active]);
+      return template;
+    };
+    for (let version = 1; version <= 160; version++) await persist(version, version < 160);
+    const service = new AdminQuestStudioService();
+    expect(Buffer.byteLength(JSON.stringify(await service.getTemplates()), "utf8")).toBeGreaterThan(8 * 1024 * 1024);
+    const page = Reflect.get(service, "getAuthoringTemplatesPage");
+    const target = Reflect.get(service, "getAuthoringTemplateVersion");
+    expect(typeof page).toBe("function");
+    expect(typeof target).toBe("function");
+    const seen: number[] = [];
+    let after: unknown = undefined;
+    do {
+      const result = await page.call(service, { after, limit: 20 });
+      expect(result.schemaVersion).toBe("aurion.quest-template-page.v1");
+      expect(result.items.length).toBeLessThanOrEqual(20);
+      expect(Buffer.byteLength(JSON.stringify(result), "utf8")).toBeLessThan(32_768);
+      for (const item of result.items) if (item.templateId === base.templateId) seen.push(item.version);
+      after = result.nextCursor;
+    } while (after);
+    expect([...new Set(seen)]).toHaveLength(160);
+    expect(seen).toContain(160); // Includes the inactive, quarantined version.
+    await persist(200, false); // A fresh DB maximum must supersede the hydrated catalog.
+    const copied = await target.call(service, { templateId: base.templateId, version: 1 });
+    expect(copied.nextVersion).toBe(201);
+    expect(copied.templates).toHaveLength(1);
+    const conflicting = { ...copied.templates[0], version: 160, title: "Changed occupied version", active: true, quarantined: false };
+    await expect(service.createDraftProposal({ authorUserId: admin, templateId: base.templateId, templateVersion: 160, proposedDataJson: JSON.stringify(conflicting) })).rejects.toThrow("QUEST_TEMPLATE_VERSION_CONFLICT");
+    const draft = { ...copied.templates[0], version: copied.nextVersion, active: true, quarantined: false };
+    const proposal = await service.createDraftProposal({ authorUserId: admin, templateId: base.templateId, templateVersion: draft.version, proposedDataJson: JSON.stringify(draft) });
+    const plan = await service.planPublishProposal(proposal.id);
+    const published = await service.publishProposal(admin, proposal.id, plan.planHash);
+    const readback = await target.call(service, { templateId: base.templateId, version: 201 });
+    expect(readback.templates).toEqual([published.template]);
+    expect(Buffer.byteLength(JSON.stringify(readback), "utf8")).toBeLessThan(128_000);
+  }, 60_000);
 
   it("reads historical plans and binds new plans and receipts to the actual predecessor", async () => {
     const previous = await seedLegacy("fixture-legacy");
