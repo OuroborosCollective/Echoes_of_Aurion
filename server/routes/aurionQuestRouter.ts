@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { adminProcedure, protectedProcedure, publicProcedure, router } from '../_core/trpc';
 import { AdminQuestStudioService } from '../questCompiler/adminService';
 import { GameDevelopmentStudioQuestSupport } from '../gameDevelopmentStudioQuestSupport';
+import { recoverQuestAuthoringReceipt } from '../aurionAuthoringPersistence';
 
 export const adminQuestService = new AdminQuestStudioService();
 
@@ -50,6 +51,13 @@ export const aurionQuestRouter = router({
     }).strict())
     .mutation(({ ctx, input }) => adminQuestService.publishProposal(ctx.user.id, input.proposalId, input.expectedPlanHash)),
   available: protectedProcedure.query(() => adminQuestService.availableQuests()),
+  // A missing receipt remains unresolved; this endpoint never republishes.
+  publishReceipt: adminProcedure
+    .input(z.object({
+      proposalId: z.string().min(8).max(128),
+      planHash: z.string().regex(/^[a-f0-9]{64}$/),
+    }).strict())
+    .mutation(({ ctx, input }) => recoverQuestAuthoringReceipt(ctx.user.id, input)),
   myInstances: protectedProcedure.query(({ ctx }) => adminQuestService.listInstances({ playerUserId: ctx.user.id })),
   details: protectedProcedure
     .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())

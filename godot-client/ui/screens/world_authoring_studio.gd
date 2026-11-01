@@ -290,7 +290,9 @@ func new_world_draft(key: String, title: String, version: int) -> bool:
 func import_world_draft(text: String) -> bool:
 	if not _draft_editable() or text.to_utf8_buffer().size() > 1024 * 1024:
 		return false
-	var candidate: Variant = JSON.parse_string(text)
+	var parser := JSON.new()
+	if parser.parse(text) != OK: return false
+	var candidate: Variant = parser.data
 	if not _catalog_draft_valid(candidate): return false
 	_draft.text = JSON.stringify(candidate, "\t")
 	_on_draft_changed()
