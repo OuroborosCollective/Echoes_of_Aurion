@@ -1,3 +1,4 @@
+@tool
 extends RefCounted
 ## Bounded, local documentation retrieval. It never calls Aurion or changes runtime state.
 
