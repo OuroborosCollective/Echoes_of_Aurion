@@ -2,6 +2,7 @@ extends RefCounted
 ## Bounded, local documentation retrieval. It never calls Aurion or changes runtime state.
 
 const MAX_FILES := 400
+const MAX_DIRECTORIES := 1000
 const MAX_FILE_BYTES := 524288
 const MAX_TOTAL_BYTES := 8388608
 const MAX_DEPTH := 12
@@ -16,6 +17,7 @@ var skipped_files := 0
 var indexed_bytes := 0
 var last_error := ""
 var _candidate_count := 0
+var _directory_count := 0
 var _scan_stopped := false
 
 func index_directory(root_path: String) -> Dictionary:
@@ -25,6 +27,7 @@ func index_directory(root_path: String) -> Dictionary:
 	indexed_bytes = 0
 	last_error = ""
 	_candidate_count = 0
+	_directory_count = 0
 	_scan_stopped = false
 	var root := DirAccess.open(root_path.strip_edges())
 	if root == null:
@@ -45,6 +48,11 @@ func index_directory(root_path: String) -> Dictionary:
 
 func _walk(folder_path: String, relative_prefix: String, depth: int) -> void:
 	if _scan_stopped:
+		return
+	_directory_count += 1
+	if _directory_count > MAX_DIRECTORIES:
+		skipped_files += 1
+		_scan_stopped = true
 		return
 	var directory := DirAccess.open(folder_path)
 	if directory == null:
@@ -158,7 +166,7 @@ func search(query: String, category: String = "Alle", limit: int = 8) -> Array[D
 	for document in documents:
 		if category != "Alle" and str(document["category"]) != category:
 			continue
-		var lines: Array = document["lines"]
+		var lines = document["lines"]
 		var found_tokens: Dictionary = {}
 		var total_occurrences := 0
 		var best_line_index := 0

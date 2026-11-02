@@ -42,7 +42,6 @@ func _remove_tree(path: String) -> void:
 			var child_path := path.path_join(entry)
 			if directory.current_is_dir():
 				_remove_tree(child_path)
-				DirAccess.remove_absolute(_absolute(child_path))
 			else:
 				DirAccess.remove_absolute(_absolute(child_path))
 		entry = directory.get_next()

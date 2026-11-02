@@ -16,6 +16,8 @@ var _status: Label
 var _index
 var _last_results: Array[Dictionary] = []
 var _indexed_root := ""
+var _last_query := ""
+var _last_category := ""
 var _has_index := false
 
 func _enter_tree() -> void:
@@ -63,6 +65,7 @@ func _build_dock() -> void:
 	_category = OptionButton.new()
 	for category_name in ["Alle", "Lore", "Quest", "Projekt"]:
 		_category.add_item(category_name)
+	_category.item_selected.connect(_on_category_selected)
 	query_row.add_child(_category)
 	_dock.add_child(query_row)
 
@@ -137,6 +140,8 @@ func _refresh_index() -> void:
 	_has_index = bool(response.get("ok", false))
 	_indexed_root = _root_field.text.strip_edges() if _has_index else ""
 	_last_results.clear()
+	_last_query = ""
+	_last_category = ""
 	_results_view.clear()
 	if not _has_index:
 		_status.text = str(response.get("error", "Index konnte nicht erstellt werden."))
@@ -158,11 +163,14 @@ func _search() -> void:
 	if not _ensure_index():
 		return
 	var query := _query_field.text.strip_edges()
+	var selected_category := _category.get_item_text(_category.selected)
+	_last_query = query
+	_last_category = selected_category
+	_last_results.clear()
 	if query.is_empty():
 		_results_view.text = "Frage oder Stichwörter eingeben."
 		_last_results.clear()
 		return
-	var selected_category := _category.get_item_text(_category.selected)
 	_last_results = _index.search(query, selected_category, 8)
 	if _last_results.is_empty():
 		_results_view.text = "Keine passenden Fundstellen."
@@ -181,13 +189,22 @@ func _search() -> void:
 func _on_query_submitted(_query: String) -> void:
 	_search()
 
+func _on_category_selected(_index_number: int) -> void:
+	_search()
+
 func _copy_context() -> void:
+	if not _ensure_index():
+		return
+	if _query_field.text.strip_edges() != _last_query or _category.get_item_text(_category.selected) != _last_category:
+		_search()
 	DisplayServer.clipboard_set(_index.context_bundle(_query_field.text, _last_results, 6))
 	_status.text = "Frage und angezeigte Fundstellen in die Zwischenablage kopiert."
 
 func _save_draft() -> void:
 	if not _ensure_index():
 		return
+	if _query_field.text.strip_edges() != _last_query or _category.get_item_text(_category.selected) != _last_category:
+		_search()
 	var response: Dictionary = _index.save_new_draft(
 		_root_field.text.strip_edges(),
 		_filename_field.text,
