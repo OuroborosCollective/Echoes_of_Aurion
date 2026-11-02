@@ -18,6 +18,7 @@ export type WorldPresenceLease = {
 
 const zoneAnchors: Readonly<Record<ZoneId, WorldChunkCoordinate>> = Object.freeze({
   observatory_threshold: Object.freeze({ x: 0, z: 0 }),
+  windhollow: Object.freeze({ x: -18, z: -22 }), // Or some appropriate default chunk coordinate
 });
 
 function assertPositiveSafeInteger(value: number, label: string) {

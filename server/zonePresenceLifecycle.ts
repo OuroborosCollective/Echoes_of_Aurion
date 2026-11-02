@@ -9,7 +9,7 @@ export class ZonePresenceLifecycle {
   private queued?: { x: number; z: number };
   private observed?: { x: number; z: number };
   private wasMoving = false;
-  constructor(private readonly sink: WorldPresenceSink, private readonly identity: { userId: number; connectionId: string; zoneId: "observatory_threshold" }) {}
+  constructor(private readonly sink: WorldPresenceSink, private readonly identity: { userId: number; connectionId: string; zoneId: "observatory_threshold"|"windhollow" }) {}
   /** Observe each authoritative tick; crossing and stopping must not wait for the lease heartbeat. */
   observe(position: { x: number; z: number }): Promise<unknown> | undefined {
     const previous = this.observed;

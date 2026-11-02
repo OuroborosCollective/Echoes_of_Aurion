@@ -67,7 +67,7 @@ export const gatewayCommands = mysqlTable("gatewayCommands", {
 export const zoneConnectionTickets = mysqlTable("zoneConnectionTickets", {
   id: varchar("id", { length: 64 }).primaryKey(),
   userId: int("userId").notNull(),
-  zoneId: mysqlEnum("zoneId", ["observatory_threshold"]).notNull(),
+  zoneId: mysqlEnum("zoneId", ["observatory_threshold", "windhollow"]).notNull(),
   ticketDigest: varchar("ticketDigest", { length: 128 }).notNull().unique(),
   clientBuild: varchar("clientBuild", { length: 120 }).notNull(),
   expiresAt: timestamp("expiresAt").notNull(),

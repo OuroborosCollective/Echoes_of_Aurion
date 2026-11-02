@@ -76,7 +76,7 @@ assert.equal(defs.worldPosition.properties.x.minimum, -chunkLimit * chunkSize - 
 assert.equal(defs.worldPosition.properties.x.maximum, chunkLimit * chunkSize + chunkSize / 2 - 1);
 assert.deepEqual(defs.worldPosition.properties.x, defs.worldPosition.properties.z);
 
-expectText(protocol, "z.literal(\"observatory_threshold\")", "zone id");
+expectText(protocol, 'z.enum(["observatory_threshold", "windhollow"])', "zone id");
 expectText(protocol, "ZONE_FIXED_POINT_SCALE=1_000", "fixed-point scale");
 expectText(protocol, "max(2_147_483_647)", "client sequence maximum");
 expectText(gateway, "MAX_MESSAGE_BYTES=2_048", "incoming byte limit");
@@ -105,7 +105,7 @@ for (const marker of [
 const isInteger = value => Number.isSafeInteger(value);
 function validClientMessage(message) {
   if (!message || typeof message !== "object") return false;
-  if (message.type === "hello") return typeof message.ticket === "string" && message.ticket.length >= 24 && message.ticket.length <= 160 && message.zoneId === "observatory_threshold" && message.protocolVersion === 5;
+  if (message.type === "hello") return typeof message.ticket === "string" && message.ticket.length >= 24 && message.ticket.length <= 160 && (message.zoneId === "observatory_threshold" || message.zoneId === "windhollow") && message.protocolVersion === 5;
   if (!isInteger(message.clientSeq) || message.clientSeq < 1 || message.clientSeq > 2147483647) return false;
   if (message.type === "move") return message.input && [-1, 0, 1].includes(message.input.x) && [-1, 0, 1].includes(message.input.z);
   if (message.type === "attack") return /^mob_[1-9][0-9]{0,2}$/.test(message.targetEntityId);
@@ -114,6 +114,7 @@ function validClientMessage(message) {
 }
 const ticket = `aurion_zone_${"a".repeat(43)}`;
 assert.equal(validClientMessage({ type: "hello", ticket, zoneId: "observatory_threshold", protocolVersion: 5 }), true);
+assert.equal(validClientMessage({ type: "hello", ticket, zoneId: "windhollow", protocolVersion: 5 }), true);
 assert.equal(validClientMessage({ type: "hello", ticket, zoneId: "observatory_threshold", protocolVersion: 4 }), false);
 assert.equal(validClientMessage({ type: "move", clientSeq: 1, input: { x: -1, z: 1 } }), true);
 assert.equal(validClientMessage({ type: "move", clientSeq: 1, input: { x: 2, z: 0 } }), false);

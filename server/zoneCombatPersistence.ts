@@ -11,7 +11,7 @@ import type { ZoneTicketReceipt } from "./zoneGateway";
  * Aurion-only responsibility: authenticate ticket, persist/read account state,
  * then project it into the AX1/WASD runtime. No combat or quest decision lives here.
  */
-export async function consumeZoneTicketWithCombatProfile(values:{ticket:string;zoneId:"observatory_threshold"}):Promise<ZoneTicketReceipt|undefined>{
+export async function consumeZoneTicketWithCombatProfile(values:{ticket:string;zoneId:"observatory_threshold"|"windhollow"}):Promise<ZoneTicketReceipt|undefined>{
   const ticket=await consumeZoneConnectionTicket(values);if(!ticket)return undefined;
   const db=await getDb();if(!db)throw new Error("ZONE_COMBAT_DATABASE_UNAVAILABLE");
   const profile=await getOrCreatePlayerProfile(ticket.userId);
