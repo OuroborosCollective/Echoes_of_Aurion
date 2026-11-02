@@ -1809,7 +1809,7 @@ func _clear_tabletop() -> void:
 	_tabletop_layer.clear()
 	_tabletop_map.set_slice({})
 	_tabletop_last_read = -1
-	_tabletop_controls.set_status("Tabletop · Ausschnitt nicht bestätigt")
+	_tabletop_controls.set_readback_status("UNAVAILABLE")
 
 func _set_tabletop_fallback(enabled: bool) -> void:
 	_tabletop_fallback = enabled
@@ -1845,7 +1845,7 @@ func _on_tabletop_ready(response: Dictionary, connection: String, generation: in
 		return
 	_tabletop_last_read = Time.get_ticks_msec()
 	_tabletop_map.set_slice(_tabletop_layer.snapshot())
-	_tabletop_controls.set_status("Tabletop · nur bestätigter Chunk" if response.status == "VERIFIED" else "Tabletop · Gelände unbekannt")
+	_tabletop_controls.set_readback_status(str(response.status))
 
 func _on_tabletop_failed(_reason: String, connection: String) -> void:
 	if _tabletop_active and _confirmed_zone.connection_id() == connection: _clear_tabletop()

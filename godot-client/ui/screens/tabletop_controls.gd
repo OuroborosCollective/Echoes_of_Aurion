@@ -18,7 +18,7 @@ func _ready() -> void:
 	add_child(_bar)
 	var bar := HBoxContainer.new()
 	_bar.add_child(bar)
-	_status.text = "Tabletop · bestätigten Ausschnitt laden"
+	_status.text = "Lädt Ausschnitt"
 	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_status.max_lines_visible = 2
 	_status.clip_text = true
@@ -82,8 +82,10 @@ func _check(parent: Node, text: String, pressed: bool, action: Callable) -> void
 	parent.add_child(button)
 	_buttons.append(button)
 	button.toggled.connect(action)
-func set_status(text: String) -> void:
-	_status.text = text
+func set_readback_status(state: String) -> void:
+	# Short, complete knowledge states remain legible beside touch buttons on
+	# narrow viewports. An unknown state never implies verified geometry.
+	_status.text = {"VERIFIED":"Chunk bestätigt", "FOGGED":"Unbekannt", "LOADING":"Lädt Ausschnitt"}.get(state, "Nicht bestätigt")
 func fit_layout(safe: Rect2, density: float = 1.0) -> void:
 	var scale_factor := clampf(density, 1.0, 2.0)
 	var margin := 16.0 * scale_factor

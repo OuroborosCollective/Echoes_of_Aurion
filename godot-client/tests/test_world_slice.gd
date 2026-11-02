@@ -95,6 +95,10 @@ func verify() -> void:
 		for button in ui._buttons:
 			require(button.custom_minimum_size.y >= 48.0 and button.focus_mode != Control.FOCUS_NONE, "tabletop touch/focus accessibility lost")
 		for excluded in ui.exclusions(): require(safe.encloses(excluded), "tabletop UI outside safe area: " + str(screen_size) + " / " + str(excluded))
+		for state in ["LOADING", "VERIFIED", "FOGGED", "UNAVAILABLE"]:
+			ui.set_readback_status(state)
+			await process_frame
+			require(ui._status.get_visible_line_count() == ui._status.get_line_count(), "knowledge state clipped: " + state + " / " + str(screen_size))
 	ui.queue_free()
 	for failure in failures: push_error(failure)
 	if failures.is_empty(): print("GODOT_WORLD_SLICE_PASS (DTO fixtures; no live receipt/device)")
