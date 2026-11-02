@@ -2,6 +2,7 @@ import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry }
 import { globalCausalPersistence } from "./persistence";
 import { replayZoneTick } from "./replayZoneTick";
 import { hashCanonicalZoneState, type CanonicalZoneState } from "./zoneCanonicalState";
+import { freezeEvidence } from "../../shared/aurionChunkStateContract";
 import {
   AURION_HEADLESS_CAUSAL_ORACLE_SCHEMA,
   sealHeadlessCausalOracleResult,
@@ -12,6 +13,13 @@ import {
 
 const MAX_REQUESTED_TICKS = 250;
 const MAX_TOTAL_REPLAY_TICKS = 350;
+
+type OracleRange = { zoneId: string; fromTick: number; toTick: number };
+/** Internal server readback. Never serialize the private canonical state to a client. */
+export type OracleStateReadback = Readonly<{
+  evidence: AurionHeadlessCausalOracleResult;
+  state: CanonicalZoneState | null;
+}>;
 
 type OraclePersistence = Pick<
   CausalPersistenceAdapter,
@@ -65,8 +73,8 @@ function seal(
   });
 }
 
-function unprovable(context: OracleContext, reason: string): AurionHeadlessCausalOracleResult {
-  return seal(context, { status: "UNPROVABLE", firstDivergence: null, reason });
+function unprovable(context: OracleContext, reason: string): OracleStateReadback {
+  return Object.freeze({ evidence: seal(context, { status: "UNPROVABLE", firstDivergence: null, reason }), state: null });
 }
 
 function divergence(
@@ -75,22 +83,26 @@ function divergence(
   stage: string,
   expectedHash: string,
   observedHash: string,
-): AurionHeadlessCausalOracleResult {
-  return seal(context, {
+): OracleStateReadback {
+  return Object.freeze({ evidence: seal(context, {
     status: "FIRST_DIVERGENCE",
     firstDivergence: { tick, stage, expectedHash, observedHash },
     reason: null,
-  });
+  }), state: null });
 }
 
 export class AurionHeadlessCausalOracle {
   constructor(private readonly persistence: OraclePersistence = globalCausalPersistence) {}
 
-  async replayRange(input: {
-    zoneId: string;
-    fromTick: number;
-    toTick: number;
-  }): Promise<AurionHeadlessCausalOracleResult> {
+  async replayRange(input: OracleRange): Promise<AurionHeadlessCausalOracleResult> {
+    return (await this.computeRange(input, false)).evidence;
+  }
+
+  async readConfirmedState(input: OracleRange): Promise<OracleStateReadback> {
+    return this.computeRange(input, true);
+  }
+
+  private async computeRange(input: OracleRange, includeState: boolean): Promise<OracleStateReadback> {
     const { zoneId, fromTick, toTick } = input;
     if (
       !zoneId.trim() ||
@@ -243,7 +255,10 @@ export class AurionHeadlessCausalOracle {
       return unprovable(context, "ORACLE_REQUESTED_RANGE_INCOMPLETE");
     }
 
-    return seal(context, { status: "MATCH", firstDivergence: null, reason: null });
+    return Object.freeze({
+      evidence: seal(context, { status: "MATCH", firstDivergence: null, reason: null }),
+      state: includeState ? freezeEvidence(structuredClone(currentState)) : null,
+    });
   }
 }
 

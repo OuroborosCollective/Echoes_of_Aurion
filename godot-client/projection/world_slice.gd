@@ -53,3 +53,15 @@ static func validate(response: Variant, connection: String, actor: String, coord
 				elif not position(item.fromMm, 0, 63999) or not position(item.toMm, 0, 63999): return {}
 	if JSON.stringify(response).to_utf8_buffer().size() > MAX_BYTES: return {}
 	return {"ok": true, "slice": s.duplicate(true), "fingerprint": response.fingerprint, "status": response.status}
+
+## Pure presentation filters shared by 3D and 2D after DTO validation.
+static func height_at(chunk: Dictionary, point: Dictionary) -> float:
+	var index := clampi(int(point.z) / 4000, 0, 15) * 16 + clampi(int(point.x) / 4000, 0, 15)
+	return float(chunk.tiles[index].heightMm) / 1000.0
+static func filtered_overlays(chunk: Dictionary, ceiling: float) -> Dictionary:
+	var result := {"structures":[], "roads":[]}
+	for item in chunk.structures:
+		if height_at(chunk, item.positionMm) + 0.5 <= ceiling: result.structures.append(item)
+	for item in chunk.roads:
+		if item.fromMm != item.toMm and maxf(height_at(chunk, item.fromMm), height_at(chunk, item.toMm)) + 0.05 <= ceiling: result.roads.append(item)
+	return result

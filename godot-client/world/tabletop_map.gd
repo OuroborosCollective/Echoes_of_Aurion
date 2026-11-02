@@ -1,5 +1,6 @@
 extends Control
 ## 2D fallback of the identical filtered slice; never fetches or expands knowledge.
+const Slice = preload("res://projection/world_slice.gd")
 var _slice: Dictionary = {}
 var _categories := {"terrain":true,"structures":true,"roads":true,"self":true}
 var _ceiling := INF
@@ -29,10 +30,11 @@ func _draw() -> void:
 				if float(tile.heightMm) / 1000.0 > _ceiling: continue
 				var color := Color("446354") if tile.surface in ["grass", "forest_floor"] else Color("8b8574")
 				draw_rect(Rect2(rect.position + Vector2(tile.x, tile.z) * length / 16.0, Vector2.ONE * (length / 16.0)), color)
+		var overlays := Slice.filtered_overlays(chunk, _ceiling)
 		if _categories.roads:
-			for road in chunk.roads: draw_line(_point(road.fromMm, rect), _point(road.toMm, rect), Color("e6d8ac"), 2.0)
+			for road in overlays.roads: draw_line(_point(road.fromMm, rect), _point(road.toMm, rect), Color("e6d8ac"), 2.0)
 		if _categories.structures:
-			for item in chunk.structures: draw_circle(_point(item.positionMm, rect), 4.0, Color("efad3d"))
+			for item in overlays.structures: draw_circle(_point(item.positionMm, rect), 4.0, Color("efad3d"))
 	if _categories.self:
 		var at: Dictionary = _slice.entities[0].position
 		var local_point := {"x":float(at.x) - float(_slice.coordinate.x) * 64000.0 + 32000.0, "z":float(at.z) - float(_slice.coordinate.z) * 64000.0 + 32000.0}

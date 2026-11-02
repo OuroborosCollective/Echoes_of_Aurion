@@ -2,6 +2,18 @@ extends SceneTree
 ## Isolated G21 UI + real local WebSocket transport; fixture state is not live Aurion.
 const Codec = preload("res://net/zone_codec.gd")
 const Actor = preload("res://actors/actor_view.tscn")
+## Control-flow spy only; real HTTP/auth boundaries have separate runtime tests.
+class ReaderCounter:
+	extends Node
+	var calls := 0
+	var cancelled := 0
+	func cancel() -> void: cancelled += 1
+	func request_self(_url: String, _connection: String) -> bool:
+		calls += 1
+		return false
+	func request_npcs(_url: String, _connection: String) -> bool:
+		calls += 1
+		return false
 var failures: Array[String] = []
 
 func require(ok: bool, message: String) -> void:
@@ -298,6 +310,12 @@ func verify() -> void:
 	slice_fixture.free()
 	dto.connectionId = scene._confirmed_zone.connection_id()
 	var canonical_before := JSON.stringify(scene._confirmed_zone.current_state())
+	var appearance_api: Node = scene._appearance_api
+	var quest_api: Node = scene._quest_npc_api
+	var appearance_counter := ReaderCounter.new()
+	var quest_counter := ReaderCounter.new()
+	scene._appearance_api = appearance_counter
+	scene._quest_npc_api = quest_counter
 	var player_view: Transform3D = scene.world_camera.transform
 	require(scene._set_tabletop(true), "at-rest protected tabletop entry failed")
 	require(not scene.world_actors.visible and not scene.confirmed_neighbors.visible and not scene._world_design_visuals.visible and not scene.mobile_joystick.visible, "legacy data leaked into slice presentation")
@@ -320,6 +338,11 @@ func verify() -> void:
 		await create_timer(0.01).timeout
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == canonical_before, "tabletop mutated confirmed world")
 	require(scene._set_tabletop(false), "return to player camera failed")
+	require(appearance_counter.cancelled == 1 and quest_counter.cancelled == 1 and appearance_counter.calls == 1 and quest_counter.calls == 1, "return failed to resume cancelled one-shot readers exactly once")
+	scene._appearance_api = appearance_api
+	scene._quest_npc_api = quest_api
+	appearance_counter.free()
+	quest_counter.free()
 	require(scene.world_camera.transform.is_equal_approx(player_view), "player camera was not restored")
 	scene._movement._last_direction = Vector2i.RIGHT
 	require(not scene._set_tabletop(true), "moving actor entered tabletop and changed intent lifecycle")

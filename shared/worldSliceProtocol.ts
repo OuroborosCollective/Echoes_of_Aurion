@@ -1,0 +1,63 @@
+import { z } from "zod";
+import { chunkCoordinateSchema, causalSha256Schema, causalRevisionSchema } from "./aurionChunkStateContract";
+import { chunkAssetPayloadSchema } from "./worldChunkProjectionPayload";
+import { GLOBAL_WORLD_ID } from "./worldIdentity";
+
+export const WORLD_SLICE_SCHEMA = "aurion.world-slice.v1" as const;
+export const WORLD_SLICE_POLICY = "actor-observed-current-epoch.v1" as const;
+export const WORLD_SLICE_MAX_BYTES = 65_536;
+export const WORLD_SLICE_ZONE = "observatory_threshold" as const;
+const epoch = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
+const mm = z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
+
+export const worldSliceQuerySchema = z.strictObject({
+  worldId: z.literal(GLOBAL_WORLD_ID), zoneId: z.literal(WORLD_SLICE_ZONE),
+  coordinate: chunkCoordinateSchema, radius: z.number().int().min(0).max(1),
+  lod: z.enum(["full", "map"]),
+  expectedEpoch: epoch.optional(), expectedWorldRoot: causalSha256Schema.optional(),
+});
+export type WorldSliceQuery = z.infer<typeof worldSliceQuerySchema>;
+
+const tile = z.strictObject({
+  x: z.number().int().min(0).max(15), z: z.number().int().min(0).max(15),
+  heightMm: z.number().int().min(-100_000).max(100_000),
+  surface: z.enum(["grass", "forest_floor", "riverbank", "stone", "ash", "ruin_path"]),
+});
+export const worldSliceSchema = z.strictObject({
+  schema: z.literal(WORLD_SLICE_SCHEMA), policy: z.literal(WORLD_SLICE_POLICY),
+  worldId: z.literal(GLOBAL_WORLD_ID), zoneId: z.literal(WORLD_SLICE_ZONE),
+  actorId: z.string().regex(/^player:[1-9][0-9]{0,15}$/),
+  epoch, worldRoot: causalSha256Schema, sourceRevision: causalRevisionSchema,
+  observedAtTick: epoch, coordinate: chunkCoordinateSchema,
+  radius: z.number().int().min(0).max(1), lod: z.enum(["full", "map"]),
+  knowledgeHash: causalSha256Schema.nullable(),
+  // V1 deliberately discloses only the actor's independently observed current
+  // chunk. A radius-1 window grants no neighbor data or arbitrary camera fetch.
+  chunks: z.array(z.strictObject({
+    coordinate: chunkCoordinateSchema, authorityReceiptHash: causalSha256Schema,
+    tiles: z.array(tile).length(256),
+    structures: chunkAssetPayloadSchema.shape.structures,
+    roads: chunkAssetPayloadSchema.shape.roads,
+  })).max(1),
+  // Own position only; no foreign players, private NPC semantics or quest state.
+  entities: z.array(z.strictObject({
+    entityId: z.string().regex(/^player:[1-9][0-9]{0,15}$/),
+    position: z.strictObject({ x: mm, z: mm }),
+  })).length(1),
+});
+
+/** Native HTTP spelling is strict too; no actor/world override or coercive floats. */
+export function parseWorldSliceHttpQuery(input: unknown): WorldSliceQuery {
+  const integerText = z.string().regex(/^(?:0|-?[1-9][0-9]{0,6})$/);
+  const query = z.strictObject({
+    x: integerText, z: integerText, radius: z.enum(["0", "1"]), lod: z.enum(["full", "map"]),
+    expectedEpoch: z.string().regex(/^[1-9][0-9]{0,15}$/).optional(),
+    expectedWorldRoot: causalSha256Schema.optional(),
+  }).parse(input);
+  return worldSliceQuerySchema.parse({
+    worldId: GLOBAL_WORLD_ID, zoneId: WORLD_SLICE_ZONE,
+    coordinate: { x: Number(query.x), z: Number(query.z) }, radius: Number(query.radius), lod: query.lod,
+    ...(query.expectedEpoch === undefined ? {} : { expectedEpoch: Number(query.expectedEpoch) }),
+    ...(query.expectedWorldRoot === undefined ? {} : { expectedWorldRoot: query.expectedWorldRoot }),
+  });
+}

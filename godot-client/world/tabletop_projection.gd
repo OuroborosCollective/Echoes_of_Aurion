@@ -53,8 +53,7 @@ func _local(point: Dictionary) -> Vector3:
 	return Vector3(float(_slice.coordinate.x) * 64.0 - 32.0 + float(point.x) / 1000.0, 0.0, float(_slice.coordinate.z) * 64.0 - 32.0 + float(point.z) / 1000.0)
 func _height(point: Dictionary) -> float:
 	if _slice.chunks.is_empty(): return 0.0
-	var index := clampi(int(point.z) / 4000, 0, 15) * 16 + clampi(int(point.x) / 4000, 0, 15)
-	return float(_slice.chunks[0].tiles[index].heightMm) / 1000.0
+	return Slice.height_at(_slice.chunks[0], point)
 func _display(parent: Node3D, mesh: Mesh, color: Color, at: Vector3) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	node.mesh = mesh
@@ -77,20 +76,19 @@ func _rebuild() -> void:
 		terrain.apply_filtered_tiles(chunk.tiles, chunk.coordinate, _connection, _ceiling)
 		# Markers disclose a known placement, never an invented building/model or
 		# underground volume. Only server-approved asset renderers own GLB shape.
-		for item in chunk.structures:
+		var overlays := Slice.filtered_overlays(chunk, _ceiling)
+		for item in overlays.structures:
 			var at := _local(item.positionMm)
 			at.y = _height(item.positionMm) + 0.5
-			if at.y > _ceiling: continue
 			var marker := BoxMesh.new()
 			marker.size = Vector3(1.0, 1.0, 1.0)
 			var node := _display(structures, marker, Color(0.94, 0.68, 0.24, 0.3 if _transparent else 1.0), at)
 			node.set_meta("placement_id", item.id)
-		for item in chunk.roads:
+		for item in overlays.roads:
 			var a := _local(item.fromMm)
 			var b := _local(item.toMm)
 			a.y = _height(item.fromMm) + 0.05
 			b.y = _height(item.toMm) + 0.05
-			if maxf(a.y, b.y) > _ceiling or a.distance_to(b) < 0.001: continue
 			var line := ImmediateMesh.new()
 			line.surface_begin(Mesh.PRIMITIVE_LINES)
 			line.surface_add_vertex(a)

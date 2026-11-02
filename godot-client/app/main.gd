@@ -1773,7 +1773,7 @@ func _set_tabletop(enabled: bool) -> bool:
 		for node in [confirmed_terrain, confirmed_neighbors, terrain3d_host, starter_village_visuals, unassigned_floor, world_actors, quest_npc_root, _world_design_visuals]:
 			_tabletop_saved_visibility[node] = node.visible
 			node.visible = false
-		for api in [_chunk_api, _world_design_api, _world_asset_api, _remote_api, _quest_npc_api, _history_api, _monster_api]: api.cancel()
+		for api in [_appearance_api, _chunk_api, _world_design_api, _world_asset_api, _remote_api, _quest_npc_api, _history_api, _monster_api]: api.cancel()
 		world_camera.set_tabletop(true, Vector3(float(coordinate.x) * 64.0, 0.0, float(coordinate.y) * 64.0))
 		_tabletop_layer.visible = not _tabletop_fallback
 		_tabletop_controls.visible = true
@@ -1796,6 +1796,11 @@ func _set_tabletop(enabled: bool) -> bool:
 		_tabletop_controls.visible = false
 		live_3d_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE
 		if _confirmed_zone.has_state(): _show_3d()
+		# These two optional readers normally start once at connection time.
+		# Entry cancelled them; safely resume them once on the return boundary.
+		if _confirmed_zone.has_state() and _zone_socket.state_name() == "connected" and not _lifecycle.is_suspended() and not _world_is_stale and _auth_start.protected_response_allowed():
+			_appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id())
+			_quest_npc_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
 	_camera_router.cancel()
 	return true
 

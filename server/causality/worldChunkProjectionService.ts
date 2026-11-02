@@ -7,8 +7,14 @@ import { worldCausalRootService } from "./worldCausalRootService";
 /** Only persisted, independently reconstructed epoch state may enter this producer. */
 export async function readConfirmedChunkAssetProjection(worldId: string, epoch: number, coordinate: WorldChunkCoordinate) {
   const readback = await worldCausalRootService.readChunk(worldId, epoch, coordinate);
+  return projectConfirmedChunkAssetReadback(readback);
+}
+
+/** Reuse one already verified server reconstruction; no second generator/read. */
+export async function projectConfirmedChunkAssetReadback(readback: Awaited<ReturnType<typeof worldCausalRootService.readChunk>>) {
   if (readback.status !== "VERIFIED") return readback;
   const { state, receipt } = readback;
+  const { worldId, epoch, coordinate } = receipt;
   const payload = chunkAssetPayloadSchema.parse({
     schema: "aurion.chunk-payload.v2", worldId, epoch, coordinate, chunkSizeMm: WORLD_CHUNK_SIZE_MM,
     structures: state.materialized.structures, roads: state.materialized.roads,
