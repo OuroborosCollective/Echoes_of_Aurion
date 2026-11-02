@@ -5441,3 +5441,5 @@ Evidence: MariaDB RED 41368991665/41370813338/41373563833; GREEN 41380291362 at 
 
 Review continuation: Validate joined epoch sources with the existing parser in one SELECT; bound JSON/PNG input and bind image hashing/decoding to one byte buffer, including decoder failures. A scheduled pre-join heartbeat must not satisfy the peer-join test; its final state assertions and deadline remain unchanged.
 Evidence: Real MariaDB query-budget RED 41382587425 (2 SELECTs instead of 1); three local Python REDs then 23/23 comparator tests passed. Historical final-head failures 41381619918/41381619949 retained; final CI/review of these corrections remains required before merge.
+
+Security continuation: Move the manual live-acceptance gate off the production-connected runner to a hosted runner, restricted to the default branch and existing production environment; execute no dispatch-ref code there. The gate still explicitly fails until capture transport/provenance exists. Static YAML validation passed; no production job was dispatched.
