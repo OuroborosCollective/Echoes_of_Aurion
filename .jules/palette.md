@@ -28,3 +28,7 @@
 ## 2024-10-17 - Checkpoint Button Keyboard Focus and Screen Reader Context
 **Learning:** List items mapped as buttons (like the checkpoint replay list in `CausalStudioDashboard`) often inherit basic layout classes but forget to define explicit focus states or aria labels, leaving keyboard users unaware of their focus position and screen readers without clear contextual action descriptions.
 **Action:** When adding interactive lists built with buttons, always ensure `focus-visible:ring-2`, `focus-visible:outline-none`, and an `aria-label` are present to make the action fully accessible to all users.
+
+## 2026-11-02 - Explicit Loading Feedback on Refresh Buttons
+**Learning:** Relying solely on a rotating icon (like `RefreshCw`) for dynamic refetch buttons lacks necessary semantic context for assistive technologies.
+**Action:** When implementing dashboard refresh or retry buttons (e.g., in `SystemStatusDashboard`), explicitly include `Loader2` from `lucide-react` alongside a contextually descriptive `title` attribute and an `aria-busy` state, rather than just disabling the button, to ensure all users receive explicit loading feedback.
