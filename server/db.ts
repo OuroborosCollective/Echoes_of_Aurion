@@ -44,7 +44,7 @@ import { isAurionQuestNpcId } from "./aurionStarterVillageContract";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
 import { aurionEthosAxes, aurionMasteryDisciplineIds, aurionMasterySources, resolveEthosAura, resolveMasteryReadmodel, type AurionEthosAxis, type AurionMasteryDisciplineId, type AurionMasterySource } from "./aurionMasteryEthosProtocol";
-import { aurionLootCatalogV2 } from "./aurionLootCatalog";
+import { aurionLootCatalogV2, aurionLootCatalogV3 } from "./aurionLootCatalog";
 import { projectChunkResourceEvidence } from "./aurionChunkResourceEvidence";
 import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aurionLootProtocol";
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "./aurionInventoryStackIdentity";
@@ -1126,12 +1126,18 @@ export async function createValidatedAurionLootDropV2(values: {
   idempotencyKey: string;
 }) {
   if (!Number.isSafeInteger(values.userId) || values.userId < 1 || !values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("Aurion-V2-Lootbeleg ist nicht gültig.");
-  if (values.context.ruleSetVersion !== aurionLootCatalogV2.ruleSetVersion || values.context.contentVersion !== aurionLootCatalogV2.contentVersion) throw new Error("Aurion-V2-Loot verwendet keine bestätigte Katalogversion.");
+  const catalog = values.context.ruleSetVersion === aurionLootCatalogV3.ruleSetVersion ? aurionLootCatalogV3 : aurionLootCatalogV2;
+  if (values.context.ruleSetVersion !== catalog.ruleSetVersion || values.context.contentVersion !== catalog.contentVersion) throw new Error("Aurion-V2-Loot verwendet keine bestätigte Katalogversion.");
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
     const prior = (await tx.select().from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.idempotencyKey, values.idempotencyKey)).limit(1))[0];
     if (prior) {
+      if (prior.userId !== values.userId || prior.encounterReceiptId !== values.context.encounterReceiptId || prior.ruleSetVersion !== values.context.ruleSetVersion || prior.contentVersion !== values.context.contentVersion) throw new Error("LOOT_RECEIPT_SCOPE_MISMATCH");
+      if (catalog === aurionLootCatalogV3) {
+        const expected = resolveDeterministicLoot({ context: values.context, ...catalog });
+        if (prior.deterministicHash !== expected.deterministicHash) throw new Error("LOOT_RECEIPT_CONTEXT_MISMATCH");
+      }
       const item = (await tx.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.lootReceiptId, prior.id)).limit(1))[0];
       if (!item) throw new Error("Aurion-V2-Lootreceipt besitzt keine Iteminstanz.");
       return { applied: false as const, receipt: prior, item };
@@ -1144,7 +1150,7 @@ export async function createValidatedAurionLootDropV2(values: {
     if (!accepted || accepted.seedDigest !== values.context.serverSeedDigest) throw new Error("V2-Loot benötigt ein akzeptiertes Result-Receipt mit passendem Serversamen.");
     const receiptConflict = (await tx.select().from(aurionLootDropReceiptsV2).where(and(eq(aurionLootDropReceiptsV2.userId, values.userId), eq(aurionLootDropReceiptsV2.encounterReceiptId, values.context.encounterReceiptId))).limit(1))[0];
     if (receiptConflict) throw new Error("Dieses Encounter-Receipt besitzt bereits einen V2-Lootdrop.");
-    const resolved = resolveDeterministicLoot({ context: values.context, baseItems: aurionLootCatalogV2.baseItems, affixes: aurionLootCatalogV2.affixes, sets: aurionLootCatalogV2.sets });
+    const resolved = resolveDeterministicLoot({ context: values.context, baseItems: catalog.baseItems, affixes: catalog.affixes, sets: catalog.sets });
     const receiptId = newEndgameId("lootv2");
     const itemId = newEndgameId("itemv2");
     await tx.insert(aurionLootDropReceiptsV2).values({
