@@ -18,6 +18,7 @@ import express from "express";
 import { sdk } from "./_core/sdk";
 import { COOKIE_NAME } from "../shared/const";
 import { registerGlbSmartUpload } from "./glbSmartUpload";
+import { orderCanonicalZoneIntents } from "../shared/aurionZoneIntentContract";
 
 const suite=process.env.AURION_EXPLORATION_MEMORY_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 
@@ -339,7 +340,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
 
     // Once the world epoch advances, the old snapshot cannot be used as a new
     // current discovery. The prior stored record remains independently readable.
-    const nextIntents = [...causalZone.getPendingIntents()];
+    const nextIntents = orderCanonicalZoneIntents(causalZone.getPendingIntents());
     causalZone.tick();
     const nextReceipt = causalZone.getLatestReceipt();
     if (!nextReceipt) throw new Error("CAUSAL_RECEIPT_EXPECTED");
