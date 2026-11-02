@@ -290,7 +290,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
     const app = express();
     registerGlbSmartUpload(app);
     const server = await new Promise<ReturnType<typeof app.listen>>(resolveServer => {
-      const listener = app.listen(0, "127.0.0.1", () => resolveServer(listener));
+      const listener = app.listen(process.env.AURION_WORLD_SLICE_GODOT_EDITOR ? 3000 : 0, "127.0.0.1", () => resolveServer(listener));
     });
     try {
       const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/game/world-slice?x=0&z=0&radius=1&lod=full`;
