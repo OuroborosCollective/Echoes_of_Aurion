@@ -2,7 +2,7 @@
 config_version=5
 
 [editor_plugins]
-enabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg")
+enabled=PackedStringArray("res://addons/aurion_android_app_link/plugin.cfg", "res://addons/aurion_knowledge_helper/plugin.cfg")
 
 [application]
 config/name="Echoes of Aurion"
