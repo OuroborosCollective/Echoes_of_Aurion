@@ -119,12 +119,42 @@ func verify() -> void:
 	Input.parse_input_event(third_drag)
 	await process_frame
 	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "third finger moved camera")
+	# WT02 preparation: a real Godot pinch reaches the active camera but emits
+	# no gameplay packet. The local socket and input state are fixture-only.
+	var pinch := InputEventScreenTouch.new()
+	pinch.index = 24
+	pinch.position = right_drag.position + Vector2(50, 0)
+	pinch.pressed = true
+	Input.parse_input_event(pinch)
+	await process_frame
+	var distance_before: float = scene.world_camera.orbit_distance
+	var pinch_drag := InputEventScreenDrag.new()
+	pinch_drag.index = 24
+	pinch_drag.position = pinch.position + Vector2(60, 0)
+	Input.parse_input_event(pinch_drag)
+	await process_frame
+	require(scene.world_camera.orbit_distance < distance_before, "pinch did not reach active Main camera")
+	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "pinch also rotated the camera")
+	require((joystick.get("output") as Vector2).is_equal_approx(held), "pinch changed held movement input")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == state_before, "pinch changed confirmed projection")
+	for _attempt in range(10):
+		client.poll()
+		remote.poll()
+		require(remote.get_available_packet_count() == 0, "camera gesture emitted a gameplay packet")
+		await create_timer(0.01).timeout
 	scene._toggle_world_diagnostics()
 	require(scene._camera_router.active_finger() == -1, "diagnostics retained camera finger")
 	require((joystick.get("output") as Vector2).is_zero_approx(), "diagnostics retained joystick input")
 	Input.parse_input_event(right_drag)
 	await process_frame
 	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "camera moved while diagnostics were open")
+	Input.parse_input_event(pinch_drag)
+	await process_frame
+	require(scene.world_camera.orbit_distance < distance_before, "cancel changed the zoom distance")
+	var cancelled_distance: float = scene.world_camera.orbit_distance
+	Input.parse_input_event(pinch_drag)
+	await process_frame
+	require(is_equal_approx(scene.world_camera.orbit_distance, cancelled_distance), "cancelled pinch moved camera")
 	scene._toggle_world_diagnostics()
 	right.pressed = false
 	Input.parse_input_event(right)

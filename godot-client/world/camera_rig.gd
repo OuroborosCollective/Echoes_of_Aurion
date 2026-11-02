@@ -5,6 +5,8 @@ const DEFAULT_PITCH := 18.0
 const MIN_PITCH := 5.0
 const MAX_PITCH := 65.0
 const DEFAULT_DISTANCE := 5.8
+const MIN_DISTANCE := 3.0
+const MAX_DISTANCE := 12.0
 @export_range(0.001, 0.03, 0.0005) var touch_sensitivity := 0.004
 @export var invert_vertical := false
 @export_range(3.0, 12.0, 0.1) var orbit_distance := DEFAULT_DISTANCE
@@ -35,6 +37,14 @@ func reset_view() -> void:
 	orbit_distance = DEFAULT_DISTANCE
 	_has_visual_target = false
 	_visual_target = Vector3.ZERO
+
+func zoom_visual(factor: float) -> void:
+	# Pinch scale changes only presentation, within the existing camera range.
+	# It never pans, fetches a chunk or emits an Aurion intent.
+	if not is_finite(factor) or factor <= 0.0 or not _has_visual_target:
+		return
+	orbit_distance = clampf(orbit_distance / factor, MIN_DISTANCE, MAX_DISTANCE)
+	_update_visual_camera()
 
 func _update_visual_camera() -> void:
 	if not _has_visual_target:

@@ -221,6 +221,9 @@ func _ready() -> void:
 	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	world_toggle.pressed.connect(_toggle_world_diagnostics)
+	%ZoomIn.pressed.connect(func(): _on_camera_zoom_requested(1.25))
+	%ZoomOut.pressed.connect(func(): _on_camera_zoom_requested(0.8))
+	mobile_hud.camera_zoom_requested.connect(_on_camera_zoom_requested)
 	world_action.pressed.connect(_on_world_action_pressed)
 	mobile_hud.attack_requested.connect(_on_world_action_pressed)
 	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
@@ -774,6 +777,10 @@ func _camera_exclusions() -> Array[Rect2]:
 		blocked.append_array(mobile_hud.touch_exclusions())
 	return blocked
 
+func _on_camera_zoom_requested(factor: float) -> void:
+	if _world_input_permitted():
+		world_camera.zoom_visual(factor)
+
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventScreenTouch or event is InputEventScreenDrag):
 		return
@@ -784,6 +791,8 @@ func _input(event: InputEvent) -> void:
 	match str(event_result.get("kind", "")):
 		"drag":
 			world_camera.drag_orbit(event_result["delta"])
+		"zoom":
+			world_camera.zoom_visual(event_result["factor"])
 		"tap":
 			_select_visible_target_at(event_result["position"])
 
