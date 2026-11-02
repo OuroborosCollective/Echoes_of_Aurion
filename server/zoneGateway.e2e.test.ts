@@ -109,7 +109,16 @@ describeWithDatabase("zone gateway e2e", () => {
       expect(joined.welcome.zoneId).toBe("observatory_threshold");
       expect(joined.welcome.presences).toEqual([{ entityId: `player:${userId}`, userId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 }]);
 
-      const presenceAfterPeerJoin = waitForMessage(socket, "snapshot");
+      const presenceAfterPeerJoin = waitForMessage(socket, "snapshot", message => {
+        const presences = message.presences as Array<{ userId: number }>;
+        return presences.some(presence => presence.userId === peerUserId);
+      });
+      // A real scheduled heartbeat can arrive while the peer ticket is still
+      // being admitted. It is valid but cannot prove the later peer join.
+      await waitForMessage(socket, "snapshot", message => {
+        const presences = message.presences as Array<{ userId: number }>;
+        return presences.length === 1 && presences[0]?.userId === userId;
+      });
       const peerJoined = await openWithTicket(runtime.url, peerIssued.ticket);
       peerSocket = peerJoined.socket;
       const expectedPresences = [

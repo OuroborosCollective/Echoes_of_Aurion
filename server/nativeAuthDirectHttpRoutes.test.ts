@@ -79,4 +79,13 @@ describe("native access expiry at direct HTTP routes", () => {
     expect(response.status).toHaveBeenCalledWith(401);
     expect(response.json).toHaveBeenCalledWith({ error: "NATIVE_AUTH_SESSION_EXPIRED" });
   });
+
+  it("rejects an expired native session before reading living history", async () => {
+    const route = captureGetRoutes(registerGlbSmartUpload).get("/api/game/living-history");
+    const response = responseRecorder();
+    expect(route).toBeDefined();
+    await route!({} as Request, response);
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(response.json).toHaveBeenCalledWith({ error: "NATIVE_AUTH_SESSION_EXPIRED" });
+  });
 });

@@ -57,6 +57,7 @@ for (const [id, script, marker] of [
   ['zone-projection', 'test_zone_projection.gd', 'Godot G11 confirmed zone state projection contract verified (headless)'],
   ['zone-entities', 'test_zone_entities.gd', 'Godot G11 confirmed entity registry and visual interpolation verified (headless)'],
   ['live-world-map', 'test_live_world_map.gd', 'Godot first live-world map, model inspection and local A/B/house sketches verified (headless)'],
+  ['living-history-projection', 'test_living_history_projection.gd', 'GODOT_LIVING_HISTORY_PROJECTION_PASS'],
   ['session-recovery', 'integration/test_session_recovery.gd', 'Godot G12 pause/resume, fresh-ticket recovery and bounded retry verified (headless)'],
   ['movement-input', 'test_movement_input.gd', 'Godot G20 native input and bounded move-intent regression verified (headless fixture only)'],
   ['multitouch-routing', 'test_multitouch_routing.gd', 'Godot G21 multitouch routing and confirmed-position camera orbit verified (headless fixture only)'],
@@ -135,6 +136,9 @@ await stage('monster-catalog-http', 'headless', process.execPath,
 await stage('world-design-http', 'headless', process.execPath,
   ['scripts/godot/quest-npc-api-runtime.mjs', executable, project, '--world-design'],
   'GODOT_WORLD_DESIGN_HTTP_PASS');
+await stage('living-history-http', 'headless', process.execPath,
+  ['scripts/godot/quest-npc-api-runtime.mjs', executable, project, '--living-history'],
+  'GODOT_LIVING_HISTORY_HTTP_PASS');
 await stage('world-asset-http', 'headless', process.execPath,
   ['scripts/godot/world-asset-api-runtime.mjs', executable, project],
   'GODOT_WORLD_ASSET_HTTP_PASS');

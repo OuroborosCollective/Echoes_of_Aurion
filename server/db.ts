@@ -467,7 +467,7 @@ export async function resolveAndRecordGlobalWorldEpoch(input: { requestedByUserI
         await tx.insert(aurionWorldEpochRequests).values({ idempotencyKey, worldId: GLOBAL_WORLD_ID, requestedByUserId: input.requestedByUserId, ruleSetVersion: AURION_WORLD_EPOCH_RULESET_VERSION, epoch: plan.epoch, snapshotHash: plan.deterministicHash, snapshotJson });
         
         // Orchestrate Living History Loop (Issue #323)
-        await orchestrateCivilizationLoop(GLOBAL_WORLD_ID, plan.epoch, reaction.receiptId);
+        await orchestrateCivilizationLoop(GLOBAL_WORLD_ID, plan.epoch, reaction.receiptId, undefined, tx);
 
         return { plan, source: "created" as const };
       });
@@ -1271,7 +1271,7 @@ export async function getGlobalWorldPlan() {
   }
 }
 
-function parseStoredWorldEpochReaction(row: typeof aurionWorldEpochReactions.$inferSelect): WorldEpochReaction {
+export function parseStoredWorldEpochReaction(row: typeof aurionWorldEpochReactions.$inferSelect): WorldEpochReaction {
   let parsed: unknown;
   try {
     parsed = JSON.parse(row.reactionJson);

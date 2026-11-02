@@ -18,7 +18,7 @@ var _path: String
 var _body_limit: int
 
 func _init(auth: Node, path: String = PATH) -> void:
-	assert(path in [PATH, "/api/game/glb-catalog", "/api/game/world-design"])
+	assert(path in [PATH, "/api/game/glb-catalog", "/api/game/world-design", "/api/game/living-history"])
 	_auth = auth
 	_path = path
 	_body_limit = 4194304 if path in ["/api/game/world-design", "/api/game/glb-catalog"] else MAX_RESPONSE_BYTES
@@ -28,6 +28,9 @@ func _ready() -> void:
 	_auth.refresh_failed.connect(_on_refresh_failed)
 	_auth.logout_succeeded.connect(_on_auth_terminal)
 	_auth.logout_failed.connect(_on_auth_terminal)
+
+func busy() -> bool:
+	return _active
 
 func request_npcs(base_url: String, connection_id: String, allow_local: bool = false) -> bool:
 	if _active or not is_inside_tree() or connection_id.is_empty():

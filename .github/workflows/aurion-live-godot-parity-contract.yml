@@ -1,0 +1,32 @@
+name: Aurion/Godot visual parity comparator contract (unit only)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/godot/live_view_parity.py'
+      - 'scripts/godot/test_live_view_parity.py'
+      - '.github/workflows/aurion-live-godot-view-parity.yml'
+      - '.github/workflows/aurion-live-godot-parity-contract.yml'
+      - 'docs/godot/LIVE_WORLD_VISUAL_PARITY.md'
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-negative-controls-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned image-analysis dependency
+        run: python -m pip install --disable-pip-version-check Pillow==12.0.0
+      - name: Unit-only tests of mismatched, empty and stale images
+        run: |
+          python -m unittest discover -s scripts/godot -p test_live_view_parity.py -v
+          git diff --check
+          echo 'UNIT_CONTRACT_ONLY_NO_LIVE_WORLD_EVIDENCE'

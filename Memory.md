@@ -5422,3 +5422,24 @@ Lifecycle review4435310490 FIX_NOW: actual fresh editor activation in isolated C
 Change: Recover supported v2/v3 histories without rewriting state, ticks or receipts, and bind recovered state to its receipt ruleset. World epochs preserve the actual homogeneous supported ruleset. A shared contract separates the binary default from executed gameplay and binds functional/final release evidence to every persisted receipt. The 100-ms/10-Hz contract remains unchanged.
 Learned: Default version, supported history and executed ruleset are distinct claims requiring distinct evidence.
 Evidence: RED runs 41301798615/41302851598/41302851653; correction c3336a4385366871a96d689fa9c1ccc65cb7461a has 48 successful checks, 71 probe tests, 8 actual MariaDB epoch cases and 2473 repository tests; code/security reviews completed and all three findings answered/resolved. Source/CI evidence does not certify production deployment or a live Godot world.
+
+
+### 2026-10-31 — Live Aurion/Godot visual viewport parity gate
+Status: PARTIAL; comparator tests passed locally, actual live pair unverified and fail-closed.
+Change: Added manual VPS-only parity workflow, Python image/identity comparator, 12 synthetic-only negative/control tests and capture-contract documentation. No gameplay, auth, receipt, image deployment, DB or Godot world edits.
+Evidence: current main preflight 4941d78429dbe4ea436025f6ab9da13d4cc9fcac; local unit check 12/12 PASS, two visual-negative tests initially failed and were corrected. Read-only host inspection: echoes-of-aurion-aurion-1 running healthy, Godot editor/noVNC services active, aurion-godot-bridge.service inactive, port 8765 and feed 39220 not listening; Godot bridge adapter projects players/monsters only, editor uses primitive skins, no full terrain/sky. This proves a current world-projection gap, not complete live parity.
+Learned: a healthy session and one Clockwork Stalker cannot prove visual equivalence. A credible PASS needs two original authenticated world-viewport captures with same canonical receipt, server image/revision and matched camera plus meaningful terrain/sky/assets; matching blanks must fail.
+Open: independent real browser/Godot viewport capture producers with authenticated, fresh sidecars; canonical terrain/asset/sky projection and live feed/bridge activation; exact-head GitHub CI, then two-original-image live dispatch and artifacts. No live-green or production mutation claimed.
+
+Continuation 2026-11-01: Consolidated active parity work here; duplicate PR1263 closed without merge. Synchronized with main fb4d9efa3d6d5b48a943193eb2e5f61bc5e5b8cf while preserving its full memory. Head2d62de364b5f3a945df98537d1240e65762a5976 comparator and contract checks succeeded; real authenticated independent captures remain absent. New merge-head CI is required; historical host observations above are not current runtime proof.
+
+
+### 2026-11-02 — PR #1262 — atomic Living History and Godot event projection
+Change: Preserve one ruin identity across collapse/persistence/replay, isolate ruin reads by world, share the epoch transaction, and prevent bootstrap reseeding after collapse. Godot presents authenticated public event metadata; visual comparison remains diagnostic and live acceptance fail-closed.
+Learned: Missing visible ruins do not imply an empty world; rollback, replay and initial seeding require canonical history and the same transaction.
+Evidence: MariaDB RED 41368991665/41370813338/41373563833; GREEN 41380291362 at 1301890c033338bb82934f2e914f3f31f5f11bdd: 13 history/exploration + 9 epoch + 2474 repository tests passed (276 integration-only cases skipped in the separate repository run). Godot/headless/bridge/JNI CI passed. Production, authenticated capture provenance, complete Issue #323 and WorldStudio effect/readback remain unverified.
+
+Review continuation: Validate joined epoch sources with the existing parser in one SELECT; bound JSON/PNG input and bind image hashing/decoding to one byte buffer, including decoder failures. A scheduled pre-join heartbeat must not satisfy the peer-join test; its final state assertions and deadline remain unchanged.
+Evidence: Real MariaDB query-budget RED 41382587425 (2 SELECTs instead of 1); three local Python REDs then 23/23 comparator tests passed. Historical final-head failures 41381619918/41381619949 retained; final CI/review of these corrections remains required before merge.
+
+Security continuation: Move the manual live-acceptance gate off the production-connected runner to a hosted runner, restricted to the default branch and existing production environment; execute no dispatch-ref code there. The gate still explicitly fails until capture transport/provenance exists. Static YAML validation passed; no production job was dispatched.

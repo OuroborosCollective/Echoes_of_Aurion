@@ -4,6 +4,10 @@ on:
     paths:
       - "server/explorationMemoryPersistence.ts"
       - "server/explorationMemoryPersistence.test.ts"
+      - "server/livingHistoryGodotMariaDb.test.ts"
+      - "server/aurionCivilizationHistoryPersistence.ts"
+      - "server/aurion/civilizationService.ts"
+      - "server/glbSmartUpload.ts"
       - "server/causality/**"
       - "drizzle/aurionCausalitySchema.ts"
       - "shared/aurionCausalTickContract.ts"
@@ -71,7 +75,7 @@ jobs:
       - run: pnpm verify:migrations
       - run: pnpm exec drizzle-kit migrate
       - run: pnpm check
-      - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts server/explorationActorObservation.test.ts --reporter=verbose
+      - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts server/explorationActorObservation.test.ts server/livingHistoryGodotMariaDb.test.ts --reporter=verbose
       - run: pnpm exec vitest run server/worldEpochReaction.e2e.test.ts --reporter=verbose
       - name: Full repository regression without integration-only environment
         env:

@@ -1,0 +1,55 @@
+name: Aurion/Godot live-world visual parity (fail-closed)
+
+# Diagnostic comparison only: capture provenance cannot yet be verified.
+# The live-acceptance job remains fail-closed even if image comparison passes.
+on:
+  workflow_dispatch:
+    inputs:
+      capture_id:
+        description: 'Pre-captured, authenticated VPS world-view pair ID; 1..64 safe characters'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-visual-parity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  unit-negative-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned image-analysis dependency
+        run: python -m pip install --disable-pip-version-check Pillow==12.0.0
+      - name: Prove empty, mismatched, green-only and stale captures fail closed
+        run: |
+          python -m unittest discover -s scripts/godot -p test_live_view_parity.py -v
+          git diff --check
+
+  live-paired-readback:
+    needs: unit-negative-controls
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      # Capture provenance and a safe transport are not implemented yet. Do not
+      # check out or execute a dispatch ref on a production-connected runner.
+      # Local diagnostic comparison remains available through the CLI; it is
+      # never a substitute for authenticated capture ingestion and live proof.
+      - if: always()
+        name: Block live acceptance until capture provenance is verified
+        shell: bash
+        run: |
+          echo '::error::LIVE_CAPTURE_TRANSPORT_NOT_VERIFIED'
+          echo '::error::LIVE_CAPTURE_PROVENANCE_NOT_VERIFIED'
+          exit 1
