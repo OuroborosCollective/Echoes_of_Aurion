@@ -1,3 +1,4 @@
+import { parseStoredDeterministicLootResult } from "./aurionVisualItemAdapter";
 import { describe, it, expect } from "vitest";
 import { aurionLootCatalogV2, aurionLootCatalogV3 } from "./aurionLootCatalog";
 import { resolveDeterministicLoot, validateLootCatalogV3, aurionItemCategories } from "./aurionLootProtocol";
@@ -26,6 +27,13 @@ describe("canonical loot V3", () => {
     expect(result.deterministicHash).not.toBe(first.deterministicHash);
     expect(result.contract?.effects.tags).toEqual(["heat"]);
     expect(result).not.toHaveProperty("visualIdentity");
+  });
+  it("verifies V3 gameplay provenance before visual projection and rejects tampered effects", () => {
+    const item = resolve();
+    expect(parseStoredDeterministicLootResult(JSON.stringify(item))).toEqual(item);
+    const tampered = JSON.parse(JSON.stringify(item));
+    tampered.contract.effects.tags.push("unearned-heat");
+    expect(() => parseStoredDeterministicLootResult(JSON.stringify(tampered))).toThrow(/hash mismatch/);
   });
   it("validates even unselected content and fails closed on taxonomy, ranges, references and bounds", () => {
     for (const patch of [{ category: "utility" }, { equipmentSlot: "feet" }, { baseStats: { power: Infinity } }, { minItemLevelExact: "5", maxItemLevelExact: "2" }]) {

@@ -1117,7 +1117,7 @@ export async function getAurionEthosReadmodel(userId: number) {
 }
 
 /**
- * Server-internal V2 drop materialization. Encounter, world and zone fields are supplied only by
+ * Server-internal V2/V3 drop materialization (historical function name retained). Encounter, world and zone fields are supplied only by
  * trusted gameplay resolvers; the accepted receipt binds the user and canonical seed digest.
  */
 export async function createValidatedAurionLootDropV2(values: {
