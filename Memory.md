@@ -5453,3 +5453,11 @@ Evidence: PR #1274 Head `5c6a125e875bf2304e1cc4304dabde13111ecf56`; Godot headle
 Learned: Quellenhinweise sind Recherchebelege, keine kanonische Aurion- oder Runtime-Bestätigung.
 Open: PR #1274 ist Draft; weitere PR-Head-Workflows laufen. Nach dem Memory-Commit den neuen exakten Head und erforderliche Checks erneut lesen.
 Next safe step: Neue Head-CI abwarten, bei grünen Gates Review einholen; nicht ohne ausdrücklichen Auftrag mergen.
+
+
+### 2026-11-02 — PR #1276 — WT02 Kameravorbereitung
+Status: PARTIAL; vollständiges Issue #1016 bleibt offen.
+Änderung: Bestehende bestätigte 3D-Projektion um begrenzten Zwei-Finger-Zoom (3–12 m) und fokussierbare Desktop-/Mobilknöpfe ergänzt; Pinch-Ende/Abbruch erzeugt keine Zielauswahl. Keine neue Welt-, Netzwerk- oder Persistenzautorität.
+Erkenntnis: Sichere Schnitt-/Transparenzansicht und Weltentisch-POV benötigen zuerst den belegten actor-/knowledge-/revision-gefilterten WorldSlice aus #1015; Kameratests ersetzen weder kanonische Receipt-Invarianz noch reale Tab-A9-Abnahme.
+Evidence: Godot 4.7.2 RED am Basiscode 311997f61bab8fc6d323b846601143bac3ab6192, danach neun lokale Regressionen PASS. Codehead 9ba2b1026ff10c34a5964f7c7c3d5c1dae089e29: alle 13 PR-Workflows SUCCESS, insbesondere Headless 41468531095 mit Pinch-/Schaltflächen-/lokaler WebSocket-Prüfung, JNI 41468531280 und APK 41468530943. Gesamtregression 2457 PASS/293 SKIPPED, kein Produktions-DB-Beweis. Synthetische Inputs ausdrücklich kein Live-/Gerätebeweis.
+Offen: WorldSlice, Diorama/Schnitt/Kategorien/POV/Fallback, echte Tab-A9-Render-/Replay-/Leistungs-/Thermal- und kanonische Receipt-Nachweise. Draft beibehalten; neue Head-CI nach diesem Memory-Commit separat prüfen. Kein Merge, Deployment oder Issue-Abschluss behauptet.
