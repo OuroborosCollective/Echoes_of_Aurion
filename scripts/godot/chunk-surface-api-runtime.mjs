@@ -22,6 +22,8 @@ const server = createServer((req, res) => {
     else if (calls === 3) res.writeHead(401, json).end('{}');
     else if (calls === 6 || calls === 8) setTimeout(() => res.writeHead(200, json).end(payload), 200);
     else if (calls === 5) res.writeHead(200, { 'Content-Type': 'text/html' }).end('<html>invalid</html>');
+    else if (calls === 9) res.writeHead(403, json).end(JSON.stringify({ error: 'CHUNK_SURFACE_PRESENCE_REQUIRED' }));
+    else if (calls === 10) res.writeHead(500, json).end(JSON.stringify({ error: '<script>x</script> ECONNREFUSED' }));
     else res.writeHead(200, json).end(payload);
   } catch (e) { error ||= e; res.writeHead(500, { 'Content-Type': 'application/json' }).end('{}'); }
 });
@@ -42,6 +44,6 @@ process.stdout.write(output);
 assert.ifError(error);
 assert.equal(timedOut, false, 'G18 HTTP integration timeout');
 assert.equal(exit, 0, 'G18 real Godot HTTP integration failed');
-assert.equal(calls, 8, 'G18 did not exercise all eight physical HTTP requests');
+assert.equal(calls, 10, 'G18 did not exercise all ten physical HTTP requests');
 assert.equal(leaked, false, 'bearer leaked to redirected endpoint');
 assert.match(output, /G18 protected chunk surface GET wire boundary verified/);

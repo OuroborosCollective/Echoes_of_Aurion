@@ -88,6 +88,9 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 		_retried = true
 		_begin_refresh()
 		return
+	if code != 200 and code >= 400 and code <= 599:
+		_fail(_server_failure(code, headers, body))
+		return
 	if code != 200 or not _json_header(headers):
 		_fail("CHUNK_RESPONSE_INVALID")
 		return
@@ -122,6 +125,22 @@ func _on_refresh_failed(_reason: String) -> void:
 func _on_terminal(_reason: String = "") -> void:
 	if _active:
 		_fail("CHUNK_SESSION_UNAVAILABLE")
+
+## Diagnostic only: exposes Aurion's fixed fail-closed reason (for example a
+## missing presence lease or unavailable DB) instead of a generic error. Only a
+## bounded upper-case code is accepted; arbitrary server text is never shown.
+static func _server_failure(code: int, headers: PackedStringArray, body: PackedByteArray) -> String:
+	var reason := "CHUNK_HTTP_%d" % code
+	if not _json_header(headers) or body.size() > 512:
+		return reason
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(parsed) != TYPE_DICTIONARY or typeof(parsed.get("error")) != TYPE_STRING:
+		return reason
+	var pattern := RegEx.new()
+	pattern.compile("^[A-Z][A-Z0-9_]{2,63}$")
+	if pattern.search(parsed.error) == null:
+		return reason
+	return reason + "_" + str(parsed.error)
 
 static func _json_header(headers: PackedStringArray) -> bool:
 	for header in headers:

@@ -595,6 +595,20 @@ func verify_quest_npc_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 		"quest NPCs survived zone logout/session reset")
 	scene.queue_free()
 
+## A confirmed mob whose archetype has no prepared model is shown as a labeled
+## primitive placeholder: never as another archetype's or a character's model.
+func require_monster_placeholder(actors: Node3D, archetype: String, why: String) -> void:
+	require(actors.get_child_count() == 1, why + " (expected exactly one placeholder, got %d)" % actors.get_child_count())
+	if actors.get_child_count() != 1:
+		return
+	var actor: Node3D = actors.get_child(0)
+	require(actor.entity_id == "mob_1" and actor.asset_id == "placeholder:" + archetype, why + " (asset " + str(actor.asset_id) + ")")
+	var labels := actor.find_children("*", "Label3D", true, false)
+	require(labels.size() == 1 and str(labels[0].text).contains("Platzhalter"), why + " (placeholder is not labeled)")
+	for mesh: MeshInstance3D in actor.find_children("*", "MeshInstance3D", true, false):
+		require(mesh.mesh is PrimitiveMesh, why + " (placeholder carries an imported model mesh)")
+	require(actor.find_children("*", "AnimationPlayer", true, false).size() == 1, why + " (placeholder animation contract missing)")
+
 ## Synthetic protocol/catalog fixtures with real imported GLBs in active scene.
 func verify_monster_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	var scene: Control = load("res://app/main.tscn").instantiate()
@@ -632,7 +646,7 @@ func verify_monster_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	var unavailable := manifest.duplicate(true)
 	unavailable.sources.clear()
 	scene._apply_monster_catalog(catalog, unavailable)
-	require(actors.get_child_count() == 0, "missing prepared monster retained old actor")
+	require_monster_placeholder(actors, "clockwork_stalker", "missing prepared monster retained old actor")
 	scene._apply_monster_catalog(catalog, manifest)
 	actor = actors.get_child(0)
 	var changed := catalog.duplicate(true)
@@ -664,13 +678,18 @@ func verify_monster_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	var denied := catalog.duplicate(true)
 	denied.entries[0].purpose = "player-public"
 	scene._apply_monster_catalog(denied, manifest)
-	require(actors.get_child_count() == 0, "character catalog mounted as monster")
+	require_monster_placeholder(actors, "clockwork_stalker", "character catalog mounted as monster")
 	scene._apply_monster_catalog(catalog, manifest)
 	snapshot.snapshotSeq = 3
 	snapshot.tick = 3
 	snapshot.mobs[0].archetype = "aether_wisp"
 	scene._on_zone_snapshot(snapshot)
-	require(actors.get_child_count() == 0, "unmatched archetype silently received Stalker")
+	require_monster_placeholder(actors, "aether_wisp", "unmatched archetype silently received Stalker")
+	scene._project_3d(scene._last_world_update_ms + 100)
+	if actors.get_child_count() == 1:
+		var marker: Node3D = actors.get_child(0)
+		require(marker.visible and is_equal_approx(marker.position.x, 3.0) and is_equal_approx(marker.position.z, 0.0), "confirmed monster without model is not visible at its confirmed position")
+		require(scene._monster_actors.visible_count() == 1 and scene._monster_diagnostic.contains("aether_wisp"), "model-less monster placeholder not reported in HUD diagnostic")
 	snapshot.snapshotSeq = 4
 	snapshot.tick = 4
 	snapshot.mobs[0].archetype = "clockwork_stalker"

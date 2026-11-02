@@ -113,6 +113,11 @@ func verify() -> void:
 	await create_timer(0.28).timeout
 	require(completed and not success and last_error == "CHUNK_SESSION_CHANGED", "revoked token accepted chunk payload")
 	api.cancel()
+	auth.allowed = true
+	await _request(api, "zone_denied")
+	require(not success and last_error == "CHUNK_HTTP_403_CHUNK_SURFACE_PRESENCE_REQUIRED", "server fail-closed reason hidden behind generic chunk error: " + last_error)
+	await _request(api, "zone_untrusted_error")
+	require(not success and last_error == "CHUNK_HTTP_500", "untrusted server error text was reflected: " + last_error)
 	api.queue_free()
 	auth.queue_free()
 	if failures.is_empty():

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, parseWorldChunkSurfaceQuery, requireWorldChunkSurfacePresence, publicPlayerCharacterEntries } from "./glbSmartUpload";
+import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, playerRouteErrorResponse, parseWorldChunkSurfaceQuery, requireWorldChunkSurfacePresence, publicPlayerCharacterEntries } from "./glbSmartUpload";
 import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
 import type { GlbRuntimeCatalog } from "../shared/glbImportContract";
 
@@ -183,5 +183,22 @@ describe("G18 active Aurion lease read window", () => {
     expect(() => requireWorldChunkSurfacePresence({ x: -2, z: 3 }, 20, actualLeaseShape)).toThrow("CHUNK_SURFACE_PRESENCE_REQUIRED");
     expect(() => requireWorldChunkSurfacePresence({ x: -2, z: 3 }, 19, [])).toThrow("CHUNK_SURFACE_PRESENCE_REQUIRED");
     expect(() => requireWorldChunkSurfacePresence({ x: -2, z: 3 }, 19, [{ userId: 19, zoneId: "foreign", chunk: { x: -2, z: 3 } }])).toThrow("CHUNK_SURFACE_PRESENCE_REQUIRED");
+  });
+});
+
+describe("protected player read error codes", () => {
+  it("discloses the concrete fail-closed chunk surface and database reason instead of a generic failure", () => {
+    expect(playerRouteErrorResponse(new Error("CHUNK_SURFACE_PRESENCE_REQUIRED"))).toEqual({ status: 403, code: "CHUNK_SURFACE_PRESENCE_REQUIRED" });
+    expect(playerRouteErrorResponse(new Error("CHUNK_SURFACE_COORDINATE_LIMIT"))).toEqual({ status: 422, code: "CHUNK_SURFACE_COORDINATE_LIMIT" });
+    expect(playerRouteErrorResponse(new Error("DATABASE_UNAVAILABLE"))).toEqual({ status: 503, code: "DATABASE_UNAVAILABLE" });
+    expect(playerRouteErrorResponse(new Error("LIVING_HISTORY_ACTIVE_PRESENCE_REQUIRED"))).toEqual({ status: 403, code: "LIVING_HISTORY_ACTIVE_PRESENCE_REQUIRED" });
+  });
+  it("keeps existing codes and never echoes arbitrary internal messages", () => {
+    expect(playerRouteErrorResponse(new Error("CHARACTER_BINDING_IMMUTABLE"))).toEqual({ status: 409, code: "CHARACTER_BINDING_IMMUTABLE" });
+    expect(playerRouteErrorResponse(new Error("WORLD_SLICE_REVISION_STALE"))).toEqual({ status: 409, code: "WORLD_SLICE_REVISION_STALE" });
+    expect(playerRouteErrorResponse(new Error("WORLD_SLICE_ACTOR_SCOPE_MISMATCH"))).toEqual({ status: 403, code: "WORLD_SLICE_ACTOR_SCOPE_MISMATCH" });
+    expect(playerRouteErrorResponse(new Error("GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED"))).toEqual({ status: 422, code: "GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED" });
+    expect(playerRouteErrorResponse(new Error("connect ECONNREFUSED 10.0.0.5:3306"))).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
+    expect(playerRouteErrorResponse("CHUNK_SURFACE_PRESENCE_REQUIRED")).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
   });
 });
