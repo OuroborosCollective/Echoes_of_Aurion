@@ -22,6 +22,25 @@ export function requireProbeOwnerOrigin(headers: { origin?: string; contentType?
   if (headers.origin !== "https://arelogic.space" || headers.contentType?.split(";")[0].trim() !== "application/json"
     || headers.requestedWith !== "AurionOps" || (headers.fetchSite !== undefined && headers.fetchSite !== "same-origin")) throw new Error("PROBE_OWNER_ORIGIN_REQUIRED");
 }
+const PROBE_REASON_CODE = /^[A-Z][A-Z0-9_]{2,63}$/;
+/**
+ * Server-side denial diagnostics. Responses stay generic; the log carries only a
+ * stable machine code (message prefix before ":", error.code or its cause), never
+ * free text, SQL, parameters, tokens or passwords.
+ */
+export function probeDenialReason(error: unknown): string {
+  const candidates: unknown[] = [];
+  for (let current: unknown = error, depth = 0; current && typeof current === "object" && depth < 3; depth += 1) {
+    const { message, code, cause } = current as { message?: unknown; code?: unknown; cause?: unknown };
+    candidates.push(typeof message === "string" ? message.split(":", 1)[0] : undefined, code);
+    current = cause;
+  }
+  const reason = candidates.find((value): value is string => typeof value === "string" && PROBE_REASON_CODE.test(value));
+  return reason ?? "UNCLASSIFIED";
+}
+function logProbeDenial(operation: string, error: unknown): void {
+  console.warn(`[ProductionProbe] DENIED ${JSON.stringify({ recordType: "aurion.production-probe-denial", schemaVersion: 1, operation, reason: probeDenialReason(error) })}`);
+}
 function exactBody(value: unknown, keys: string[]): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)
     || Object.keys(value).sort().join(",") !== keys.sort().join(",")) throw new Error("PROBE_HTTP_INPUT_INVALID");
@@ -46,7 +65,8 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
       if (!await productionProbeStore().isReady()) throw new Error("PROBE_CONTROL_PLANE_UNAVAILABLE");
       res.json({ recordType: "aurion.production-probe-control-plane", schemaVersion: 1,
         state: "ready", revision: health().revision, mutationAuthority: "none" });
-    } catch {
+    } catch (error) {
+      logProbeDenial("bootstrap-status", error);
       res.status(503).json({ recordType: "aurion.production-probe-control-plane", schemaVersion: 1,
         state: "unavailable", mutationAuthority: "none" });
     }
@@ -61,7 +81,7 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
         res.json(approved);
       } else if (operation === "list") { exactBody(req.body, []); res.json(await store.list(actor.id)); }
       else { const body = exactBody(req.body, ["approvalId"]); res.json(await store.revoke(actor.id, body.approvalId as string)); }
-    } catch { res.status(403).json({ error: "PROBE_OWNER_REQUEST_DENIED" }); }
+    } catch (error) { logProbeDenial(operation, error); res.status(403).json({ error: "PROBE_OWNER_REQUEST_DENIED" }); }
   });
   /** OIDC-authenticated, read-only readiness. Never consumes approval or starts a zone. */
   app.post(`${path}/readiness`, async (req, res) => {
@@ -76,7 +96,7 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
       res.json({ recordType: "aurion.production-probe-readiness", schemaVersion: 1,
         revision: run.revision, runId: run.runId, runAttempt: run.runAttempt,
         scope: body.scope, state: ready ? "READY" : "WAITING", credentialReturned: false });
-    } catch { res.status(403).json({ error: "PROBE_READINESS_DENIED", credentialReturned: false }); }
+    } catch (error) { logProbeDenial("readiness", error); res.status(403).json({ error: "PROBE_READINESS_DENIED", credentialReturned: false }); }
   });
   app.post(`${path}/execute`, async (req, res) => {
     try {
@@ -136,6 +156,6 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
         res.json(result); return;
       }
       throw new Error("PROBE_SCOPE_INVALID");
-    } catch { res.status(403).json({ error: "PROBE_EXECUTION_DENIED", credentialReturned: false }); }
+    } catch (error) { logProbeDenial("execute", error); res.status(403).json({ error: "PROBE_EXECUTION_DENIED", credentialReturned: false }); }
   });
 }
