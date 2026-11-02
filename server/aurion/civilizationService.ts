@@ -28,6 +28,12 @@ const hash = (parts: readonly string[]) =>
 
 const clampUnit = (value: number) => Math.max(0, Math.min(1, Math.round(value * 10_000) / 10_000));
 
+type CivilizationLoopResult =
+  | { action: "COLLAPSED"; ruinId: string; candidateId?: never; civilizationId?: never }
+  | { action: "REBIRTH_CANDIDATE_CREATED"; candidateId: string; ruinId?: never; civilizationId?: never }
+  | { action: "INITIAL_CIV_SEEDED" | "ADVANCED"; civilizationId: string; ruinId?: never; candidateId?: never }
+  | { action: "IDLE"; ruinId?: never; candidateId?: never; civilizationId?: never };
+
 /**
  * Derive dynamic civilization metric deltas from aggregated economic impact.
  * Markets develop based on real NPC economic activity:
@@ -77,7 +83,7 @@ function deriveEconomicDeltas(impact: EconomicCycleImpact | null) {
   };
 }
 
-async function readTransitionReplay(worldId: string, sourceReceiptId: string) {
+async function readTransitionReplay(worldId: string, sourceReceiptId: string): Promise<CivilizationLoopResult | null> {
   const priorSourceEvents = await findCivilizationHistoryEventsBySourceReceipt(worldId, sourceReceiptId);
   const transitions = priorSourceEvents.filter(event =>
     event.eventType === "CIVILIZATION_COLLAPSE" ||
@@ -109,7 +115,7 @@ export async function orchestrateCivilizationLoop(
   worldEpoch: number,
   sourceReceiptId: string,
   economicImpact?: EconomicCycleImpact | null,
-) {
+): Promise<CivilizationLoopResult> {
   const replay = await readTransitionReplay(worldId, sourceReceiptId);
   if (replay) return replay;
 
