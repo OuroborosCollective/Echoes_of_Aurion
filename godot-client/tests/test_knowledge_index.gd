@@ -78,15 +78,16 @@ func verify() -> void:
 	var bundle := index.context_bundle("silver oath", lore, 6)
 	require(bundle.contains("lore/creation.md#L2"), "copied context omitted its citation")
 	require(bundle.contains("2: The silver oath"), "copied context omitted its excerpt")
+	var no_sources: Array[Dictionary] = []
 	var saved: Dictionary = index.save_new_draft(FIXTURE_ROOT, "evidence-note.md", "## Draft\nA proposed note.", lore)
 	require(bool(saved.get("ok", false)), "new draft was not saved")
 	var saved_path := str(saved.get("path", ""))
 	var before := FileAccess.get_file_as_string(saved_path)
 	require(before.contains("lore/creation.md#L2"), "saved draft omitted retrieved source citations")
-	var overwrite: Dictionary = index.save_new_draft(FIXTURE_ROOT, "evidence-note.md", "## Changed", [])
+	var overwrite: Dictionary = index.save_new_draft(FIXTURE_ROOT, "evidence-note.md", "## Changed", no_sources)
 	require(not bool(overwrite.get("ok", false)), "existing file was overwritten")
 	require(FileAccess.get_file_as_string(saved_path) == before, "existing draft content changed")
-	var unsafe_name: Dictionary = index.save_new_draft(FIXTURE_ROOT, "../outside.md", "## Unsafe", [])
+	var unsafe_name: Dictionary = index.save_new_draft(FIXTURE_ROOT, "../outside.md", "## Unsafe", no_sources)
 	require(not bool(unsafe_name.get("ok", false)), "path traversal filename was accepted")
 
 	_remove_tree(FIXTURE_ROOT)
