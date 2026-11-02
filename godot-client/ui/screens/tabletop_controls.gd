@@ -22,7 +22,8 @@ func _ready() -> void:
 	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_status.max_lines_visible = 2
 	_status.clip_text = true
-	_status.custom_minimum_size.x = 80
+	_status.custom_minimum_size = Vector2(80, 48)
+	_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bar.add_child(_status)
 	_button(bar, "Ansicht", func():
@@ -85,7 +86,7 @@ func set_status(text: String) -> void:
 	_status.text = text
 func fit_layout(safe: Rect2, density: float = 1.0) -> void:
 	var scale_factor := clampf(density, 1.0, 2.0)
-	var margin := 8.0 * scale_factor
+	var margin := 16.0 * scale_factor
 	var width := maxf(160.0, safe.size.x - 2.0 * margin)
 	_bar.position = safe.position + Vector2.ONE * margin
 	_bar.size = Vector2(width, 64.0 * scale_factor)

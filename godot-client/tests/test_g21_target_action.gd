@@ -349,6 +349,16 @@ func verify() -> void:
 	scene._movement.reset()
 	require(scene._set_tabletop(true), "fresh tabletop entry failed")
 	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation() - 1, Vector2i.ZERO)
+	require(scene._tabletop_layer.readback_fingerprint().is_empty(), "old token generation populated fresh tabletop")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	scene._world_is_stale = true
+	scene._tick_tabletop(Time.get_ticks_msec())
+	require(not scene._tabletop_active and scene._tabletop_layer.readback_fingerprint().is_empty(), "stale live world retained tabletop")
+	scene._world_is_stale = false
+	require(scene._set_tabletop(true), "tabletop did not recover after fresh scope")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	scene._notification(Control.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	require(not scene._tabletop_active and scene._tabletop_layer.readback_fingerprint().is_empty(), "focus loss retained protected slice")
 	# The previous accepted read is cleared explicitly on reset below. A stale
 	# generation callback cannot replace it or revive a disconnected view.
 	scene._reset_projection()

@@ -62,6 +62,7 @@ jobs:
       DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_exploration_memory_test
       NODE_ENV: test
       AURION_WORLD_SLICE_GODOT_EDITOR: ${{ github.workspace }}/.aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64
+      # Fixed isolated-test seal key; never a production credential.
       NATIVE_AUTH_STATE_SEAL_KEY: ERERERERERERERERERERERERERERERERERERERERERE
       JWT_SECRET: aurion-world-slice-isolated-fixture-key-never-production
       VITE_APP_ID: aurion-world-slice-isolated-http-fixture

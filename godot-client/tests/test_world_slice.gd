@@ -91,6 +91,7 @@ func verify() -> void:
 		var safe := Rect2(Vector2(16, 20), screen_size - Vector2(32, 40))
 		ui.fit_layout(safe)
 		await process_frame
+		require(ui._status.size.y >= 32.0 and not ui._status.text.is_empty(), "knowledge status text clipped to invisible height")
 		for button in ui._buttons:
 			require(button.custom_minimum_size.y >= 48.0 and button.focus_mode != Control.FOCUS_NONE, "tabletop touch/focus accessibility lost")
 		for excluded in ui.exclusions(): require(safe.encloses(excluded), "tabletop UI outside safe area: " + str(screen_size) + " / " + str(excluded))

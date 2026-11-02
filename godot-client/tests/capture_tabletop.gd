@@ -51,7 +51,10 @@ func capture() -> void:
 	for viewport_size in [Vector2i(1340, 800), Vector2i(640, 360), Vector2i(360, 640)]:
 		root.size = viewport_size
 		DisplayServer.window_set_size(viewport_size)
-		watermark.position = Vector2(20, viewport_size.y - 32)
+		watermark.position = Vector2(20, viewport_size.y - 48)
+		watermark.size = Vector2(viewport_size.x - 40, 40)
+		watermark.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		watermark.add_theme_font_size_override("font_size", 14)
 		await process_frame
 		await process_frame
 		scene._fit_layout()
