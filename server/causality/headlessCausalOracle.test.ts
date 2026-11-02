@@ -64,6 +64,22 @@ function persistence(
 }
 
 describe("Wave 2 Step 25 headless causal oracle v2", () => {
+  it("returns a detached confirmed state only after the entire persisted range matches", async () => {
+    const { checkpoint, entries } = fixture(4);
+    const oracle = new AurionHeadlessCausalOracle(persistence(checkpoint, entries));
+    const result = await (oracle as any).readConfirmedState({ zoneId: checkpoint.zoneId, fromTick: 4, toTick: 4 });
+    expect(result.evidence.status).toBe("MATCH");
+    expect(result.state.tick).toBe(4);
+    expect(result.state.players.map((player: any) => player.userId)).toEqual([25_001]);
+    expect(hashCanonicalZoneState(result.state)).toBe(result.evidence.finalStateHash);
+    expect(result.state).not.toBe(checkpoint.state);
+    const broken = entries.filter(entry => entry.receipt.tick !== 2);
+    const rejected = await (new AurionHeadlessCausalOracle(persistence(checkpoint, broken)) as any)
+      .readConfirmedState({ zoneId: checkpoint.zoneId, fromTick: 4, toTick: 4 });
+    expect(rejected.evidence.status).toBe("UNPROVABLE");
+    expect(rejected.state).toBeNull();
+  });
+
   it("warms up from a sparse checkpoint and verifies only the requested range", async () => {
     const { checkpoint, entries } = fixture(4);
     const oracle = new AurionHeadlessCausalOracle(persistence(checkpoint, entries));
