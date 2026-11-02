@@ -87,4 +87,42 @@ real("bounded causal archives — real MariaDB", () => {
     const failed = await adapter.archiveOldReceipts(zoneId, 1201).catch(error => error.message);
     expect(failed).toBe("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
   }, 60_000);
+
+  it("reads archive pages through the canonical world index without locking or waiting on foreign-world rows", async () => {
+    // Production regression: zone-only FOR UPDATE pages could not use the
+    // (worldId, zoneId, tick) index, scanned and locked the whole receipt
+    // table and starved live tick inserts with ER_LOCK_WAIT_TIMEOUT.
+    await pool.query("DELETE FROM aurionCausalArchive WHERE zoneId=?", [zoneId]);
+    const foreignId = "rcpt_archive_foreign_world_lock_probe";
+    await pool.query("DELETE FROM aurionCausalTickReceipts WHERE id=?", [foreignId]);
+    await pool.query(
+      `INSERT INTO aurionCausalTickReceipts (id, worldId, zoneId, tick, revision, rulesetVersion, receiptSchema,
+         preStateHash, inputHash, inputJson, stageReceiptsJson, transitionHash, rngRootHash, postStateHash,
+         previousReceiptHash, receiptHash)
+       SELECT ?, 'archive-foreign-world', zoneId, tick, revision, rulesetVersion, receiptSchema,
+         preStateHash, inputHash, inputJson, stageReceiptsJson, transitionHash, rngRootHash, postStateHash,
+         previousReceiptHash, REPEAT('e', 64)
+       FROM aurionCausalTickReceipts WHERE zoneId=? AND tick=5`,
+      [foreignId, zoneId],
+    );
+    const holder = await pool.getConnection();
+    let archiving: Promise<unknown> | undefined;
+    try {
+      await holder.beginTransaction();
+      await holder.query("SELECT id FROM aurionCausalTickReceipts WHERE id=? FOR UPDATE", [foreignId]);
+      archiving = adapter.archiveOldReceipts(zoneId, 1101);
+      let timer: NodeJS.Timeout | undefined;
+      const blocked = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("ARCHIVE_BLOCKED_ON_FOREIGN_WORLD_ROW")), 10_000);
+      });
+      try {
+        expect(await Promise.race([archiving, blocked])).toMatchObject({ startTick: 1, endTick: 1100, archivedCount: 1100 });
+      } finally { clearTimeout(timer); }
+    } finally {
+      await holder.rollback();
+      holder.release();
+      await archiving?.catch(() => undefined);
+      await pool.query("DELETE FROM aurionCausalTickReceipts WHERE id=?", [foreignId]);
+    }
+  }, 60_000);
 });
