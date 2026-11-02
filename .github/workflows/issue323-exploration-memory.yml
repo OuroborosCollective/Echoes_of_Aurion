@@ -4,6 +4,9 @@ on:
     paths:
       - "server/explorationMemoryPersistence.ts"
       - "server/explorationMemoryPersistence.test.ts"
+      - "server/worldSlice.ts"
+      - "shared/worldSliceProtocol.ts"
+      - "scripts/world-slice/**"
       - "server/livingHistoryGodotMariaDb.test.ts"
       - "server/aurionCivilizationHistoryPersistence.ts"
       - "server/aurion/civilizationService.ts"
@@ -56,6 +59,8 @@ jobs:
     env:
       DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_exploration_memory_test
       NODE_ENV: test
+      JWT_SECRET: aurion-world-slice-isolated-fixture-key-never-production
+      VITE_APP_ID: aurion-world-slice-isolated-http-fixture
       AURION_EXPLORATION_MEMORY_E2E: "1"
       AURION_WORLD_EPOCH_E2E: "1"
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -75,8 +80,10 @@ jobs:
       - run: pnpm verify:migrations
       - run: pnpm exec drizzle-kit migrate
       - run: pnpm check
+      - run: pnpm exec vitest run server/causality/headlessCausalOracle.test.ts --reporter=verbose
       - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts server/explorationActorObservation.test.ts server/livingHistoryGodotMariaDb.test.ts --reporter=verbose
       - run: pnpm exec vitest run server/worldEpochReaction.e2e.test.ts --reporter=verbose
+      - run: AURION_ORACLE_E2E=1 pnpm exec vitest run server/causality/headlessCausalOracleMariaDb.test.ts --reporter=verbose
       - name: Full repository regression without integration-only environment
         env:
           AURION_EXPLORATION_MEMORY_E2E: "0"

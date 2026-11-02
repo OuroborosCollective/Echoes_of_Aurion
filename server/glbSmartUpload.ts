@@ -15,6 +15,8 @@ import { readActiveWorldDesign } from "./aurionAuthoringPersistence";
 import { projectQuestNpcVisuals } from "./aurionQuestNpcVisualProjection";
 import { attachStarterVillageVisuals } from "./aurionStarterVillageVisuals";
 import { readPublicCollapseHistory } from "./aurionCivilizationHistoryPersistence";
+import { readActorWorldSlice } from "./worldSlice";
+import { parseWorldSliceHttpQuery } from "../shared/worldSliceProtocol";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
@@ -236,8 +238,8 @@ export function registerGlbSmartUpload(app: Express): void {
       response.json(await operation(request, user));
     } catch (error) {
       const message = error instanceof Error ? error.message : "GLB_PLAYER_OPERATION_FAILED";
-      const code = /^GLB_[A-Z_]+$/.test(message) || message === "CHARACTER_BINDING_IMMUTABLE" ? message : "GLB_PLAYER_OPERATION_FAILED";
-      response.status(code === "CHARACTER_BINDING_IMMUTABLE" ? 409 : 422).json({ error: code });
+      const code = /^GLB_[A-Z_]+$/.test(message) || /^WORLD_SLICE_[A-Z_]+$/.test(message) || message === "CHARACTER_BINDING_IMMUTABLE" ? message : "GLB_PLAYER_OPERATION_FAILED";
+      response.status(code === "CHARACTER_BINDING_IMMUTABLE" || code === "WORLD_SLICE_REVISION_STALE" ? 409 : code === "WORLD_SLICE_ACTOR_SCOPE_MISMATCH" ? 403 : 422).json({ error: code });
     }
   };
 
@@ -298,6 +300,10 @@ export function registerGlbSmartUpload(app: Express): void {
     projectQuestNpcVisuals(await glbImportStore().catalog())
   ));
   // Protected DB-backed Aurion readmodel. No world-seed computation on Godot.
+  app.get("/api/game/world-slice", playerRoute((request, user) =>
+    readActorWorldSlice(user.id, parseWorldSliceHttpQuery(request.query))
+  ));
+
   // The active DB lease bounds the 3x3 visible window; missing DB is fail-closed.
   app.get("/api/game/world-chunk-surface", playerRoute(async (request, user) => {
     const coordinate = parseWorldChunkSurfaceQuery(request.query);

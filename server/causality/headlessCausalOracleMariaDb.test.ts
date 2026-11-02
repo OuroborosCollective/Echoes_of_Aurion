@@ -93,4 +93,17 @@ suite("Wave 2 Step 25 Headless Causal Oracle V2 MariaDB", () => {
     const evidencePath = process.env.AURION_STEP25_ZONE_ID_PATH?.trim();
     if (evidencePath) writeFileSync(evidencePath, ZONE + "\n", "utf8");
   });
+
+  it("reconstructs actor state from durable checkpoints and receipts with no runtime recorder or writes", async () => {
+    const before = await counts();
+    const result = await (new AurionHeadlessCausalOracle() as any)
+      .readConfirmedState({ zoneId: ZONE, fromTick: 4, toTick: 4 });
+    expect(result.evidence.status).toBe("MATCH");
+    expect(result.state).toMatchObject({ worldId: "echoes-of-aurion-global", zoneId: ZONE, tick: 4 });
+    expect(result.state.players.map((player: any) => player.userId)).toEqual([25_101]);
+    expect(await counts()).toEqual(before);
+    const cold = await (new AurionHeadlessCausalOracle() as any)
+      .readConfirmedState({ zoneId: ZONE, fromTick: 4, toTick: 4 });
+    expect(cold).toEqual(result);
+  });
 });
