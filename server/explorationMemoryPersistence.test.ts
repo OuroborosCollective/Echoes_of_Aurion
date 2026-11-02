@@ -1,5 +1,5 @@
 import { createPool } from "mysql2/promise";
-import { afterAll,afterEach,beforeAll,beforeEach,describe,expect,it } from "vitest";
+import { afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi } from "vitest";
 import { and,eq } from "drizzle-orm";
 import { getDb, resolveAndRecordGlobalWorldEpoch, recordWorldChunkDelta } from "./db";
 import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionExplorationMemoryProjections, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests } from "../drizzle/schema";
@@ -8,6 +8,9 @@ import { createExplorationMemoryRecord } from "../shared/explorationMemoryProtoc
 import { recordExplorationDiscovery, readExplorationMemory } from "./explorationMemoryPersistence";
 import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
 import { globalZoneRegistry } from "./zoneRuntime";
+import { appRouter } from "./routers";
+import type { TrpcContext } from "./_core/context";
+import { worldCausalRootService } from "./causality/worldCausalRootService";
 
 const suite=process.env.AURION_EXPLORATION_MEMORY_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 
@@ -98,6 +101,8 @@ suite("Issue 323 Phase H exploration memory",()=>{
       socket,
       combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" },
     }).connectionId;
+    const unseenUserId = userId + 9;
+    const unseenConnection = causalZone.join({ userId: unseenUserId, socket }).connectionId;
     const causalIntents = [...causalZone.getPendingIntents()];
     causalZone.tick();
     const causalReceipt = causalZone.getLatestReceipt();
@@ -184,6 +189,62 @@ suite("Issue 323 Phase H exploration memory",()=>{
     expect(read.records).toHaveLength(1);
     expect(read.records[0]).toEqual(first.memory);
 
+    // WT01: exercise the protected public seam with actual zone ticks, MariaDB,
+    // discovery and epoch reconstruction. Context/socket are explicit fixtures;
+    // no production authentication or physical device is claimed.
+    const caller = (id: number | null) => appRouter.createCaller({
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: {} as TrpcContext["res"],
+      user: id === null ? null : {
+        id, openId: `world-slice-fixture-${id}`, name: "WorldSlice fixture", email: null,
+        loginMethod: "fixture", role: "user", createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"), lastSignedIn: new Date("2026-01-01"),
+      },
+    });
+    const root = await worldCausalRootService.read(worldId, epoch);
+    if (root?.status !== "VERIFIED") throw new Error("WORLD_ROOT_EXPECTED");
+    const query = { worldId, zoneId: "observatory_threshold", coordinate: chunk, radius: 1, lod: "full",
+      expectedEpoch: epoch, expectedWorldRoot: root.root.worldRootHash };
+    const invoke = (id: number | null, value: unknown = query) => (caller(id).gameplay as any).worldSlice(value);
+    const durableFacts = async () => {
+      const tables = ["aurionCausalTickReceipts", "aurionCausalCheckpoints", "aurionExplorationMemoryProjections", "aurionWorldChunkDeltas", "aurionGlobalWorldStates"];
+      return Promise.all(tables.map(async table => (await pool.query(`SELECT * FROM ${table} ORDER BY 1`))[0]));
+    };
+    const factsBefore = await durableFacts();
+    const selects = vi.spyOn(db, "select");
+    const slice = await (async () => {
+      try {
+        const result = await invoke(userId);
+        expect(selects.mock.calls.length, "single-chunk WorldSlice SELECT budget").toBeLessThanOrEqual(40);
+        return result;
+      } finally { selects.mockRestore(); }
+    })();
+    expect(slice.status).toBe("VERIFIED");
+    expect(slice.slice).toMatchObject({ worldId, zoneId: "observatory_threshold", epoch,
+      actorId: `player:${userId}`, worldRoot: root.root.worldRootHash, coordinate: chunk, radius: 1 });
+    expect(slice.slice.chunks).toHaveLength(1);
+    expect(slice.slice.chunks[0].tiles).toHaveLength(256);
+    expect(slice.slice.entities.map((entity: any) => entity.entityId)).toEqual([`player:${userId}`]);
+    expect(JSON.stringify(slice)).not.toMatch(/worldSeed|visibleResources|yieldKey|questSummaries|weaponBonus|skillCooldowns|idempotencyKey|combatProfile/);
+    expect(Buffer.byteLength(JSON.stringify(slice), "utf8")).toBeLessThanOrEqual(65536);
+    expect(slice.fingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(await invoke(userId)).toEqual(slice);
+    const map = await invoke(userId, { ...query, lod: "map" });
+    expect(map.slice.chunks).toEqual(slice.slice.chunks);
+    expect(map.slice.worldRoot).toBe(slice.slice.worldRoot);
+    const fogged = await invoke(unseenUserId);
+    expect(fogged.status).toBe("FOGGED");
+    expect(fogged.slice.chunks).toEqual([]);
+    expect(fogged.slice.entities.every((entity: any) => entity.entityId === `player:${unseenUserId}`)).toBe(true);
+    await expect(invoke(null)).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    for (const invalid of [{ ...query, actorId: `player:${unseenUserId}` }, { ...query, worldId: "other-world" }, { ...query, radius: 2 }]) {
+      await expect(invoke(userId, invalid)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+    await expect(invoke(userId, { ...query, expectedEpoch: epoch + 1 })).rejects.toThrow("WORLD_SLICE_REVISION_STALE");
+    await expect(invoke(userId, { ...query, expectedWorldRoot: "sha256:" + "0".repeat(64) })).rejects.toThrow("WORLD_SLICE_REVISION_STALE");
+    await expect(invoke(userId, { ...query, coordinate: { x: 1, z: 0 } })).rejects.toThrow("WORLD_SLICE_ACTOR_SCOPE_MISMATCH");
+    expect(await durableFacts()).toEqual(factsBefore);
+
     // Once the world epoch advances, the old snapshot cannot be used as a new
     // current discovery. The prior stored record remains independently readable.
     const nextIntents = [...causalZone.getPendingIntents()];
@@ -201,6 +262,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
     })).rejects.toThrow("EXPLORATION_WORLD_EPOCH_STALE");
     expect((await readExplorationMemory(userId, worldId, epoch)).records).toEqual([first.memory]);
     causalZone.leave(lateConnection);
+    causalZone.leave(unseenConnection);
     causalZone.leave(connected);
   });
 });
