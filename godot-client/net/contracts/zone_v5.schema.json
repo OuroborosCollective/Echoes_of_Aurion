@@ -153,7 +153,9 @@
         "maxStamina": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "alive": { "type": "boolean" },
         "combatLevel": { "type": "integer", "minimum": 1, "maximum": 10000 },
-        "lastCombatSequence": { "$ref": "#/$defs/safeNonNegativeInteger" }
+        "lastCombatSequence": { "$ref": "#/$defs/safeNonNegativeInteger" },
+        "effects": { "type": "object", "maxProperties": 4, "additionalProperties": { "$ref": "#/$defs/safeNonNegativeInteger" } },
+        "skillCooldowns": { "type": "object", "maxProperties": 5, "additionalProperties": { "$ref": "#/$defs/safeNonNegativeInteger" } }
       }
     },
     "resourceNode": {
@@ -230,7 +232,7 @@
       "properties": {
         "type": { "const": "reject" },
         "code": {
-          "enum": ["INVALID_MESSAGE", "STALE_CLIENT_SEQUENCE", "UNSUPPORTED_ZONE_COMMAND", "PROTOCOL_VERSION_UNSUPPORTED", "INVALID_COMBAT_TARGET", "COMBAT_TARGET_OUT_OF_RANGE", "COMBATANT_DEAD", "INVALID_COMBAT_SKILL", "COMBAT_SKILL_COOLDOWN"]
+          "enum": ["INVALID_MESSAGE", "STALE_CLIENT_SEQUENCE", "UNSUPPORTED_ZONE_COMMAND", "PROTOCOL_VERSION_UNSUPPORTED", "INVALID_COMBAT_TARGET", "COMBAT_TARGET_OUT_OF_RANGE", "COMBATANT_DEAD", "INVALID_COMBAT_SKILL", "COMBAT_SKILL_COOLDOWN", "COMBAT_NO_STAMINA"]
         }
       }
     },

@@ -1,6 +1,7 @@
 extends Control
 ## Mobile presentation of validated Aurion zone records. No gameplay state is
 ## predicted here; buttons emit intents to the existing main scene.
+signal skill_requested(skill_id: String)
 signal attack_requested
 signal diagnostics_requested
 signal world_studio_requested
@@ -26,6 +27,18 @@ signal exit_requested
 func _ready() -> void:
 	menu_button.pressed.connect(func(): set_menu_open(not menu_panel.visible))
 	attack_button.pressed.connect(func(): attack_requested.emit())
+	var skills := GridContainer.new()
+	skills.columns = 3
+	skills.name = "Skills"
+	add_child(skills)
+	for pair in [["k_strike", "Hieb"], ["k_charge", "Ansturm"], ["k_shield", "Schild"], ["k_whirlwind", "Wirbel"], ["k_overdrive", "Overdrive"]]:
+		var button := Button.new()
+		button.name = pair[0]
+		button.disabled = true
+		button.text = pair[1]
+		button.custom_minimum_size = Vector2(76, 48)
+		button.pressed.connect(func(): skill_requested.emit(pair[0]))
+		skills.add_child(button)
 	$MenuPanel/Scroll/Content/Close.pressed.connect(func(): set_menu_open(false))
 	$MenuPanel/Scroll/Content/Diagnostics.pressed.connect(func():
 		set_menu_open(false)
@@ -97,6 +110,13 @@ func render_projection(zone: Variant, entities: Variant, selected: String, stale
 	else:
 		target_name.text = "Ziel: " + selected
 		target_health.text = "HP %d / %d" % [int(selected_record["health"]), int(selected_record["maxHealth"])] if selected_record.has("health") else ""
+	var effects: Dictionary = self_record.get("effects", {})
+	if int(effects.get("shieldUntil", 0)) > int(zone.last_tick()):
+		stamina_label.text += " · Schild"
+	if int(effects.get("overdriveUntil", 0)) > int(zone.last_tick()):
+		stamina_label.text += " · Overdrive"
+	for button: Button in get_node("Skills").get_children():
+		button.disabled = stale or menu_is_open() or self_record.is_empty() or not self_record.get("alive", false) or int(self_record.get("skillCooldowns", {}).get(str(button.name), 0)) > int(zone.last_tick())
 	attack_button.disabled = not attack_enabled or stale or menu_is_open() or (not self_record.is_empty() and not bool(self_record["alive"]))
 	notice_text.text = message
 	notice.visible = not message.is_empty()
@@ -133,6 +153,7 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 	var target_left := safe.position.x + margin if target_top != top else safe.end.x - margin - menu_width - 8.0 * scale_factor - target_width
 	_place(target, Rect2(target_left, target_top, target_width, 60.0 * scale_factor))
 	var action_size := clampf(safe.size.y * 0.12, 80.0 * scale_factor, 96.0 * scale_factor)
+	get_node("Skills").position = Vector2(safe.position.x + margin, safe.end.y - margin - action_size - 108)
 	_place(attack_button, Rect2(safe.end.x - margin - action_size, safe.end.y - margin - action_size, action_size, action_size))
 	var menu_panel_width := minf(240.0 * scale_factor, usable_width)
 	var menu_top := top + 56.0 * scale_factor

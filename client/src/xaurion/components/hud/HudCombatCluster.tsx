@@ -1,15 +1,34 @@
-import type { CSSProperties } from "react";
-import { Gamepad2, Hand, MessageSquare, Repeat, ShieldCheck, Sparkles, Swords } from "lucide-react";
+import { ax1BladeSkillForCommand } from "@shared/ax1BladeSkillProtocol";
+import { useEffect, useState, type CSSProperties } from "react";
+import {
+  Gamepad2,
+  Hand,
+  MessageSquare,
+  Repeat,
+  ShieldCheck,
+  Sparkles,
+  Swords,
+} from "lucide-react";
 import { arcSlots, SKILL_ARC, UTILITY_ANGLES_DEG } from "./hudGeometry";
 import type { GameHUDProps } from "./hudTypes";
 
 type ClusterProps = Pick<
   GameHUDProps,
-  "hotbar" | "autoLoot" | "autoAttack" | "actionsDisabled" | "controlsDisabled" | "onAttack" | "onCastSkill" | "onInteract" | "onToggleAutoAttack" | "onToggleAutoLoot"
+  | "hotbar"
+  | "autoLoot"
+  | "autoAttack"
+  | "actionsDisabled"
+  | "controlsDisabled"
+  | "onAttack"
+  | "onCastSkill"
+  | "onInteract"
+  | "onToggleAutoAttack"
+  | "onToggleAutoLoot"
 >;
 
 const slotAt = (angleDeg: number) => arcSlots(1, angleDeg, angleDeg)[0]!;
-const at = (slot: { x: number; y: number }) => ({ "--x": slot.x, "--y": slot.y }) as CSSProperties;
+const at = (slot: { x: number; y: number }) =>
+  ({ "--x": slot.x, "--y": slot.y }) as CSSProperties;
 
 /**
  * Thumb-zone combat cluster (bottom-right): the big attack button is the anchor, the hotbar
@@ -17,9 +36,45 @@ const at = (slot: { x: number; y: number }) => ({ "--x": slot.x, "--y": slot.y }
  * Every position is a unit vector from hudGeometry multiplied by a CSS ring radius.
  */
 export function HudCombatCluster(props: ClusterProps) {
-  const skillSlots = arcSlots(props.hotbar.length, SKILL_ARC.fromDeg, SKILL_ARC.toDeg);
+  const [status, setStatus] = useState<{
+    tick: number;
+    stamina?: number;
+    skillCooldowns?: Record<string, number>;
+    effects: { shieldUntil?: number; overdriveUntil?: number };
+  }>({ tick: 0, effects: {} });
+  useEffect(() => {
+    const update = (event: Event) => setStatus((event as CustomEvent).detail);
+    window.addEventListener("aurion:confirmed-combat-status", update);
+    return () =>
+      window.removeEventListener("aurion:confirmed-combat-status", update);
+  }, []);
+  const skillSlots = arcSlots(
+    props.hotbar.length,
+    SKILL_ARC.fromDeg,
+    SKILL_ARC.toDeg
+  );
   return (
-    <div className="ax-combat" data-auto-attack={props.autoAttack} aria-label="Kampfsteuerung" role="group">
+    <div
+      className="ax-combat"
+      data-auto-attack={props.autoAttack}
+      aria-label="Kampfsteuerung"
+      role="group"
+    >
+      <div
+        aria-label="Bestätigter Kampfstatus"
+        className="text-xs text-amber-100"
+        style={{ position: "absolute", bottom: "100%", right: 0, width: 180 }}
+      >
+        {status.stamina !== undefined && (
+          <span>Ausdauer: {status.stamina} · </span>
+        )}
+        {(status.effects.shieldUntil ?? 0) > status.tick && (
+          <span>Schild · </span>
+        )}
+        {(status.effects.overdriveUntil ?? 0) > status.tick && (
+          <span>Overdrive</span>
+        )}
+      </div>
       <button
         type="button"
         disabled={props.actionsDisabled}
@@ -33,24 +88,37 @@ export function HudCombatCluster(props: ClusterProps) {
         <span className="ax-orb__cap">ANGRIFF</span>
       </button>
 
-      {props.hotbar.map((skill, index) => (
-        <button
-          type="button"
-          key={`${skill.command}:${index}`}
-          disabled={props.actionsDisabled}
-          onClick={() => props.onCastSkill(skill.command)}
-          className="ax-orb ax-orb--skill min-h-11 min-w-11"
-          style={{ ...at(skillSlots[index]!), "--skill": skill.color } as CSSProperties}
-          title={skill.name}
-          aria-label={`${skill.name} · Hotbar ${index + 1}`}
-        >
-          <span className="ax-orb__glyph" style={{ color: skill.color }}>
-            {skill.icon}
-          </span>
-          <kbd className="ax-kbd">{index + 1}</kbd>
-          <small className="sr-only">{skill.name}</small>
-        </button>
-      ))}
+      {props.hotbar.map((skill, index) => {
+        const id = ax1BladeSkillForCommand(skill.command)?.skillId;
+        const cooldown = id
+          ? Math.max(0, (status.skillCooldowns?.[id] ?? 0) - status.tick)
+          : 0;
+        return (
+          <button
+            type="button"
+            key={`${skill.command}:${index}`}
+            disabled={props.actionsDisabled || cooldown > 0}
+            onClick={() => props.onCastSkill(skill.command)}
+            className="ax-orb ax-orb--skill min-h-11 min-w-11"
+            style={
+              {
+                ...at(skillSlots[index]!),
+                "--skill": skill.color,
+              } as CSSProperties
+            }
+            title={skill.name}
+            aria-label={`${skill.name} · Hotbar ${index + 1}`}
+          >
+            <span className="ax-orb__glyph" style={{ color: skill.color }}>
+              {skill.icon}
+            </span>
+            <kbd className="ax-kbd">
+              {cooldown > 0 ? `${(cooldown / 10).toFixed(1)}s` : index + 1}
+            </kbd>
+            <small className="sr-only">{skill.name}</small>
+          </button>
+        );
+      })}
 
       <button
         type="button"
@@ -77,7 +145,9 @@ export function HudCombatCluster(props: ClusterProps) {
         title="Auto-Angriff"
       >
         <Repeat className="ax-orb__icon" aria-hidden />
-        <span className="ax-orb__cap">{props.autoAttack ? "AUTO AN" : "AUTO"}</span>
+        <span className="ax-orb__cap">
+          {props.autoAttack ? "AUTO AN" : "AUTO"}
+        </span>
       </button>
       <button
         type="button"
@@ -97,21 +167,45 @@ export function HudCombatCluster(props: ClusterProps) {
   );
 }
 
-type RailProps = Pick<GameHUDProps, "onOpenChat" | "onOpenControls" | "onOpenParty">;
+type RailProps = Pick<
+  GameHUDProps,
+  "onOpenChat" | "onOpenControls" | "onOpenParty"
+>;
 
 /** Small system rail above the joystick: chat, controls, group. */
-export function HudSystemRail({ onOpenChat, onOpenControls, onOpenParty }: RailProps) {
+export function HudSystemRail({
+  onOpenChat,
+  onOpenControls,
+  onOpenParty,
+}: RailProps) {
   return (
     <div className="ax-rail">
-      <button type="button" onClick={onOpenChat} className="ax-railbtn ax-railbtn--chat" title="Realm Chat">
+      <button
+        type="button"
+        onClick={onOpenChat}
+        className="ax-railbtn ax-railbtn--chat"
+        title="Realm Chat"
+      >
         <MessageSquare aria-hidden />
         <span className="ax-railbtn__text">Realm Chat</span>
       </button>
-      <button type="button" onClick={onOpenControls} aria-label="Steuerung öffnen" className="ax-railbtn" title="Steuerung">
+      <button
+        type="button"
+        onClick={onOpenControls}
+        aria-label="Steuerung öffnen"
+        className="ax-railbtn"
+        title="Steuerung"
+      >
         <Gamepad2 aria-hidden />
         <span className="sr-only">Steuerung</span>
       </button>
-      <button type="button" onClick={onOpenParty} aria-label="Gruppe öffnen" className="ax-railbtn" title="Gruppe">
+      <button
+        type="button"
+        onClick={onOpenParty}
+        aria-label="Gruppe öffnen"
+        className="ax-railbtn"
+        title="Gruppe"
+      >
         <ShieldCheck aria-hidden />
         <span className="sr-only">Gruppe</span>
       </button>

@@ -71,7 +71,8 @@ suite("real equipment to consumed zone ticket combat profile", () => {
     for (let i = 0; i < 20; i++) {
       expect(zone.submitAttack(connectionId, { type: "attack", clientSeq: seq++, targetEntityId: "mob_12" })).toBe("accepted");
       zone.submitMovement(connectionId, { type: "move", clientSeq: seq++, input: { x: 0, z: 0 } });
-      zone.tick();
+      // v4 basic attacks have an authoritative eight-tick recovery.
+      for (let recovery = 0; recovery < 8; recovery++) zone.tick();
     }
     const hits = socket.send.mock.calls.map(([payload]) => JSON.parse(payload)).filter(event => event.type === "combat" && event.attackerEntityId === `player:${userId}` && event.hit);
     expect(hits.length).toBeGreaterThan(0);

@@ -9,8 +9,8 @@ import { AuthoritativeMovementZone } from "./zoneRuntime";
 import { AURION_ZONE_RULESET_VERSION, computeReceiptHash } from "../shared/aurionCausalTickContract";
 
 const revision = "a".repeat(40);
-const supportedRulesets = ["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION];
-const binaryAuthority = { ruleset: "aurion-zone-v3", rulesetScope: "runtime-default",
+const supportedRulesets = ["aurion.zone.rules.v2", "aurion.zone.rules.v3", AURION_ZONE_RULESET_VERSION];
+const binaryAuthority = { ruleset: "aurion-zone-v4", rulesetScope: "runtime-default",
   defaultRulesetVersion: AURION_ZONE_RULESET_VERSION, supportedZoneRulesets: supportedRulesets,
   tickHz: 10, causalReceipts: true };
 

@@ -7,6 +7,10 @@ import type { ZoneId } from "./zoneProtocol";
 function fixture(name: string) {
   const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
   const zone = new AuthoritativeMovementZone(`combat_continuity_${name}` as ZoneId);
+  const state = zone.getCanonicalZoneState();
+  state.ruleset = "aurion.zone.rules.v3";
+  delete state.combatTactics;
+  zone.restoreFromCanonicalState(state);
   const { connectionId } = zone.join({ userId: 73, socket: socket as unknown as WebSocket,
     combatProfile: { combatLevel: 1, maxHealth: 100_000, weaponBonus: 0, weaponEquipped: false, weaponTrack: "staff" } });
   const events = () => socket.send.mock.calls.map(([payload]) => JSON.parse(payload)).filter(event => event.type === "combat");

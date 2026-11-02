@@ -21,6 +21,8 @@ export interface CombatDeltaContext {
   tick: number;
   sequence: number;
   weaponBonus?: number;
+  /** Explicit v4 rules; omitted for historical replay. */
+  tuning?: { cost: number; power: number; hitChance: number };
   /** Explicit authoritative equipment readback; never inferred from mastery/weapon track. */
   unarmed?: boolean;
   /** Aurion-owned addressable draws are mandatory for every gameplay-authority caller. */
@@ -65,11 +67,11 @@ export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDe
   const attackerId = stableEntityId(attacker), defenderId = stableEntityId(defender);
   const staminaBefore = typeof attacker.stamina === "number" ? attacker.stamina : 100;
   const healthBefore = typeof defender.health === "number" ? defender.health : 100;
-  const staminaCost = action === "melee" ? STAMINA_COST : 0;
-  if (action === "melee" && staminaBefore <= 0) return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:0, healthDelta:0, result:Object.freeze({ success:false, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore, reason:"no_stamina" }) });
+  const staminaCost = context.tuning?.cost ?? (action === "melee" ? STAMINA_COST : 0);
+  if (action === "melee" && (context.tuning ? staminaBefore < staminaCost : staminaBefore <= 0)) return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:0, healthDelta:0, result:Object.freeze({ success:false, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore, reason:"no_stamina" }) });
 
   assertEntropy(context.entropy);
-  const hitChance = calculateCombatHitChance(attacker, defender);
+  const hitChance = context.tuning?.hitChance ?? calculateCombatHitChance(attacker, defender);
   const hit = context.entropy.hitU32 < probabilityThreshold(hitChance);
   if (!hit) return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:0, result:Object.freeze({ success:true, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore }) });
 
@@ -80,7 +82,8 @@ export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDe
   const base = context.unarmed ? combatLevel(attacker) : 5 + combatLevel(attacker) + Math.max(0, weaponBonus);
   const mitigation = Math.floor(combatLevel(defender) * 0.3);
   const baseDamage = Math.max(1, base - mitigation + damageRoll);
-  const damage = crit ? Math.floor(baseDamage * 1.75) : baseDamage;
+  const scaledDamage = Math.max(1, Math.floor(baseDamage * (context.tuning?.power ?? 100) / 100));
+  const damage = crit ? Math.floor(scaledDamage * 1.75) : scaledDamage;
   const healthAfter = Math.max(0, healthBefore - damage);
   return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:healthAfter-healthBefore, result:Object.freeze({ success:true, hit:true, damage, crit, killed:healthAfter<=0, defenderHealth:healthAfter }) });
 }

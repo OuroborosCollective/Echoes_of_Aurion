@@ -6,7 +6,7 @@ const MAX_CLIENT_BYTES := 2048
 const MAX_BROWSER_SNAPSHOT_CODE_UNITS := 65536
 const FIXED_CONTENT := "286c575d3d0050ffa77b794d5b7a7e24858acee8"
 const NODE_IDS := ["node_beast_1","node_copper_1","node_cotton_1","node_iron_1","node_steel_1"]
-const REJECT_CODES := ["INVALID_MESSAGE", "STALE_CLIENT_SEQUENCE", "UNSUPPORTED_ZONE_COMMAND", "PROTOCOL_VERSION_UNSUPPORTED", "INVALID_COMBAT_TARGET", "COMBAT_TARGET_OUT_OF_RANGE", "COMBATANT_DEAD", "INVALID_COMBAT_SKILL", "COMBAT_SKILL_COOLDOWN"]
+const REJECT_CODES := ["INVALID_MESSAGE", "STALE_CLIENT_SEQUENCE", "UNSUPPORTED_ZONE_COMMAND", "PROTOCOL_VERSION_UNSUPPORTED", "INVALID_COMBAT_TARGET", "COMBAT_TARGET_OUT_OF_RANGE", "COMBATANT_DEAD", "INVALID_COMBAT_SKILL", "COMBAT_SKILL_COOLDOWN", "COMBAT_NO_STAMINA"]
 
 static func valid_hello(ticket: String) -> Dictionary:
 	if ticket.length() < 24 or ticket.length() > 160:
@@ -44,10 +44,14 @@ static func valid_attack(client_seq: int, target_id: String) -> Dictionary:
 	return {"type":"attack","clientSeq":client_seq,"targetEntityId":target_id}
 
 static func valid_skill(client_seq: int, skill_id: String, target_id: String) -> Dictionary:
-	# Current Aurion server accepts only equipped blade k_strike with a mob target.
-	if client_seq < 1 or client_seq > 2147483647 or skill_id != "k_strike" or not _valid_mob_id(target_id):
+	if client_seq < 1 or client_seq > 2147483647 or skill_id not in ["k_strike", "k_charge", "k_shield", "k_whirlwind", "k_overdrive"]:
 		return {}
-	return {"type":"skill","clientSeq":client_seq,"skillId":skill_id,"targetEntityId":target_id}
+	var data := {"type":"skill","clientSeq":client_seq,"skillId":skill_id}
+	if skill_id in ["k_strike", "k_charge"]:
+		if not _valid_mob_id(target_id):
+			return {}
+		data["targetEntityId"] = target_id
+	return data
 
 static func serialized_attack(client_seq: int, target_id: String) -> String:
 	var data := valid_attack(client_seq, target_id)
@@ -262,6 +266,13 @@ static func _valid_combatant(raw: Variant) -> bool:
 		return false
 	if not _safe_nonnegative(raw.get("health")) or not _positive(raw.get("maxHealth")) or not _safe_nonnegative(raw.get("stamina")) or not _positive(raw.get("maxStamina")):
 		return false
+	for key in ["effects", "skillCooldowns"]:
+		if raw.has(key):
+			if typeof(raw[key]) != TYPE_DICTIONARY or raw[key].size() > 8:
+				return false
+			for value in raw[key].values():
+				if not _safe_nonnegative(value):
+					return false
 	return typeof(raw.get("alive")) == TYPE_BOOL and raw["health"] <= raw["maxHealth"] and raw["stamina"] <= raw["maxStamina"] and raw["alive"] == (raw["health"] > 0) and _positive(raw.get("combatLevel")) and raw.get("combatLevel") <= 10000 and _safe_nonnegative(raw.get("lastCombatSequence"))
 
 static func is_valid_zone_state(raw: Variant) -> bool:

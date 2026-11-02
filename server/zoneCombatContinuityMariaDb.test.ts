@@ -27,7 +27,8 @@ suite("combat state durable readback on isolated MariaDB", () => {
     for (let i = 0; i < 30; i++) {
       expect(zone.submitAttack(connectionId, { type: "attack", clientSeq: seq++, targetEntityId: "mob_12" })).toBe("accepted");
       zone.submitMovement(connectionId, { type: "move", clientSeq: seq++, input: { x: 0, z: 0 } });
-      zone.tick();
+      // v4 basic attacks have an authoritative eight-tick recovery.
+      for (let recovery = 0; recovery < 8; recovery++) zone.tick();
     }
     const state = zone.getCanonicalZoneState();
     expect(state.players[0]!.health).toBeLessThan(10_000);
@@ -45,5 +46,6 @@ suite("combat state durable readback on isolated MariaDB", () => {
     restored.restoreFromCanonicalState(saved!.state);
     expect(restored.getCanonicalZoneState().players).toEqual(state.players);
     expect(restored.getCanonicalZoneState().mobs).toEqual(state.mobs);
+    expect(restored.getCanonicalZoneState().combatTactics).toEqual(state.combatTactics);
   });
 });

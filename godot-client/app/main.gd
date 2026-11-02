@@ -223,6 +223,10 @@ func _ready() -> void:
 	world_toggle.pressed.connect(_toggle_world_diagnostics)
 	world_action.pressed.connect(_on_world_action_pressed)
 	mobile_hud.attack_requested.connect(_on_world_action_pressed)
+	mobile_hud.skill_requested.connect(func(skill_id: String):
+		if _world_input_permitted() and not mobile_hud.menu_is_open():
+			_zone_socket.send_skill(skill_id, _selected_target_id)
+	)
 	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
 	mobile_hud.world_studio_requested.connect(_open_world_studio)
 	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
@@ -549,7 +553,7 @@ func _on_zone_rejected(code: String) -> void:
 	# Command-level rejection is recoverable after a verified welcome.
 	if _zone_socket.state_name() == "connected":
 		status.text = "Sicher mit Aurion verbunden"
-		combat_notice.text = "Aktion abgelehnt · " + code
+		combat_notice.text = "Nicht genügend Ausdauer" if code == "COMBAT_NO_STAMINA" else "Aktion abgelehnt · " + code
 		combat_notice.visible = true
 		_combat_notice_expires_at_ms = Time.get_ticks_msec() + COMBAT_NOTICE_DURATION_MS
 		return

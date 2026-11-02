@@ -11,6 +11,7 @@ let engine:MMOEngine|null=null;
 let transport:ZoneCombatTransport|null=null;
 let selfEntityId:string|null=null;
 let pending:PendingAttack|null=null;
+let confirmedCooldowns: Readonly<Record<string, number>> = {};
 const mobPresentationListeners = new Set<(event: ConfirmedZoneCombatEvent) => void>();
 /** Observe server-confirmed mob impacts for animation only. */
 export function subscribeConfirmedMobCombat(listener: (event: ConfirmedZoneCombatEvent) => void): () => void {
@@ -27,10 +28,11 @@ export function attachAx1ZoneProjection(next:MMOEngine):()=>void{
 
 export function attachZoneCombatTransport(next:ZoneCombatTransport):()=>void{
   transport=next;
+  confirmedCooldowns = {};
   return()=>{if(transport===next)transport=null;clearPending({confirmed:false,completed:false,message:"Kampfverbindung wurde geschlossen."});};
 }
 
-export function projectConfirmedZoneSnapshot(values:{selfEntityId:string;mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[]}):void{
+export function projectConfirmedZoneSnapshot(values:{selfEntityId:string;mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[];tick?:number}):void{
   selfEntityId=values.selfEntityId;
   const self=values.combatants.find(entry=>entry.entityId===values.selfEntityId);
   // The gameplay state comes exclusively from validated, authoritative zone snapshots.
@@ -41,6 +43,9 @@ export function projectConfirmedZoneSnapshot(values:{selfEntityId:string;mobs:re
     maxHealth: self?.maxHealth ?? null,
     alive: self?.alive ?? null,
   } }));
+  if (self && pending?.expectedSkillId && ["k_shield", "k_overdrive"].includes(pending.expectedSkillId) && (self.skillCooldowns?.[pending.expectedSkillId] ?? 0) > (confirmedCooldowns[pending.expectedSkillId] ?? 0)) clearPending({confirmed:true,completed:false,message:"Fähigkeit von Aurion bestätigt."});
+  confirmedCooldowns = self?.skillCooldowns ?? {};
+  window.dispatchEvent(new CustomEvent("aurion:confirmed-combat-status", { detail: { tick: values.tick ?? 0, stamina: self?.stamina, skillCooldowns: self?.skillCooldowns ?? {}, effects: self?.effects ?? {} } }));
   if(!engine)return;
   engine.mobManager.applyAuthoritativeSnapshot(values.mobs);
   if(self){engine.player.stats.hp=self.health;engine.player.stats.maxHp=self.maxHealth;if(self.health<=0){engine.player.setConfirmedGlbSpeed(0);engine.setVirtualMovement(0,0);}}
@@ -67,7 +72,7 @@ export function acceptConfirmedZoneCombat(event:ConfirmedZoneCombatEvent):void{
 
 export function rejectPendingZoneAttack(code:string):void{
   if(!pending)return;
-  const message=code==="COMBAT_TARGET_OUT_OF_RANGE"?"Ziel außerhalb der bestätigten Aurion-Reichweite.":code==="INVALID_COMBAT_TARGET"?"Ziel ist nicht mehr angreifbar.":code==="COMBATANT_DEAD"?"Dein Charakter ist kampfunfähig.":code==="INVALID_COMBAT_SKILL"?"Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.":code==="COMBAT_SKILL_COOLDOWN"?"Der Aurion-Skill ist serverseitig noch auf Abklingzeit.":`Angriff verworfen: ${code}`;
+  const message=code==="COMBAT_NO_STAMINA"?"Nicht genügend Ausdauer für diese Aktion.":code==="COMBAT_TARGET_OUT_OF_RANGE"?"Ziel außerhalb der bestätigten Aurion-Reichweite.":code==="INVALID_COMBAT_TARGET"?"Ziel ist nicht mehr angreifbar.":code==="COMBATANT_DEAD"?"Dein Charakter ist kampfunfähig.":code==="INVALID_COMBAT_SKILL"?"Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.":code==="COMBAT_SKILL_COOLDOWN"?"Der Aurion-Skill ist serverseitig noch auf Abklingzeit.":`Angriff verworfen: ${code}`;
   clearPending({confirmed:false,completed:false,message});
 }
 
@@ -96,8 +101,8 @@ export function requestZoneSkill(skillId:Ax1BladeSkillId):Promise<ZoneActionOutc
   if(!engine||!transport||!selfEntityId)return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenkampf ist nicht verbunden."});
   if(pending)return Promise.resolve({confirmed:false,completed:false,message:"Vorherige Kampfaktion wartet noch auf Serverbestätigung."});
   const definition=ax1BladeSkillById(skillId);
-  const target=definition && definition.rangeFixed > 0 ? currentTarget() : null;
-  if(definition && definition.rangeFixed > 0 && !target)return Promise.resolve({confirmed:false,completed:false,message:"Kein angreifbares Ziel in der Nähe."});
+  const target=definition && ["k_strike", "k_charge"].includes(skillId) ? currentTarget() : null;
+  if(definition && ["k_strike", "k_charge"].includes(skillId) && !target)return Promise.resolve({confirmed:false,completed:false,message:"Kein angreifbares Ziel in der Nähe."});
   return new Promise(resolve=>{
     const timer=window.setTimeout(()=>{if(pending?.resolve===resolve)clearPending({confirmed:false,completed:false,message:"Keine Kampfbestätigung erhalten; Zustand wird nicht geraten."});},3_000);
     pending={expectedSkillId:skillId,resolve,timer};

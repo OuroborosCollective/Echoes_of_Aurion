@@ -1,10 +1,10 @@
 /** Canonical runtime capabilities; a binary default never proves an executed ruleset. */
-export const AURION_ZONE_RULESET_VERSION = "aurion.zone.rules.v3";
+export const AURION_ZONE_RULESET_VERSION = "aurion.zone.rules.v4";
 export const AURION_SUPPORTED_ZONE_RULESETS = Object.freeze([
-  "aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION,
+  "aurion.zone.rules.v2", "aurion.zone.rules.v3", AURION_ZONE_RULESET_VERSION,
 ]);
 export const AURION_BINARY_AUTHORITY = Object.freeze({
-  ruleset: "aurion-zone-v3",
+  ruleset: "aurion-zone-v4",
   rulesetScope: "runtime-default",
   defaultRulesetVersion: AURION_ZONE_RULESET_VERSION,
   supportedZoneRulesets: AURION_SUPPORTED_ZONE_RULESETS,
