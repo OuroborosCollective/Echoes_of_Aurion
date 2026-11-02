@@ -283,6 +283,55 @@ func verify() -> void:
 		unexpected = unexpected or remote.get_available_packet_count() > 0
 		await create_timer(0.01).timeout
 	require(not unexpected, "unconfirmed target sent an attack")
+	# WT02 active-scene fixture: real socket captures every outgoing packet;
+	# token bytes and DTO are explicit test fixtures, not actual authentication.
+	scene._selected_target_id = ""
+	scene._config.server_base_url = "" # no fixture credential leaves this process
+	scene._world_is_stale = false
+	scene.mobile_hud.set_menu_open(false)
+	scene._movement.reset()
+	scene.mobile_joystick.call("_reset")
+	var tokens := {"version":"aurion.native-auth.v1","tokenType":"Bearer","accessToken":"t".repeat(43),"refreshToken":"r".repeat(43),"accessExpiresInSeconds":900,"refreshAbsoluteRemainingSeconds":2592000,"refreshIdleExpiresInSeconds":604800}
+	require(scene._auth_start._tokens.accept_token_response(tokens, Time.get_ticks_msec()), "fixture token store rejected test pair")
+	var slice_fixture: SceneTree = load("res://tests/test_world_slice.gd").new()
+	var dto: Dictionary = slice_fixture.fixture()
+	slice_fixture.free()
+	dto.connectionId = scene._confirmed_zone.connection_id()
+	var canonical_before := JSON.stringify(scene._confirmed_zone.current_state())
+	var player_view: Transform3D = scene.world_camera.transform
+	require(scene._set_tabletop(true), "at-rest protected tabletop entry failed")
+	require(not scene.world_actors.visible and not scene.confirmed_neighbors.visible and not scene._world_design_visuals.visible and not scene.mobile_joystick.visible, "legacy data leaked into slice presentation")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	var fingerprint: String = scene._tabletop_layer.readback_fingerprint()
+	require(fingerprint == dto.fingerprint and scene._tabletop_layer.terrain.get_child_count() == 1, "active scene failed to project protected slice")
+	scene._on_camera_zoom_requested(1.5)
+	scene.world_camera.drag_orbit(Vector2(40, 10))
+	scene._tabletop_layer.set_ceiling(0)
+	scene._tabletop_layer.set_category("structures", false)
+	scene._set_tabletop_fallback(true)
+	require(scene._tabletop_map.visible and scene.live_3d_viewport.render_target_update_mode == SubViewport.UPDATE_DISABLED, "fallback kept 3D GPU work running")
+	require(scene._tabletop_layer.readback_fingerprint() == fingerprint, "render mode changed knowledge identity")
+	scene._poll_move_intent(Time.get_ticks_msec())
+	scene._on_world_action_pressed()
+	for _attempt in range(20):
+		client.poll()
+		remote.poll()
+		require(remote.get_available_packet_count() == 0, "tabletop emitted gameplay packet")
+		await create_timer(0.01).timeout
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == canonical_before, "tabletop mutated confirmed world")
+	require(scene._set_tabletop(false), "return to player camera failed")
+	require(scene.world_camera.transform.is_equal_approx(player_view), "player camera was not restored")
+	scene._movement._last_direction = Vector2i.RIGHT
+	require(not scene._set_tabletop(true), "moving actor entered tabletop and changed intent lifecycle")
+	scene._movement.reset()
+	require(scene._set_tabletop(true), "fresh tabletop entry failed")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation() - 1, Vector2i.ZERO)
+	# The previous accepted read is cleared explicitly on reset below. A stale
+	# generation callback cannot replace it or revive a disconnected view.
+	scene._reset_projection()
+	require(not scene._tabletop_active and scene._tabletop_layer.readback_fingerprint().is_empty() and scene._tabletop_map._slice.is_empty(), "session reset retained tabletop data")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	require(scene._tabletop_layer.readback_fingerprint().is_empty(), "late callback revived cleared scene")
 	client.close()
 	remote.close()
 	listener.stop()

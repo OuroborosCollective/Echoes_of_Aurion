@@ -115,7 +115,8 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 		safe = bounds
 	var scale_factor := clampf(density, 1.0, 2.0)
 	var font_size := roundi(16.0 * scale_factor)
-	for button: Button in [$MenuPanel/Scroll/Content/ZoomIn, $MenuPanel/Scroll/Content/ZoomOut]:
+	for button in $MenuPanel/Scroll/Content.get_children():
+		if not button is Button: continue
 		button.custom_minimum_size.y = 48.0 * scale_factor
 		button.add_theme_font_size_override("font_size", font_size)
 	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Scroll/Content/Diagnostics, $MenuPanel/Scroll/Content/WorldStudio, $MenuPanel/Scroll/Content/QuestAvailability, $MenuPanel/Scroll/Content/Close, notice_text]:

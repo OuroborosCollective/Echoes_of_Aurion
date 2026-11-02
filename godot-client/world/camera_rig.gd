@@ -10,6 +10,8 @@ const MAX_DISTANCE := 12.0
 @export_range(0.001, 0.03, 0.0005) var touch_sensitivity := 0.004
 @export var invert_vertical := false
 @export_range(3.0, 12.0, 0.1) var orbit_distance := DEFAULT_DISTANCE
+var _tabletop := false
+var _player_view: Dictionary = {}
 var yaw_radians := 0.0
 var pitch_radians := deg_to_rad(DEFAULT_PITCH)
 var _visual_target := Vector3.ZERO
@@ -27,11 +29,13 @@ func drag_orbit(delta: Vector2) -> void:
 		return
 	yaw_radians = wrapf(yaw_radians - delta.x * touch_sensitivity, -PI, PI)
 	var pitch_delta := delta.y * touch_sensitivity * (1.0 if invert_vertical else -1.0)
-	pitch_radians = clampf(pitch_radians + pitch_delta, deg_to_rad(MIN_PITCH), deg_to_rad(MAX_PITCH))
+	pitch_radians = clampf(pitch_radians + pitch_delta, deg_to_rad(15.0 if _tabletop else MIN_PITCH), deg_to_rad(85.0 if _tabletop else MAX_PITCH))
 	if _has_visual_target:
 		_update_visual_camera()
 
 func reset_view() -> void:
+	_tabletop = false
+	_player_view.clear()
 	yaw_radians = 0.0
 	pitch_radians = deg_to_rad(DEFAULT_PITCH)
 	orbit_distance = DEFAULT_DISTANCE
@@ -43,7 +47,7 @@ func zoom_visual(factor: float) -> void:
 	# It never pans, fetches a chunk or emits an Aurion intent.
 	if not is_finite(factor) or factor <= 0.0 or not _has_visual_target:
 		return
-	orbit_distance = clampf(orbit_distance / factor, MIN_DISTANCE, MAX_DISTANCE)
+	orbit_distance = clampf(orbit_distance / factor, 48.0 if _tabletop else MIN_DISTANCE, 160.0 if _tabletop else MAX_DISTANCE)
 	_update_visual_camera()
 
 func _update_visual_camera() -> void:
@@ -54,3 +58,22 @@ func _update_visual_camera() -> void:
 	var z := cos(yaw_radians) * cos(pitch_radians) * orbit_distance
 	position = _visual_target + Vector3(x, y, z)
 	look_at(_visual_target, Vector3.UP)
+
+func set_tabletop(enabled: bool, center: Vector3 = Vector3.ZERO) -> void:
+	if enabled == _tabletop: return
+	if enabled:
+		_player_view = {"yaw":yaw_radians,"pitch":pitch_radians,"distance":orbit_distance,"target":_visual_target,"has_target":_has_visual_target}
+		_tabletop = true
+		yaw_radians = 0.0
+		pitch_radians = deg_to_rad(55.0)
+		orbit_distance = 96.0
+		follow_confirmed(center)
+	else:
+		_tabletop = false
+		yaw_radians = _player_view.get("yaw", 0.0)
+		pitch_radians = _player_view.get("pitch", deg_to_rad(DEFAULT_PITCH))
+		orbit_distance = _player_view.get("distance", DEFAULT_DISTANCE)
+		_visual_target = _player_view.get("target", Vector3.ZERO)
+		_has_visual_target = _player_view.get("has_target", false)
+		_player_view.clear()
+		if _has_visual_target: _update_visual_camera()

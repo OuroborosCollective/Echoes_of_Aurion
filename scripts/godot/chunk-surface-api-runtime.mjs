@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 const [godot, project] = process.argv.slice(2);
+const slice = process.argv.includes("--slice");
 assert.ok(godot && project, 'pinned Godot and project needed for G18 HTTP regression');
 const payload = JSON.stringify({
   base: { worldId: 'synthetic-G18-http-fixture', coordinate: { x: 0, z: 0 }, tiles: [] },
@@ -12,7 +13,7 @@ const server = createServer((req, res) => {
   try {
     if (req.url === '/redirect-leak') { leaked = true; res.end(); return; }
     assert.equal(req.method, 'GET');
-    assert.equal(req.url, '/api/game/world-chunk-surface?x=0&z=0');
+    assert.equal(req.url, slice ? '/api/game/world-slice?x=0&z=0&radius=1&lod=full' : '/api/game/world-chunk-surface?x=0&z=0');
     assert.equal(req.headers.cookie, undefined);
     assert.equal(req.headers['content-type'], undefined);
     calls++;
@@ -30,7 +31,7 @@ await new Promise((resolve, reject) => {
   server.listen(3000, '127.0.0.1', resolve);
 });
 let output = '', timedOut = false;
-const child = spawn(godot, ['--headless', '--path', project, '--script', 'tests/test_chunk_surface_api_runtime.gd'],
+const child = spawn(godot, ['--headless', '--path', project, '--script', 'tests/test_chunk_surface_api_runtime.gd', ...(slice ? ['--', '--slice'] : [])],
   { stdio: ['ignore', 'pipe', 'pipe'] });
 child.stdout.on('data', bytes => { output += bytes; });
 child.stderr.on('data', bytes => { output += bytes; });
