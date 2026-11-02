@@ -249,6 +249,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
       while (scannedUntil < beforeTick - 1) {
         const page = await tx.select().from(aurionCausalTickReceipts)
           .where(and(
+            eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
             eq(aurionCausalTickReceipts.zoneId, zoneId),
             gt(aurionCausalTickReceipts.tick, scannedUntil),
             lt(aurionCausalTickReceipts.tick, beforeTick),
@@ -284,6 +285,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
       while (true) {
         const existingPage = await tx.select().from(aurionCausalArchive)
           .where(and(
+            eq(aurionCausalArchive.worldId, GLOBAL_WORLD_ID),
             eq(aurionCausalArchive.zoneId, zoneId),
             lt(aurionCausalArchive.startTick, beforeTick),
             gt(aurionCausalArchive.startTick, afterArchiveStart),
@@ -304,6 +306,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
         while (verifiedUntil < archive.endTick) {
           const page = await tx.select().from(aurionCausalTickReceipts)
             .where(and(
+              eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
               eq(aurionCausalTickReceipts.zoneId, zoneId),
               gt(aurionCausalTickReceipts.tick, verifiedUntil),
               lte(aurionCausalTickReceipts.tick, archive.endTick),
@@ -363,6 +366,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
       while (lastSourceTick < beforeTick - 1) {
         const page = await tx.select().from(aurionCausalTickReceipts)
           .where(and(
+            eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
             eq(aurionCausalTickReceipts.zoneId, zoneId),
             gt(aurionCausalTickReceipts.tick, lastSourceTick),
             lt(aurionCausalTickReceipts.tick, beforeTick),
@@ -399,7 +403,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
 
   async getArchiveStats(zoneId: string): Promise<{ totalArchives: number; totalArchivedReceipts: number }> {
     const db = await getDb(); if (!db) return { totalArchives: 0, totalArchivedReceipts: 0 };
-    const rows = await db.select({ count: sqlDrizzle<number>`count(*)`, totalReceipts: sqlDrizzle<number>`sum(receiptCount)` }).from(aurionCausalArchive).where(eq(aurionCausalArchive.zoneId, zoneId));
+    const rows = await db.select({ count: sqlDrizzle<number>`count(*)`, totalReceipts: sqlDrizzle<number>`sum(receiptCount)` }).from(aurionCausalArchive).where(and(eq(aurionCausalArchive.worldId, GLOBAL_WORLD_ID), eq(aurionCausalArchive.zoneId, zoneId)));
     return { totalArchives: Number(rows[0]?.count) || 0, totalArchivedReceipts: Number(rows[0]?.totalReceipts) || 0 };
   }
 
