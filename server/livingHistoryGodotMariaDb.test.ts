@@ -59,4 +59,22 @@ suite("Living History: canonical ruin identity and world isolation", () => {
     const result = await listVisibleRuins(worldA);
     expect(result.map(ruin => ruin.ruinId)).toEqual(["history-proof-ruin-a"]);
   });
+
+  it("reconciles concurrent attempts against one persisted collapse", async () => {
+    await pool.execute(
+      "INSERT INTO aurionActiveCivilizations (civilizationId,worldId,worldEpoch,population,stability,hazardIndex,scarcitySeverity,lastResolutionIndex) VALUES (?,?,?,?,?,?,?,?)",
+      ["history-proof-civ-a", worldA, 3, 50, 0.1, 0.9, 0.1, 4],
+    );
+    const results = await Promise.all([
+      orchestrateCivilizationLoop(worldA, 3, "history-proof-receipt-concurrent"),
+      orchestrateCivilizationLoop(worldA, 3, "history-proof-receipt-concurrent"),
+    ]);
+    expect(results[0]?.action).toBe("COLLAPSED");
+    expect(results[1]).toEqual(results[0]);
+    const [rows] = await pool.execute<any[]>(
+      "SELECT r.ruinId FROM aurionRuinOrigins r JOIN aurionCivilizationHistoryEvents e ON e.eventId=r.collapseEventId WHERE e.worldId=?",
+      [worldA],
+    );
+    expect(rows).toHaveLength(1);
+  });
 });

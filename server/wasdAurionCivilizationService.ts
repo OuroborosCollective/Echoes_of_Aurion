@@ -48,6 +48,7 @@ export async function orchestrateCivilizationLoop(worldId: string, worldEpoch: n
       await recordCivilizationCollapse({
         worldId,
         civilizationId: activeCiv.civilizationId,
+        ruinId: ruinTransformation.ruinId,
         collapseEventId: hash(["collapse", activeCiv.civilizationId, String(worldEpoch)]),
         sourceReceiptId,
         sourceRevision: "wasd:civ:v1",

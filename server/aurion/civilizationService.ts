@@ -14,6 +14,7 @@ import {
   getActiveCivilization,
   findCivilizationHistoryEventsBySourceReceipt,
   listCivilizationHistoryEvents,
+  readRuinForCollapse,
   recordCivilizationAdvance,
   recordCivilizationCollapse,
   recordInitialCivilizationSeed,
@@ -76,22 +77,20 @@ function deriveEconomicDeltas(impact: EconomicCycleImpact | null) {
   };
 }
 
-export async function orchestrateCivilizationLoop(
-  worldId: string,
-  worldEpoch: number,
-  sourceReceiptId: string,
-  economicImpact?: EconomicCycleImpact | null,
-) {
+async function readTransitionReplay(worldId: string, sourceReceiptId: string) {
   const priorSourceEvents = await findCivilizationHistoryEventsBySourceReceipt(worldId, sourceReceiptId);
-  const transitionReplay = priorSourceEvents.find(event =>
+  const transitions = priorSourceEvents.filter(event =>
     event.eventType === "CIVILIZATION_COLLAPSE" ||
     event.eventType === "EPOCH_ADVANCE" ||
     event.eventType === "REBIRTH_CANDIDATE_CREATED" ||
     event.eventType === "INITIAL_CIV_SEEDED",
   );
+  if (transitions.length > 1) throw new Error("CIVILIZATION_HISTORY_SOURCE_RECEIPT_AMBIGUOUS");
+  const transitionReplay = transitions[0];
   if (transitionReplay) {
     if (transitionReplay.eventType === "CIVILIZATION_COLLAPSE") {
-      return { action: "COLLAPSED" as const, ruinId: `ruin_${transitionReplay.eventId}` };
+      const ruin = await readRuinForCollapse(worldId, transitionReplay.eventId);
+      return { action: "COLLAPSED" as const, ruinId: ruin.ruinId };
     }
     if (transitionReplay.eventType === "REBIRTH_CANDIDATE_CREATED") {
       return { action: "REBIRTH_CANDIDATE_CREATED" as const, candidateId: transitionReplay.eventId };
@@ -102,8 +101,25 @@ export async function orchestrateCivilizationLoop(
     return { action: "ADVANCED" as const, civilizationId: transitionReplay.civilizationId };
   }
   if (priorSourceEvents.length) throw new Error("CIVILIZATION_HISTORY_SOURCE_RECEIPT_INCOMPLETE");
+  return null;
+}
+
+export async function orchestrateCivilizationLoop(
+  worldId: string,
+  worldEpoch: number,
+  sourceReceiptId: string,
+  economicImpact?: EconomicCycleImpact | null,
+) {
+  const replay = await readTransitionReplay(worldId, sourceReceiptId);
+  if (replay) return replay;
 
   const activeCiv = await getActiveCivilization(worldId);
+  // A competing collapse may commit between the first receipt read and the
+  // active-state read. Reconcile before seeding a new civilization.
+  if (!activeCiv) {
+    const concurrentReplay = await readTransitionReplay(worldId, sourceReceiptId);
+    if (concurrentReplay) return concurrentReplay;
+  }
 
   if (activeCiv) {
     const occurredSequence = activeCiv.lastResolutionIndex + 1;
@@ -134,6 +150,7 @@ export async function orchestrateCivilizationLoop(
       await recordCivilizationCollapse({
         worldId,
         civilizationId: activeCiv.civilizationId,
+        ruinId: ruinTransformation.ruinId,
         collapseEventId: hash(["collapse", activeCiv.civilizationId, sourceReceiptId]),
         sourceReceiptId,
         sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
