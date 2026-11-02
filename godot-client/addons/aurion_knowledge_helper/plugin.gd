@@ -24,6 +24,8 @@ func _enter_tree() -> void:
 	_index = KnowledgeIndex.new()
 	_build_dock()
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
+	if OS.get_environment("AURION_KNOWLEDGE_HELPER_EDITOR_SMOKE") == "1":
+		print("AURION_KNOWLEDGE_HELPER_EDITOR_PASS")
 
 func _build_dock() -> void:
 	_dock = VBoxContainer.new()

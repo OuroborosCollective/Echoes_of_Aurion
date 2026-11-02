@@ -31,6 +31,9 @@ const project = join(repo, 'godot-client');
 const godot = (...args) => ['--headless', '--path', project, ...args];
 await stage('doctor', 'static', process.execPath, ['scripts/godot/doctor.mjs'], '"editor": "ready"');
 await stage('import', 'headless', executable, godot('--editor', '--import'));
+await stage('knowledge-doc-editor-smoke', 'headless', process.execPath,
+  ['scripts/godot/knowledge-helper-editor-smoke.mjs', executable, project],
+  'AURION_KNOWLEDGE_HELPER_EDITOR_PASS');
 async function scripts(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.name === '.godot') continue;
