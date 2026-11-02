@@ -28,3 +28,7 @@
 ## 2024-10-17 - Checkpoint Button Keyboard Focus and Screen Reader Context
 **Learning:** List items mapped as buttons (like the checkpoint replay list in `CausalStudioDashboard`) often inherit basic layout classes but forget to define explicit focus states or aria labels, leaving keyboard users unaware of their focus position and screen readers without clear contextual action descriptions.
 **Action:** When adding interactive lists built with buttons, always ensure `focus-visible:ring-2`, `focus-visible:outline-none`, and an `aria-label` are present to make the action fully accessible to all users.
+
+## 2026-10-18 - Landing Page Button Tactile Feedback
+**Learning:** When applying tactile feedback like hover scales to child icons inside buttons, ensuring consistency between dedicated subpages (like Community) and primary entry points (like Home) prevents a disjointed user experience. Icons in action buttons should scale to draw focus where appropriate, respecting disabled states.
+**Action:** Applied `group` to interactive buttons and `transition-transform motion-safe:group-hover:scale-110` to their child icons in `client/src/pages/Home.tsx`, mirroring the `Community.tsx` implementation. Handled disabled icon states via `group-disabled:motion-safe:group-hover:scale-100`.
