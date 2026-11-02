@@ -25,3 +25,12 @@ Compatibility ist der Ausgangsrenderer. Die Oberfläche verwendet Container und 
 `.godot/` bleibt lokal; generierte `.gd.uid`-Dateien werden mitgeführt. Der GitHub-Workflow importiert aus einem frischen Checkout, testet Startszene und URLgrenzen und erzeugt echte PNGs unter Xvfb/llvmpipe. Software-Rendering ist weder Android- noch GPU-Leistungsevidence.
 
 Der Agent führt Tests und Builds aus. Der Owner muss keine Dateien verschieben oder Engine-Einstellungen ändern. Eine installierbare APK folgt erst mit G08.
+
+
+## Dokumentationshelfer im Godot-Editor
+
+Das Add-on Aurion Knowledge Helper öffnet rechts im Editor einen Dock. Wähle einen Dokumentationsordner, aktualisiere den Index und suche in Markdown-, Text- und reStructuredText-Dateien. Treffer zeigen Kategorie, relativen Pfad, Zeile und einen kurzen Quellenausschnitt. Die Kategorien Lore, Quest und Projekt werden aus dem Pfad abgeleitet; unbekannte Pfade landen unter Projekt.
+
+Die Suche ist lokal, deterministisch und stichwortbasiert. Sie nutzt weder Netzwerk noch LLM, Embeddings oder eine zusätzliche Datenbank. „Quellenkontext kopieren“ kopiert Frage und Fundstellen mit Zeilenbelegen in die Zwischenablage, damit ein Schreibwerkzeug damit einen prüfbaren Entwurf formulieren kann.
+
+Der Textentwurf kann als neue Markdown-Datei im gewählten Ordner gespeichert werden. Das Add-on verweigert einen vorhandenen Dateinamen und fügt die gerade angezeigten Fundstellen an. Es verändert keine vorhandenen Dokumente, Questdaten, Aurion-Weltzustände, Tick, Serverdatenbank oder Persistenz. Fundstellen sind Lesehinweise; sie bestätigen weder Kanon noch aktuelle Runtime-Wahrheit.
