@@ -31,6 +31,9 @@ const project = join(repo, 'godot-client');
 const godot = (...args) => ['--headless', '--path', project, ...args];
 await stage('doctor', 'static', process.execPath, ['scripts/godot/doctor.mjs'], '"editor": "ready"');
 await stage('import', 'headless', executable, godot('--editor', '--import'));
+await stage('knowledge-doc-editor-smoke', 'headless', process.execPath,
+  ['scripts/godot/knowledge-helper-editor-smoke.mjs', executable, project],
+  'AURION_KNOWLEDGE_HELPER_EDITOR_PASS');
 async function scripts(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.name === '.godot') continue;
@@ -70,6 +73,7 @@ for (const [id, script, marker] of [
   ['world-authoring-state', 'test_world_authoring_state.gd', 'GODOT_WORLD_AUTHORING_STATE_PASS'],
   ['world-authoring-scene', 'test_world_authoring_scene.gd', 'GODOT_WORLD_AUTHORING_SCENE_PASS'],
   ['world-editor-draft', 'test_world_editor_draft.gd', 'GODOT_WORLD_EDITOR_DRAFT_PASS'],
+  ['knowledge-doc-index', 'test_knowledge_index.gd', 'AURION_KNOWLEDGE_DOC_INDEX_PASS (temporary local fixtures only)'],
   ['modular-npc-visual', 'test_modular_npc_visual.gd', 'Aurion MCS NPC cosmetic recipe and optional 1.0 rig verified (headless presentation only)'],
   ['technical-diagnostics', 'test_technical_diagnostics.gd', 'Godot G43 safe technical diagnostics verified'],
   ['startup', 'test_startup.gd', 'Aurion startup scene and configuration verified'],

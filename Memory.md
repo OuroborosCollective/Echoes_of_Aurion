@@ -5443,3 +5443,13 @@ Review continuation: Validate joined epoch sources with the existing parser in o
 Evidence: Real MariaDB query-budget RED 41382587425 (2 SELECTs instead of 1); three local Python REDs then 23/23 comparator tests passed. Historical final-head failures 41381619918/41381619949 retained; final CI/review of these corrections remains required before merge.
 
 Security continuation: Move the manual live-acceptance gate off the production-connected runner to a hosted runner, restricted to the default branch and existing production environment; execute no dispatch-ref code there. The gate still explicitly fails until capture transport/provenance exists. Static YAML validation passed; no production job was dispatched.
+
+### 2026-11-02 — PR #1274 — Godot-Lore/Quest/Projekt-Dokumentationshelfer
+Status: PARTIAL (Kandidat; Feature-CI verifiziert, PR offen)
+Task: Ein lokales Godot-Editor-Dock für Lore-, Quest- und Projektdokumentation bereitstellen.
+Decisions: Optional manuell aktivierbares Add-on; begrenzte lokale Markdown/Text/RST-Suche mit stabilen Treffern und Quellenzeilen; Kontextkopie und neue Markdown-Entwürfe ohne Überschreiben. Keine Netzwerk-, LLM-, Datenbank-, Quest-, Welt-, Tick- oder Persistenzschreibzugriffe.
+Touched surfaces: `godot-client/addons/aurion_knowledge_helper/`, Godot-Prüfskripte und README.
+Evidence: PR #1274 Head `5c6a125e875bf2304e1cc4304dabde13111ecf56`; Godot headless contract run 41386325914 passed, including `knowledge-doc-editor-smoke` and `knowledge-doc-index`; isolated Assistant editor proof 41386325889 passed.
+Learned: Quellenhinweise sind Recherchebelege, keine kanonische Aurion- oder Runtime-Bestätigung.
+Open: PR #1274 ist Draft; weitere PR-Head-Workflows laufen. Nach dem Memory-Commit den neuen exakten Head und erforderliche Checks erneut lesen.
+Next safe step: Neue Head-CI abwarten, bei grünen Gates Review einholen; nicht ohne ausdrücklichen Auftrag mergen.
