@@ -40,3 +40,6 @@
 ## 2026-10-22 - Optimize Array Allocation and Matrix Lookups in Wolfram CAG Probes
 **Learning:** High-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity) suffer from garbage collection spikes when using `Map` lookups with string-concatenated keys or chained array methods like `.map().join()`. Using `Map` for grid coordinates forces O(N) string allocations and hash lookups.
 **Action:** Replace `Map` lookups and `Array.from()` with pre-allocated 2D arrays accessed via integer indices. Replace chained `.map().join()` operations with pre-allocated arrays populated via direct `for` loops or direct array instantiation for tuples.
+## 2026-11-02 - Use Object.keys for Deterministic Object Sorting
+**Learning:** Using Object.entries().sort() inside high-frequency stringifiers or canonical JSON builders allocates massive amounts of tuple arrays, causing severe garbage collection latency.
+**Action:** Always prefer Object.keys(obj).sort() followed by key-based lookups rather than Object.entries(obj).sort(). Object.keys() only allocates a single array of strings, avoiding the inner tuple array allocations.

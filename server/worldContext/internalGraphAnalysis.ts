@@ -27,8 +27,9 @@ function compare(a: string, b: string): number {
 function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, current) => {
     if (current && typeof current === "object" && !Array.isArray(current)) {
+      const record = current as Record<string, unknown>;
       return Object.fromEntries(
-        Object.entries(current as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
+        Object.keys(record).sort((a, b) => a.localeCompare(b)).map(key => [key, record[key]]),
       );
     }
     return current;

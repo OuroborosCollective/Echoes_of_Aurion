@@ -19,8 +19,26 @@ export type CompanionMemoryObservation = {
 type MemoryEnvelope = CompanionMemoryObservation & { userId: number; memoryVersion: "aurion-companion-memory.v1" };
 
 function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
+  if (Array.isArray(value)) {
+    let str = "[";
+    for (let i = 0; i < value.length; i++) {
+      if (i > 0) str += ",";
+      str += canonicalJson(value[i]);
+    }
+    str += "]";
+    return str;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort((a, b) => a.localeCompare(b));
+    let str = "{";
+    for (let i = 0; i < keys.length; i++) {
+      if (i > 0) str += ",";
+      str += `${JSON.stringify(keys[i])}:${canonicalJson(record[keys[i] as string])}`;
+    }
+    str += "}";
+    return str;
+  }
   return JSON.stringify(value);
 }
 
