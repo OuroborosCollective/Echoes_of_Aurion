@@ -7,6 +7,7 @@ on:
       - "server/livingHistoryGodotMariaDb.test.ts"
       - "server/aurionCivilizationHistoryPersistence.ts"
       - "server/aurion/civilizationService.ts"
+      - "server/glbSmartUpload.ts"
       - "server/causality/**"
       - "drizzle/aurionCausalitySchema.ts"
       - "shared/aurionCausalTickContract.ts"

@@ -1,7 +1,9 @@
 import { createPool, type Pool } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
-import { listVisibleRuins } from "./aurionCivilizationHistoryPersistence";
+import { listVisibleRuins, readDiscoveredRuinHistory } from "./aurionCivilizationHistoryPersistence";
+import { buildGlobalWorldPlan } from "./globalWorldProtocol";
+import { resolveWorldEpochReaction } from "./worldEpochReactionProtocol";
 
 const suite = process.env.AURION_EXPLORATION_MEMORY_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const worldA = "history-godot-proof-a";
@@ -14,6 +16,7 @@ suite("Living History: canonical ruin identity and world isolation", () => {
     await pool.execute("DELETE FROM aurionRuinOrigins WHERE originCivilizationId IN (?, ?)", ["history-proof-civ-a", "history-proof-civ-b"]);
     await pool.execute("DELETE FROM aurionCivilizationHistoryEvents WHERE worldId IN (?, ?)", [worldA, worldB]);
     await pool.execute("DELETE FROM aurionActiveCivilizations WHERE worldId IN (?, ?)", [worldA, worldB]);
+    await pool.execute("DELETE FROM aurionWorldEpochReactions WHERE worldId IN (?, ?)", [worldA, worldB]);
   }
 
   beforeAll(async () => {
@@ -76,5 +79,38 @@ suite("Living History: canonical ruin identity and world isolation", () => {
       [worldA],
     );
     expect(rows).toHaveLength(1);
+  });
+
+  it("projects only discovered ruins with a matching, independently readable world reaction", async () => {
+    // A real deterministic resolver supplies this isolated test fixture;
+    // the alternate world is intentional and never represents production.
+    const plan = buildGlobalWorldPlan({ worldSeed: "history-proof", epoch: 7, activePlayerCount: 0, highWaterPlayerCount: 1 });
+    const reaction = { ...resolveWorldEpochReaction({ plan, resolutionIndex: 7, confirmedDeltas: [], observedPresence: [] }), worldId: worldA };
+    const receipt = reaction.receiptId;
+    const reactionHash = reaction.deterministicHash;
+    await pool.execute(
+      "INSERT INTO aurionWorldEpochReactions (receiptId,worldId,epoch,ruleSetVersion,contentVersion,snapshotHash,reactionHash,reactionJson) VALUES (?,?,?,?,?,?,?,?)",
+      [receipt, worldA, 7, reaction.ruleSetVersion, reaction.contentVersion, plan.deterministicHash, reactionHash, JSON.stringify(reaction)],
+    );
+    for (const [suffix, state, source] of [["a", "DISCOVERED", receipt], ["b", "ELIGIBLE", receipt], ["c", "DISCOVERED", "missing-source"]] as const) {
+      await pool.execute(
+        "INSERT INTO aurionCivilizationHistoryEvents (eventId,civilizationId,worldId,worldEpoch,eventType,sourceReceiptId,sourceRevision,eventPayloadHash,occurredSequence) VALUES (?,?,?,?,?,?,?,?,?)",
+        [`history-proof-event-${suffix}`, "history-proof-civ-a", worldA, 1, "CIVILIZATION_COLLAPSE", source, "test-revision", "a".repeat(64), suffix === "a" ? 1 : suffix === "b" ? 2 : 3],
+      );
+      await pool.execute(
+        "INSERT INTO aurionRuinOrigins (ruinId,originCivilizationId,collapseEventId,locationIdentity,worldEpoch,historyDigest,rulesetVersion,generationSeedDigest,state) VALUES (?,?,?,?,?,?,?,?,?)",
+        [`history-proof-ruin-${suffix}`, "history-proof-civ-a", `history-proof-event-${suffix}`, "world_heart", 1, "b".repeat(64), "test-rules", "c".repeat(64), state],
+      );
+    }
+    const projection = await readDiscoveredRuinHistory(worldA);
+    expect(projection).toMatchObject({ worldId: worldA, disclosureScope: "globally-discovered", events: [
+      { eventId: "history-proof-event-a", ruinId: "history-proof-ruin-a", sourceReceiptId: receipt, sourceReactionHash: reactionHash },
+    ] });
+    expect((await readDiscoveredRuinHistory(worldB)).events).toHaveLength(0);
+    await pool.execute("UPDATE aurionWorldEpochReactions SET reactionJson=? WHERE receiptId=?", [JSON.stringify({ ...reaction, deterministicHash: "e".repeat(64) }), receipt]);
+    await expect(readDiscoveredRuinHistory(worldA)).rejects.toThrow();
+    const alteredSector = { ...reaction.sectors[0]!, resources: { ...reaction.sectors[0]!.resources, food: 0.123456 } };
+    await pool.execute("UPDATE aurionWorldEpochReactions SET reactionJson=? WHERE receiptId=?", [JSON.stringify({ ...reaction, sectors: [alteredSector, ...reaction.sectors.slice(1)] }), receipt]);
+    await expect(readDiscoveredRuinHistory(worldA)).rejects.toThrow("LIVING_HISTORY_SOURCE_READBACK_MISMATCH");
   });
 });

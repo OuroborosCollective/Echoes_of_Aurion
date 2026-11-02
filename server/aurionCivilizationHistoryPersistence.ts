@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
   aurionActiveCivilizations,
@@ -7,8 +7,10 @@ import {
   aurionDungeonInstanceReceipts,
   aurionRuinOrigins,
   aurionSettlementRebirthCandidates,
+  aurionWorldEpochReactions,
 } from "../drizzle/schema";
-import { getDb } from "./db";
+import { getDb, getWorldEpochReaction } from "./db";
+import { AURION_WORLD_EPOCH_REACTION_VERSION, AURION_WORLD_EPOCH_MAX_SECTORS_PER_RESOLUTION, type WorldEpochReaction } from "./worldEpochReactionProtocol";
 
 const id = z.string().trim().min(1).max(64);
 
@@ -242,6 +244,73 @@ export async function readRuinForCollapse(worldId: string, collapseEventId: stri
     )).limit(2);
   if (rows.length !== 1) throw new Error("CIVILIZATION_COLLAPSE_RUIN_READBACK_MISMATCH");
   return rows[0]!.ruin;
+}
+
+/**
+ * Bounded public-world history projection. Only ruins already marked globally
+ * discovered and linked to an independently readable epoch-reaction receipt
+ * are exposed; missing or other source types are not inferred by the client.
+ */
+function hasValidEpochReactionHashes(reaction: WorldEpochReaction): boolean {
+  if (reaction.version !== AURION_WORLD_EPOCH_REACTION_VERSION || typeof reaction.worldSeed !== "string" || !reaction.worldSeed ||
+    !Number.isSafeInteger(reaction.resolutionIndex) || reaction.resolutionIndex < 1 ||
+    !Array.isArray(reaction.sectors) || reaction.sectors.length < 1 || reaction.sectors.length > AURION_WORLD_EPOCH_MAX_SECTORS_PER_RESOLUTION) return false;
+  let previous = "";
+  for (const sector of reaction.sectors) {
+    if (!sector || typeof sector.sectorId !== "string" || !sector.sectorId || (previous && previous >= sector.sectorId) ||
+      sector.resolutionIndex !== reaction.resolutionIndex || !Array.isArray(sector.sourceIds) ||
+      sector.sourceIds.some((source, index) => typeof source !== "string" || !source || (index > 0 && sector.sourceIds[index - 1]! >= source)) ||
+      !Array.isArray(sector.market) || !Array.isArray(sector.migrations) || !Array.isArray(sector.questOffers) ||
+      !sector.resources || !sector.professions || !sector.polity) return false;
+    const expectedSector = hash([reaction.version, sector.sectorId, String(sector.resolutionIndex), ...sector.sourceIds,
+      JSON.stringify(sector.resources), JSON.stringify(sector.market), JSON.stringify(sector.professions),
+      JSON.stringify(sector.migrations), JSON.stringify(sector.polity), JSON.stringify(sector.questOffers)]);
+    if (expectedSector !== sector.reactionHash) return false;
+    previous = sector.sectorId;
+  }
+  const expected = hash([reaction.version, reaction.ruleSetVersion, reaction.contentVersion, reaction.worldSeed,
+    String(reaction.resolutionIndex), ...reaction.sectors.map(sector => sector.reactionHash)]);
+  return expected === reaction.deterministicHash && reaction.receiptId === `world-epoch:${reaction.resolutionIndex}:${expected.slice(0, 24)}`;
+}
+
+export async function readDiscoveredRuinHistory(worldId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const rows = await db.select({ event: aurionCivilizationHistoryEvents, ruin: aurionRuinOrigins, source: aurionWorldEpochReactions })
+    .from(aurionCivilizationHistoryEvents)
+    .innerJoin(aurionRuinOrigins, and(
+      eq(aurionRuinOrigins.collapseEventId, aurionCivilizationHistoryEvents.eventId),
+      eq(aurionRuinOrigins.originCivilizationId, aurionCivilizationHistoryEvents.civilizationId),
+      eq(aurionRuinOrigins.worldEpoch, aurionCivilizationHistoryEvents.worldEpoch),
+    ))
+    .innerJoin(aurionWorldEpochReactions, and(
+      eq(aurionWorldEpochReactions.receiptId, aurionCivilizationHistoryEvents.sourceReceiptId),
+      eq(aurionWorldEpochReactions.worldId, aurionCivilizationHistoryEvents.worldId),
+    ))
+    .where(and(
+      eq(aurionCivilizationHistoryEvents.worldId, worldId),
+      eq(aurionCivilizationHistoryEvents.eventType, "CIVILIZATION_COLLAPSE"),
+      inArray(aurionRuinOrigins.state, ["DISCOVERED", "ACTIVE", "CLEARED", "HISTORICAL"]),
+    ))
+    .orderBy(desc(aurionCivilizationHistoryEvents.occurredSequence), asc(aurionCivilizationHistoryEvents.eventId))
+    .limit(20);
+  const events = [];
+  for (const { event, ruin, source } of rows) {
+    const reaction = await getWorldEpochReaction(worldId, source.epoch, source.snapshotHash);
+    if (!reaction || reaction.receiptId !== event.sourceReceiptId || reaction.deterministicHash !== source.reactionHash || !hasValidEpochReactionHashes(reaction)) {
+      throw new Error("LIVING_HISTORY_SOURCE_READBACK_MISMATCH");
+    }
+    events.push(Object.freeze({
+      eventId: event.eventId, civilizationId: event.civilizationId, worldId: event.worldId,
+      worldEpoch: event.worldEpoch, eventType: event.eventType,
+      sourceReceiptId: event.sourceReceiptId, sourceRevision: event.sourceRevision,
+      eventPayloadHash: event.eventPayloadHash, occurredSequence: event.occurredSequence,
+      ruinId: ruin.ruinId, ruinState: ruin.state, historyDigest: ruin.historyDigest,
+      sourceEpoch: source.epoch, sourceReactionHash: source.reactionHash,
+    }));
+  }
+  return Object.freeze({ schema: "aurion.discovered-ruin-history.v1" as const,
+    worldId, disclosureScope: "globally-discovered" as const, events: Object.freeze(events) });
 }
 
 export const dungeonInstanceReceiptInputSchema = z
