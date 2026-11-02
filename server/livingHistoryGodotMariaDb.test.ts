@@ -1,5 +1,6 @@
 import { createPool, type Pool } from "mysql2/promise";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { getDb } from "./db";
 import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
 import { listVisibleRuins, readPublicCollapseHistory } from "./aurionCivilizationHistoryPersistence";
 import { buildGlobalWorldPlan } from "./globalWorldProtocol";
@@ -150,7 +151,18 @@ suite("Living History: canonical ruin identity and world isolation", () => {
       "INSERT INTO aurionCivilizationHistoryEvents (eventId,civilizationId,worldId,worldEpoch,eventType,sourceReceiptId,sourceRevision,eventPayloadHash,occurredSequence) VALUES (?,?,?,?,?,?,?,?,?)",
       ["history-proof-missing-source", "history-proof-civ-a", worldA, 1, "CIVILIZATION_COLLAPSE", "missing-source", "aurion:civ:v1", "a".repeat(64), 1],
     );
-    const projection = await readPublicCollapseHistory(worldA);
+    // Measure the real read's query budget; the spy calls through to MariaDB.
+    // Source rows are already joined, so validation must add no N+1 reads.
+    const database = await getDb();
+    if (!database) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    const selects = vi.spyOn(database, "select");
+    const projection = await (async () => {
+      try {
+        const result = await readPublicCollapseHistory(worldA);
+        expect(selects.mock.calls.length, "history source validation exceeded one SELECT").toBe(1);
+        return result;
+      } finally { selects.mockRestore(); }
+    })();
     expect(projection).toMatchObject({ worldId: worldA, disclosureScope: "public-history-events", events: [
       { civilizationId: "history-proof-civ-a", sourceReceiptId: receipt, sourceReactionHash: reactionHash },
     ] });
