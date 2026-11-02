@@ -60,6 +60,8 @@ import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence"
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
 import { investigationJournalRouter } from "./investigationJournalRouter";
 import { readExplorationMemory, recordExplorationDiscovery } from "./explorationMemoryPersistence";
+import { readActorWorldSlice } from "./worldSlice";
+import { worldSliceQuerySchema } from "../shared/worldSliceProtocol";
 import { desc, eq } from "drizzle-orm";
 import { readAurionStatWallet, allocateAurionStatPoint } from "./aurionStatPointPersistence";
 import { aurionStatAttributes } from "../shared/aurionStatPointProtocol";
@@ -324,6 +326,7 @@ export const appRouter = router({
     }),
     npcProjectionProvenance: protectedProcedure.query(({ ctx }) => readConfirmedNpcProjectionProvenancePacket(ctx.user.id)),
     explorationMemory: protectedProcedure.input(z.strictObject({ worldEpoch: z.number().int().min(1) })).query(({ ctx, input }) => readExplorationMemory(ctx.user.id, db.GLOBAL_WORLD_ID, input.worldEpoch)),
+    worldSlice: protectedProcedure.input(worldSliceQuerySchema).query(({ ctx, input }) => readActorWorldSlice(ctx.user.id, input)),
     recordExplorationDiscovery: protectedProcedure.input(z.strictObject({ epoch: z.number().int().min(1), chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), observedAtLogicalFrame: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) })).mutation(({ ctx, input }) => recordExplorationDiscovery(ctx.user.id, input)),
     relationshipStanding: protectedProcedure.query(({ ctx }) => db.getRelationshipStanding(ctx.user.id)),
     currentEncounter: protectedProcedure.query(({ ctx }) => db.getCurrentGameplayEncounter(ctx.user.id)),

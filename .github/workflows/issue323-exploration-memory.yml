@@ -4,6 +4,8 @@ on:
     paths:
       - "server/explorationMemoryPersistence.ts"
       - "server/explorationMemoryPersistence.test.ts"
+      - "server/worldSlice.ts"
+      - "shared/worldSliceProtocol.ts"
       - "server/livingHistoryGodotMariaDb.test.ts"
       - "server/aurionCivilizationHistoryPersistence.ts"
       - "server/aurion/civilizationService.ts"

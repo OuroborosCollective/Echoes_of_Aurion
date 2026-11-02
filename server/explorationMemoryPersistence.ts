@@ -156,3 +156,17 @@ export async function readExplorationMemory(userId:number, worldId:string, world
   for (const row of rows) records.push(await verifyRow(row));
   return Object.freeze({schema:"aurion.exploration-memory.v1" as const,worldId,worldEpoch,records:Object.freeze(records),mutationAuthority:"none" as const});
 }
+
+/** Indexed, bounded point read for the WorldSlice observer; no history scan. */
+export async function readExplorationMemoryChunk(userId: number, worldId: string, worldEpoch: number, coordinate: { x: number; z: number }) {
+  assertInput(userId, { epoch: worldEpoch, chunkX: coordinate.x, chunkZ: coordinate.z, observedAtLogicalFrame: 0 });
+  if (worldId !== GLOBAL_WORLD_ID) throw new Error("WORLD_SLICE_WORLD_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("WORLD_SLICE_DATABASE_UNAVAILABLE");
+  const [row] = await db.select().from(aurionExplorationMemoryProjections).where(and(
+    eq(aurionExplorationMemoryProjections.userId, userId), eq(aurionExplorationMemoryProjections.worldId, worldId),
+    eq(aurionExplorationMemoryProjections.worldEpoch, worldEpoch),
+    eq(aurionExplorationMemoryProjections.chunkX, coordinate.x), eq(aurionExplorationMemoryProjections.chunkZ, coordinate.z),
+  )).limit(1);
+  return row ? verifyRow(row) : null;
+}
