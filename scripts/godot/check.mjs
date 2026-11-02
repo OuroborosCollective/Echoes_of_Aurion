@@ -157,6 +157,8 @@ await stage('chunk-surface-native-http', 'headless', process.execPath,
 await stage('world-slice-native-http', 'headless', process.execPath,
   ['scripts/godot/chunk-surface-api-runtime.mjs', executable, project, 'world-slice'],
   'WORLD_SLICE_PROTECTED_HTTP_WIRE_PASS');
+await stage('native-discovery-http', 'headless', process.execPath,
+  ['scripts/godot/native-discovery-runtime.mjs', executable, project], 'NATIVE_DISCOVERY_HTTP_PASS');
 await stage('world-table-presentation', 'headless', executable,
   godot('--script', 'tests/test_world_table.gd'), 'WORLD_TABLE_PRESENTATION_PASS');
 

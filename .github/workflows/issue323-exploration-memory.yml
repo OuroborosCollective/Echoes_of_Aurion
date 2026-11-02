@@ -5,6 +5,10 @@ on:
       - "server/explorationMemoryPersistence.ts"
       - "server/explorationMemoryPersistence.test.ts"
       - "server/worldSlice.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
+      - "godot-client/projection/world_table_inventory.gd"
+      - "server/aurionInventoryBackendAdapter.ts"
       - "shared/worldSliceProtocol.ts"
       - "shared/worldSliceProtocol.test.ts"
       - "godot-client/projection/world_slice.gd"
@@ -12,6 +16,10 @@ on:
       - "godot-client/ui/screens/world_table.gd"
       - "godot-client/tests/test_world_table.gd"
       - "godot-client/app/main.gd"
+      - "godot-client/app/native_discovery.gd"
+      - "godot-client/tests/test_native_discovery*.gd"
+      - "godot-client/net/api/world_authoring_api.gd"
+      - "scripts/godot/native-discovery-runtime.mjs"
       - "godot-client/net/api/chunk_surface_api.gd"
       - "godot-client/tests/test_chunk_surface_api_runtime.gd"
       - "scripts/godot/chunk-surface-api-runtime.mjs"
@@ -91,7 +99,7 @@ jobs:
       - run: node scripts/godot/bootstrap.mjs
       - run: .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import --quit
       - run: node scripts/godot/chunk-surface-api-runtime.mjs .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 godot-client world-slice
-      - run: pnpm exec vitest run shared/worldSliceProtocol.test.ts --reporter=verbose
+      - run: pnpm exec vitest run shared/worldSliceProtocol.test.ts shared/worldTableInventoryProtocol.test.ts --reporter=verbose
       - run: pnpm verify:migrations
       - run: pnpm exec drizzle-kit migrate
       - run: pnpm check

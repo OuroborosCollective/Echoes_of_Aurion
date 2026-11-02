@@ -18,6 +18,11 @@ import { promisify } from "node:util";
 import { resolve } from "node:path";
 import type { AddressInfo } from "node:net";
 import express from "express";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { createContext } from "./_core/context";
+import { createNativeAuthSecret, nativeAuthCodeChallengeFor } from "./nativeAuthProtocol";
+import { startNativeAuthTransaction, issueNativeAuthHandoffAfterVerifiedBrowserLogin, exchangeNativeAuthHandoff } from "./nativeAuthPersistence";
+import { NATIVE_AUTH_CONTRACT_VERSION, NATIVE_AUTH_RETURN_ID } from "../shared/nativeAuthContract";
 import { sdk } from "./_core/sdk";
 import { COOKIE_NAME } from "../shared/const";
 import { registerGlbSmartUpload } from "./glbSmartUpload";
@@ -359,6 +364,78 @@ suite("Issue 323 Phase H exploration memory",()=>{
     try { await expect(invoke(userId)).rejects.toThrow("WORLD_SLICE_SESSION_CHANGED"); }
     finally { replaced.mockRestore(); }
     expect(await durableFacts()).toEqual(factsBefore);
+
+    if (process.env.AURION_WORLD_TABLE_GODOT_E2E === "1") {
+      // Fresh native discovery, not a pre-seeded memory or an in-process caller:
+      // persisted PKCE session -> Godot HTTP -> protected tRPC -> MariaDB -> GET.
+      // The socket is synthetic; the native auth, command and DB paths are real.
+      const appBuild = "worldtable-discovery-db-e2e";
+      const sealBefore = process.env.NATIVE_AUTH_STATE_SEAL_KEY;
+      process.env.NATIVE_AUTH_STATE_SEAL_KEY = Buffer.alloc(32, 29).toString("base64url");
+      const directory = await mkdtemp(resolve(tmpdir(), "aurion-native-discovery-"));
+      let nativeServer: ReturnType<typeof app.listen> | undefined;
+      try {
+        await pool.execute("INSERT INTO users (id,openId,name,loginMethod,role) VALUES (?,?,?,?,?)",
+          [unseenUserId, `native-discovery-fixture:${unseenUserId}`, "Native discovery fixture", "fixture", "user"]);
+        expect((await readExplorationMemory(unseenUserId, worldId, epoch)).records).toEqual([]);
+        await pool.execute("INSERT INTO playerProfiles (userId,inventoryRevisionExact) VALUES (?,?)", [unseenUserId, "0"]);
+        for (const owner of [unseenUserId, userId]) {
+          await pool.execute("INSERT INTO itemInstances (id,ownerUserId,lootReceiptId,baseItemKey,quality,itemLevel,affixesJson,quantityExact,maxQuantityExact) VALUES (?,?,?,?,?,?,?,?,?)",
+            [`native-stock:${owner}`, owner, `native-stock-loot:${owner}`, "oakwood", "normal", 1, "[]", "17", "99"]);
+        }
+        const verifier = createNativeAuthSecret();
+        const requestState = createNativeAuthSecret();
+        const transaction = await startNativeAuthTransaction({
+          version: NATIVE_AUTH_CONTRACT_VERSION, platform: "android", appBuild,
+          returnId: NATIVE_AUTH_RETURN_ID, requestState,
+          codeChallenge: nativeAuthCodeChallengeFor(verifier), codeChallengeMethod: "S256",
+        });
+        const issued = await issueNativeAuthHandoffAfterVerifiedBrowserLogin(transaction.transactionId, unseenUserId, requestState);
+        const tokens = await exchangeNativeAuthHandoff({ version: NATIVE_AUTH_CONTRACT_VERSION,
+          transactionId: transaction.transactionId, code: issued.handoffCode, codeVerifier: verifier, appBuild });
+        const nativeApp = express();
+        registerGlbSmartUpload(nativeApp);
+        nativeApp.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
+        nativeServer = await new Promise<ReturnType<typeof app.listen>>((resolveServer, reject) => {
+          const listener = nativeApp.listen(3000, "127.0.0.1", () => resolveServer(listener));
+          listener.once("error", reject);
+        });
+        const input = resolve(directory, "session.json");
+        await writeFile(input, JSON.stringify({ token: tokens.accessToken,
+          actor: `player:${unseenUserId}`, connection: unseenConnection, stockId: `native-stock:${unseenUserId}` }), { mode: 0o600 });
+        const { stdout, stderr } = await promisify(execFile)(
+          resolve(".aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64"),
+          ["--headless", "--path", "godot-client", "--script", "tests/test_native_discovery_db.gd"],
+          { timeout: 20_000, maxBuffer: 262_144, env: { ...process.env, AURION_NATIVE_DISCOVERY_SESSION: input } },
+        );
+        expect(stdout).toContain("NATIVE_DISCOVERY_DB_PASS");
+        expect(stderr).not.toMatch(/SCRIPT ERROR|ERROR:/);
+        const persisted = await readExplorationMemory(unseenUserId, worldId, epoch);
+        expect(persisted.records).toHaveLength(1);
+        expect(persisted.records[0]).toMatchObject({ userId: unseenUserId, worldEpoch: epoch,
+          firstDiscoveryReceiptHash: causalReceipt.receiptHash, latestConfirmedVisitSequence: causalReceipt.tick });
+        // The second native submission was an explicit replay; one durable row.
+        expect((await pool.query("SELECT * FROM aurionExplorationMemoryProjections WHERE userId=?", [unseenUserId]))[0]).toHaveLength(1);
+        console.info("NATIVE_DISCOVERY_DB_PASS (fresh native PKCE session, Godot command + replay, real MariaDB, independent GET; isolated actors)");
+      } finally {
+        if (nativeServer) await new Promise<void>(resolveClosed => nativeServer!.close(() => resolveClosed()));
+        const [sessions] = await pool.query("SELECT id FROM aurionNativeAuthSessions WHERE appBuild=?", [appBuild]);
+        for (const session of sessions as any[]) {
+          await pool.execute("DELETE FROM aurionNativeAuthAccessTokens WHERE sessionId=?", [session.id]);
+          await pool.execute("DELETE FROM aurionNativeAuthRefreshTokens WHERE sessionId=?", [session.id]);
+        }
+        await pool.execute("DELETE FROM aurionNativeAuthSessions WHERE appBuild=?", [appBuild]);
+        await pool.execute("DELETE FROM aurionNativeAuthTransactions WHERE appBuild=?", [appBuild]);
+        await pool.execute("DELETE FROM aurionExplorationMemoryProjections WHERE userId=?", [unseenUserId]);
+        await pool.execute("DELETE FROM itemInstances WHERE id IN (?,?)", [`native-stock:${unseenUserId}`, `native-stock:${userId}`]);
+        await pool.execute("DELETE FROM playerProfiles WHERE userId=?", [unseenUserId]);
+        await pool.execute("DELETE FROM users WHERE id=? AND openId=?", [unseenUserId, `native-discovery-fixture:${unseenUserId}`]);
+        if (sealBefore === undefined) delete process.env.NATIVE_AUTH_STATE_SEAL_KEY;
+        else process.env.NATIVE_AUTH_STATE_SEAL_KEY = sealBefore;
+        await rm(directory, { recursive: true, force: true });
+      }
+      expect(await durableFacts()).toEqual(factsBefore);
+    }
 
     // Once the world epoch advances, the old snapshot cannot be used as a new
     // current discovery. The prior stored record remains independently readable.

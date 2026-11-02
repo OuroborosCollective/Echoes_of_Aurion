@@ -71,6 +71,27 @@ func verify() -> void:
 	table._api.cancel()
 	table._on_slice(reply, connection, 1, coordinate)
 	require(not table._reply.is_empty(), "valid response did not enter table")
+	var stock := {"schema":"aurion.worldtable-owned-stock.v1", "actorId":actor, "revisionExact":"9007199254740993", "stockHash":"sha256:"+"f".repeat(64), "mutationAuthority":"none", "stacks":[{"id":"stock1", "version":"aurion_v2", "definitionId":"oakwood", "quantityExact":"9007199254740993"}]}
+	table._on_stock("ownedStock", stock, connection, 1)
+	require(table._stock_label.text.contains("9007199254740993 × oakwood"), "exact quantity rounded or stock missing")
+	var stock_text: String = table._stock_label.text
+	table._on_stock("ownedStock", stock, "old-connection", 1)
+	require(table._stock_label.text == stock_text, "late stock response replaced current stock")
+	var bad_stock := stock.duplicate(true)
+	bad_stock.actorId = "player:999"
+	table._on_stock("ownedStock", bad_stock, connection, 1)
+	require(table._stock_received_at == -1 and not table._stock_label.text.contains("oakwood"), "foreign stock admitted or prior stock retained")
+	bad_stock = stock.duplicate(true)
+	bad_stock.stacks.append(bad_stock.stacks[0])
+	require(not preload("res://projection/world_table_inventory.gd").valid(bad_stock, actor), "duplicate stock identity admitted")
+	bad_stock = stock.duplicate(true)
+	bad_stock.stacks[0].quantityExact = 17
+	require(not preload("res://projection/world_table_inventory.gd").valid(bad_stock, actor), "floating quantity admitted")
+	table._on_stock("ownedStock", stock, connection, 1)
+	table._expire_view(table._stock_received_at + Table.VIEW_TTL_MS + 1)
+	require(not table._stock_label.text.contains("oakwood"), "expired stock retained")
+	table._on_slice(reply, connection, 1, coordinate)
+
 	require(table._projection.get_child_count() > 0 and table._projection.get_child_count() <= 67, "projection missing or unbounded")
 	table._on_slice(reply, "old-connection", 1, coordinate)
 	require(table._reply == reply, "late previous connection erased the current projection")

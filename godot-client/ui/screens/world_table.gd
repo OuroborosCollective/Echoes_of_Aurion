@@ -1,10 +1,15 @@
 extends Control
 ## Actor-scoped read-only worldtable. Local sketches never call an apply gateway.
 signal closed
+const StockApi = preload("res://net/api/world_authoring_api.gd")
+const Stock = preload("res://projection/world_table_inventory.gd")
 const Api = preload("res://net/api/chunk_surface_api.gd")
 const TableProjection = preload("res://world/world_table_projection.gd")
 const Slice = preload("res://projection/world_slice.gd")
 const VIEW_TTL_MS := 5000
+var _stock_api: Node
+var _stock_received_at := -1
+var _stock_label: Label
 var _api: Node
 var _auth: Node
 var _server := ""
@@ -71,6 +76,11 @@ func _ready() -> void:
 		_clear_ghost()
 		_projection.show_roads = not _projection.show_roads
 		_projection.rebuild())
+	_button(actions, "Bestände lesen", read_stock)
+	_stock_label = Label.new()
+	_stock_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stack.add_child(_stock_label)
+	_clear_stock()
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(_status)
@@ -176,6 +186,12 @@ func open_table(auth: Node, server: String, connection: String, actor: String, c
 	_coordinate = coordinate
 	_allow_local = allow_local
 	_generation = auth.session_generation()
+	_stock_api = StockApi.new(auth)
+	add_child(_stock_api)
+	_stock_api.completed.connect(_on_stock)
+	_stock_api.failed.connect(func(_kind: String, _reason: String, connection_id: String, generation_id: int):
+		if visible and connection_id == _connection and generation_id == _generation:
+			_clear_stock("Bestände nicht belegbar. Erneut lesen."))
 	_api = Api.new(auth, "/api/game/world-slice")
 	add_child(_api)
 	_api.surface_ready.connect(_on_slice)
@@ -188,6 +204,7 @@ func open_table(auth: Node, server: String, connection: String, actor: String, c
 	refresh()
 
 func refresh() -> void:
+	_clear_stock()
 	_clear_data()
 	_status.text = "Aurion-Weltstand wird gelesen …"
 	if _api != null:
@@ -233,6 +250,8 @@ func _process(_delta: float) -> void:
 		_expire_view(Time.get_ticks_msec())
 
 func _expire_view(now_ms: int) -> void:
+	if _stock_received_at >= 0 and now_ms - _stock_received_at > VIEW_TTL_MS:
+		_clear_stock("Bestandsansicht abgelaufen. Erneut lesen.")
 	if _received_at >= 0 and now_ms - _received_at > VIEW_TTL_MS:
 		_clear_data()
 		_status.text = "Ansicht abgelaufen. Erneut lesen."
@@ -332,6 +351,11 @@ func close() -> void:
 	closed.emit()
 
 func close_session() -> void:
+	_clear_stock()
+	if _stock_api != null:
+		_stock_api.cancel()
+		_stock_api.queue_free()
+		_stock_api = null
 	if _api != null:
 		_api.cancel()
 		_api.queue_free()
@@ -343,3 +367,27 @@ func close_session() -> void:
 	if _viewport != null:
 		_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	hide()
+
+func _clear_stock(message: String = "Eigene Bestände noch nicht gelesen. Lager und Transporte sind nicht bestätigt.") -> void:
+	_stock_received_at = -1
+	if _stock_api != null: _stock_api.cancel()
+	if _stock_label != null: _stock_label.text = message
+
+func read_stock() -> void:
+	if not visible or not _session_valid() or _stock_api == null or _stock_api.busy(): return
+	_clear_stock("Eigene Bestände werden gelesen …")
+	if not _stock_api.request("ownedStock", _server, _connection, {}, _allow_local):
+		_clear_stock("Bestände nicht verfügbar.")
+
+func _on_stock(kind: String, reply: Dictionary, connection: String, generation: int) -> void:
+	if kind != "ownedStock" or not visible or connection != _connection or generation != _generation: return
+	if not _session_valid() or not Stock.valid(reply, _actor):
+		_clear_stock("Bestandsantwort abgelehnt.")
+		return
+	_stock_received_at = Time.get_ticks_msec()
+	var lines: Array[String] = ["Am Charakter: %d Inventarpositionen · Revision %s" % [reply.stacks.size(), reply.revisionExact]]
+	for stack in reply.stacks.slice(0, 20):
+		lines.append("%s × %s (%s)" % [stack.quantityExact, stack.definitionId, stack.version])
+	if reply.stacks.size() > 20: lines.append("Anzeige: erste 20 von %d Positionen." % reply.stacks.size())
+	lines.append("Keine Reservierung oder Bauzusage. Ausrüstung, Abholung und fremde Lager sind ausgeschlossen.")
+	_stock_label.text = "\n".join(lines)

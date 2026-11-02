@@ -15,7 +15,7 @@ import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_
 import * as db from "./db";
 import { toPublicLeaderboard } from "./leaderboardPublicProjection";
 import { controlSettingsSchema, itemReferenceSchema } from "../shared/playerUiProtocol";
-import { executeAurionInventoryTransaction, readAurionInventorySnapshot } from "./aurionInventoryBackendAdapter";
+import { executeAurionInventoryTransaction, readAurionInventorySnapshot, readWorldTableOwnedStock } from "./aurionInventoryBackendAdapter";
 import { readPlayerUi, savePlayerControls, collectPlayerLoot, equipPlayerItem, unequipPlayerItem } from "./playerUiPersistence";
 import { groupCommandSchema } from "../shared/groupInstanceProtocol";
 import { commandGroupForUser, readGroupForUser } from "./groupInstancePersistence";
@@ -221,6 +221,7 @@ export const appRouter = router({
     collectLoot: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => collectPlayerLoot(ctx.user.id, input)),
     equipItem: protectedProcedure.input(itemReferenceSchema.extend({ expectedItem: itemReferenceSchema.nullable() }).strict()).mutation(({ ctx, input }) => equipPlayerItem(ctx.user.id, input, input.expectedItem)),
     unequipItem: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => unequipPlayerItem(ctx.user.id, input)),
+    worldTableOwnedStock: protectedProcedure.query(({ ctx }) => readWorldTableOwnedStock(ctx.user.id)),
     inventoryState: protectedProcedure.query(({ ctx }) => readAurionInventorySnapshot(ctx.user.id)),
     inventoryTransaction: protectedProcedure.input(aurionInventoryTransactionInputSchema).mutation(async ({ ctx, input }) => {
       const result = await executeAurionInventoryTransaction({

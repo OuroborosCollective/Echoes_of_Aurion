@@ -14,6 +14,8 @@ on:
       - "server/playerUiMariaDb.test.ts"
       - "server/routers.ts"
       - "server/db.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
       - "shared/playerUiProtocol.ts"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
       - "drizzle/0034_ax1_starter_equipment_receipts.sql"

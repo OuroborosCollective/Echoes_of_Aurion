@@ -22,6 +22,7 @@ const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
 const WorldDesignProjection = preload("res://world/world_design_projection.gd")
 const WorldAssetApi = preload("res://net/api/world_asset_api.gd")
+const NativeDiscovery = preload("res://app/native_discovery.gd")
 const WorldTable = preload("res://ui/screens/world_table.gd")
 const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
 const LivingHistoryProjection = preload("res://world/living_history_projection.gd")
@@ -83,6 +84,7 @@ var _chunk_api: Node
 var _world_design_api: Node
 var _world_asset_api: Node
 var _world_design_visuals: Node3D
+var _discovery: Node
 var _world_table: Control
 var _world_studio: Control
 var _world_design_readback: Dictionary = {}
@@ -200,6 +202,16 @@ func _ready() -> void:
 	_world_table = WorldTable.new()
 	_world_table.name = "WorldTable"
 	add_child(_world_table)
+	_discovery = NativeDiscovery.new()
+	add_child(_discovery)
+	_discovery.configure(_auth_start, _config.server_base_url)
+	_discovery.status_changed.connect(func(message: String):
+		_history_last_poll_ms = Time.get_ticks_msec()
+		history_status.text = message
+		history_status.visible = true
+		combat_notice.text = message
+		combat_notice.visible = true
+		_combat_notice_expires_at_ms = Time.get_ticks_msec() + 5000)
 	_world_table.closed.connect(func(): mobile_joystick.visible = _world_input_permitted())
 	_chunk_api = ChunkSurfaceApi.new(_auth_start)
 	add_child(_chunk_api)
@@ -232,6 +244,7 @@ func _ready() -> void:
 	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
 	mobile_hud.world_studio_requested.connect(_open_world_studio)
 	mobile_hud.world_table_requested.connect(_open_world_table)
+	mobile_hud.discovery_requested.connect(_record_native_discovery)
 	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
 	mobile_hud.exit_requested.connect(_on_mobile_exit_requested)
 	mobile_hud.exit_confirmation.canceled.connect(_restore_mobile_joystick)
@@ -247,6 +260,11 @@ func _ready() -> void:
 	table_button.custom_minimum_size.y = 48
 	table_button.pressed.connect(_open_world_table)
 	$WorldHUD/WorldBar.add_child(table_button)
+	var discover_button := Button.new()
+	discover_button.text = "Entdeckung merken"
+	discover_button.custom_minimum_size.y = 48
+	discover_button.pressed.connect(_record_native_discovery)
+	$WorldHUD/WorldBar.add_child(discover_button)
 	if _mobile_hud_enabled:
 		get_tree().set_quit_on_go_back(false)
 	login.disabled = true
@@ -367,6 +385,8 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 
 func _reset_projection() -> void:
 	# An old HTTP completion/actor must not survive a new authenticated zone.
+	if _discovery != null:
+		_discovery.cancel()
 	if _world_table != null:
 		_world_table.close_session()
 	if _world_studio != null:
@@ -484,6 +504,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
 		_reconcile_world_table()
+		_reconcile_native_discovery()
 		var now_ms := Time.get_ticks_msec()
 		_last_world_update_ms = now_ms
 		_world_is_stale = false
@@ -678,6 +699,7 @@ func _process(_delta: float) -> void:
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
 	_reconcile_world_table()
+	_reconcile_native_discovery()
 	if _world_studio.visible:
 		_world_studio.set_inspection_context(_confirmed_zone, _entities, _world_is_stale)
 	_request_world_design(now_ms)
@@ -1698,3 +1720,19 @@ func _reconcile_world_table() -> void:
 		_world_table.close()
 	else:
 		_world_table.reconcile(_confirmed_zone.connection_id(), _confirmed_zone.self_entity_id(), _world_table_coordinate(int(own.position.x), int(own.position.z)), _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected")
+
+func _record_native_discovery() -> void:
+	if not _world_input_permitted() or not _auth_start.protected_response_allowed():
+		return
+	var own := _entities.record("presences", _confirmed_zone.self_entity_id())
+	if not own.is_empty():
+		_discovery.begin(_confirmed_zone.connection_id(), _confirmed_zone.self_entity_id(), _world_table_coordinate(int(own.position.x), int(own.position.z)))
+
+func _reconcile_native_discovery() -> void:
+	if not _discovery.busy():
+		return
+	var own := _entities.record("presences", _confirmed_zone.self_entity_id())
+	if own.is_empty():
+		_discovery.cancel()
+	else:
+		_discovery.reconcile(_confirmed_zone.connection_id(), _confirmed_zone.self_entity_id(), _world_table_coordinate(int(own.position.x), int(own.position.z)), _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected")
