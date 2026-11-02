@@ -1,6 +1,6 @@
 extends SceneTree
 ## Synthetic contract checks; this is not a live-world capture or DB evidence.
-const Projection = preload("res://world/living_history_projection.gd")
+const HistoryProjection = preload("res://world/living_history_projection.gd")
 const Codec = preload("res://net/zone_codec.gd")
 const SESSION := "zone_peer_history_fixture_123456"
 var failures: Array[String] = []
@@ -41,24 +41,24 @@ func verify() -> void:
 		"sourceEpoch":4, "sourceReactionHash":"c".repeat(64)}
 	var response := {"schema":"aurion.discovered-ruin-history.v1", "worldId":world,
 		"disclosureScope":"globally-discovered", "events":[event]}
-	var presented: Dictionary = Projection.present(response, world)
+	var presented: Dictionary = HistoryProjection.present(response, world)
 	require(presented.get("ok") == true and presented.get("count") == 1, "valid disclosed event rejected")
 	require(str(presented.get("text", "")).contains("receipt-1") and str(presented.get("text", "")).contains("ruin-1"), "provenance missing from presentation")
 	var wrong_world: Dictionary = response.duplicate(true)
 	wrong_world.events[0].worldId = "another-world"
-	require(Projection.present(wrong_world, world).get("ok") == false, "foreign world accepted")
+	require(HistoryProjection.present(wrong_world, world).get("ok") == false, "foreign world accepted")
 	var undisclosed: Dictionary = response.duplicate(true)
 	undisclosed.events[0].ruinState = "ELIGIBLE"
-	require(Projection.present(undisclosed, world).get("ok") == false, "undiscovered ruin accepted")
+	require(HistoryProjection.present(undisclosed, world).get("ok") == false, "undiscovered ruin accepted")
 	var missing_proof: Dictionary = response.duplicate(true)
 	missing_proof.events[0].sourceReactionHash = "invalid"
-	require(Projection.present(missing_proof, world).get("ok") == false, "unbound source accepted")
+	require(HistoryProjection.present(missing_proof, world).get("ok") == false, "unbound source accepted")
 	var duplicate: Dictionary = response.duplicate(true)
 	duplicate.events.append(event.duplicate(true))
-	require(Projection.present(duplicate, world).get("ok") == false, "duplicate event accepted")
+	require(HistoryProjection.present(duplicate, world).get("ok") == false, "duplicate event accepted")
 	var empty: Dictionary = response.duplicate(true)
 	empty.events = []
-	require(Projection.present(empty, world).get("ok") == true, "empty readback was treated as an error")
+	require(HistoryProjection.present(empty, world).get("ok") == true, "empty readback was treated as an error")
 	var scene := (load("res://app/main.tscn") as PackedScene).instantiate()
 	root.add_child(scene)
 	await process_frame

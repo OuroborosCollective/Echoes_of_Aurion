@@ -259,7 +259,7 @@ function hasValidEpochReactionHashes(reaction: WorldEpochReaction): boolean {
   for (const sector of reaction.sectors) {
     if (!sector || typeof sector.sectorId !== "string" || !sector.sectorId || (previous && previous >= sector.sectorId) ||
       sector.resolutionIndex !== reaction.resolutionIndex || !Array.isArray(sector.sourceIds) ||
-      sector.sourceIds.some((source, index) => typeof source !== "string" || !source || (index > 0 && sector.sourceIds[index - 1]! >= source)) ||
+      sector.sourceIds.some((source: unknown, index: number) => typeof source !== "string" || !source || (index > 0 && sector.sourceIds[index - 1]! >= source)) ||
       !Array.isArray(sector.market) || !Array.isArray(sector.migrations) || !Array.isArray(sector.questOffers) ||
       !sector.resources || !sector.professions || !sector.polity) return false;
     const expectedSector = hash([reaction.version, sector.sectorId, String(sector.resolutionIndex), ...sector.sourceIds,
