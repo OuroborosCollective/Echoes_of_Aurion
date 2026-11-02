@@ -63,6 +63,38 @@ suite("Living History: canonical ruin identity and world isolation", () => {
     expect(result.map(ruin => ruin.ruinId)).toEqual(["history-proof-ruin-a"]);
   });
 
+  it("does not bootstrap a new civilization while a collapsed ruin awaits qualified rebirth", async () => {
+    await pool.execute(
+      "INSERT INTO aurionActiveCivilizations (civilizationId,worldId,worldEpoch,population,stability,hazardIndex,scarcitySeverity,lastResolutionIndex) VALUES (?,?,?,?,?,?,?,?)",
+      ["history-proof-civ-a", worldA, 3, 50, 0.1, 0.9, 0.1, 4],
+    );
+    const collapse = await orchestrateCivilizationLoop(worldA, 3, "history-proof-before-rebirth");
+    expect(collapse.action).toBe("COLLAPSED");
+    if (collapse.action !== "COLLAPSED") throw new Error("EXPECTED_COLLAPSE");
+    const [before] = await pool.execute<any[]>(
+      "SELECT r.* FROM aurionRuinOrigins r JOIN aurionCivilizationHistoryEvents e ON e.eventId=r.collapseEventId WHERE e.worldId=?",
+      [worldA],
+    );
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({ ruinId: collapse.ruinId, state: "ELIGIBLE" });
+
+    // An undiscovered ruin is absent from the presentation query. That absence
+    // must not authorize initial seeding or bypass the dungeon/rebirth rules.
+    expect(await listVisibleRuins(worldA)).toHaveLength(0);
+    const next = await orchestrateCivilizationLoop(worldA, 4, "history-proof-awaiting-rebirth");
+    expect(next).toEqual({ action: "IDLE" });
+    const [active] = await pool.execute<any[]>("SELECT * FROM aurionActiveCivilizations WHERE worldId=?", [worldA]);
+    expect(active).toHaveLength(0);
+    const [after] = await pool.execute<any[]>(
+      "SELECT r.* FROM aurionRuinOrigins r JOIN aurionCivilizationHistoryEvents e ON e.eventId=r.collapseEventId WHERE e.worldId=?",
+      [worldA],
+    );
+    expect(after).toEqual(before);
+    const [history] = await pool.execute<any[]>("SELECT eventType FROM aurionCivilizationHistoryEvents WHERE worldId=?", [worldA]);
+    expect(history).toEqual([{ eventType: "CIVILIZATION_COLLAPSE" }]);
+    expect(await orchestrateCivilizationLoop(worldA, 3, "history-proof-before-rebirth")).toEqual(collapse);
+  });
+
   it("reconciles concurrent attempts against one persisted collapse", async () => {
     await pool.execute(
       "INSERT INTO aurionActiveCivilizations (civilizationId,worldId,worldEpoch,population,stability,hazardIndex,scarcitySeverity,lastResolutionIndex) VALUES (?,?,?,?,?,?,?,?)",
