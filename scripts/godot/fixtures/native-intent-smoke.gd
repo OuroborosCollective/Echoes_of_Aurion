@@ -2,6 +2,7 @@ extends Node
 ## Test-only autoload in a disposable debug APK. No auth request or credential.
 var _app: Variant
 var _callbacks := 0
+var _rejection_observed := false
 var _mode := "warm"
 var _previous := ""
 
@@ -14,6 +15,7 @@ func _ready() -> void:
 	if FileAccess.file_exists("user://smoke-mode"):
 		_mode = FileAccess.get_file_as_string("user://smoke-mode").strip_edges()
 	_app._intent_bridge.callback_received.connect(_observed_callback)
+	_app._auth_start.session_failed.connect(_observed_rejection)
 	if _mode == "warm":
 		# Exercise the real waiting controller and strict rejection path, without
 		# /start, PKCE material or any request to a production auth endpoint.
@@ -28,6 +30,12 @@ func _ready() -> void:
 
 func _observed_callback(_raw_url: String) -> void:
 	_callbacks += 1
+
+func _observed_rejection(error_code: String) -> void:
+	# The real controller emits this synchronously for this malformed callback.
+	# Resume may replace its UI label before the next report sample.
+	if error_code == "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE":
+		_rejection_observed = true
 
 func _process(_delta: float) -> void:
 	if _app != null:
@@ -46,11 +54,10 @@ func _write_report() -> void:
 		if intent != null:
 			intent_present = intent.getDataString() != null
 			dispatch_sequence = intent.getIntExtra("aurion_smoke_dispatch", 0)
-	var status: String = _app.status.text
 	var phase := "waiting" if _app._awaiting_callback else "other"
 	if _mode == "cold" and not _app._awaiting_callback:
 		phase = "cold_login_required"
-	elif _callbacks == 1 and status == "Anmeldung derzeit nicht verfügbar":
+	elif _callbacks == 1 and _rejection_observed and not _app._awaiting_callback:
 		phase = "callback_rejected"
 	var report := {
 		"schemaVersion": 1, "layer": "android-jni-bridge-smoke", "mode": _mode,

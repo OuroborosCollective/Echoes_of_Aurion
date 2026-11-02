@@ -2,11 +2,12 @@ import { spawnSync } from "node:child_process";
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
-import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
+import { aurionCausalCheckpoints, aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { getDb, getGlobalWorldPlan, listActiveWorldPresence, recordWorldPresenceLease, releaseWorldPresenceLease, resolveAndRecordGlobalWorldEpoch } from "./db";
 import { WORLD_PRESENCE_LEASE_MS } from "./worldPresenceProtocol";
 import { AuthoritativeMovementZone } from "./zoneRuntime";
-import { globalTickRecorder } from "./causality/tickRecorder";
+import { AurionTickRecorder, globalTickRecorder } from "./causality/tickRecorder";
+import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
 import { worldCausalRootService } from "./causality/worldCausalRootService";
 import { aurionWorldChunkDeltas } from "../drizzle/schema";
 import { recordWorldChunkDelta } from "./db";
@@ -16,6 +17,7 @@ import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { readConfirmedChunkAssetProjection } from "./causality/worldChunkProjectionService";
 import { createWorldChunkProjectionWorkerJobV2 } from "../shared/worldChunkProjectionV2";
 import { decodeChunkAssetWorkerPayload } from "../shared/worldChunkProjectionPayload";
+import { AURION_ZONE_RULESET_VERSION } from "../shared/aurionCausalTickContract";
 
 const describeWithEpochDatabase = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_WORLD_EPOCH_E2E === "1" ? describe : describe.skip;
 const WORLD_ID = "echoes-of-aurion-global";
@@ -37,6 +39,7 @@ async function cleanupEpochState() {
   await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, WORLD_ID));
   await db.delete(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
   await db.delete(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD_ID));
+  await db.delete(aurionCausalCheckpoints).where(eq(aurionCausalCheckpoints.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, WORLD_ID));
 }
 
@@ -78,6 +81,72 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     const reactions = await db.select().from(aurionWorldEpochReactions).where(eq(aurionWorldEpochReactions.worldId, WORLD_ID));
     expect(reactions).toHaveLength(1);
     expect(JSON.parse(reactions[0]!.reactionJson)).toMatchObject({ resolutionIndex: 1, receiptId: reactions[0]!.receiptId, deterministicHash: reactions[0]!.reactionHash });
+  }, 30_000);
+
+  it.each(["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION])("seals and independently replays the actual supported %s ruleset from real persisted zone ticks", async ruleset => {
+    expect(new URL(process.env.DATABASE_URL!).pathname).toMatch(/_test$/);
+    const releaseSha = process.env.AURION_RELEASE_SHA;
+    expect(releaseSha).toMatch(/^[a-f0-9]{40}$/);
+    const zone = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder(20, new MariaDBCausalPersistenceAdapter()));
+    zone.restoreFromCanonicalState({ ...zone.getCanonicalZoneState(), ruleset });
+    zone.sourceRevisionOverride = releaseSha!;
+    zone.tick();
+    await zone.flushEvidencePersistence();
+
+    await resolveAndRecordGlobalWorldEpoch({
+      requestedByUserId: 2_146_999_970,
+      idempotencyKey: "world-epoch-e2e:supported-ruleset:0001",
+      now: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    const db = await getDb();
+    if (!db) throw new Error("ISOLATED_TEST_DB_REQUIRED");
+    const ticks = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD_ID));
+    expect(ticks).toHaveLength(1);
+    expect(ticks[0]).toMatchObject({ tick: 1, rulesetVersion: ruleset, receiptHash: zone.getLatestReceipt()!.receiptHash });
+    const proofs = await db.select().from(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
+    expect(proofs).toHaveLength(1);
+    const proof = JSON.parse(proofs[0]!.globalProofJson);
+    expect(proof).toMatchObject({ status: "VERIFIED", root: {
+      rulesetVersion: ruleset,
+      zoneRoots: [{ zoneId: zone.zoneId, rulesetVersion: ruleset, fromTick: 1, toTick: 1 }],
+    } });
+    expect(proofs[0]!.globalProofHash).toBe(proof.root.worldRootHash);
+    await expect(worldCausalRootService.replay(WORLD_ID, 1)).resolves.toMatchObject({
+      status: "MATCH", worldRootHash: proof.root.worldRootHash,
+    });
+  }, 30_000);
+
+  it("keeps a mixed persisted ruleset range unprovable rather than dropping its historical prefix", async () => {
+    expect(new URL(process.env.DATABASE_URL!).pathname).toMatch(/_test$/);
+    const releaseSha = process.env.AURION_RELEASE_SHA;
+    expect(releaseSha).toMatch(/^[a-f0-9]{40}$/);
+    const zone = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder(20, new MariaDBCausalPersistenceAdapter()));
+    zone.sourceRevisionOverride = releaseSha!;
+    zone.restoreFromCanonicalState({ ...zone.getCanonicalZoneState(), ruleset: "aurion.zone.rules.v2" });
+    zone.tick();
+    await zone.flushEvidencePersistence();
+    // Isolated negative fixture only: an unversioned ruleset switch must never
+    // become a verified production epoch or erase the earlier stored receipt.
+    zone.restoreFromCanonicalState({ ...zone.getCanonicalZoneState(), ruleset: AURION_ZONE_RULESET_VERSION }, zone.getLatestReceipt()!.receiptHash);
+    zone.tick();
+    await zone.flushEvidencePersistence();
+
+    await resolveAndRecordGlobalWorldEpoch({
+      requestedByUserId: 2_146_999_970,
+      idempotencyKey: "world-epoch-e2e:mixed-rulesets:0001",
+      now: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    const db = await getDb();
+    if (!db) throw new Error("ISOLATED_TEST_DB_REQUIRED");
+    const ticks = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD_ID));
+    expect(ticks.map(row => ({ tick: row.tick, rulesetVersion: row.rulesetVersion })).sort((left, right) => left.tick - right.tick)).toEqual([
+      { tick: 1, rulesetVersion: "aurion.zone.rules.v2" },
+      { tick: 2, rulesetVersion: AURION_ZONE_RULESET_VERSION },
+    ]);
+    const proofs = await db.select().from(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
+    expect(proofs).toHaveLength(1);
+    expect(JSON.parse(proofs[0]!.globalProofJson)).toMatchObject({ status: "UNPROVABLE", root: null });
+    expect(proofs[0]!.status).toBe("UNPROVABLE");
   }, 30_000);
 
   it("persists real zone/chunk evidence, replays historical roots in a fresh CLI, and rejects tampering", async () => {

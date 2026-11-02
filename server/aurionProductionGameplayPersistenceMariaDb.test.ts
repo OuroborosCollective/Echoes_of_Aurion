@@ -9,6 +9,7 @@ import { AurionProductionProbeStore } from "./aurionProductionProbeStore";
 import { runProductionGameplaySessionReadback } from "./aurionProductionGameplaySession";
 import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID, requireProbePersistenceEvidence } from "../shared/aurionProductionProbeEvidence";
 import { orderCanonicalZoneIntents, sanitizeIntentForHash } from "../shared/aurionZoneIntentContract";
+import { AURION_ZONE_RULESET_VERSION } from "../shared/aurionCausalTickContract";
 
 const suite = process.env.AURION_PROBE_E2E === "1" ? describe : describe.skip;
 suite("real Aurion membership receipts in isolated MariaDB (not production)", () => {
@@ -76,12 +77,13 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
     }
   }, 30000);
 
-  it("hydrates an earlier revision, continues its durable chain, stops ticking and hydrates again", async () => {
+  it.each(["aurion.zone.rules.v2", AURION_ZONE_RULESET_VERSION])("hydrates an earlier revision with supported %s, continues its durable chain and hydrates again", async ruleset => {
     const url = new URL(process.env.DATABASE_URL ?? "");
     if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("ISOLATED_TEST_DB_REQUIRED");
     const pool = createPool(url.href), adapter = new MariaDBCausalPersistenceAdapter();
     const zoneId = "observatory_threshold";
     const old = new AuthoritativeMovementZone(zoneId, new AurionTickRecorder(20, adapter));
+    old.restoreFromCanonicalState({ ...old.getCanonicalZoneState(), ruleset });
     old.sourceRevisionOverride = "a".repeat(40);
     const socket = () => ({ OPEN: 1, readyState: 1, send() {}, close() {} }) as any;
     const registry = new ZoneRegistry();
@@ -94,6 +96,7 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       expect(registry.find(zoneId)).toBeUndefined();
       expect(prepared.zone.getTickNumber()).toBe(2);
       expect(prepared.zone.getCanonicalZoneState()).toEqual(old.getCanonicalZoneState());
+      expect(prepared.zone.getCanonicalZoneState().ruleset).toBe(ruleset);
       prepared.zone.sourceRevisionOverride = "b".repeat(40);
       registry.installProbeZone(prepared.zone);
       const next = prepared.zone.join({ userId: AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID, socket: socket() });
@@ -102,6 +105,7 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       expect(continued).toHaveLength(2);
       expect(continued[0].receipt.previousReceiptHash).toBe(original!.receiptHash);
       expect(continued[1].receipt.sourceRevision).toBe("b".repeat(40));
+      expect(continued.every(entry => entry.receipt.rulesetVersion === ruleset)).toBe(true);
       registry.releaseProbeZone(prepared.zone);
       registry.tick();
       expect(prepared.zone.getTickNumber()).toBe(4);
