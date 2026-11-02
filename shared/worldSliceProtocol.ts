@@ -2,6 +2,7 @@ import { z } from "zod";
 import { chunkCoordinateSchema, causalSha256Schema, causalRevisionSchema } from "./aurionChunkStateContract";
 import { chunkAssetPayloadSchema } from "./worldChunkProjectionPayload";
 import { GLOBAL_WORLD_ID } from "./worldIdentity";
+import { splitWorldChunkPositionMm } from "./worldChunkProtocol";
 
 export const WORLD_SLICE_SCHEMA = "aurion.world-slice.v1" as const;
 export const WORLD_SLICE_POLICY = "actor-observed-current-epoch.v1" as const;
@@ -44,6 +45,27 @@ export const worldSliceSchema = z.strictObject({
     entityId: z.string().regex(/^player:[1-9][0-9]{0,15}$/),
     position: z.strictObject({ x: mm, z: mm }),
   })).length(1),
+});
+
+/** Same v1 wire, now checked as a complete consumer boundary before rendering. */
+export const worldSliceReadbackSchema = z.strictObject({
+  status: z.enum(["VERIFIED", "FOGGED"]), connectionId: z.string().min(1).max(128),
+  slice: worldSliceSchema, fingerprint: causalSha256Schema, mutationAuthority: z.literal("none"),
+}).superRefine((reply, ctx) => {
+  const { slice } = reply;
+  const invalid = (message: string) => ctx.addIssue({ code: "custom", message });
+  if (slice.entities[0].entityId !== slice.actorId) invalid("WORLD_SLICE_FOREIGN_ENTITY");
+  const ownChunk = splitWorldChunkPositionMm(slice.entities[0].position).coordinate;
+  if (ownChunk.x !== slice.coordinate.x || ownChunk.z !== slice.coordinate.z) invalid("WORLD_SLICE_ACTOR_SCOPE_MISMATCH");
+  if (reply.status === "FOGGED" ? slice.chunks.length !== 0 || slice.knowledgeHash !== null
+    : slice.chunks.length !== 1 || slice.knowledgeHash === null) invalid("WORLD_SLICE_KNOWLEDGE_MISMATCH");
+  for (const chunk of slice.chunks) {
+    if (chunk.coordinate.x !== slice.coordinate.x || chunk.coordinate.z !== slice.coordinate.z) invalid("WORLD_SLICE_CHUNK_SCOPE_MISMATCH");
+    if (new Set(chunk.tiles.map(tile => tile.z * 16 + tile.x)).size !== 256) invalid("WORLD_SLICE_TILE_COVERAGE_INVALID");
+    for (const rows of [chunk.structures, chunk.roads]) {
+      if (new Set(rows.map(row => row.id)).size !== rows.length) invalid("WORLD_SLICE_DUPLICATE_OVERLAY");
+    }
+  }
 });
 
 /** Native HTTP spelling is strict too; no actor/world override or coercive floats. */

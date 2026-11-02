@@ -6,6 +6,16 @@ on:
       - "server/explorationMemoryPersistence.test.ts"
       - "server/worldSlice.ts"
       - "shared/worldSliceProtocol.ts"
+      - "shared/worldSliceProtocol.test.ts"
+      - "godot-client/projection/world_slice.gd"
+      - "godot-client/world/world_table_projection.gd"
+      - "godot-client/ui/screens/world_table.gd"
+      - "godot-client/tests/test_world_table.gd"
+      - "godot-client/app/main.gd"
+      - "godot-client/net/api/chunk_surface_api.gd"
+      - "godot-client/tests/test_chunk_surface_api_runtime.gd"
+      - "scripts/godot/chunk-surface-api-runtime.mjs"
+      - "config/godot-toolchain.lock.json"
       - "scripts/world-slice/**"
       - "server/livingHistoryGodotMariaDb.test.ts"
       - "server/aurionCivilizationHistoryPersistence.ts"
@@ -62,6 +72,7 @@ jobs:
       JWT_SECRET: aurion-world-slice-isolated-fixture-key-never-production
       VITE_APP_ID: aurion-world-slice-isolated-http-fixture
       AURION_EXPLORATION_MEMORY_E2E: "1"
+      AURION_WORLD_TABLE_GODOT_E2E: "1"
       AURION_WORLD_EPOCH_E2E: "1"
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -77,6 +88,10 @@ jobs:
           node-version: 22
       - run: pnpm install --frozen-lockfile
       - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - run: node scripts/godot/bootstrap.mjs
+      - run: .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import --quit
+      - run: node scripts/godot/chunk-surface-api-runtime.mjs .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 godot-client world-slice
+      - run: pnpm exec vitest run shared/worldSliceProtocol.test.ts --reporter=verbose
       - run: pnpm verify:migrations
       - run: pnpm exec drizzle-kit migrate
       - run: pnpm check

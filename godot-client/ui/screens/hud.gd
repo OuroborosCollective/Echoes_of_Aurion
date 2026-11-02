@@ -3,6 +3,7 @@ extends Control
 ## predicted here; buttons emit intents to the existing main scene.
 signal attack_requested
 signal diagnostics_requested
+signal world_table_requested
 signal world_studio_requested
 signal menu_changed(open: bool)
 signal exit_requested
@@ -33,6 +34,9 @@ func _ready() -> void:
 	$MenuPanel/Scroll/Content/WorldStudio.pressed.connect(func():
 		set_menu_open(false)
 		world_studio_requested.emit())
+	$MenuPanel/Scroll/Content/WorldTable.pressed.connect(func():
+		set_menu_open(false)
+		world_table_requested.emit())
 	exit_confirmation.confirmed.connect(func(): exit_requested.emit())
 
 func set_menu_open(open: bool) -> void:
@@ -108,7 +112,7 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 		safe = bounds
 	var scale_factor := clampf(density, 1.0, 2.0)
 	var font_size := roundi(16.0 * scale_factor)
-	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Scroll/Content/Diagnostics, $MenuPanel/Scroll/Content/WorldStudio, $MenuPanel/Scroll/Content/QuestAvailability, $MenuPanel/Scroll/Content/Close, notice_text]:
+	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Scroll/Content/Diagnostics, $MenuPanel/Scroll/Content/WorldStudio, $MenuPanel/Scroll/Content/WorldTable, $MenuPanel/Scroll/Content/QuestAvailability, $MenuPanel/Scroll/Content/Close, notice_text]:
 		label.add_theme_font_size_override("font_size", font_size)
 	$MenuPanel/Scroll/Content/Diagnostics.custom_minimum_size.y = 48.0 * scale_factor
 	$MenuPanel/Scroll/Content/WorldStudio.custom_minimum_size.y = 48.0 * scale_factor

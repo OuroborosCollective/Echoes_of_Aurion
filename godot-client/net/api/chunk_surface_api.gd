@@ -8,6 +8,8 @@ const RuntimeConfig = preload("res://config/runtime_config.gd")
 const PATH := "/api/game/world-chunk-surface"
 const MAX_BYTES := 262144
 
+var _path := PATH
+var _lod := "full"
 var _auth: Node
 var _http: HTTPRequest
 var _active := false
@@ -19,7 +21,8 @@ var _requested := Vector2i.ZERO
 var _retried := false
 var _waiting_refresh := false
 
-func _init(auth: Node) -> void:
+func _init(auth: Node, path: String = PATH) -> void:
+	_path = path if path in [PATH, "/api/game/world-slice"] else ""
 	_auth = auth
 
 func _ready() -> void:
@@ -31,7 +34,11 @@ func _ready() -> void:
 func busy() -> bool:
 	return _active
 
-func request_surface(server_url: String, connection_id: String, coordinate: Vector2i, allow_local: bool = false) -> bool:
+func request_surface(server_url: String, connection_id: String, coordinate: Vector2i, allow_local: bool = false, lod: String = "full") -> bool:
+	if lod not in ["full", "map"]:
+		return false
+	if _path.is_empty():
+		return false
 	if _active or not is_inside_tree() or connection_id.is_empty():
 		return false
 	if absi(coordinate.x) > 1000000 or absi(coordinate.y) > 1000000:
@@ -39,6 +46,7 @@ func request_surface(server_url: String, connection_id: String, coordinate: Vect
 	var validated: String = RuntimeConfig.validated_server_url(server_url, allow_local)
 	if validated.is_empty() or not _auth.protected_response_allowed():
 		return false
+	_lod = lod
 	_server = validated
 	_connection_id = connection_id
 	_requested = coordinate
@@ -61,13 +69,15 @@ func _send() -> bool:
 	_epoch += 1
 	var expected_epoch: int = _epoch
 	_http = HTTPRequest.new()
-	_http.body_size_limit = MAX_BYTES
+	_http.body_size_limit = 65536 if _path == "/api/game/world-slice" else MAX_BYTES
 	_http.max_redirects = 0
 	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_completed.bind(expected_epoch))
 	var query := "?x=%d&z=%d" % [_requested.x, _requested.y]
-	var error: Error = _http.request(_server + PATH + query,
+	if _path == "/api/game/world-slice":
+		query += "&radius=0&lod=" + _lod
+	var error: Error = _http.request(_server + _path + query,
 		PackedStringArray(["Accept: application/json", "Authorization: Bearer " + token]),
 		HTTPClient.METHOD_GET)
 	if error != OK:

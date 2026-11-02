@@ -154,6 +154,12 @@ await stage('world-authoring-wire', 'headless', process.execPath,
 await stage('chunk-surface-native-http', 'headless', process.execPath,
   ['scripts/godot/chunk-surface-api-runtime.mjs', executable, project],
   'G18 protected chunk surface GET wire boundary verified');
+await stage('world-slice-native-http', 'headless', process.execPath,
+  ['scripts/godot/chunk-surface-api-runtime.mjs', executable, project, 'world-slice'],
+  'WORLD_SLICE_PROTECTED_HTTP_WIRE_PASS');
+await stage('world-table-presentation', 'headless', executable,
+  godot('--script', 'tests/test_world_table.gd'), 'WORLD_TABLE_PRESENTATION_PASS');
+
 for (const result of await negativeControls(repo, executable)) await record(`negative-${result.id}`, result.id === 'wrong-contract' ? 'static' : 'headless', result, true);
 run('git', ['-C', repo, 'diff', '--exit-code', 'HEAD']);
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);

@@ -11,7 +11,10 @@ import { globalZoneRegistry } from "./zoneRuntime";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { worldCausalRootService } from "./causality/worldCausalRootService";
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { promisify } from "node:util";
 import { resolve } from "node:path";
 import type { AddressInfo } from "node:net";
 import express from "express";
@@ -299,10 +302,29 @@ suite("Issue 323 Phase H exploration memory",()=>{
       const own = await fetch(url, { headers: { cookie: ownCookie } });
       expect(own.status).toBe(200);
       expect(own.headers.get("cache-control")).toBe("no-store");
-      expect((await own.json()).fingerprint).toBe(slice.fingerprint);
+      const ownReadback = await own.json();
+      expect(ownReadback.fingerprint).toBe(slice.fingerprint);
       const other = await fetch(url, { headers: { cookie: await cookieFor(unseenUserId) } });
       expect(other.status).toBe(200);
-      expect(await other.json()).toMatchObject({ status: "FOGGED", slice: { chunks: [] } });
+      const otherReadback = await other.json();
+      expect(otherReadback).toMatchObject({ status: "FOGGED", slice: { chunks: [] } });
+      if (process.env.AURION_WORLD_TABLE_GODOT_E2E === "1") {
+        // Genuine isolated MariaDB + authenticated HTTP DTOs cross into the
+        // actual Godot consumer. Synthetic identities, not production clients.
+        const directory = await mkdtemp(resolve(tmpdir(), "aurion-world-table-"));
+        try {
+          const input = resolve(directory, "readback.json");
+          await writeFile(input, JSON.stringify({ known: ownReadback, fogged: otherReadback }));
+          const { stdout, stderr } = await promisify(execFile)(
+            resolve(".aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64"),
+            ["--headless", "--path", "godot-client", "--script", "tests/test_world_table.gd"],
+            { timeout: 20_000, maxBuffer: 262_144, env: { ...process.env, AURION_WORLD_TABLE_READBACK: input } },
+          );
+          expect(stdout).toContain("WORLD_TABLE_DB_READBACK_PASS");
+          expect(stderr).not.toMatch(/SCRIPT ERROR|ERROR:/);
+          console.info("WORLD_TABLE_DB_READBACK_PASS (isolated authenticated HTTP, real MariaDB, headless Godot; no physical device)");
+        } finally { await rm(directory, { recursive: true, force: true }); }
+      }
       expect((await fetch(url)).status).toBe(401);
       expect((await fetch(url, { headers: { cookie: COOKIE_NAME + "=invalid" } })).status).toBe(401);
       expect((await fetch(url + "&actorId=player:1", { headers: { cookie: ownCookie } })).status).toBe(422);

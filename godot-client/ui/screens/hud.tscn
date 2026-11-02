@@ -166,6 +166,12 @@ theme_override_font_sizes/font_size = 16
 text = "Questdaten nicht verfügbar"
 autowrap_mode = 3
 
+[node name="WorldTable" type="Button" parent="MenuPanel/Scroll/Content"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Weltentisch"
+
 [node name="WorldStudio" type="Button" parent="MenuPanel/Scroll/Content"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2

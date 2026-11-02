@@ -22,6 +22,7 @@ const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
 const WorldDesignProjection = preload("res://world/world_design_projection.gd")
 const WorldAssetApi = preload("res://net/api/world_asset_api.gd")
+const WorldTable = preload("res://ui/screens/world_table.gd")
 const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
 const LivingHistoryProjection = preload("res://world/living_history_projection.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
@@ -82,6 +83,7 @@ var _chunk_api: Node
 var _world_design_api: Node
 var _world_asset_api: Node
 var _world_design_visuals: Node3D
+var _world_table: Control
 var _world_studio: Control
 var _world_design_readback: Dictionary = {}
 var _world_design_surfaces: Dictionary = {}
@@ -195,6 +197,10 @@ func _ready() -> void:
 	add_child(_world_studio)
 	_world_studio.confirmed_world.connect(_on_world_studio_readback)
 	_world_studio.closed.connect(_restore_mobile_joystick)
+	_world_table = WorldTable.new()
+	_world_table.name = "WorldTable"
+	add_child(_world_table)
+	_world_table.closed.connect(func(): mobile_joystick.visible = _world_input_permitted())
 	_chunk_api = ChunkSurfaceApi.new(_auth_start)
 	add_child(_chunk_api)
 	_chunk_api.surface_ready.connect(_on_chunk_surface_ready)
@@ -225,6 +231,7 @@ func _ready() -> void:
 	mobile_hud.attack_requested.connect(_on_world_action_pressed)
 	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
 	mobile_hud.world_studio_requested.connect(_open_world_studio)
+	mobile_hud.world_table_requested.connect(_open_world_table)
 	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
 	mobile_hud.exit_requested.connect(_on_mobile_exit_requested)
 	mobile_hud.exit_confirmation.canceled.connect(_restore_mobile_joystick)
@@ -234,6 +241,12 @@ func _ready() -> void:
 	studio_button.custom_minimum_size.y = 48
 	studio_button.pressed.connect(_open_world_studio)
 	$WorldHUD/WorldBar.add_child(studio_button)
+	var table_button := Button.new()
+	table_button.name = "WorldTableButton"
+	table_button.text = "Weltentisch"
+	table_button.custom_minimum_size.y = 48
+	table_button.pressed.connect(_open_world_table)
+	$WorldHUD/WorldBar.add_child(table_button)
 	if _mobile_hud_enabled:
 		get_tree().set_quit_on_go_back(false)
 	login.disabled = true
@@ -354,6 +367,8 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 
 func _reset_projection() -> void:
 	# An old HTTP completion/actor must not survive a new authenticated zone.
+	if _world_table != null:
+		_world_table.close_session()
 	if _world_studio != null:
 		_world_studio.close_session()
 	if _appearance_api != null:
@@ -468,6 +483,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		return
 	if _confirmed_zone.apply_snapshot(snapshot):
 		_entities.sync(_confirmed_zone)
+		_reconcile_world_table()
 		var now_ms := Time.get_ticks_msec()
 		_last_world_update_ms = now_ms
 		_world_is_stale = false
@@ -661,6 +677,7 @@ func _process(_delta: float) -> void:
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
+	_reconcile_world_table()
 	if _world_studio.visible:
 		_world_studio.set_inspection_context(_confirmed_zone, _entities, _world_is_stale)
 	_request_world_design(now_ms)
@@ -711,9 +728,12 @@ func _on_mobile_menu_changed(open: bool) -> void:
 
 func _restore_mobile_joystick() -> void:
 	if _mobile_hud_enabled:
-		mobile_joystick.visible = world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible
+		mobile_joystick.visible = world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible and not _world_table.visible
 
 func _handle_mobile_back() -> void:
+	if _world_table.visible:
+		_world_table.close()
+		return
 	if _world_studio.visible:
 		_world_studio._close_requested()
 		_restore_mobile_joystick()
@@ -740,9 +760,22 @@ func _on_mobile_exit_requested() -> void:
 ## G21: camera-only gestures never send move/attack or alter confirmed state.
 ## The existing G20 joystick still exclusively owns its own finger index.
 func _world_input_permitted() -> bool:
-	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and not _world_studio.visible and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
+	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and not _world_studio.visible and not _world_table.visible and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
+
+func _open_world_table() -> void:
+	if not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended() or _world_is_stale or not _auth_start.protected_response_allowed() or _world_studio.visible:
+		return
+	var own := _entities.record("presences", _confirmed_zone.self_entity_id())
+	if own.is_empty():
+		return
+	_camera_router.cancel()
+	_cancel_move_intent()
+	_world_table.open_table(_auth_start, _config.server_base_url, _confirmed_zone.connection_id(), _confirmed_zone.self_entity_id(), _world_table_coordinate(int(own.position.x), int(own.position.z)))
+	mobile_joystick.visible = false
 
 func _open_world_studio() -> void:
+	if _world_table.visible:
+		return
 	if not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended() or _world_is_stale or not _auth_start.protected_response_allowed():
 		return
 	_camera_router.cancel()
@@ -1653,3 +1686,15 @@ func _on_history_failed(_reason: String, connection_id: String) -> void:
 	history_status.text = "Weltgeschichte · derzeit nicht verfügbar"
 	history_status.visible = true
 
+
+func _world_table_coordinate(x: int, z: int) -> Vector2i:
+	return Vector2i(floori((float(x) + 32000.0) / 64000.0), floori((float(z) + 32000.0) / 64000.0))
+
+func _reconcile_world_table() -> void:
+	if not _world_table.visible:
+		return
+	var own := _entities.record("presences", _confirmed_zone.self_entity_id())
+	if own.is_empty():
+		_world_table.close()
+	else:
+		_world_table.reconcile(_confirmed_zone.connection_id(), _confirmed_zone.self_entity_id(), _world_table_coordinate(int(own.position.x), int(own.position.z)), _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected")

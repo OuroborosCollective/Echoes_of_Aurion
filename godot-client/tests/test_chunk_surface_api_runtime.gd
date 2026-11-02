@@ -3,6 +3,7 @@ extends SceneTree
 ## Does not prove real login, server DB content or live terrain.
 const Api = preload("res://net/api/chunk_surface_api.gd")
 const SERVER := "http://127.0.0.1:3000"
+var _slice_mode := OS.get_environment("AURION_WORLD_SLICE_WIRE_TEST") == "1"
 var failures: Array[String] = []
 var completed := false
 var success := false
@@ -64,10 +65,13 @@ func _request(api: Node, id: String) -> void:
 	completed = false
 	success = false
 	last_error = ""
-	var started: bool = api.request_surface(SERVER, id, Vector2i(0, 0), true)
+	var started: bool = api.request_surface(SERVER, id, Vector2i(0, 0), true, "map" if _slice_mode else "full")
 	require(started, "chunk GET did not start: " + id)
 	if not started:
 		return
+	if _slice_mode:
+		require(not api.request_surface(SERVER, "zone_busy", Vector2i(0,0), true, "full"), "busy call accepted")
+		require(api._lod == "map", "rejected request changed active LOD")
 	var began := Time.get_ticks_msec()
 	while not completed and Time.get_ticks_msec() - began < 3500:
 		await process_frame
@@ -78,7 +82,7 @@ func _request(api: Node, id: String) -> void:
 func verify() -> void:
 	var auth := TestAuth.new()
 	root.add_child(auth)
-	var api := Api.new(auth)
+	var api := Api.new(auth, "/api/game/world-slice" if _slice_mode else Api.PATH)
 	api.surface_ready.connect(_ready_event)
 	api.request_failed.connect(_failed_event)
 	root.add_child(api)
@@ -90,7 +94,7 @@ func verify() -> void:
 	var first: HTTPRequest = api.get_child(0) as HTTPRequest if api.get_child_count() > 0 else null
 	require(first != null, "chunk GET did not open a real HTTPRequest")
 	if first:
-		require(first.max_redirects == 0 and first.body_size_limit == 262144 and first.timeout == 12.0, "unbounded/redirectable chunk GET")
+		require(first.max_redirects == 0 and first.body_size_limit == (65536 if _slice_mode else 262144) and first.timeout == 12.0, "unbounded/redirectable chunk GET")
 	await _request(api, "zone_redirect")
 	require(not success and last_error == "CHUNK_REQUEST_FAILED", "redirect followed or accepted")
 	await _request(api, "zone_refresh")
@@ -98,7 +102,7 @@ func verify() -> void:
 	await _request(api, "zone_html")
 	require(not success and last_error == "CHUNK_RESPONSE_INVALID", "HTML accepted as chunk JSON")
 	var previous := callbacks
-	require(api.request_surface(SERVER, "zone_old", Vector2i.ZERO, true), "old chunk request did not start")
+	require(api.request_surface(SERVER, "zone_old", Vector2i.ZERO, true, "map" if _slice_mode else "full"), "old chunk request did not start")
 	await create_timer(0.05).timeout
 	api.cancel()
 	await _request(api, "zone_new")
@@ -107,7 +111,7 @@ func verify() -> void:
 	require(callbacks == previous + 1, "late cancelled chunk emitted a second callback")
 	completed = false
 	success = false
-	require(api.request_surface(SERVER, "zone_revoked", Vector2i.ZERO, true), "revoked test did not start")
+	require(api.request_surface(SERVER, "zone_revoked", Vector2i.ZERO, true, "map" if _slice_mode else "full"), "revoked test did not start")
 	await create_timer(0.05).timeout
 	auth.allowed = false
 	await create_timer(0.28).timeout
@@ -116,7 +120,7 @@ func verify() -> void:
 	api.queue_free()
 	auth.queue_free()
 	if failures.is_empty():
-		print("G18 protected chunk surface GET wire boundary verified")
+		print("WORLD_SLICE_PROTECTED_HTTP_WIRE_PASS" if _slice_mode else "G18 protected chunk surface GET wire boundary verified")
 		quit(0)
 	else:
 		for msg in failures:

@@ -4,7 +4,7 @@ import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { freezeEvidence } from "../shared/aurionChunkStateContract";
 import { verifyAnyWorldRoot } from "../shared/aurionChunkWorldRootContract";
 import { splitWorldChunkPositionMm } from "../shared/worldChunkProtocol";
-import { WORLD_SLICE_MAX_BYTES, WORLD_SLICE_POLICY, WORLD_SLICE_SCHEMA, WORLD_SLICE_ZONE, worldSliceQuerySchema, worldSliceSchema } from "../shared/worldSliceProtocol";
+import { WORLD_SLICE_MAX_BYTES, WORLD_SLICE_POLICY, WORLD_SLICE_SCHEMA, WORLD_SLICE_ZONE, worldSliceQuerySchema, worldSliceReadbackSchema, worldSliceSchema } from "../shared/worldSliceProtocol";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import { getDb } from "./db";
 import { readExplorationMemoryChunk } from "./explorationMemoryPersistence";
@@ -88,8 +88,8 @@ export async function readActorWorldSlice(userId: number, rawQuery: unknown) {
   if (await readEpoch() !== epoch || finalRoot?.status !== "VERIFIED"
     || finalRoot.root.worldRootHash !== root.root.worldRootHash) throw new Error("WORLD_SLICE_REVISION_STALE");
   if (requireConnection() !== connectionId) throw new Error("WORLD_SLICE_SESSION_CHANGED");
-  const result = { status: memory ? "VERIFIED" as const : "FOGGED" as const, connectionId, slice,
-    fingerprint: canonicalSha256({ domain: WORLD_SLICE_SCHEMA, slice }), mutationAuthority: "none" as const };
+  const result = worldSliceReadbackSchema.parse({ status: memory ? "VERIFIED" as const : "FOGGED" as const, connectionId, slice,
+    fingerprint: canonicalSha256({ domain: WORLD_SLICE_SCHEMA, slice }), mutationAuthority: "none" as const });
   if (Buffer.byteLength(JSON.stringify(result), "utf8") > WORLD_SLICE_MAX_BYTES) throw new Error("WORLD_SLICE_PAYLOAD_LIMIT");
   return freezeEvidence(result);
 }
