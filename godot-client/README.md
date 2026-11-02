@@ -29,7 +29,7 @@ Der Agent führt Tests und Builds aus. Der Owner muss keine Dateien verschieben 
 
 ## Dokumentationshelfer im Godot-Editor
 
-Das Add-on Aurion Knowledge Helper öffnet rechts im Editor einen Dock. Wähle einen Dokumentationsordner, aktualisiere den Index und suche in Markdown-, Text- und reStructuredText-Dateien. Treffer zeigen Kategorie, relativen Pfad, Zeile und einen kurzen Quellenausschnitt. Die Kategorien Lore, Quest und Projekt werden aus dem Pfad abgeleitet; unbekannte Pfade landen unter Projekt.
+Aktiviere Aurion Knowledge Helper im Godot-Editor unter Projekt > Projekteinstellungen > Plugins. Das Add-on öffnet dann rechts einen Dock. Wähle einen Dokumentationsordner, aktualisiere den Index und suche in Markdown-, Text- und reStructuredText-Dateien. Treffer zeigen Kategorie, relativen Pfad, Zeile und einen kurzen Quellenausschnitt. Die Kategorien Lore, Quest und Projekt werden aus dem Pfad abgeleitet; unbekannte Pfade landen unter Projekt.
 
 Die Suche ist lokal, deterministisch und stichwortbasiert. Sie nutzt weder Netzwerk noch LLM, Embeddings oder eine zusätzliche Datenbank. „Quellenkontext kopieren“ kopiert Frage und Fundstellen mit Zeilenbelegen in die Zwischenablage, damit ein Schreibwerkzeug damit einen prüfbaren Entwurf formulieren kann.
 
