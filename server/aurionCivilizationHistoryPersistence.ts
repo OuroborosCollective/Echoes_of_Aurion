@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   aurionActiveCivilizations,
@@ -7,13 +7,29 @@ import {
   aurionDungeonInstanceReceipts,
   aurionRuinOrigins,
   aurionSettlementRebirthCandidates,
+  aurionWorldEpochReactions,
 } from "../drizzle/schema";
-import { getDb } from "./db";
+import { getDb, parseStoredWorldEpochReaction, type DatabaseTransaction } from "./db";
+import { AURION_CIVILIZATION_RULESET_VERSION } from "./aurion/civilizationProtocol";
+import { AURION_WORLD_EPOCH_REACTION_VERSION, AURION_WORLD_EPOCH_MAX_SECTORS_PER_RESOLUTION, type WorldEpochReaction } from "./worldEpochReactionProtocol";
 
 const id = z.string().trim().min(1).max(64);
 
 const hash = (parts: readonly string[]) =>
   createHash("sha256").update(parts.join("\u001f"), "utf8").digest("hex");
+
+async function historyExecutor(transaction?: DatabaseTransaction) {
+  const executor = transaction ?? await getDb();
+  if (!executor) throw new Error("Game database is not available");
+  return executor;
+}
+
+async function withHistoryTransaction<T>(transaction: DatabaseTransaction | undefined, work: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+  if (transaction) return work(transaction);
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(work);
+}
 
 export const civilizationHistoryEventInputSchema = z
   .object({
@@ -104,9 +120,8 @@ export async function recordCivilizationHistoryEvent(input: CivilizationHistoryE
 }
 
 /** Lists history events for a world, descending by sequence. */
-export async function listCivilizationHistoryEvents(worldId: string, limit = 50) {
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
+export async function listCivilizationHistoryEvents(worldId: string, limit = 50, transaction?: DatabaseTransaction) {
+  const db = await historyExecutor(transaction);
   return db
     .select()
     .from(aurionCivilizationHistoryEvents)
@@ -118,9 +133,9 @@ export async function listCivilizationHistoryEvents(worldId: string, limit = 50)
 export async function findCivilizationHistoryEventsBySourceReceipt(
   worldId: string,
   sourceReceiptId: string,
+  transaction?: DatabaseTransaction,
 ) {
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
+  const db = await historyExecutor(transaction);
   return db
     .select()
     .from(aurionCivilizationHistoryEvents)
@@ -205,16 +220,109 @@ export async function advanceRuinState(ruinId: string, newState: RuinOriginInput
 }
 
 /** Lists active or discovered ruins. */
-export async function listVisibleRuins(worldId: string) {
+export async function listVisibleRuins(worldId: string, transaction?: DatabaseTransaction) {
+  const db = await historyExecutor(transaction);
+  const rows = await db
+    .select({ ruin: aurionRuinOrigins })
+    .from(aurionRuinOrigins)
+    .innerJoin(aurionCivilizationHistoryEvents, and(
+      eq(aurionRuinOrigins.collapseEventId, aurionCivilizationHistoryEvents.eventId),
+      eq(aurionRuinOrigins.originCivilizationId, aurionCivilizationHistoryEvents.civilizationId),
+      eq(aurionRuinOrigins.worldEpoch, aurionCivilizationHistoryEvents.worldEpoch),
+    ))
+    .where(and(
+      eq(aurionCivilizationHistoryEvents.worldId, worldId),
+      eq(aurionCivilizationHistoryEvents.eventType, "CIVILIZATION_COLLAPSE"),
+      eq(aurionRuinOrigins.state, "DISCOVERED"),
+    ));
+  return rows.map(({ ruin }) => ruin);
+}
+
+/** Resolve a replay to its persisted ruin, never to a fabricated identifier. */
+export async function readRuinForCollapse(worldId: string, collapseEventId: string, transaction?: DatabaseTransaction) {
+  const db = await historyExecutor(transaction);
+  const rows = await db.select({ ruin: aurionRuinOrigins })
+    .from(aurionRuinOrigins)
+    .innerJoin(aurionCivilizationHistoryEvents, and(
+      eq(aurionRuinOrigins.collapseEventId, aurionCivilizationHistoryEvents.eventId),
+      eq(aurionRuinOrigins.originCivilizationId, aurionCivilizationHistoryEvents.civilizationId),
+      eq(aurionRuinOrigins.worldEpoch, aurionCivilizationHistoryEvents.worldEpoch),
+    ))
+    .where(and(
+      eq(aurionCivilizationHistoryEvents.worldId, worldId),
+      eq(aurionCivilizationHistoryEvents.eventId, collapseEventId),
+      eq(aurionCivilizationHistoryEvents.eventType, "CIVILIZATION_COLLAPSE"),
+    )).limit(2);
+  if (rows.length !== 1) throw new Error("CIVILIZATION_COLLAPSE_RUIN_READBACK_MISMATCH");
+  return rows[0]!.ruin;
+}
+
+/** Check the persisted epoch reaction using the current resolver's hash contract. */
+function hasValidEpochReactionHashes(reaction: WorldEpochReaction): boolean {
+  if (reaction.version !== AURION_WORLD_EPOCH_REACTION_VERSION || typeof reaction.worldSeed !== "string" || !reaction.worldSeed ||
+    !Number.isSafeInteger(reaction.resolutionIndex) || reaction.resolutionIndex < 1 ||
+    !Array.isArray(reaction.sectors) || reaction.sectors.length < 1 || reaction.sectors.length > AURION_WORLD_EPOCH_MAX_SECTORS_PER_RESOLUTION) return false;
+  let previous = "";
+  for (const sector of reaction.sectors) {
+    if (!sector || typeof sector.sectorId !== "string" || !sector.sectorId || (previous && previous >= sector.sectorId) ||
+      sector.resolutionIndex !== reaction.resolutionIndex || !Array.isArray(sector.sourceIds) ||
+      sector.sourceIds.some((source: unknown, index: number) => typeof source !== "string" || !source || (index > 0 && sector.sourceIds[index - 1]! >= source)) ||
+      !Array.isArray(sector.market) || !Array.isArray(sector.migrations) || !Array.isArray(sector.questOffers) ||
+      !sector.resources || !sector.professions || !sector.polity) return false;
+    const expectedSector = hash([reaction.version, sector.sectorId, String(sector.resolutionIndex), ...sector.sourceIds,
+      JSON.stringify(sector.resources), JSON.stringify(sector.market), JSON.stringify(sector.professions),
+      JSON.stringify(sector.migrations), JSON.stringify(sector.polity), JSON.stringify(sector.questOffers)]);
+    if (expectedSector !== sector.reactionHash) return false;
+    previous = sector.sectorId;
+  }
+  const expected = hash([reaction.version, reaction.ruleSetVersion, reaction.contentVersion, reaction.worldSeed,
+    String(reaction.resolutionIndex), ...reaction.sectors.map(sector => sector.reactionHash)]);
+  return expected === reaction.deterministicHash && reaction.receiptId === `world-epoch:${reaction.resolutionIndex}:${expected.slice(0, 24)}`;
+}
+
+/**
+ * Bounded metadata for already-public collapse events. No ruin, location or
+ * discovery claim is made: the current schema has no ruin-bound discovery
+ * receipt or independently replayable collapse-qualification input.
+ */
+export async function readPublicCollapseHistory(worldId: string) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  // We don't have a direct worldId on ruins (only originCivilizationId),
-  // but for Aurion Alpha, civilization is effectively the world state.
-  // We join with history events to filter by worldId if needed, or assume global world.
-  return db
-    .select()
-    .from(aurionRuinOrigins)
-    .where(and(eq(aurionRuinOrigins.state, "DISCOVERED")));
+  const rows = await db.select({ event: aurionCivilizationHistoryEvents, source: aurionWorldEpochReactions })
+    .from(aurionCivilizationHistoryEvents)
+    .innerJoin(aurionWorldEpochReactions, and(
+      eq(aurionWorldEpochReactions.receiptId, aurionCivilizationHistoryEvents.sourceReceiptId),
+      eq(aurionWorldEpochReactions.worldId, aurionCivilizationHistoryEvents.worldId),
+    ))
+    .where(and(
+      eq(aurionCivilizationHistoryEvents.worldId, worldId),
+      eq(aurionCivilizationHistoryEvents.eventType, "CIVILIZATION_COLLAPSE"),
+      eq(aurionCivilizationHistoryEvents.sourceRevision, AURION_CIVILIZATION_RULESET_VERSION),
+    ))
+    // Civilization sequences are local to each civilization; the source epoch
+    // is the available world-level ordering for this restricted projection.
+    .orderBy(desc(aurionWorldEpochReactions.epoch), asc(aurionCivilizationHistoryEvents.eventId))
+    .limit(20);
+  const events = [];
+  for (const { event, source } of rows) {
+    if (event.eventId !== hash(["collapse", event.civilizationId, event.sourceReceiptId]) ||
+      event.eventPayloadHash !== hash(["civilization-collapse", event.civilizationId])) {
+      throw new Error("LIVING_HISTORY_EVENT_READBACK_MISMATCH");
+    }
+    const reaction = parseStoredWorldEpochReaction(source);
+    if (reaction.receiptId !== event.sourceReceiptId || reaction.deterministicHash !== source.reactionHash || !hasValidEpochReactionHashes(reaction)) {
+      throw new Error("LIVING_HISTORY_SOURCE_READBACK_MISMATCH");
+    }
+    events.push(Object.freeze({
+      eventId: event.eventId, civilizationId: event.civilizationId, worldId: event.worldId,
+      worldEpoch: event.worldEpoch, eventType: event.eventType,
+      sourceReceiptId: event.sourceReceiptId, sourceRevision: event.sourceRevision,
+      eventPayloadHash: event.eventPayloadHash, occurredSequence: event.occurredSequence,
+      sourceEpoch: source.epoch, sourceReactionHash: source.reactionHash,
+    }));
+  }
+  return Object.freeze({ schema: "aurion.public-collapse-history.v1" as const,
+    worldId, disclosureScope: "public-history-events" as const, events: Object.freeze(events) });
 }
 
 export const dungeonInstanceReceiptInputSchema = z
@@ -397,7 +505,7 @@ export async function recordCivilizationAdvance(input: Readonly<{
   state: ActiveCivilizationInput;
   transitionEvent: CivilizationHistoryEventInput;
   economicEvent?: CivilizationHistoryEventInput | null;
-}>) {
+}>, transaction?: DatabaseTransaction) {
   const state = activeCivilizationInputSchema.parse(input.state);
   const transition = normalizeCivilizationHistoryEvent(input.transitionEvent);
   const economic = input.economicEvent ? normalizeCivilizationHistoryEvent(input.economicEvent) : null;
@@ -416,10 +524,7 @@ export async function recordCivilizationAdvance(input: Readonly<{
     economic.occurredSequence !== transition.occurredSequence + 1
   )) throw new Error("CIVILIZATION_ECONOMIC_EVENT_BINDING_INVALID");
 
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
-
-  return db.transaction(async tx => {
+  return withHistoryTransaction(transaction, async tx => {
     const priorTransition = (
       await tx.select().from(aurionCivilizationHistoryEvents)
         .where(eq(aurionCivilizationHistoryEvents.eventId, transition.eventId))
@@ -481,7 +586,7 @@ export async function recordCivilizationAdvance(input: Readonly<{
 export async function recordInitialCivilizationSeed(input: Readonly<{
   state: ActiveCivilizationInput;
   event: CivilizationHistoryEventInput;
-}>) {
+}>, transaction?: DatabaseTransaction) {
   const state = activeCivilizationInputSchema.parse(input.state);
   const event = normalizeCivilizationHistoryEvent(input.event);
   if (
@@ -492,9 +597,7 @@ export async function recordInitialCivilizationSeed(input: Readonly<{
     event.occurredSequence !== 0
   ) throw new Error("CIVILIZATION_INITIAL_SEED_BINDING_INVALID");
 
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
-  return db.transaction(async tx => {
+  return withHistoryTransaction(transaction, async tx => {
     const priorEvent = (
       await tx.select().from(aurionCivilizationHistoryEvents)
         .where(eq(aurionCivilizationHistoryEvents.eventId, event.eventId))
@@ -525,7 +628,7 @@ export async function recordInitialCivilizationSeed(input: Readonly<{
 export async function recordSettlementRebirthTransition(input: Readonly<{
   candidate: SettlementRebirthCandidateInput;
   event: CivilizationHistoryEventInput;
-}>) {
+}>, transaction?: DatabaseTransaction) {
   const candidate = settlementRebirthCandidateInputSchema.parse(input.candidate);
   const event = normalizeCivilizationHistoryEvent(input.event);
   if (
@@ -534,9 +637,7 @@ export async function recordSettlementRebirthTransition(input: Readonly<{
     event.worldId !== candidate.worldId
   ) throw new Error("SETTLEMENT_REBIRTH_EVENT_BINDING_INVALID");
 
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
-  return db.transaction(async tx => {
+  return withHistoryTransaction(transaction, async tx => {
     const priorCandidate = (
       await tx.select().from(aurionSettlementRebirthCandidates)
         .where(eq(aurionSettlementRebirthCandidates.candidateId, candidate.candidateId))
@@ -575,9 +676,8 @@ export async function recordSettlementRebirthTransition(input: Readonly<{
   });
 }
 
-export async function getActiveCivilization(worldId: string) {
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
+export async function getActiveCivilization(worldId: string, transaction?: DatabaseTransaction) {
+  const db = await historyExecutor(transaction);
   return (
     await db
       .select()
@@ -613,6 +713,7 @@ export async function recordCivilizationCollapse(input: {
   worldId: string;
   civilizationId: string;
   collapseEventId: string;
+  ruinId: string;
   sourceReceiptId: string;
   sourceRevision: string;
   worldEpoch: number;
@@ -621,12 +722,35 @@ export async function recordCivilizationCollapse(input: {
   rulesetVersion: string;
   generationSeedDigest: string;
   occurredSequence: number;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
+}, transaction?: DatabaseTransaction) {
+  id.parse(input.ruinId);
+  return withHistoryTransaction(transaction, async tx => {
+    // Serialize competing collapse attempts on the actual active civilization.
+    const active = (await tx.select().from(aurionActiveCivilizations)
+      .where(and(eq(aurionActiveCivilizations.worldId, input.worldId), eq(aurionActiveCivilizations.civilizationId, input.civilizationId)))
+      .limit(1).for("update"))[0];
+    const priorEvent = (await tx.select().from(aurionCivilizationHistoryEvents)
+      .where(eq(aurionCivilizationHistoryEvents.eventId, input.collapseEventId)).limit(1).for("update"))[0];
+    const priorRuin = (await tx.select().from(aurionRuinOrigins)
+      .where(eq(aurionRuinOrigins.ruinId, input.ruinId)).limit(1).for("update"))[0];
+    const payloadHash = hash(["civilization-collapse", input.civilizationId]);
+    if (priorEvent || priorRuin) {
+      if (!priorEvent || !priorRuin || priorEvent.worldId !== input.worldId ||
+        priorEvent.civilizationId !== input.civilizationId || priorEvent.worldEpoch !== input.worldEpoch ||
+        priorEvent.eventType !== "CIVILIZATION_COLLAPSE" || priorEvent.sourceReceiptId !== input.sourceReceiptId ||
+        priorEvent.sourceRevision !== input.sourceRevision || priorEvent.occurredSequence !== input.occurredSequence ||
+        priorEvent.eventPayloadHash !== payloadHash || priorRuin.collapseEventId !== input.collapseEventId ||
+        priorRuin.originCivilizationId !== input.civilizationId || priorRuin.worldEpoch !== input.worldEpoch ||
+        priorRuin.locationIdentity !== input.locationIdentity || priorRuin.historyDigest !== input.historyDigest ||
+        priorRuin.rulesetVersion !== input.rulesetVersion || priorRuin.generationSeedDigest !== input.generationSeedDigest) {
+        throw new Error("CIVILIZATION_COLLAPSE_IDEMPOTENCY_CONFLICT");
+      }
+      return { success: true as const, applied: false as const, ruinId: priorRuin.ruinId };
+    }
+    if (!active || active.worldEpoch !== input.worldEpoch || active.lastResolutionIndex + 1 !== input.occurredSequence) {
+      throw new Error("CIVILIZATION_COLLAPSE_REVISION_CONFLICT");
+    }
 
-  return db.transaction(async (tx) => {
-    // 1. Record History Event
     await tx.insert(aurionCivilizationHistoryEvents).values({
       eventId: input.collapseEventId,
       civilizationId: input.civilizationId,
@@ -635,13 +759,12 @@ export async function recordCivilizationCollapse(input: {
       eventType: "CIVILIZATION_COLLAPSE",
       sourceReceiptId: input.sourceReceiptId,
       sourceRevision: input.sourceRevision,
-      eventPayloadHash: hash(["civilization-collapse", input.civilizationId]),
+      eventPayloadHash: payloadHash,
       occurredSequence: input.occurredSequence,
     });
 
-    // 2. Create Ruin Origin
     await tx.insert(aurionRuinOrigins).values({
-      ruinId: `ruin_${input.collapseEventId}`,
+      ruinId: input.ruinId,
       originCivilizationId: input.civilizationId,
       collapseEventId: input.collapseEventId,
       locationIdentity: input.locationIdentity,
@@ -652,12 +775,16 @@ export async function recordCivilizationCollapse(input: {
       state: "ELIGIBLE",
     });
 
-    // 3. Remove Active Civilization
     await tx
       .delete(aurionActiveCivilizations)
-      .where(eq(aurionActiveCivilizations.civilizationId, input.civilizationId));
+      .where(and(eq(aurionActiveCivilizations.worldId, input.worldId), eq(aurionActiveCivilizations.civilizationId, input.civilizationId)));
 
-    return { success: true, ruinId: `ruin_${input.collapseEventId}` };
+    const stored = (await tx.select().from(aurionRuinOrigins).where(eq(aurionRuinOrigins.ruinId, input.ruinId)).limit(1))[0];
+    if (!stored || stored.collapseEventId !== input.collapseEventId || stored.originCivilizationId !== input.civilizationId || stored.worldEpoch !== input.worldEpoch) {
+      throw new Error("CIVILIZATION_COLLAPSE_RUIN_READBACK_MISMATCH");
+    }
+
+    return { success: true as const, applied: true as const, ruinId: stored.ruinId };
   });
 }
 

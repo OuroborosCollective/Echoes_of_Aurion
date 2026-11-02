@@ -14,6 +14,7 @@ import {
   getActiveCivilization,
   findCivilizationHistoryEventsBySourceReceipt,
   listCivilizationHistoryEvents,
+  readRuinForCollapse,
   recordCivilizationAdvance,
   recordCivilizationCollapse,
   recordInitialCivilizationSeed,
@@ -21,11 +22,18 @@ import {
   listVisibleRuins,
 } from "../aurionCivilizationHistoryPersistence.js";
 import type { EconomicCycleImpact } from "./economicEventAggregator.js";
+import type { DatabaseTransaction } from "../db.js";
 
 const hash = (parts: readonly string[]) =>
   createHash("sha256").update(parts.join("\u001f"), "utf8").digest("hex");
 
 const clampUnit = (value: number) => Math.max(0, Math.min(1, Math.round(value * 10_000) / 10_000));
+
+type CivilizationLoopResult =
+  | { action: "COLLAPSED"; ruinId: string; candidateId?: never; civilizationId?: never }
+  | { action: "REBIRTH_CANDIDATE_CREATED"; candidateId: string; ruinId?: never; civilizationId?: never }
+  | { action: "INITIAL_CIV_SEEDED" | "ADVANCED"; civilizationId: string; ruinId?: never; candidateId?: never }
+  | { action: "IDLE"; ruinId?: never; candidateId?: never; civilizationId?: never };
 
 /**
  * Derive dynamic civilization metric deltas from aggregated economic impact.
@@ -76,22 +84,20 @@ function deriveEconomicDeltas(impact: EconomicCycleImpact | null) {
   };
 }
 
-export async function orchestrateCivilizationLoop(
-  worldId: string,
-  worldEpoch: number,
-  sourceReceiptId: string,
-  economicImpact?: EconomicCycleImpact | null,
-) {
-  const priorSourceEvents = await findCivilizationHistoryEventsBySourceReceipt(worldId, sourceReceiptId);
-  const transitionReplay = priorSourceEvents.find(event =>
+async function readTransitionReplay(worldId: string, sourceReceiptId: string, transaction?: DatabaseTransaction): Promise<CivilizationLoopResult | null> {
+  const priorSourceEvents = await findCivilizationHistoryEventsBySourceReceipt(worldId, sourceReceiptId, transaction);
+  const transitions = priorSourceEvents.filter(event =>
     event.eventType === "CIVILIZATION_COLLAPSE" ||
     event.eventType === "EPOCH_ADVANCE" ||
     event.eventType === "REBIRTH_CANDIDATE_CREATED" ||
     event.eventType === "INITIAL_CIV_SEEDED",
   );
+  if (transitions.length > 1) throw new Error("CIVILIZATION_HISTORY_SOURCE_RECEIPT_AMBIGUOUS");
+  const transitionReplay = transitions[0];
   if (transitionReplay) {
     if (transitionReplay.eventType === "CIVILIZATION_COLLAPSE") {
-      return { action: "COLLAPSED" as const, ruinId: `ruin_${transitionReplay.eventId}` };
+      const ruin = await readRuinForCollapse(worldId, transitionReplay.eventId, transaction);
+      return { action: "COLLAPSED" as const, ruinId: ruin.ruinId };
     }
     if (transitionReplay.eventType === "REBIRTH_CANDIDATE_CREATED") {
       return { action: "REBIRTH_CANDIDATE_CREATED" as const, candidateId: transitionReplay.eventId };
@@ -102,8 +108,26 @@ export async function orchestrateCivilizationLoop(
     return { action: "ADVANCED" as const, civilizationId: transitionReplay.civilizationId };
   }
   if (priorSourceEvents.length) throw new Error("CIVILIZATION_HISTORY_SOURCE_RECEIPT_INCOMPLETE");
+  return null;
+}
 
-  const activeCiv = await getActiveCivilization(worldId);
+export async function orchestrateCivilizationLoop(
+  worldId: string,
+  worldEpoch: number,
+  sourceReceiptId: string,
+  economicImpact?: EconomicCycleImpact | null,
+  transaction?: DatabaseTransaction,
+): Promise<CivilizationLoopResult> {
+  const replay = await readTransitionReplay(worldId, sourceReceiptId, transaction);
+  if (replay) return replay;
+
+  const activeCiv = await getActiveCivilization(worldId, transaction);
+  // A competing collapse may commit between the first receipt read and the
+  // active-state read. Reconcile before seeding a new civilization.
+  if (!activeCiv) {
+    const concurrentReplay = await readTransitionReplay(worldId, sourceReceiptId, transaction);
+    if (concurrentReplay) return concurrentReplay;
+  }
 
   if (activeCiv) {
     const occurredSequence = activeCiv.lastResolutionIndex + 1;
@@ -134,6 +158,7 @@ export async function orchestrateCivilizationLoop(
       await recordCivilizationCollapse({
         worldId,
         civilizationId: activeCiv.civilizationId,
+        ruinId: ruinTransformation.ruinId,
         collapseEventId: hash(["collapse", activeCiv.civilizationId, sourceReceiptId]),
         sourceReceiptId,
         sourceRevision: AURION_CIVILIZATION_RULESET_VERSION,
@@ -143,7 +168,7 @@ export async function orchestrateCivilizationLoop(
         rulesetVersion: ruinTransformation.rulesetVersion,
         generationSeedDigest: ruinTransformation.generationSeedDigest,
         occurredSequence,
-      });
+      }, transaction);
 
       return { action: "COLLAPSED" as const, ruinId: ruinTransformation.ruinId };
     } else {
@@ -217,13 +242,13 @@ export async function orchestrateCivilizationLoop(
         state: nextCiv,
         transitionEvent,
         economicEvent,
-      });
+      }, transaction);
 
       return { action: "ADVANCED" as const, civilizationId: activeCiv.civilizationId };
     }
   } else {
     // Phase D: Settlement Rebirth
-    const ruins = await listVisibleRuins(worldId);
+    const ruins = await listVisibleRuins(worldId, transaction);
     if (ruins.length > 0) {
       const ruinTransformations: RuinTransformation[] = ruins.map(ruin => ({
         ruinId: ruin.ruinId,
@@ -252,7 +277,7 @@ export async function orchestrateCivilizationLoop(
         if (!candidate.ruinId) throw new Error("CIVILIZATION_REBIRTH_RUIN_REQUIRED");
         const candidateRuin = ruinTransformations.find(ruin => ruin.ruinId === candidate.ruinId);
         if (!candidateRuin) throw new Error("CIVILIZATION_REBIRTH_SOURCE_REQUIRED");
-        const priorHistory = await listCivilizationHistoryEvents(worldId, 200);
+        const priorHistory = await listCivilizationHistoryEvents(worldId, 200, transaction);
         const occurredSequence = priorHistory
           .filter(event => event.civilizationId === candidateRuin.sourceCivilizationId)
           .reduce((maximum, event) => Math.max(maximum, event.occurredSequence), -1) + 1;
@@ -277,11 +302,16 @@ export async function orchestrateCivilizationLoop(
             eventPayloadJson: JSON.stringify(candidate),
             occurredSequence,
           },
-        });
+        }, transaction);
         return { action: "REBIRTH_CANDIDATE_CREATED" as const, candidateId: candidate.candidateId };
       }
     } else {
-      // Seed initial civilization if none exists and no ruins
+      // Bootstrap only a world without civilization history. An undiscovered
+      // ruin is absent from the presentation query, not from canonical history;
+      // that absence cannot authorize a new seed or bypass qualified rebirth.
+      if ((await listCivilizationHistoryEvents(worldId, 1, transaction)).length > 0) {
+        return { action: "IDLE" as const };
+      }
       const initialCivId = `civ_initial_${worldId}`;
       const initialCiv = {
         civilizationId: initialCivId,
@@ -306,7 +336,7 @@ export async function orchestrateCivilizationLoop(
           eventPayloadJson: JSON.stringify(initialCiv),
           occurredSequence: 0,
         },
-      });
+      }, transaction);
       return { action: "INITIAL_CIV_SEEDED" as const, civilizationId: initialCivId };
     }
   }

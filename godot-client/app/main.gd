@@ -23,10 +23,12 @@ const ChunkTerrain = preload("res://world/chunk_terrain.gd")
 const WorldDesignProjection = preload("res://world/world_design_projection.gd")
 const WorldAssetApi = preload("res://net/api/world_asset_api.gd")
 const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
+const LivingHistoryProjection = preload("res://world/living_history_projection.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
 const InputAdapter = preload("res://app/input_adapter.gd")
 const TouchRouter = preload("res://ui/mobile/touch_router.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
+const HISTORY_REFRESH_MS := 30000
 const COMBAT_NOTICE_DURATION_MS := 2000
 const WORLD_STALE_AFTER_MS := 1000
 const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), Vector2(0.53, 0.85), Vector2(0.67, 0.18), Vector2(0.79, 0.11), Vector2(0.88, 0.38), Vector2(0.94, 0.73), Vector2(0.72, 0.67)]
@@ -43,6 +45,7 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var map_panel: VBoxContainer = %MapPanel
 @onready var zone_map: Control = %ZoneMap
 @onready var map_selection: Label = %MapSelection
+@onready var history_status: Label = %HistoryStatus
 @onready var destination: Label = %Destination
 @onready var login: Button = %Login
 @onready var development_notice: Label = $SafeMargin/Scroll/Center/LaunchCard/Content/DevelopmentNotice
@@ -101,6 +104,9 @@ var _monster_diagnostic := "Katalog nicht geladen"
 var _remote_api: Node
 var _remote_actors = RemoteActorRegistry.new()
 var _quest_npc_api: Node
+var _history_api: Node
+var _history_world_id := ""
+var _history_last_poll_ms := -1
 var _quest_npc_actors = QuestNpcRegistry.new()
 var _quest_npc_diagnostic := "nicht geladen"
 var _remote_catalog: Dictionary = {}
@@ -165,6 +171,10 @@ func _ready() -> void:
 	add_child(_quest_npc_api)
 	_quest_npc_api.npcs_ready.connect(_on_quest_npc_ready)
 	_quest_npc_api.request_failed.connect(_on_quest_npc_failed)
+	_history_api = QuestNpcApi.new(_auth_start, "/api/game/living-history")
+	add_child(_history_api)
+	_history_api.npcs_ready.connect(_on_history_ready)
+	_history_api.request_failed.connect(_on_history_failed)
 	_monster_api = QuestNpcApi.new(_auth_start, "/api/game/glb-catalog")
 	add_child(_monster_api)
 	_monster_api.npcs_ready.connect(_on_monster_catalog_ready)
@@ -352,6 +362,12 @@ func _reset_projection() -> void:
 		_remote_api.cancel()
 	if _quest_npc_api != null:
 		_quest_npc_api.cancel()
+	if _history_api != null:
+		_history_api.cancel()
+	_history_world_id = ""
+	_history_last_poll_ms = -1
+	history_status.text = ""
+	history_status.visible = false
 	_quest_npc_diagnostic = "nicht geladen"
 	if _monster_api != null:
 		_monster_api.cancel()
@@ -641,6 +657,7 @@ func _process(_delta: float) -> void:
 		_project_3d(now_ms)
 		_request_remote_appearances(now_ms)
 		_request_chunk_surface(now_ms)
+		_request_living_history(now_ms)
 	_expire_combat_notice(now_ms)
 	_update_position_presentation(now_ms)
 	_update_world_freshness(now_ms)
@@ -1062,6 +1079,11 @@ func _update_world_freshness(now_ms: int) -> void:
 	if stale and _world_asset_api != null:
 		_world_asset_api.cancel()
 		_world_asset_inflight = ""
+	if stale:
+		if _history_api != null:
+			_history_api.cancel()
+		_history_last_poll_ms = -1
+		history_status.visible = false
 	zone_map.set_stale(stale)
 	_update_entity_presentation()
 	_update_vitals_presentation()
@@ -1435,6 +1457,10 @@ func _request_chunk_surface(now_ms: int) -> void:
 	var coordinate: Vector2i = value
 	if _chunk_center != coordinate:
 		_chunk_api.cancel()
+		_history_api.cancel()
+		_history_world_id = ""
+		_history_last_poll_ms = -1
+		history_status.visible = false
 		_world_asset_api.cancel()
 		_world_asset_inflight = ""
 		_world_design_surfaces.clear()
@@ -1510,6 +1536,10 @@ func _on_chunk_surface_failed(reason: String, connection_id: String) -> void:
 		return
 	var center: Variant = _current_confirmed_chunk()
 	if _chunk_requested == center:
+		_history_world_id = ""
+		_history_last_poll_ms = -1
+		_history_api.cancel()
+		history_status.visible = false
 		_world_design_surfaces.clear()
 		_world_design_visuals.reset_surfaces(connection_id)
 		_world_asset_api.cancel()
@@ -1571,6 +1601,10 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	if base.coordinate.get("x") != coordinate.x or base.coordinate.get("z") != coordinate.y:
 		return false
 	if not confirmed_terrain.apply_confirmed(readback, connection_id):
+		_history_api.cancel()
+		_history_world_id = ""
+		_history_last_poll_ms = -1
+		history_status.visible = false
 		_world_design_surfaces.clear()
 		_world_design_visuals.reset_surfaces(connection_id)
 		_world_asset_api.cancel()
@@ -1582,6 +1616,8 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 		_update_3d_status()
 		return false
 	unassigned_floor.visible = false
+	_history_world_id = str(base.worldId)
+	_request_living_history(Time.get_ticks_msec())
 	_apply_terrain3d_presentation(readback, connection_id)
 	_remember_world_design_surface(readback, connection_id, coordinate, coordinate)
 	# The authenticated chunk contains an optional server-owned visual plan.
@@ -1590,4 +1626,30 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	_chunk_diagnostic = "" if village_ok else starter_village_visuals.diagnostic
 	_update_3d_status()
 	return true
+
+func _request_living_history(now_ms: int) -> void:
+	if _history_api == null or _history_world_id.is_empty() or _history_api.busy() or not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed():
+		return
+	if _history_last_poll_ms >= 0 and now_ms - _history_last_poll_ms < HISTORY_REFRESH_MS:
+		return
+	_history_last_poll_ms = now_ms
+	_history_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
+
+func _on_history_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if _lifecycle.is_suspended() or _world_is_stale or not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _zone_socket.state_name() != "connected":
+		return
+	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation:
+		return
+	var view: Dictionary = LivingHistoryProjection.present(response, _history_world_id)
+	if not view.get("ok", false):
+		history_status.text = "Weltgeschichte · Readback nicht bestätigt"
+	else:
+		history_status.text = view.text
+	history_status.visible = true
+
+func _on_history_failed(_reason: String, connection_id: String) -> void:
+	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _world_is_stale:
+		return
+	history_status.text = "Weltgeschichte · derzeit nicht verfügbar"
+	history_status.visible = true
 

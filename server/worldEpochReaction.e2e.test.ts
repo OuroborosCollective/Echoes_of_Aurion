@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { and, eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createConnection } from "mysql2/promise";
+import * as civilizationService from "./aurion/civilizationService";
 import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
 import { aurionCausalCheckpoints, aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { getDb, getGlobalWorldPlan, listActiveWorldPresence, recordWorldPresenceLease, releaseWorldPresenceLease, resolveAndRecordGlobalWorldEpoch } from "./db";
@@ -25,6 +27,15 @@ const CHUNK = { x: 777702, z: -777702 };
 const chunkRows = and(eq(aurionWorldChunkDeltas.worldId, WORLD_ID), eq(aurionWorldChunkDeltas.chunkX, CHUNK.x), eq(aurionWorldChunkDeltas.chunkZ, CHUNK.z));
 
 async function cleanupEpochState() {
+  const url = new URL(process.env.DATABASE_URL!);
+  if (url.hostname !== "127.0.0.1" || !url.pathname.endsWith("_test")) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+  const inspection = await createConnection(process.env.DATABASE_URL!);
+  try {
+    const [rows] = await inspection.query<any[]>("SELECT DATABASE() AS name");
+    if (rows[0]?.name !== url.pathname.slice(1)) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+  } finally {
+    await inspection.end();
+  }
   const db = await getDb();
   if (!db) return;
   await db.delete(aurionWorldChunkDeltas).where(chunkRows);
@@ -46,6 +57,55 @@ async function cleanupEpochState() {
 describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
   beforeEach(cleanupEpochState);
   afterEach(cleanupEpochState);
+
+  it("rolls back the real collapse together with its source epoch and safely replays after retry", async () => {
+    const url = new URL(process.env.DATABASE_URL!);
+    if (url.hostname !== "127.0.0.1" || !url.pathname.endsWith("_test")) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    const db = await getDb();
+    if (!db) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    const independent = await createConnection(process.env.DATABASE_URL!);
+    const original = civilizationService.orchestrateCivilizationLoop;
+    let collapseObserved = false;
+    const spy = vi.spyOn(civilizationService, "orchestrateCivilizationLoop").mockImplementation(async (...args) => {
+      const outcome = await original(...args);
+      if (outcome.action !== "COLLAPSED") throw new Error("TEST_EXPECTED_COLLAPSE");
+      collapseObserved = true;
+      throw new Error("TEST_AFTER_HISTORY_BEFORE_WORLD_COMMIT");
+    });
+    try {
+      const [engines] = await independent.query<any[]>(
+        "SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('aurionActiveCivilizations','aurionCivilizationHistoryEvents','aurionRuinOrigins','aurionGlobalWorldStates','aurionWorldEpochRequests','aurionGlobalWorldEpochReceipts','aurionWorldEpochReactions','aurionGlobalStateProofs')",
+      );
+      expect(engines).toHaveLength(8);
+      expect(engines.every(row => row.ENGINE === "InnoDB")).toBe(true);
+      await db.insert(aurionActiveCivilizations).values({ civilizationId: "history-epoch-rollback-civ", worldId: WORLD_ID, worldEpoch: 1,
+        population: 50, stability: 0.1, hazardIndex: 0.9, scarcitySeverity: 0.1, lastResolutionIndex: 0 });
+      const input = { requestedByUserId: 2_146_999_970, idempotencyKey: "world-epoch-e2e:collapse-atomic:0001", now: new Date("2026-01-01T00:00:00.000Z") };
+      await expect(resolveAndRecordGlobalWorldEpoch(input)).rejects.toThrow("TEST_AFTER_HISTORY_BEFORE_WORLD_COMMIT");
+      expect(collapseObserved).toBe(true);
+      spy.mockRestore();
+      const [active] = await independent.execute<any[]>("SELECT civilizationId,worldEpoch,lastResolutionIndex FROM aurionActiveCivilizations WHERE worldId=?", [WORLD_ID]);
+      expect(active).toMatchObject([{ civilizationId: "history-epoch-rollback-civ", worldEpoch: 1, lastResolutionIndex: 0 }]);
+      for (const table of ["aurionCivilizationHistoryEvents", "aurionGlobalWorldStates", "aurionWorldEpochRequests", "aurionGlobalWorldEpochReceipts", "aurionWorldEpochReactions", "aurionGlobalStateProofs"]) {
+        const [rows] = await independent.execute<any[]>(`SELECT COUNT(*) AS n FROM ${table} WHERE worldId=?`, [WORLD_ID]);
+        expect(Number(rows[0].n), `${table} survived rollback`).toBe(0);
+      }
+      const [ruins] = await independent.execute<any[]>("SELECT COUNT(*) AS n FROM aurionRuinOrigins WHERE originCivilizationId=?", ["history-epoch-rollback-civ"]);
+      expect(Number(ruins[0].n), "ruin survived rollback").toBe(0);
+      const first = await resolveAndRecordGlobalWorldEpoch(input);
+      const replay = await resolveAndRecordGlobalWorldEpoch(input);
+      expect(first.source).toBe("created");
+      expect(replay.source).toBe("persisted");
+      const [joined] = await independent.execute<any[]>(
+        "SELECT e.eventId,r.ruinId,w.receiptId FROM aurionCivilizationHistoryEvents e JOIN aurionRuinOrigins r ON r.collapseEventId=e.eventId JOIN aurionWorldEpochReactions w ON w.receiptId=e.sourceReceiptId AND w.worldId=e.worldId WHERE e.worldId=? AND e.civilizationId=?",
+        [WORLD_ID, "history-epoch-rollback-civ"],
+      );
+      expect(joined).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+      await independent.end();
+    }
+  }, 30_000);
 
   it("expires and reconnects server-recorded presence deterministically", async () => {
     const now = new Date("2026-01-01T00:00:00.000Z");

@@ -303,6 +303,13 @@ layout_mode = 2
 autowrap_mode = 3
 text = "Berühre ein bestätigtes Objekt oder skizziere einen Punkt."
 
+[node name="HistoryStatus" type="Label" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+autowrap_mode = 3
+text = ""
+
 [node name="PlanButtons" type="HBoxContainer" parent="SafeMargin/Scroll/Center/LaunchCard/Content/MapPanel"]
 layout_mode = 2
 theme_override_constants/separation = 8
