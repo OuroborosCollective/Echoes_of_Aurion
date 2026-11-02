@@ -9,7 +9,7 @@ import {
   aurionSettlementRebirthCandidates,
   aurionWorldEpochReactions,
 } from "../drizzle/schema";
-import { getDb, getWorldEpochReaction, type DatabaseTransaction } from "./db";
+import { getDb, parseStoredWorldEpochReaction, type DatabaseTransaction } from "./db";
 import { AURION_CIVILIZATION_RULESET_VERSION } from "./aurion/civilizationProtocol";
 import { AURION_WORLD_EPOCH_REACTION_VERSION, AURION_WORLD_EPOCH_MAX_SECTORS_PER_RESOLUTION, type WorldEpochReaction } from "./worldEpochReactionProtocol";
 
@@ -309,8 +309,8 @@ export async function readPublicCollapseHistory(worldId: string) {
       event.eventPayloadHash !== hash(["civilization-collapse", event.civilizationId])) {
       throw new Error("LIVING_HISTORY_EVENT_READBACK_MISMATCH");
     }
-    const reaction = await getWorldEpochReaction(worldId, source.epoch, source.snapshotHash);
-    if (!reaction || reaction.receiptId !== event.sourceReceiptId || reaction.deterministicHash !== source.reactionHash || !hasValidEpochReactionHashes(reaction)) {
+    const reaction = parseStoredWorldEpochReaction(source);
+    if (reaction.receiptId !== event.sourceReceiptId || reaction.deterministicHash !== source.reactionHash || !hasValidEpochReactionHashes(reaction)) {
       throw new Error("LIVING_HISTORY_SOURCE_READBACK_MISMATCH");
     }
     events.push(Object.freeze({

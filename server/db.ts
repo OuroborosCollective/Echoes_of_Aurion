@@ -1271,7 +1271,7 @@ export async function getGlobalWorldPlan() {
   }
 }
 
-function parseStoredWorldEpochReaction(row: typeof aurionWorldEpochReactions.$inferSelect): WorldEpochReaction {
+export function parseStoredWorldEpochReaction(row: typeof aurionWorldEpochReactions.$inferSelect): WorldEpochReaction {
   let parsed: unknown;
   try {
     parsed = JSON.parse(row.reactionJson);

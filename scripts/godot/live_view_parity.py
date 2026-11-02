@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import sys
@@ -25,6 +26,8 @@ REQUIRED_SKY = {"physical", "procedural", "panorama"}
 MAX_AGE_SECONDS = 120
 MAX_CAPTURE_SKEW_SECONDS = 2
 MAX_PIXELS = 4096 * 2160
+MAX_MANIFEST_BYTES = 1_048_576
+MAX_PNG_BYTES = 24_000_000
 
 
 def digest(path: Path) -> str:
@@ -42,7 +45,13 @@ def _fail(issues: list[str], code: str) -> None:
 
 def _load_json(path: Path, issues: list[str], name: str) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        if path.stat().st_size > MAX_MANIFEST_BYTES:
+            raise ValueError("oversized manifest")
+        with path.open("rb") as source:
+            payload = source.read(MAX_MANIFEST_BYTES + 1)
+        if len(payload) > MAX_MANIFEST_BYTES:
+            raise ValueError("oversized manifest")
+        data = json.loads(payload.decode("utf-8"))
     except (OSError, ValueError):
         _fail(issues, f"{name}_MANIFEST_MISSING_OR_INVALID")
         return {}
@@ -206,15 +215,19 @@ def compare(
         dates[key] = _capture_checks(meta, key, expected_revision, expected_image_id, now, issues)
         src = image_paths[key]
         try:
-            if src.stat().st_size > 24_000_000:
+            if src.stat().st_size > MAX_PNG_BYTES:
                 raise ValueError("oversized PNG")
-            with Image.open(src) as raw:
+            with src.open("rb") as source:
+                png_bytes = source.read(MAX_PNG_BYTES + 1)
+            if len(png_bytes) > MAX_PNG_BYTES:
+                raise ValueError("oversized PNG")
+            with Image.open(io.BytesIO(png_bytes)) as raw:
                 if raw.format != "PNG" or raw.width * raw.height > MAX_PIXELS or raw.width < 320 or raw.height < 240:
                     raise ValueError("unsupported PNG")
                 frame = raw.convert("RGB")
             frames[key] = frame
             hash_value = meta.get("imageSha256")
-            if not isinstance(hash_value, str) or not HEX64.fullmatch(hash_value) or hash_value != digest(src):
+            if not isinstance(hash_value, str) or not HEX64.fullmatch(hash_value) or hash_value != hashlib.sha256(png_bytes).hexdigest():
                 _fail(issues, f"{key.upper().replace('-', '_')}_IMAGE_HASH_MISMATCH")
             camera = meta.get("camera")
             if isinstance(camera, dict) and camera.get("viewportPx") != [frame.width, frame.height]:
@@ -230,7 +243,7 @@ def compare(
             preview = frame.copy()
             preview.thumbnail((960, 540), Image.Resampling.LANCZOS)
             preview.save(out_dir / f"{key}-preview.png")
-        except (OSError, ValueError, SyntaxError):
+        except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
             _fail(issues, f"{key.upper().replace('-', '_')}_SCREENSHOT_MISSING_OR_INVALID")
     web, godot = manifests["aurion-web"], manifests["godot-live-editor"]
     wa, ga = web.get("identity", {}), godot.get("identity", {})

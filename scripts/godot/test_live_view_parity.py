@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image, ImageDraw
 
@@ -196,6 +200,68 @@ class ParityNegativeControls(unittest.TestCase):
         result = self.check()
         self.assertIn("GODOT_LIVE_EDITOR_IMAGE_HASH_MISMATCH", result["issues"])
         self.assertIn("REAL_VIEW_VISUAL_MISMATCH", result["issues"])
+
+    def test_oversized_valid_sidecar_is_rejected_with_a_diagnostic_report(self):
+        # A bounded local synthetic file, not a captured production manifest.
+        # Its ordinary fields remain valid so JSON syntax cannot reject it first.
+        self.update_json("godot", lambda m: m.update(untrustedPadding="x" * (2 * 1024 * 1024)))
+        self.assertGreater((self.capture_dir / "godot.json").stat().st_size, 2 * 1024 * 1024)
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("GODOT_LIVE_EDITOR_MANIFEST_MISSING_OR_INVALID", result["issues"])
+        self.assertTrue((self.output / "parity.json").is_file())
+        self.assertTrue((self.output / "report.md").is_file())
+
+    def test_image_replacement_cannot_bind_new_file_hash_to_old_analyzed_pixels(self):
+        path = self.capture_dir / "godot.png"
+        replacement = self.base / "replacement.png"
+        colored_world(replacement, alternate=True)
+        replacement_bytes = replacement.read_bytes()
+        replacement_hash = hashlib.sha256(replacement_bytes).hexdigest()
+        self.assertNotEqual(digest(path), replacement_hash)
+        self.update_json("godot", lambda m: m.update(imageSha256=replacement_hash))
+        original_convert = Image.Image.convert
+        decoded_png_count = 0
+        replaced = False
+
+        def replace_after_decode(image, *args, **kwargs):
+            nonlocal decoded_png_count, replaced
+            frame = original_convert(image, *args, **kwargs)
+            if image.format == "PNG":
+                decoded_png_count += 1
+                if decoded_png_count == 2:
+                    # Synthetic race injection: both source frames initially
+                    # match. Replace only after the second old frame is decoded.
+                    path.write_bytes(replacement_bytes)
+                    replaced = True
+            return frame
+
+        with patch.object(Image.Image, "convert", replace_after_decode):
+            result = self.check()
+        self.assertTrue(replaced, "controlled file replacement did not execute")
+        self.assertEqual(digest(path), replacement_hash)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("GODOT_LIVE_EDITOR_IMAGE_HASH_MISMATCH", result["issues"])
+        self.assertTrue((self.output / "parity.json").is_file())
+
+    def test_real_png_decompression_bomb_becomes_a_diagnostic_failure(self):
+        path = self.capture_dir / "godot.png"
+        png = bytearray(path.read_bytes())
+        self.assertEqual(png[12:16], b"IHDR")
+        # Recompute a valid IHDR CRC after declaring enormous dimensions. This
+        # exercises Pillow's real header guard without allocating those pixels
+        # or lowering Image.MAX_IMAGE_PIXELS in the decoder.
+        png[16:24] = struct.pack(">II", 50_000, 50_000)
+        png[29:33] = struct.pack(">I", zlib.crc32(png[12:29]) & 0xffffffff)
+        path.write_bytes(png)
+        self.assertLess(path.stat().st_size, 24_000_000)
+        with self.assertRaises(Image.DecompressionBombError):
+            Image.open(path)
+        result = self.check()
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("GODOT_LIVE_EDITOR_SCREENSHOT_MISSING_OR_INVALID", result["issues"])
+        self.assertTrue((self.output / "parity.json").is_file())
+        self.assertTrue((self.output / "report.md").is_file())
 
     def test_two_flat_green_images_must_not_report_live_world(self):
         for key in ("aurion", "godot"):
