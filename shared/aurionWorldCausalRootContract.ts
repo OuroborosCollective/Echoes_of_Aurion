@@ -10,6 +10,7 @@ export const AURION_ZONE_EPOCH_ROOT_SCHEMA = "aurion.zone.epoch-root.v1" as cons
  */
 export const AURION_WORLD_CAUSAL_ZONE_IDS = Object.freeze([
   "observatory_threshold",
+  "windhollow",
 ] as const);
 
 export type AurionWorldCausalZoneId = (typeof AURION_WORLD_CAUSAL_ZONE_IDS)[number];

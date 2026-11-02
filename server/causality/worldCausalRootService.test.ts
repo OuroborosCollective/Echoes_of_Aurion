@@ -69,7 +69,7 @@ describe("worldCausalRootService contract", () => {
     expect(verify).toHaveBeenCalledTimes(2);
   });
   it("keeps the expected causal zone set aligned with the live zone protocol", () => {
-    expect(AURION_WORLD_CAUSAL_ZONE_IDS).toEqual(["observatory_threshold"]);
+    expect(AURION_WORLD_CAUSAL_ZONE_IDS).toEqual(["observatory_threshold", "windhollow"]);
     for (const zoneId of AURION_WORLD_CAUSAL_ZONE_IDS) expect(zoneIdSchema.parse(zoneId)).toBe(zoneId);
   });
 
