@@ -306,7 +306,12 @@ export async function orchestrateCivilizationLoop(
         return { action: "REBIRTH_CANDIDATE_CREATED" as const, candidateId: candidate.candidateId };
       }
     } else {
-      // Seed initial civilization if none exists and no ruins
+      // Bootstrap only a world without civilization history. An undiscovered
+      // ruin is absent from the presentation query, not from canonical history;
+      // that absence cannot authorize a new seed or bypass qualified rebirth.
+      if ((await listCivilizationHistoryEvents(worldId, 1, transaction)).length > 0) {
+        return { action: "IDLE" as const };
+      }
       const initialCivId = `civ_initial_${worldId}`;
       const initialCiv = {
         civilizationId: initialCivId,

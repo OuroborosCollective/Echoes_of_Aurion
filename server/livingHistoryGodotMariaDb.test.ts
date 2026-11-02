@@ -95,6 +95,22 @@ suite("Living History: canonical ruin identity and world isolation", () => {
     expect(await orchestrateCivilizationLoop(worldA, 3, "history-proof-before-rebirth")).toEqual(collapse);
   });
 
+  it("bootstraps an untouched world once even when another world has collapsed", async () => {
+    await pool.execute(
+      "INSERT INTO aurionActiveCivilizations (civilizationId,worldId,worldEpoch,population,stability,hazardIndex,scarcitySeverity,lastResolutionIndex) VALUES (?,?,?,?,?,?,?,?)",
+      ["history-proof-civ-a", worldA, 3, 50, 0.1, 0.9, 0.1, 4],
+    );
+    expect((await orchestrateCivilizationLoop(worldA, 3, "history-proof-other-world-collapse")).action).toBe("COLLAPSED");
+    const receipt = "history-proof-virgin-world-seed";
+    const seeded = await orchestrateCivilizationLoop(worldB, 1, receipt);
+    expect(seeded).toEqual({ action: "INITIAL_CIV_SEEDED", civilizationId: `civ_initial_${worldB}` });
+    expect(await orchestrateCivilizationLoop(worldB, 1, receipt)).toEqual(seeded);
+    const [active] = await pool.execute<any[]>("SELECT civilizationId,worldEpoch,lastResolutionIndex FROM aurionActiveCivilizations WHERE worldId=?", [worldB]);
+    expect(active).toEqual([{ civilizationId: seeded.civilizationId, worldEpoch: 1, lastResolutionIndex: 0 }]);
+    const [events] = await pool.execute<any[]>("SELECT eventType,sourceReceiptId FROM aurionCivilizationHistoryEvents WHERE worldId=?", [worldB]);
+    expect(events).toEqual([{ eventType: "INITIAL_CIV_SEEDED", sourceReceiptId: receipt }]);
+  });
+
   it("reconciles concurrent attempts against one persisted collapse", async () => {
     await pool.execute(
       "INSERT INTO aurionActiveCivilizations (civilizationId,worldId,worldEpoch,population,stability,hazardIndex,scarcitySeverity,lastResolutionIndex) VALUES (?,?,?,?,?,?,?,?)",
