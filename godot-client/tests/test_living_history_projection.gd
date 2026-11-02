@@ -34,22 +34,21 @@ func surface() -> Dictionary:
 
 func verify() -> void:
 	var world := "echoes-of-aurion-global"
-	var event := {"eventId":"event-1", "civilizationId":"civ-1", "worldId":world,
+	var event := {"eventId":"a".repeat(64), "civilizationId":"civ-1", "worldId":world,
 		"worldEpoch":3, "eventType":"CIVILIZATION_COLLAPSE", "sourceReceiptId":"receipt-1",
 		"sourceRevision":"aurion:civ:v1", "eventPayloadHash":"a".repeat(64), "occurredSequence":7,
-		"ruinId":"ruin-1", "ruinState":"DISCOVERED", "historyDigest":"b".repeat(64),
 		"sourceEpoch":4, "sourceReactionHash":"c".repeat(64)}
-	var response := {"schema":"aurion.discovered-ruin-history.v1", "worldId":world,
-		"disclosureScope":"globally-discovered", "events":[event]}
+	var response := {"schema":"aurion.public-collapse-history.v1", "worldId":world,
+		"disclosureScope":"public-history-events", "events":[event]}
 	var presented: Dictionary = HistoryProjection.present(response, world)
 	require(presented.get("ok") == true and presented.get("count") == 1, "valid disclosed event rejected")
-	require(str(presented.get("text", "")).contains("receipt-1") and str(presented.get("text", "")).contains("ruin-1"), "provenance missing from presentation")
+	require(str(presented.get("text", "")).contains("receipt-1") and str(presented.get("text", "")).contains("nicht unabhängig geprüft"), "provenance missing from presentation")
 	var wrong_world: Dictionary = response.duplicate(true)
 	wrong_world.events[0].worldId = "another-world"
 	require(HistoryProjection.present(wrong_world, world).get("ok") == false, "foreign world accepted")
-	var undisclosed: Dictionary = response.duplicate(true)
-	undisclosed.events[0].ruinState = "ELIGIBLE"
-	require(HistoryProjection.present(undisclosed, world).get("ok") == false, "undiscovered ruin accepted")
+	var wrong_scope: Dictionary = response.duplicate(true)
+	wrong_scope.disclosureScope = "globally-discovered"
+	require(HistoryProjection.present(wrong_scope, world).get("ok") == false, "unsupported disclosure scope accepted")
 	var missing_proof: Dictionary = response.duplicate(true)
 	missing_proof.events[0].sourceReactionHash = "invalid"
 	require(HistoryProjection.present(missing_proof, world).get("ok") == false, "unbound source accepted")

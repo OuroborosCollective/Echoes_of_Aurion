@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only, fail-closed comparison of two *externally captured* live world viewports.
+"""Diagnostic comparison of two externally supplied viewport images and sidecars.
 
-The tool neither captures a runtime nor manufactures an Aurion receipt. Synthetic
-images are permitted in unit tests only. Real CI must acquire independent, fresh
-Aurion and Godot captures with matching canonical receipt and camera identity.
+The tool neither authenticates a capture nor verifies that a sidecar describes
+its source runtime. A comparison PASS is not a live-world acceptance result.
 """
 from __future__ import annotations
 
@@ -300,7 +299,8 @@ def compare(
 
     report = {
         "schema": "aurion.live-view.parity-report.v1", "status": status,
-        "evidenceKind": "real-live-pair-required", "expectedRuntimeRevision": expected_revision,
+        "evidenceKind": "diagnostic-sidecar-comparison", "captureProvenanceVerified": False,
+        "liveAcceptance": "UNVERIFIED", "expectedRuntimeRevision": expected_revision,
         "expectedRuntimeImageId": expected_image_id, "issues": issues,
         "diagnosis": diagnosis, "stats": stats, "visual": visual,
         "captureNames": {k: p.name for k, p in image_paths.items()},
@@ -314,7 +314,7 @@ def compare(
         },
     }
     (out_dir / "parity.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    rows = [f"# Aurion ↔ Godot echter Live-Bildvergleich: {status}", "", f"- Aurion Runtime-SHA: `{expected_revision}`", f"- Runtime-Image-ID: `{expected_image_id}`", "- Nachweisgrenze: echte Bildpaare **und** derselbe serverbestätigte Receipt, kein Mock/Fixture", ""]
+    rows = [f"# Aurion ↔ Godot Bildvergleich (Diagnose): {status}", "", f"- Aurion Runtime-SHA: `{expected_revision}`", f"- Runtime-Image-ID: `{expected_image_id}`", "- Live-Abnahme: UNVERIFIED. Herkunft der Bilder und Sidecars ist nicht unabhängig bestätigt.", ""]
     rows.append("## Ursachen / Blocker")
     rows.extend([f"- `{x}`" for x in issues] or ["- Keine"])  # Never declare live without the complete gate.
     rows.extend(["", "## Diagnose der Godot-Ansicht"] + [f"- {x}" for x in diagnosis])

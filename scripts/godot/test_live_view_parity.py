@@ -88,6 +88,9 @@ class ParityNegativeControls(unittest.TestCase):
     def test_matching_verified_viewports_are_allowed_in_unit_test_only(self):
         result = self.check()
         self.assertEqual(result["status"], "PASS", result["issues"])
+        self.assertEqual(result["liveAcceptance"], "UNVERIFIED")
+        self.assertFalse(result["captureProvenanceVerified"])
+        self.assertEqual(result["evidenceKind"], "diagnostic-sidecar-comparison")
         self.assertAlmostEqual(result["visual"]["tileSsim"], 1.0)
         self.assertTrue((self.output / "difference.png").is_file())
 

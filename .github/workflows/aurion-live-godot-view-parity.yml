@@ -1,7 +1,7 @@
 name: Aurion/Godot live-world visual parity (fail-closed)
 
-# IMPORTANT: A green real-parity workflow run requires an actual live pair.
-# Pull-request unit-only checks live in a separate contract workflow.
+# Diagnostic comparison only: capture provenance cannot yet be verified.
+# The live-acceptance job remains fail-closed even if image comparison passes.
 on:
   workflow_dispatch:
     inputs:
@@ -72,7 +72,7 @@ jobs:
           if ss -ltn | grep -Eq '(127\.0\.0\.1|\[::1\]):8765[[:space:]]'; then bridge='true'; fi
           printf 'AURION_PARITY_EDITOR_UP=%s\nAURION_PARITY_BRIDGE_UP=%s\n' "$editor" "$bridge" >> "$GITHUB_ENV"
           printf 'Runtime image ID verified locally: %s\nSource revision: %s\nBridge listening: %s\nGodot editor: %s\n' "$image_id" "$revision" "$bridge" "$editor"
-      - name: Compare original authenticated live-world captures (never synthetic)
+      - name: Compare supplied images and sidecars (diagnostic only)
         shell: bash
         run: |
           set -euo pipefail
@@ -92,3 +92,9 @@ jobs:
           path: ${{ runner.temp }}/aurion-parity-analysis/
           if-no-files-found: error
           retention-days: 7
+      - if: always()
+        name: Block live acceptance until capture provenance is verified
+        shell: bash
+        run: |
+          echo '::error::LIVE_CAPTURE_PROVENANCE_NOT_VERIFIED'
+          exit 1

@@ -14,7 +14,7 @@ import { z } from "zod";
 import { readActiveWorldDesign } from "./aurionAuthoringPersistence";
 import { projectQuestNpcVisuals } from "./aurionQuestNpcVisualProjection";
 import { attachStarterVillageVisuals } from "./aurionStarterVillageVisuals";
-import { readDiscoveredRuinHistory } from "./aurionCivilizationHistoryPersistence";
+import { readPublicCollapseHistory } from "./aurionCivilizationHistoryPersistence";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
@@ -308,14 +308,14 @@ export function registerGlbSmartUpload(app: Express): void {
     return attachStarterVillageVisuals(readback, coordinate, db.GLOBAL_WORLD_SEED);
   }));
 
-  // Read only globally discovered history for an authenticated active player.
-  // No location, undiscovered ruin or client-authored history is inferred.
+  // Read already-public collapse event metadata for an authenticated active player.
+  // No location, ruin, discovery or client-authored history is inferred.
   app.get("/api/game/living-history", playerRoute(async (request, user) => {
     if (Object.keys(request.query).length !== 0) throw new Error("LIVING_HISTORY_QUERY_INVALID");
     await db.requireDb();
     const own = (await db.listActiveWorldPresence()).find(lease => lease.userId === user.id && lease.zoneId === "observatory_threshold");
     if (!own) throw new Error("LIVING_HISTORY_ACTIVE_PRESENCE_REQUIRED");
-    return readDiscoveredRuinHistory(db.GLOBAL_WORLD_ID);
+    return readPublicCollapseHistory(db.GLOBAL_WORLD_ID);
   }));
 
 

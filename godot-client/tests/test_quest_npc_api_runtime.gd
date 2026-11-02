@@ -87,7 +87,7 @@ func verify() -> void:
 	await _request(api, "zone_npc_one")
 	require(success and last_connection == "zone_npc_one" and last_generation == 1, "protected NPC GET lost connection/generation")
 	if living_history_mode:
-		require(last_response.get("schema") == "aurion.discovered-ruin-history.v1", "history GET lost server schema")
+		require(last_response.get("schema") == "aurion.public-collapse-history.v1", "history GET lost server schema")
 	elif world_design_mode:
 		require(last_response.get("schemaVersion") == "aurion.world-design.v1", "world-design GET lost server schema")
 	else:

@@ -29,6 +29,13 @@ const chunkRows = and(eq(aurionWorldChunkDeltas.worldId, WORLD_ID), eq(aurionWor
 async function cleanupEpochState() {
   const url = new URL(process.env.DATABASE_URL!);
   if (url.hostname !== "127.0.0.1" || !url.pathname.endsWith("_test")) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+  const inspection = await createConnection(process.env.DATABASE_URL!);
+  try {
+    const [rows] = await inspection.query<any[]>("SELECT DATABASE() AS name");
+    if (rows[0]?.name !== url.pathname.slice(1)) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+  } finally {
+    await inspection.end();
+  }
   const db = await getDb();
   if (!db) return;
   await db.delete(aurionWorldChunkDeltas).where(chunkRows);

@@ -8,9 +8,9 @@ const worldDesignMode = process.argv.includes('--world-design');
 const livingHistoryMode = process.argv.includes('--living-history');
 assert.ok(godot && project, 'pinned Godot editor and project are required');
 const payload = JSON.stringify({
-  schema: livingHistoryMode ? 'aurion.discovered-ruin-history.v1' : undefined,
+  schema: livingHistoryMode ? 'aurion.public-collapse-history.v1' : undefined,
   worldId: livingHistoryMode ? 'echoes-of-aurion-global' : undefined,
-  disclosureScope: livingHistoryMode ? 'globally-discovered' : undefined,
+  disclosureScope: livingHistoryMode ? 'public-history-events' : undefined,
   events: livingHistoryMode ? [] : undefined,
   schemaVersion: worldDesignMode ? 'aurion.world-design.v1' : undefined,
   version: catalogMode ? 'aurion.glb-import.v1' : 'aurion.quest-npc-visuals.v1',
