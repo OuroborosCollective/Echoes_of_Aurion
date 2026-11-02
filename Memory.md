@@ -5432,3 +5432,9 @@ Learned: a healthy session and one Clockwork Stalker cannot prove visual equival
 Open: independent real browser/Godot viewport capture producers with authenticated, fresh sidecars; canonical terrain/asset/sky projection and live feed/bridge activation; exact-head GitHub CI, then two-original-image live dispatch and artifacts. No live-green or production mutation claimed.
 
 Continuation 2026-11-01: Consolidated active parity work here; duplicate PR1263 closed without merge. Synchronized with main fb4d9efa3d6d5b48a943193eb2e5f61bc5e5b8cf while preserving its full memory. Head2d62de364b5f3a945df98537d1240e65762a5976 comparator and contract checks succeeded; real authenticated independent captures remain absent. New merge-head CI is required; historical host observations above are not current runtime proof.
+
+
+### 2026-11-02 — PR #1262 — atomic Living History and Godot event projection
+Change: Preserve one ruin identity across collapse/persistence/replay, isolate ruin reads by world, share the epoch transaction, and prevent bootstrap reseeding after collapse. Godot presents authenticated public event metadata; visual comparison remains diagnostic and live acceptance fail-closed.
+Learned: Missing visible ruins do not imply an empty world; rollback, replay and initial seeding require canonical history and the same transaction.
+Evidence: MariaDB RED 41368991665/41370813338/41373563833; GREEN 41380291362 at 1301890c033338bb82934f2e914f3f31f5f11bdd: 13 history/exploration + 9 epoch + 2474 repository tests passed (276 integration-only cases skipped in the separate repository run). Godot/headless/bridge/JNI CI passed. Production, authenticated capture provenance, complete Issue #323 and WorldStudio effect/readback remain unverified.
