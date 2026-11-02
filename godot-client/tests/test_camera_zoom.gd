@@ -48,6 +48,21 @@ func verify() -> void:
 	zoom = router.route(drag(6, Vector2(900, 300)), true, area, exclusions)
 	require(zoom.is_empty(), "overlapping fingers must establish a baseline without division by zero")
 	router.cancel()
+	# Cancellation/release must work symmetrically for either pinch finger.
+	for first_up in [2, 3]:
+		router.route(touch(2, Vector2(800, 300), true), true, area, exclusions)
+		router.route(touch(3, Vector2(900, 300), true), true, area, exclusions)
+		router.route(touch(first_up, Vector2(850, 300), false), true, area, exclusions)
+		var remaining := 3 if first_up == 2 else 2
+		require(router.route(drag(remaining, Vector2(950, 300)), true, area, exclusions).is_empty(), "either pinch release must suppress remaining drag")
+		require(router.route(touch(remaining, Vector2(950, 300), false), true, area, exclusions).get("kind") != "tap", "either pinch release must suppress tap")
+		require(router.active_finger() == -1, "pinch fingers leaked after both releases")
+	router.route(touch(2, Vector2(800, 300), true), true, area, exclusions)
+	router.route(touch(3, Vector2(900, 300), true), true, area, exclusions)
+	var cancelled := touch(3, Vector2(900, 300), false)
+	cancelled.canceled = true
+	router.route(cancelled, true, area, exclusions)
+	require(router.active_finger() == -1, "OS cancellation must release both pinch fingers")
 	router.route(touch(5, Vector2(NAN, 300), true), true, area, exclusions)
 	require(router.active_finger() == -1, "nonfinite point must not capture input")
 	var camera := (load("res://world/camera_rig.tscn") as PackedScene).instantiate() as Camera3D

@@ -137,6 +137,11 @@ func verify() -> void:
 	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "pinch also rotated the camera")
 	require((joystick.get("output") as Vector2).is_equal_approx(held), "pinch changed held movement input")
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == state_before, "pinch changed confirmed projection")
+	var zoom_before_button: float = scene.world_camera.orbit_distance
+	scene.get_node("%ZoomOut").pressed.emit()
+	require(is_equal_approx(scene.world_camera.orbit_distance, zoom_before_button / 0.8), "desktop zoom-out signal not connected or factor inverted")
+	scene.get_node("%ZoomIn").pressed.emit()
+	require(is_equal_approx(scene.world_camera.orbit_distance, zoom_before_button), "desktop zoom-in signal not connected or factor inverted")
 	for _attempt in range(10):
 		client.poll()
 		remote.poll()
@@ -229,6 +234,22 @@ func verify() -> void:
 	expected_packet["clientSeq"] = 2.0 # JSON parsing represents wire numbers consistently.
 	require(JSON.parse_string(packet) == expected_packet, "mobile button did not send canonical attack packet")
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == before, "mobile attack mutated confirmed state")
+	# Exercise the real mobile menu -> close -> signal -> Main path.
+	scene.mobile_hud.set_menu_open(true)
+	var mobile_distance: float = scene.world_camera.orbit_distance
+	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/ZoomOut").pressed.emit()
+	require(not scene.mobile_hud.menu_is_open(), "zoom-out left mobile menu open")
+	require(is_equal_approx(scene.world_camera.orbit_distance, mobile_distance / 0.8), "mobile zoom-out did not reach active camera")
+	scene.mobile_hud.set_menu_open(true)
+	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/ZoomIn").pressed.emit()
+	require(not scene.mobile_hud.menu_is_open(), "zoom-in left mobile menu open")
+	require(is_equal_approx(scene.world_camera.orbit_distance, mobile_distance), "mobile zoom-in did not reach active camera")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == before, "zoom buttons changed confirmed state")
+	for _attempt in range(10):
+		client.poll()
+		remote.poll()
+		require(remote.get_available_packet_count() == 0, "zoom buttons emitted a gameplay packet")
+		await create_timer(0.01).timeout
 	scene.mobile_hud.set_menu_open(true)
 	scene.mobile_hud.attack_button.pressed.emit()
 	var menu_sent := false
