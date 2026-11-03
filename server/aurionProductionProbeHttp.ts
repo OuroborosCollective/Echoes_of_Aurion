@@ -71,7 +71,7 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
         state: "unavailable", mutationAuthority: "none" });
     }
   });
-  for (const operation of ["approve", "list", "revoke"] as const) app.post(`${path}/${operation}`, async (req, res) => {
+  for (const operation of ["approve", "approve-release", "list", "revoke"] as const) app.post(`${path}/${operation}`, async (req, res) => {
     try {
       const actor = await owner(req), store = productionProbeStore();
       if (operation === "approve") {
@@ -79,6 +79,10 @@ export function registerProductionProbeRoutes(app: Express, health: () => { revi
         if (body.confirmed !== true) throw new Error("PROBE_OWNER_CONFIRMATION_REQUIRED");
         const approved = await store.approve(actor.id, body.password as string, body.run, body.scope, body.purpose as string);
         res.json(approved);
+      } else if (operation === "approve-release") {
+        const body = exactBody(req.body, ["run", "password", "confirmed"]);
+        if (body.confirmed !== true) throw new Error("PROBE_OWNER_CONFIRMATION_REQUIRED");
+        res.json(await store.approveRelease(actor.id, body.password as string, body.run));
       } else if (operation === "list") { exactBody(req.body, []); res.json(await store.list(actor.id)); }
       else { const body = exactBody(req.body, ["approvalId"]); res.json(await store.revoke(actor.id, body.approvalId as string)); }
     } catch (error) { logProbeDenial(operation, error); res.status(403).json({ error: "PROBE_OWNER_REQUEST_DENIED" }); }
