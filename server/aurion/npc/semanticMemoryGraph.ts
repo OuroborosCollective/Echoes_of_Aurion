@@ -254,7 +254,24 @@ function provenanceOrder(a: NpcSemanticProvenanceRef, b: NpcSemanticProvenanceRe
   return textOrder(a.kind, b.kind) || textOrder(a.id, b.id) || textOrder(a.hash, b.hash);
 }
 
+/**
+ * Runtime invariant: within one provenance kind, a receipt id identifies exactly
+ * one content hash. Decision receipt ids are derived from npcId and resolution
+ * index only, so two hashes under one id are two conflicting receipts and must
+ * never coexist silently in a graph.
+ */
+export function assertNpcSemanticProvenanceIdentity(refs: readonly NpcSemanticProvenanceRef[]): void {
+  const hashById = new Map<string, string>();
+  for (const ref of refs) {
+    const key = `${ref.kind}:${ref.id}`;
+    const known = hashById.get(key);
+    if (known !== undefined && known !== ref.hash) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_HASH_CONFLICT");
+    hashById.set(key, ref.hash);
+  }
+}
+
 function mergeProvenance(...groups: readonly (readonly NpcSemanticProvenanceRef[])[]): NpcSemanticProvenanceRef[] {
+  assertNpcSemanticProvenanceIdentity(groups.flat());
   const map = new Map<string, NpcSemanticProvenanceRef>();
   for (const ref of groups.flat()) {
     const key = `${ref.kind}:${ref.id}:${ref.hash}`;
@@ -755,6 +772,7 @@ function parseNode(raw: unknown, npcId: string): NpcSemanticGraphNode {
   if (!Array.isArray(node.provenance) || !node.provenance.length || node.provenance.length > NPC_SEMANTIC_GRAPH_LIMITS.provenanceRefs) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
   node.provenance.forEach(validateProvenance);
   const provenance = node.provenance as NpcSemanticProvenanceRef[];
+  assertNpcSemanticProvenanceIdentity(provenance);
   if (!same(provenance, [...provenance].sort(provenanceOrder)) || new Set(provenance.map((ref) => `${ref.kind}:${ref.id}:${ref.hash}`)).size !== provenance.length) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_ORDER");
   assertHash(node.payloadHash, "NPC_SEMANTIC_GRAPH_NODE_INVALID");
   const { id, payloadHash, ...payload } = node;
@@ -778,6 +796,7 @@ function parseEdge(raw: unknown, npcId: string): NpcSemanticGraphEdge {
   if (!Array.isArray(edge.provenance) || !edge.provenance.length || edge.provenance.length > NPC_SEMANTIC_GRAPH_LIMITS.provenanceRefs) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
   edge.provenance.forEach(validateProvenance);
   const provenance = edge.provenance as NpcSemanticProvenanceRef[];
+  assertNpcSemanticProvenanceIdentity(provenance);
   if (!same(provenance, [...provenance].sort(provenanceOrder)) || new Set(provenance.map((ref) => `${ref.kind}:${ref.id}:${ref.hash}`)).size !== provenance.length) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_ORDER");
   assertHash(edge.payloadHash, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
   const { id, payloadHash, ...payload } = edge;

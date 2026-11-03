@@ -30,6 +30,8 @@ vi.mock("./aurion/npc/authority.js", async importOriginal => {
 const { npcCapsulePin: pin } = await import("./aurion/npc/authority.js");
 const { executeConfirmedMerchantAction, readConfirmedMerchantActionSource } = await import("./npcActionGatewayPersistence");
 const { resolveAndRecordNpc } = await import("./wasdAurionRuntime");
+const { readConfirmedNpcSemanticGraphPacket, readVerifiedNpcSemanticGraphV2 } = await import("./wasdSemanticGraphV2Persistence");
+const { getDb } = await import("./db");
 const { merchantBootstrapMarkets, merchantInventoryStateHash, merchantMarketStateHash, merchantPolityStateHash, npcIdentity } = await import("./wasdNpcCapsule");
 type HubId = keyof typeof merchantBootstrapMarkets;
 
@@ -118,5 +120,63 @@ suite("historical NPC decision provenance across a capsule pin change (real Mari
     );
     expect(refs.length).toBeGreaterThan(0);
     expect(refs.every(row => row.sourceRevision === authorityState.revision)).toBe(true);
+  });
+
+  async function graphRowsByPin() {
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT generation, sourceRevision, previousGraphHash, graphHash FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? ORDER BY generation", [npcId]);
+    return rows;
+  }
+  async function actOnLatestSource(worldSeed: string) {
+    const source = await readConfirmedMerchantActionSource(npcId);
+    if (!source) throw new Error("SOURCE_FIXTURE_REQUIRED");
+    return executeConfirmedMerchantAction({ worldSeed, homeHubId: homeHub, sourceDecisionReceiptId: source.receiptId });
+  }
+
+  it("starts a new graph chain after a pin change instead of rejecting the previous pin's graphs as drift", async () => {
+    // A complete graph chain (seed + one action) exists under the previous pin.
+    authorityState.historical = true;
+    await resetEpochs();
+    await resolveAndRecordNpc(sourceRequest(0));
+    expect((await actOnLatestSource("pin-chain-world-a")).status).toBe("committed");
+    const before = await graphRowsByPin();
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every(row => row.sourceRevision === authorityState.revision)).toBe(true);
+
+    // Under the current pin the NPC must keep acting; previously append threw NPC_SEMANTIC_GRAPH_V2_SOURCE_DRIFT.
+    authorityState.historical = false;
+    await resetEpochs();
+    expect((await actOnLatestSource("pin-chain-world-b")).status).toBe("committed");
+    const after = await graphRowsByPin();
+    const historical = after.filter(row => row.sourceRevision === authorityState.revision);
+    const current = after.filter(row => row.sourceRevision === pin.sourceRevision);
+    expect(historical).toEqual(before);
+    expect(current.length).toBeGreaterThan(0);
+    expect(current[0].previousGraphHash).toBeNull();
+
+    const db = await getDb();
+    if (!db) throw new Error("DB_REQUIRED");
+    const verified = await db.transaction(tx => readVerifiedNpcSemanticGraphV2(tx, npcId));
+    expect(verified?.row.sourceRevision).toBe(pin.sourceRevision);
+    expect(verified?.graph.generation).toBe(current[current.length - 1].generation);
+  });
+
+  it("withholds only an NPC without a current verified graph instead of failing the whole public packet", async () => {
+    await resetEpochs();
+    await resolveAndRecordNpc(sourceRequest(0));
+    const ready = await readConfirmedNpcSemanticGraphPacket(7);
+    expect(ready.graphs.map(graph => graph.npcId)).toContain(npcId);
+
+    // As in production since 2026-09-19: NPC state advanced, no graph for it.
+    await truncateGraphV2();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const packet = await readConfirmedNpcSemanticGraphPacket(7);
+      expect(packet.graphs.map(graph => graph.npcId)).not.toContain(npcId);
+      const lines = warn.mock.calls.map(call => String(call[0])).filter(line => line.startsWith("[NpcSemanticGraph] UNAVAILABLE "));
+      expect(lines.map(line => JSON.parse(line.slice("[NpcSemanticGraph] UNAVAILABLE ".length)))).toEqual([{
+        recordType: "aurion.npc-semantic-graph-unavailable", schemaVersion: 1, npcId, stateGeneration: 0, graphGeneration: null,
+        reason: "NPC_SEMANTIC_GRAPH_CURRENT_PIN_GRAPH_MISSING",
+      }]);
+    } finally { warn.mockRestore(); }
   });
 });
