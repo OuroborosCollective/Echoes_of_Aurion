@@ -58,6 +58,38 @@ test('resource depletion differences participate in the private canonical compar
   assert.throws(()=>publicObservation(raw, 'run key'),/CAPTURE_RESOURCES_INVALID/);
 });
 
+test('camera readback compares exact positions privately and exposes only the relative viewing offset', () => {
+  const raw = {snapshot:{tick:42,zoneId:'zone',presences:[],mobs:[],combatants:[],resources:{revision:1,nodes:[]}},
+    camera:{positionMm:[12345678,5000,87654321],targetMm:[12345678,1600,87644321],fovMilliDeg:58000,privateExtra:'never publish'}};
+  const key = Buffer.alloc(32, 3);
+  const before = publicObservation(raw, key).camera;
+  assert.deepEqual(Object.keys(before).sort(), ['fovMilliDeg','offsetMm','positionDigest','targetDigest']);
+  assert.deepEqual(before.offsetMm, [0,3400,10000]);
+  assert.match(before.positionDigest, /^[a-f0-9]{64}$/);
+  assert.match(before.targetDigest, /^[a-f0-9]{64}$/);
+  assert.deepEqual(before, publicObservation(structuredClone(raw), key).camera);
+  for (const privateValue of ['12345678','87654321','87644321','never publish','positionMm','targetMm']) {
+    assert.equal(JSON.stringify(publicObservation(raw, key)).includes(privateValue), false);
+  }
+  // A common translation keeps the viewing offset but must still fail exact-camera equality.
+  raw.camera.positionMm[0]++;
+  raw.camera.targetMm[0]++;
+  const translated = publicObservation(raw, key).camera;
+  assert.deepEqual(before.offsetMm, translated.offsetMm);
+  assert.notEqual(before.positionDigest, translated.positionDigest);
+  assert.notEqual(before.targetDigest, translated.targetDigest);
+  assert.notEqual(translated.positionDigest, publicObservation(raw, Buffer.alloc(32,4)).camera.positionDigest);
+});
+
+test('invalid camera coordinates cannot be converted to a valid public camera proof', () => {
+  const raw = {snapshot:{tick:42,zoneId:'zone',presences:[],mobs:[],combatants:[],resources:{revision:1,nodes:[]}}};
+  const camera = {positionMm:[0,5000,10000],targetMm:[0,1600,0],fovMilliDeg:58000};
+  for (const invalid of [null, {}, {...camera,positionMm:[0,NaN,0]}, {...camera,targetMm:[0,0]},
+    {...camera,positionMm:[0,10**10+1,0]}, {...camera,fovMilliDeg:0}]) {
+    assert.throws(()=>publicObservation({...raw,camera:invalid}, 'private key'), /CAPTURE_CAMERA_INVALID/);
+  }
+});
+
 test('same-account and missing sessions are rejected before native login can supersede the browser', () => {
   assert.throws(()=>assertDistinctCaptureUsers({id:1},{id:1}),/CAPTURE_IDENTITIES_SUPERSEDE/);
   for (const user of [null,{}, {id:0}, {id:1.5}]) assert.throws(()=>assertDistinctCaptureUsers({id:1},user),/CAPTURE_IDENTITIES_UNVERIFIED/);

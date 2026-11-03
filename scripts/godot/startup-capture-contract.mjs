@@ -56,6 +56,19 @@ export async function prepareCaptureProject(source, destination) {
 const stable = value => Array.isArray(value) ? '[' + value.map(stable).join(',') + ']' :
   value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + stable(value[k])).join(',') + '}' : JSON.stringify(value);
 
+function publicCamera(camera, privateRunKey) {
+  if (!camera || !['positionMm','targetMm'].every(field => Array.isArray(camera[field]) && camera[field].length === 3 &&
+    camera[field].every(n => Number.isSafeInteger(n) && Math.abs(n) <= 10**10)) ||
+    !Number.isSafeInteger(camera.fovMilliDeg) || camera.fovMilliDeg < 10000 || camera.fovMilliDeg > 150000) {
+    throw Error('CAPTURE_CAMERA_INVALID');
+  }
+  // Following cameras reveal player locations too. Keep exact absolute equality
+  // through run-private, domain-separated digests; publish only viewing geometry.
+  const digest = field => createHmac('sha256', privateRunKey).update('camera:' + field + ':').update(stable(camera[field])).digest('hex');
+  return {positionDigest:digest('positionMm'),targetDigest:digest('targetMm'),
+    offsetMm:camera.positionMm.map((n,i)=>n-camera.targetMm[i]),fovMilliDeg:camera.fovMilliDeg};
+}
+
 export function publicObservation(raw, privateRunKey) {
   const snapshot = raw.snapshot;
   if (!snapshot || !Number.isSafeInteger(snapshot.tick) || typeof snapshot.zoneId !== 'string') throw Error('CAPTURE_SNAPSHOT_INVALID');
@@ -70,8 +83,9 @@ export function publicObservation(raw, privateRunKey) {
   // IDs/positions/combat state. The ephemeral HMAC key never leaves this run.
   const projectionDigest = createHmac('sha256', privateRunKey).update(stable(canonical)).digest('hex');
   const keep = ['schema','source','nonce','documentId','minimumTick','captureIndex','startedAtUtc','capturedAtUtc','frame','pid',
-    'connected','worldVisible','worldId','stale','viewportPx','camera','chunks','assets','actorCache','worldAssets','environmentPresent','timeOfDay'];
+    'connected','worldVisible','worldId','stale','viewportPx','chunks','assets','actorCache','worldAssets','environmentPresent','timeOfDay'];
   const result = Object.fromEntries(keep.filter(k => Object.hasOwn(raw, k)).map(k => [k, raw[k]]));
+  if (Object.hasOwn(raw, 'camera')) result.camera = publicCamera(raw.camera, privateRunKey);
   for (const key of ['player','npcs']) {
     const actor = raw[key];
     result[key] = actor ? Object.fromEntries(['visible','heightMeters','renderedHeightMeters','boneCount','animationDeferred'].filter(k=>Object.hasOwn(actor,k)).map(k=>[k,actor[k]])) : null;
