@@ -183,11 +183,18 @@ export type NpcSemanticGraphQueryResult = Readonly<{
   resultHash: string;
 }>;
 
+/**
+ * Identity of a verified predecessor generation. A graph's content never depends
+ * on its predecessor's content, only on the predecessor's graphHash, so a stored
+ * predecessor can be bound by this anchor without re-deriving its whole chain.
+ */
+export type NpcSemanticGraphPredecessor = Readonly<{ npcId: string; generation: number; graphHash: string }>;
+
 export type NpcSemanticGraphBuildInput = Readonly<{
   memory: NpcMemoryV4;
   memoryReceipts: readonly ConfirmedNpcDecision[];
   performedActions?: readonly VerifiedPerformedActionEvidence[];
-  previousGraph?: NpcSemanticMemoryGraph | null;
+  previousGraph?: NpcSemanticMemoryGraph | NpcSemanticGraphPredecessor | null;
 }>;
 
 // ---------------------------------------------------------------------------
@@ -214,6 +221,21 @@ const provenanceKinds = Object.freeze(["decision_receipt", "action_receipt", "ef
 
 const verifiedPerformedActions = new WeakSet<object>();
 const verifiedGraphs = new WeakSet<object>();
+const verifiedPredecessorAnchors = new WeakSet<object>();
+
+/**
+ * Bind a stored predecessor generation by its identity. Callers create an anchor
+ * only after verifying the stored receipt envelope (receipt hash) and its hash link
+ * to the successor; every generation stays re-derivable from its retained evidence.
+ */
+export function npcSemanticGraphPredecessorAnchor(value: Readonly<{ npcId: unknown; generation: unknown; graphHash: unknown }>): NpcSemanticGraphPredecessor {
+  assertId(value.npcId, "NPC_SEMANTIC_GRAPH_PREDECESSOR_ANCHOR_INVALID");
+  assertIndex(value.generation, "NPC_SEMANTIC_GRAPH_PREDECESSOR_ANCHOR_INVALID");
+  assertHash(value.graphHash, "NPC_SEMANTIC_GRAPH_PREDECESSOR_ANCHOR_INVALID");
+  const anchor = Object.freeze({ npcId: value.npcId as string, generation: value.generation as number, graphHash: value.graphHash as string });
+  verifiedPredecessorAnchors.add(anchor);
+  return anchor;
+}
 
 const textOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -504,7 +526,7 @@ function buildNpcSemanticMemoryGraph(input: NpcSemanticGraphBuildInput): NpcSema
 
   const previous = input.previousGraph ?? null;
   if (previous) {
-    if (!verifiedGraphs.has(previous) || previous.npcId !== memory.npcId) throw new Error("NPC_SEMANTIC_GRAPH_PREDECESSOR_VERIFICATION_REQUIRED");
+    if (!(verifiedGraphs.has(previous) || verifiedPredecessorAnchors.has(previous)) || previous.npcId !== memory.npcId) throw new Error("NPC_SEMANTIC_GRAPH_PREDECESSOR_VERIFICATION_REQUIRED");
     if (previous.generation >= memory.lastResolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_GENERATION_REGRESSION");
   }
 
