@@ -12,7 +12,7 @@ import { buildGlbImportPlan } from "../server/glbImportPlan";
 import { applyWorldDesign, planWorldDesign, readActiveWorldDesign, recoverWorldAuthoringReceipt } from "../server/aurionAuthoringPersistence";
 import { WorldDesignDraftSchema, WorldDesignPlanSchema } from "../shared/aurionAuthoringContract";
 import { AURION_STARTER_CITY_WALL_LODS, AURION_STARTER_CITY_WALL_LEGACY_NORMALIZATIONS, starterCityWallAssetId } from "../shared/aurionStarterCityWallContract";
-import { STARTER_CITY_WALL_PLACEMENT, requireStarterCityWallPlacement, requireStarterCityWallReadback } from "../server/starterCityWallPublication";
+import { STARTER_CITY_WALL_PLACEMENT, requireStarterCityWallPlacement, requireStarterCityWallReadback, requireStarterCityWallStoredAssets } from "../server/starterCityWallPublication";
 
 const mode = process.argv[2];
 const location = process.argv[3];
@@ -98,10 +98,11 @@ try {
     }
   } else if (mode === "readback") {
     const { catalog, family } = await verifyCatalog();
+    const storedAssets = await requireStarterCityWallStoredAssets(store);
     const world = await readActiveWorldDesign();
     const design = requireStarterCityWallReadback(world);
     console.log(JSON.stringify({ revision: expectedRevision, catalogRevision: catalog.revision, family,
-      worldRevision: world.revision, designs: [design] }));
+      storedAssets, worldRevision: world.revision, designs: [design] }));
   } else throw new Error("CITY_WALL_MODE_REQUIRED_ingest_plan_apply_receipt_readback");
 } finally {
   await store.close();

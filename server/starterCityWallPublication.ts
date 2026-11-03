@@ -1,5 +1,18 @@
 import { WorldDesignReadbackSchema, type WorldDesignDraft, type WorldDesignReadback } from "../shared/aurionAuthoringContract";
 import { AURION_STARTER_CITY_WALL_LODS, starterCityWallAssetId } from "../shared/aurionStarterCityWallContract";
+import type { GlbImportStore } from "./glbImportStore";
+
+/** The public asset route uses this same approval, storage-root and digest check. */
+export async function requireStarterCityWallStoredAssets(store: Pick<GlbImportStore, "approvedBytes">) {
+  const stored = [];
+  for (const lod of AURION_STARTER_CITY_WALL_LODS) {
+    const bytes = await store.approvedBytes(lod.sha256);
+    if (!bytes) throw new Error("CITY_WALL_STORED_GLB_UNAVAILABLE");
+    if (bytes.length !== lod.bytes) throw new Error("CITY_WALL_STORED_GLB_SIZE_MISMATCH");
+    stored.push({ level: lod.level, sha256: lod.sha256, bytes: bytes.length });
+  }
+  return stored;
+}
 
 export const STARTER_CITY_WALL_PLACEMENT = Object.freeze({
   placementKey: "city-perimeter",
