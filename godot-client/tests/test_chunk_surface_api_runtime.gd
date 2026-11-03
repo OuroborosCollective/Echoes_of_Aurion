@@ -116,9 +116,20 @@ func verify() -> void:
 	api.cancel()
 	auth.allowed = true
 	await _request(api, "zone_denied")
-	require(not success and last_error == "CHUNK_HTTP_403_CHUNK_SURFACE_PRESENCE_REQUIRED", "server fail-closed reason hidden behind generic chunk error: " + last_error)
+	var denied_code := "WORLD_SLICE_ACTOR_SCOPE_MISMATCH" if slice_mode else "CHUNK_SURFACE_PRESENCE_REQUIRED"
+	require(not success and last_error == "CHUNK_HTTP_403_" + denied_code, "server fail-closed reason hidden behind generic chunk error: " + last_error)
 	await _request(api, "zone_untrusted_error")
 	require(not success and last_error == "CHUNK_HTTP_500", "untrusted server error text was reflected: " + last_error)
+	await _request(api, "zone_unknown_prefixed_error")
+	require(not success and last_error == "CHUNK_HTTP_500", "unknown prefixed error was reflected: " + last_error)
+	await _request(api, "zone_unknown_uppercase_error")
+	require(not success and last_error == "CHUNK_HTTP_500", "arbitrary uppercase error was reflected: " + last_error)
+	await _request(api, "zone_foreign_endpoint_error")
+	require(not success and last_error == "CHUNK_HTTP_403", "another endpoint's code was reflected: " + last_error)
+	await _request(api, "zone_database_error")
+	require(not success and last_error == "CHUNK_HTTP_503_DATABASE_UNAVAILABLE", "shared database reason was hidden: " + last_error)
+	await _request(api, "zone_native_auth_error")
+	require(not success and last_error == "CHUNK_HTTP_503_NATIVE_AUTH_CONFIGURATION_UNAVAILABLE", "native auth availability reason was hidden: " + last_error)
 	api.queue_free()
 	auth.queue_free()
 	if failures.is_empty():

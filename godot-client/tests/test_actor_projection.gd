@@ -647,6 +647,26 @@ func verify_monster_scene(welcome: Dictionary, manifest: Dictionary) -> void:
 	unavailable.sources.clear()
 	scene._apply_monster_catalog(catalog, unavailable)
 	require_monster_placeholder(actors, "clockwork_stalker", "missing prepared monster retained old actor")
+	# A missing file permits a placeholder only after every mapping was validated.
+	var missing_sha := "a".repeat(64)
+	var missing_id := "glb_" + missing_sha.substr(0, 48)
+	var missing_entry := {"assetId":"approved_missing_fixture","sha256":missing_sha,"purpose":"auto","assetType":"enemy","targetKey":null,"storageUrl":"/api/assets/glb/" + missing_sha + ".glb"}
+	var missing_catalog := catalog.duplicate(true)
+	missing_catalog.entries = [missing_entry]
+	var missing_manifest := manifest.duplicate(true)
+	missing_manifest.sources = [{"role":"monster","assetId":missing_id,"sha256":missing_sha,"sourceSha256":missing_sha,"outputSha256":missing_sha,"path":"godot-client/assets/generated/" + missing_id + ".glb","canonicalMapping":{"kind":"monster-source","archetype":"clockwork_stalker"}}]
+	scene._apply_monster_catalog(missing_catalog, missing_manifest)
+	require_monster_placeholder(actors, "clockwork_stalker", "unique missing model did not permit a placeholder")
+	missing_catalog.entries.append(missing_entry.duplicate(true))
+	scene._apply_monster_catalog(missing_catalog, missing_manifest)
+	require(actors.get_child_count() == 0, "missing file bypassed ambiguous monster catalog rejection")
+	missing_catalog.entries[1] = {"assetType":"enemy","purpose":"auto","targetKey":null,"sha256":"invalid"}
+	scene._apply_monster_catalog(missing_catalog, missing_manifest)
+	require(actors.get_child_count() == 0, "missing file bypassed later invalid monster entry")
+	missing_catalog.entries.clear()
+	missing_manifest.sources = ["invalid"]
+	scene._apply_monster_catalog(missing_catalog, missing_manifest)
+	require(actors.get_child_count() == 0, "empty catalog bypassed invalid prepared manifest")
 	scene._apply_monster_catalog(catalog, manifest)
 	actor = actors.get_child(0)
 	var changed := catalog.duplicate(true)

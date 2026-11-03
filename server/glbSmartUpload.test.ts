@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DrizzleQueryError } from "drizzle-orm";
 import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, playerRouteErrorResponse, parseWorldChunkSurfaceQuery, requireWorldChunkSurfacePresence, publicPlayerCharacterEntries } from "./glbSmartUpload";
 import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
 import type { GlbRuntimeCatalog } from "../shared/glbImportContract";
@@ -187,6 +188,19 @@ describe("G18 active Aurion lease read window", () => {
 });
 
 describe("protected player read error codes", () => {
+  it("recognizes bounded driver causes through the actual Drizzle error wrapper", () => {
+    const driver = Object.assign(new Error("connect failed; private connection details"), { code: "ECONNREFUSED" });
+    const wrapped = new DrizzleQueryError("select private_column from private_table", ["private parameter"], driver);
+    expect(playerRouteErrorResponse(wrapped)).toEqual({ status: 503, code: "DATABASE_UNAVAILABLE" });
+    expect(playerRouteErrorResponse(Object.assign(new Error("outer"), { cause: wrapped }))).toEqual({ status: 503, code: "DATABASE_UNAVAILABLE" });
+    const cycle = Object.assign(new Error("cycle"), { cause: undefined as unknown });
+    cycle.cause = cycle;
+    expect(playerRouteErrorResponse(cycle)).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
+    let deep: Error = driver;
+    for (let i = 0; i < 4; i++) deep = Object.assign(new Error("wrapper"), { cause: deep });
+    expect(playerRouteErrorResponse(deep)).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
+    expect(playerRouteErrorResponse(Object.assign(new Error("outer"), { cause: { code: "ECONNREFUSED" } }))).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
+  });
   it("discloses the concrete fail-closed chunk surface and database reason instead of a generic failure", () => {
     expect(playerRouteErrorResponse(new Error("CHUNK_SURFACE_PRESENCE_REQUIRED"))).toEqual({ status: 403, code: "CHUNK_SURFACE_PRESENCE_REQUIRED" });
     expect(playerRouteErrorResponse(new Error("CHUNK_SURFACE_COORDINATE_LIMIT"))).toEqual({ status: 422, code: "CHUNK_SURFACE_COORDINATE_LIMIT" });
@@ -199,6 +213,8 @@ describe("protected player read error codes", () => {
     expect(playerRouteErrorResponse(new Error("WORLD_SLICE_ACTOR_SCOPE_MISMATCH"))).toEqual({ status: 403, code: "WORLD_SLICE_ACTOR_SCOPE_MISMATCH" });
     expect(playerRouteErrorResponse(new Error("GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED"))).toEqual({ status: 422, code: "GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED" });
     expect(playerRouteErrorResponse(new Error("connect ECONNREFUSED 10.0.0.5:3306"))).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
+    expect(playerRouteErrorResponse(new Error("CHUNK_SURFACE_INTERNAL_SECRET"))).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
+    expect(playerRouteErrorResponse(new Error("LIVING_HISTORY_INTERNAL_SECRET"))).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
     expect(playerRouteErrorResponse("CHUNK_SURFACE_PRESENCE_REQUIRED")).toEqual({ status: 422, code: "GLB_PLAYER_OPERATION_FAILED" });
   });
 });
