@@ -50,6 +50,7 @@ import {
 import { ZoneMobRuntime } from "./zoneMobRuntime";
 import { ZoneResourceRuntime } from "./zoneResourceRuntime";
 import { worldNatureCollision } from "./worldNatureCollision";
+import { WorldObjectCollision } from "./worldObjectCollision";
 import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
 import { mobDistance } from "./wasdMobFsmProtocol";
 import { reduceCombatDelta, resolveCombatDelta, type CombatEntropy } from "./wasdCombatDeltaProtocol";
@@ -142,6 +143,8 @@ function createPresencePeer(values: {
  * below are donor provenance, not external runtime authorities.
  */
 export class AuthoritativeMovementZone {
+  private worldCollision?: WorldObjectCollision;
+  private readonly preparedWorldCollisions = new Map<string, WorldObjectCollision>();
   private tactics: ZoneCombatTactics = { effects: {}, windups: [] };
   private get tacticalCombat(): boolean { return this.rulesetVersion === "aurion.zone.rules.v4"; }
   private rulesetVersion: string = AURION_ZONE_RULESET_VERSION;
@@ -193,7 +196,20 @@ export class AuthoritativeMovementZone {
     this.lastCommittedState = this.getCanonicalZoneState();
   }
 
-  enqueueIntent(intent: AurionZoneIntent): void { this.pendingIntents.push(intent); }
+  enqueueIntent(intent: AurionZoneIntent): void {
+    if (intent.type === "world_collision_replace") {
+      if (this.preparedWorldCollisions.size >= 4) throw new Error("WORLD_COLLISION_PENDING_LIMIT");
+      // Validate and build the derived broadphase outside the authority tick.
+      const collision = new WorldObjectCollision(intent.snapshot);
+      this.preparedWorldCollisions.set(intent.snapshot.revision, collision);
+      this.pendingIntents.push(structuredClone(intent));
+    } else this.pendingIntents.push(intent);
+  }
+  getWorldCollisionRevision(): string | null { return this.worldCollision?.snapshot.revision ?? null; }
+  private readonly resolveWorldMovement = (from: ZonePosition, to: ZonePosition): ZonePosition =>
+    this.worldCollision
+      ? this.worldCollision.resolve(from, to, (a, b) => worldNatureCollision.blockingObstacle(a, b) !== undefined)
+      : worldNatureCollision.resolve(from, to);
   getPendingIntents(): readonly AurionZoneIntent[] { return this.pendingIntents; }
   getLatestReceipt(): AurionCausalTickReceipt | null { return this.lastReceipt; }
   getTickNumber(): number { return this.tickNumber; }
@@ -266,6 +282,7 @@ export class AuthoritativeMovementZone {
     return sortCanonicalZoneState({
       schema: "aurion.zone.state.v1",
       ...(this.tacticalCombat ? { combatTactics: structuredClone(this.tactics) } : {}),
+      ...(this.worldCollision ? { worldCollision: this.worldCollision.snapshot } : {}),
       worldId: WORLD_ID,
       zoneId: this.zoneId,
       tick: this.tickNumber,
@@ -293,6 +310,9 @@ export class AuthoritativeMovementZone {
     if (!isSupportedAurionZoneRuleset(state.ruleset)) throw new Error("AURION_REPLAY_RULESET_UNSUPPORTED");
     if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
     if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
+    const collision = state.worldCollision ? new WorldObjectCollision(state.worldCollision) : undefined;
+    this.worldCollision = collision;
+    this.preparedWorldCollisions.clear();
     this.rulesetVersion = state.ruleset;
     this.tactics = structuredClone(state.combatTactics ?? { effects: {}, windups: [] });
     this.tickNumber = state.tick;
@@ -607,7 +627,7 @@ export class AuthoritativeMovementZone {
       const steps = Math.ceil(travel / 300);
         for (let step = 0; step < steps; step++) {
           const desired = { x: candidate.x + Math.round(dx / distance * Math.min(300, travel - step * 300)), z: candidate.z + Math.round(dz / distance * Math.min(300, travel - step * 300)) };
-          candidate = worldNatureCollision.resolve(candidate, desired);
+          candidate = this.resolveWorldMovement(candidate, desired);
         }
       if (mobDistance(candidate, mob.position) > AX1_PLAYER_BASIC_MELEE_RANGE_FIXED) return { result: "out_of_range", rngEvents: [] };
       peer.position = candidate;
@@ -670,7 +690,18 @@ export class AuthoritativeMovementZone {
     // 01 membership changes are canonical intents. Live transport readbacks apply
     // them immediately; replay reconstructs the identical canonical mutation here.
     for (const intent of intentsToProcess) {
-      if (intent.type === "presence_join") {
+      if (intent.type === "world_collision_replace") {
+        if (intent.entityId !== "world:collision" || intent.worldId !== WORLD_ID || intent.zoneId !== this.zoneId
+          || intent.expectedRevision !== this.getWorldCollisionRevision()) continue;
+        const collision = this.preparedWorldCollisions.get(intent.snapshot.revision);
+        if (!collision) throw new Error("WORLD_COLLISION_INPUT_UNPREPARED");
+        // Publication cannot trap an existing actor inside newly solid geometry.
+        if (collision.blockingObject({ x: 0, z: 0 }, { x: 0, z: 0 })
+          || [...this.peers.values()].some(peer => collision.blockingObject(peer.position, peer.position))
+          || this.mobRuntime.orderedStates().some(mob => mob.health > 0 && collision.blockingObject(mob.position, mob.position))) continue;
+        this.worldCollision = collision;
+        changed = true;
+      } else if (intent.type === "presence_join") {
         const current = this.peersByEntityId.get(intent.entityId);
         if (!current || current.connectionId !== intent.connectionId) {
           if (current) this.peers.delete(current.connectionId);
@@ -697,6 +728,7 @@ export class AuthoritativeMovementZone {
         changed = true;
       }
     }
+    this.preparedWorldCollisions.clear();
     this.refreshPeerOrder();
 
     // 01.5 deterministic return-stone revival. Visual GLB availability is not an input.
@@ -736,7 +768,7 @@ export class AuthoritativeMovementZone {
     }
     for (const peer of this.sortedPeers) {
       if ((peer.input.x === 0 && peer.input.z === 0) || peer.health <= 0) continue;
-      const next = integrateZoneMovement(peer.position, peer.input);
+      const next = integrateWasdZoneMovement(peer.position, peer.input, this.resolveWorldMovement);
       if (next.x === peer.position.x && next.z === peer.position.z) continue;
       peer.position = next;
       changed = true;
@@ -808,7 +840,7 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]), this.worldCollision ? this.resolveWorldMovement : undefined);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);

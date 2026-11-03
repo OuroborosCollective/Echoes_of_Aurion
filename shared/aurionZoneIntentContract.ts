@@ -1,4 +1,5 @@
 import { canonicalJson, canonicalSha256 } from "./aurionCanonicalHash";
+import type { WorldCollisionSnapshot } from "./worldObjectCollisionContract";
 
 export type AurionZoneIntentKind =
   | "move"
@@ -9,6 +10,7 @@ export type AurionZoneIntentKind =
   | "resource_interact"
   | "mob_trigger"
   | "quest_accept"
+  | "world_collision_replace"
   | "quest_hand_in";
 
 type OperationalIntentMetadata = {
@@ -19,6 +21,16 @@ type OperationalIntentMetadata = {
   arrivalSeq: number;
   timestamp?: number;
 };
+
+/** Internal Aurion input from a verified published world design. This is never
+ * a client command. Its full geometry is recorded for catalog-independent replay. */
+export interface AurionWorldCollisionIntent extends OperationalIntentMetadata {
+  type: "world_collision_replace";
+  worldId: string;
+  zoneId: string;
+  expectedRevision: string | null;
+  snapshot: WorldCollisionSnapshot;
+}
 
 export interface AurionQuestAcceptIntent extends OperationalIntentMetadata {
   type: "quest_accept";
@@ -86,6 +98,7 @@ export interface AurionMobTriggerIntent extends OperationalIntentMetadata {
 }
 
 export type AurionZoneIntent =
+  | AurionWorldCollisionIntent
   | AurionPresenceJoinIntent
   | AurionPresenceLeaveIntent
   | AurionMoveIntent
@@ -118,6 +131,9 @@ export function sanitizeIntentForHash(intent: AurionZoneIntent): Record<string, 
   assertIntentIdentity(intent);
   const base = { type: intent.type, entityId: intent.entityId, clientSeq: intent.clientSeq };
   switch (intent.type) {
+    case "world_collision_replace":
+      return { ...base, worldId: intent.worldId, zoneId: intent.zoneId,
+        expectedRevision: intent.expectedRevision, snapshot: intent.snapshot };
     case "presence_join":
       return {
         ...base,

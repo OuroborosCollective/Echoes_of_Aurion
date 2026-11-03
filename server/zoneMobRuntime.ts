@@ -14,7 +14,7 @@ import {
   mobCollisionSubsteps,
   resolveWasdMobCollisionMovement,
 } from "./wasdMobCollisionProtocol";
-import { worldNatureCollision } from "./worldNatureCollision";
+import { worldNatureCollision, type GroundPoint } from "./worldNatureCollision";
 
 export const MOB_COLLISION_SUBSTEP_MAX_MM = WASD_MOB_COLLISION_SUBSTEP_MAX_MM;
 export { mobCollisionSubsteps };
@@ -64,12 +64,14 @@ export class ZoneMobRuntime {
     }
   }
 
-  tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS): boolean {
+  tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS,
+    resolveStep?: (from: GroundPoint, to: GroundPoint) => GroundPoint): boolean {
     let changed = false;
     for (let i = 0; i < this.cachedOrderedStates.length; i++) {
       const current = this.cachedOrderedStates[i]!;
       const entityId = current.definition.entityId;
-      const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
+      const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick,
+        resolveMovement: resolveStep ? (from, to) => resolveWasdMobCollisionMovement(from, to, resolveStep) : resolveMobCollisionMovement });
       this.updateState(entityId, next);
       if (!sameMobState(current, next)) changed = true;
     }

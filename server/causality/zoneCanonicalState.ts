@@ -1,5 +1,6 @@
 import type { ZoneCombatTactics } from "../../shared/aurionCombatRules";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
+import type { WorldCollisionSnapshot } from "../../shared/worldObjectCollisionContract";
 
 export interface CanonicalPlayerState {
   entityId: string;
@@ -93,6 +94,7 @@ export interface CanonicalZoneState {
   questSummaries: CanonicalQuestSummary[];
   questInstances?: CanonicalZoneQuestInstance[];
   combatTactics?: ZoneCombatTactics;
+  worldCollision?: WorldCollisionSnapshot;
 }
 
 /**
@@ -197,6 +199,7 @@ export function sortCanonicalZoneState(
     questSummaries,
     ...(questInstances ? { questInstances } : {}),
     ...(state.combatTactics ? { combatTactics: structuredClone(state.combatTactics) } : {}),
+    ...(state.worldCollision ? { worldCollision: structuredClone(state.worldCollision) } : {}),
   };
 }
 
