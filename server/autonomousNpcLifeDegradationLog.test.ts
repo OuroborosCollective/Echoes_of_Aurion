@@ -48,11 +48,17 @@ describe("autonomous NPC life runtime degradation logging", () => {
       npcId: "aurion_civilization_loop", failureCode: loop.failureCode, consecutiveCycles: 1, cycle: 1,
     });
 
+    // IDLE records no civilization transition and must not count as recovery.
     loop.failureCode = null;
-    loop.civilizationAction = "ADVANCED";
+    loop.civilizationAction = "IDLE";
     await runtime.resolveOnce({ tick: 2 * AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS });
-    const recovered = info.mock.calls.map(call => String(call[0])).filter(line => line.startsWith("[NpcLife] RECOVERED "));
+    const recoveredLines = () => info.mock.calls.map(call => String(call[0])).filter(line => line.startsWith("[NpcLife] RECOVERED "));
+    expect(recoveredLines()).toHaveLength(0);
+
+    loop.civilizationAction = "ADVANCED";
+    await runtime.resolveOnce({ tick: 3 * AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS });
+    const recovered = recoveredLines();
     expect(recovered).toHaveLength(1);
-    expect(JSON.parse(recovered[0].slice("[NpcLife] RECOVERED ".length))).toMatchObject({ npcId: "aurion_civilization_loop", cycle: 2 });
+    expect(JSON.parse(recovered[0].slice("[NpcLife] RECOVERED ".length))).toMatchObject({ npcId: "aurion_civilization_loop", cycle: 3 });
   });
 });

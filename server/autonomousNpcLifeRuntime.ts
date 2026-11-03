@@ -157,7 +157,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         ...loopResult.entries,
         {
           npcId: AUTONOMOUS_CIVILIZATION_LOOP_MONITOR_ID,
-          status: loopResult.failureCode ? "degraded" : loopResult.civilizationAction ? "confirmed" : "skipped",
+          status: loopResult.failureCode ? "degraded" : loopResult.civilizationAction && loopResult.civilizationAction !== "IDLE" ? "confirmed" : "skipped",
           failureCode: loopResult.failureCode ?? null,
         },
       ], cycle, tick);
