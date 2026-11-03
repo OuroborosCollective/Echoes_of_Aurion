@@ -101,8 +101,7 @@ export function requestZoneSkill(skillId:Ax1BladeSkillId):Promise<ZoneActionOutc
   if(!engine||!transport||!selfEntityId)return Promise.resolve({confirmed:false,completed:false,message:"Aurion-Zonenkampf ist nicht verbunden."});
   if(pending)return Promise.resolve({confirmed:false,completed:false,message:"Vorherige Kampfaktion wartet noch auf Serverbestätigung."});
   const definition=ax1BladeSkillById(skillId);
-  const target=definition && ["k_strike", "k_charge"].includes(skillId) ? currentTarget() : null;
-  if(definition && ["k_strike", "k_charge"].includes(skillId) && !target)return Promise.resolve({confirmed:false,completed:false,message:"Kein angreifbares Ziel in der Nähe."});
+  const target=definition && definition.rangeFixed > 0 ? currentTarget() : null;
   return new Promise(resolve=>{
     const timer=window.setTimeout(()=>{if(pending?.resolve===resolve)clearPending({confirmed:false,completed:false,message:"Keine Kampfbestätigung erhalten; Zustand wird nicht geraten."});},3_000);
     pending={expectedSkillId:skillId,resolve,timer};

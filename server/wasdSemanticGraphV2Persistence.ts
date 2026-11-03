@@ -27,6 +27,7 @@ import {
   merchantActionReceiptHash,
   npcHash,
   npcMemoryReceiptIds,
+  npcSemanticGraphPredecessorAnchor,
   retrieveNpcSemanticMemoryGraph,
   stableCatalogStringify,
   verifyConfirmedNpcDecision,
@@ -37,6 +38,7 @@ import {
   type MerchantDecisionRequests,
   type NpcSemanticGraphEdge,
   type NpcSemanticGraphNode,
+  type NpcSemanticGraphPredecessor,
   type NpcSemanticMemoryGraph,
   type VerifiedPerformedActionEvidence,
 } from "./wasdNpcCapsule";
@@ -57,6 +59,34 @@ function cacheVerifiedGraph(graph:NpcSemanticMemoryGraph):void{
     if(!oldest) break;
     verifiedGraphCache.delete(oldest);
   }
+}
+/**
+ * Bounded storage: every generation appends its small receipt envelope (hash chain,
+ * receipt hash). The full graph body (graphJson, node/edge/provenance rows) is only
+ * stored for checkpoint generations: the first generation of a pin chain and every
+ * GRAPH_BODY_CHECKPOINT_INTERVAL generations. Any other generation stays verifiable
+ * by re-deriving it from its retained memory/decision/action receipts and checking
+ * the result against its envelope graphHash. Nothing is ever deleted (append-only).
+ */
+export const GRAPH_BODY_CHECKPOINT_INTERVAL=256;
+const ENVELOPE_ONLY_VERSION="aurion-semantic-graph-v2.envelope-only.v1" as const;
+function envelopeOnlyGraphJson(graphHash:string):string{
+  return stableCatalogStringify({version:ENVELOPE_ONLY_VERSION,graphHash});
+}
+function isEnvelopeOnly(row:Pick<GraphRow,"graphJson"|"graphHash">):boolean{
+  return row.graphJson===envelopeOnlyGraphJson(row.graphHash);
+}
+export function storesGraphBody(graph:Pick<NpcSemanticMemoryGraph,"previousGraphHash"|"generation">):boolean{
+  return graph.previousGraphHash===null||graph.generation%GRAPH_BODY_CHECKPOINT_INTERVAL===0;
+}
+/** Envelope-only rows carry no body: verify the re-derived graph against the envelope. */
+function verifyEnvelopeOnlyGraph(row:GraphRow,evidence:Awaited<ReturnType<typeof graphEvidence>>):NpcSemanticMemoryGraph{
+  if(!isEnvelopeOnly(row)) throw new Error("NPC_SEMANTIC_GRAPH_V2_ENVELOPE_INVALID");
+  const graph=compileNpcSemanticMemoryGraph(evidence);
+  if(graph.graphHash!==row.graphHash||graph.generation!==row.generation||graph.previousGraphHash!==row.previousGraphHash||graph.npcId!==row.npcId) {
+    throw new Error("NPC_SEMANTIC_GRAPH_V2_ENVELOPE_EVIDENCE_MISMATCH");
+  }
+  return graph;
 }
 type FailurePoint="after_receipt"|"after_node"|"after_edge"|"after_provenance"|"before_readback";
 
@@ -205,7 +235,7 @@ async function verifiedPerformedActions(tx:NpcTransaction,npcId:string,generatio
 async function graphEvidence(
   tx:NpcTransaction,
   memory:ConfirmedNpcMultiMemory,
-  previousGraph:NpcSemanticMemoryGraph|null,
+  previousGraph:NpcSemanticMemoryGraph|NpcSemanticGraphPredecessor|null,
 ){
   return Object.freeze({
     memory:memory.memory,
@@ -249,6 +279,19 @@ async function verifyStoredIndex(tx:NpcTransaction,row:GraphRow,graph:NpcSemanti
   const expected=indexRows(row.id,graph);
   if(stableCatalogStringify(stripCreated(index))!==stableCatalogStringify(expected)) throw new Error("NPC_SEMANTIC_GRAPH_V2_INDEX_READBACK_MISMATCH");
 }
+/**
+ * Graph receipts form one hash chain per capsule pin. Rows written under an
+ * earlier pin cannot be re-verified with the current authority, so they stay an
+ * immutable historical chain: never a predecessor, never served as verified.
+ */
+function currentPinGraphRows(npcId:string){
+  return and(
+    eq(aurionSemanticGraphReceiptsV2.npcId,npcId),
+    eq(aurionSemanticGraphReceiptsV2.sourceRevision,pin.sourceRevision),
+    eq(aurionSemanticGraphReceiptsV2.sourceSha256,pin.sourceSha256),
+    eq(aurionSemanticGraphReceiptsV2.capsuleManifestSha256,pin.manifestSha256),
+  );
+}
 function verifyGraphRowEnvelope(row:GraphRow):void{
   assertPin();
   if(row.sourceRevision!==pin.sourceRevision||row.sourceSha256!==pin.sourceSha256||row.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_DRIFT");
@@ -264,57 +307,77 @@ async function verifiedPredecessorForAppend(tx:NpcTransaction,row:GraphRow):Prom
   const cached=verifiedGraphCache.get(row.npcId);
   if(!cached||cached.graphHash!==row.graphHash) return (await verifiedGraphFromRow(tx,row)).graph;
   verifyGraphRowEnvelope(row);
-  if(row.graphJson!==stableCatalogStringify(cached)||
+  const envelopeOnly=isEnvelopeOnly(row);
+  if((!envelopeOnly&&row.graphJson!==stableCatalogStringify(cached))||
      cached.npcId!==row.npcId||cached.generation!==row.generation||cached.graphHash!==row.graphHash||
      cached.previousGraphHash!==row.previousGraphHash||cached.version!==row.graphVersion||cached.retrievalVersion!==row.retrievalVersion||
      cached.authority.sourceRevision!==row.sourceRevision||cached.authority.sourceSha256!==row.sourceSha256){
     throw new Error("NPC_SEMANTIC_GRAPH_V2_CACHED_PREDECESSOR_MISMATCH");
   }
-  await verifyStoredRows(tx,row,cached);
+  if(!envelopeOnly) await verifyStoredRows(tx,row,cached);
   return cached;
 }
 
+/**
+ * Bounded verification of one stored generation. Its own receipt envelope, the
+ * predecessor's receipt envelope and their hash link are checked; the generation
+ * itself is re-derived from its retained evidence with the predecessor bound by
+ * graphHash only. Cost no longer grows with the chain length.
+ */
 async function verifiedGraphFromRow(
   tx:NpcTransaction,
   row:GraphRow,
-  seenGraphHashes:ReadonlySet<string>=new Set(),
 ):Promise<Readonly<{
   row:Readonly<GraphRow>;
   graph:NpcSemanticMemoryGraph;
   memory:ConfirmedNpcMultiMemory;
   evidence:Awaited<ReturnType<typeof graphEvidence>>;
 }>>{
-  if(seenGraphHashes.has(row.graphHash)) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_CYCLE");
   verifyGraphRowEnvelope(row);
 
   const prior=(await tx.select().from(aurionSemanticGraphReceiptsV2)
     .where(and(
-      eq(aurionSemanticGraphReceiptsV2.npcId,row.npcId),
+      currentPinGraphRows(row.npcId),
       lt(aurionSemanticGraphReceiptsV2.generation,row.generation),
     ))
     .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
 
-  let previousGraph:NpcSemanticMemoryGraph|null=null;
+  let previousGraph:NpcSemanticGraphPredecessor|null=null;
   if(row.previousGraphHash===null){
     if(prior) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_GAP");
   }else{
-    if(!prior||prior.graphHash!==row.previousGraphHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_MISMATCH");
-    const nextSeen=new Set(seenGraphHashes);nextSeen.add(row.graphHash);
-    const verifiedPrevious=await verifiedGraphFromRow(tx,prior,nextSeen);
-    if(verifiedPrevious.graph.graphHash!==row.previousGraphHash||verifiedPrevious.graph.generation>=row.generation) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_MISMATCH");
-    previousGraph=verifiedPrevious.graph;
+    if(!prior||prior.graphHash!==row.previousGraphHash||prior.generation>=row.generation) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_MISMATCH");
+    verifyGraphRowEnvelope(prior);
+    previousGraph=npcSemanticGraphPredecessorAnchor({npcId:prior.npcId,generation:prior.generation,graphHash:prior.graphHash});
   }
 
   const memory=await memoryForGraphRow(tx,row);
   const evidence=await graphEvidence(tx,memory,previousGraph);
-  const graph=verifyNpcSemanticMemoryGraph(row.graphJson,evidence);
+  const envelopeOnly=isEnvelopeOnly(row);
+  const graph=envelopeOnly?verifyEnvelopeOnlyGraph(row,evidence):verifyNpcSemanticMemoryGraph(row.graphJson,evidence);
   if(graph.npcId!==row.npcId||graph.generation!==row.generation||graph.graphHash!==row.graphHash||
      graph.previousGraphHash!==row.previousGraphHash||
      graph.version!==row.graphVersion||graph.retrievalVersion!==row.retrievalVersion||
      graph.authority.sourceRevision!==row.sourceRevision||graph.authority.sourceSha256!==row.sourceSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_GRAPH_READBACK_MISMATCH");
-  await verifyStoredRows(tx,row,graph);
+  if(!envelopeOnly) await verifyStoredRows(tx,row,graph);
   cacheVerifiedGraph(graph);
   return Object.freeze({row:Object.freeze(row),graph,memory,evidence});
+}
+
+/**
+ * Full audit of the current pin chain for one NPC, oldest first. Every generation
+ * (with or without stored body) is re-derived from its own retained evidence and
+ * checked against its envelope; iterative, never recursive.
+ */
+export async function verifyNpcSemanticGraphChainV2(tx:NpcTransaction,npcId:string){
+  assertPin();
+  const rows=await tx.select().from(aurionSemanticGraphReceiptsV2).where(currentPinGraphRows(npcId)).orderBy(asc(aurionSemanticGraphReceiptsV2.generation));
+  let bodies=0;
+  for(const row of rows){
+    const verified=await verifiedGraphFromRow(tx,row);
+    if(!isEnvelopeOnly(verified.row)) bodies++;
+  }
+  return Object.freeze({npcId,generations:rows.length,bodies,headGraphHash:rows.at(-1)?.graphHash??null});
 }
 
 export async function appendNpcSemanticGraphV2(
@@ -326,7 +389,7 @@ export async function appendNpcSemanticGraphV2(
   if(memory.row.sourceRevision!==pin.sourceRevision||memory.row.sourceSha256!==pin.sourceSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_MEMORY_SOURCE_DRIFT");
 
   const latest=(await tx.select().from(aurionSemanticGraphReceiptsV2)
-    .where(eq(aurionSemanticGraphReceiptsV2.npcId,memory.row.npcId))
+    .where(currentPinGraphRows(memory.row.npcId))
     .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
   if(latest&&latest.generation>memory.row.resolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_V2_GENERATION_REGRESSION");
   if(latest&&latest.generation===memory.row.resolutionIndex){
@@ -343,39 +406,50 @@ export async function appendNpcSemanticGraphV2(
   const id=graphReceiptId(graph);
   const core=graphReceiptCore({id,graph,memoryReceiptId:memory.row.id});
   const receiptHash=npcHash(core);
-  const graphJson=stableCatalogStringify(graph);
+  const storesBody=storesGraphBody(graph);
+  const graphJson=storesBody?stableCatalogStringify(graph):envelopeOnlyGraphJson(graph.graphHash);
   const {version:_receiptVersion,...dbCore}=core;
   await tx.insert(aurionSemanticGraphReceiptsV2).values({...dbCore,graphJson,receiptHash});
   if(options.failureInjection==="after_receipt") throw new Error("AIM294_FORCED_AFTER_GRAPH_RECEIPT");
-  for(const [index,node] of graph.nodes.entries()){
-    await tx.insert(aurionSemanticGraphNodesV2).values(nodeRow(id,graph.npcId,node));
-    if(index===0&&options.failureInjection==="after_node") throw new Error("AIM294_FORCED_AFTER_GRAPH_NODE");
+  if(storesBody){
+    for(const [index,node] of graph.nodes.entries()){
+      await tx.insert(aurionSemanticGraphNodesV2).values(nodeRow(id,graph.npcId,node));
+      if(index===0&&options.failureInjection==="after_node") throw new Error("AIM294_FORCED_AFTER_GRAPH_NODE");
+    }
+    for(const [index,edge] of graph.edges.entries()){
+      await tx.insert(aurionSemanticGraphEdgesV2).values(edgeRow(id,graph.npcId,edge));
+      if(index===0&&options.failureInjection==="after_edge") throw new Error("AIM294_FORCED_AFTER_GRAPH_EDGE");
+    }
+    const prov=provenanceRows(id,graph);
+    for(const [index,row] of prov.entries()){
+      await tx.insert(aurionSemanticGraphProvenanceV2).values(row);
+      if(index===0&&options.failureInjection==="after_provenance") throw new Error("AIM294_FORCED_AFTER_GRAPH_PROVENANCE");
+    }
   }
-  for(const [index,edge] of graph.edges.entries()){
-    await tx.insert(aurionSemanticGraphEdgesV2).values(edgeRow(id,graph.npcId,edge));
-    if(index===0&&options.failureInjection==="after_edge") throw new Error("AIM294_FORCED_AFTER_GRAPH_EDGE");
-  }
-  const prov=provenanceRows(id,graph);
-  for(const [index,row] of prov.entries()){
-    await tx.insert(aurionSemanticGraphProvenanceV2).values(row);
-    if(index===0&&options.failureInjection==="after_provenance") throw new Error("AIM294_FORCED_AFTER_GRAPH_PROVENANCE");
-  }
+  // The retrieval index is a rebuildable projection, not authority: keep it for the
+  // newest generation of this NPC only.
+  // Delete by primary key only: a secondary-index range delete takes gap locks that
+  // deadlock with concurrent appends of other NPCs (all hub merchants act together).
+  const staleIndex=await tx.select({id:aurionSemanticGraphIndexV2.id}).from(aurionSemanticGraphIndexV2)
+    .where(eq(aurionSemanticGraphIndexV2.npcId,graph.npcId));
+  if(staleIndex.length) await tx.delete(aurionSemanticGraphIndexV2).where(inArray(aurionSemanticGraphIndexV2.id,staleIndex.map(row=>row.id)));
   const idx=indexRows(id,graph);
   if(idx.length) await tx.insert(aurionSemanticGraphIndexV2).values(idx);
   if(options.failureInjection==="before_readback") throw new Error("AIM294_FORCED_BEFORE_GRAPH_READBACK");
   const stored=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(eq(aurionSemanticGraphReceiptsV2.id,id)).limit(1))[0];
   if(!stored||stored.receiptHash!==receiptHash||stored.graphJson!==graphJson) throw new Error("NPC_SEMANTIC_GRAPH_V2_RECEIPT_READBACK_REQUIRED");
   verifyGraphRowEnvelope(stored);
-  const verifiedGraph=verifyNpcSemanticMemoryGraph(stored.graphJson,evidence);
+  const verifiedGraph=storesBody?verifyNpcSemanticMemoryGraph(stored.graphJson,evidence):verifyEnvelopeOnlyGraph(stored,evidence);
   if(verifiedGraph.graphHash!==stored.graphHash||verifiedGraph.previousGraphHash!==stored.previousGraphHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_GRAPH_READBACK_MISMATCH");
-  await verifyStoredRows(tx,stored,verifiedGraph);
+  if(storesBody) await verifyStoredRows(tx,stored,verifiedGraph);
   await verifyStoredIndex(tx,stored,verifiedGraph);
   cacheVerifiedGraph(verifiedGraph);
   return Object.freeze({row:Object.freeze(stored),graph:verifiedGraph,memory,evidence});
 }
 
 export async function readVerifiedNpcSemanticGraphV2(tx:NpcTransaction,npcId:string){
-  const row=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(eq(aurionSemanticGraphReceiptsV2.npcId,npcId))
+  assertPin();
+  const row=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(currentPinGraphRows(npcId))
     .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
   return row?verifiedGraphFromRow(tx,row):null;
 }
@@ -412,6 +486,11 @@ function isActiveAt(status:string,from:number,until:number|null,index:number):bo
   return status==="active"&&index>=from&&(until===null||index<until);
 }
 
+function reportUnavailableNpcGraph(npcId:string,stateGeneration:number,graphGeneration:number|null):void{
+  console.warn(`[NpcSemanticGraph] UNAVAILABLE ${JSON.stringify({recordType:"aurion.npc-semantic-graph-unavailable",schemaVersion:1,npcId,stateGeneration,graphGeneration,
+    reason:graphGeneration===null?"NPC_SEMANTIC_GRAPH_CURRENT_PIN_GRAPH_MISSING":"NPC_SEMANTIC_GRAPH_CURRENT_GENERATION_LAG"})}`);
+}
+
 export async function readConfirmedNpcSemanticGraphPacket(userId:number){
   if(!Number.isSafeInteger(userId)||userId<1) throw new Error("NPC_SEMANTIC_GRAPH_PACKET_OWNER_INVALID");
   const db=await getDb(); if(!db) throw new Error("Game database is not available");
@@ -421,7 +500,12 @@ export async function readConfirmedNpcSemanticGraphPacket(userId:number){
     for(const state of states.sort((a,b)=>a.npcId<b.npcId?-1:a.npcId>b.npcId?1:0)){
       if(state.lastResolutionIndex<0) continue;
       const confirmed=await readVerifiedNpcSemanticGraphV2(tx,state.npcId);
-      if(!confirmed||confirmed.row.generation!==state.lastResolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_CURRENT_READBACK_REQUIRED");
+      if(!confirmed||confirmed.row.generation!==state.lastResolutionIndex){
+        // A missing or lagging graph for one NPC withholds only that NPC; it must
+        // not deny every other verified graph. Integrity failures still throw above.
+        reportUnavailableNpcGraph(state.npcId,state.lastResolutionIndex,confirmed?.row.generation??null);
+        continue;
+      }
       const query={logicalIndex:confirmed.graph.generation,startKeys:[state.npcId],maxDepth:4,maxCandidates:64,maxResults:32} as const;
       const result=retrieveNpcSemanticMemoryGraph(confirmed.graph,query);
       const resultIds=new Set(result.results.map(item=>item.nodeId));

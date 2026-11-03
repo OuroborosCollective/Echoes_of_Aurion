@@ -5,6 +5,7 @@ signal skill_requested(skill_id: String)
 signal attack_requested
 signal diagnostics_requested
 signal world_studio_requested
+signal camera_zoom_requested(factor: float)
 signal menu_changed(open: bool)
 signal exit_requested
 
@@ -25,6 +26,12 @@ signal exit_requested
 @onready var exit_confirmation: ConfirmationDialog = $ExitConfirmation
 
 func _ready() -> void:
+	$MenuPanel/Scroll/Content/ZoomIn.pressed.connect(func():
+		set_menu_open(false)
+		camera_zoom_requested.emit(1.25))
+	$MenuPanel/Scroll/Content/ZoomOut.pressed.connect(func():
+		set_menu_open(false)
+		camera_zoom_requested.emit(0.8))
 	menu_button.pressed.connect(func(): set_menu_open(not menu_panel.visible))
 	attack_button.pressed.connect(func(): attack_requested.emit())
 	var skills := GridContainer.new()
@@ -128,6 +135,10 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 		safe = bounds
 	var scale_factor := clampf(density, 1.0, 2.0)
 	var font_size := roundi(16.0 * scale_factor)
+	for button in $MenuPanel/Scroll/Content.get_children():
+		if not button is Button: continue
+		button.custom_minimum_size.y = 48.0 * scale_factor
+		button.add_theme_font_size_override("font_size", font_size)
 	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Scroll/Content/Diagnostics, $MenuPanel/Scroll/Content/WorldStudio, $MenuPanel/Scroll/Content/QuestAvailability, $MenuPanel/Scroll/Content/Close, notice_text]:
 		label.add_theme_font_size_override("font_size", font_size)
 	$MenuPanel/Scroll/Content/Diagnostics.custom_minimum_size.y = 48.0 * scale_factor

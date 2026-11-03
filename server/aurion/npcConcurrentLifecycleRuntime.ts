@@ -108,6 +108,11 @@ export function deriveNpcInteractions(
     hubId: LivingHistoryHubId;
     action: string | null;
     cycle: number;
+    /**
+     * Hub the caravan arrived at. When provided, caravan pressure targets only
+     * that hub; null means no caravan arrived (e.g. it was ambushed).
+     */
+    caravanDestinationHubId?: LivingHistoryHubId | null;
   }>>,
 ): readonly NpcInteractionSignal[] {
   const interactions: NpcInteractionSignal[] = [];
@@ -195,8 +200,11 @@ export function deriveNpcInteractions(
   const caravaners = npcResults.filter((n) => n.action === "caravan");
   for (const caravaner of caravaners) {
     for (const [hubId, npcs] of byHub) {
-      if (hubId === caravaner.hubId) continue;
+      if (caravaner.caravanDestinationHubId !== undefined) {
+        if (hubId !== caravaner.caravanDestinationHubId) continue;
+      } else if (hubId === caravaner.hubId) continue;
       for (const target of npcs) {
+        if (target.npcId === caravaner.npcId) continue;
         interactions.push(Object.freeze({
           id: `int:${caravaner.cycle}:${hubId}:caravan:${caravaner.npcId}:${target.npcId}`,
           kind: "caravan_pressure",

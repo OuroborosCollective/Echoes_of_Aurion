@@ -53,6 +53,6 @@ Antworten unterscheiden gegenüber dem Client nur handlungsrelevante Zustände. 
 2. MariaDB-Integration beweist atomaren Einmalkonsum, Rotation, Parallelität und Revoke am exakten Schema.
 3. HTTP-Integration beweist Header, Cookie-Abwesenheit, Redirect-Allowlist und Logmaskierung.
 4. Ein signierter Android-Kandidat beweist App-Link-Verifikation, sicheren Speicher und Systembrowser-Rückkehr.
-5. Das Tab A9 beweist den vollständigen Ablauf bis WSS-`welcome` und den negativen Readback nach Logout.
+5. Ein ausgewiesenes natives Android-Testsystem mit echtem Backend beweist den vollständigen Ablauf bis WSS-`welcome` und den negativen Readback nach Logout; ein physisches Referenzgerät ist optional.
 
 Kein Mock, grüner Build, Browserlogin oder CI-Produktionsprobe ersetzt den jeweils nächsten Evidence-Layer.

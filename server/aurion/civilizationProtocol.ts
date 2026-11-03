@@ -157,12 +157,12 @@ export function resolveCollapseQualification(input: {
   scarcitySeverity: number;
   receiptId: string;
 }): CollapseQualification {
-  const isEligible = input.population < 100 && (input.stability < 0.2 || input.hazardIndex > 0.8 || input.scarcitySeverity > 8);
+  const isEligible = input.population < 100 && (input.stability < 0.2 || input.hazardIndex > 0.8 || input.scarcitySeverity > 0.8);
   let reason = "none";
   if (isEligible) {
     if (input.population < 100 && input.stability < 0.2) reason = "instability";
     else if (input.hazardIndex > 0.8) reason = "hazard";
-    else if (input.scarcitySeverity > 8) reason = "famine";
+    else if (input.scarcitySeverity > 0.8) reason = "famine";
     else reason = "depopulation";
   }
   const receiptHash = hash(["aurion:collapse:v1", input.receiptId, input.civilizationId, input.worldId, String(input.worldEpoch), String(isEligible), reason]);

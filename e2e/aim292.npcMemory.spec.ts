@@ -182,14 +182,17 @@ for(const profile of profiles){
       const provenanceReadmodel=readmodelFromVerifiedGraph(verifiedProvenanceGraph!.graph,provenanceGraphRows[0].sourceRevision);
       expect(provenanceProjection).toEqual({npcId:provenanceReadmodel.npcId,generation:provenanceReadmodel.generation,graphHash:provenanceReadmodel.graphHash,sourceResultHash:provenanceReadmodel.sourceResultHash,semanticGraphResultHash:provenanceReadmodel.resultHash,sourceRevision:provenanceReadmodel.sourceRevision,provenanceStatus:"VERIFIED"});
       expect(graphRows[0].receiptHash).toMatch(/^[a-f0-9]{64}$/);
-      const [graphEdges]=await pool.query<RowDataPacket[]>("SELECT id,kind,fromNodeId,toNodeId FROM aurionSemanticGraphEdgesV2 WHERE graphReceiptId=?",[graphRows[0].id]);
-      const [actionNodes]=await pool.query<RowDataPacket[]>("SELECT id,semanticKey FROM aurionSemanticGraphNodesV2 WHERE graphReceiptId=? AND kind='action' AND semanticKey=?",[graphRows[0].id,displayedAction.actionReceiptId]);
+      // Generations between body checkpoints store only their receipt envelope. Read the performed
+      // action from the graph re-derived from retained evidence and checked against that envelope.
+      const verifiedActionGraph=await database.transaction(tx=>readVerifiedNpcSemanticGraphV2AtGeneration(tx,graphProjection.npcId,graphProjection.generation));
+      expect(verifiedActionGraph?.row.receiptHash).toBe(graphRows[0].receiptHash);
+      const actionNodes=verifiedActionGraph!.graph.nodes.filter(node=>node.kind==="action"&&node.key===displayedAction.actionReceiptId);
       expect(actionNodes).toHaveLength(1);
-      const performedEdges=graphEdges.filter(row=>row.kind==="performed_action"&&row.toNodeId===actionNodes[0].id);
+      const performedEdges=verifiedActionGraph!.graph.edges.filter(edge=>edge.kind==="performed_action"&&edge.toNodeId===actionNodes[0].id);
       expect(performedEdges).toHaveLength(1);
-      const [performedProv]=await pool.query<RowDataPacket[]>("SELECT provenanceKind,provenanceHash,sourceRevision FROM aurionSemanticGraphProvenanceV2 WHERE graphReceiptId=? AND elementType='edge' AND elementId=? ORDER BY provenanceKind,provenanceId",[graphRows[0].id,performedEdges[0].id]);
-      expect(performedProv.map(row=>row.provenanceKind)).toEqual(expect.arrayContaining(["decision_receipt","action_receipt","effect_readback","memory_link"]));
-      expect(performedProv.every(row=>row.sourceRevision===pin.sourceRevision&&/^[a-f0-9]{64}$/.test(row.provenanceHash))).toBe(true);
+      const performedProv=performedEdges[0].provenance;
+      expect(performedProv.map(ref=>ref.kind)).toEqual(expect.arrayContaining(["decision_receipt","action_receipt","effect_readback","memory_link"]));
+      expect(performedProv.every(ref=>ref.sourceRevision===pin.sourceRevision&&/^[a-f0-9]{64}$/.test(ref.hash))).toBe(true);
       const counts=[memory.working.confirmedEventIds.length,memory.episodic.length,memory.semantic.length,memory.procedural.length];
       expect(displayed.counts).toEqual(counts.map(String));
       await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual AIM-292 memory + AIM-293 effect readback + AIM-294 graph DB provenance -> bounded authenticated AX1 projection",graphHash:graphProjection.graphHash,graphResultHash:graphProjection.resultHash,graphSourceResultHash:graphProjection.sourceResultHash,projectionProvenanceFormat:provenancePacket.format,projectionProvenanceGeneration:provenanceProjection.generation,projectionProvenanceGraphHash:provenanceProjection.graphHash,projectionProvenanceSourceResultHash:provenanceProjection.sourceResultHash,projectionProvenanceSemanticGraphResultHash:provenanceProjection.semanticGraphResultHash,projectionProvenanceStatus:provenanceProjection.provenanceStatus}),contentType:"application/json"});

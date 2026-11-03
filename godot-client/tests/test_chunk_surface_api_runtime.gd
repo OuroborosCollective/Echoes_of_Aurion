@@ -78,7 +78,8 @@ func _request(api: Node, id: String) -> void:
 func verify() -> void:
 	var auth := TestAuth.new()
 	root.add_child(auth)
-	var api := Api.new(auth)
+	var slice_mode := OS.get_cmdline_user_args().has("--slice")
+	var api := Api.new(auth, "/api/game/world-slice" if slice_mode else Api.PATH)
 	api.surface_ready.connect(_ready_event)
 	api.request_failed.connect(_failed_event)
 	root.add_child(api)
@@ -90,7 +91,7 @@ func verify() -> void:
 	var first: HTTPRequest = api.get_child(0) as HTTPRequest if api.get_child_count() > 0 else null
 	require(first != null, "chunk GET did not open a real HTTPRequest")
 	if first:
-		require(first.max_redirects == 0 and first.body_size_limit == 262144 and first.timeout == 12.0, "unbounded/redirectable chunk GET")
+		require(first.max_redirects == 0 and first.body_size_limit == (65536 if slice_mode else 262144) and first.timeout == 12.0, "unbounded/redirectable chunk GET")
 	await _request(api, "zone_redirect")
 	require(not success and last_error == "CHUNK_REQUEST_FAILED", "redirect followed or accepted")
 	await _request(api, "zone_refresh")
@@ -113,6 +114,22 @@ func verify() -> void:
 	await create_timer(0.28).timeout
 	require(completed and not success and last_error == "CHUNK_SESSION_CHANGED", "revoked token accepted chunk payload")
 	api.cancel()
+	auth.allowed = true
+	await _request(api, "zone_denied")
+	var denied_code := "WORLD_SLICE_ACTOR_SCOPE_MISMATCH" if slice_mode else "CHUNK_SURFACE_PRESENCE_REQUIRED"
+	require(not success and last_error == "CHUNK_HTTP_403_" + denied_code, "server fail-closed reason hidden behind generic chunk error: " + last_error)
+	await _request(api, "zone_untrusted_error")
+	require(not success and last_error == "CHUNK_HTTP_500", "untrusted server error text was reflected: " + last_error)
+	await _request(api, "zone_unknown_prefixed_error")
+	require(not success and last_error == "CHUNK_HTTP_500", "unknown prefixed error was reflected: " + last_error)
+	await _request(api, "zone_unknown_uppercase_error")
+	require(not success and last_error == "CHUNK_HTTP_500", "arbitrary uppercase error was reflected: " + last_error)
+	await _request(api, "zone_foreign_endpoint_error")
+	require(not success and last_error == "CHUNK_HTTP_403", "another endpoint's code was reflected: " + last_error)
+	await _request(api, "zone_database_error")
+	require(not success and last_error == "CHUNK_HTTP_503_DATABASE_UNAVAILABLE", "shared database reason was hidden: " + last_error)
+	await _request(api, "zone_native_auth_error")
+	require(not success and last_error == "CHUNK_HTTP_503_NATIVE_AUTH_CONFIGURATION_UNAVAILABLE", "native auth availability reason was hidden: " + last_error)
 	api.queue_free()
 	auth.queue_free()
 	if failures.is_empty():

@@ -20,7 +20,8 @@
 import { createHash } from "node:crypto";
 import { resolveAndRecordAx1LivingWorld } from "../ax1LivingWorldRuntime";
 import { readConfirmedMerchantActionSource } from "../npcActionGatewayPersistence";
-import { readConfirmedNpcState } from "../wasdAurionRuntime";
+import { readConfirmedNpcState, resolveAndRecordNpc } from "../wasdAurionRuntime";
+import { merchantGenesisRequest } from "./npc/merchantRules.js";
 import { readConfirmedNpcMultiMemory } from "../npcMultiMemoryPersistence";
 import { GLOBAL_WORLD_SEED, GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { orchestrateCivilizationLoop } from "./civilizationService";
@@ -194,6 +195,10 @@ type NpcExecutionResult = Readonly<{
   signals: readonly PendingSignal[];
   actionReceiptId: string | null;
   action: string | null;
+  /** Market hub where the action was resolved (the NPC's location before acting). */
+  actionHubId: LivingHistoryHubId;
+  /** Hub a caravan actually arrived at this cycle; null when no caravan arrived. */
+  caravanDestinationHubId: LivingHistoryHubId | null;
 }>;
 
 /**
@@ -211,28 +216,36 @@ async function executeSingleNpcLifecycle(
 
   const source = await readConfirmedMerchantActionSource(npcId);
   if (!source) {
+    // Never-started hub merchant: record exactly one deterministic genesis decision
+    // through the canonical resolveAndRecordNpc path. It acts from the next cycle.
+    // An NPC with any recorded state never re-enters this branch.
+    const genesis = await resolveAndRecordNpc(merchantGenesisRequest(hubId));
+    if (genesis.npcId !== npcId || genesis.decision.resolutionIndex !== 0) throw new Error("NPC_GENESIS_READBACK_MISMATCH");
+    const confirmedGenesis = await readConfirmedMerchantActionSource(npcId);
+    if (!confirmedGenesis || confirmedGenesis.resolutionIndex !== 0) throw new Error("NPC_GENESIS_SOURCE_READBACK_REQUIRED");
     return Object.freeze({
       entry: Object.freeze({
         hubId,
         npcId,
-        status: "skipped",
+        status: "confirmed",
         action: null,
-        goal: null,
-        longTermGoal: null,
-        resolutionIndex: null,
-        decisionHash: null,
+        goal: genesis.decision.goal,
+        longTermGoal: "lifeState" in genesis ? genesis.lifeState.longTermGoal : null,
+        resolutionIndex: 0,
+        decisionHash: genesis.decision.decisionHash,
         worldReactionHash: null,
         actionReceiptId: null,
         effectReadbackHash: null,
-        receiptSource: null,
-        failureCode: "NPC_ACTION_SOURCE_DECISION_REQUIRED",
+        receiptSource: genesis.source,
+        failureCode: null,
       }),
       signals: Object.freeze([]),
       actionReceiptId: null,
       action: null,
+      actionHubId: hubId,
+      caravanDestinationHubId: null,
     });
   }
-
   const resolutionIndex = source.resolutionIndex + 1;
   const result = await resolveAndRecordAx1LivingWorld({
     worldSeed: GLOBAL_WORLD_SEED,
@@ -265,18 +278,23 @@ async function executeSingleNpcLifecycle(
 
   const action = result.resolution.action;
   const worldReactionHash = result.world.deterministicHash;
+  // NPCs travel between hubs; signals and interactions belong to the market the
+  // action was resolved in, not to the NPC's home hub.
+  const actionHubId = result.resolution.market.hubId;
+  const caravanDestinationHubId =
+    action === "caravan" && !result.resolution.caravan.ambushed ? result.resolution.caravan.destination : null;
 
   signals.push({
     signal: {
       id: `whl:${cycle}:${hubId}:economy`,
       kind: "economy",
-      regionId: hubId,
+      regionId: actionHubId,
       magnitude: result.resolution.stabilityDelta / 100,
       sourceReceiptId: result.actionReceiptId,
       resolutionIndex,
     },
     sourceNpcId: npcId,
-    sourceHubId: hubId,
+    sourceHubId: actionHubId,
   });
 
   if (result.resolution.caravan.ambushed) {
@@ -284,13 +302,13 @@ async function executeSingleNpcLifecycle(
       signal: {
         id: `whl:${cycle}:${hubId}:hazard`,
         kind: "hazard",
-        regionId: hubId,
+        regionId: actionHubId,
         magnitude: 0.5,
         sourceReceiptId: result.actionReceiptId,
         resolutionIndex,
       },
       sourceNpcId: npcId,
-      sourceHubId: hubId,
+      sourceHubId: actionHubId,
     });
   }
 
@@ -299,13 +317,13 @@ async function executeSingleNpcLifecycle(
       signal: {
         id: `whl:${cycle}:${hubId}:politics`,
         kind: "politics",
-        regionId: hubId,
+        regionId: actionHubId,
         magnitude: result.resolution.stabilityDelta / 50,
         sourceReceiptId: result.actionReceiptId,
         resolutionIndex,
       },
       sourceNpcId: npcId,
-      sourceHubId: hubId,
+      sourceHubId: actionHubId,
     });
   }
 
@@ -328,6 +346,8 @@ async function executeSingleNpcLifecycle(
     signals: Object.freeze(signals),
     actionReceiptId: result.actionReceiptId,
     action,
+    actionHubId,
+    caravanDestinationHubId,
   });
 }
 
@@ -362,7 +382,9 @@ export async function executeLivingHistoryCycle(
     hubId: LivingHistoryHubId;
     action: string | null;
     cycle: number;
+    caravanDestinationHubId: LivingHistoryHubId | null;
   }>> = [];
+  let civilizationFailureCode: string | null = null;
   let civilizationAction: string | null = null;
   let lastReceiptId: string | null = null;
 
@@ -376,9 +398,10 @@ export async function executeLivingHistoryCycle(
       if (result.value.actionReceiptId) lastReceiptId = result.value.actionReceiptId;
       npcActionResults.push({
         npcId: result.value.entry.npcId,
-        hubId,
+        hubId: result.value.actionHubId,
         action: result.value.action,
         cycle,
+        caravanDestinationHubId: result.value.caravanDestinationHubId,
       });
     } else {
       const npcId = npcIdForHub(hubId);
@@ -398,7 +421,7 @@ export async function executeLivingHistoryCycle(
         receiptSource: null,
         failureCode: code,
       }));
-      npcActionResults.push({ npcId, hubId, action: null, cycle });
+      npcActionResults.push({ npcId, hubId, action: null, cycle, caravanDestinationHubId: null });
     }
   }
 
@@ -426,6 +449,7 @@ export async function executeLivingHistoryCycle(
       );
       civilizationAction = civResult?.action ?? null;
     } catch (error) {
+      civilizationFailureCode = `CIVILIZATION_ORCHESTRATION_FAILED:${failureCode(error)}`;
       console.warn("[LivingHistoryLoop] Civilization orchestration failed:", error);
     }
   }
@@ -438,7 +462,7 @@ export async function executeLivingHistoryCycle(
     aggregatedSignalsCount: pendingSignals.length,
     worldReactionHash: signalsHash,
     civilizationAction,
-    failureCode: null,
+    failureCode: civilizationFailureCode,
     interactions,
     interactionsHash,
     economicImpact,

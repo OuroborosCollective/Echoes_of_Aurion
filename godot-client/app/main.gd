@@ -25,6 +25,10 @@ const WorldAssetApi = preload("res://net/api/world_asset_api.gd")
 const WorldStudio = preload("res://ui/screens/world_authoring_studio.gd")
 const LivingHistoryProjection = preload("res://world/living_history_projection.gd")
 const Terrain3DConfirmed = preload("res://world/terrain3d_confirmed.gd")
+const WorldSlice = preload("res://projection/world_slice.gd")
+const TabletopProjection = preload("res://world/tabletop_projection.gd")
+const TabletopMap = preload("res://world/tabletop_map.gd")
+const TabletopControls = preload("res://ui/screens/tabletop_controls.gd")
 const InputAdapter = preload("res://app/input_adapter.gd")
 const TouchRouter = preload("res://ui/mobile/touch_router.gd")
 const PUBLIC_APPEARANCE_REFRESH_MS := 10000
@@ -69,6 +73,18 @@ const STARS := [Vector2(0.08, 0.13), Vector2(0.19, 0.65), Vector2(0.33, 0.09), V
 @onready var starter_village_visuals: Node3D = $WorldView/Live3D/World/StarterVillageVisuals
 @onready var terrain3d_host: Node3D = $WorldView/Live3D/World/ConfirmedTerrain3D
 
+var _tabletop_active := false
+var _tabletop_fallback := false
+var _tabletop_api: Node
+var _tabletop_layer: Node3D
+var _tabletop_map: Control
+var _tabletop_controls: Control
+var _tabletop_last_request := -1
+var _tabletop_last_read := -1
+var _tabletop_coordinate := Vector2i.ZERO
+var _tabletop_saved_visibility: Dictionary = {}
+var _tabletop_pending_ceiling := INF
+var _tabletop_ceiling_dirty := false
 var _diagnostics = TechnicalDiagnostics.new()
 var _movement = InputAdapter.new()
 var _camera_router = TouchRouter.new()
@@ -195,6 +211,33 @@ func _ready() -> void:
 	add_child(_world_studio)
 	_world_studio.confirmed_world.connect(_on_world_studio_readback)
 	_world_studio.closed.connect(_restore_mobile_joystick)
+	_tabletop_api = ChunkSurfaceApi.new(_auth_start, WorldSlice.PATH)
+	add_child(_tabletop_api)
+	_tabletop_api.surface_ready.connect(_on_tabletop_ready)
+	_tabletop_api.request_failed.connect(_on_tabletop_failed)
+	_tabletop_layer = TabletopProjection.new()
+	_tabletop_layer.name = "TabletopProjection"
+	world_actors.get_parent().add_child(_tabletop_layer)
+	_tabletop_layer.visible = false
+	_tabletop_map = TabletopMap.new()
+	_tabletop_map.name = "TabletopMap"
+	add_child(_tabletop_map)
+	_tabletop_map.visible = false
+	_tabletop_controls = TabletopControls.new()
+	_tabletop_controls.name = "TabletopControls"
+	add_child(_tabletop_controls)
+	_tabletop_controls.visible = false
+	_tabletop_controls.return_requested.connect(func(): _set_tabletop(false))
+	_tabletop_controls.zoom_requested.connect(_on_camera_zoom_requested)
+	_tabletop_controls.controls_changed.connect(func(): _camera_router.cancel())
+	_tabletop_controls.category_changed.connect(func(category: String, enabled: bool):
+		_tabletop_layer.set_category(category, enabled)
+		_tabletop_map.set_category(category, enabled))
+	_tabletop_controls.ceiling_changed.connect(func(height: float):
+		_tabletop_pending_ceiling = height
+		_tabletop_ceiling_dirty = true)
+	_tabletop_controls.transparency_changed.connect(func(enabled: bool): _tabletop_layer.set_transparency(enabled))
+	_tabletop_controls.fallback_changed.connect(_set_tabletop_fallback)
 	_chunk_api = ChunkSurfaceApi.new(_auth_start)
 	add_child(_chunk_api)
 	_chunk_api.surface_ready.connect(_on_chunk_surface_ready)
@@ -221,6 +264,9 @@ func _ready() -> void:
 	%PlanB.pressed.connect(func(): zone_map.arm_plan("B"))
 	%PlanHouse.pressed.connect(func(): zone_map.arm_plan("Haus"))
 	world_toggle.pressed.connect(_toggle_world_diagnostics)
+	%ZoomIn.pressed.connect(func(): _on_camera_zoom_requested(1.25))
+	%ZoomOut.pressed.connect(func(): _on_camera_zoom_requested(0.8))
+	mobile_hud.camera_zoom_requested.connect(_on_camera_zoom_requested)
 	world_action.pressed.connect(_on_world_action_pressed)
 	mobile_hud.attack_requested.connect(_on_world_action_pressed)
 	mobile_hud.skill_requested.connect(func(skill_id: String):
@@ -232,6 +278,20 @@ func _ready() -> void:
 	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
 	mobile_hud.exit_requested.connect(_on_mobile_exit_requested)
 	mobile_hud.exit_confirmation.canceled.connect(_restore_mobile_joystick)
+	var tabletop_button := Button.new()
+	tabletop_button.name = "TabletopButton"
+	tabletop_button.text = "Tabletop"
+	tabletop_button.custom_minimum_size.y = 48
+	tabletop_button.pressed.connect(func(): _set_tabletop(true))
+	$WorldHUD/WorldBar.add_child(tabletop_button)
+	var tabletop_mobile := Button.new()
+	tabletop_mobile.name = "TabletopButton"
+	tabletop_mobile.text = "Tabletop"
+	tabletop_mobile.custom_minimum_size.y = 48
+	mobile_hud.get_node("MenuPanel/Scroll/Content").add_child(tabletop_mobile)
+	tabletop_mobile.pressed.connect(func():
+		mobile_hud.set_menu_open(false)
+		_set_tabletop(true))
 	var studio_button := Button.new()
 	studio_button.name = "WorldStudioButton"
 	studio_button.text = "Weltstudio (Admin)"
@@ -357,6 +417,9 @@ func _on_zone_ticket_succeeded(receipt: Dictionary) -> void:
 		_on_zone_closed("socket_open_failed")
 
 func _reset_projection() -> void:
+	if _tabletop_controls != null:
+		_set_tabletop(false)
+		_clear_tabletop()
 	# An old HTTP completion/actor must not survive a new authenticated zone.
 	if _world_studio != null:
 		_world_studio.close_session()
@@ -475,7 +538,7 @@ func _on_zone_snapshot(snapshot: Dictionary) -> void:
 		var now_ms := Time.get_ticks_msec()
 		_last_world_update_ms = now_ms
 		_world_is_stale = false
-		_world_design_visuals.visible = true
+		_world_design_visuals.visible = not _tabletop_active
 		_visuals.capture(_confirmed_zone, now_ms)
 		zone_map.set_confirmed(_confirmed_zone, _entities)
 		zone_map.set_visual_positions(_visuals, now_ms)
@@ -646,6 +709,11 @@ func _notification(what: int) -> void:
 		_on_app_suspended()
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
 		_on_app_resumed()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_node_ready():
+		_camera_router.cancel()
+		if _tabletop_active:
+			_clear_tabletop()
+			_set_tabletop(false)
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST and _mobile_hud_enabled and is_node_ready():
 		_handle_mobile_back()
 
@@ -656,6 +724,7 @@ func _process(_delta: float) -> void:
 	if _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _auth_start.protected_response_allowed():
 		_on_auth_session_failed("NATIVE_AUTH_SESSION_EXPIRED")
 		return
+	_tick_tabletop(now_ms)
 	if _confirmed_zone.has_state():
 		zone_map.set_visual_positions(_visuals, now_ms)
 		_project_3d(now_ms)
@@ -715,12 +784,15 @@ func _on_mobile_menu_changed(open: bool) -> void:
 
 func _restore_mobile_joystick() -> void:
 	if _mobile_hud_enabled:
-		mobile_joystick.visible = world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible
+		mobile_joystick.visible = not _tabletop_active and world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible
 
 func _handle_mobile_back() -> void:
 	if _world_studio.visible:
 		_world_studio._close_requested()
 		_restore_mobile_joystick()
+		return
+	if _tabletop_active:
+		_set_tabletop(false)
 		return
 	if mobile_hud.close_transient():
 		_restore_mobile_joystick()
@@ -747,6 +819,7 @@ func _world_input_permitted() -> bool:
 	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and not _world_studio.visible and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
 
 func _open_world_studio() -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _zone_socket.state_name() != "connected" or _lifecycle.is_suspended() or _world_is_stale or not _auth_start.protected_response_allowed():
 		return
 	_camera_router.cancel()
@@ -768,6 +841,8 @@ func _on_world_studio_readback(readback: Dictionary, connection: String, generat
 
 func _camera_exclusions() -> Array[Rect2]:
 	var blocked: Array[Rect2] = []
+	if _tabletop_active:
+		blocked.append_array(_tabletop_controls.exclusions())
 	if mobile_joystick.visible:
 		blocked.append(mobile_joystick.get_global_rect())
 	if world_hud.visible:
@@ -778,7 +853,12 @@ func _camera_exclusions() -> Array[Rect2]:
 		blocked.append_array(mobile_hud.touch_exclusions())
 	return blocked
 
+func _on_camera_zoom_requested(factor: float) -> void:
+	if _world_input_permitted():
+		world_camera.zoom_visual(factor)
+
 func _input(event: InputEvent) -> void:
+	if _tabletop_active and _tabletop_fallback: return
 	if not (event is InputEventScreenTouch or event is InputEventScreenDrag):
 		return
 	var area := Rect2(
@@ -788,6 +868,8 @@ func _input(event: InputEvent) -> void:
 	match str(event_result.get("kind", "")):
 		"drag":
 			world_camera.drag_orbit(event_result["delta"])
+		"zoom":
+			world_camera.zoom_visual(event_result["factor"])
 		"tap":
 			_select_visible_target_at(event_result["position"])
 
@@ -802,6 +884,7 @@ func _is_visible_confirmed_entity(id: String) -> bool:
 	return false
 
 func _select_visible_target_at(screen_point: Vector2) -> void:
+	if _tabletop_active: return
 	if not _world_input_permitted():
 		return
 	_selected_target_id = ""
@@ -836,11 +919,12 @@ func _refresh_target_hud() -> void:
 		_selected_target_id = ""
 	target_label.text = "Ziel: keines" if _selected_target_id.is_empty() else "Aurion bestätigt · " + _selected_target_id
 	var mob: Dictionary = _entities.record("mobs", _selected_target_id)
-	world_action.disabled = not _world_input_permitted() or mob.is_empty() or mob.get("state", "dead") == "dead"
+	world_action.disabled = _tabletop_active or not _world_input_permitted() or mob.is_empty() or mob.get("state", "dead") == "dead"
 	if mobile_hud.visible:
 		mobile_hud.render_projection(_confirmed_zone, _entities, _selected_target_id, _world_is_stale, not world_action.disabled, combat_notice.text if combat_notice.visible else "")
 
 func _on_world_action_pressed() -> void:
+	if _tabletop_active: return
 	# Only the existing v5 send_attack typed command; Aurion decides all
 	# reachability, damage, cooldown, and final action outcome.
 	if not _world_input_permitted():
@@ -854,6 +938,7 @@ func _on_world_action_pressed() -> void:
 ## Only a verified v5 session may send digital intents, max once per 100 ms.
 ## No client-side motion, velocity, coordinates or gameplay simulation.
 func _poll_move_intent(now_ms: int) -> void:
+	if _tabletop_active: return
 	if _zone_socket == null:
 		return
 	var connected: bool = _zone_socket.state_name() == "connected"
@@ -891,6 +976,7 @@ func _on_appearance_failed(reason: String, connection_id: String) -> void:
 	_update_3d_status()
 
 func _on_appearance_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
 		return
 	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation:
@@ -936,6 +1022,7 @@ func _mount_resolved_self(resolution: Dictionary) -> bool:
 	return true
 
 func _project_3d(now_ms: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state():
 		return
 	_remote_actors.project(_confirmed_zone, _visuals, now_ms, world_actors)
@@ -993,6 +1080,7 @@ func _current_remote_ids_csv() -> String:
 	return ",".join(parts)
 
 func _request_remote_appearances(now_ms: int) -> void:
+	if _tabletop_active: return
 	_request_monster_catalog(now_ms)
 	if _remote_catalog.is_empty() or not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
 		return
@@ -1009,6 +1097,7 @@ func _request_remote_appearances(now_ms: int) -> void:
 		_remote_last_poll_ms = now_ms
 
 func _on_remote_appearance_ready(response: Dictionary, connection_id: String, generation: int, requested_ids: String) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
 		return
 	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
@@ -1034,6 +1123,7 @@ func _apply_remote_appearances(response: Dictionary, catalog: Dictionary, manife
 
 ## Static Aurion quest anchors are NOT dynamic v5 gameplay NPCs.
 func _on_quest_npc_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
 		return
 	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
@@ -1079,7 +1169,7 @@ func _update_world_freshness(now_ms: int) -> void:
 	if stale == _world_is_stale:
 		return
 	_world_is_stale = stale
-	_world_design_visuals.visible = not stale
+	_world_design_visuals.visible = not stale and not _tabletop_active
 	if stale and _world_asset_api != null:
 		_world_asset_api.cancel()
 		_world_asset_inflight = ""
@@ -1231,6 +1321,8 @@ func _fit_layout() -> void:
 		mobile_joystick.offset_right = mobile_joystick.offset_left + 220.0
 		mobile_joystick.offset_top = safe.end.y - size.y - 16.0 * density - 220.0 * joystick_scale
 		mobile_joystick.offset_bottom = mobile_joystick.offset_top + 220.0
+	if _tabletop_controls != null:
+		_tabletop_controls.fit_layout(_mobile_safe_rect())
 	queue_redraw()
 
 func _mobile_safe_rect() -> Rect2:
@@ -1259,6 +1351,7 @@ func _draw() -> void:
 		draw_circle(star * size, 2.0, Color(0.77, 0.69, 0.46, 0.6))
 
 func _request_monster_catalog(now_ms: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
 		return
 	# Preserve monster refresh behavior without downloading the full asset
@@ -1273,6 +1366,7 @@ func _request_monster_catalog(now_ms: int) -> void:
 	_monster_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
 
 func _on_monster_catalog_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
 		return
 	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
@@ -1300,6 +1394,7 @@ func _apply_monster_catalog(catalog: Dictionary, manifest: Dictionary) -> void:
 	_project_3d(Time.get_ticks_msec())
 
 func _request_world_design(now_ms: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed():
 		return
 	if _world_design_last_poll_ms >= 0 and now_ms - _world_design_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS:
@@ -1308,6 +1403,7 @@ func _request_world_design(now_ms: int) -> void:
 	_world_design_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
 
 func _on_world_design_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended():
 		return
 	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
@@ -1349,6 +1445,7 @@ func _remember_world_design_surface(readback: Dictionary, connection_id: String,
 	_world_design_visuals.accept_surface(readback, connection_id, center)
 
 func _request_world_asset(now_ms: int) -> void:
+	if _tabletop_active: return
 	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed() or _world_asset_api.busy():
 		return
 	for request in _world_design_visuals.needed_assets():
@@ -1362,6 +1459,7 @@ func _request_world_asset(now_ms: int) -> void:
 		return
 
 func _on_world_asset_ready(sha: String, bytes: PackedByteArray, connection_id: String, generation: int) -> void:
+	if _tabletop_active: return
 	_world_asset_inflight = ""
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _lifecycle.is_suspended() or _world_is_stale:
 		return
@@ -1453,6 +1551,7 @@ func _evict_neighbor_chunk(coordinate: Vector2i) -> void:
 	_sync_terrain3d_presentation()
 
 func _request_chunk_surface(now_ms: int) -> void:
+	if _tabletop_active: return
 	if _chunk_api == null or not _confirmed_zone.has_state() or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected":
 		return
 	var value: Variant = _current_confirmed_chunk()
@@ -1517,6 +1616,7 @@ func _request_chunk_surface(now_ms: int) -> void:
 ## Production enters only via a native authenticated GET and exact zone,
 ## token-generation and current confirmed self-position reconciliation.
 func _on_chunk_surface_ready(response: Dictionary, connection_id: String, generation: int, coordinate: Vector2i) -> void:
+	if _tabletop_active: return
 	if _lifecycle.is_suspended() or not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
 		return
 	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
@@ -1632,6 +1732,7 @@ func _apply_chunk_surface(readback: Dictionary, connection_id: String) -> bool:
 	return true
 
 func _request_living_history(now_ms: int) -> void:
+	if _tabletop_active: return
 	if _history_api == null or _history_world_id.is_empty() or _history_api.busy() or not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed():
 		return
 	if _history_last_poll_ms >= 0 and now_ms - _history_last_poll_ms < HISTORY_REFRESH_MS:
@@ -1640,6 +1741,7 @@ func _request_living_history(now_ms: int) -> void:
 	_history_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
 
 func _on_history_ready(response: Dictionary, connection_id: String, generation: int) -> void:
+	if _tabletop_active: return
 	if _lifecycle.is_suspended() or _world_is_stale or not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _zone_socket.state_name() != "connected":
 		return
 	if not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation:
@@ -1657,3 +1759,97 @@ func _on_history_failed(_reason: String, connection_id: String) -> void:
 	history_status.text = "Weltgeschichte · derzeit nicht verfügbar"
 	history_status.visible = true
 
+
+## WT02 is an observation view. Enter only at rest; never manufacture a stop,
+## move, attack, discovery or a camera-selected chunk request.
+func _set_tabletop(enabled: bool) -> bool:
+	if enabled == _tabletop_active: return true
+	if enabled:
+		if not _world_input_permitted() or not _auth_start.protected_response_allowed(): return false
+		if _movement._last_direction != Vector2i.ZERO or Input.get_vector("move_left", "move_right", "move_forward", "move_backward", 0.2) != Vector2.ZERO or bool(mobile_joystick.get("is_pressed")): return false
+		var coordinate: Variant = _current_confirmed_chunk()
+		if typeof(coordinate) != TYPE_VECTOR2I: return false
+		_tabletop_coordinate = coordinate
+		_tabletop_active = true
+		_tabletop_last_request = -1
+		_tabletop_last_read = -1
+		_tabletop_saved_visibility.clear()
+		for node in [confirmed_terrain, confirmed_neighbors, terrain3d_host, starter_village_visuals, unassigned_floor, world_actors, quest_npc_root, _world_design_visuals]:
+			_tabletop_saved_visibility[node] = node.visible
+			node.visible = false
+		for api in [_appearance_api, _chunk_api, _world_design_api, _world_asset_api, _remote_api, _quest_npc_api, _history_api, _monster_api]: api.cancel()
+		world_camera.set_tabletop(true, Vector3(float(coordinate.x) * 64.0, 0.0, float(coordinate.y) * 64.0))
+		_tabletop_layer.visible = not _tabletop_fallback
+		_tabletop_controls.visible = true
+		_set_tabletop_fallback(_tabletop_fallback)
+		world_hud.visible = false
+		mobile_hud.visible = false
+		target_hud.visible = false
+		mobile_joystick.visible = false
+		_tabletop_controls.fit_layout(_mobile_safe_rect())
+		_request_tabletop(Time.get_ticks_msec())
+	else:
+		_tabletop_active = false
+		_clear_tabletop()
+		for node in _tabletop_saved_visibility:
+			if is_instance_valid(node): node.visible = bool(_tabletop_saved_visibility[node])
+		_tabletop_saved_visibility.clear()
+		world_camera.set_tabletop(false)
+		_tabletop_layer.visible = false
+		_tabletop_map.visible = false
+		_tabletop_controls.visible = false
+		live_3d_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE
+		if _confirmed_zone.has_state(): _show_3d()
+		# These two optional readers normally start once at connection time.
+		# Entry cancelled them; safely resume them once on the return boundary.
+		if _confirmed_zone.has_state() and _zone_socket.state_name() == "connected" and not _lifecycle.is_suspended() and not _world_is_stale and _auth_start.protected_response_allowed():
+			_appearance_api.request_self(_config.server_base_url, _confirmed_zone.connection_id())
+			_quest_npc_api.request_npcs(_config.server_base_url, _confirmed_zone.connection_id())
+	_camera_router.cancel()
+	return true
+
+func _clear_tabletop() -> void:
+	_tabletop_api.cancel()
+	_tabletop_layer.clear()
+	_tabletop_map.set_slice({})
+	_tabletop_last_read = -1
+	_tabletop_controls.set_readback_status("UNAVAILABLE")
+
+func _set_tabletop_fallback(enabled: bool) -> void:
+	_tabletop_fallback = enabled
+	if not _tabletop_active: return
+	_camera_router.cancel()
+	_tabletop_map.visible = enabled
+	_tabletop_layer.visible = not enabled
+	live_3d_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if enabled else SubViewport.UPDATE_WHEN_PARENT_VISIBLE
+
+func _tick_tabletop(now_ms: int) -> void:
+	if not _tabletop_active: return
+	if _tabletop_ceiling_dirty:
+		_tabletop_ceiling_dirty = false
+		_tabletop_layer.set_ceiling(_tabletop_pending_ceiling)
+		_tabletop_map.set_ceiling(_tabletop_pending_ceiling)
+	if not _world_input_permitted() or not _auth_start.protected_response_allowed() or _current_confirmed_chunk() != _tabletop_coordinate:
+		_clear_tabletop()
+		_set_tabletop(false)
+		return
+	if _tabletop_last_read >= 0 and now_ms - _tabletop_last_read >= 10000: _clear_tabletop()
+	_request_tabletop(now_ms)
+
+func _request_tabletop(now_ms: int) -> void:
+	if not _tabletop_active or _tabletop_api.busy() or (_tabletop_last_request >= 0 and now_ms - _tabletop_last_request < 5000): return
+	_tabletop_last_request = now_ms
+	_tabletop_api.request_surface(_config.server_base_url, _confirmed_zone.connection_id(), _tabletop_coordinate)
+
+func _on_tabletop_ready(response: Dictionary, connection: String, generation: int, coordinate: Vector2i) -> void:
+	if not _tabletop_active or not _world_input_permitted() or not _auth_start.protected_response_allowed() or generation != _auth_start.session_generation() or connection != _confirmed_zone.connection_id(): return
+	if coordinate != _tabletop_coordinate or coordinate != _current_confirmed_chunk(): return
+	if not _tabletop_layer.apply_readback(response, connection, _confirmed_zone.self_entity_id(), coordinate):
+		_clear_tabletop()
+		return
+	_tabletop_last_read = Time.get_ticks_msec()
+	_tabletop_map.set_slice(_tabletop_layer.snapshot())
+	_tabletop_controls.set_readback_status(str(response.status))
+
+func _on_tabletop_failed(_reason: String, connection: String) -> void:
+	if _tabletop_active and _confirmed_zone.connection_id() == connection: _clear_tabletop()
