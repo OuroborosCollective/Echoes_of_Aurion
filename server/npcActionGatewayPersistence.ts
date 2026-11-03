@@ -319,10 +319,12 @@ async function persistWorld(tx: NpcTransaction, request: MerchantDecisionRequest
   return Object.freeze({ row, reaction });
 }
 
-async function persistPolity(tx: NpcTransaction, request: MerchantDecisionRequests["polityRequest"]): Promise<PolityState> {
+export async function persistPolity(tx: NpcTransaction, request: MerchantDecisionRequests["polityRequest"]): Promise<PolityState> {
   const state = resolvePolityState(request);
   await tx.insert(aurionPolityStates).values({ polityId:state.polityId, stateJson:stableCatalogStringify(state), reactionHash:state.reactionHash, ruleSetVersion:AURION_WASD_RULESET_VERSION, contentVersion:AURION_WASD_CONTENT_VERSION }).onDuplicateKeyUpdate({ set:{ stateJson:stableCatalogStringify(state), reactionHash:state.reactionHash, ruleSetVersion:AURION_WASD_RULESET_VERSION, contentVersion:AURION_WASD_CONTENT_VERSION } });
-  const row = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId,state.polityId)).limit(1))[0];
+  // A no-op upsert may follow another transaction's identical write. A plain
+  // repeatable-read SELECT can still see our earlier snapshot in that case.
+  const row = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId,state.polityId)).limit(1).for("update"))[0];
   if (!row || row.reactionHash !== state.reactionHash || row.stateJson !== stableCatalogStringify(state)) throw new Error("NPC_ACTION_POLITY_EFFECT_READBACK_MISMATCH");
   return state;
 }

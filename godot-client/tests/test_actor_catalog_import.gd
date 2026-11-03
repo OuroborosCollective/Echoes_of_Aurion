@@ -133,6 +133,21 @@ func verify_cache(source: Dictionary, bytes: PackedByteArray) -> bool:
 	require(cache.evidence().actors == 12 and not cache.admits("player:13"), "native actor ceiling exceeded")
 	cache.clear()
 	require(cache.evidence().models == 0 and cache.evidence().actors == 0, "session reset leaked cache ownership")
+	var oversized := changed(bytes, func(data: Dictionary): data.skins[0].joints.resize(129))
+	var digest := HashingContext.new()
+	digest.start(HashingContext.HASH_SHA256)
+	digest.update(oversized)
+	var rejected_sha := digest.finish().hex_encode()
+	var rejected_entry := entry.duplicate(true)
+	rejected_entry.sha256 = rejected_sha
+	rejected_entry.storageUrl = "/api/assets/glb/" + rejected_sha + ".glb"
+	rejected_entry.normalization.sourceSha256 = rejected_sha
+	rejected_entry.bytes = oversized.size()
+	cache.set_owners(connection,["player:1"])
+	cache.request(rejected_entry,"player:1")
+	require(not cache.supply_asset(rejected_sha,oversized,connection), "inadmissible source reached cache")
+	require(cache.needed_assets().is_empty(), "deterministically rejected bytes remain in download loop")
+	cache.clear()
 	# Imported libraries often namespace or suffix clip names. Keep real clips.
 	var aliases := AnimationPlayer.new()
 	var library := AnimationLibrary.new()
@@ -200,6 +215,9 @@ func verify_scene(manifest: Dictionary) -> void:
 	scene._quest_npc_response = {"version":"aurion.quest-npc-visuals.v1","zoneId":"observatory_threshold","stateSource":"aurion-canonical-quest-anchors","catalogRevision":catalog.revision,"npcs":npcs}
 	var before := JSON.stringify(scene._confirmed_zone.current_state())
 	scene._refresh_catalog_actors()
+	require(scene.world_actors.get_child_count() == 9, "prepared exact self/remote models vanished while their catalog bytes load")
+	var exact: Dictionary = load("res://actors/appearance_resolver.gd").new().resolve_monster(scene._confirmed_zone,welcome.mobs[0],catalog,manifest,scene._actor_models)
+	require(exact.get("status") == "resolved" and not exact.get("fallback",true), "pending download hid the exact prepared monster match")
 	for request in scene._actor_models.needed_assets():
 		require(scene._actor_models.supply_asset(request.sha256,byte_map[request.sha256],welcome.connectionId),"scene failed to decode requested approved bytes")
 	scene._refresh_catalog_actors()

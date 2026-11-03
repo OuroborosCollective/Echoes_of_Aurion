@@ -1593,8 +1593,10 @@ func _on_actor_asset_ready(sha: String, bytes: PackedByteArray, connection_id: S
 		return
 	_refresh_catalog_actors()
 
-func _on_actor_asset_failed(_reason: String, connection_id: String) -> void:
+func _on_actor_asset_failed(reason: String, connection_id: String) -> void:
 	if _confirmed_zone.has_state() and _confirmed_zone.connection_id() == connection_id and not _actor_asset_inflight.is_empty():
+		if reason == "WORLD_ASSET_TOO_LARGE":
+			_actor_models.reject_asset(_actor_asset_inflight)
 		_actor_asset_retry[_actor_asset_inflight] = Time.get_ticks_msec() + 30000
 	_actor_asset_inflight = ""
 

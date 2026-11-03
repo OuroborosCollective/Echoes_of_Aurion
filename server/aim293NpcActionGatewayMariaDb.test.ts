@@ -1,15 +1,22 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
-import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource, readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
+import { executeConfirmedMerchantAction, persistPolity, readConfirmedMerchantActionSource, readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
+import { eq } from "drizzle-orm";
+import { aurionPolityStates } from "../drizzle/schema";
+import { getDb } from "./db";
 import { resolveAndRecordNpc } from "./wasdAurionRuntime";
 import {
   merchantBootstrapMarkets,
+  AURION_WASD_CONTENT_VERSION,
+  AURION_WASD_RULESET_VERSION,
   merchantInventoryStateHash,
   merchantMarketStateHash,
   merchantPolityStateHash,
   npcHash,
   npcIdentity,
+  resolvePolityState,
+  stableCatalogStringify,
   type HubId,
 } from "./wasdNpcCapsule";
 
@@ -106,6 +113,35 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
   });
   beforeEach(cleanup);
   afterAll(async()=>{if(pool){if(isolated)await cleanup();await pool.end();}});
+
+  it("reads the current polity after a no-op upsert despite an older repeatable-read snapshot", async () => {
+    const request = {polityId: "polity:" + homeHub, governmentType: "council" as const,
+      territoryIds: [homeHub], stability: 0.72, activeDiplomacy: [], warSignals: []};
+    const old = resolvePolityState({...request, stability: 0.5});
+    const current = resolvePolityState(request);
+    const db = await getDb();
+    if (!db) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    await pool.query("INSERT INTO aurionPolityStates (polityId,stateJson,reactionHash,ruleSetVersion,contentVersion) VALUES (?,?,?,?,?)",
+      [old.polityId, stableCatalogStringify(old), old.reactionHash, AURION_WASD_RULESET_VERSION, AURION_WASD_CONTENT_VERSION]);
+    await db.transaction(async tx => {
+      const before = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId, request.polityId)).limit(1))[0];
+      expect(before.reactionHash).toBe(old.reactionHash);
+      // A separate real connection commits after this transaction's snapshot.
+      await pool.query("UPDATE aurionPolityStates SET stateJson=?,reactionHash=?,ruleSetVersion=?,contentVersion=? WHERE polityId=?",
+        [stableCatalogStringify(current), current.reactionHash, before.ruleSetVersion, before.contentVersion, request.polityId]);
+      const snapshot = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId, request.polityId)).limit(1))[0];
+      expect(snapshot.reactionHash).toBe(old.reactionHash);
+      const values = {polityId:current.polityId,stateJson:stableCatalogStringify(current),reactionHash:current.reactionHash,
+        ruleSetVersion:AURION_WASD_RULESET_VERSION,contentVersion:AURION_WASD_CONTENT_VERSION};
+      await tx.insert(aurionPolityStates).values(values).onDuplicateKeyUpdate({set:values});
+      const stale = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId, request.polityId)).limit(1))[0];
+      expect(stale.reactionHash).toBe(old.reactionHash); // Negative control reproduces the former readback failure.
+      expect(await persistPolity(tx, request)).toEqual(current);
+      const readback = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId, request.polityId)).limit(1).for("update"))[0];
+      expect(readback.reactionHash).toBe(current.reactionHash);
+      expect(readback.stateJson).toBe(stableCatalogStringify(current));
+    }, {isolationLevel: "repeatable read"});
+  });
 
   it("commits the scarce three-unit trade with matching DB inventory, receipt and idempotent readback",async()=>{
     // Disposable, guarded test DB only; no production seeding or inventory repair.

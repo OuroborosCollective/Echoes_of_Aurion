@@ -83,7 +83,7 @@ func verify() -> void:
 	small.asset_ready.connect(_ready_asset)
 	small.request_failed.connect(_failed)
 	await request_and_wait(small, request)
-	require(not ok, "configured byte ceiling was ignored by real HTTP")
+	require(not ok and message == "WORLD_ASSET_TOO_LARGE", "configured byte ceiling was ignored by real HTTP")
 	small.queue_free()
 	require(callbacks == 2, "stale, HTML, or redirect response emitted asset bytes")
 	api.queue_free()

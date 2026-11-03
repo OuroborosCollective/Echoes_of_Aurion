@@ -61,7 +61,7 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 		_fail("WORLD_ASSET_SESSION_CHANGED")
 		return
 	if result != HTTPRequest.RESULT_SUCCESS:
-		_fail("WORLD_ASSET_REQUEST_FAILED")
+		_fail("WORLD_ASSET_TOO_LARGE" if result == HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED else "WORLD_ASSET_REQUEST_FAILED")
 		return
 	var valid_type := false
 	for header in headers:

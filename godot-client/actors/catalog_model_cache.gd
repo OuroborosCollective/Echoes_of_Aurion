@@ -12,6 +12,8 @@ var _owners: Dictionary = {}
 var _requests: Dictionary = {}
 var _models: Dictionary = {}
 var _costs: Dictionary = {}
+var _rejected: Dictionary = {}
+var _deferred: Dictionary = {}
 
 func clear() -> void:
 	_connection = ""
@@ -19,6 +21,8 @@ func clear() -> void:
 	_requests.clear()
 	_models.clear()
 	_costs.clear()
+	_rejected.clear()
+	_deferred.clear()
 
 ## Priority order comes from the confirmed scene (self, then nearby actors).
 func set_owners(connection_id: String, owners: Array) -> void:
@@ -40,6 +44,12 @@ func admits(owner: String) -> bool:
 func forget(owner: String) -> void:
 	_requests.erase(owner)
 	_prune()
+
+func reject_asset(sha: String) -> void:
+	for request in _requests.values():
+		if request.sha256 == sha:
+			_rejected[sha] = true
+			return
 
 static func _normalization_valid(value: Variant, sha: String) -> bool:
 	if typeof(value) != TYPE_DICTIONARY or value.get("revision") != "aurion.glb-normalization.v1" or value.get("sourceSha256") != sha or value.get("unitConvention") != "gltf-rh-y-up-meter" or value.get("unitToMm") != 1000 or value.get("axisConvention") != "aurion-rh-y-up-forward-z":
@@ -122,14 +132,16 @@ func needed_assets() -> Array:
 	var seen: Dictionary = {}
 	for owner in _owners:
 		var request: Dictionary = _requests.get(owner, {})
-		if request.is_empty() or _models.has(request.sha256) or seen.has(request.sha256):
+		if request.is_empty() or _models.has(request.sha256) or seen.has(request.sha256) or _rejected.has(request.sha256):
+			continue
+		if _deferred.has(request.sha256) and not _fits(_deferred[request.sha256]):
 			continue
 		seen[request.sha256] = true
 		result.append({"sha256":request.sha256,"storageUrl":request.storageUrl})
 	return result
 
 func supply_asset(sha: String, bytes: PackedByteArray, connection_id: String) -> bool:
-	if connection_id.is_empty() or connection_id != _connection or bytes.size() > MAX_ASSET_BYTES or bytes.size() < 28 or _models.has(sha):
+	if connection_id.is_empty() or connection_id != _connection or bytes.size() > MAX_ASSET_BYTES or bytes.size() < 28 or _models.has(sha) or _rejected.has(sha):
 		return false
 	var requested := false
 	for request in _requests.values():
@@ -144,38 +156,49 @@ func supply_asset(sha: String, bytes: PackedByteArray, connection_id: String) ->
 		return false
 	var cost := Inspector.inspect_actor_glb(bytes)
 	if cost.is_empty():
+		reject_asset(sha)
 		return false
+	cost["bytes"] = bytes.size()
+	if not _fits(cost):
+		_deferred[sha] = cost
+		return false
+	var state := GLTFState.new()
+	var document := GLTFDocument.new()
+	if document.append_from_buffer(bytes, "", state) != OK:
+		reject_asset(sha)
+		return false
+	var model := document.generate_scene(state) as Node3D
+	if model == null:
+		reject_asset(sha)
+		return false
+	var meshes := model.find_children("*", "MeshInstance3D", true, false)
+	var players := model.find_children("*", "AnimationPlayer", true, false)
+	if meshes.is_empty() or players.size() != 1 or model.find_children("*", "Skeleton3D", true, false).is_empty() or not model.find_children("*", "CollisionObject3D", true, false).is_empty():
+		model.free()
+		reject_asset(sha)
+		return false
+	var packed := PackedScene.new()
+	var error := packed.pack(model)
+	model.free()
+	if error != OK:
+		reject_asset(sha)
+		return false
+	_models[sha] = packed
+	_costs[sha] = {"pixels":cost.pixels,"vertices":cost.vertices,"bytes":bytes.size(),"decoded":cost.decoded}
+	_deferred.erase(sha)
+	return true
+
+func _fits(cost: Dictionary) -> bool:
 	var pixels: int = cost.pixels
 	var vertices: int = cost.vertices
-	var source_bytes := bytes.size()
+	var source_bytes: int = cost.bytes
 	var decoded: int = cost.decoded
 	for previous in _costs.values():
 		pixels += int(previous.pixels)
 		vertices += int(previous.vertices)
 		source_bytes += int(previous.bytes)
 		decoded += int(previous.decoded)
-	if decoded > 64 * 1024 * 1024 or pixels > MAX_TEXTURE_PIXELS or vertices > MAX_VERTICES or source_bytes > MAX_SOURCE_BYTES or _models.size() >= MAX_ACTORS:
-		return false
-	var state := GLTFState.new()
-	var document := GLTFDocument.new()
-	if document.append_from_buffer(bytes, "", state) != OK:
-		return false
-	var model := document.generate_scene(state) as Node3D
-	if model == null:
-		return false
-	var meshes := model.find_children("*", "MeshInstance3D", true, false)
-	var players := model.find_children("*", "AnimationPlayer", true, false)
-	if meshes.is_empty() or players.size() != 1 or model.find_children("*", "Skeleton3D", true, false).is_empty() or not model.find_children("*", "CollisionObject3D", true, false).is_empty():
-		model.free()
-		return false
-	var packed := PackedScene.new()
-	var error := packed.pack(model)
-	model.free()
-	if error != OK:
-		return false
-	_models[sha] = packed
-	_costs[sha] = {"pixels":cost.pixels,"vertices":cost.vertices,"bytes":bytes.size(),"decoded":cost.decoded}
-	return true
+	return decoded <= 64 * 1024 * 1024 and pixels <= MAX_TEXTURE_PIXELS and vertices <= MAX_VERTICES and source_bytes <= MAX_SOURCE_BYTES and _models.size() < MAX_ACTORS
 
 func evidence() -> Dictionary:
 	return {"models":_models.size(),"actors":_owners.size(),"requested":_requests.size(),"pending":needed_assets().size()}

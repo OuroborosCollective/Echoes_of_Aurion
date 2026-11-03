@@ -60,23 +60,26 @@ func resolve_self(world: Variant, response: Variant, prepared: Variant, cache: V
 	var url: String = "/api/assets/glb/" + sha + ".glb"
 	if entry.get("storageUrl") != url or selected.get("storageUrl") != url:
 		return _blocked("selection_not_admitted")
+	var streamed: Dictionary = {}
 	if cache != null and not CatalogModels.physical(entry).is_empty():
-		return cache.request(entry, id)
+		streamed = cache.request(entry, id)
+		if streamed.status == "resolved":
+			return streamed
 	if typeof(prepared) != TYPE_DICTIONARY or prepared.get("schemaVersion") != PREPARED_VERSION or prepared.get("outputMode") != "byte-exact-compatible-copy" or not _lower_hex(prepared.get("sourceRevision"), 40) or typeof(prepared.get("sources")) != TYPE_ARRAY or prepared.sources.size() > 128:
-		return _blocked("prepared_manifest_invalid")
+		return streamed if not streamed.is_empty() else _blocked("prepared_manifest_invalid")
 	var source_matches: Array = []
 	for raw in prepared.sources:
 		if typeof(raw) != TYPE_DICTIONARY:
-			return _blocked("prepared_manifest_invalid")
+			return streamed if not streamed.is_empty() else _blocked("prepared_manifest_invalid")
 		var expected_id: String = "glb_" + str(sha).substr(0, 48)
 		if raw.get("role") == "character" and raw.get("sha256") == sha and raw.get("sourceSha256") == sha and raw.get("outputSha256") == sha and raw.get("assetId") == expected_id and raw.get("path") == "godot-client/assets/generated/" + expected_id + ".glb":
 			source_matches.append(raw)
 	if source_matches.size() != 1:
-		return _blocked("prepared_model_missing")
+		return streamed if not streamed.is_empty() else _blocked("prepared_model_missing")
 	var source_asset_id: String = source_matches[0].assetId
 	var path := "res://assets/generated/" + source_asset_id + ".glb"
 	if not ResourceLoader.exists(path, "PackedScene"):
-		return _blocked("prepared_model_missing")
+		return streamed if not streamed.is_empty() else _blocked("prepared_model_missing")
 	return {
 		"status": "resolved",
 		"entityId": id,
@@ -84,6 +87,7 @@ func resolve_self(world: Variant, response: Variant, prepared: Variant, cache: V
 		"sourceAssetId": source_asset_id,
 		"sha256": sha,
 		"resourcePath": path,
+		"normalization": entry.normalization if CatalogModels._normalization_valid(entry.get("normalization"),str(sha)) else {},
 	}
 
 ## The server returns only active, public selections for requested user IDs.
@@ -127,24 +131,27 @@ func resolve_public_presence(world: Variant, appearance: Variant, catalog: Varia
 	var url := "/api/assets/glb/" + str(sha) + ".glb"
 	if not _lower_hex(sha, 64) or entry.get("purpose") != "player-public" or entry.get("assetType") != "character" or entry.get("targetKey") != null or entry.get("storageUrl") != url or appearance.get("storageUrl") != url:
 		return _blocked("public_asset_not_admitted")
+	var streamed: Dictionary = {}
 	if cache != null and not CatalogModels.physical(entry).is_empty():
-		return cache.request(entry, id)
+		streamed = cache.request(entry, id)
+		if streamed.status == "resolved":
+			return streamed
 	if typeof(prepared) != TYPE_DICTIONARY or prepared.get("schemaVersion") != PREPARED_VERSION or prepared.get("outputMode") != "byte-exact-compatible-copy" or not _lower_hex(prepared.get("sourceRevision"), 40) or typeof(prepared.get("sources")) != TYPE_ARRAY or prepared.sources.size() > 128:
-		return _blocked("prepared_manifest_invalid")
+		return streamed if not streamed.is_empty() else _blocked("prepared_manifest_invalid")
 	var matches_prepared: Array = []
 	for source in prepared.sources:
 		if typeof(source) != TYPE_DICTIONARY:
-			return _blocked("prepared_manifest_invalid")
+			return streamed if not streamed.is_empty() else _blocked("prepared_manifest_invalid")
 		var source_id := "glb_" + str(sha).substr(0, 48)
 		if source.get("role") == "character" and source.get("sha256") == sha and source.get("sourceSha256") == sha and source.get("outputSha256") == sha and source.get("assetId") == source_id and source.get("path") == "godot-client/assets/generated/" + source_id + ".glb":
 			matches_prepared.append(source)
 	if matches_prepared.size() != 1:
-		return _blocked("prepared_model_missing")
+		return streamed if not streamed.is_empty() else _blocked("prepared_model_missing")
 	var prepared_id: String = matches_prepared[0].assetId
 	var path := "res://assets/generated/" + prepared_id + ".glb"
 	if not ResourceLoader.exists(path, "PackedScene"):
-		return _blocked("prepared_model_missing")
-	return {"status": "resolved", "entityId": id, "catalogAssetId": asset_id, "sourceAssetId": prepared_id, "sha256": sha, "resourcePath": path}
+		return streamed if not streamed.is_empty() else _blocked("prepared_model_missing")
+	return {"status": "resolved", "entityId": id, "catalogAssetId": asset_id, "sourceAssetId": prepared_id, "sha256": sha, "resourcePath": path,"normalization":entry.normalization if CatalogModels._normalization_valid(entry.get("normalization"),str(sha)) else {}}
 
 ## Approved visual fallback selection never changes a mob's archetype or state.
 ## Stream catalog GLBs when available; a real prepared enemy may bridge loading.
@@ -205,7 +212,7 @@ func resolve_monster(world: Variant, mob: Variant, catalog: Variant, prepared: V
 		if not ResourceLoader.exists(path, "PackedScene"):
 			continue
 		local.append({"status":"resolved","entityId":mob.entityId,"catalogAssetId":entry.assetId,"sourceAssetId":source_id,"sha256":sha,"resourcePath":path,
-			"fallback":loading or matches[0].canonicalMapping.get("archetype") != mob.get("archetype"),"archetype":mob.archetype})
+			"fallback":matches[0].canonicalMapping.get("archetype") != mob.get("archetype"),"archetype":mob.archetype})
 	if local.is_empty():
 		return _blocked("actor_model_loading" if loading else "monster_model_missing")
 	for candidate in local:
