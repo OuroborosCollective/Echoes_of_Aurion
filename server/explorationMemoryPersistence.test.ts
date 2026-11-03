@@ -6,10 +6,13 @@ import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionExplo
 import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { createExplorationMemoryRecord } from "../shared/explorationMemoryProtocol";
 import { recordExplorationDiscovery, readExplorationMemory } from "./explorationMemoryPersistence";
+import * as explorationMemory from "./explorationMemoryPersistence";
 import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
 import { globalZoneRegistry } from "./zoneRuntime";
 import { appRouter } from "./routers";
-import type { TrpcContext } from "./_core/context";
+import { createContext, type TrpcContext } from "./_core/context";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { discoveryResponseMeta } from "./_core/discoveryResponseMeta";
 import { worldCausalRootService } from "./causality/worldCausalRootService";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
@@ -222,6 +225,55 @@ suite("Issue 323 Phase H exploration memory",()=>{
       return Promise.all(tables.map(async table => (await pool.query(`SELECT * FROM ${table} ORDER BY 1`))[0]));
     };
     const factsBefore = await durableFacts();
+    // DG02 foundation: the real canonical observation becomes personal regional
+    // knowledge only. Point reads never imply a plant/weather/recipe discovery.
+    const codexQuery = { worldEpoch: epoch, chunkX: chunk.x, chunkZ: chunk.z };
+    const codex = (id: number | null, value: unknown = codexQuery) => (caller(id).gameplay as any).discoveryRegion(value);
+    await expect(codex(null)).rejects.toThrow();
+    const codexSelects = vi.spyOn(db, "select");
+    let region: any;
+    try {
+      region = await codex(userId);
+      expect(codexSelects.mock.calls.length).toBe(3);
+    } finally { codexSelects.mockRestore(); }
+    expect(region.entry).toEqual({ state: "confirmed", category: "regions", canonicalReference: { chunkX: chunk.x, chunkZ: chunk.z },
+      observation: { firstDiscoveryReceiptHash: first.memory.firstDiscoveryReceiptHash, latestConfirmedVisitSequence: first.memory.latestConfirmedVisitSequence,
+        latestProjectionHash: first.memory.latestProjectionHash,
+        sourceRevision: first.memory.sourceRevision, knowledgeHash: first.memory.memoryHash }, connections: [] });
+    expect(region.currentWorldState).toBe("not_projected");
+    expect(await codex(userId, { ...codexQuery, expectedCatalogFingerprint: region.catalogFingerprint })).toEqual(region);
+    const foreign = await codex(unseenUserId);
+    expect(foreign.entry).toEqual({ state: "locked" });
+    expect(foreign.scopeFingerprint).not.toBe(region.scopeFingerprint);
+    expect(await codex(userId, { ...codexQuery, chunkX: 999 })).toMatchObject({ entry: { state: "locked" } });
+    await expect(codex(userId, { ...codexQuery, expectedCatalogFingerprint: "sha256:" + "0".repeat(64) })).rejects.toThrow("DISCOVERY_CATALOG_STALE");
+    await expect(codex(userId, { ...codexQuery, userId: unseenUserId })).rejects.toThrow();
+    const ownMemory = and(eq(aurionExplorationMemoryProjections.userId, userId), eq(aurionExplorationMemoryProjections.worldId, worldId),
+      eq(aurionExplorationMemoryProjections.worldEpoch, epoch), eq(aurionExplorationMemoryProjections.chunkX, chunk.x), eq(aurionExplorationMemoryProjections.chunkZ, chunk.z));
+    await db.update(aurionExplorationMemoryProjections).set({ memoryHash: "sha256:" + "0".repeat(64) }).where(ownMemory);
+    try { await expect(codex(userId)).rejects.toThrow("EXPLORATION_MEMORY_HASH_MISMATCH"); }
+    finally { await db.update(aurionExplorationMemoryProjections).set({ memoryHash: first.memory.memoryHash }).where(ownMemory); }
+    expect(Buffer.byteLength(JSON.stringify(region))).toBeLessThan(2048);
+    const coldRegion = await new Promise<any>((resolveCold, reject) => {
+      const child = spawn(process.execPath, ["--import", "tsx", resolve("scripts/discovery/cold-read.ts")], {
+        env: { ...process.env, AURION_DISCOVERY_TEST_INPUT: JSON.stringify({ userId, query: codexQuery }) }, stdio: ["ignore", "pipe", "pipe"],
+      });
+      let output = "";
+      const timeout = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("DISCOVERY_COLD_TIMEOUT")); }, 20_000);
+      child.stdout.on("data", chunk => { output += String(chunk); if (output.length > 8192) { child.kill("SIGKILL"); reject(new Error("DISCOVERY_COLD_LIMIT")); } });
+      child.stderr.resume();
+      child.once("error", error => { clearTimeout(timeout); reject(error); });
+      child.once("close", code => {
+        clearTimeout(timeout);
+        if (code !== 0) { reject(new Error(`DISCOVERY_COLD_EXIT:${code}`)); return; }
+        try { resolveCold(JSON.parse(output.split("\n").find(line => line.startsWith("DISCOVERY_COLD_RESULT="))!.slice("DISCOVERY_COLD_RESULT=".length))); }
+        catch (error) { reject(error); }
+      });
+    });
+    expect(coldRegion.projection).toEqual(region);
+    expect(coldRegion.selectCount).toBe(3);
+    expect(await durableFacts()).toEqual(factsBefore);
+
     let fixtureSelectCount = 0;
     const selects = vi.spyOn(db, "select");
     const slice = await (async () => {
@@ -289,6 +341,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
     }
     const app = express();
     registerGlbSmartUpload(app);
+    app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext, responseMeta: discoveryResponseMeta }));
     const server = await new Promise<ReturnType<typeof app.listen>>(resolveServer => {
       const listener = app.listen(0, "127.0.0.1", () => resolveServer(listener));
     });
@@ -296,6 +349,16 @@ suite("Issue 323 Phase H exploration memory",()=>{
       const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/game/world-slice?x=0&z=0&radius=1&lod=full`;
       const cookieFor = async (id: number) => COOKIE_NAME + "=" + await sdk.createSessionToken(`world-slice-http-fixture:${id}`, { name: "WorldSlice fixture", expiresInMs: 60_000 });
       const ownCookie = await cookieFor(userId);
+      const codexUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/trpc/gameplay.discoveryRegion?input=` + encodeURIComponent(JSON.stringify({ json: codexQuery }));
+      const codexHttp = await fetch(codexUrl, { headers: { cookie: ownCookie } });
+      expect(codexHttp.status).toBe(200);
+      expect(codexHttp.headers.get("cache-control")).toBe("private, no-store");
+      expect(codexHttp.headers.get("vary")?.toLowerCase().split(",").map((v: string) => v.trim()).sort()).toEqual(["accept", "authorization", "cookie", "trpc-accept"]);
+      expect((await codexHttp.json()).result.data.json).toEqual(region);
+      const foreignCodexHttp = await fetch(codexUrl, { headers: { cookie: await cookieFor(unseenUserId) } });
+      expect(foreignCodexHttp.status).toBe(200);
+      expect((await foreignCodexHttp.json()).result.data.json.entry).toEqual({ state: "locked" });
+      expect((await fetch(codexUrl)).status).toBe(401);
       const own = await fetch(url, { headers: { cookie: ownCookie } });
       expect(own.status).toBe(200);
       expect(own.headers.get("cache-control")).toBe("no-store");
@@ -363,11 +426,21 @@ suite("Issue 323 Phase H exploration memory",()=>{
       });
       return result;
     });
-    try { await expect(invoke(userId)).rejects.toThrow("WORLD_SLICE_REVISION_STALE"); }
-    finally { advanced.mockRestore(); }
+    // Interleave the original real epoch advancement after the codex memory
+    // point read and before its final epoch check. The spy never substitutes a
+    // DB result; both WorldSlice and Codex must reject the same actual race.
+    const originalPointRead = explorationMemory.readExplorationMemoryChunk;
+    const racedPoint = vi.spyOn(explorationMemory, "readExplorationMemoryChunk").mockImplementationOnce(async (...args) => {
+      const result = await originalPointRead(...args);
+      await expect(invoke(userId)).rejects.toThrow("WORLD_SLICE_REVISION_STALE");
+      return result;
+    });
+    try { await expect(codex(userId)).rejects.toThrow("DISCOVERY_WORLD_EPOCH_STALE"); }
+    finally { racedPoint.mockRestore(); advanced.mockRestore(); }
     await expect(recordExplorationDiscovery(userId, {
       epoch, chunkX: chunk.x, chunkZ: chunk.z, observedAtLogicalFrame: 1,
     })).rejects.toThrow("EXPLORATION_WORLD_EPOCH_STALE");
+    await expect(codex(userId)).rejects.toThrow("DISCOVERY_WORLD_EPOCH_STALE");
     expect((await readExplorationMemory(userId, worldId, epoch)).records).toEqual([first.memory]);
     const nextRoot = await originalRootRead(worldId, epoch + 1);
     if (nextRoot?.status !== "VERIFIED" || !("chunkReceipts" in nextRoot.root)) throw new Error("WORLD_SLICE_MAXIMUM_ROOT_EXPECTED");

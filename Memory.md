@@ -5464,3 +5464,17 @@ Status: PARTIAL; local real-MariaDB RED/GREEN, CI, review, merge and production 
 Change: archiveOldReceipts and getArchiveStats add `worldId = GLOBAL_WORLD_ID` to every receipt/archive page query, matching the recovery reads fixed in adf19c04. No packing, coverage, readback, rollback or FOR UPDATE semantics changed.
 Evidence: Production at b00c6d89 (2026-11-02 21:27 UTC): after the ruleset-v2 head was restored, live inserts into aurionCausalTickReceipts failed ER_LOCK_WAIT_TIMEOUT. The archive transaction (zoneId+tick only, ORDER BY tick LIMIT 64 FOR UPDATE) held ~1.74M row locks; EXPLAIN: type index over ~1.13M rows with filesort, versus type range without filesort once worldId is present. Production has exactly one receipt worldId. New real-MariaDB case locks a foreign-world row of the same zone: old code RED ARCHIVE_BLOCKED_ON_FOREIGN_WORLD_ROW (10s), fix GREEN 4/4; causality unit 138 passed/26 skipped; tsc clean.
 Open/next: Exact-head CI and review, merge, canonical release; then verify live tick inserts, feed snapshot and Godot bridge health.
+
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:fbeb6117f6e8f5fe41f3fa0347805c282962832885e0df90c9c1931a8f08d09d -->
+
+### 2026-11-03 — Discovery Graph #1005: DG01/DG02 foundation
+Status: PARTIAL; new feature draft, remaining child acceptance and exact-head CI pending.
+Change: Add a bounded, canonically hashed server-only index over existing crafting/resource definitions; typed relations, recipe material/profession prerequisites and fail-closed identity/cycle/depth/fanout/evaluation guards. Add protected read-only regional codex point projection over existing actor exploration memory, with neutral undiscovered entries, epoch/catalog invalidation and private HTTP cache policy. No region receipt is promoted to species, weather or recipe knowledge.
+Learned: tRPC finalizes Vary after the resolver; actor cache policy belongs in responseMeta. First discovery provenance and latest confirmed visit/projection are separate fields and must remain distinct.
+Evidence: Local 24-case targeted run passed, including 8 real MariaDB exploration/history cases, actual signed fixture SDK/tRPC HTTP, receipt-hash corruption rejection, actual epoch advancement during read, 3-SELECT warm/cold codex reads, unchanged durable world facts and identical independent-process projection. Graph includes 100 deterministic permutations and dense-work rejection. Exact-head rerun/CI tracked in draft; no live rollout, new Godot UI, Android or physical Tab A9 acceptance claimed.
+Open: Plant-specific observations, paged multi-category codex/Godot, environment/synergy/experiment/share integrations and full DG08 corridor remain. All #1006–#1013 stay open; this slice does not complete #1005.
+
+
+<!-- /coderabbit-ai-generated:v1 -->
