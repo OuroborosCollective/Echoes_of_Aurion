@@ -111,6 +111,7 @@ export class UploadedWorldCatalogProjection {
       placement.id.startsWith("aurion.return-stone")
       || placement.id.startsWith("aurion.village-fountain")
       || placement.id.startsWith("aurion.village-street-lamp")
+      || isStarterCityWallSource(placement.asset.sha256)
         ? 0
         : 1;
     placements.sort((left, right) => {

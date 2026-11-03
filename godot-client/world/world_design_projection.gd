@@ -275,9 +275,24 @@ func _desired() -> Array:
 	return _desired_cache
 
 func _placement_less(a: Dictionary, b: Dictionary) -> bool:
+	var a_overlaps := _wall_overlaps_center(a)
+	var b_overlaps := _wall_overlaps_center(b)
+	if a_overlaps != b_overlaps:
+		return a_overlaps
 	var ad: int = absi(a.chunk.x - _center.x) + absi(a.chunk.y - _center.y)
 	var bd: int = absi(b.chunk.x - _center.x) + absi(b.chunk.y - _center.y)
 	return ad < bd if ad != bd else (str(a.designKey) + ":" + str(a.placementKey)) < (str(b.designKey) + ":" + str(b.placementKey))
+
+func _wall_overlaps_center(item: Dictionary) -> bool:
+	if item.sha256 not in STARTER_CITY_WALL_HASHES:
+		return false
+	# Half extents of the byte-pinned, centred wall; quarter turns preserve AABBs.
+	var half_extent := Vector2(50750.0, 44750.0) * (float(item.scale) / 1000.0)
+	if int(item.rotation) % 2 == 1:
+		half_extent = Vector2(half_extent.y, half_extent.x)
+	var dx: int = (item.chunk.x - _center.x) * CHUNK_MM + int(item.xMm) - HALF_CHUNK_MM
+	var dz: int = (item.chunk.y - _center.y) * CHUNK_MM + int(item.zMm) - HALF_CHUNK_MM
+	return absf(dx) <= HALF_CHUNK_MM + half_extent.x and absf(dz) <= HALF_CHUNK_MM + half_extent.y
 
 func needed_assets() -> Array:
 	var result: Array = []

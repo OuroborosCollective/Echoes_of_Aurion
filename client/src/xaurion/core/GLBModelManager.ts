@@ -394,16 +394,28 @@ export class GLBModelManager {
     lodLevels: readonly number[];
   }> {
     const variants = glbCatalogLods(entry)
+      // A logical model must remain usable when its highest-detail physical
+      // files exceed this device's budget. Never request known oversized LODs.
+      .filter(variant => variant.bytes === null || variant.bytes <= glbResourcePool.limits.assetBytes)
       .slice()
       .sort(
         (left, right) =>
           left.level - right.level || left.sha256.localeCompare(right.sha256)
       );
+    if (variants.length === 0) throw Error("GLB_NO_SUPPORTED_LOD");
+    for (const variant of variants) {
+      if (variant.normalization.lod.level !== variant.level || variant.normalization.sourceSha256 !== variant.sha256)
+        throw Error("GLB_LOD_MANIFEST_IDENTITY_MISMATCH");
+    }
     if (variants.length === 1) {
       const loaded = await this.loadModel(
         variants[0]!.storageUrl,
         variants[0]!.normalization
       );
+      if (loaded.animations.length) {
+        releaseGlbTree(loaded.scene);
+        throw Error("GLB_STATIC_LOD_ANIMATIONS_FORBIDDEN");
+      }
       return { ...loaded, lodLevels: Object.freeze([variants[0]!.level]) };
     }
     const root = new THREE.Group();
@@ -413,11 +425,6 @@ export class GLBModelManager {
     const borrowed: THREE.Group[] = [];
     try {
       for (const variant of variants) {
-        if (
-          variant.normalization.lod.level !== variant.level ||
-          variant.normalization.sourceSha256 !== variant.sha256
-        )
-          throw Error("GLB_LOD_MANIFEST_IDENTITY_MISMATCH");
         const loaded = await this.loadModel(
           variant.storageUrl,
           variant.normalization

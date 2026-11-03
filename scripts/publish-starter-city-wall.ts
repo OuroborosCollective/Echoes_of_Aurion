@@ -11,7 +11,8 @@ import { glbImportStore } from "../server/glbImportStore";
 import { buildGlbImportPlan } from "../server/glbImportPlan";
 import { applyWorldDesign, planWorldDesign, readActiveWorldDesign, recoverWorldAuthoringReceipt } from "../server/aurionAuthoringPersistence";
 import { WorldDesignDraftSchema, WorldDesignPlanSchema } from "../shared/aurionAuthoringContract";
-import { AURION_STARTER_CITY_WALL_LODS, starterCityWallAssetId } from "../shared/aurionStarterCityWallContract";
+import { AURION_STARTER_CITY_WALL_LODS, AURION_STARTER_CITY_WALL_LEGACY_NORMALIZATIONS, starterCityWallAssetId } from "../shared/aurionStarterCityWallContract";
+import { STARTER_CITY_WALL_PLACEMENT, requireStarterCityWallPlacement, requireStarterCityWallReadback } from "../server/starterCityWallPublication";
 
 const mode = process.argv[2];
 const location = process.argv[3];
@@ -53,13 +54,18 @@ try {
           || plan.classification.subcategory !== "structure") throw new Error("CITY_WALL_SOURCE_CONTRACT_MISMATCH");
       sources.push({ source, contentBase64, plan });
     }
+    const migrations = [];
+    for (const { source, contentBase64, plan } of sources) migrations.push(await store.migrateStarterCityWallNormalization(owner.id, {
+      contentBase64, fileName: source.fileName, expectedPlanSha256: plan.planSha256,
+      expectedPreviousNormalizationSha256: AURION_STARTER_CITY_WALL_LEGACY_NORMALIZATIONS[source.level],
+    }));
     const receipts = [];
     for (const { source, contentBase64, plan } of sources) receipts.push(await store.ingest(owner.id, {
       displayName: `Aurion CityWall LOD${source.level}`, fileName: source.fileName, contentBase64,
       purpose: "world-environment", expectedPlanSha256: plan.planSha256,
     }));
     const { catalog, family } = await verifyCatalog();
-    console.log(JSON.stringify({ revision: expectedRevision, catalogRevision: catalog.revision, assetId: family.assetId, receipts }));
+    console.log(JSON.stringify({ revision: expectedRevision, catalogRevision: catalog.revision, assetId: family.assetId, migrations, receipts }));
   } else if (mode === "plan" && location) {
     const { catalog, family } = await verifyCatalog();
     const world = await readActiveWorldDesign();
@@ -67,8 +73,7 @@ try {
     const draft = WorldDesignDraftSchema.parse({
       schemaVersion: "aurion.world-design.v1", designKey, version: 1, title: "Aurion Starterstadt — Stadtmauer",
       expectedCatalogRevision: catalog.revision,
-      placements: [{ placementKey: "city-perimeter", assetId: family.assetId, chunkX: 0, chunkZ: 0,
-        xMm: 32000, zMm: 32000, rotationQuarterTurns: 0, scalePermille: 1000 }],
+      placements: [STARTER_CITY_WALL_PLACEMENT],
     });
     const plan = await planWorldDesign(draft, undefined, randomBytes(16).toString("hex"));
     await writeFile(location, JSON.stringify({ revision: expectedRevision, actorUserId: owner.id, plan }, null, 2), { flag: "wx", mode: 0o600 });
@@ -76,22 +81,27 @@ try {
   } else if ((mode === "apply" || mode === "receipt") && location) {
     const { plan } = envelope.parse(JSON.parse(await readFile(location, "utf8")));
     if (plan.designKey !== designKey || !plan.operationId) throw new Error("CITY_WALL_PLAN_SCOPE_INVALID");
+    requireStarterCityWallPlacement(plan);
     if (mode === "receipt") {
-      console.log(JSON.stringify(await recoverWorldAuthoringReceipt(owner.id, {
+      const result = await recoverWorldAuthoringReceipt(owner.id, {
         designKey, version: plan.version, planHash: plan.planHash, operationId: plan.operationId,
-      })));
+      });
+      if (result.status !== "found") throw new Error("CITY_WALL_RECEIPT_UNRESOLVED");
+      console.log(JSON.stringify(result));
     } else {
       if (process.argv[4] !== plan.planHash) throw new Error("CITY_WALL_REVIEWED_PLAN_HASH_REQUIRED");
       const { planHash, referencedAssetHashes: _assets, requiresHumanConfirmation: _confirmation,
         expectedPreviousHash: _previous, operationId, ...draft } = plan;
       const result = await applyWorldDesign(owner.id, WorldDesignDraftSchema.parse(draft), planHash, operationId);
+      requireStarterCityWallReadback(result.readback);
       console.log(JSON.stringify(result));
     }
   } else if (mode === "readback") {
     const { catalog, family } = await verifyCatalog();
     const world = await readActiveWorldDesign();
+    const design = requireStarterCityWallReadback(world);
     console.log(JSON.stringify({ revision: expectedRevision, catalogRevision: catalog.revision, family,
-      worldRevision: world.revision, designs: world.designs.filter(item => item.designKey === designKey) }));
+      worldRevision: world.revision, designs: [design] }));
   } else throw new Error("CITY_WALL_MODE_REQUIRED_ingest_plan_apply_receipt_readback");
 } finally {
   await store.close();

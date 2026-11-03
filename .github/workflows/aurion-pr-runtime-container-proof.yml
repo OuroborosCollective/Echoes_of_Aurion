@@ -214,12 +214,13 @@ jobs:
           if (evidence.runtimeImageDigest !== process.env.EXPECTED_IMAGE_ID) throw new Error('WORLD_GENERATION_PARITY_IMAGE_MISMATCH');
           NODE
 
+          expected_ruleset="$(node --input-type=module -e 'import { AURION_ZONE_RULESET_VERSION } from "./shared/aurionZoneRulesetContract.mjs"; process.stdout.write(AURION_ZONE_RULESET_VERSION)')"
           AURION_EXPECTED_WORLD_ID=echoes-of-aurion-global \
           AURION_EXPECTED_SOURCE_REVISION="${EXPECTED_HEAD}" \
           AURION_EXPECTED_RUNTIME_REVISION="${EXPECTED_HEAD}" \
           AURION_EXPECTED_RUNTIME_IMAGE_DIGEST="${image_id}" \
           AURION_EXPECTED_CAUSAL_TICK_SCHEMA=aurion.causal.tick.v2 \
-          AURION_EXPECTED_RULESET_VERSION=aurion.zone.rules.v3 \
+          AURION_EXPECTED_RULESET_VERSION="${expected_ruleset}" \
           pnpm exec tsx scripts/atlas/verifyWorldGenerationAtlasAdmission.ts aurion-world-generation-parity-510.json > aurion-world-generation-atlas-admission-563.json
           test -s aurion-world-generation-atlas-admission-563.json
 
@@ -264,7 +265,7 @@ jobs:
           AURION_EXPECTED_RUNTIME_REVISION="${EXPECTED_HEAD}" \
           AURION_EXPECTED_RUNTIME_IMAGE_DIGEST="${image_id}" \
           AURION_EXPECTED_CAUSAL_TICK_SCHEMA=aurion.causal.tick.v2 \
-          AURION_EXPECTED_RULESET_VERSION=aurion.zone.rules.v3 \
+          AURION_EXPECTED_RULESET_VERSION="${expected_ruleset}" \
           pnpm exec tsx scripts/atlas/buildGeneratedWorldAtlasPlan.ts \
             aurion-world-generation-parity-510.json \
             aurion-generated-world-atlas-input.json \

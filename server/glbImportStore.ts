@@ -31,6 +31,7 @@ import {
 } from "../shared/glbExternalProvenanceContract";
 import { persistGlbBytes, readStoredGlb, glbStorageRoot } from "./glbFileStore";
 import type { GlbAssetClassification } from "./glbAssetClassifier";
+import { AURION_STARTER_CITY_WALL_LODS, AURION_STARTER_CITY_WALL_LEGACY_NORMALIZATIONS } from "../shared/aurionStarterCityWallContract";
 import { groupGlbCatalogRows } from "./glbCatalogFamilies";
 import {
   validateGlbStructure,
@@ -512,6 +513,56 @@ export class GlbImportStore {
     });
   }
 
+
+  /** Explicit operator upgrade for the three pinned city-wall GLBs only.
+   * Ordinary ingestion still rejects normalization drift. The same catalog
+   * fence used by world publication binds source bytes, predecessor and update. */
+  async migrateStarterCityWallNormalization(actorUserId: number, input: {
+    contentBase64: string; fileName: string; expectedPlanSha256: string;
+    expectedPreviousNormalizationSha256: string;
+  }) {
+    const plan = await buildGlbImportPlan(input.contentBase64, "world-environment", input.fileName);
+    const source = AURION_STARTER_CITY_WALL_LODS.find(item => item.sha256 === plan.sha256);
+    if (!source || plan.planSha256 !== input.expectedPlanSha256 || plan.bytes !== source.bytes
+      || plan.assetType !== "arena" || plan.classification.subcategory !== "structure" || plan.classification.lod !== source.level
+      || plan.normalization.scaleE8 !== 100_000_000
+      || input.expectedPreviousNormalizationSha256 !== AURION_STARTER_CITY_WALL_LEGACY_NORMALIZATIONS[source.level]) {
+      throw new Error("CITY_WALL_NORMALIZATION_MIGRATION_SCOPE");
+    }
+    return this.locked(actorUserId, async connection => {
+      const [rows] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE sha256 = ? FOR UPDATE", [source.sha256]);
+      if (!rows.length) return { status: "absent" as const, sha256: source.sha256 };
+      const row = rows[0]!;
+      if (rows.length !== 1 || row.status !== "approved" || row.id !== plan.assetId || row.bytes !== source.bytes
+        || row.assetType !== "arena" || glbPurposeFromDisplayName(String(row.displayName)) !== "world-environment"
+        || row.storageKey !== `local-glb/${source.sha256}.glb` || row.storageUrl !== `/api/assets/glb/${source.sha256}.glb`) {
+        throw new Error("CITY_WALL_NORMALIZATION_MIGRATION_IDENTITY");
+      }
+      // Null manifests remain the existing ingestion/backfill path; never accept
+      // a partial or invalid previous manifest as a migration predecessor.
+      if ([row.normalizationRevision, row.normalizationSha256, row.normalizationManifest].every(value => value == null))
+        return { status: "unnormalized" as const, sha256: source.sha256 };
+      const previous = storedNormalization(row);
+      if (previous.manifestSha256 === plan.normalization.manifestSha256)
+        return { status: "unchanged" as const, sha256: source.sha256 };
+      if (previous.manifestSha256 !== input.expectedPreviousNormalizationSha256)
+        throw new Error("CITY_WALL_NORMALIZATION_MIGRATION_PREDECESSOR");
+      // A digest pin never substitutes for independent durable-byte readback.
+      const stored = await readStoredGlb(source.sha256, this.storageRoot);
+      if (stored.length !== source.bytes) throw new Error("CITY_WALL_NORMALIZATION_MIGRATION_BYTES");
+      await connection.execute(
+        "UPDATE glbAssets SET normalizationRevision = ?, normalizationSha256 = ?, normalizationManifest = ? WHERE id = ? AND sha256 = ? AND normalizationSha256 = ?",
+        [plan.normalization.revision, plan.normalization.manifestSha256, JSON.stringify(plan.normalization), row.id, source.sha256, previous.manifestSha256],
+      );
+      const [readback] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ?", [row.id]);
+      if (readback.length !== 1 || storedNormalization(readback[0]!).manifestSha256 !== plan.normalization.manifestSha256)
+        throw new Error("CITY_WALL_NORMALIZATION_MIGRATION_READBACK");
+      const identity = { actorUserId, assetId: row.id as string, sha256: source.sha256,
+        previousNormalizationSha256: previous.manifestSha256, normalizationSha256: plan.normalization.manifestSha256, planSha256: plan.planSha256 };
+      return { status: "migrated" as const, ...identity,
+        receiptSha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
+    });
+  }
 
   private async collectMissingNormalization(
     connection: PoolConnection,
