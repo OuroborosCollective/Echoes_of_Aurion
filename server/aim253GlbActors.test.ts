@@ -23,6 +23,23 @@ async function geometryAndRig(file: string) {
 }
 
 describe("owner-supplied Aurion actors", () => {
+  it("retains confirmed-speed fallback motion on a real rig without authored clips", async () => {
+    const gltf = await geometryAndRig("assets/characters/aurion-player-standard-animated.glb");
+    // Explicit static-rig case: preserve actual geometry/bones, supply no clips.
+    const actor = new AnimatedGlbActor(gltf.scene, [], 2);
+    try {
+      actor.setLocomotion(2);
+      const before = actor.evidence().bonePose;
+      actor.update(0.2);
+      expect(actor.evidence().bonePose).not.toBe(before);
+      expect(actor.evidence().activeAnimationActions).toBe(0);
+      expect(actor.group.visible).toBe(true);
+      actor.setAnimationEnabled(false);
+      const suspended = actor.evidence().bonePose;
+      actor.update(0.2);
+      expect(actor.evidence().bonePose).toBe(suspended);
+    } finally { actor.dispose(); }
+  });
   it("assigns the smith independently of the player without using the upload filename", async () => {
     const smith = await buildGlbImportPlan(readFileSync("test/fixtures/aurion-glb/blacksmith-npc.glb").toString("base64"));
     const player = await buildGlbImportPlan(readFileSync("test/fixtures/aurion-glb/aurion-player-standard.glb").toString("base64"));

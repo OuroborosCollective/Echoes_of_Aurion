@@ -357,10 +357,10 @@ export class AnimatedGlbActor {
         this.releaseActiveAnimation = glbResourcePool.animationActions(1);
         if (!this.releaseActiveAnimation) return;
         this.active.paused = this.pausedBeforeLod;
-      } else if (!this.play(this.locomotion, false)) return;
+      } else if (!this.play(this.locomotion, false) && (this.resolveClip(this.locomotion) || this.resolveClip("idle"))) return;
     }
     const step = Math.min(delta, 0.25);
-    this.mixer.update(step);
+    if (this.releaseActiveAnimation) this.mixer.update(step);
     this.fadeRemaining -= step;
     if (this.fading && this.fadeRemaining <= 0) {
       this.fading.stop(); this.fading = null;
