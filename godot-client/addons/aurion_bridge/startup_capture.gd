@@ -122,6 +122,9 @@ func _capture() -> void:
 		_fail("GODOT_VIEWPORT_CAPTURE_FAILED")
 		return
 	var camera: Camera3D = _main.world_camera
+	# own_world_3d creates an internal world; the assignable world_3d property
+	# can remain null. Query the world actually used for this rendered viewport.
+	var rendered_world: World3D = viewport.find_world_3d()
 	var actors: Array = []
 	for actor in _main.world_actors.get_children():
 		if actor is Node3D and actor.visible and actor.get("entity_id") != null:
@@ -144,7 +147,7 @@ func _capture() -> void:
 		"worldAssets":{"rendered":_main._world_design_visuals.get_child_count() + _main.starter_village_visuals.get_child_count(),
 			"publishedDesigns":_main._world_design_visuals.get_child_count(),"starterVillage":_main.starter_village_visuals.get_child_count(),
 			"pending":_main._world_design_visuals.needed_assets().size(),"diagnostic":_main._world_design_visuals.diagnostic},
-		"environmentPresent":_main.live_3d_viewport.world_3d.environment != null,
+		"environmentPresent":rendered_world != null and rendered_world.environment != null,
 	})
 
 func _mm(value: Vector3) -> Array:

@@ -383,8 +383,8 @@ export default function AurionOpenWorldRuntime() {
           chunks: read(containerRef.current?.dataset.chunkProjection),
           assets: read(worldAssetsEvidenceRef.current?.dataset.presentation),
           selfEntityId: "player:" + user!.id,
-          player: engine!.player.glbPresentationEvidence() ? { ...engine!.player.glbPresentationEvidence(), visible: engine!.player.rootGroup.visible } : null,
-          npcs: serviceNpcRef.current?.evidence() ? { ...serviceNpcRef.current.evidence(), visible: serviceNpcRef.current.group.visible } : null,
+          player: engine!.player.glbPresentationEvidence(),
+          npcs: serviceNpcRef.current?.evidence() ?? null,
           timeOfDay: engine!.timeOfDay,
         };
       }, () => engine!.renderer.domElement);
