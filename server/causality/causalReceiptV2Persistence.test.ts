@@ -51,6 +51,26 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     }
   });
 
+  it("diagnoses a conflicting natural key without changing any stored receipt", async () => {
+    const adapter = new MariaDBCausalPersistenceAdapter();
+    const zoneId = `${ZONE_PREFIX}:conflict-diagnostic`;
+    const zone = new AuthoritativeMovementZone(zoneId as any, new AurionTickRecorder());
+    zone.tick();
+    const receipt = zone.getLatestReceipt()!;
+    await adapter.saveReceipt(receipt, []);
+    const [before] = await pool.query("SELECT * FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
+    const conflicting = { ...receipt, sourceRevision: receipt.sourceRevision === "a".repeat(40) ? "b".repeat(40) : "a".repeat(40) };
+    conflicting.receiptHash = computeReceiptHash(conflicting);
+    await expect(adapter.saveReceipt(conflicting, [])).rejects.toMatchObject({
+      message: expect.stringMatching(/^CAUSAL_RECEIPT_CONFLICT:/),
+      diagnostics: { schema: "aurion.receipt-conflict-diagnostic.v1", mismatchFields: ["revision", "receiptHash"], insertErrorCode: "ER_DUP_ENTRY" },
+    });
+    await adapter.saveReceipt(receipt, []);
+    const [after] = await pool.query("SELECT * FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
+    expect(after).toEqual(before);
+    expect((await adapter.getRecordedTick(zoneId, 1))?.receipt).toEqual(receipt);
+  });
+
   it("recovers only the canonical world when another world shares the zone and tick", async () => {
     const adapter = new MariaDBCausalPersistenceAdapter();
     const zoneId = `${ZONE_PREFIX}:world-scope`;
