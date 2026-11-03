@@ -27,7 +27,7 @@ host_config=/etc/aurion-production-schema-apply.env
 state_dir=/var/lib/echoes-of-aurion/schema-apply
 backup_dir=/var/backups/echoes-of-aurion/schema-apply
 # Newest verified logical backups retained after a successful recovery proof.
-backup_keep=10
+backup_keep=5
 phase=INITIALIZE
 receipt_emitted=0
 recovery_container=""
