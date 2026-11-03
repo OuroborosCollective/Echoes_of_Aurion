@@ -5,6 +5,7 @@ import { worldAssetRegionSchema } from "../shared/worldAssetProtocol";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 import { projectPlayerReadback } from "../client/src/xaurion/integration/authoritativeHudProjection";
+import { ax1BladeSkillForCommand } from "../shared/ax1BladeSkillProtocol";
 
 test.skip(process.env.AURION_UI_E2E !== "1", "Isolated AX1 runtime required");
 
@@ -29,7 +30,7 @@ type ZoneCombatEvent = {
   skillId?: string | null;
   gameplaySourceRevision: string;
 };
-type Combatant = { entityId: string; health: number; maxHealth: number; stamina: number; alive: boolean };
+type Combatant = { entityId: string; health: number; maxHealth: number; stamina: number; alive: boolean; skillCooldowns?: Record<string, number>; effects?: { attackUntil?: number } };
 type Presence = { entityId: string; userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number };
 
 for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tablet", width: 800, height: 1280 }, { name: "desktop", width: 1440, height: 1000 }]) {
@@ -45,16 +46,25 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
     const combatEvents: ZoneCombatEvent[] = [];
     const combatRejects: string[] = [];
     let selfEntityId = "";
+    let latestTick = -1;
+    const sentSkills: string[] = [];
     let latestPresences: Presence[] = [];
     let latestCombatants: Combatant[] = [];
     page.on("pageerror", error => errors.push(error.message));
     page.on("websocket", socket => {
       if (!socket.url().endsWith("/v1/ws")) return;
+      socket.on("framesent", frame => {
+        try {
+          const value = JSON.parse(String(frame.payload));
+          if (value.type === "skill" && typeof value.skillId === "string") sentSkills.push(value.skillId);
+        } catch {}
+      });
       socket.on("framereceived", frame => {
         try {
           const value = JSON.parse(String(frame.payload));
           if (value.type === "welcome") selfEntityId = String(value.selfEntityId ?? "");
           if (value.type === "welcome" || value.type === "snapshot") {
+            latestTick = value.tick;
             latestPresences = Array.isArray(value.presences) ? value.presences : latestPresences;
             latestCombatants = Array.isArray(value.combatants) ? value.combatants : latestCombatants;
           } else if (value.type === "combat") {
@@ -272,12 +282,28 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       const serverSkill = hud.getByRole("button", { name: "Echoschild · Hotbar 2", exact: true });
       await expect(serverSkill).toBeVisible();
-      // The typed intent must reach Aurion; only the server may reject unsupported skill execution.
+      // Ruleset v4 implements this typed skill. Verify the real wire intent,
+      // confirmed impact and cooldown before exercising a genuine rejection.
+      const skill = ax1BladeSkillForCommand("2")!;
+      expect(skill.skillId).toBe("k_charge");
+      const skillEventsBefore = combatEvents.length;
+      const skillSendsBefore = sentSkills.length;
       const skillRejectsBefore = combatRejects.length;
       await serverSkill.click();
+      await expect.poll(() => sentSkills.length, { timeout: 8_000 }).toBe(skillSendsBefore + 1);
+      expect(sentSkills.at(-1)).toBe(skill.skillId);
+      await expect.poll(() => combatEvents.slice(skillEventsBefore).some(event =>
+        event.attackerEntityId === selfEntityId && event.skillId === skill.skillId), { timeout: 8_000 }).toBe(true);
+      await expect.poll(() => (latestCombatants.find(entry => entry.entityId === selfEntityId)
+        ?.skillCooldowns?.[skill.skillId] ?? 0) > latestTick, { timeout: 8_000 }).toBe(true);
+      expect(combatRejects.length).toBe(skillRejectsBefore);
+      // The keyboard is a real alternative input route; it must not bypass the
+      // server's cooldown even when the touch button displays that cooldown.
+      await page.keyboard.press("2");
+      await expect.poll(() => sentSkills.length, { timeout: 8_000 }).toBe(skillSendsBefore + 2);
       await expect.poll(() => combatRejects.length, { timeout: 8_000 }).toBeGreaterThan(skillRejectsBefore);
-      expect(combatRejects.at(-1)).toBe("INVALID_COMBAT_SKILL");
-      const combatFeedback = hud.getByText("Dieser Aurion-Skill gehört nicht zum bestätigten Waffenpfad.", { exact: true });
+      expect(combatRejects.at(-1)).toBe("COMBAT_SKILL_COOLDOWN");
+      const combatFeedback = hud.getByText("Der Aurion-Skill ist serverseitig noch auf Abklingzeit.", { exact: true });
       await expect(combatFeedback).toBeVisible();
       expect(await combatFeedback.evaluate(element => {
         const bounds = element.getBoundingClientRect();
@@ -310,6 +336,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       let ownDamage: ZoneCombatEvent | undefined;
       for (let attempt = 0; attempt < 8 && !ownDamage; attempt += 1) {
         const before = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
+        await expect.poll(() => latestTick >= (latestCombatants.find(entry => entry.entityId === selfEntityId)?.effects?.attackUntil ?? 0), { timeout: 5_000 }).toBe(true);
         await attack.click();
         await expect.poll(
           () => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length,
@@ -328,6 +355,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(new Set(animation.map((sample: any) => sample.kind === "glb" ? `glb:${sample.bonePose}:${Math.round(sample.clipTime * 1000)}` : `procedural:${JSON.stringify(sample.arm)}`)).size).toBeGreaterThan(1);
 
       const ownCount = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
+      await expect.poll(() => latestTick >= (latestCombatants.find(entry => entry.entityId === selfEntityId)?.effects?.attackUntil ?? 0), { timeout: 5_000 }).toBe(true);
       await auto.click();
       await expect.poll(() => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length, { timeout: 8_000 }).toBeGreaterThan(ownCount);
       await hud.getByRole("button", { name: "Inventar", exact: true }).click();
