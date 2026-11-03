@@ -116,6 +116,7 @@ jobs:
           client/src/xaurion/core/EnemyGlbFallback.test.ts
           client/src/xaurion/core/NpcGlbFallback.test.ts
           client/src/xaurion/integration/MobCatalogProjection.test.ts
+          client/src/xaurion/integration/RemotePublicAppearanceProjection.test.ts
           client/src/xaurion/integration/NpcFallbackProjection.test.ts
           server/aim253GlbActors.test.ts
           client/src/xaurion/core/UploadedAssetRuntime.test.ts

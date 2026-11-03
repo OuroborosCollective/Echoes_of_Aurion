@@ -27,12 +27,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const buffer = (bytes: Buffer) => Uint8Array.from(bytes).buffer;
+function occupyAnimationSlots(): () => void {
+  const slots = Array.from({ length: glbResourcePool.limits.animations }, () => glbResourcePool.animationActions(1));
+  expect(slots.every(Boolean)).toBe(true);
+  return () => slots.forEach(release => release?.());
+}
 
 describe("bounded, verified GLB ownership", () => {
-  it("keeps the phone actor capacity visible when animation slots are full, without charging scenery as actors", async () => {
+  it.each([false, true])("keeps phone actor capacity independent of clips (clipless=%s) and scenery", async clipless => {
     vi.stubGlobal("crypto", webcrypto);
+    const character = testAnimatedPlayerGlb("crowd-character", true);
+    if (clipless) {
+      const length = character.readUInt32LE(12);
+      const json = JSON.parse(character.subarray(20, 20 + length).toString());
+      delete json.animations;
+      character.fill(0x20, 20, 20 + length);
+      character.write(JSON.stringify(json), 20);
+    }
     const sources = await Promise.all([
-      ["crowd-character", testAnimatedPlayerGlb("crowd-character", true)],
+      ["crowd-character", character],
       ["crowd-scenery", testGlb("Aurion_Wall_LOD0")],
     ].map(async ([id, bytes]) => {
       const fixture = bytes as Buffer;
@@ -41,7 +54,7 @@ describe("bounded, verified GLB ownership", () => {
     }));
     glbManager.setAuthoritativeCatalog(sources.map(source => ({
       id: source.id, name: source.id, fileName: `${source.plan.sha256}.glb`, url: source.url,
-      category: "character_avatar", normalization: source.plan.normalization,
+      category: source.id === "crowd-character" ? "character_avatar" : "architecture", normalization: source.plan.normalization,
       status: "approved", animations: [], description: "explicit decoded crowd fixture",
     })));
     vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(sources.find(source => source.url === url)!.fixture)));
@@ -55,9 +68,10 @@ describe("bounded, verified GLB ownership", () => {
       expect(glbResourcePool.tier).toBe("phone");
       expect(actors).toHaveLength(12);
       expect(actors.every(actor => actor.group.visible && !new THREE.Box3().setFromObject(actor.group).isEmpty())).toBe(true);
-      expect(glbResourcePool.evidence()).toMatchObject({ actors: 12, staticInstances: 5, animations: 8 });
-      expect(actors.reduce((count, actor) => count + actor.evidence().activeAnimationActions, 0)).toBe(8);
+      expect(glbResourcePool.evidence()).toMatchObject({ actors: 12, staticInstances: 5, animations: clipless ? 0 : 8 });
+      expect(actors.reduce((count, actor) => count + actor.evidence().activeAnimationActions, 0)).toBe(clipless ? 0 : 8);
       await expect(glbManager.loadModel("crowd-character")).rejects.toThrow("GLB_ACTOR_BUDGET");
+      if (clipless) return;
       const waiting = actors[11]!;
       expect(waiting.evidence().activeAnimationActions).toBe(0);
       expect(waiting.evidence().clip).toMatch(/idle/i);
@@ -74,6 +88,49 @@ describe("bounded, verified GLB ownership", () => {
       scenery.forEach(model => releaseGlbTree(model));
     }
     expect(glbResourcePool.evidence()).toMatchObject({ actors: 0, staticInstances: 0, animations: 0 });
+  });
+  it("keeps static-clip locomotion moving while all mixer slots are occupied", () => {
+    const release = occupyAnimationSlots();
+    expect(release).not.toBeNull();
+    const model = new THREE.Group();
+    model.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial()));
+    const bone = new THREE.Bone(); bone.name = "thigh_l"; model.add(bone);
+    const actor = new AnimatedGlbActor(model, [new THREE.AnimationClip("Idle", 1, []), new THREE.AnimationClip("Walk", 1, [])]);
+    try {
+      actor.setLocomotion(2);
+      const before = bone.quaternion.clone();
+      actor.update(.12);
+      expect(bone.quaternion.equals(before)).toBe(false);
+      expect(actor.evidence().activeAnimationActions).toBe(0);
+      expect(actor.evidence().clipTime).toBe(0);
+      expect(glbResourcePool.evidence().animations).toBe(glbResourcePool.limits.animations);
+    } finally { actor.dispose(); release(); }
+  });
+  it("resumes a one-shot after repeated suspension while mixer capacity is full", () => {
+    const model = new THREE.Group();
+    model.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial()));
+    const bone = new THREE.Bone(); bone.name = "Spine"; model.add(bone);
+    const clips = ["Idle", "Attack", "Walk"].map(name => new THREE.AnimationClip(name, 1,
+      [new THREE.NumberKeyframeTrack("Spine.position[x]", [0, 1], [0, .2])]));
+    const actor = new AnimatedGlbActor(model, clips);
+    let release: (() => void) | null = null;
+    try {
+      expect(actor.playOnce("attack")).toBe(true);
+      actor.update(.1);
+      const before = actor.evidence().clipTime;
+      actor.setAnimationEnabled(false);
+      release = occupyAnimationSlots();
+      expect(release).not.toBeNull();
+      actor.setAnimationEnabled(true); actor.update(.1);
+      actor.setAnimationEnabled(false);
+      release!(); release = null;
+      actor.setAnimationEnabled(true); actor.update(.1);
+      expect(actor.evidence().clipTime).toBeGreaterThan(before);
+      for (let i = 0; i < 10; i++) actor.update(.2);
+      actor.setLocomotion(2);
+      expect(actor.evidence().clip).toBe("Walk");
+    } finally { actor.dispose(); release?.(); }
+    expect(glbResourcePool.evidence().animations).toBe(0);
   });
   it("rejects a resolved GLTF with a silently missing material texture", () => {
     const scene = new THREE.Group(),

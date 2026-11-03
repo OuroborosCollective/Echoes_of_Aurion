@@ -333,12 +333,17 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
         record();
       });
 
+      const attackReady = () => {
+        const self = latestCombatants.find(entry => entry.entityId === selfEntityId);
+        const attackTick = combatEvents.findLast(event => event.attackerEntityId === selfEntityId)?.tick ?? -1;
+        return Boolean(self && latestTick >= attackTick && latestTick >= (self.effects?.attackUntil ?? 0));
+      };
       let ownDamage: ZoneCombatEvent | undefined;
       const priorAttackReceipt = await page.locator("#three-viewport").getAttribute("data-confirmed-attack-receipt");
       for (let attempt = 0; attempt < 8 && !ownDamage; attempt += 1) {
         const before = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
         const eventsBefore = combatEvents.length;
-        await expect.poll(() => latestTick >= (latestCombatants.find(entry => entry.entityId === selfEntityId)?.effects?.attackUntil ?? 0), { timeout: 5_000 }).toBe(true);
+        await expect.poll(attackReady, { timeout: 5_000 }).toBe(true);
         await attack.click();
         await expect.poll(
           () => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length,
@@ -357,7 +362,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(new Set(animation.map((sample: any) => sample.kind === "glb" ? `glb:${sample.bonePose}:${Math.round(sample.clipTime * 1000)}` : `procedural:${JSON.stringify(sample.arm)}`)).size).toBeGreaterThan(1);
 
       const ownCount = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
-      await expect.poll(() => latestTick >= (latestCombatants.find(entry => entry.entityId === selfEntityId)?.effects?.attackUntil ?? 0), { timeout: 5_000 }).toBe(true);
+      await expect.poll(attackReady, { timeout: 5_000 }).toBe(true);
       await auto.click();
       await expect.poll(() => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length, { timeout: 8_000 }).toBeGreaterThan(ownCount);
       await hud.getByRole("button", { name: "Inventar", exact: true }).click();

@@ -121,6 +121,15 @@ func verify_cache(source: Dictionary, bytes: PackedByteArray) -> bool:
 	require(moved, "runtime-decoded packed rig lost real animation")
 	root.remove_child(model)
 	model.free()
+	# Purpose-specific rejection must release NPC costs without evicting a
+	# different confirmed actor that still uses the same shared source.
+	cache.set_owners(connection, ["player:1", "npc:fixture"])
+	cache.request(entry, "npc:fixture", "Idle")
+	cache.reject_pose(sha, "Idle")
+	require(cache.request(entry, "npc:fixture", "Idle").get("reason") == "actor_clip_missing", "unsupported pose was requested again")
+	require(cache.request(entry, "player:1").status == "resolved" and cache.evidence().models == 1, "NPC pose rejection evicted another actor's shared model")
+	cache.forget("player:1")
+	require(cache.evidence().models == 0 and cache.needed_assets().is_empty(), "unused pose-rejected model retained costs or requests")
 	var bad := entry.duplicate(true)
 	bad.normalization.sourceSha256 = "a".repeat(64)
 	require(Cache.physical(bad).is_empty(), "different source normalization admitted")
@@ -261,6 +270,10 @@ func verify_scene(manifest: Dictionary) -> void:
 	require(scene._actor_models.supply_asset(no_idle_sha,no_idle,welcome.connectionId), "approved missing-idle fixture was not decoded")
 	scene._refresh_catalog_actors()
 	require(scene._quest_npc_actors.visible_count() == 3, "one unknown idle clip erased the other quest NPCs")
+	require(scene._actor_models.evidence().models == 2, "unused missing-idle rig retained shared model budget")
+	scene._refresh_catalog_actors()
+	for asset in scene._actor_models.needed_assets():
+		require(asset.sha256 != no_idle_sha, "missing-idle NPC rig was requested again after fallback")
 	var malformed: Dictionary = scene._quest_npc_response.duplicate(true)
 	malformed.npcs = []
 	for index in range(11):

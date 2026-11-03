@@ -207,7 +207,10 @@ export class AnimatedGlbActor {
     if (this.disposed || this.animationEnabled === enabled) return;
     this.animationEnabled = enabled;
     if (enabled) return;
-    if (this.active) { this.pausedBeforeLod = this.active.paused; this.active.paused = true; }
+    if (this.active) {
+      if (this.releaseActiveAnimation) this.pausedBeforeLod = this.active.paused;
+      this.active.paused = true;
+    }
     this.fading?.stop();
     this.fading = null;
     this.releaseFadingAnimation?.();
@@ -357,7 +360,7 @@ export class AnimatedGlbActor {
         this.releaseActiveAnimation = glbResourcePool.animationActions(1);
         if (!this.releaseActiveAnimation) return;
         this.active.paused = this.pausedBeforeLod;
-      } else if (!this.play(this.locomotion, false) && (this.resolveClip(this.locomotion) || this.resolveClip("idle"))) return;
+      } else if (!this.play(this.locomotion, false) && this.hasAnimatedPose(this.locomotion)) return;
     }
     const step = Math.min(delta, 0.25);
     if (this.releaseActiveAnimation) this.mixer.update(step);

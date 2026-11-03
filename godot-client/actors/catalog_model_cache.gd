@@ -14,6 +14,7 @@ var _models: Dictionary = {}
 var _costs: Dictionary = {}
 var _rejected: Dictionary = {}
 var _deferred: Dictionary = {}
+var _missing_poses: Dictionary = {}
 
 func clear() -> void:
 	_connection = ""
@@ -23,6 +24,7 @@ func clear() -> void:
 	_costs.clear()
 	_rejected.clear()
 	_deferred.clear()
+	_missing_poses.clear()
 
 ## Priority order comes from the confirmed scene (self, then nearby actors).
 func set_owners(connection_id: String, owners: Array) -> void:
@@ -43,6 +45,16 @@ func admits(owner: String) -> bool:
 
 func forget(owner: String) -> void:
 	_requests.erase(owner)
+	_prune()
+
+## Missing clips reject only the presentation use that requires them. Another
+## confirmed actor may still use the same decoded SHA with different clips.
+func reject_pose(sha: String, pose: String) -> void:
+	_missing_poses[sha + ":" + pose] = true
+	for owner in _requests.keys():
+		var request: Dictionary = _requests[owner]
+		if request.sha256 == sha and request.get("requiredPose", "") == pose:
+			_requests.erase(owner)
 	_prune()
 
 func reject_asset(sha: String) -> void:
@@ -97,7 +109,7 @@ static func physical(entry: Dictionary) -> Dictionary:
 		return ar < br if ar != br else a.sha256 < b.sha256)
 	return candidates[0]
 
-func request(entry: Dictionary, owner: String) -> Dictionary:
+func request(entry: Dictionary, owner: String, required_pose: String = "") -> Dictionary:
 	if not admits(owner):
 		return {"status":"blocked", "reason":"actor_capacity"}
 	var candidate := physical(entry)
@@ -105,6 +117,10 @@ func request(entry: Dictionary, owner: String) -> Dictionary:
 		_requests.erase(owner)
 		_prune()
 		return {"status":"blocked", "reason":"actor_asset_profile"}
+	if _missing_poses.has(str(candidate.sha256) + ":" + required_pose):
+		forget(owner)
+		return {"status":"blocked", "reason":"actor_clip_missing"}
+	candidate["requiredPose"] = required_pose
 	_requests[owner] = candidate
 	_prune()
 	var sha: String = candidate.sha256

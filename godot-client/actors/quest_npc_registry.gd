@@ -113,7 +113,7 @@ func apply(root: Node3D, response: Variant, manifest: Variant, cache: Variant = 
 			if matches.size() > 1:
 				return _reject(root, "npc_catalog_ambiguous")
 			if matches.size() == 1:
-				streamed = cache.request(matches[0], id)
+				streamed = cache.request(matches[0], id, "Idle")
 		var normalization: Dictionary = {}
 		var packed: PackedScene
 		if streamed.get("status") == "resolved":
@@ -225,6 +225,7 @@ func apply(root: Node3D, response: Variant, manifest: Variant, cache: Variant = 
 		if idle.is_empty() and item.packedScene != null:
 			# A valid catalog rig need not have a recognizable idle clip. Keep
 			# this confirmed NPC on the audited standard without erasing peers.
+			cache.reject_pose(str(item.sha), "Idle")
 			actor.remove_child(model_instance)
 			model_instance.free()
 			var standard_path := _local_path(manifest, STANDARD_SHA)
