@@ -1,17 +1,42 @@
 # Aurion ↔ Godot: visueller Vergleich und Live-Nachweis
 
-Der visuelle Comparator vergleicht zwei bereitgestellte Bilddateien und deren Metadaten. Sein Ergebnis ist eine **Diagnose**, kein Nachweis, dass die Bilder aus authentifizierten Live-Sitzungen stammen. Die Herkunft der Aufnahmen und die Verbindung zu einem serverbestätigten Receipt werden bisher nicht unabhängig geprüft.
+Der Workflow **Aurion / Godot first-start live parity** startet einen frischen Godot-Editor. Dieser öffnet über `EditorInterface.play_custom_scene` die echte `authoring_entry.tscn` und damit den tatsächlichen Spielclient. Verglichen wird dessen Welt-Viewport mit dem authentifizierten Browser-Spiel. Die primitive Vorschau des alten Bridge-Docks ist keine Spielansicht.
 
-Der Live-Abnahmeschritt bleibt daher mit `LIVE_CAPTURE_PROVENANCE_NOT_VERIFIED` gesperrt, auch wenn der Bildvergleich `PASS` meldet. Die zugehörigen Unit-Tests verwenden synthetische Daten und belegen ausschließlich das Verhalten des Comparators.
+Der Collector verwendet die bestehende Browser-Sitzung und den echten Native-Auth-PKCE-Ablauf. Beide Clients empfangen Aurion-Snapshots und nehmen genau einen gemeinsamen zukünftigen Tick auf. Ein verpasster Tick wird rot; es gibt keine automatische Auswahl eines besser passenden Folgebildes. „Erststart“ bezeichnet hier die erste Spielsitzung mit dem ersten abgestimmten Aufnahmeversuch nach Anmeldung und Terrain-Eingang, nicht den Lade- oder Anmeldebildschirm.
 
-Für eine spätere Live-Abnahme sind erforderlich:
+## Grenze und Diagnose
 
-1. Zwei unabhängig und autorisiert aufgenommene Welt-Viewports aus Aurion und Godot, mit überprüfbarer Herkunft der unveränderten Bildbytes.
-2. Derselbe bestätigte Weltzustand, dieselbe aktive Source-Revision, dieselbe Stream- und Receipt-Identität sowie zeitlich ausreichend nahe Aufnahmen.
-3. Ein vergleichbarer Kamerastandpunkt, ein gleiches Sichtfeld und gleiche Bildabmessungen.
-4. Nachweisbare Darstellung von Terrain, Welt-Assets, einem bestätigten Actor sowie Himmel und Horizont in beiden Clients.
-5. Erfolgreiche visuelle Prüfung und unabhängiger Readback der zugehörigen Receipts.
+Ein Pixel gilt als abweichend, sobald mindestens ein RGB-Kanal um mehr als 24 von 255 Stufen abweicht. **Mehr als 75% abweichende Originalpixel machen den Test rot. Genau 75% sind zulässig.** Die Entscheidung erfolgt mit ganzzahliger Pixelzahl vor jeder Rundung. Es gibt keine Skalierung, Bildausrichtung, Masken oder Farbkorrektur. MAE und SSIM des älteren Diagnose-Comparators sind Zusatzmetriken und ersetzen diese Grenze nicht.
 
-Der Comparator prüft unter anderem Übereinstimmung der gelieferten Metadaten, Bildintegrität, Frische und visuelle Ähnlichkeit. Diese Prüfungen können manipulierte Herkunftsangaben nicht ausschließen. Ein übereinstimmendes Bildpaar, ein laufender Editor oder eine erfolgreiche Netzwerkverbindung allein beweist daher keine Live-Parität.
+Außerdem müssen die Aufnahmebedingungen stimmen: gleiche Revision und Runtime-Image vor und nach der Aufnahme, gleicher Tick und kanonischer Snapshot-Inhalt, passende tatsächliche Kamera und Pixelmaße, aktive authentifizierte Verbindungen sowie sichtbares Terrain und Modelle. Ein aus MariaDB gelesener Receipt und das unabhängige reine `causality.oracleRange`-Replay müssen zum aufgenommenen Tick passen. Gleiche schwarze oder leere Bilder reichen nicht aus.
 
-Aurion bleibt die einzige Autorität für Weltzustand und Gameplay. Der Godot-Client stellt bestätigte Daten dar und erzeugt keine eigene Weltwahrheit. Zugangsdaten gehören weder in Bilder noch in Metadaten oder Testartefakte.
+Der Workflow zeigt Rot/Grün, Prozentwert und Ursachen im Job Summary. Sein Artefakt enthält:
+
+- `aurion.png` und `godot.png`: unveränderte Welt-Viewport-Bilder;
+- `difference.png`: hervorgehobene Bildunterschiede;
+- `report.html`, `report.md` und `parity.json`: Status, Ursachen und Kamera-/Asset-/Terrain-Readbacks;
+- `capture-index.json` und die beiden Observation-Dateien: Nonce, Bild-Hashes, Editor-/Spielprozess-Zuordnung, Revision und Receipt-/Replay-Readback.
+
+Fehler vor der Aufnahme erzeugen ebenfalls einen roten Bericht. Beispielsweise unterscheiden sich eine unerreichbare Anmeldung, fehlendes Terrain, falsche Kameraprojektion, ausstehende GLBs und eine tatsächliche Bildabweichung. Zugangsdaten, PKCE-Rückgaben, Browser-Traces und Cookies werden nicht als Artefakte gespeichert.
+
+## Geschützter Live-Lauf
+
+Der Workflow wird nach Auslieferung derselben geprüften Revision auf dem Default-Branch manuell gestartet. Er läuft ausschließlich im Environment `production` auf dem vorhandenen Runner mit den Labels `self-hosted`, `Linux`, `X64`, `aurion-static`. PR- und fremde Dispatch-Refs dürfen diesen Runner nicht über diesen Workflow erreichen.
+
+Für den Arbeitsplatz sind folgende Environment-Variablen zu konfigurieren:
+
+| Variable | Bedeutung |
+| --- | --- |
+| `AURION_PARITY_CDP_URL` | Nur lokales HTTP-CDP, z. B. `http://127.0.0.1:9222`, mit einer bereits angemeldeten, zum Receipt-Lesen berechtigten Aurion-Sitzung |
+| `AURION_GODOT_EXECUTABLE` | Absoluter Pfad zum geprüften Godot-Editor |
+| `AURION_PARITY_DISPLAY` | Vorhandenes X-Display des Testarbeitsplatzes |
+
+Es wird ein eigener Editor-Prozess gestartet und nur diese Prozessgruppe beendet. Der vorhandene Benutzer-Editor bleibt unangetastet. Eine fehlende Konfiguration, abgelaufene Sitzung, nicht abgeschlossene Charakterauswahl oder andere ausgelieferte Revision ist ein konkreter roter Blocker und keine bestandene Live-Abnahme.
+
+## Regression und Vertrauensgrenze
+
+PR-CI prüft die 75%-Grenze, Bildintegrität, unvollständige Captures, Metadatenfehler, Kamera-/Asset-/Terrain-Diagnosen und den einmaligen Aufnahmezeitpunkt mit ausdrücklich synthetischen Kontrollen. Godot-CI importiert und prüft die tatsächlichen Editor-Skripte. Diese grünen Tests beweisen keine Produktionsparität.
+
+Nur der geschützte Workflow erzeugt und prüft die Live-Aufnahmen selbst. Ein lokal mit frei bearbeiteten Sidecars aufgerufenes `startup_view_report.py` kann deren Herkunft nicht beweisen. Der ältere `live_view_parity.py` bleibt entsprechend ein Diagnosewerkzeug für bereitgestellte Dateien.
+
+Aurion bleibt alleinige Autorität für Welt und Gameplay. Die Aufnahme führt keine Bewegungs-, Kampf- oder WorldStudio-Schreibaktionen aus. Nach einem roten Live-Lauf wird der zuerst belegte Fehler im zuständigen Client oder Transport korrigiert und derselbe Test mit unveränderter Grenze erneut ausgeführt. Erst ein tatsächlicher grüner Live-Lauf belegt die angeforderte visuelle Abnahme.

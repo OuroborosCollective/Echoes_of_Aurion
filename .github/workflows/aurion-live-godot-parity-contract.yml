@@ -5,6 +5,12 @@ on:
     paths:
       - 'scripts/godot/live_view_parity.py'
       - 'scripts/godot/test_live_view_parity.py'
+      - 'scripts/godot/startup_view_report.py'
+      - 'scripts/godot/test_startup_view_report.py'
+      - 'scripts/godot/capture-live-startup.mjs'
+      - 'client/src/xaurion/integration/StartupViewCapture*'
+      - 'client/src/xaurion/integration/AurionOpenWorldRuntime.tsx'
+      - 'godot-client/addons/aurion_bridge/**'
       - '.github/workflows/aurion-live-godot-view-parity.yml'
       - '.github/workflows/aurion-live-godot-parity-contract.yml'
       - 'docs/godot/LIVE_WORLD_VISUAL_PARITY.md'
@@ -28,5 +34,7 @@ jobs:
       - name: Unit-only tests of mismatched, empty and stale images
         run: |
           python -m unittest discover -s scripts/godot -p test_live_view_parity.py -v
+          python -m unittest discover -s scripts/godot -p test_startup_view_report.py -v
+          node --check scripts/godot/capture-live-startup.mjs
           git diff --check
           echo 'UNIT_CONTRACT_ONLY_NO_LIVE_WORLD_EVIDENCE'

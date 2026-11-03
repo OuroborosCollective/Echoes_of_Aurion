@@ -15,7 +15,7 @@ from unittest.mock import patch
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).parent))
-from live_view_parity import compare, digest
+from live_view_parity import compare, digest, pixel_difference
 
 NOW = datetime(2026, 10, 31, 20, 30, tzinfo=timezone.utc)
 REV = "a" * 40
@@ -44,7 +44,7 @@ def colored_world(image_path: Path, *, alternate: bool = False, dark_sky: bool =
         draw.ellipse((x - 23, 67, x + 34, 147), fill=(45 + i*10, 105+i*4, 55 + i*3))
     draw.polygon([(220, 310), (310, 200), (410, 210), (530, 360)], fill=(142, 127, 114))
     if alternate:
-        draw.rectangle((65, 42, 575, 310), fill=(154, 30, 74))
+        draw.rectangle((5, 5, 635, 355), fill=(154, 30, 74))
         draw.ellipse((202, 86, 436, 315), fill=(245, 180, 22))
     img.save(image_path)
 
@@ -68,6 +68,23 @@ def manifest(source: str, image_hash: str) -> dict:
 
 
 class ParityNegativeControls(unittest.TestCase):
+    def test_exact_75_percent_boundary_and_one_pixel_above(self):
+        a = Image.new("RGB", (400, 300), (0, 0, 0))
+        b = a.copy()
+        ImageDraw.Draw(b).rectangle((0, 0, 299, 299), fill=(255, 255, 255))
+        result = pixel_difference(a, b)
+        self.assertEqual(result["differencePercent"], 75)
+        self.assertFalse(result["exceedsThreshold"])
+        b.putpixel((300, 0), (255, 255, 255))
+        self.assertTrue(pixel_difference(a, b)["exceedsThreshold"])
+
+    def test_color_tolerance_is_bounded_per_original_pixel(self):
+        a = Image.new("RGB", (400, 300), (80, 90, 100))
+        self.assertEqual(pixel_difference(a, Image.new("RGB", a.size, (104, 90, 100)))["differentPixels"], 0)
+        self.assertEqual(pixel_difference(a, Image.new("RGB", a.size, (105, 90, 100)))["differencePercent"], 100)
+        with self.assertRaisesRegex(ValueError, "VIEWPORT_SIZE_MISMATCH"):
+            pixel_difference(a, Image.new("RGB", (401, 300)))
+
     def setUp(self) -> None:
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)

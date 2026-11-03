@@ -1,4 +1,6 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
+import { installStartupViewCapture, type StartupViewCapture } from "./StartupViewCapture";
+import { GLOBAL_WORLD_ID } from "@shared/worldIdentity";
 import { ConfirmedChunkProjection } from "./ConfirmedChunkProjection";
 import { WorldLoadingScreen, type WorldAssetLoadingEvidence, type WorldChunkLoadingEvidence } from "../../components/WorldLoadingScreen";
 import { AURION_CLIENT_VERIFICATION_SCHEMA, createClientVerificationReceipt } from "@shared/aurionClientVerificationContract";
@@ -80,6 +82,7 @@ export default function AurionOpenWorldRuntime() {
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
+  const startupCaptureRef = useRef<StartupViewCapture | null>(null);
   const rendererGeneration = useRef(0);
   const rendererWorldEpochRef = useRef<number | null>(null);
   const pendingWorldRefreshRef = useRef<{ worldSeed: string; epoch: number } | null>(null);
@@ -368,6 +371,21 @@ export default function AurionOpenWorldRuntime() {
       engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch), rendererHandle, confirmedNpcReadback);
       setRendererEvidence({ ...initialized.evidence, generation, recoveryAttempt: recoveryAttempts.current, recoveryCause: recoveryCause.current, status: "awaiting_snapshot", worldSeed: world.worldSeed, epoch: world.epoch });
       engineRef.current = engine;
+      startupCaptureRef.current = installStartupViewCapture(() => {
+        const view = engine!.cameraDirector.getState();
+        const read = (value?: string) => { try { return value ? JSON.parse(value) : null; } catch { return null; } };
+        return {
+          connected: zoneConnectedRef.current,
+          worldId: GLOBAL_WORLD_ID,
+          camera: { positionMm: engine!.camera.position.toArray().map(v => Math.round(v * 1000)),
+            targetMm: [view.lookAtX, view.lookAtY, view.lookAtZ].map(v => Math.round(v * 1000)), fovMilliDeg: Math.round(engine!.camera.fov * 1000) },
+          chunks: read(containerRef.current?.dataset.chunkProjection),
+          assets: read(worldAssetsEvidenceRef.current?.dataset.presentation),
+          player: read(modelEvidenceRef.current?.dataset.presentation),
+          npcs: read(npcEvidenceRef.current?.dataset.presentation),
+          timeOfDay: engine!.timeOfDay,
+        };
+      }, () => engine!.renderer.domElement);
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
         center => rpcUtils.worldAssets.regionV2.fetch(center),
@@ -449,6 +467,7 @@ export default function AurionOpenWorldRuntime() {
       let evidenceFrames = 0;
       engine.onFrameRendered = () => {
         capture?.onRenderedFrame();
+        startupCaptureRef.current?.onFrame();
         if (++evidenceFrames === 1) setRendererEvidence(value => value?.generation === generation ? { ...value, status: "rendering" } : value);
         if (evidenceFrames % 3 !== 0 || !engine) return;
         const evidence = engine.player.glbPresentationEvidence();
@@ -648,6 +667,7 @@ export default function AurionOpenWorldRuntime() {
             setConfirmedPosition({ ...self.position });
             confirmedPositionRef.current = { ...self.position };
             motionRef.current?.project(self.position, snapshot.tick);
+            startupCaptureRef.current?.observe(snapshot);
             const movementCue = surfaceAudioRef.current.advanceMovement({
               position: { x: self.position.x / 1000, z: self.position.z / 1000 },
               tick: snapshot.tick,

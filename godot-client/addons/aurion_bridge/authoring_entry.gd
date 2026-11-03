@@ -79,6 +79,11 @@ func _ready() -> void:
     toolbar.custom_minimum_size = Vector2(260, 48)
     toolbar.pressed.connect(func(): _dialog.popup_centered())
     add_child(toolbar)
+    var capture_script = preload("res://addons/aurion_bridge/startup_capture.gd")
+    if not capture_script.requested_directory().is_empty():
+        var capture = capture_script.new()
+        add_child(capture)
+        capture.bind(_main)
 
 func _button(parent: VBoxContainer, title: String, callback: Callable) -> Button:
     var button := Button.new()
