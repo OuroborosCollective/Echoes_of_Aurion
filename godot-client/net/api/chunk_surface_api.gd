@@ -6,7 +6,16 @@ signal surface_ready(readback: Dictionary, connection_id: String, generation: in
 signal request_failed(reason: String, connection_id: String)
 const RuntimeConfig = preload("res://config/runtime_config.gd")
 const PATH := "/api/game/world-chunk-surface"
+const WORLD_SLICE_PATH := "/api/game/world-slice"
 const MAX_BYTES := 262144
+const SHARED_ERROR_CODES := ["DATABASE_UNAVAILABLE", "GLB_PLAYER_OPERATION_FAILED", "NATIVE_AUTH_CONFIGURATION_UNAVAILABLE"]
+const SURFACE_ERROR_CODES := ["CHUNK_SURFACE_COORDINATE_LIMIT", "CHUNK_SURFACE_PRESENCE_REQUIRED"]
+const SLICE_ERROR_CODES := [
+	"WORLD_SLICE_ACTOR_INVALID", "WORLD_SLICE_ACTOR_SCOPE_MISMATCH", "WORLD_SLICE_ACTOR_UNPROVABLE",
+	"WORLD_SLICE_CHUNK_UNPROVABLE", "WORLD_SLICE_DATABASE_UNAVAILABLE", "WORLD_SLICE_DISCOVERY_UNPROVABLE",
+	"WORLD_SLICE_EPOCH_UNPROVABLE", "WORLD_SLICE_PAYLOAD_LIMIT", "WORLD_SLICE_REVISION_STALE",
+	"WORLD_SLICE_ROOT_UNPROVABLE", "WORLD_SLICE_SESSION_CHANGED", "WORLD_SLICE_WORLD_INVALID",
+]
 
 var _path := PATH
 var _auth: Node
@@ -21,7 +30,7 @@ var _retried := false
 var _waiting_refresh := false
 
 func _init(auth: Node, path: String = PATH) -> void:
-	assert(path in [PATH, "/api/game/world-slice"])
+	assert(path in [PATH, WORLD_SLICE_PATH])
 	_auth = auth
 	_path = path
 
@@ -64,13 +73,13 @@ func _send() -> bool:
 	_epoch += 1
 	var expected_epoch: int = _epoch
 	_http = HTTPRequest.new()
-	_http.body_size_limit = 65536 if _path == "/api/game/world-slice" else MAX_BYTES
+	_http.body_size_limit = 65536 if _path == WORLD_SLICE_PATH else MAX_BYTES
 	_http.max_redirects = 0
 	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_completed.bind(expected_epoch))
 	var query := "?x=%d&z=%d" % [_requested.x, _requested.y]
-	if _path == "/api/game/world-slice":
+	if _path == WORLD_SLICE_PATH:
 		query += "&radius=1&lod=full"
 	var error: Error = _http.request(_server + _path + query,
 		PackedStringArray(["Accept: application/json", "Authorization: Bearer " + token]),
@@ -92,6 +101,9 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 	if code == 401 and not _retried:
 		_retried = true
 		_begin_refresh()
+		return
+	if code != 200 and code >= 400 and code <= 599:
+		_fail(_server_failure(code, headers, body, _path))
 		return
 	if code != 200 or not _json_header(headers):
 		_fail("CHUNK_RESPONSE_INVALID")
@@ -127,6 +139,21 @@ func _on_refresh_failed(_reason: String) -> void:
 func _on_terminal(_reason: String = "") -> void:
 	if _active:
 		_fail("CHUNK_SESSION_UNAVAILABLE")
+
+## Diagnostic only: exposes Aurion's fixed fail-closed reason (for example a
+## missing presence lease or unavailable DB) instead of a generic error. Only an
+## explicit code for this endpoint is accepted; arbitrary server text is never shown.
+static func _server_failure(code: int, headers: PackedStringArray, body: PackedByteArray, path: String = PATH) -> String:
+	var reason := "CHUNK_HTTP_%d" % code
+	if not _json_header(headers) or body.size() > 512:
+		return reason
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(parsed) != TYPE_DICTIONARY or typeof(parsed.get("error")) != TYPE_STRING:
+		return reason
+	var endpoint_codes: Array = SLICE_ERROR_CODES if path == WORLD_SLICE_PATH else SURFACE_ERROR_CODES
+	if parsed.error not in SHARED_ERROR_CODES and parsed.error not in endpoint_codes:
+		return reason
+	return reason + "_" + str(parsed.error)
 
 static func _json_header(headers: PackedStringArray) -> bool:
 	for header in headers:

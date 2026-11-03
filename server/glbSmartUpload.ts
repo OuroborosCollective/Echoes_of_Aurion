@@ -119,6 +119,41 @@ export function requireWorldChunkSurfacePresence(
   }
 }
 
+const DATABASE_OUTAGE_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EHOSTUNREACH", "ENOTFOUND", "PROTOCOL_CONNECTION_LOST", "ER_CON_COUNT_ERROR", "ER_ACCESS_DENIED_ERROR"]);
+const PLAYER_READ_ERROR_CODES = new Set([
+  "CHUNK_SURFACE_COORDINATE_LIMIT", "CHUNK_SURFACE_PRESENCE_REQUIRED",
+  "LIVING_HISTORY_ACTIVE_PRESENCE_REQUIRED", "LIVING_HISTORY_QUERY_INVALID",
+  "LIVING_HISTORY_CYCLE_INVALID", "LIVING_HISTORY_TICK_INVALID",
+  "LIVING_HISTORY_EVENT_READBACK_MISMATCH", "LIVING_HISTORY_SOURCE_READBACK_MISMATCH",
+]);
+
+/** Maps a protected player read failure to a stable, non-sensitive wire code.
+ * Chunk/history codes use an explicit allowlist; legacy GLB/WorldSlice codes
+ * retain their existing mapping. Raw internal text is never returned.
+ * Chunk/history presence and DB availability codes are disclosed so a client can
+ * show WHY a confirmed readback is absent instead of a generic failure. */
+export function playerRouteErrorResponse(error: unknown): { status: number; code: string } {
+  // Drizzle wraps the driver's error in .cause. Bound traversal, including cycles,
+  // and inspect only structured codes, never SQL, connection details or messages.
+  const seen = new Set<Error>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current instanceof Error && !seen.has(current); depth++) {
+    seen.add(current);
+    const driverCode = (current as { code?: unknown }).code;
+    if (typeof driverCode === "string" && DATABASE_OUTAGE_CODES.has(driverCode)) return { status: 503, code: "DATABASE_UNAVAILABLE" };
+    current = current.cause;
+  }
+  const message = error instanceof Error ? error.message : "";
+  const disclosed = /^GLB_[A-Z_]+$/.test(message) || /^WORLD_SLICE_[A-Z_]+$/.test(message)
+    || PLAYER_READ_ERROR_CODES.has(message)
+    || message === "CHARACTER_BINDING_IMMUTABLE" || message === "DATABASE_UNAVAILABLE";
+  const code = disclosed ? message : "GLB_PLAYER_OPERATION_FAILED";
+  if (code === "CHARACTER_BINDING_IMMUTABLE" || code === "WORLD_SLICE_REVISION_STALE") return { status: 409, code };
+  if (code === "DATABASE_UNAVAILABLE") return { status: 503, code };
+  if (code === "WORLD_SLICE_ACTOR_SCOPE_MISMATCH" || code === "CHUNK_SURFACE_PRESENCE_REQUIRED" || code === "LIVING_HISTORY_ACTIVE_PRESENCE_REQUIRED") return { status: 403, code };
+  return { status: 422, code };
+}
+
 export function parseRequestedPresenceUserIds(value: unknown): readonly number[] {
   if (typeof value !== "string" || value.length < 1 || value.length > 1400) return Object.freeze([]);
   const ids = Array.from(new Set(value.split(",").map(part => Number(part)).filter(id => Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647))).sort((a, b) => a - b);
@@ -237,9 +272,8 @@ export function registerGlbSmartUpload(app: Express): void {
       response.setHeader("Cache-Control", "no-store");
       response.json(await operation(request, user));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "GLB_PLAYER_OPERATION_FAILED";
-      const code = /^GLB_[A-Z_]+$/.test(message) || /^WORLD_SLICE_[A-Z_]+$/.test(message) || message === "CHARACTER_BINDING_IMMUTABLE" ? message : "GLB_PLAYER_OPERATION_FAILED";
-      response.status(code === "CHARACTER_BINDING_IMMUTABLE" || code === "WORLD_SLICE_REVISION_STALE" ? 409 : code === "WORLD_SLICE_ACTOR_SCOPE_MISMATCH" ? 403 : 422).json({ error: code });
+      const { status, code } = playerRouteErrorResponse(error);
+      response.status(status).json({ error: code });
     }
   };
 
