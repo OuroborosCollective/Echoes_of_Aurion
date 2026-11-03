@@ -119,11 +119,15 @@ export function requireWorldChunkSurfacePresence(
   }
 }
 
+const DATABASE_OUTAGE_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EHOSTUNREACH", "ENOTFOUND", "PROTOCOL_CONNECTION_LOST", "ER_CON_COUNT_ERROR", "ER_ACCESS_DENIED_ERROR"]);
+
 /** Maps a protected player read failure to a stable, non-sensitive wire code.
  * Only fixed upper-case Aurion codes pass; arbitrary internal messages never do.
  * Chunk/history presence and DB availability codes are disclosed so a client can
  * show WHY a confirmed readback is absent instead of a generic failure. */
 export function playerRouteErrorResponse(error: unknown): { status: number; code: string } {
+  const driverCode = error instanceof Error ? (error as { code?: unknown }).code : undefined;
+  if (typeof driverCode === "string" && DATABASE_OUTAGE_CODES.has(driverCode)) return { status: 503, code: "DATABASE_UNAVAILABLE" };
   const message = error instanceof Error ? error.message : "";
   const disclosed = /^GLB_[A-Z_]+$/.test(message) || /^WORLD_SLICE_[A-Z_]+$/.test(message)
     || /^CHUNK_SURFACE_[A-Z_]+$/.test(message) || /^LIVING_HISTORY_[A-Z_]+$/.test(message)

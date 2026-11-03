@@ -137,7 +137,7 @@ static func _server_failure(code: int, headers: PackedStringArray, body: PackedB
 	if typeof(parsed) != TYPE_DICTIONARY or typeof(parsed.get("error")) != TYPE_STRING:
 		return reason
 	var pattern := RegEx.new()
-	pattern.compile("^[A-Z][A-Z0-9_]{2,63}$")
+	pattern.compile("^(?:CHUNK_SURFACE_[A-Z0-9_]{2,48}|DATABASE_UNAVAILABLE|GLB_PLAYER_OPERATION_FAILED)$")
 	if pattern.search(parsed.error) == null:
 		return reason
 	return reason + "_" + str(parsed.error)

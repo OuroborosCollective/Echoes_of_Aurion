@@ -42,9 +42,9 @@ func apply(world: Variant, root: Node3D, response: Variant, catalog: Variant, ma
 		var resolution: Dictionary = resolver.resolve_monster(world, row, catalog, manifest) if _monsters else resolver.resolve_public_presence(world, row, catalog, manifest)
 		if resolution.get("reason") == "presence_absent":
 			continue # A response for a player who already despawned is stale.
-		if _monsters and resolution.get("reason") == "monster_archetype_model_unavailable":
-			# Valid catalog/manifest, but no prepared model for this confirmed
-			# archetype: show a labeled primitive instead of hiding the mob.
+		if _monsters and resolution.get("reason") in ["monster_archetype_model_unavailable", "monster_model_missing"]:
+			# No usable prepared model for this confirmed archetype: show a
+			# labeled primitive instead of hiding the mob.
 			resolution = MonsterPlaceholder.resolution(row)
 			if resolution.get("status") == "resolved" and not placeholders.has(str(resolution.archetype)):
 				placeholders.append(str(resolution.archetype))
