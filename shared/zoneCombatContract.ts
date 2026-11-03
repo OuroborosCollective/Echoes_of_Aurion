@@ -13,6 +13,8 @@ export type ConfirmedZoneCombatant = Readonly<{
   alive: boolean;
   combatLevel: number;
   lastCombatSequence: number;
+  effects?: Readonly<{ attackUntil?: number; shieldUntil?: number; overdriveUntil?: number; slowUntil?: number }>;
+  skillCooldowns?: Readonly<Record<string, number>>;
 }>;
 
 export type ConfirmedZoneCombatEvent = Readonly<{
@@ -45,6 +47,9 @@ export function validConfirmedZoneCombatants(value: unknown): value is Confirmed
   return value.every((candidate, index) => {
     if (!candidate || typeof candidate !== "object") return false;
     const state = candidate as ConfirmedZoneCombatant;
+    for (const optional of [state.effects, state.skillCooldowns]) {
+      if (optional !== undefined && (!optional || typeof optional !== "object" || Array.isArray(optional) || Object.keys(optional).length > 8 || !Object.values(optional).every(v => Number.isSafeInteger(v) && v >= 0))) return false;
+    }
     if (!validEntityId(state.entityId) || ids.has(state.entityId) || (index > 0 && state.entityId <= previous)) return false;
     ids.add(state.entityId); previous = state.entityId;
     if (![state.health,state.maxHealth,state.stamina,state.maxStamina,state.combatLevel,state.lastCombatSequence].every(Number.isSafeInteger)) return false;

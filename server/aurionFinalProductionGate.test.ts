@@ -28,10 +28,10 @@ describe("Blocker 1 final production proof contract", () => {
       "health.artifactDigest",
       "health.runtimeImageDigest",
       "health.releaseArchiveDigest",
-      'health.authority?.ruleset !== "aurion-zone-v3"',
+      'health.authority?.ruleset !== "aurion-zone-v4"',
       'health.authority?.rulesetScope !== "runtime-default"',
-      'health.authority?.defaultRulesetVersion !== "aurion.zone.rules.v3"',
-      "health.authority.supportedZoneRulesets.length !== 2",
+      'health.authority?.defaultRulesetVersion !== "aurion.zone.rules.v4"',
+      "health.authority.supportedZoneRulesets.length !== 3",
       "health.authority?.tickHz !== 10",
       "health.authority?.causalReceipts !== true",
     ]) expect(promoter).toContain(field);
@@ -76,7 +76,7 @@ describe("Blocker 1 final production proof contract", () => {
       health: { authority: structuredClone(AURION_BINARY_AUTHORITY) } };
   }
 
-  it.each(["aurion.zone.rules.v2", "aurion.zone.rules.v3"])("final plain-Node gate certifies actual %s separately from binary default", ruleset => {
+  it.each(["aurion.zone.rules.v2", "aurion.zone.rules.v3", "aurion.zone.rules.v4"])("final plain-Node gate certifies actual %s separately from binary default", ruleset => {
     const result = runFinalRulesetGuard(rulesetFixture(ruleset));
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({ zoneRulesetVersion: ruleset });

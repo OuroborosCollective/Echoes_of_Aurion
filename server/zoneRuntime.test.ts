@@ -12,7 +12,12 @@ import type { ZoneId } from "./zoneProtocol";
 let isolatedZoneSequence = 0;
 function createIsolatedTestZone(): AuthoritativeMovementZone {
   isolatedZoneSequence += 1;
-  return new AuthoritativeMovementZone(`observatory_threshold_test_${isolatedZoneSequence}` as ZoneId);
+  const zone = new AuthoritativeMovementZone(`observatory_threshold_test_${isolatedZoneSequence}` as ZoneId);
+  const state = zone.getCanonicalZoneState();
+  state.ruleset = "aurion.zone.rules.v3";
+  delete state.combatTactics;
+  zone.restoreFromCanonicalState(state);
+  return zone;
 }
 
 describe("WASD authoritative zone movement", () => {

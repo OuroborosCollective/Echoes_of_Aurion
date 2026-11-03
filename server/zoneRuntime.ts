@@ -1,3 +1,6 @@
+import { combatRule, insideCombatLine, type ZoneCombatTactics } from "../shared/aurionCombatRules";
+import { ZONE_TELEGRAPH_CONTRACT_VERSION, ZONE_TELEGRAPH_VISUAL_SOURCE_REVISION, ZONE_TELEGRAPH_AUTHORITY_RULESET } from "../shared/zoneTelegraphContract";
+import { zoneMobTelegraphWindupTicks, zoneMobTelegraphWidthFixed } from "./zoneMobTelegraphPolicy";
 import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
@@ -92,7 +95,7 @@ type PresencePeer = {
   presence: ZonePresence;
 };
 
-type AttackResult = "accepted" | "stale" | "missing" | "invalid_target" | "invalid_skill" | "cooldown" | "out_of_range" | "dead";
+type AttackResult = "accepted" | "stale" | "missing" | "invalid_target" | "invalid_skill" | "cooldown" | "out_of_range" | "dead" | "no_stamina";
 type CombatResolution = { result: AttackResult; event?: ConfirmedZoneCombatEvent; rngEvents: RngEventRecord[] };
 
 function serialize(payload: ZoneServerMessage) { return JSON.stringify(payload); }
@@ -139,6 +142,8 @@ function createPresencePeer(values: {
  * below are donor provenance, not external runtime authorities.
  */
 export class AuthoritativeMovementZone {
+  private tactics: ZoneCombatTactics = { effects: {}, windups: [] };
+  private get tacticalCombat(): boolean { return this.rulesetVersion === "aurion.zone.rules.v4"; }
   private rulesetVersion: string = AURION_ZONE_RULESET_VERSION;
   private readonly peers = new Map<string, PresencePeer>();
   private readonly peersByEntityId = new Map<string, PresencePeer>();
@@ -260,6 +265,7 @@ export class AuthoritativeMovementZone {
 
     return sortCanonicalZoneState({
       schema: "aurion.zone.state.v1",
+      ...(this.tacticalCombat ? { combatTactics: structuredClone(this.tactics) } : {}),
       worldId: WORLD_ID,
       zoneId: this.zoneId,
       tick: this.tickNumber,
@@ -288,6 +294,7 @@ export class AuthoritativeMovementZone {
     if (state.zoneId !== this.zoneId) throw new Error("AURION_REPLAY_ZONE_MISMATCH");
     if (state.worldId !== WORLD_ID) throw new Error("AURION_REPLAY_WORLD_MISMATCH");
     this.rulesetVersion = state.ruleset;
+    this.tactics = structuredClone(state.combatTactics ?? { effects: {}, windups: [] });
     this.tickNumber = state.tick;
     this.combatSequence = state.combatSequence;
     if (previousReceiptHash !== undefined) this.previousReceiptHash = previousReceiptHash;
@@ -517,9 +524,11 @@ export class AuthoritativeMovementZone {
     if (!peer) return "missing";
     if (attack.clientSeq <= peer.lastReceivedClientSeq) return "stale";
     if (peer.health <= 0) return "dead";
+    if (this.tacticalCombat && peer.stamina < 8) return "no_stamina";
     const mob = this.mobRuntime.stateFor(attack.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
     if (mobDistance(peer.position, mob.position) > AX1_PLAYER_BASIC_MELEE_RANGE_FIXED) return "out_of_range";
+    if (this.tacticalCombat && this.tickNumber + 1 < (this.tactics.effects[`player:${peer.userId}`]?.attackUntil ?? 0)) return "cooldown";
     if (this.hasQueuedPlayerCombat(`player:${peer.userId}`)) return "cooldown";
     if (!this.admitSequence(peer, attack.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
@@ -532,13 +541,23 @@ export class AuthoritativeMovementZone {
     if (!peer) return "missing";
     if (skill.clientSeq <= peer.lastReceivedClientSeq) return "stale";
     if (peer.health <= 0) return "dead";
+    if (this.tacticalCombat && peer.stamina < 8) return "no_stamina";
     const definition = ax1BladeSkillById(skill.skillId);
-    if (peer.weaponTrack !== "blade" || !definition || definition.skillId !== "k_strike" || definition.kind !== "melee") return "invalid_skill";
+    if (peer.weaponTrack !== "blade" || (this.tacticalCombat && peer.weaponEquipped === false) || !definition || (!this.tacticalCombat && (definition.skillId !== "k_strike" || definition.kind !== "melee"))) return "invalid_skill";
     if (this.tickNumber < (peer.skillCooldownUntilTick.get(skill.skillId) ?? 0)) return "cooldown";
+    if (this.tacticalCombat && peer.stamina < combatRule(skill.skillId).cost) return "no_stamina";
+    if (this.tacticalCombat && this.tickNumber + 1 < (this.tactics.effects[`player:${peer.userId}`]?.attackUntil ?? 0)) return "cooldown";
+    if (this.tacticalCombat && ["k_shield", "k_overdrive", "k_whirlwind"].includes(skill.skillId)) {
+      if (this.hasQueuedPlayerCombat(`player:${peer.userId}`)) return "cooldown";
+      if (!this.admitSequence(peer, skill.clientSeq)) return "stale";
+      this.pendingIntents.push({ type: "skill", connectionId, entityId: `player:${peer.userId}`, clientSeq: skill.clientSeq, arrivalSeq: ++this.arrivalSequence, skillId: skill.skillId, targetEntityId: "" });
+      return "accepted";
+    }
     if (!skill.targetEntityId) return "invalid_target";
     const mob = this.mobRuntime.stateFor(skill.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
-    if (mobDistance(peer.position, mob.position) > definition.rangeFixed) return "out_of_range";
+    if (mobDistance(peer.position, mob.position) > (this.tacticalCombat ? combatRule(skill.skillId).range : definition.rangeFixed)) return "out_of_range";
+    if (this.tacticalCombat && this.tickNumber + 1 < (this.tactics.effects[`player:${peer.userId}`]?.attackUntil ?? 0)) return "cooldown";
     if (this.hasQueuedPlayerCombat(`player:${peer.userId}`)) return "cooldown";
     if (!this.admitSequence(peer, skill.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
@@ -576,17 +595,40 @@ export class AuthoritativeMovementZone {
 
   private resolvePlayerMelee(peer: PresencePeer, targetEntityId: string, skillId: Ax1BladeSkillId | null, rangeFixed: number, actionIndex: number): CombatResolution {
     if (peer.health <= 0) return { result: "dead", rngEvents: [] };
+    if (this.tacticalCombat && this.tickNumber < (this.tactics.effects[`player:${peer.userId}`]?.attackUntil ?? 0)) return { result: "cooldown", rngEvents: [] };
     const mob = this.mobRuntime.stateFor(targetEntityId);
     if (!mob || mob.health <= 0) return { result: "invalid_target", rngEvents: [] };
     if (mobDistance(peer.position, mob.position) > rangeFixed) return { result: "out_of_range", rngEvents: [] };
+    if (this.tacticalCombat && peer.stamina < combatRule(skillId).cost) return { result: "no_stamina", rngEvents: [] };
+    if (this.tacticalCombat && skillId === "k_charge") {
+      let candidate = { ...peer.position };
+      const dx = mob.position.x - candidate.x, dz = mob.position.z - candidate.z;
+      const distance = Math.hypot(dx, dz), travel = Math.max(0, distance - 2000);
+      const steps = Math.ceil(travel / 300);
+        for (let step = 0; step < steps; step++) {
+          const desired = { x: candidate.x + Math.round(dx / distance * Math.min(300, travel - step * 300)), z: candidate.z + Math.round(dz / distance * Math.min(300, travel - step * 300)) };
+          candidate = worldNatureCollision.resolve(candidate, desired);
+        }
+      if (mobDistance(candidate, mob.position) > AX1_PLAYER_BASIC_MELEE_RANGE_FIXED) return { result: "out_of_range", rngEvents: [] };
+      peer.position = candidate;
+    }
     const sequence = this.tickNumber * 1000 + actionIndex;
     this.combatSequence = Math.max(this.combatSequence, sequence);
     const attacker = { id: `player:${peer.userId}`, stamina: peer.stamina, skills: { combat: { level: peer.combatLevel } } };
     const defender = { id: mob.definition.entityId, health: mob.health, skills: { combat: { level: mob.definition.level } } };
     const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, unarmed: this.rulesetVersion === AURION_ZONE_RULESET_VERSION && skillId === null && peer.weaponEquipped === false, entropy: entropyBundle.entropy });
+    const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, unarmed: this.rulesetVersion !== "aurion.zone.rules.v2" && skillId === null && peer.weaponEquipped === false, entropy: entropyBundle.entropy, ...(this.tacticalCombat ? { tuning: { cost: combatRule(skillId).cost, power: combatRule(skillId).power * ((this.tactics.effects[attacker.id]?.overdriveUntil ?? 0) > this.tickNumber ? 1.5 : 1), hitChance: 0.9 } } : {}) });
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
+    if (this.tacticalCombat) {
+      const effects = this.tactics.effects[attacker.id] ??= {};
+      effects.attackUntil = this.tickNumber + 8;
+      if (skillId === "k_charge") {
+        (this.tactics.effects[defender.id] ??= {}).slowUntil = this.tickNumber + 30;
+        this.tactics.windups = this.tactics.windups.filter(w => w.mobId !== defender.id);
+        this.mobRuntime.applyCombatState(defender.id, { health: mob.health, nextAttackTick: this.tickNumber + 10 });
+      }
+    }
     peer.lastCombatSequence = sequence;
     this.mobRuntime.applyCombatState(mob.definition.entityId, { health: patch.defender.health });
     return { result: "accepted", event: this.combatEvent(delta, peer.stamina, patch.defender.health, skillId), rngEvents: entropyBundle.events };
@@ -715,7 +757,14 @@ export class AuthoritativeMovementZone {
           changed = true;
           combatEvents.push(resolution.event);
           rngEvents.push(...resolution.rngEvents);
+        } else if (this.tacticalCombat && !this.isReplay) {
+          const code = resolution.result === "no_stamina" ? "COMBAT_NO_STAMINA" : resolution.result === "out_of_range" ? "COMBAT_TARGET_OUT_OF_RANGE" : resolution.result === "cooldown" ? "COMBAT_SKILL_COOLDOWN" : "INVALID_COMBAT_TARGET";
+          peer.socket.send(JSON.stringify({ type: "reject", code }));
         }
+      } else if (intent.type === "skill" && this.tacticalCombat) {
+        const events = this.resolveTacticalSkill(peer, intent.skillId as Ax1BladeSkillId, intent.targetEntityId, () => ++actionIndex);
+        combatEvents.push(...events.events); rngEvents.push(...events.rngEvents);
+        if (events.changed) changed = true;
       } else if (intent.type === "skill") {
         const definition = ax1BladeSkillById(intent.skillId as Ax1BladeSkillId);
         if (!definition || peer.weaponTrack !== "blade") continue;
@@ -759,7 +808,7 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber);
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -768,6 +817,16 @@ export class AuthoritativeMovementZone {
     rngEvents.push(...mobCombat.rngEvents);
     captureAuthorityStage("MOB_COMBAT");
     // 07 regeneration.
+    if (this.tacticalCombat) for (const peer of this.sortedPeers) {
+      for (const [id, until] of peer.skillCooldownUntilTick) if (until <= this.tickNumber) { peer.skillCooldownUntilTick.delete(id); changed = true; }
+    }
+    if (this.tacticalCombat) {
+      this.tactics.windups = this.tactics.windups.filter(w => { const m = this.mobRuntime.stateFor(w.mobId); return m && m.health > 0 && m.state === "combat" && m.targetEntityId === w.targetId && (this.peersByEntityId.get(w.targetId)?.health ?? 0) > 0; });
+      for (const [id, effects] of Object.entries(this.tactics.effects)) {
+        for (const key of Object.keys(effects) as (keyof typeof effects)[]) if ((effects[key] ?? 0) <= this.tickNumber) { delete effects[key]; changed = true; }
+        if (!Object.keys(effects).length) delete this.tactics.effects[id];
+      }
+    }
     for (const peer of this.sortedPeers) {
       if (peer.health <= 0) continue;
       const next = regenerateWasdStamina(peer.stamina);
@@ -846,6 +905,32 @@ export class AuthoritativeMovementZone {
     return changed || resourcesChanged || mobsChanged;
   }
 
+  private resolveTacticalSkill(peer: PresencePeer, skillId: Ax1BladeSkillId, targetId: string, nextIndex: () => number): { changed: boolean; events: ConfirmedZoneCombatEvent[]; rngEvents: RngEventRecord[] } {
+    const result = { changed: false, events: [] as ConfirmedZoneCombatEvent[], rngEvents: [] as RngEventRecord[] };
+    const rule = combatRule(skillId), id = `player:${peer.userId}`;
+    if (!ax1BladeSkillById(skillId) || peer.weaponTrack !== "blade" || peer.weaponEquipped === false || peer.health <= 0 || peer.stamina < rule.cost || this.tickNumber < (this.tactics.effects[id]?.attackUntil ?? 0) || this.tickNumber < (peer.skillCooldownUntilTick.get(skillId) ?? 0)) return result;
+    if (skillId === "k_shield" || skillId === "k_overdrive") {
+      peer.stamina -= rule.cost;
+      const effects = this.tactics.effects[id] ??= {};
+      if (skillId === "k_shield") effects.shieldUntil = this.tickNumber + 30;
+      else effects.overdriveUntil = this.tickNumber + 50;
+      result.changed = true;
+    } else {
+      const targets = skillId === "k_whirlwind" ? this.mobRuntime.orderedStates().filter(m => m.health > 0 && mobDistance(peer.position, m.position) <= rule.range).map(m => m.definition.entityId) : [targetId];
+      const initialStamina = peer.stamina;
+      for (const target of targets) {
+        peer.stamina = initialStamina;
+        if (skillId === "k_whirlwind") (this.tactics.effects[id] ??= {}).attackUntil = this.tickNumber;
+        const resolved = this.resolvePlayerMelee(peer, target, skillId, rule.range, nextIndex());
+        if (resolved.event) { result.events.push(resolved.event); result.rngEvents.push(...resolved.rngEvents); result.changed = true; }
+      }
+      peer.stamina = result.changed ? initialStamina - rule.cost : initialStamina;
+    }
+    if (result.changed) peer.skillCooldownUntilTick.set(skillId, this.tickNumber + rule.cooldown);
+    else if (!this.isReplay) peer.socket.send(JSON.stringify({type:"reject",code:"INVALID_COMBAT_TARGET"}));
+    return result;
+  }
+
   private resolveMobAttacks(actionIndex: number): { changed: boolean; events: ConfirmedZoneCombatEvent[]; rngEvents: RngEventRecord[] } {
     let changed = false;
     const events: ConfirmedZoneCombatEvent[] = [];
@@ -855,13 +940,36 @@ export class AuthoritativeMovementZone {
       if (mob.state !== "combat" || mob.health <= 0 || !mob.targetEntityId || this.tickNumber < mob.nextAttackTick) continue;
       const peer = this.peersByEntityId.get(mob.targetEntityId);
       if (!peer || peer.health <= 0) continue;
-      if (mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed) continue;
+      if (this.tacticalCombat) {
+        const windup = this.tactics.windups.find(w => w.mobId === mob.definition.entityId);
+        if (windup) {
+          if (this.tickNumber < windup.impactTick) continue;
+          this.tactics.windups = this.tactics.windups.filter(w => w !== windup);
+          if (!insideCombatLine(peer.position, windup)) {
+            this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, nextAttackTick: this.tickNumber + mob.definition.attackCooldownTicks });
+            changed = true; continue;
+          }
+        } else {
+          if (mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed) continue;
+          const duration = zoneMobTelegraphWindupTicks(mob.definition);
+          if (duration > 0) {
+            const sequence = this.tickNumber * 1000 + (++localActionIndex);
+            const pending = { mobId: mob.definition.entityId, targetId: `player:${peer.userId}`, startTick: this.tickNumber, impactTick: this.tickNumber + duration, sequence, origin: { ...mob.position }, target: { ...peer.position }, width: zoneMobTelegraphWidthFixed(mob.definition) };
+            this.tactics.windups.push(pending);
+            if (!this.isReplay) {
+              const wire = JSON.stringify({ type: "telegraph", contractVersion: ZONE_TELEGRAPH_CONTRACT_VERSION, id: `telegraph:${pending.mobId}:${sequence}`, sequence, startTick: this.tickNumber, impactTick: pending.impactTick, attackerEntityId: pending.mobId, targetEntityId: pending.targetId, kind: "line", origin: pending.origin, target: pending.target, widthFixed: pending.width, color: "#ef4444", visualSourceRevision: ZONE_TELEGRAPH_VISUAL_SOURCE_REVISION, authorityRuleset: ZONE_TELEGRAPH_AUTHORITY_RULESET });
+              for (const client of this.sortedPeers) if (client.socket.readyState === client.socket.OPEN) client.socket.send(wire);
+            }
+            changed = true; continue;
+          }
+        }
+      } else if (mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed) continue;
       const sequence = this.tickNumber * 1000 + (++localActionIndex);
       this.combatSequence = Math.max(this.combatSequence, sequence);
       const attacker = { id: mob.definition.entityId, stamina: mob.stamina, skills: { combat: { level: mob.definition.level } } };
       const defender = { id: `player:${peer.userId}`, health: peer.health, skills: { combat: { level: peer.combatLevel } } };
       const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
-      const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: 0, entropy: entropyBundle.entropy });
+      const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: 0, entropy: entropyBundle.entropy, ...(this.tacticalCombat ? { tuning: { cost: 8, power: (this.tactics.effects[defender.id]?.shieldUntil ?? 0) > this.tickNumber ? 40 : 100, hitChance: 0.9 } } : {}) });
       const patch = reduceCombatDelta(attacker, defender, delta);
       this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, stamina: patch.attacker.stamina, nextAttackTick: this.tickNumber + mob.definition.attackCooldownTicks });
       peer.health = patch.defender.health;
@@ -931,7 +1039,7 @@ export class AuthoritativeMovementZone {
       const peerId = peer ? `player:${peer.userId}` : null;
       const mobId = mob ? mob.definition.entityId : null;
       if (peerId && (!mobId || compareBinary(peerId, mobId) < 0)) {
-        out.push(Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence }));
+        out.push(Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence, ...(this.tacticalCombat ? { effects: { ...this.tactics.effects[peerId] }, skillCooldowns: Object.fromEntries(peer.skillCooldownUntilTick) } : {}) }));
         peerIndex += 1;
       } else if (mobId) {
         out.push(Object.freeze({ entityId: mobId, health: mob.health, maxHealth: mob.maxHealth, stamina: mob.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: mob.health > 0, combatLevel: mob.definition.level, lastCombatSequence: 0 }));

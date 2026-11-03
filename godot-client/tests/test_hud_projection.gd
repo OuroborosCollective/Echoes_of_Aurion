@@ -131,6 +131,13 @@ func verify() -> void:
 	require(scene.world_hud.visible and not hud.visible, "diagnostics not reachable from mobile")
 	scene._handle_mobile_back()
 	require(hud.visible and not scene.world_hud.visible, "Android back did not return from diagnostics")
+	var active := Fixture.snapshot(welcome, 1000)
+	active["combatants"][0]["effects"] = {"shieldUntil": 2000, "overdriveUntil": 2000}
+	active["combatants"][0]["skillCooldowns"] = {"k_shield": 2000}
+	scene._on_zone_snapshot(active)
+	scene._refresh_target_hud()
+	require(hud.stamina_label.text.contains("Schild") and hud.stamina_label.text.contains("Overdrive"), "confirmed effects missing from HUD")
+	require(hud.get_node("Skills/k_shield").disabled, "confirmed skill cooldown ignored")
 	scene._reset_projection()
 	require(not hud.visible and hud.health_label.text == "HP: —" and hud.attack_button.disabled, "disconnect retained HUD data")
 	scene.queue_free()

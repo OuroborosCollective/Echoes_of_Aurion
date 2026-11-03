@@ -1,3 +1,4 @@
+import type { ZoneCombatTactics } from "../../shared/aurionCombatRules";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 
 export interface CanonicalPlayerState {
@@ -91,6 +92,7 @@ export interface CanonicalZoneState {
   resources: CanonicalResourceState[];
   questSummaries: CanonicalQuestSummary[];
   questInstances?: CanonicalZoneQuestInstance[];
+  combatTactics?: ZoneCombatTactics;
 }
 
 /**
@@ -194,6 +196,7 @@ export function sortCanonicalZoneState(
     resources,
     questSummaries,
     ...(questInstances ? { questInstances } : {}),
+    ...(state.combatTactics ? { combatTactics: structuredClone(state.combatTactics) } : {}),
   };
 }
 
