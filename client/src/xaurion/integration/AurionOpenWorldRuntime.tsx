@@ -1,5 +1,5 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
-import { installStartupViewCapture, type StartupViewCapture } from "./StartupViewCapture";
+import { installStartupViewCapture, type StartupViewCapture } from "@/lib/startupViewCapture";
 import { GLOBAL_WORLD_ID } from "@shared/worldIdentity";
 import { ConfirmedChunkProjection } from "./ConfirmedChunkProjection";
 import { WorldLoadingScreen, type WorldAssetLoadingEvidence, type WorldChunkLoadingEvidence } from "../../components/WorldLoadingScreen";

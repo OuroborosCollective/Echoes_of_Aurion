@@ -1,3 +1,5 @@
+import { operationalDate } from "@shared/operationalClock";
+
 /** Opt-in, one-shot observation of the real renderer. Never sends a game intent. */
 export class StartupViewCapture {
   private snapshot: any = null;
@@ -5,7 +7,7 @@ export class StartupViewCapture {
   private captured: unknown = null;
   private failure: string | null = null;
   private frames = 0;
-  readonly startedAtUtc = new Date().toISOString();
+  readonly startedAtUtc = operationalDate().toISOString();
 
   constructor(readonly nonce: string, private read: () => Record<string, unknown>, private canvas: () => HTMLCanvasElement, readonly documentId: string = crypto.randomUUID()) {}
 
@@ -24,7 +26,7 @@ export class StartupViewCapture {
       // resize, overlay removal, camera override, retry, or postprocessing.
       const canvas = this.canvas();
       this.captured = { schema: "aurion.startup-view.observation.v1", source: "aurion-web", nonce: this.nonce,
-        documentId: this.documentId, minimumTick: this.target, captureIndex: 1, startedAtUtc: this.startedAtUtc, capturedAtUtc: new Date().toISOString(),
+        documentId: this.documentId, minimumTick: this.target, captureIndex: 1, startedAtUtc: this.startedAtUtc, capturedAtUtc: operationalDate().toISOString(),
         frame: this.frames, snapshot: structuredClone(this.snapshot), ...this.read(),
         viewportPx: [canvas.width, canvas.height], png: canvas.toDataURL("image/png") };
     } catch { this.failure = "BROWSER_FRAME_CAPTURE_FAILED"; }

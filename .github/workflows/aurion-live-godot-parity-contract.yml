@@ -10,6 +10,7 @@ on:
       - 'scripts/godot/capture-live-startup.mjs'
       - 'scripts/godot/startup-*.mjs'
       - 'client/src/xaurion/integration/Startup*Capture*'
+      - 'client/src/lib/startupViewCapture.ts'
       - 'client/src/xaurion/integration/AurionOpenWorldRuntime.tsx'
       - 'godot-client/addons/aurion_bridge/**'
       - '.github/workflows/aurion-live-godot-view-parity.yml'

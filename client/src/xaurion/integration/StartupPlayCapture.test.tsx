@@ -1,7 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import Ax1PlayNavigationBridge, { AX1_PLAY_REQUEST_EVENT } from './Ax1PlayNavigationBridge';
-import { installStartupViewCapture } from './StartupViewCapture';
+import { installStartupViewCapture } from '@/lib/startupViewCapture';
 import { AURION_PLAY_LAUNCH_KEY } from './AurionPlayRoute';
 vi.mock('./AurionOpenWorldRuntime', () => ({ default: () => null }));
 vi.mock('./Ax1CompanionOverlay', () => ({ default: () => null }));

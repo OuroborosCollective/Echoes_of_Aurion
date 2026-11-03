@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { StartupViewCapture } from './StartupViewCapture';
+import { StartupViewCapture } from '@/lib/startupViewCapture';
 
 // Synthetic observer controls. Real screenshots are produced only by the
 // protected live workflow, never by this unit test.
