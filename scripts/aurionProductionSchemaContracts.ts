@@ -5,7 +5,7 @@ import { lateAurionMigrationTags, parseLateMigrationSql, type ExpectedMigration,
 /** Read-only contract sources; these old migrations are never reapplied. */
 export const legacyContractTags = [
   "0001_shocking_doctor_octopus", "0009_rainy_multiple_man",
-  "0019_wasd_aurion_crafting_receipt_inventory",
+  "0015_careless_photon", "0019_wasd_aurion_crafting_receipt_inventory",
 ] as const;
 
 export async function readProductionSchemaContracts(root: string): Promise<ExpectedMigration[]> {
@@ -13,8 +13,8 @@ export async function readProductionSchemaContracts(root: string): Promise<Expec
   // Only the legacy tables evolved by late migrations are prerequisites. All of
   // their real CREATE, ALTER and index statements are retained in source order.
   const legacySql = sources.flatMap(sql => sql.split("--> statement-breakpoint")).filter(statement =>
-    /(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+`(?:itemInstances|craftingReceipts|glbAssets|playerProfiles)`/i.test(statement)
-      || /(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+`[^`]+`\s+ON\s+`(?:itemInstances|craftingReceipts|glbAssets)`/i.test(statement),
+    /(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+`(?:itemInstances|craftingReceipts|glbAssets|playerProfiles|zoneConnectionTickets)`/i.test(statement)
+      || /(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+`[^`]+`\s+ON\s+`(?:itemInstances|craftingReceipts|glbAssets|zoneConnectionTickets)`/i.test(statement),
   ).join("\n");
   const baseline = parseLateMigrationSql(lateAurionMigrationTags[0], legacySql);
   const state = new Map<string, ExpectedTable>(baseline.tables.map(table => [table.name, table]));

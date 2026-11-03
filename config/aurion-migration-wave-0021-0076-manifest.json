@@ -222,6 +222,10 @@
     {
       "tag": "0076_aurion_investigation_deduction_receipts",
       "source": "aurion"
+    },
+    {
+      "tag": "0077_windhollow_zone_connection",
+      "source": "aurion"
     }
   ],
   "policy": {
