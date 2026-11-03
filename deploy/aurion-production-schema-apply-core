@@ -26,6 +26,8 @@ env_file=/opt/echoes-of-aurion/.env.production
 host_config=/etc/aurion-production-schema-apply.env
 state_dir=/var/lib/echoes-of-aurion/schema-apply
 backup_dir=/var/backups/echoes-of-aurion/schema-apply
+# Newest verified logical backups retained after a successful recovery proof.
+backup_keep=5
 phase=INITIALIZE
 receipt_emitted=0
 recovery_container=""
@@ -252,6 +254,28 @@ database_image_id="$(docker inspect --format '{{.Image}}' "$database_container")
 docker image inspect "$database_image_id" >/dev/null
 database_name="$(node "${release}/bin/mysql-client-config.cjs" --env-file "$env_file" --database-name 2>/dev/null)" || { phase=DATABASE_URL_INVALID; exit 70; }
 [[ "$database_name" =~ ^[A-Za-z0-9_$]+$ ]] || { phase=DATABASE_NAME_INVALID; exit 70; }
+
+# Bounded retention, run only after this run's backup passed its isolated
+# recovery proof. Keeps the newest canonical backups by mtime; the verified
+# backup of this run is never removed. Unknown files and in-progress temp
+# files are left untouched. Retention failure never blocks the reviewed apply.
+prune_schema_backups() {
+  local dir="$1" keep="$2" protected="$3"
+  [[ "$keep" =~ ^[0-9]+$ && "$keep" -ge 2 && -d "$dir" && -f "$protected" ]] || return 1
+  local -a candidates=()
+  local entry
+  while IFS= read -r -d '' entry; do candidates+=("${entry#* }"); done < <(
+    find "$dir" -maxdepth 1 -type f -regextype posix-extended \
+      -regex '.*/[a-f0-9]{40}-[a-f0-9]{16}-[0-9]{8}T[0-9]{6}Z(-refreshed)?\.sql\.gz' \
+      -printf '%T@ %p\0' | sort -z -rn)
+  local index=0 removed=0
+  for entry in "${candidates[@]}"; do
+    index=$((index + 1))
+    [[ "$index" -le "$keep" || "$entry" == "$protected" ]] && continue
+    rm -f -- "$entry" && removed=$((removed + 1))
+  done
+  echo "schema backup retention: kept newest ${keep}, removed ${removed}" >&2
+}
 
 production_client() {
   local mode="$1"
@@ -649,6 +673,9 @@ if [[ "$preflight_mode" == "repair" ]]; then
   repair_rehearsal_sha256="$(sha256sum "$repair_rehearsal" | awk '{print $1}')"
 fi
 cleanup_recovery || { phase=RECOVERY_CLEANUP_FAILED; exit 70; }
+
+phase=PRUNE_SCHEMA_BACKUPS
+prune_schema_backups "$backup_dir" "$backup_keep" "$backup_file" || echo "schema backup retention skipped" >&2
 
 phase=APPLY_SCHEMA
 apply_raw="$(mktemp "${state_dir}/.apply.XXXXXX")"

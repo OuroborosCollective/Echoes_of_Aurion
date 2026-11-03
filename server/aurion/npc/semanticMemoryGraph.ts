@@ -183,11 +183,18 @@ export type NpcSemanticGraphQueryResult = Readonly<{
   resultHash: string;
 }>;
 
+/**
+ * Identity of a verified predecessor generation. A graph's content never depends
+ * on its predecessor's content, only on the predecessor's graphHash, so a stored
+ * predecessor can be bound by this anchor without re-deriving its whole chain.
+ */
+export type NpcSemanticGraphPredecessor = Readonly<{ npcId: string; generation: number; graphHash: string }>;
+
 export type NpcSemanticGraphBuildInput = Readonly<{
   memory: NpcMemoryV4;
   memoryReceipts: readonly ConfirmedNpcDecision[];
   performedActions?: readonly VerifiedPerformedActionEvidence[];
-  previousGraph?: NpcSemanticMemoryGraph | null;
+  previousGraph?: NpcSemanticMemoryGraph | NpcSemanticGraphPredecessor | null;
 }>;
 
 // ---------------------------------------------------------------------------
@@ -214,6 +221,21 @@ const provenanceKinds = Object.freeze(["decision_receipt", "action_receipt", "ef
 
 const verifiedPerformedActions = new WeakSet<object>();
 const verifiedGraphs = new WeakSet<object>();
+const verifiedPredecessorAnchors = new WeakSet<object>();
+
+/**
+ * Bind a stored predecessor generation by its identity. Callers create an anchor
+ * only after verifying the stored receipt envelope (receipt hash) and its hash link
+ * to the successor; every generation stays re-derivable from its retained evidence.
+ */
+export function npcSemanticGraphPredecessorAnchor(value: Readonly<{ npcId: unknown; generation: unknown; graphHash: unknown }>): NpcSemanticGraphPredecessor {
+  assertId(value.npcId, "NPC_SEMANTIC_GRAPH_PREDECESSOR_ANCHOR_INVALID");
+  assertIndex(value.generation, "NPC_SEMANTIC_GRAPH_PREDECESSOR_ANCHOR_INVALID");
+  assertHash(value.graphHash, "NPC_SEMANTIC_GRAPH_PREDECESSOR_ANCHOR_INVALID");
+  const anchor = Object.freeze({ npcId: value.npcId as string, generation: value.generation as number, graphHash: value.graphHash as string });
+  verifiedPredecessorAnchors.add(anchor);
+  return anchor;
+}
 
 const textOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -254,7 +276,24 @@ function provenanceOrder(a: NpcSemanticProvenanceRef, b: NpcSemanticProvenanceRe
   return textOrder(a.kind, b.kind) || textOrder(a.id, b.id) || textOrder(a.hash, b.hash);
 }
 
+/**
+ * Runtime invariant: within one provenance kind, a receipt id identifies exactly
+ * one content hash. Decision receipt ids are derived from npcId and resolution
+ * index only, so two hashes under one id are two conflicting receipts and must
+ * never coexist silently in a graph.
+ */
+export function assertNpcSemanticProvenanceIdentity(refs: readonly NpcSemanticProvenanceRef[]): void {
+  const hashById = new Map<string, string>();
+  for (const ref of refs) {
+    const key = `${ref.kind}:${ref.id}`;
+    const known = hashById.get(key);
+    if (known !== undefined && known !== ref.hash) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_HASH_CONFLICT");
+    hashById.set(key, ref.hash);
+  }
+}
+
 function mergeProvenance(...groups: readonly (readonly NpcSemanticProvenanceRef[])[]): NpcSemanticProvenanceRef[] {
+  assertNpcSemanticProvenanceIdentity(groups.flat());
   const map = new Map<string, NpcSemanticProvenanceRef>();
   for (const ref of groups.flat()) {
     const key = `${ref.kind}:${ref.id}:${ref.hash}`;
@@ -487,7 +526,7 @@ function buildNpcSemanticMemoryGraph(input: NpcSemanticGraphBuildInput): NpcSema
 
   const previous = input.previousGraph ?? null;
   if (previous) {
-    if (!verifiedGraphs.has(previous) || previous.npcId !== memory.npcId) throw new Error("NPC_SEMANTIC_GRAPH_PREDECESSOR_VERIFICATION_REQUIRED");
+    if (!(verifiedGraphs.has(previous) || verifiedPredecessorAnchors.has(previous)) || previous.npcId !== memory.npcId) throw new Error("NPC_SEMANTIC_GRAPH_PREDECESSOR_VERIFICATION_REQUIRED");
     if (previous.generation >= memory.lastResolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_GENERATION_REGRESSION");
   }
 
@@ -501,6 +540,20 @@ function buildNpcSemanticMemoryGraph(input: NpcSemanticGraphBuildInput): NpcSema
     ...memory.semantic.flatMap((f) => f.provenance.map(decisionRef)),
     ...memory.procedural.flatMap((c) => c.provenance.map(decisionRef)),
   ]);
+
+  // A decision already recorded in memory keeps the authority it was recorded
+  // under. Re-verifying a historical receipt later must not restamp it with the
+  // current capsule pin, otherwise the same receipt carries two provenances.
+  const recordedDecisionRefs = new Map(
+    allMemoryProvenance.filter((ref) => ref.kind === "decision_receipt").map((ref) => [`${ref.id}:${ref.hash}`, ref] as const),
+  );
+  const performedDecisionRef = (decision: ConfirmedNpcDecision): NpcSemanticProvenanceRef => {
+    const confirmed = confirmedDecisionRef(decision);
+    const recorded = recordedDecisionRefs.get(`${confirmed.id}:${confirmed.hash}`);
+    if (!recorded) return confirmed;
+    if (recorded.logicalIndex !== confirmed.logicalIndex) throw new Error("NPC_SEMANTIC_GRAPH_DECISION_PROVENANCE_MISMATCH");
+    return recorded;
+  };
 
   const ensureIdentityNode = (
     kind: NpcSemanticNodeKind,
@@ -630,11 +683,11 @@ function buildNpcSemanticMemoryGraph(input: NpcSemanticGraphBuildInput): NpcSema
   for (const performedAction of performed.sort((a, b) => a.actionReceipt.resolutionIndex - b.actionReceipt.resolutionIndex || textOrder(a.actionReceipt.id, b.actionReceipt.id))) {
     const action = performedAction.actionReceipt;
     const provenance = mergeProvenance(
-      [confirmedDecisionRef(performedAction.sourceDecision)],
+      [performedDecisionRef(performedAction.sourceDecision)],
       [actionRef(action)],
       [effectRef(performedAction.effectReadback, authority.sourceSha256, action.resolutionIndex)],
       [linkRef(performedAction.memoryLink, authority)],
-      [confirmedDecisionRef(performedAction.successorDecision)],
+      [performedDecisionRef(performedAction.successorDecision)],
     );
     const actionNode = ensureIdentityNode("action", action.id, provenance, action.resolutionIndex, null);
     const outcomeNode = ensureIdentityNode("outcome", `${action.id}:committed`, provenance, action.resolutionIndex, null);
@@ -741,6 +794,7 @@ function parseNode(raw: unknown, npcId: string): NpcSemanticGraphNode {
   if (!Array.isArray(node.provenance) || !node.provenance.length || node.provenance.length > NPC_SEMANTIC_GRAPH_LIMITS.provenanceRefs) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
   node.provenance.forEach(validateProvenance);
   const provenance = node.provenance as NpcSemanticProvenanceRef[];
+  assertNpcSemanticProvenanceIdentity(provenance);
   if (!same(provenance, [...provenance].sort(provenanceOrder)) || new Set(provenance.map((ref) => `${ref.kind}:${ref.id}:${ref.hash}`)).size !== provenance.length) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_ORDER");
   assertHash(node.payloadHash, "NPC_SEMANTIC_GRAPH_NODE_INVALID");
   const { id, payloadHash, ...payload } = node;
@@ -764,6 +818,7 @@ function parseEdge(raw: unknown, npcId: string): NpcSemanticGraphEdge {
   if (!Array.isArray(edge.provenance) || !edge.provenance.length || edge.provenance.length > NPC_SEMANTIC_GRAPH_LIMITS.provenanceRefs) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
   edge.provenance.forEach(validateProvenance);
   const provenance = edge.provenance as NpcSemanticProvenanceRef[];
+  assertNpcSemanticProvenanceIdentity(provenance);
   if (!same(provenance, [...provenance].sort(provenanceOrder)) || new Set(provenance.map((ref) => `${ref.kind}:${ref.id}:${ref.hash}`)).size !== provenance.length) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_ORDER");
   assertHash(edge.payloadHash, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
   const { id, payloadHash, ...payload } = edge;

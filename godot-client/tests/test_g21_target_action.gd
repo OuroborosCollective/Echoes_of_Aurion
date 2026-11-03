@@ -2,6 +2,18 @@ extends SceneTree
 ## Isolated G21 UI + real local WebSocket transport; fixture state is not live Aurion.
 const Codec = preload("res://net/zone_codec.gd")
 const Actor = preload("res://actors/actor_view.tscn")
+## Control-flow spy only; real HTTP/auth boundaries have separate runtime tests.
+class ReaderCounter:
+	extends Node
+	var calls := 0
+	var cancelled := 0
+	func cancel() -> void: cancelled += 1
+	func request_self(_url: String, _connection: String) -> bool:
+		calls += 1
+		return false
+	func request_npcs(_url: String, _connection: String) -> bool:
+		calls += 1
+		return false
 var failures: Array[String] = []
 
 func require(ok: bool, message: String) -> void:
@@ -119,12 +131,47 @@ func verify() -> void:
 	Input.parse_input_event(third_drag)
 	await process_frame
 	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "third finger moved camera")
+	# WT02 preparation: a real Godot pinch reaches the active camera but emits
+	# no gameplay packet. The local socket and input state are fixture-only.
+	var pinch := InputEventScreenTouch.new()
+	pinch.index = 24
+	pinch.position = right_drag.position + Vector2(50, 0)
+	pinch.pressed = true
+	Input.parse_input_event(pinch)
+	await process_frame
+	var distance_before: float = scene.world_camera.orbit_distance
+	var pinch_drag := InputEventScreenDrag.new()
+	pinch_drag.index = 24
+	pinch_drag.position = pinch.position + Vector2(60, 0)
+	Input.parse_input_event(pinch_drag)
+	await process_frame
+	require(scene.world_camera.orbit_distance < distance_before, "pinch did not reach active Main camera")
+	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "pinch also rotated the camera")
+	require((joystick.get("output") as Vector2).is_equal_approx(held), "pinch changed held movement input")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == state_before, "pinch changed confirmed projection")
+	var zoom_before_button: float = scene.world_camera.orbit_distance
+	scene.get_node("%ZoomOut").pressed.emit()
+	require(is_equal_approx(scene.world_camera.orbit_distance, zoom_before_button / 0.8), "desktop zoom-out signal not connected or factor inverted")
+	scene.get_node("%ZoomIn").pressed.emit()
+	require(is_equal_approx(scene.world_camera.orbit_distance, zoom_before_button), "desktop zoom-in signal not connected or factor inverted")
+	for _attempt in range(10):
+		client.poll()
+		remote.poll()
+		require(remote.get_available_packet_count() == 0, "camera gesture emitted a gameplay packet")
+		await create_timer(0.01).timeout
 	scene._toggle_world_diagnostics()
 	require(scene._camera_router.active_finger() == -1, "diagnostics retained camera finger")
 	require((joystick.get("output") as Vector2).is_zero_approx(), "diagnostics retained joystick input")
 	Input.parse_input_event(right_drag)
 	await process_frame
 	require(is_equal_approx(scene.world_camera.yaw_radians, orbit_after), "camera moved while diagnostics were open")
+	Input.parse_input_event(pinch_drag)
+	await process_frame
+	require(scene.world_camera.orbit_distance < distance_before, "cancel changed the zoom distance")
+	var cancelled_distance: float = scene.world_camera.orbit_distance
+	Input.parse_input_event(pinch_drag)
+	await process_frame
+	require(is_equal_approx(scene.world_camera.orbit_distance, cancelled_distance), "cancelled pinch moved camera")
 	scene._toggle_world_diagnostics()
 	right.pressed = false
 	Input.parse_input_event(right)
@@ -199,6 +246,22 @@ func verify() -> void:
 	expected_packet["clientSeq"] = 2.0 # JSON parsing represents wire numbers consistently.
 	require(JSON.parse_string(packet) == expected_packet, "mobile button did not send canonical attack packet")
 	require(JSON.stringify(scene._confirmed_zone.current_state()) == before, "mobile attack mutated confirmed state")
+	# Exercise the real mobile menu -> close -> signal -> Main path.
+	scene.mobile_hud.set_menu_open(true)
+	var mobile_distance: float = scene.world_camera.orbit_distance
+	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/ZoomOut").pressed.emit()
+	require(not scene.mobile_hud.menu_is_open(), "zoom-out left mobile menu open")
+	require(is_equal_approx(scene.world_camera.orbit_distance, mobile_distance / 0.8), "mobile zoom-out did not reach active camera")
+	scene.mobile_hud.set_menu_open(true)
+	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/ZoomIn").pressed.emit()
+	require(not scene.mobile_hud.menu_is_open(), "zoom-in left mobile menu open")
+	require(is_equal_approx(scene.world_camera.orbit_distance, mobile_distance), "mobile zoom-in did not reach active camera")
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == before, "zoom buttons changed confirmed state")
+	for _attempt in range(10):
+		client.poll()
+		remote.poll()
+		require(remote.get_available_packet_count() == 0, "zoom buttons emitted a gameplay packet")
+		await create_timer(0.01).timeout
 	scene.mobile_hud.set_menu_open(true)
 	scene.mobile_hud.attack_button.pressed.emit()
 	var menu_sent := false
@@ -232,6 +295,76 @@ func verify() -> void:
 		unexpected = unexpected or remote.get_available_packet_count() > 0
 		await create_timer(0.01).timeout
 	require(not unexpected, "unconfirmed target sent an attack")
+	# WT02 active-scene fixture: real socket captures every outgoing packet;
+	# token bytes and DTO are explicit test fixtures, not actual authentication.
+	scene._selected_target_id = ""
+	scene._config.server_base_url = "" # no fixture credential leaves this process
+	scene._world_is_stale = false
+	scene.mobile_hud.set_menu_open(false)
+	scene._movement.reset()
+	scene.mobile_joystick.call("_reset")
+	var tokens := {"version":"aurion.native-auth.v1","tokenType":"Bearer","accessToken":"t".repeat(43),"refreshToken":"r".repeat(43),"accessExpiresInSeconds":900,"refreshAbsoluteRemainingSeconds":2592000,"refreshIdleExpiresInSeconds":604800}
+	require(scene._auth_start._tokens.accept_token_response(tokens, Time.get_ticks_msec()), "fixture token store rejected test pair")
+	var slice_fixture: SceneTree = load("res://tests/test_world_slice.gd").new()
+	var dto: Dictionary = slice_fixture.fixture()
+	slice_fixture.free()
+	dto.connectionId = scene._confirmed_zone.connection_id()
+	var canonical_before := JSON.stringify(scene._confirmed_zone.current_state())
+	var appearance_api: Node = scene._appearance_api
+	var quest_api: Node = scene._quest_npc_api
+	var appearance_counter := ReaderCounter.new()
+	var quest_counter := ReaderCounter.new()
+	scene._appearance_api = appearance_counter
+	scene._quest_npc_api = quest_counter
+	var player_view: Transform3D = scene.world_camera.transform
+	require(scene._set_tabletop(true), "at-rest protected tabletop entry failed")
+	require(not scene.world_actors.visible and not scene.confirmed_neighbors.visible and not scene._world_design_visuals.visible and not scene.mobile_joystick.visible, "legacy data leaked into slice presentation")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	var fingerprint: String = scene._tabletop_layer.readback_fingerprint()
+	require(fingerprint == dto.fingerprint and scene._tabletop_layer.terrain.get_child_count() == 1, "active scene failed to project protected slice")
+	scene._on_camera_zoom_requested(1.5)
+	scene.world_camera.drag_orbit(Vector2(40, 10))
+	scene._tabletop_layer.set_ceiling(0)
+	scene._tabletop_layer.set_category("structures", false)
+	scene._set_tabletop_fallback(true)
+	require(scene._tabletop_map.visible and scene.live_3d_viewport.render_target_update_mode == SubViewport.UPDATE_DISABLED, "fallback kept 3D GPU work running")
+	require(scene._tabletop_layer.readback_fingerprint() == fingerprint, "render mode changed knowledge identity")
+	scene._poll_move_intent(Time.get_ticks_msec())
+	scene._on_world_action_pressed()
+	for _attempt in range(20):
+		client.poll()
+		remote.poll()
+		require(remote.get_available_packet_count() == 0, "tabletop emitted gameplay packet")
+		await create_timer(0.01).timeout
+	require(JSON.stringify(scene._confirmed_zone.current_state()) == canonical_before, "tabletop mutated confirmed world")
+	require(scene._set_tabletop(false), "return to player camera failed")
+	require(appearance_counter.cancelled == 1 and quest_counter.cancelled == 1 and appearance_counter.calls == 1 and quest_counter.calls == 1, "return failed to resume cancelled one-shot readers exactly once")
+	scene._appearance_api = appearance_api
+	scene._quest_npc_api = quest_api
+	appearance_counter.free()
+	quest_counter.free()
+	require(scene.world_camera.transform.is_equal_approx(player_view), "player camera was not restored")
+	scene._movement._last_direction = Vector2i.RIGHT
+	require(not scene._set_tabletop(true), "moving actor entered tabletop and changed intent lifecycle")
+	scene._movement.reset()
+	require(scene._set_tabletop(true), "fresh tabletop entry failed")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation() - 1, Vector2i.ZERO)
+	require(scene._tabletop_layer.readback_fingerprint().is_empty(), "old token generation populated fresh tabletop")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	scene._world_is_stale = true
+	scene._tick_tabletop(Time.get_ticks_msec())
+	require(not scene._tabletop_active and scene._tabletop_layer.readback_fingerprint().is_empty(), "stale live world retained tabletop")
+	scene._world_is_stale = false
+	require(scene._set_tabletop(true), "tabletop did not recover after fresh scope")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	scene._notification(Control.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	require(not scene._tabletop_active and scene._tabletop_layer.readback_fingerprint().is_empty(), "focus loss retained protected slice")
+	# The previous accepted read is cleared explicitly on reset below. A stale
+	# generation callback cannot replace it or revive a disconnected view.
+	scene._reset_projection()
+	require(not scene._tabletop_active and scene._tabletop_layer.readback_fingerprint().is_empty() and scene._tabletop_map._slice.is_empty(), "session reset retained tabletop data")
+	scene._on_tabletop_ready(dto, dto.connectionId, scene._auth_start.session_generation(), Vector2i.ZERO)
+	require(scene._tabletop_layer.readback_fingerprint().is_empty(), "late callback revived cleared scene")
 	client.close()
 	remote.close()
 	listener.stop()

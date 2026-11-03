@@ -54,8 +54,10 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
       await pool.query("INSERT INTO aurionNpcActionEpochStates (hubId,active,marketVersion,marketJson,marketHash,inventoryJson,inventoryHash,polityVersion,polityId,polityStability,polityStateHash,sourceRevision,sourceSha256) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [hubId,true,0,JSON.stringify(market),merchantMarketStateHash(market),JSON.stringify(inventory),inventory.stateHash,0,polityId,72,merchantPolityStateHash({polityId,version:0,stability:72}),pin.sourceRevision,pin.sourceSha256]);
     }
-    await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId=?",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
-    await pool.query("DELETE FROM aurionNpcStates WHERE npcId=?",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
+    // Every hub merchant may now receive a genesis decision; keep each test isolated.
+    const npcIds = hubs.map(hub => `ax1_merchant_${hub}`);
+    await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId IN (?,?,?,?)",npcIds);
+    await pool.query("DELETE FROM aurionNpcStates WHERE npcId IN (?,?,?,?)",npcIds);
     await pool.query("DELETE FROM aurionWorldResolutions WHERE regionId IN (?,?,?,?) AND resolutionIndex BETWEEN 0 AND 20",hubs);
     await pool.query("DELETE FROM aurionPolityStates WHERE polityId IN (?,?,?,?)",hubs.map(hub => `polity:${hub}`));
   }
@@ -79,10 +81,11 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     expect(first.lifeStateHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.worldReactionHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.effectReadbackHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(first.npcGuilds?.guildCount).toBe(1);
-    expect(first.npcGuilds?.totalMembers).toBe(1);
-    expect(first.npcGuilds?.guilds[0]?.leaderNpcId).toBe(AUTONOMOUS_NPC_LIFE_NPC_ID);
-    expect(first.npcGuilds?.guilds[0]?.stateHash).toMatch(/^[a-f0-9]{64}$/);
+    // Since merchant genesis every hub merchant is alive after the first cycle and founds its own guild.
+    expect(first.npcGuilds?.guildCount).toBe(hubs.length);
+    expect(first.npcGuilds?.totalMembers).toBe(hubs.length);
+    expect(new Set(first.npcGuilds?.guilds.map(guild => guild.leaderNpcId))).toEqual(new Set(hubs.map(hub => `ax1_merchant_${hub}`)));
+    expect(first.npcGuilds?.guilds.find(guild => guild.leaderNpcId === AUTONOMOUS_NPC_LIFE_NPC_ID)?.stateHash).toMatch(/^[a-f0-9]{64}$/);
 
     const restartedRuntime = createAutonomousNpcLifeRuntime({ enabled: true });
     await restartedRuntime.resolveOnce({ tick: 600 });
@@ -93,17 +96,18 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     expect(typeof second.worldRegionId).toBe("string");
     expect(hubs).toContain(second.worldRegionId as (typeof hubs)[number]);
     expect(second.effectReadbackHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(second.npcGuilds?.guildCount).toBe(1);
-    expect(second.npcGuilds?.totalMembers).toBe(1);
+    expect(second.npcGuilds?.guildCount).toBe(hubs.length);
+    expect(second.npcGuilds?.totalMembers).toBe(hubs.length);
 
     const [guildStates] = await pool.query<RowDataPacket[]>("SELECT guildId,leaderNpcId,revision,stateHash FROM aurionNpcGuildStates");
-    expect(guildStates).toHaveLength(1);
-    expect(guildStates[0].leaderNpcId).toBe(AUTONOMOUS_NPC_LIFE_NPC_ID);
-    expect(guildStates[0].stateHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(guildStates).toHaveLength(hubs.length);
+    const primaryGuild = guildStates.find(row => row.leaderNpcId === AUTONOMOUS_NPC_LIFE_NPC_ID);
+    expect(primaryGuild?.stateHash).toMatch(/^[a-f0-9]{64}$/);
     const [guildReceipts] = await pool.query<RowDataPacket[]>("SELECT sourceDecisionReceiptId,sourceResolutionIndex,confirmationHash FROM aurionNpcGuildReceipts ORDER BY createdAt");
     expect(guildReceipts.length).toBeGreaterThanOrEqual(1);
-    expect(guildReceipts[0].sourceResolutionIndex).toBe(1);
-    expect(guildReceipts[0].confirmationHash).toMatch(/^[a-f0-9]{64}$/);
+    // The primary merchant's guild is founded from its confirmed index-1 decision; genesis merchants from index 0.
+    expect(guildReceipts.some(row => row.sourceResolutionIndex === 1)).toBe(true);
+    expect(guildReceipts.every(row => /^[a-f0-9]{64}$/.test(row.confirmationHash))).toBe(true);
 
     const [receipts] = await pool.query<RowDataPacket[]>("SELECT resolutionIndex,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? ORDER BY resolutionIndex",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
     expect(receipts).toHaveLength(3);

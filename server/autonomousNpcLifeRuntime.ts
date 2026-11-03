@@ -13,10 +13,13 @@ import {
 } from "./aurion/livingHistoryLoop";
 import type { NpcInteractionSignal } from "./aurion/npcConcurrentLifecycleRuntime.js";
 import { createNpcGuildRuntime, type NpcGuildRuntime, type NpcGuildRuntimeReadback } from "./aurion/npcGuildRuntime.js";
+import { formatNpcDegradationEvent, observeNpcDegradation, type NpcDegradationEntry, type NpcDegradationState } from "./aurion/npcLifeDegradationMonitor.js";
 
 export const AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS = LIVING_HISTORY_LOOP_INTERVAL_TICKS;
 export const AUTONOMOUS_NPC_LIFE_HOME_REGION = "observatory_threshold" as const;
 export const AUTONOMOUS_NPC_LIFE_NPC_ID = `ax1_merchant_${AUTONOMOUS_NPC_LIFE_HOME_REGION}` as const;
+/** Degradation-monitor key for the civilization step of each Living History cycle. */
+export const AUTONOMOUS_CIVILIZATION_LOOP_MONITOR_ID = "aurion_civilization_loop" as const;
 
 export type AutonomousNpcLifeReadback = Readonly<{
   enabled: boolean;
@@ -95,6 +98,18 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
   let chain: Promise<void> = Promise.resolve();
   let cycleCount = 0;
   let lastCycle: LivingHistoryLoopResult | null = null;
+  let degradation: NpcDegradationState = new Map();
+  // Observability only: a monitor failure must never affect NPC lifecycle truth.
+  const reportDegradation = (entries: readonly NpcDegradationEntry[], cycle: number, tick: number): void => {
+    try {
+      const observed = observeNpcDegradation(degradation, entries, cycle, tick);
+      degradation = observed.state;
+      for (const event of observed.events) {
+        if (event.event === "recovered") console.info(formatNpcDegradationEvent(event));
+        else console.warn(formatNpcDegradationEvent(event));
+      }
+    } catch { /* never let diagnostics change lifecycle behavior */ }
+  };
   const guildRuntime = createNpcGuildRuntime({ enabled });
   let state: AutonomousNpcLifeReadback = frozenReadback({
     enabled,
@@ -138,6 +153,14 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
       // Execute the Living History Loop for all merchant NPCs.
       const loopResult = await executeLivingHistoryCycle(tick, cycle);
       lastCycle = loopResult;
+      reportDegradation([
+        ...loopResult.entries,
+        {
+          npcId: AUTONOMOUS_CIVILIZATION_LOOP_MONITOR_ID,
+          status: loopResult.failureCode ? "degraded" : loopResult.civilizationAction && loopResult.civilizationAction !== "IDLE" ? "confirmed" : "skipped",
+          failureCode: loopResult.failureCode ?? null,
+        },
+      ], cycle, tick);
 
       // Read back the primary NPC (observatory_threshold) for the readback state.
       const primaryNpcId = AUTONOMOUS_NPC_LIFE_NPC_ID;
@@ -257,6 +280,11 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         npcGuilds: guildRuntime.readback(),
       });
     } catch (error) {
+      reportDegradation([
+        { npcId: AUTONOMOUS_NPC_LIFE_NPC_ID, status: "degraded", failureCode: failureCode(error) },
+        // The civilization step was not observed in this cycle: keep its open degradation.
+        { npcId: AUTONOMOUS_CIVILIZATION_LOOP_MONITOR_ID, status: "skipped", failureCode: null },
+      ], cycleCount, tick);
       state = frozenReadback({
         ...state,
         enabled,

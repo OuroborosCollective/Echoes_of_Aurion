@@ -409,3 +409,17 @@ text = "Diagnose"
 
 [node name="MobileHUD" parent="." instance=ExtResource("7_hud")]
 visible = false
+
+[node name="ZoomIn" type="Button" parent="WorldHUD/WorldBar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(48, 48)
+text = "Näher"
+tooltip_text = "Kamera näher · nur Darstellung"
+
+[node name="ZoomOut" type="Button" parent="WorldHUD/WorldBar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(48, 48)
+text = "Weiter"
+tooltip_text = "Kamera weiter · nur Darstellung"

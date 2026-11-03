@@ -153,6 +153,9 @@ func resolve_monster(world: Variant, mob: Variant, catalog: Variant, prepared: V
 	if typeof(prepared) != TYPE_DICTIONARY or prepared.get("schemaVersion") != PREPARED_VERSION or prepared.get("outputMode") != "byte-exact-compatible-copy" or not _lower_hex(prepared.get("sourceRevision"), 40) or typeof(prepared.get("sources")) != TYPE_ARRAY or prepared.sources.size() > 128:
 		return _blocked("prepared_manifest_invalid")
 	var matches: Array = []
+	for source in prepared.sources:
+		if typeof(source) != TYPE_DICTIONARY:
+			return _blocked("prepared_manifest_invalid")
 	for entry in catalog.entries:
 		if typeof(entry) != TYPE_DICTIONARY:
 			return _blocked("monster_catalog_invalid")
@@ -164,8 +167,6 @@ func resolve_monster(world: Variant, mob: Variant, catalog: Variant, prepared: V
 		var source_id := "glb_" + str(sha).substr(0, 48)
 		var source_matches: Array = []
 		for source in prepared.sources:
-			if typeof(source) != TYPE_DICTIONARY:
-				return _blocked("prepared_manifest_invalid")
 			var mapping: Variant = source.get("canonicalMapping")
 			if source.get("role") == "monster" and source.get("assetId") == source_id and source.get("sha256") == sha and source.get("sourceSha256") == sha and source.get("outputSha256") == sha and source.get("path") == "godot-client/assets/generated/" + source_id + ".glb" and typeof(mapping) == TYPE_DICTIONARY and mapping.get("kind") == "monster-source" and mapping.get("archetype") == mob.get("archetype"):
 				source_matches.append(source)
@@ -173,9 +174,9 @@ func resolve_monster(world: Variant, mob: Variant, catalog: Variant, prepared: V
 			return _blocked("monster_source_ambiguous")
 		if source_matches.size() == 1:
 			var resource := "res://assets/generated/" + source_id + ".glb"
-			if not ResourceLoader.exists(resource, "PackedScene"):
-				return _blocked("monster_model_missing")
 			matches.append({"status":"resolved","entityId":mob.entityId,"catalogAssetId":entry.assetId,"sourceAssetId":source_id,"sha256":sha,"resourcePath":resource})
 	if matches.size() != 1:
 		return _blocked("monster_asset_ambiguous" if matches.size() > 1 else "monster_archetype_model_unavailable")
+	if not ResourceLoader.exists(matches[0].resourcePath, "PackedScene"):
+		return _blocked("monster_model_missing")
 	return matches[0]

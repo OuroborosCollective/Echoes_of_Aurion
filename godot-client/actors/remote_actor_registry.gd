@@ -3,6 +3,7 @@ extends RefCounted
 ## public appearance replies and byte-verified packaged models may be mounted.
 const ActorScene = preload("res://actors/actor_view.tscn")
 const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
+const MonsterPlaceholder = preload("res://actors/monster_placeholder.gd")
 var _actors: Dictionary = {}
 var _resource_paths: Dictionary = {}
 var diagnostic := ""
@@ -36,10 +37,17 @@ func apply(world: Variant, root: Node3D, response: Variant, catalog: Variant, ma
 	diagnostic = ""
 	var resolver = AppearanceResolver.new()
 	var accepted: Dictionary = {}
+	var placeholders: Array[String] = []
 	for row in rows:
 		var resolution: Dictionary = resolver.resolve_monster(world, row, catalog, manifest) if _monsters else resolver.resolve_public_presence(world, row, catalog, manifest)
 		if resolution.get("reason") == "presence_absent":
 			continue # A response for a player who already despawned is stale.
+		if _monsters and resolution.get("reason") in ["monster_archetype_model_unavailable", "monster_model_missing"]:
+			# No usable prepared model for this confirmed archetype: show a
+			# labeled primitive instead of hiding the mob.
+			resolution = MonsterPlaceholder.resolution(row)
+			if resolution.get("status") == "resolved" and not placeholders.has(str(resolution.archetype)):
+				placeholders.append(str(resolution.archetype))
 		if resolution.get("status") != "resolved":
 			if _monsters:
 				diagnostic = str(resolution.get("reason", "monster_unavailable"))
@@ -51,6 +59,9 @@ func apply(world: Variant, root: Node3D, response: Variant, catalog: Variant, ma
 			clear(root) # Ambiguous server reply must not keep an older actor.
 			return
 		accepted[id] = resolution
+	if not placeholders.is_empty() and diagnostic.is_empty():
+		placeholders.sort()
+		diagnostic = "Platzhalter ohne Godot-Modell: " + ", ".join(PackedStringArray(placeholders))
 	for id in _actors.keys():
 		if not accepted.has(id) or _resource_paths.get(id) != accepted[id].resourcePath or _actors[id].asset_id != accepted[id].catalogAssetId:
 			_remove(root, str(id))
@@ -58,7 +69,7 @@ func apply(world: Variant, root: Node3D, response: Variant, catalog: Variant, ma
 		if _actors.has(id):
 			continue
 		var resolved: Dictionary = accepted[id]
-		var packed := load(str(resolved.resourcePath)) as PackedScene
+		var packed: PackedScene = MonsterPlaceholder.packed(str(resolved.archetype)) if resolved.get("placeholder", false) else load(str(resolved.resourcePath)) as PackedScene
 		if packed == null:
 			continue
 		var actor: Node3D = ActorScene.instantiate()

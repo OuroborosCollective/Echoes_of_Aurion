@@ -344,7 +344,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
     registerGlbSmartUpload(app);
     app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext, responseMeta: discoveryResponseMeta }));
     const server = await new Promise<ReturnType<typeof app.listen>>(resolveServer => {
-      const listener = app.listen(0, "127.0.0.1", () => resolveServer(listener));
+      const listener = app.listen(process.env.AURION_WORLD_SLICE_GODOT_EDITOR ? 3000 : 0, "127.0.0.1", () => resolveServer(listener));
     });
     try {
       const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/game/world-slice?x=0&z=0&radius=1&lod=full`;
@@ -363,10 +363,65 @@ suite("Issue 323 Phase H exploration memory",()=>{
       const own = await fetch(url, { headers: { cookie: ownCookie } });
       expect(own.status).toBe(200);
       expect(own.headers.get("cache-control")).toBe("no-store");
-      expect((await own.json()).fingerprint).toBe(slice.fingerprint);
+      const ownReadback = await own.json();
+      expect(ownReadback.fingerprint).toBe(slice.fingerprint);
       const other = await fetch(url, { headers: { cookie: await cookieFor(unseenUserId) } });
       expect(other.status).toBe(200);
-      expect(await other.json()).toMatchObject({ status: "FOGGED", slice: { chunks: [] } });
+      const otherReadback = await other.json();
+      expect(otherReadback).toMatchObject({ status: "FOGGED", slice: { chunks: [] } });
+      if (process.env.AURION_WORLD_SLICE_GODOT_EDITOR) {
+        const { startNativeAuthTransaction, issueNativeAuthHandoffAfterVerifiedBrowserLogin, exchangeNativeAuthHandoff, revokeNativeAuthSession } = await import("./nativeAuthPersistence");
+        const { createNativeAuthSecret, nativeAuthCodeChallengeFor } = await import("./nativeAuthProtocol");
+        const { NATIVE_AUTH_CONTRACT_VERSION, NATIVE_AUTH_RETURN_ID } = await import("../shared/nativeAuthContract");
+        const appBuild = "world-slice-native-godot-fixture";
+        const pairs: any[] = [];
+        try {
+          const accounts = [];
+          for (const [id, readback] of [[userId, ownReadback], [unseenUserId, otherReadback]] as const) {
+            const requestState = createNativeAuthSecret(), verifier = createNativeAuthSecret();
+            const started = await startNativeAuthTransaction({ version: NATIVE_AUTH_CONTRACT_VERSION, platform: "android", appBuild,
+              returnId: NATIVE_AUTH_RETURN_ID, requestState, codeChallenge: nativeAuthCodeChallengeFor(verifier), codeChallengeMethod: "S256" });
+            // Isolated verified-browser-identity fixture; real canonical PKCE
+            // exchange, session tables and unmodified SDK bearer verification.
+            const issued = await issueNativeAuthHandoffAfterVerifiedBrowserLogin(started.transactionId, id, requestState);
+            const tokens = await exchangeNativeAuthHandoff({ version: NATIVE_AUTH_CONTRACT_VERSION, transactionId: started.transactionId,
+              code: issued.handoffCode, codeVerifier: verifier, appBuild });
+            pairs.push(tokens);
+            const native = await fetch(url, { headers: { authorization: "Bearer " + tokens.accessToken } });
+            expect(native.status).toBe(200);
+            expect((await native.json()).fingerprint).toBe(readback.fingerprint);
+            accounts.push({ tokens, connectionId: readback.connectionId, actorId: readback.slice.actorId, fingerprint: readback.fingerprint, status: readback.status });
+          }
+          const godotResult = await new Promise<string>((resolveGodot, reject) => {
+            const child = spawn(process.env.AURION_WORLD_SLICE_GODOT_EDITOR!, ["--headless", "--path", resolve("godot-client"), "--script", "tests/integration/test_world_slice_server.gd"], {
+              env: { ...process.env, AURION_WORLD_SLICE_GODOT_INPUT: JSON.stringify({ server: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, accounts }) }, stdio: ["ignore", "pipe", "pipe"],
+            });
+            let output = "";
+            const timeout = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("ACTUAL_GODOT_SLICE_TIMEOUT")); }, 25_000);
+            for (const stream of [child.stdout, child.stderr]) stream.on("data", bytes => {
+              output += bytes.toString();
+              if (output.length > 65536) { child.kill("SIGKILL"); reject(new Error("ACTUAL_GODOT_SLICE_OUTPUT_LIMIT")); }
+            });
+            child.on("error", error => { clearTimeout(timeout); reject(error); });
+            child.on("close", code => {
+              clearTimeout(timeout);
+              if (code !== 0 || output.includes("ERROR:") || !output.includes("WORLD_SLICE_ACTUAL_GODOT=")) reject(new Error("ACTUAL_GODOT_SLICE_FAILED: " + output));
+              else resolveGodot(output);
+            });
+          });
+          console.info(godotResult.trim());
+        } finally {
+          for (const tokens of pairs) await revokeNativeAuthSession(tokens.refreshToken);
+          // Only this test's native-session rows; never broad production cleanup.
+          const [sessions] = await pool.execute("SELECT id FROM aurionNativeAuthSessions WHERE appBuild=?", [appBuild]);
+          for (const session of sessions as any[]) {
+            await pool.execute("DELETE FROM aurionNativeAuthAccessTokens WHERE sessionId=?", [session.id]);
+            await pool.execute("DELETE FROM aurionNativeAuthRefreshTokens WHERE sessionId=?", [session.id]);
+          }
+          await pool.execute("DELETE FROM aurionNativeAuthSessions WHERE appBuild=?", [appBuild]);
+          await pool.execute("DELETE FROM aurionNativeAuthTransactions WHERE appBuild=?", [appBuild]);
+        }
+      }
       expect((await fetch(url)).status).toBe(401);
       expect((await fetch(url, { headers: { cookie: COOKIE_NAME + "=invalid" } })).status).toBe(401);
       expect((await fetch(url + "&actorId=player:1", { headers: { cookie: ownCookie } })).status).toBe(422);

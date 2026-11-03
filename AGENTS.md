@@ -47,6 +47,19 @@ Do not:
 
 ## Evidence and merge discipline
 
+### Device-independent acceptance
+
+Physical Tab A9 availability, installation on that specific model, and its FPS,
+memory or thermal measurements are optional compatibility evidence. They must
+not block issue completion, PR readiness, merge or release. G31 / #938 is not a
+mandatory predecessor. Apply this owner decision from 2026-11-03 to historical
+device gates as well; see [acceptance policy](docs/godot-migration/acceptance-policy.md).
+
+Keep the actual functional, Android/JNI, authentication, database, replay,
+receipt and runtime checks required for the changed boundary. Label desktop,
+emulator, isolated integration and production evidence accurately. An unrun
+physical check stays unverified; optional does not mean passed.
+
 - Green is accepted only at the layer actually read back.
 - Aurion runtime/database/receipt evidence is canonical.
 - Client visuals prove presentation of Aurion state, not independent truth.
