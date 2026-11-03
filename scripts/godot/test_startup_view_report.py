@@ -30,7 +30,7 @@ class StartupReportControls(unittest.TestCase):
                 'startedAtUtc':stamp,'capturedAtUtc':stamp,'connected':True,'viewportPx':[640,360],
                 'worldId':'echoes-of-aurion-global',
                 'worldVisible':True,
-                'snapshot':{'tick':42,'zoneId':'observatory_threshold','presences':[{'entityId':'player:1','position':{'x':0,'z':0}}],'mobs':[],'combatants':[]},
+                'snapshot':{'tick':42,'zoneId':'observatory_threshold','projectionDigest':'f'*64,'presenceCount':1,'mobCount':0},
                 'camera':{'positionMm':[0,5000,10000],'targetMm':[0,1600,0],'fovMilliDeg':58000},
                 'chunks':{'status':'APPLIED','count':1}, 'assets':{'rendered':2,'loading':0,'failed':0}}
             colored_world(self.directory / (name + '.png'))
@@ -117,8 +117,8 @@ class StartupReportControls(unittest.TestCase):
         self.index['oracle']['requestedRange']['fromTick'] = 41
         self.assertIn('CANONICAL_RECEIPT_UNVERIFIED', self.run_report()['issues'])
 
-    def test_different_canonical_position_fails(self):
-        self.observations['godot']['snapshot']['presences'][0]['position']['x'] = 340
+    def test_different_canonical_projection_digest_fails(self):
+        self.observations['godot']['snapshot']['projectionDigest'] = '9'*64
         self.assertIn('CANONICAL_SNAPSHOT_MISMATCH', self.run_report()['issues'])
 
     def test_tampered_png_and_missing_capture_still_produce_report(self):

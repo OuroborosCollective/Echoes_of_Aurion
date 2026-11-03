@@ -7,10 +7,10 @@ export class StartupViewCapture {
   private frames = 0;
   readonly startedAtUtc = new Date().toISOString();
 
-  constructor(readonly nonce: string, private read: () => Record<string, unknown>, private canvas: () => HTMLCanvasElement) {}
+  constructor(readonly nonce: string, private read: () => Record<string, unknown>, private canvas: () => HTMLCanvasElement, readonly documentId: string = crypto.randomUUID()) {}
 
   observe(snapshot: { tick: number }) { this.snapshot = structuredClone(snapshot); }
-  state() { return { nonce: this.nonce, tick: this.snapshot?.tick ?? null, armed: this.target !== null, failure: this.failure }; }
+  state() { const canvas = this.canvas(); return { nonce: this.nonce, documentId: this.documentId, viewportPx: [canvas.width, canvas.height], tick: this.snapshot?.tick ?? null, armed: this.target !== null, failure: this.failure }; }
   result() { return this.captured; }
   arm(tick: number) {
     if (this.target !== null || !Number.isSafeInteger(tick) || !this.snapshot || tick <= this.snapshot.tick || tick > this.snapshot.tick + 100) throw Error("CAPTURE_ARM_INVALID");
@@ -25,20 +25,22 @@ export class StartupViewCapture {
       // resize, overlay removal, camera override, retry, or postprocessing.
       const canvas = this.canvas();
       this.captured = { schema: "aurion.startup-view.observation.v1", source: "aurion-web", nonce: this.nonce,
-        captureIndex: 1, startedAtUtc: this.startedAtUtc, capturedAtUtc: new Date().toISOString(),
+        documentId: this.documentId, captureIndex: 1, startedAtUtc: this.startedAtUtc, capturedAtUtc: new Date().toISOString(),
         frame: this.frames, snapshot: structuredClone(this.snapshot), ...this.read(),
         viewportPx: [canvas.width, canvas.height], png: canvas.toDataURL("image/png") };
     } catch { this.failure = "BROWSER_FRAME_CAPTURE_FAILED"; }
   }
 }
 
-declare global { interface Window { __aurionStartupCapture?: StartupViewCapture } }
+declare global { interface Window { __aurionStartupCapture?: StartupViewCapture; __aurionStartupCaptureHandoff?: { nonce: string; documentId: string } } }
 
 export function installStartupViewCapture(read: () => Record<string, unknown>, canvas: () => HTMLCanvasElement) {
-  const nonce = new URLSearchParams(window.location.search).get("aurionParity");
+  const handoff = window.__aurionStartupCaptureHandoff;
+  delete window.__aurionStartupCaptureHandoff;
+  const nonce = handoff?.nonce ?? new URLSearchParams(window.location.search).get("aurionParity");
   if (!nonce || !/^[a-f0-9]{32}$/.test(nonce)) return null;
   // Recovery/recreation is not the first startup. Preserve the failed initial
   // observer so a later successful frame cannot silently replace its result.
   if (window.__aurionStartupCapture) throw Error("STARTUP_RENDERER_RECREATED");
-  return window.__aurionStartupCapture = new StartupViewCapture(nonce, read, canvas);
+  return window.__aurionStartupCapture = new StartupViewCapture(nonce, read, canvas, handoff?.documentId);
 }

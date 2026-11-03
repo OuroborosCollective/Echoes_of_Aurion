@@ -9,6 +9,16 @@ var _start_ms := 0
 var _last_state_ms := -1000
 var _target := -1
 var _done := false
+var _viewport_size := Vector2i.ZERO
+
+static func configure_viewport(main: Control, viewport_size: Vector2i) -> void:
+	main.get_window().size = viewport_size
+	main.get_window().content_scale_size = viewport_size
+	# Configure the render target before the initially hidden container appears.
+	# Restore normal container ownership; never resize the captured image bytes.
+	main.world_view.stretch = false
+	main.live_3d_viewport.size = viewport_size
+	main.world_view.stretch = true
 
 static func requested_directory() -> String:
 	var directory := OS.get_environment("AURION_PARITY_PRIVATE_DIR")
@@ -45,8 +55,8 @@ func bind(main: Control) -> void:
 	if viewport_size.x < 320 or viewport_size.y < 240 or viewport_size.x > 4096 or viewport_size.y > 2160:
 		_fail("GODOT_VIEWPORT_INVALID")
 		return
-	get_window().size = viewport_size
-	get_window().content_scale_size = viewport_size
+	_viewport_size = viewport_size
+	configure_viewport(_main, viewport_size)
 	# Same real PKCE transaction and single-use callback as the manual editor UI.
 	_main._auth_start.browser_opener = Callable(self, "_browser_handoff")
 	_main._auth_start.session_failed.connect(func(_reason: String): _fail("NATIVE_SESSION_REJECTED"))
@@ -104,6 +114,9 @@ func _capture() -> void:
 		return
 	var viewport: SubViewport = _main.live_3d_viewport
 	var pixels := viewport.get_texture().get_image()
+	if pixels != null and pixels.get_size() != _viewport_size:
+		_fail("GODOT_VIEWPORT_SIZE_MISMATCH")
+		return
 	if pixels == null or pixels.is_empty() or pixels.save_png(_directory.path_join("godot.png")) != OK:
 		_fail("GODOT_VIEWPORT_CAPTURE_FAILED")
 		return

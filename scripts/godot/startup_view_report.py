@@ -22,6 +22,13 @@ HINTS = {
     "BROWSER_AUTH_OR_WORLD_NOT_READY": "Der Browser hat nach dem Start keine authentifizierten Aurion-Snapshots empfangen. Anmeldung, Charakterauswahl und WebSocket prüfen.",
     "BROWSER_GAMEPLAY_NOT_STARTED": "Die echte Spielansicht ist nicht gestartet. Anmeldung und den Einstieg SPIEL BETRETEN prüfen.",
     "GODOT_AUTH_OR_WORLD_NOT_READY": "Godot hat keine aktive Sitzung mit sichtbarem Welt-Viewport und bestätigtem Terrain. Native-Auth, WorldLease und Chunk-Abrufe prüfen.",
+    "GODOT_EDITOR_PLUGIN_NOT_STARTED": "Der frische Editor hat den Aufnahme-Einstieg nicht erreicht. Plugin-Aktivierung in der privaten Projektkopie, Importfehler und Editor-Start prüfen.",
+    "GODOT_VIEWPORT_NOT_CONFIGURED": "Die gewünschte Original-Auflösung fehlt. AURION_PARITY_VIEWPORT muss aus dem tatsächlichen Browser-Canvas stammen.",
+    "GODOT_VIEWPORT_SIZE_MISMATCH": "Godots gerenderte Textur hat andere Maße als der Browser-Canvas. SubViewportContainer, Stretch und Fenster-Skalierung prüfen; PNGs werden nicht nachträglich skaliert.",
+    "BROWSER_DOCUMENT_RESTARTED": "Die Browserseite wurde während des ersten Aufnahmeversuchs neu geladen. Navigation oder Wiederherstellung prüfen; ein späterer Start ersetzt den ersten Versuch nicht.",
+    "BROWSER_TARGET_TICK_MISSED": "Der Browser hat den gemeinsamen Ziel-Tick nicht gerendert. Verbindungsunterbrechung, Hintergrund-Tab und Renderlatenz prüfen.",
+    "GODOT_TARGET_TICK_MISSED": "Godot hat den gemeinsamen Ziel-Tick nicht gerendert. Snapshot-Verarbeitung, Verbindung und Renderlatenz prüfen.",
+    "GODOT_RENDER_TICK_CHANGED": "Während Godot das Bild renderte, wurde bereits der nächste Snapshot angewendet. Das Bild lässt sich deshalb nicht demselben bestätigten Tick zuordnen.",
     "CAMERA_PROJECTION_MISMATCH": "Kameraposition, Ziel oder Sichtfeld unterscheiden sich. Beide tatsächlichen Kamera-Readbacks stehen im Bericht; Startabstand, Terrainhöhe und FOV prüfen.",
     "RENDER_VIEWPORT_SIZE_MISMATCH": "Die Original-Viewports haben unterschiedliche Pixelmaße. Fenstergröße und Geräte-Pixelfaktor angleichen; der Test skaliert keine Bilder.",
     "CANONICAL_SNAPSHOT_MISMATCH": "Die Renderer zeigen andere bestätigte Entitäten oder Positionen. Konto, Zone, Snapshot-Tick und Verbindung prüfen.",
@@ -110,13 +117,11 @@ def build_report(directory: Path, now=None):
         if not isinstance(gs, dict): gs = {}
         tick = index.get("targetTick")
         if type(tick) is not int or tick < 1 or any(s.get("tick") != tick for s in (ws, gs)): fail("CAPTURE_TICK_MISMATCH")
-        # Connection IDs and snapshot sequence counters are transport-specific;
-        # canonical zone, presence and mob state must be identical at the same tick.
-        for field in ("zoneId", "presences", "mobs", "combatants"):
-            a, b = ws.get(field), gs.get(field)
-            if field != "zoneId" and isinstance(a, list) and isinstance(b, list):
-                a, b = sorted(a, key=lambda x: json.dumps(x, sort_keys=True)), sorted(b, key=lambda x: json.dumps(x, sort_keys=True))
-            if a is None or a != b: fail("CANONICAL_SNAPSHOT_MISMATCH")
+        # The trusted collector hashes real presence/mob/combat state in memory
+        # with an ephemeral run key. Player IDs and combat records stay private.
+        for field in ("zoneId", "projectionDigest", "presenceCount", "mobCount"):
+            if ws.get(field) is None or ws.get(field) != gs.get(field): fail("CANONICAL_SNAPSHOT_MISMATCH")
+        if not SHA256.fullmatch(str(ws.get("projectionDigest", ""))): fail("CANONICAL_SNAPSHOT_MISMATCH")
         if web.get("camera") != godot.get("camera"): fail("CAMERA_PROJECTION_MISMATCH")
         for camera in (web.get("camera"), godot.get("camera")):
             if not isinstance(camera, dict) or set(camera) != {"positionMm", "targetMm", "fovMilliDeg"}:
@@ -158,13 +163,13 @@ def build_report(directory: Path, now=None):
               "observations":observations, "evidenceScope":"First editor-launched authenticated game viewport; not the legacy primitive bridge preview."}
     (directory / "parity.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     color, label = ("#a71d2a", "ROT") if issues else ("#18794e", "GRÜN")
-    percent = str(visual.get("differencePercent", "nicht messbar"))
-    rows = [f"# Aurion / Godot Erststart: {label}", "", f"Bildabweichung: **{percent}%**. Rot bei **mehr als 75%**; Pixeltoleranz 24/255 je Farbkanal. Keine Skalierung, Maskierung oder Auswahl eines späteren Bildes.", "", f"Revision: `{revision}` · Tick: `{tick}`", "", "## Ursachen", ""]
+    percent = str(visual["differencePercent"]) + "%" if "differencePercent" in visual else "nicht messbar"
+    rows = [f"# Aurion / Godot Erststart: {label}", "", f"Bildabweichung: **{percent}**. Rot bei **mehr als 75%**; Pixeltoleranz 24/255 je Farbkanal. Keine Skalierung, Maskierung oder Auswahl eines späteren Bildes.", "", f"Revision: `{revision}` · Tick: `{tick}`", "", "## Ursachen", ""]
     rows += [f"- **{code}**: {hint}" for code, hint in zip(issues, report["diagnosis"])] or ["- Erststart-Aufnahmen, Live-Readback und Pixelvergleich bestanden."]
     rows += ["", "Die Artefakte enthalten beide Originalbilder, difference.png, den vollständigen JSON-Readback und report.html."]
     (directory / "report.md").write_text("\n".join(rows) + "\n")
     pictures = "".join(f'<figure><figcaption>{name}</figcaption><img src="{name}.png"></figure>' for name in ("aurion", "godot", "difference") if (directory / (name + ".png")).exists())
-    (directory / "report.html").write_text('<!doctype html><meta charset="utf-8"><title>Aurion / Godot Erststart</title><style>body{font:16px system-ui;background:#101923;color:#eee;margin:32px}h1{color:' + color + '}figure{margin:24px 0}img{max-width:100%;height:auto}pre{white-space:pre-wrap}</style>' + f'<h1>{label} · {html.escape(percent)}% Abweichung</h1><p>Rot bei mehr als 75%. Originalpixel, Pixeltoleranz 24/255. Beide Bilder stammen aus dem ersten gestarteten Spielprozess.</p><pre>' + html.escape("\n".join(rows)) + '</pre>' + pictures + '<details><summary>Kamera, Assets und Terrain</summary><pre>' + html.escape(json.dumps(observations, ensure_ascii=False, indent=2)) + '</pre></details>')
+    (directory / "report.html").write_text('<!doctype html><meta charset="utf-8"><title>Aurion / Godot Erststart</title><style>body{font:16px system-ui;background:#101923;color:#eee;margin:32px}h1{color:' + color + '}figure{margin:24px 0}img{max-width:100%;height:auto}pre{white-space:pre-wrap}</style>' + f'<h1>{label} · Bildabweichung {html.escape(percent)}</h1><p>Rot bei mehr als 75%. Originalpixel, Pixeltoleranz 24/255. Fehlende oder nicht verifizierte Erststart-Aufnahmen bleiben rot.</p><pre>' + html.escape("\n".join(rows)) + '</pre>' + pictures + '<details><summary>Kamera, Assets und Terrain</summary><pre>' + html.escape(json.dumps(observations, ensure_ascii=False, indent=2)) + '</pre></details>')
     return report
 
 

@@ -7,10 +7,12 @@ import { mkdtemp, mkdir, readFile, writeFile, rename, rm, stat } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
+import { prepareCaptureProject, publicObservation } from './startup-capture-contract.mjs';
 
 const output = resolve(process.argv[2] || '.aurion-parity');
 const origin = 'https://arelogic.space';
 const nonce = randomBytes(16).toString('hex');
+const privateRunKey = randomBytes(32);
 const privateDir = await mkdtemp(join(tmpdir(), 'aurion-startup-'));
 await mkdir(output, { recursive: true });
 const index = { schema: 'aurion.startup-capture-index.v1', nonce, status: 'FAIL',
@@ -18,6 +20,7 @@ const index = { schema: 'aurion.startup-capture-index.v1', nonce, status: 'FAIL'
 let editor, browser, page, authPage;
 let failure = 'CAPTURE_PREFLIGHT_FAILED';
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
+const runtimeIdentity = value => Object.fromEntries(['status','revision','runtimeImageDigest'].map(key => [key, value[key]]));
 const atomic = async (name, value) => {
   const path = join(privateDir, name);
   await writeFile(path + '.tmp', JSON.stringify(value), { mode: 0o600 });
@@ -53,7 +56,7 @@ try {
   failure = 'LIVE_HEALTH_UNAVAILABLE';
   const healthResponse = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(10_000) });
   if (!healthResponse.ok()) throw Error(failure);
-  index.runtime = await healthResponse.json();
+  index.runtime = runtimeIdentity(await healthResponse.json());
   if (index.runtime.revision !== index.sourceRevision) throw Error('LIVE_REVISION_MISMATCH');
   if (!/^sha256:[a-f0-9]{64}$/.test(index.runtime.runtimeImageDigest || '')) throw Error('LIVE_IMAGE_UNVERIFIED');
   failure = 'AUTHENTICATED_BROWSER_NOT_CONFIGURED';
@@ -63,6 +66,9 @@ try {
   const context = browser.contexts()[0];
   if (!context) throw Error(failure);
   page = await context.newPage();
+  // A one-use page-local handoff survives the normal / -> /play SPA navigation.
+  // It conveys capture configuration only, never authentication or world state.
+  await page.addInitScript(nonce => { window.__aurionStartupCaptureHandoff = { nonce, documentId: crypto.randomUUID() }; }, nonce);
   page.setDefaultTimeout(15_000);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto(`${origin}/?aurionParity=${nonce}`, { waitUntil: 'domcontentloaded' });
@@ -74,10 +80,8 @@ try {
     return false;
   }, failure);
   await waitFor(() => page.evaluate(() => (window.__aurionStartupCapture?.state().tick ?? 0) > 0), 'BROWSER_AUTH_OR_WORLD_NOT_READY', 45_000);
-  const viewport = await page.evaluate(() => {
-    const canvas = document.querySelector('[data-testid="xaurion-open-world-runtime"] canvas');
-    return canvas && [canvas.width, canvas.height];
-  });
+  const documentId = await page.evaluate(() => window.__aurionStartupCapture.state().documentId);
+  const viewport = await page.evaluate(() => window.__aurionStartupCapture.state().viewportPx);
   if (!viewport || viewport.some(n => !Number.isInteger(n) || n < 240 || n > 4096)) throw Error('BROWSER_VIEWPORT_INVALID');
   const binary = process.env.AURION_GODOT_EXECUTABLE;
   if (!binary || !binary.startsWith('/') || !(await stat(binary)).isFile()) throw Error('GODOT_EXECUTABLE_NOT_CONFIGURED');
@@ -86,9 +90,10 @@ try {
   if (index.editorVersion !== lock.engine.version) throw Error('GODOT_VERSION_MISMATCH');
   if (!process.env.DISPLAY) throw Error('GODOT_DISPLAY_NOT_CONFIGURED');
   failure = 'GODOT_EDITOR_START_FAILED';
+  const project = await prepareCaptureProject(resolve('godot-client'), join(privateDir, 'project'));
   // A fresh actual editor launches the actual authoring scene via EditorInterface.
   // Use a separate editor process. Never restart or kill the user's editor.
-  editor = spawn(binary, ['--editor', '--path', resolve('godot-client'), '--resolution', viewport.join('x')], {
+  editor = spawn(binary, ['--editor', '--path', project, '--resolution', viewport.join('x')], {
     detached: true, stdio: 'ignore', env: { ...process.env, AURION_PARITY_PRIVATE_DIR: privateDir, AURION_PARITY_NONCE: nonce, AURION_PARITY_VIEWPORT: viewport.join('x') },
   });
   let spawnFailed = false;
@@ -96,7 +101,7 @@ try {
   index.editor = await waitFor(async () => {
     if (spawnFailed || editor.exitCode !== null) throw Error('GODOT_EDITOR_EXITED');
     return await maybeJson('editor-start.json');
-  }, 'GODOT_EDITOR_PLUGIN_NOT_STARTED');
+  }, 'GODOT_EDITOR_PLUGIN_NOT_STARTED', 90_000);
   if (index.editor.pid !== editor.pid || index.editor.nonce !== nonce || index.editor.editor !== true || index.editor.scene !== 'res://addons/aurion_bridge/authoring_entry.tscn') throw Error('EDITOR_LAUNCH_UNVERIFIED');
   failure = 'NATIVE_AUTH_HANDOFF_MISSING';
   const handoff = await waitFor(() => maybeJson('login.json'), failure);
@@ -142,6 +147,7 @@ try {
     }, failure, 15_000),
   ]);
   if (nativeFrame.pid !== native.pid || nativeFrame.pid === editor.pid) throw Error('EDITOR_GAME_PROCESS_UNVERIFIED');
+  if (webFrame.documentId !== documentId) throw Error('BROWSER_DOCUMENT_RESTARTED');
   if (!Number.isSafeInteger(nativeFrame.pid) || nativeFrame.pid < 1) throw Error('EDITOR_GAME_PROCESS_UNVERIFIED');
   const processStatus = await readFile(`/proc/${nativeFrame.pid}/status`, 'utf8');
   index.editorGameParentPid = Number(processStatus.match(/^PPid:\s+(\d+)$/m)?.[1]);
@@ -151,17 +157,17 @@ try {
   delete webFrame.png;
   await publish('aurion.png', webPng);
   await publish('godot.png', await readFile(join(privateDir, 'godot.png')));
-  await publish('aurion-observation.json', Buffer.from(JSON.stringify(webFrame)));
-  await publish('godot-observation.json', Buffer.from(JSON.stringify(nativeFrame)));
+  await publish('aurion-observation.json', Buffer.from(JSON.stringify(publicObservation(webFrame, privateRunKey))));
+  await publish('godot-observation.json', Buffer.from(JSON.stringify(publicObservation(nativeFrame, privateRunKey))));
   failure = 'CANONICAL_RECEIPT_READBACK_FAILED';
   const zoneId = webFrame.snapshot.zoneId;
   const recorded = await rpc('causality.getRecordedTick', { zoneId, tick });
   const oracle = await rpc('causality.oracleRange', { zoneId, fromTick: tick, toTick: tick });
   // Keep only the independent receipt/evidence, never full player/account state.
-  index.receipt = recorded.receipt;
-  index.oracle = oracle;
+  index.receipt = Object.fromEntries(['worldId','zoneId','tick','sourceRevision','receiptHash','postStateHash'].map(k => [k, recorded.receipt?.[k]]));
+  index.oracle = Object.fromEntries(['status','zoneId','sourceRevision','requestedRange','terminalReceiptHash','finalStateHash'].map(k => [k, oracle[k]]));
   const after = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(10_000) });
-  index.runtimeAfter = await after.json();
+  index.runtimeAfter = runtimeIdentity(await after.json());
   if (!after.ok()) throw Error('LIVE_HEALTH_AFTER_CAPTURE_FAILED');
   index.status = 'CAPTURED';
 } catch (error) {

@@ -17,7 +17,7 @@ Der Workflow zeigt Rot/Grün, Prozentwert und Ursachen im Job Summary. Sein Arte
 - `report.html`, `report.md` und `parity.json`: Status, Ursachen und Kamera-/Asset-/Terrain-Readbacks;
 - `capture-index.json` und die beiden Observation-Dateien: Nonce, Bild-Hashes, Editor-/Spielprozess-Zuordnung, Revision und Receipt-/Replay-Readback.
 
-Fehler vor der Aufnahme erzeugen ebenfalls einen roten Bericht. Beispielsweise unterscheiden sich eine unerreichbare Anmeldung, fehlendes Terrain, falsche Kameraprojektion, ausstehende GLBs und eine tatsächliche Bildabweichung. Zugangsdaten, PKCE-Rückgaben, Browser-Traces und Cookies werden nicht als Artefakte gespeichert.
+Fehler vor der Aufnahme erzeugen ebenfalls einen roten Bericht. Beispielsweise unterscheiden sich eine unerreichbare Anmeldung, fehlendes Terrain, falsche Kameraprojektion, ausstehende GLBs und eine tatsächliche Bildabweichung. Zugangsdaten, PKCE-Rückgaben, Browser-Traces und Cookies werden nicht als Artefakte gespeichert. Vollständige Zone-Snapshots bleiben im privaten Aufnahmeprozess: Ein temporärer, nicht exportierter HMAC-Schlüssel bindet deren kanonischen Inhalt für den Paarvergleich. Die Artefakte enthalten nur die Vergleichsdigests und Zähler; Spieler-IDs, individuelle Positionen und Kampfdatensätze werden nicht exportiert. Kamerakoordinaten bleiben für die angeforderte Perspektivdiagnose erhalten.
 
 ## Geschützter Live-Lauf
 
@@ -31,7 +31,7 @@ Für den Arbeitsplatz sind folgende Environment-Variablen zu konfigurieren:
 | `AURION_GODOT_EXECUTABLE` | Absoluter Pfad zum geprüften Godot-Editor |
 | `AURION_PARITY_DISPLAY` | Vorhandenes X-Display des Testarbeitsplatzes |
 
-Es wird ein eigener Editor-Prozess gestartet und nur diese Prozessgruppe beendet. Der vorhandene Benutzer-Editor bleibt unangetastet. Eine fehlende Konfiguration, abgelaufene Sitzung, nicht abgeschlossene Charakterauswahl oder andere ausgelieferte Revision ist ein konkreter roter Blocker und keine bestandene Live-Abnahme.
+Für den Test entsteht eine private Projektkopie mit aktivierter Aurion-Bridge; Spielskripte und Assets bleiben identisch. Es wird ein eigener Editor-Prozess gestartet und nur diese Prozessgruppe beendet. Der vorhandene Benutzer-Editor bleibt unangetastet. Eine fehlende Konfiguration, abgelaufene Sitzung, nicht abgeschlossene Charakterauswahl oder andere ausgelieferte Revision ist ein konkreter roter Blocker und keine bestandene Live-Abnahme.
 
 ## Regression und Vertrauensgrenze
 

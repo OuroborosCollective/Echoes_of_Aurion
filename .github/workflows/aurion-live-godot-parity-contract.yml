@@ -8,7 +8,8 @@ on:
       - 'scripts/godot/startup_view_report.py'
       - 'scripts/godot/test_startup_view_report.py'
       - 'scripts/godot/capture-live-startup.mjs'
-      - 'client/src/xaurion/integration/StartupViewCapture*'
+      - 'scripts/godot/startup-*.mjs'
+      - 'client/src/xaurion/integration/Startup*Capture*'
       - 'client/src/xaurion/integration/AurionOpenWorldRuntime.tsx'
       - 'godot-client/addons/aurion_bridge/**'
       - '.github/workflows/aurion-live-godot-view-parity.yml'
@@ -36,5 +37,6 @@ jobs:
           python -m unittest discover -s scripts/godot -p test_live_view_parity.py -v
           python -m unittest discover -s scripts/godot -p test_startup_view_report.py -v
           node --check scripts/godot/capture-live-startup.mjs
+          node --test scripts/godot/startup-capture-contract.test.mjs
           git diff --check
           echo 'UNIT_CONTRACT_ONLY_NO_LIVE_WORLD_EVIDENCE'
