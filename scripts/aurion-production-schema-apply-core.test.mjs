@@ -95,12 +95,12 @@ test("backup retention keeps the newest verified backups and never touches unkno
     assert.notEqual(run(10, path.join(dir, "missing.sql.gz")).status, 0, "missing protected backup must be rejected");
     assert.equal(readdirSync(dir).length, 17);
 
-    const result = run(10);
+    const result = run(5);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stderr, /kept newest 10, removed 3/);
+    assert.match(result.stderr, /kept newest 5, removed 8/);
     const remaining = new Set(readdirSync(dir));
-    for (const file of canonical.slice(4)) assert.ok(remaining.has(file), `newest backup ${file} must be kept`);
-    for (const file of canonical.slice(1, 4)) assert.ok(!remaining.has(file), `old backup ${file} must be removed`);
+    for (const file of canonical.slice(9)) assert.ok(remaining.has(file), `newest backup ${file} must be kept`);
+    for (const file of canonical.slice(1, 9)) assert.ok(!remaining.has(file), `old backup ${file} must be removed`);
     assert.ok(remaining.has(canonical[0]), "protected verified backup must be kept");
     for (const other of ["notes.txt", `.${name(99)}.tmp123`, "partial.sql.gz"]) assert.ok(remaining.has(other), `${other} must be untouched`);
   } finally {
@@ -114,5 +114,5 @@ test("backup retention runs only after recovery proof and cleanup, before produc
   const retention = core.indexOf('prune_schema_backups "$backup_dir" "$backup_keep" "$backup_file" || echo "schema backup retention skipped" >&2');
   const apply = core.indexOf("phase=APPLY_SCHEMA");
   assert.ok(recovery > 0 && cleanup > recovery && retention > cleanup && apply > retention);
-  assert.match(core, /^backup_keep=10$/m);
+  assert.match(core, /^backup_keep=5$/m);
 });

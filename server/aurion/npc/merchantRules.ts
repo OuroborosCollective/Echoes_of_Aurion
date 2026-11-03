@@ -12,6 +12,7 @@ import {
 } from "./ax1LivingWorldProtocol.js";
 import type { NpcRequest, NpcSnapshot } from "./npcPersistenceProtocol.js";
 import type { PolityGovernmentType, WorldSignal, DiplomacyType } from "./worldPolityRules.js";
+import type { NpcLifeOpportunityKind } from "./npcLifeProtocol.js";
 
 export type MerchantDecisionRequests = Readonly<{
   resolution: ReturnType<typeof resolveLivingWorldTick>;
@@ -89,6 +90,50 @@ function defaultNpc(regionId: HubId): NpcEconomyState {
     harvestYieldBps: 1e4,
     memory: Object.freeze([]),
   }) as NpcEconomyState;
+}
+
+export const MERCHANT_GENESIS_VERSION = "aurion-merchant-genesis.v1" as const;
+
+/**
+ * Deterministic first decision request for a hub merchant that has never decided.
+ *
+ * Derived only from canonical Aurion code: the default merchant economy of the hub
+ * (defaultNpc) and the hub's bootstrap market. It mirrors the successor request a
+ * confirmed action produces, with explicitly neutral genesis values: no risk, no
+ * stability change, no market price yet, and the hub's scarcest commodity as the
+ * resource target. The same hub always yields the same request, so the genesis
+ * receipt id is stable and a repeated or concurrent genesis cannot fork history.
+ */
+export function merchantGenesisRequest(hubId: HubId) {
+  if (!isHubId(hubId)) throw new Error("NPC_GENESIS_HUB_INVALID");
+  const npc = defaultNpc(hubId);
+  const market = merchantBootstrapMarkets[hubId];
+  const [scarcest, stock] = Object.entries(market.stock)
+    .sort(([a, x], [b, y]) => x - y || (a < b ? -1 : a > b ? 1 : 0))[0] as [string, number];
+  const evidence = `${MERCHANT_GENESIS_VERSION}:${hubId}`;
+  const opportunity = (suffix: string, value: Readonly<{ kind: NpcLifeOpportunityKind; targetId?: string; benefitBps: number; distanceBps: number }>) =>
+    ({ id: `${evidence}:${suffix}`, regionId: hubId, riskBps: 0, sourceReceiptId: evidence, resolutionIndex: 0, ...value });
+  return Object.freeze({
+    npcId: npc.npcId,
+    regionId: hubId,
+    resolutionIndex: 0,
+    roleId: "merchant" as const,
+    needEvents: [],
+    observationIds: [evidence, `market:${hubId}:bootstrap`],
+    memory: [],
+    economy: {
+      currentHubId: hubId, wealthCopper: npc.wealthCopper, hungerBps: npc.hungerBps, fatigueBps: npc.fatigueBps,
+      tradeProwessBps: npc.tradeProwessBps, harvestYieldBps: npc.harvestYieldBps,
+    },
+    opportunities: [
+      opportunity("safe", { kind: "safe_hub", targetId: `hub:${hubId}`, benefitBps: 9e3, distanceBps: 0 }),
+      opportunity("resource", { kind: "resource", targetId: `commodity:${scarcest}`, benefitBps: Math.max(2e3, Math.min(1e4, 1e4 - Math.min(8e3, stock * 10))), distanceBps: 500 }),
+      opportunity("social", { kind: "social", benefitBps: 6e3, distanceBps: 250 }),
+      opportunity("reputation", { kind: "reputation", targetId: `polity:${hubId}`, benefitBps: 5500, distanceBps: 500 }),
+      opportunity("market", { kind: "market", targetId: `market:${hubId}`, benefitBps: 2500, distanceBps: 300 }),
+      opportunity("influence", { kind: "influence", targetId: `polity:${hubId}`, benefitBps: 5e3, distanceBps: 750 }),
+    ],
+  });
 }
 
 export function confirmedNpcEconomy(homeRegionId: HubId, snapshot: NpcSnapshot | null): NpcEconomyState {

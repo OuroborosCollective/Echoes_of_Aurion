@@ -20,7 +20,8 @@
 import { createHash } from "node:crypto";
 import { resolveAndRecordAx1LivingWorld } from "../ax1LivingWorldRuntime";
 import { readConfirmedMerchantActionSource } from "../npcActionGatewayPersistence";
-import { readConfirmedNpcState } from "../wasdAurionRuntime";
+import { readConfirmedNpcState, resolveAndRecordNpc } from "../wasdAurionRuntime";
+import { merchantGenesisRequest } from "./npc/merchantRules.js";
 import { readConfirmedNpcMultiMemory } from "../npcMultiMemoryPersistence";
 import { GLOBAL_WORLD_SEED, GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { orchestrateCivilizationLoop } from "./civilizationService";
@@ -211,28 +212,34 @@ async function executeSingleNpcLifecycle(
 
   const source = await readConfirmedMerchantActionSource(npcId);
   if (!source) {
+    // Never-started hub merchant: record exactly one deterministic genesis decision
+    // through the canonical resolveAndRecordNpc path. It acts from the next cycle.
+    // An NPC with any recorded state never re-enters this branch.
+    const genesis = await resolveAndRecordNpc(merchantGenesisRequest(hubId));
+    if (genesis.npcId !== npcId || genesis.decision.resolutionIndex !== 0) throw new Error("NPC_GENESIS_READBACK_MISMATCH");
+    const confirmedGenesis = await readConfirmedMerchantActionSource(npcId);
+    if (!confirmedGenesis || confirmedGenesis.resolutionIndex !== 0) throw new Error("NPC_GENESIS_SOURCE_READBACK_REQUIRED");
     return Object.freeze({
       entry: Object.freeze({
         hubId,
         npcId,
-        status: "skipped",
+        status: "confirmed",
         action: null,
-        goal: null,
-        longTermGoal: null,
-        resolutionIndex: null,
-        decisionHash: null,
+        goal: genesis.decision.goal,
+        longTermGoal: "lifeState" in genesis ? genesis.lifeState.longTermGoal : null,
+        resolutionIndex: 0,
+        decisionHash: genesis.decision.decisionHash,
         worldReactionHash: null,
         actionReceiptId: null,
         effectReadbackHash: null,
-        receiptSource: null,
-        failureCode: "NPC_ACTION_SOURCE_DECISION_REQUIRED",
+        receiptSource: genesis.source,
+        failureCode: null,
       }),
       signals: Object.freeze([]),
       actionReceiptId: null,
       action: null,
     });
   }
-
   const resolutionIndex = source.resolutionIndex + 1;
   const result = await resolveAndRecordAx1LivingWorld({
     worldSeed: GLOBAL_WORLD_SEED,
