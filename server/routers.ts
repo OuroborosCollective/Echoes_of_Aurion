@@ -6,6 +6,7 @@ import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from 
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { aurionQuestNpcIdValues } from "./aurionStarterVillageContract";
 import { COMPANION_FEATURE_VECTOR_LENGTH, COMPANION_STATE_VECTOR_LENGTH } from "@shared/companionLearningProtocol";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -60,6 +61,8 @@ import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence"
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
 import { investigationJournalRouter } from "./investigationJournalRouter";
 import { readExplorationMemory, recordExplorationDiscovery } from "./explorationMemoryPersistence";
+import { readActorRegionDiscovery } from "./discoveryCodex";
+import { discoveryRegionQuerySchema } from "../shared/discoveryCodexProtocol";
 import { readActorWorldSlice } from "./worldSlice";
 import { worldSliceQuerySchema } from "../shared/worldSliceProtocol";
 import { desc, eq } from "drizzle-orm";
@@ -325,6 +328,14 @@ export const appRouter = router({
       });
     }),
     npcProjectionProvenance: protectedProcedure.query(({ ctx }) => readConfirmedNpcProjectionProvenancePacket(ctx.user.id)),
+    discoveryRegion: protectedProcedure.input(discoveryRegionQuerySchema).query(async ({ ctx, input }) => {
+      try { return await readActorRegionDiscovery(ctx.user.id, input); }
+      catch (error) {
+        const message = error instanceof Error ? error.message : "DISCOVERY_READ_FAILED";
+        if (message === "DISCOVERY_CATALOG_STALE" || message === "DISCOVERY_WORLD_EPOCH_STALE") throw new TRPCError({ code: "CONFLICT", message });
+        throw error;
+      }
+    }),
     explorationMemory: protectedProcedure.input(z.strictObject({ worldEpoch: z.number().int().min(1) })).query(({ ctx, input }) => readExplorationMemory(ctx.user.id, db.GLOBAL_WORLD_ID, input.worldEpoch)),
     worldSlice: protectedProcedure.input(worldSliceQuerySchema).query(({ ctx, input }) => readActorWorldSlice(ctx.user.id, input)),
     recordExplorationDiscovery: protectedProcedure.input(z.strictObject({ epoch: z.number().int().min(1), chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), observedAtLogicalFrame: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) })).mutation(({ ctx, input }) => recordExplorationDiscovery(ctx.user.id, input)),

@@ -13,6 +13,7 @@ import { registerNativeAuthHttpRoutes } from "../nativeAuthHttp";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { discoveryResponseMeta } from "./discoveryResponseMeta";
 import { serveStatic, setupVite } from "./vite";
 import { registerMcpGateway } from "../gateway";
 import { registerAdminMcp } from "../adminMcp";
@@ -107,7 +108,7 @@ async function startServer(){
     console.error("[Aurion Godot] Read-only observer unavailable", error);
     return undefined;
   });
-  app.use("/api/trpc",createExpressMiddleware({router:appRouter,createContext}));if(process.env.NODE_ENV==="development")await setupVite(app,server);else serveStatic(app);
+  app.use("/api/trpc",createExpressMiddleware({router:appRouter,createContext,responseMeta:discoveryResponseMeta}));if(process.env.NODE_ENV==="development")await setupVite(app,server);else serveStatic(app);
   const rawPort=process.env.PORT,preferredPort=(rawPort&&rawPort!=="8080")?parseInt(rawPort,10):3000,strictPort=process.env.STRICT_PORT==="true"||rawPort==="8080",port=strictPort?preferredPort:await findAvailablePort(preferredPort),host=process.env.HOST||"0.0.0.0";if(port!==preferredPort)console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   let shuttingDown=false;
   const shutdown=async(signal:"SIGTERM"|"SIGINT")=>{

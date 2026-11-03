@@ -2,6 +2,20 @@ name: Issue 323 Exploration Memory E2E
 on:
   pull_request:
     paths:
+      - "server/_core/index.ts"
+      - "server/_core/discoveryResponseMeta.ts"
+      - "server/discoveryCatalog.ts"
+      - "server/discoveryCatalog.test.ts"
+      - "server/discoveryCodex.ts"
+      - "shared/discoveryGraphProtocol.ts"
+      - "shared/discoveryGraphProtocol.test.ts"
+      - "shared/discoveryCodexProtocol.ts"
+      - "shared/ax1CraftingCatalog.ts"
+      - "shared/ax1ResourceEcologyProtocol.ts"
+      - "shared/zoneResourceContract.ts"
+      - "server/ax1CraftingProtocol.ts"
+      - "shared/aurionCanonicalHash.ts"
+      - "scripts/discovery/**"
       - "server/explorationMemoryPersistence.ts"
       - "server/explorationMemoryPersistence.test.ts"
       - "server/worldSlice.ts"
@@ -88,7 +102,7 @@ jobs:
       - run: .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
       - run: pnpm check
       - run: pnpm exec vitest run server/causality/headlessCausalOracle.test.ts --reporter=verbose
-      - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts server/explorationActorObservation.test.ts server/livingHistoryGodotMariaDb.test.ts --reporter=verbose
+      - run: pnpm exec vitest run shared/discoveryGraphProtocol.test.ts server/discoveryCatalog.test.ts server/explorationMemoryPersistence.test.ts server/explorationActorObservation.test.ts server/livingHistoryGodotMariaDb.test.ts --reporter=verbose
       - run: pnpm exec vitest run server/worldEpochReaction.e2e.test.ts --reporter=verbose
       - run: AURION_ORACLE_E2E=1 pnpm exec vitest run server/causality/headlessCausalOracleMariaDb.test.ts --reporter=verbose
       - name: Full repository regression without integration-only environment
