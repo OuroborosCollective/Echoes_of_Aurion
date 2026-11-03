@@ -178,6 +178,18 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Schließen"
 
+[node name="ZoomIn" type="Button" parent="MenuPanel/Scroll/Content"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Kamera näher"
+
+[node name="ZoomOut" type="Button" parent="MenuPanel/Scroll/Content"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Kamera weiter"
+
 [node name="Notice" type="PanelContainer" parent="."]
 visible = false
 layout_mode = 0

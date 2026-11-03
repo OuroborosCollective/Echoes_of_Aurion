@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createPool, type Pool, type PoolConnection, type RowDataPacket, type ResultSetHeader } from "mysql2/promise";
 import { verifyLocalPassword, DUMMY_LOCAL_AUTH_HASH } from "./localAuth";
-import { AURION_PROBE_MAX_APPROVAL_MS, AURION_PROBE_SCOPES, parseAurionProbeRunIdentity, requireMatchingAurionProbeApproval, type AurionProbeRunIdentity, type AurionProbeScope } from "./aurionProductionProbeApprovalContract";
+import { AURION_PROBE_MAX_APPROVAL_MS, AURION_PROBE_RELEASE_APPROVALS, AURION_PROBE_SCOPES, parseAurionProbeRunIdentity, requireMatchingAurionProbeApproval, type AurionProbeRunIdentity, type AurionProbeScope } from "./aurionProductionProbeApprovalContract";
 
 /** Reserved only for the explicitly approved, server-owned gameplay probe. */
 import { AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID } from "../shared/aurionProductionProbeEvidence";
@@ -37,9 +37,20 @@ export class AurionProductionProbeStore {
     catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
   }
   async approve(userId: number, password: string, rawRun: unknown, rawScope: unknown, purpose: string) {
-    const run = parseAurionProbeRunIdentity(rawRun), scope = probeScope(rawScope);
-    if (typeof purpose !== "string" || purpose.trim().length < 8 || purpose.length > 240
+    const [approved] = await this.approveScopes(userId, password, rawRun, [{ scope: probeScope(rawScope), purpose }]);
+    return approved;
+  }
+  /** One password confirmation creates both release approvals atomically, or none. */
+  async approveRelease(userId: number, password: string, rawRun: unknown) {
+    return this.approveScopes(userId, password, rawRun, AURION_PROBE_RELEASE_APPROVALS);
+  }
+  private async approveScopes(userId: number, password: string, rawRun: unknown,
+    entries: readonly Readonly<{ scope: AurionProbeScope; purpose: string }>[]) {
+    const run = parseAurionProbeRunIdentity(rawRun);
+    if (entries.length < 1 || new Set(entries.map(entry => entry.scope)).size !== entries.length
+      || entries.some(entry => typeof entry.purpose !== "string" || entry.purpose.trim().length < 8 || entry.purpose.length > 240)
       || typeof password !== "string" || password.length < 1 || password.length > 128) throw new Error("PROBE_APPROVAL_INPUT_INVALID");
+    for (const entry of entries) probeScope(entry.scope);
     // Return a denied result rather than throwing inside the transaction: failed
     // password counters MUST commit, otherwise attackers get unlimited attempts.
     const result = await this.transaction(async connection => {
@@ -57,10 +68,15 @@ export class AurionProductionProbeStore {
         return null;
       }
       await connection.execute("UPDATE localCredentials SET failedAttempts=0, lockedUntil=NULL WHERE userId=?", [userId]);
-      const approvalId = randomBytes(16).toString("hex"), expiresAtMs = now + AURION_PROBE_MAX_APPROVAL_MS;
-      await connection.execute("INSERT INTO aurionProductionProbeApprovals (approvalId,runKey,runJson,scope,approvedByUserId,purpose,approvedAtMs,expiresAtMs) VALUES (?,?,?,?,?,?,?,?)",
-        [approvalId, probeRunKey(run), JSON.stringify(run), scope, userId, purpose.trim(), now, expiresAtMs]);
-      return { approvalId, run, scope, purpose: purpose.trim(), approvedAtMs: now, expiresAtMs, consumedAtMs: null, revokedAtMs: null };
+      const expiresAtMs = now + AURION_PROBE_MAX_APPROVAL_MS;
+      const approved = [];
+      for (const entry of entries) {
+        const approvalId = randomBytes(16).toString("hex");
+        await connection.execute("INSERT INTO aurionProductionProbeApprovals (approvalId,runKey,runJson,scope,approvedByUserId,purpose,approvedAtMs,expiresAtMs) VALUES (?,?,?,?,?,?,?,?)",
+          [approvalId, probeRunKey(run), JSON.stringify(run), entry.scope, userId, entry.purpose.trim(), now, expiresAtMs]);
+        approved.push({ approvalId, run, scope: entry.scope, purpose: entry.purpose.trim(), approvedAtMs: now, expiresAtMs, consumedAtMs: null, revokedAtMs: null });
+      }
+      return approved;
     });
     if (!result) throw new Error("PROBE_ADMIN_REAUTH_REQUIRED");
     return result;

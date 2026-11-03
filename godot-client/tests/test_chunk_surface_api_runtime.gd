@@ -78,7 +78,8 @@ func _request(api: Node, id: String) -> void:
 func verify() -> void:
 	var auth := TestAuth.new()
 	root.add_child(auth)
-	var api := Api.new(auth)
+	var slice_mode := OS.get_cmdline_user_args().has("--slice")
+	var api := Api.new(auth, "/api/game/world-slice" if slice_mode else Api.PATH)
 	api.surface_ready.connect(_ready_event)
 	api.request_failed.connect(_failed_event)
 	root.add_child(api)
@@ -90,7 +91,7 @@ func verify() -> void:
 	var first: HTTPRequest = api.get_child(0) as HTTPRequest if api.get_child_count() > 0 else null
 	require(first != null, "chunk GET did not open a real HTTPRequest")
 	if first:
-		require(first.max_redirects == 0 and first.body_size_limit == 262144 and first.timeout == 12.0, "unbounded/redirectable chunk GET")
+		require(first.max_redirects == 0 and first.body_size_limit == (65536 if slice_mode else 262144) and first.timeout == 12.0, "unbounded/redirectable chunk GET")
 	await _request(api, "zone_redirect")
 	require(not success and last_error == "CHUNK_REQUEST_FAILED", "redirect followed or accepted")
 	await _request(api, "zone_refresh")

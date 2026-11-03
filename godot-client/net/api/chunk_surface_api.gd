@@ -8,6 +8,7 @@ const RuntimeConfig = preload("res://config/runtime_config.gd")
 const PATH := "/api/game/world-chunk-surface"
 const MAX_BYTES := 262144
 
+var _path := PATH
 var _auth: Node
 var _http: HTTPRequest
 var _active := false
@@ -19,8 +20,10 @@ var _requested := Vector2i.ZERO
 var _retried := false
 var _waiting_refresh := false
 
-func _init(auth: Node) -> void:
+func _init(auth: Node, path: String = PATH) -> void:
+	assert(path in [PATH, "/api/game/world-slice"])
 	_auth = auth
+	_path = path
 
 func _ready() -> void:
 	_auth.refresh_succeeded.connect(_on_refresh_succeeded)
@@ -61,13 +64,15 @@ func _send() -> bool:
 	_epoch += 1
 	var expected_epoch: int = _epoch
 	_http = HTTPRequest.new()
-	_http.body_size_limit = MAX_BYTES
+	_http.body_size_limit = 65536 if _path == "/api/game/world-slice" else MAX_BYTES
 	_http.max_redirects = 0
 	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_completed.bind(expected_epoch))
 	var query := "?x=%d&z=%d" % [_requested.x, _requested.y]
-	var error: Error = _http.request(_server + PATH + query,
+	if _path == "/api/game/world-slice":
+		query += "&radius=1&lod=full"
+	var error: Error = _http.request(_server + _path + query,
 		PackedStringArray(["Accept: application/json", "Authorization: Bearer " + token]),
 		HTTPClient.METHOD_GET)
 	if error != OK:

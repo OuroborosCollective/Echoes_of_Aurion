@@ -18,8 +18,8 @@ Scope: Echoes of Aurion, native Godot 4.7.2, target Samsung Tab A9. **Code revie
 
 ## Tests and gates
 - Native Godot check stage `starter-village-model-projection` loads the actual active main.tscn scene, imports all GLB PackedScenes, consumes an explicit **synthetic v5 protocol fixture** with ten matching identities and rejects counterfeit, duplicate, foreign-session or stale overlays. This is evidence for native client behavior, **not** a production lease or real player.
-- Compare real pixels with the existing native G18/G19 render tests where available. Android ARM64 Terrain3D packaging, source asset manifest admission and texture performance must be measured before a Tab A9 install recommendation.
-- To bring this into production requires reviewed exact-HEAD CI, merge, separate Aurion runtime promotion, HTTPS+DB+WorldLease readback, signed Android APK artifact with verified cert/DAL and a physical Tab A9 check. A PR or green test alone is not live.
+- Compare real pixels with the existing native G18/G19 render tests where available. Android ARM64 Terrain3D packaging, source asset manifest admission and bounded texture work must be checked in the stated test environment. Physical-device performance is optional compatibility evidence.
+- To bring this into production requires reviewed exact-HEAD CI, merge, separate Aurion runtime promotion, HTTPS+DB+WorldLease readback, signed Android APK artifact with verified cert/DAL. A physical Tab A9 check is optional and does not block this path. A PR or green test alone is not live.
 
 ## Safety status
 Fail closed for missing DB lease/server state, missing visuals, source mismatch or invalid shapes. Do not lower test thresholds or invent any client game state. Keep G19 Terrain3D PR #1183 and the editor toolbox PR #1185 separate until independently proven. `APK installieren: NEIN` until the release guardian's chain is actually satisfied.
