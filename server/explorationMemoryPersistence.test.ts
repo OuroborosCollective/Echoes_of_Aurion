@@ -250,9 +250,10 @@ suite("Issue 323 Phase H exploration memory",()=>{
     await expect(codex(userId, { ...codexQuery, userId: unseenUserId })).rejects.toThrow();
     const ownMemory = and(eq(aurionExplorationMemoryProjections.userId, userId), eq(aurionExplorationMemoryProjections.worldId, worldId),
       eq(aurionExplorationMemoryProjections.worldEpoch, epoch), eq(aurionExplorationMemoryProjections.chunkX, chunk.x), eq(aurionExplorationMemoryProjections.chunkZ, chunk.z));
+    const [memoryBeforeCorruption] = await db.select().from(aurionExplorationMemoryProjections).where(ownMemory).limit(1);
     await db.update(aurionExplorationMemoryProjections).set({ memoryHash: "sha256:" + "0".repeat(64) }).where(ownMemory);
     try { await expect(codex(userId)).rejects.toThrow("EXPLORATION_MEMORY_HASH_MISMATCH"); }
-    finally { await db.update(aurionExplorationMemoryProjections).set({ memoryHash: first.memory.memoryHash }).where(ownMemory); }
+    finally { await db.update(aurionExplorationMemoryProjections).set({ memoryHash: first.memory.memoryHash, updatedAt: memoryBeforeCorruption.updatedAt }).where(ownMemory); }
     expect(Buffer.byteLength(JSON.stringify(region))).toBeLessThan(2048);
     const coldRegion = await new Promise<any>((resolveCold, reject) => {
       const child = spawn(process.execPath, ["--import", "tsx", resolve("scripts/discovery/cold-read.ts")], {
