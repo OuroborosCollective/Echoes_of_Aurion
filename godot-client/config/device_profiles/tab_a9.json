@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "profile_id": "samsung-galaxy-tab-a9-4gb",
-  "profile_status": "planning_baseline",
+  "profile_status": "optional_reference",
   "authority": "aurion",
   "device": {
     "manufacturer": "Samsung",
@@ -55,7 +55,7 @@
   "evidence": {
     "manufacturer_reference": "https://www.samsung.com/uk/business/tablets/galaxy-tab-a/galaxy-tab-a9-wifi-graphite-64gb-sm-x110nzaaeua/",
     "owner_ram_confirmation_date": "2026-10-15",
-    "physical_device_measurement_required": true,
+    "physical_device_measurement_required": false,
     "emulator_counts_as_physical_evidence": false,
     "required_run_fields": [
       "build_sha",

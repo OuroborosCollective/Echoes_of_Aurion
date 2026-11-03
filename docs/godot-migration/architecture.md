@@ -4,6 +4,9 @@ description: "Quellgebundene Bestandsaufnahme und Datei-für-Datei-Plan für den
 
 # Godot-Client: Architektur, Funktionsumfang und Ausführungsplan
 
+Aktuelle Owner-Vorgabe vom 03.11.2026: [geräteunabhängige Abnahme](acceptance-policy.md). Physische Tab-A9-Tests und modellbezogene Leistungsbudgets sind optionale Referenzdaten und kein Abschluss-, Merge- oder Releasegate.
+
+
 ## Auftrag, Revision und Aussagegrenze
 
 Diese Bestandsaufnahme bearbeitet [G01 / #907](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/907) aus [Master #906](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/906). Der Owner hat die Ausarbeitung mit **„Weiter“ am 15.10.2026** freigegeben. Dieser Änderungsschritt liefert Dokumentation; er installiert keine Engine und verändert keine Spielsimulation.
@@ -159,19 +162,19 @@ Vorhandene Originalbeispiele sind `assets/characters/aurion-player-standard-anim
 
 Die Quelle bleibt an ihrem bestehenden Ort. Ein Assetmanifest verbindet Sourcepfad, SHA-256, Lizenz/Herkunft, Katalog-ID, Rig/Bones, Clipmapping, Material-/Texturreferenzen und abgeleitete Buildprodukte. G15 erzeugt reproduzierbar Godot-Importquellen unter `godot-client/assets/generated/`; dieser konkret geplante Verzeichnisvertrag wird in der Vorbereitung implementiert. Godots `.godot/`-Cache und Credentials werden nicht eingecheckt.
 
-Meshopt-/KTX2-/WebP-Ausgaben der vorhandenen mobilen Pipeline werden auf tatsächliche Decoderfähigkeit geprüft. Ein Importfehler führt zu einem diagnostizierten Fehler oder einem ausdrücklich als Darstellung gekennzeichneten Fallback, nie zu erfundenen Assethashes oder Erfolgsmeldungen. Character-/Animationsbudgets dürfen nicht blind das vereinfachte Propbudget übernehmen. G31 friert endgültige Ressourcenbudgets erst nach echten Gerätemessungen ein.
+Meshopt-/KTX2-/WebP-Ausgaben der vorhandenen mobilen Pipeline werden auf tatsächliche Decoderfähigkeit geprüft. Ein Importfehler führt zu einem diagnostizierten Fehler oder einem ausdrücklich als Darstellung gekennzeichneten Fallback, nie zu erfundenen Assethashes oder Erfolgsmeldungen. Character-/Animationsbudgets dürfen nicht blind das vereinfachte Propbudget übernehmen. Ressourcenverträge bleiben prüfpflichtig; G31 und physische Gerätemessungen sind optionale Optimierungsdaten und kein Pflichtvorgänger.
 
 Animationen und Meshkollision dienen der Darstellung. Assetwechsel verändert weder Hitboxwahrheit noch Inventarwerte, Schaden, Queststand oder NPC-KI. Statische Collision-/Navigationsdaten, soweit für Darstellung benötigt, bleiben von der autoritativen Aurion-Bewegung getrennt.
 
-## Samsung Tab A9 und minimaler Owneraufwand
+## Geräteunabhängiger Client und minimaler Owneraufwand
 
-Ziel ist **Galaxy Tab A9, ausdrücklich nicht A9+**. Die konkrete RAM-/Speicher-/OS-/GPUvariante des Owners ist noch nicht bestätigt. Ein 4-GB-Profil und ein stabiler 30-FPS-Modus sind konservative Planungsannahmen. Sie sind keine Messwerte und kein Leistungsversprechen.
+Das **Galaxy Tab A9, ausdrücklich nicht A9+**, bleibt ein optionales Referenzgerät. Die konkrete RAM-/Speicher-/OS-/GPUvariante des Owners ist noch nicht bestätigt. Ein 4-GB-Profil und ein stabiler 30-FPS-Modus sind konservative Planungsannahmen. Sie sind keine Messwerte und kein Leistungsversprechen.
 
 Der Standardablauf lautet: Chat auf dem Tablet → entfernte vorbereitete Entwicklungsumgebung → automatisierter Import/Test/Build → fertige APK → kurze echte Bedienprobe. Der Owner schreibt keine Skripte, installiert keine SDKs und befüllt keine Inspectorfelder. Falls nötig bleiben eine reguläre Anmeldung/Connectorverbindung, Androids Installationsdialog sowie kreative und spielerische Rückmeldungen. Geräteinformationen möglichst diagnostisch lesen; andernfalls reicht eine kurze Variantenangabe ohne Seriennummer/IMEI.
 
 Touch-Steuerung wird in G20/G21 als austauschbare Präsentationskomponente eingebunden: Godot-Controls/Touch-Ereignisse oder ein nach Version/Lizenz/Multitouch geprüfter virtueller Joystick. Eine zusätzliche Komponente wird erst nach tatsächlichem Bedarf gepinnt. UI-Fokus, geöffnete Panels, Softkeyboard, Finger-ID, gleichzeitige Bewegung/Kamera/Skill und Neutralzustand nach Unterbrechung sind Pflichtprüfungen.
 
-Android-Editor auf dem Tablet ist optional. Geteilte Ansicht von Chat und Spiel wird real getestet; schneller Appwechsel ist eine zulässige Alternative. Remote-/GPU-/Headless-Ergebnisse ersetzen keinen physischen Tab-A9-Lauf.
+Android-Editor auf dem Tablet ist optional. Geteilte Ansicht von Chat und Spiel oder schneller Appwechsel wird im ausgewiesenen Android-Testsystem geprüft; ein bestimmtes physisches Gerät ist nicht erforderlich. Remote-/GPU-/Headless-Ergebnisse bleiben als solche gekennzeichnet.
 
 ## Historische Issues und aktuelle Risiken
 
@@ -185,7 +188,7 @@ Alle nachstehenden Issues wurden in dieser Sitzung neu gelesen; sie sind weiterh
 | #879 | dokumentierter OOM-/DB-Verbindungsincident; keine aktuelle Stabilitätsaussage ohne neue Messung; Serverreparatur nicht in Clientmigration einschmuggeln |
 | #904 | Produktions-Probe-/Freigabekontrollpfad; getrennt von normalem Spielerlogin und Godot-Auth behandeln |
 
-Frühe harte Blocker sind die sichere native Session, die tatsächliche Godot-Toolverbindung zum richtigen Repo, GLB-/Rig-/Materialkompatibilität und das physische Gerätemessergebnis. Unverbundene Spieloberflächen stehen als eigene Matrixlücken daneben. Fehlende Serverfähigkeiten werden als separate Entscheidungen/Serveraufträge ausgewiesen; die festgelegte unveränderte Simulation bleibt bindend.
+Frühe harte Blocker sind die sichere native Session, die tatsächliche Godot-Toolverbindung zum richtigen Repo, GLB-/Rig-/Materialkompatibilität. Ein physisches Gerätemessergebnis ist optional und kein Ausführungsblocker. Unverbundene Spieloberflächen stehen als eigene Matrixlücken daneben. Fehlende Serverfähigkeiten werden als separate Entscheidungen/Serveraufträge ausgewiesen; die festgelegte unveränderte Simulation bleibt bindend.
 
 ## Datei-für-Datei arbeiten
 
