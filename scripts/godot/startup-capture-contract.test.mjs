@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { prepareCaptureProject, publicObservation } from './startup-capture-contract.mjs';
+import { createHash } from 'node:crypto';
+import { prepareCaptureProject, publicObservation, assertDistinctCaptureUsers, awaitDurableTick, verifyEditorExecutable } from './startup-capture-contract.mjs';
 
 test('private capture copy enables the actual bridge without changing source settings or copying editor cache', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'aurion-capture-contract-'));
@@ -25,7 +26,7 @@ test('private capture copy enables the actual bridge without changing source set
 test('public capture compares canonical payloads without exposing live player identifiers or combat records', () => {
   const raw = { source: 'aurion-web', snapshot: { tick:42, zoneId:'observatory_threshold',
     presences:[{entityId:'player:8675309',userId:8675309,position:{x:12345678,z:456}}],
-    mobs:[{entityId:'mob:private',health:42}], combatants:[{entityId:'player:8675309',health:31}] },
+    mobs:[{entityId:'mob:private',health:42}], combatants:[{entityId:'player:8675309',health:31}], resources:{contractVersion:1,revision:1,nodes:[]} },
     actors:[{entityId:'player:8675309',assetId:'glb_public',position:[12345678,0,456]}],
     player:{userId:8675309},npcs:{private:'not exported'} };
   const key = Buffer.alloc(32, 1);
@@ -43,7 +44,53 @@ test('public capture compares canonical payloads without exposing live player id
 });
 
 test('transport counters and ordering cannot manufacture a canonical difference', () => {
-  const raw = { snapshot: {tick:42,zoneId:'zone',snapshotSeq:1,connectionId:'private-peer',presences:[{entityId:'b'},{entityId:'a'}],mobs:[],combatants:[]} };
+  const raw = { snapshot: {tick:42,zoneId:'zone',snapshotSeq:1,connectionId:'private-peer',presences:[{entityId:'b'},{entityId:'a'}],mobs:[],combatants:[],resources:{contractVersion:1,revision:1,nodes:[]}} };
   const other = structuredClone(raw);other.snapshot.presences.reverse();other.snapshot.snapshotSeq=55;other.snapshot.connectionId='other-peer';
   assert.equal(publicObservation(raw, 'private key').snapshot.projectionDigest, publicObservation(other, 'private key').snapshot.projectionDigest);
+});
+
+test('resource depletion differences participate in the private canonical comparison', () => {
+  const raw = {snapshot:{tick:42,zoneId:'zone',presences:[],mobs:[],combatants:[],resources:{contractVersion:1,revision:2,nodes:[{nodeId:'copper',remaining:10}]}}};
+  const before = publicObservation(raw, 'run key').snapshot.projectionDigest;
+  raw.snapshot.resources.nodes[0].remaining--;
+  assert.notEqual(publicObservation(raw, 'run key').snapshot.projectionDigest,before);
+  delete raw.snapshot.resources;
+  assert.throws(()=>publicObservation(raw, 'run key'),/CAPTURE_RESOURCES_INVALID/);
+});
+
+test('same-account and missing sessions are rejected before native login can supersede the browser', () => {
+  assert.throws(()=>assertDistinctCaptureUsers({id:1},{id:1}),/CAPTURE_IDENTITIES_SUPERSEDE/);
+  for (const user of [null,{}, {id:0}, {id:1.5}]) assert.throws(()=>assertDistinctCaptureUsers({id:1},user),/CAPTURE_IDENTITIES_UNVERIFIED/);
+  assert.doesNotThrow(()=>assertDistinctCaptureUsers({id:1},{id:2}));
+});
+
+test('durable readback waits only for the same missing receipt and bounds persistence delays', async () => {
+  let time=0, reads=0;
+  const clock={timeoutMs:20,pollMs:10,now:()=>time,sleep:async ms=>{time+=ms;}};
+  const entry={receipt:{tick:42}};
+  assert.equal(await awaitDurableTick(async()=>++reads<3?null:entry,42,clock),entry);
+  assert.equal(reads,3);
+  await assert.rejects(awaitDurableTick(async()=>null,42,clock),/CANONICAL_RECEIPT_PERSISTENCE_TIMEOUT/);
+  await assert.rejects(awaitDurableTick(async()=>({receipt:{tick:43}}),42,clock),/CANONICAL_READBACK_INVALID/);
+  reads=0;
+  await assert.rejects(awaitDurableTick(async()=>{reads++;throw Error('UNAUTHORIZED');},42,clock),/UNAUTHORIZED/);
+  assert.equal(reads,1);
+});
+
+test('a modified same-version executable or foreign bootstrap receipt cannot pass', async () => {
+  const directory=await mkdtemp(join(tmpdir(),'aurion-editor-digest-'));
+  try {
+    await mkdir(join(directory,'editor'));
+    const engine={file:'Godot',version:'synthetic-version',sha256:'b'.repeat(64)};
+    const binary=join(directory,'editor',engine.file), bytes=Buffer.from('synthetic executable bytes');
+    await writeFile(binary,bytes);
+    const receipt={version:engine.version,archiveSha256:engine.sha256,binarySha256:createHash('sha256').update(bytes).digest('hex')};
+    await writeFile(join(directory,'editor-receipt.json'),JSON.stringify(receipt));
+    assert.deepEqual(await verifyEditorExecutable(binary,engine),receipt);
+    await writeFile(binary,'changed executable, same claimed version');
+    await assert.rejects(verifyEditorExecutable(binary,engine),/GODOT_EXECUTABLE_UNVERIFIED/);
+    await writeFile(binary,bytes);
+    await writeFile(join(directory,'editor-receipt.json'),JSON.stringify({...receipt,archiveSha256:'c'.repeat(64)}));
+    await assert.rejects(verifyEditorExecutable(binary,engine),/GODOT_EXECUTABLE_UNVERIFIED/);
+  } finally {await rm(directory,{recursive:true,force:true});}
 });

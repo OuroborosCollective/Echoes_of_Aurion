@@ -8,6 +8,7 @@ var _started := ""
 var _start_ms := 0
 var _last_state_ms := -1000
 var _target := -1
+var _captured_tick := -1
 var _done := false
 var _viewport_size := Vector2i.ZERO
 
@@ -99,9 +100,9 @@ func _process(_delta: float) -> void:
 			return
 		_target = int(arm.tick)
 	if _target < 0 or tick < _target: return
-	if tick != _target:
-		_fail("GODOT_TARGET_TICK_MISSED")
-		return
+	# Idle ticks may have no broadcast. Take the first actually published/rendered
+	# snapshot after the shared lower bound, once; never select a later image.
+	_captured_tick = tick
 	_done = true
 	_capture()
 
@@ -109,7 +110,7 @@ func _capture() -> void:
 	# Metadata and pixels must describe the same actually rendered tick. No
 	# pause of the canonical simulation, and no substituted/offline snapshot.
 	await RenderingServer.frame_post_draw
-	if _main._confirmed_zone.last_tick() != _target:
+	if _main._confirmed_zone.last_tick() != _captured_tick:
 		_fail("GODOT_RENDER_TICK_CHANGED")
 		return
 	var viewport: SubViewport = _main.live_3d_viewport
@@ -134,6 +135,7 @@ func _capture() -> void:
 		"schema":"aurion.startup-view.observation.v1","source":"godot-live-editor","nonce":_nonce,"captureIndex":1,
 		"startedAtUtc":_started,"capturedAtUtc":Time.get_datetime_string_from_system(true) + "Z",
 		"pid":OS.get_process_id(),"snapshot":_main._confirmed_zone.current_state(),
+		"selfEntityId":_main._confirmed_zone.self_entity_id(),"minimumTick":_target,
 		"connected":_main._zone_socket.state_name() == "connected" and _main._auth_start.protected_response_allowed(),
 		"worldVisible":_main.world_view.visible,"stale":_main._world_is_stale,
 		"viewportPx":[pixels.get_width(), pixels.get_height()],

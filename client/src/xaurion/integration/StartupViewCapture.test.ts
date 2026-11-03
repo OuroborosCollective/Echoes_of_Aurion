@@ -28,13 +28,14 @@ describe('first-session capture', () => {
     expect(capture.result()).toMatchObject({ captureIndex: 1, snapshot: { tick: 2, position: { x: 0 } } });
     expect(() => capture.arm(3)).toThrow('CAPTURE_ARM_INVALID');
   });
-  it('never chooses a later frame after a missed target tick', () => {
+  it('captures the first published tick at or after the bound once, including idle gaps', () => {
     const { capture, captures } = observer();
     capture.observe({ tick: 1 }); capture.arm(2);
     capture.observe({ tick: 3 }); capture.onFrame();
-    capture.observe({ tick: 2 }); capture.onFrame();
-    expect(captures()).toBe(0);
-    expect(capture.state().failure).toBe('BROWSER_TARGET_TICK_MISSED');
+    capture.observe({ tick: 4 }); capture.onFrame();
+    expect(captures()).toBe(1);
+    expect(capture.result()).toMatchObject({snapshot:{tick:3}});
+    expect(capture.state().failure).toBeNull();
   });
   it('requires a confirmed tick and bounded future target', () => {
     const { capture } = observer();

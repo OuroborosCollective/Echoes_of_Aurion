@@ -20,6 +20,7 @@ jobs:
     env:
       AURION_EXPECTED_REVISION: ${{ github.sha }}
       AURION_PARITY_CDP_URL: ${{ vars.AURION_PARITY_CDP_URL }}
+      AURION_PARITY_NATIVE_CDP_URL: ${{ vars.AURION_PARITY_NATIVE_CDP_URL }}
       AURION_GODOT_EXECUTABLE: ${{ vars.AURION_GODOT_EXECUTABLE }}
       DISPLAY: ${{ vars.AURION_PARITY_DISPLAY }}
       PARITY_OUTPUT: ${{ runner.temp }}/aurion-startup-${{ github.run_id }}-${{ github.run_attempt }}

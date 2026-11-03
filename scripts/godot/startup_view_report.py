@@ -13,12 +13,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from PIL import Image, ImageChops, ImageEnhance, ImageOps
 from live_view_parity import pixel_difference, _visual_stats, MAX_PNG_BYTES, MAX_PIXELS, SHA256
+ENGINE_LOCK = json.loads((Path(__file__).resolve().parents[2] / 'config/godot-toolchain.lock.json').read_text())["engine"]
 
 HINTS = {
     "LIVE_CAPTURE_INCOMPLETE": "Es liegt keine vollständige Live-Paaraufnahme vor. Den konkreten Start-/Verbindungsfehler zuerst beheben; fehlende Bilder sind kein visueller Erfolg.",
     "LIVE_RUNTIME_IDENTITY_UNVERIFIED": "Ohne erfolgreichen Health-Readback ist der aktive Stand unbekannt; daraus wird keine behauptete Versionsabweichung abgeleitet.",
     "LIVE_REVISION_MISMATCH": "Web-Runtime und geprüfter Godot-Checkout haben verschiedene Git-Stände. Erst dieselbe geprüfte Revision ausliefern.",
     "AUTHENTICATED_BROWSER_NOT_CONFIGURED": "Kein erreichbarer, bereits angemeldeter Browser am lokalen CDP-Port. Die Aufnahme erzeugt keine Ersatzsitzung.",
+    "NATIVE_AUTH_BROWSER_NOT_CONFIGURED": "Der separate lokale Anmeldebrowser für Godot fehlt. AURION_PARITY_NATIVE_CDP_URL muss einen bereits angemeldeten zweiten Aurion-Account bereitstellen.",
+    "CAPTURE_IDENTITIES_SUPERSEDE": "Beide Browser verwenden dasselbe Konto. Aurion ersetzt dessen alte Spielverbindung beim zweiten Login; für den Paarvergleich sind zwei getrennte reale Konten erforderlich.",
+    "CAPTURE_IDENTITIES_UNVERIFIED": "Die zwei angemeldeten Konten konnten nicht unabhängig bestätigt werden. Beide bestehenden Browser-Sitzungen prüfen.",
+    "CAPTURE_SUBJECT_POSITION_MISMATCH": "Die beiden bestätigten Spieler stehen an verschiedenen Weltpositionen. Ein Perspektivvergleich ist so nicht vergleichbar; der Collector bewegt keinen Spieler automatisch.",
+    "GODOT_EXECUTABLE_UNVERIFIED": "Die Editor-Datei stimmt nicht mit dem Bootstrap-Hashbeleg des gesperrten Toolchains überein. Den Editor mit scripts/godot/bootstrap.mjs aus dem geprüften Archiv installieren.",
     "BROWSER_AUTH_OR_WORLD_NOT_READY": "Der Browser hat nach dem Start keine authentifizierten Aurion-Snapshots empfangen. Anmeldung, Charakterauswahl und WebSocket prüfen.",
     "BROWSER_GAMEPLAY_NOT_STARTED": "Die echte Spielansicht ist nicht gestartet. Anmeldung und den Einstieg SPIEL BETRETEN prüfen.",
     "GODOT_AUTH_OR_WORLD_NOT_READY": "Godot hat keine aktive Sitzung mit sichtbarem Welt-Viewport und bestätigtem Terrain. Native-Auth, WorldLease und Chunk-Abrufe prüfen.",
@@ -32,9 +38,12 @@ HINTS = {
     "CAMERA_PROJECTION_MISMATCH": "Kameraposition, Ziel oder Sichtfeld unterscheiden sich. Beide tatsächlichen Kamera-Readbacks stehen im Bericht; Startabstand, Terrainhöhe und FOV prüfen.",
     "RENDER_VIEWPORT_SIZE_MISMATCH": "Die Original-Viewports haben unterschiedliche Pixelmaße. Fenstergröße und Geräte-Pixelfaktor angleichen; der Test skaliert keine Bilder.",
     "CANONICAL_SNAPSHOT_MISMATCH": "Die Renderer zeigen andere bestätigte Entitäten oder Positionen. Konto, Zone, Snapshot-Tick und Verbindung prüfen.",
-    "CAPTURE_TICK_MISMATCH": "Die erste Aufnahme verfehlte den gemeinsamen Tick. Snapshot-Verarbeitung und Renderlatenz prüfen; es wird kein besseres Folgebild ausgewählt.",
+    "CAPTURE_TICK_MISMATCH": "Die ersten gerenderten Snapshots nach der gemeinsamen Tick-Untergrenze unterscheiden sich. Snapshot-Verarbeitung und Renderlatenz prüfen; es wird kein besseres Folgebild ausgewählt.",
+    "CANONICAL_RECEIPT_PERSISTENCE_TIMEOUT": "Der aufgenommene Tick wurde innerhalb der begrenzten Wartezeit nicht dauerhaft lesbar. MariaDB und die Causal-Persistence-Queue prüfen; die Bildaufnahme wird nicht wiederholt.",
     "GODOT_TERRAIN_MISSING": "Godot zeigt keinen bestätigten Terrain-Chunk. Chunk-Download, WorldLease und Import prüfen.",
     "BROWSER_TERRAIN_MISSING": "Die Browseransicht hat keine bestätigte Chunk-Projektion angewendet. Chunk-Abruf und Worker prüfen.",
+    "BROWSER_TERRAIN_INCOMPLETE": "Noch nicht alle gewünschten Terrain-Chunks sind angewendet oder mindestens ein Chunk ist fehlgeschlagen. desiredCount, count, pendingCount und failedCount im Readback prüfen.",
+    "BROWSER_ACTOR_MODELS_MISSING": "Das Browser-Readback bestätigt kein geladenes sichtbares Spieler- oder NPC-GLB. Charaktermodell, Service-NPC und deren Import-/Ladezustand prüfen.",
     "GODOT_ENVIRONMENT_MISSING": "In der aktiven Godot-Spielwelt fehlt ein WorldEnvironment. Himmel und Beleuchtung werden nicht wie im Browser dargestellt.",
     "GODOT_ACTOR_MODELS_MISSING": "In Godot fehlt ein sichtbares bestätigtes GLB-Modell. Katalogzulassung, Download, Import und Ressourcenbudget prüfen.",
     "ASSETS_LOADING_OR_FAILED": "Mindestens ein Renderer lädt noch notwendige Assets oder meldet einen Assetfehler. Katalog, GLB-Downloads und Import-Diagnose prüfen.",
@@ -72,6 +81,8 @@ def build_report(directory: Path, now=None):
     if not isinstance(runtime, dict): runtime = {}
     if not isinstance(after, dict): after = {}
     image = runtime.get("runtimeImageDigest")
+    editor_binary = index.get("editorBinary", {})
+    if not isinstance(editor_binary, dict) or editor_binary.get("archiveSha256") != ENGINE_LOCK["sha256"] or editor_binary.get("version") != ENGINE_LOCK["version"] or index.get("editorVersion") != ENGINE_LOCK["version"] or not SHA256.fullmatch(str(editor_binary.get("binarySha256", ""))): fail("GODOT_EXECUTABLE_UNVERIFIED")
     if not runtime or not after:
         fail("LIVE_RUNTIME_IDENTITY_UNVERIFIED")
     else:
@@ -112,11 +123,15 @@ def build_report(directory: Path, now=None):
     web, godot = observations["aurion"], observations["godot"]
     tick = index.get("targetTick")
     if web and godot:
+        identities = index.get("identities", {})
+        if not isinstance(identities, dict) or identities.get("distinct") is not True: fail("CAPTURE_IDENTITIES_UNVERIFIED")
+        elif identities.get("subjectsAtSamePosition") is not True: fail("CAPTURE_SUBJECT_POSITION_MISMATCH")
         ws, gs = web.get("snapshot", {}), godot.get("snapshot", {})
         if not isinstance(ws, dict): ws = {}
         if not isinstance(gs, dict): gs = {}
         tick = index.get("targetTick")
-        if type(tick) is not int or tick < 1 or any(s.get("tick") != tick for s in (ws, gs)): fail("CAPTURE_TICK_MISMATCH")
+        minimum = index.get("minimumTick")
+        if type(tick) is not int or type(minimum) is not int or minimum < 1 or tick < minimum or any(s.get("tick") != tick for s in (ws, gs)) or any(o.get("minimumTick") != minimum for o in (web,godot)): fail("CAPTURE_TICK_MISMATCH")
         # The trusted collector hashes real presence/mob/combat state in memory
         # with an ephemeral run key. Player IDs and combat records stay private.
         for field in ("zoneId", "projectionDigest", "presenceCount", "mobCount"):
@@ -130,6 +145,9 @@ def build_report(directory: Path, now=None):
             if any(not isinstance(camera[k], list) or len(camera[k]) != 3 or any(type(n) is not int or abs(n) > 10**10 for n in camera[k]) for k in ("positionMm", "targetMm")) or type(camera["fovMilliDeg"]) is not int or not 10000 <= camera["fovMilliDeg"] <= 150000: fail("CAMERA_READBACK_MISSING")
         chunks = web.get("chunks")
         if not isinstance(chunks, dict) or chunks.get("status") != "APPLIED" or not isinstance(chunks.get("count"), int) or chunks["count"] < 1: fail("BROWSER_TERRAIN_MISSING")
+        if not isinstance(chunks, dict) or type(chunks.get("desiredCount")) is not int or chunks["desiredCount"] < 1 or chunks.get("count") != chunks["desiredCount"] or chunks.get("pendingCount") != 0 or chunks.get("failedCount") != 0: fail("BROWSER_TERRAIN_INCOMPLETE")
+        for actor in (web.get("player"),web.get("npcs")):
+            if not isinstance(actor, dict) or actor.get("visible") is not True or type(actor.get("renderedHeightMeters")) not in (int,float) or not 0.1 < actor["renderedHeightMeters"] < 20: fail("BROWSER_ACTOR_MODELS_MISSING")
         native_chunks = godot.get("chunks")
         if not isinstance(native_chunks, list) or not native_chunks: fail("GODOT_TERRAIN_MISSING")
         if godot.get("environmentPresent") is not True: fail("GODOT_ENVIRONMENT_MISSING")

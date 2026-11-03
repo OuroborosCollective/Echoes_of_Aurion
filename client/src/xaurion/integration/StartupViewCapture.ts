@@ -19,13 +19,12 @@ export class StartupViewCapture {
   onFrame() {
     this.frames++;
     if (this.captured || this.failure || this.target === null || !this.snapshot || this.snapshot.tick < this.target) return;
-    if (this.snapshot.tick !== this.target) { this.failure = "BROWSER_TARGET_TICK_MISSED"; return; }
     try {
       // Read in onFrameRendered: preserveDrawingBuffer is unnecessary; no
       // resize, overlay removal, camera override, retry, or postprocessing.
       const canvas = this.canvas();
       this.captured = { schema: "aurion.startup-view.observation.v1", source: "aurion-web", nonce: this.nonce,
-        documentId: this.documentId, captureIndex: 1, startedAtUtc: this.startedAtUtc, capturedAtUtc: new Date().toISOString(),
+        documentId: this.documentId, minimumTick: this.target, captureIndex: 1, startedAtUtc: this.startedAtUtc, capturedAtUtc: new Date().toISOString(),
         frame: this.frames, snapshot: structuredClone(this.snapshot), ...this.read(),
         viewportPx: [canvas.width, canvas.height], png: canvas.toDataURL("image/png") };
     } catch { this.failure = "BROWSER_FRAME_CAPTURE_FAILED"; }

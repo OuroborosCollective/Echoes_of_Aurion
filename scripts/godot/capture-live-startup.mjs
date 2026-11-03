@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rename, rm, stat } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
-import { prepareCaptureProject, publicObservation } from './startup-capture-contract.mjs';
+import { prepareCaptureProject, publicObservation, assertDistinctCaptureUsers, awaitDurableTick, verifyEditorExecutable } from './startup-capture-contract.mjs';
 
 const output = resolve(process.argv[2] || '.aurion-parity');
 const origin = 'https://arelogic.space';
@@ -17,7 +17,7 @@ const privateDir = await mkdtemp(join(tmpdir(), 'aurion-startup-'));
 await mkdir(output, { recursive: true });
 const index = { schema: 'aurion.startup-capture-index.v1', nonce, status: 'FAIL',
   startedAtUtc: new Date().toISOString(), issues: [], files: {} };
-let editor, browser, page, authPage;
+let editor, browser, nativeBrowser, page, authPage;
 let failure = 'CAPTURE_PREFLIGHT_FAILED';
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const runtimeIdentity = value => Object.fromEntries(['status','revision','runtimeImageDigest'].map(key => [key, value[key]]));
@@ -40,13 +40,18 @@ const publish = async (name, bytes) => {
   await writeFile(join(output, name), bytes);
   index.files[name] = createHash('sha256').update(bytes).digest('hex');
 };
-async function rpc(procedure, input) {
+async function rpc(procedure, input, {request=page.request, nullable=false}={}) {
   const url = `${origin}/api/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify({ json: input }))}`;
-  const response = await page.request.get(url, { timeout: 15_000 });
+  const response = await request.get(url, { timeout: 15_000 });
   if (!response.ok()) throw Error('CANONICAL_READBACK_UNAUTHORIZED_OR_UNAVAILABLE');
   const body = await response.json();
-  if (body.error || !body.result?.data?.json) throw Error('CANONICAL_READBACK_INVALID');
+  if (body.error || !Object.hasOwn(body.result?.data ?? {}, 'json') || (body.result.data.json === null && !nullable)) throw Error('CANONICAL_READBACK_INVALID');
   return body.result.data.json;
+}
+function localCdp(value) {
+  const url = new URL(value);
+  if (url.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(url.hostname) || url.username || url.password || url.pathname !== '/') throw Error('CDP_MUST_BE_LOCAL');
+  return url.href;
 }
 
 try {
@@ -60,11 +65,20 @@ try {
   if (index.runtime.revision !== index.sourceRevision) throw Error('LIVE_REVISION_MISMATCH');
   if (!/^sha256:[a-f0-9]{64}$/.test(index.runtime.runtimeImageDigest || '')) throw Error('LIVE_IMAGE_UNVERIFIED');
   failure = 'AUTHENTICATED_BROWSER_NOT_CONFIGURED';
-  const cdp = new URL(process.env.AURION_PARITY_CDP_URL || 'http://127.0.0.1:9222');
-  if (cdp.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(cdp.hostname) || cdp.username || cdp.password || cdp.pathname !== '/') throw Error('CDP_MUST_BE_LOCAL');
-  browser = await chromium.connectOverCDP(cdp.href, { timeout: 10_000 });
+  browser = await chromium.connectOverCDP(localCdp(process.env.AURION_PARITY_CDP_URL || 'http://127.0.0.1:9222'), { timeout: 10_000 });
   const context = browser.contexts()[0];
   if (!context) throw Error(failure);
+  failure = 'NATIVE_AUTH_BROWSER_NOT_CONFIGURED';
+  if (!process.env.AURION_PARITY_NATIVE_CDP_URL) throw Error(failure);
+  nativeBrowser = await chromium.connectOverCDP(localCdp(process.env.AURION_PARITY_NATIVE_CDP_URL), { timeout: 10_000 });
+  const nativeContext = nativeBrowser.contexts()[0];
+  if (!nativeContext) throw Error(failure);
+  // Aurion intentionally permits one active game transport per player. Verify
+  // two real accounts before either capture login can evict the other client.
+  const webUser = await rpc('auth.me', null, {request:context.request, nullable:true});
+  const nativeUser = await rpc('auth.me', null, {request:nativeContext.request, nullable:true});
+  assertDistinctCaptureUsers(webUser,nativeUser);
+  index.identities = {distinct:true};
   page = await context.newPage();
   // A one-use page-local handoff survives the normal / -> /play SPA navigation.
   // It conveys capture configuration only, never authentication or world state.
@@ -86,6 +100,7 @@ try {
   const binary = process.env.AURION_GODOT_EXECUTABLE;
   if (!binary || !binary.startsWith('/') || !(await stat(binary)).isFile()) throw Error('GODOT_EXECUTABLE_NOT_CONFIGURED');
   const lock = await json(resolve('config/godot-toolchain.lock.json'));
+  index.editorBinary = await verifyEditorExecutable(binary,lock.engine);
   index.editorVersion = execFileSync(binary, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim();
   if (index.editorVersion !== lock.engine.version) throw Error('GODOT_VERSION_MISMATCH');
   if (!process.env.DISPLAY) throw Error('GODOT_DISPLAY_NOT_CONFIGURED');
@@ -106,7 +121,7 @@ try {
   failure = 'NATIVE_AUTH_HANDOFF_MISSING';
   const handoff = await waitFor(() => maybeJson('login.json'), failure);
   if (!/^https:\/\/arelogic\.space\/api\/native-auth\/browser\/[A-Za-z0-9_-]{32,128}$/.test(handoff.url)) throw Error('NATIVE_AUTH_URL_INVALID');
-  authPage = await context.newPage();
+  authPage = await nativeContext.newPage();
   let callback;
   await authPage.route(`${origin}/app/auth/callback?**`, async route => {
     callback = route.request().url();
@@ -127,12 +142,13 @@ try {
     return state?.connected && state.worldVisible && state.terrain > 0 && state.tick > 0 ? state : null;
   }, failure, 45_000);
   await waitFor(() => page.evaluate(() => Boolean(window.__aurionStartupCapture) && !document.querySelector('[data-testid="world-loading-screen"]')), 'BROWSER_WORLD_OBSCURED_BY_LOADING_SCREEN', 30_000);
-  // One shared future committed tick, one capture attempt. A missed tick is red.
+  // One shared lower bound, then the first actually published/rendered tick in
+  // each client. Idle ticks need not be broadcast. No later-frame retry.
   const web = await page.evaluate(() => window.__aurionStartupCapture.state());
-  const tick = Math.max(web.tick, native.tick) + 20;
-  index.targetTick = tick;
-  await page.evaluate(tick => window.__aurionStartupCapture.arm(tick), tick);
-  await atomic('arm.json', { nonce, tick });
+  const minimumTick = Math.max(web.tick, native.tick) + 20;
+  index.minimumTick = minimumTick;
+  await page.evaluate(tick => window.__aurionStartupCapture.arm(tick), minimumTick);
+  await atomic('arm.json', { nonce, tick:minimumTick });
   failure = 'PAIRED_FRAME_TIMEOUT';
   const [webFrame, nativeFrame] = await Promise.all([
     waitFor(async () => {
@@ -148,6 +164,12 @@ try {
   ]);
   if (nativeFrame.pid !== native.pid || nativeFrame.pid === editor.pid) throw Error('EDITOR_GAME_PROCESS_UNVERIFIED');
   if (webFrame.documentId !== documentId) throw Error('BROWSER_DOCUMENT_RESTARTED');
+  if (webFrame.selfEntityId !== 'player:' + webUser.id || nativeFrame.selfEntityId !== 'player:' + nativeUser.id) throw Error('CAPTURE_IDENTITIES_CHANGED');
+  const webSubject = webFrame.snapshot.presences.find(p=>p.entityId === webFrame.selfEntityId);
+  const nativeSubject = nativeFrame.snapshot.presences.find(p=>p.entityId === nativeFrame.selfEntityId);
+  index.identities.subjectsAtSamePosition = Boolean(webSubject && nativeSubject && webSubject.position.x === nativeSubject.position.x && webSubject.position.z === nativeSubject.position.z);
+  const tick = webFrame.snapshot.tick;
+  index.targetTick = tick;
   if (!Number.isSafeInteger(nativeFrame.pid) || nativeFrame.pid < 1) throw Error('EDITOR_GAME_PROCESS_UNVERIFIED');
   const processStatus = await readFile(`/proc/${nativeFrame.pid}/status`, 'utf8');
   index.editorGameParentPid = Number(processStatus.match(/^PPid:\s+(\d+)$/m)?.[1]);
@@ -161,7 +183,7 @@ try {
   await publish('godot-observation.json', Buffer.from(JSON.stringify(publicObservation(nativeFrame, privateRunKey))));
   failure = 'CANONICAL_RECEIPT_READBACK_FAILED';
   const zoneId = webFrame.snapshot.zoneId;
-  const recorded = await rpc('causality.getRecordedTick', { zoneId, tick });
+  const recorded = await awaitDurableTick(() => rpc('causality.getRecordedTick', { zoneId, tick }, {nullable:true}), tick);
   const oracle = await rpc('causality.oracleRange', { zoneId, fromTick: tick, toTick: tick });
   // Keep only the independent receipt/evidence, never full player/account state.
   index.receipt = Object.fromEntries(['worldId','zoneId','tick','sourceRevision','receiptHash','postStateHash'].map(k => [k, recorded.receipt?.[k]]));
@@ -178,6 +200,7 @@ try {
   await authPage?.close().catch(() => {});
   await page?.close().catch(() => {});
   await browser?.close().catch(() => {});
+  await nativeBrowser?.close().catch(() => {});
   if (editor?.pid) {
     try { process.kill(-editor.pid, 'SIGTERM'); } catch {}
     const deadline = Date.now() + 5000;

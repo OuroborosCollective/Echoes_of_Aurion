@@ -6,7 +6,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from PIL import Image
-from startup_view_report import build_report
+from startup_view_report import build_report, ENGINE_LOCK
 from test_live_view_parity import colored_world
 
 
@@ -20,19 +20,23 @@ class StartupReportControls(unittest.TestCase):
         self.nonce, self.revision = 'a' * 32, 'b' * 40
         runtime = {'status':'ok', 'revision':self.revision, 'runtimeImageDigest':'sha256:' + 'c' * 64}
         self.index = {'schema':'aurion.startup-capture-index.v1', 'status':'CAPTURED', 'nonce':self.nonce, 'sourceRevision':self.revision,
-                      'targetTick':42, 'runtime':runtime, 'runtimeAfter':dict(runtime), 'files':{}, 'editorGameParentPid':100,
+                      'targetTick':42, 'minimumTick':40, 'identities':{'distinct':True,'subjectsAtSamePosition':True}, 'runtime':runtime, 'runtimeAfter':dict(runtime), 'files':{}, 'editorGameParentPid':100,
+                      'editorVersion':ENGINE_LOCK['version'],'editorBinary':{'version':ENGINE_LOCK['version'],'archiveSha256':ENGINE_LOCK['sha256'],'binarySha256':'8'*64},
                       'editor':{'nonce':self.nonce,'pid':100,'editor':True,'scene':'res://addons/aurion_bridge/authoring_entry.tscn'},
                       'receipt':{'tick':42,'worldId':'echoes-of-aurion-global','zoneId':'observatory_threshold','sourceRevision':self.revision,'receiptHash':'d'*64,'postStateHash':'e'*64},
                       'oracle':{'status':'MATCH','zoneId':'observatory_threshold','sourceRevision':self.revision,'requestedRange':{'fromTick':42,'toTick':42},'terminalReceiptHash':'d'*64,'finalStateHash':'e'*64}}
         self.observations = {}
         for name, source in [('aurion','aurion-web'), ('godot','godot-live-editor')]:
-            self.observations[name] = {'schema':'aurion.startup-view.observation.v1','source':source,'nonce':self.nonce,'captureIndex':1,
+            self.observations[name] = {'schema':'aurion.startup-view.observation.v1','source':source,'nonce':self.nonce,'minimumTick':40,'captureIndex':1,
                 'startedAtUtc':stamp,'capturedAtUtc':stamp,'connected':True,'viewportPx':[640,360],
                 'worldId':'echoes-of-aurion-global',
                 'worldVisible':True,
                 'snapshot':{'tick':42,'zoneId':'observatory_threshold','projectionDigest':'f'*64,'presenceCount':1,'mobCount':0},
                 'camera':{'positionMm':[0,5000,10000],'targetMm':[0,1600,0],'fovMilliDeg':58000},
-                'chunks':{'status':'APPLIED','count':1}, 'assets':{'rendered':2,'loading':0,'failed':0}}
+                'chunks':{'status':'APPLIED','count':9,'desiredCount':9,'pendingCount':0,'failedCount':0},
+                'player':{'visible':True,'renderedHeightMeters':1.8,'boneCount':30},
+                'npcs':{'visible':True,'renderedHeightMeters':1.8,'boneCount':30},
+                'assets':{'rendered':2,'loading':0,'failed':0}}
             colored_world(self.directory / (name + '.png'))
         self.observations['godot'].update({'pid':101,'worldVisible':True,'stale':False,'environmentPresent':True,'chunks':[{'worldId':'echoes-of-aurion-global'}],
             'actors':[{'entityId':'player:1','assetId':'glb_actual'}], 'actorCache':{'pending':0},'worldAssets':{'rendered':2,'pending':0}})
@@ -93,6 +97,23 @@ class StartupReportControls(unittest.TestCase):
         self.observations['aurion']['worldVisible'] = False
         self.assertIn('BROWSER_WORLD_OBSCURED_BY_LOADING_SCREEN', self.run_report()['issues'])
 
+    def test_partial_terrain_is_not_complete_even_after_one_applied_result(self):
+        for update in [{'count':1,'pendingCount':8}, {'failedCount':1}, {'desiredCount':None}]:
+            with self.subTest(update=update):
+                old = dict(self.observations['aurion']['chunks'])
+                self.observations['aurion']['chunks'].update(update)
+                self.assertIn('BROWSER_TERRAIN_INCOMPLETE',self.run_report()['issues'])
+                self.observations['aurion']['chunks'] = old
+
+    def test_missing_unloaded_or_hidden_browser_actor_fails(self):
+        for field in ['player','npcs']:
+            for value in [None, {}, {'visible':False,'renderedHeightMeters':1.8}, {'visible':True,'renderedHeightMeters':0}]:
+                with self.subTest(field=field,value=value):
+                    old = self.observations['aurion'][field]
+                    self.observations['aurion'][field] = value
+                    self.assertIn('BROWSER_ACTOR_MODELS_MISSING',self.run_report()['issues'])
+                    self.observations['aurion'][field] = old
+
     def test_separate_camera_asset_terrain_and_environment_diagnoses(self):
         native = self.observations['godot']
         native['camera']['fovMilliDeg'] = 75000
@@ -116,6 +137,21 @@ class StartupReportControls(unittest.TestCase):
     def test_receipt_and_oracle_must_be_the_actual_captured_tick(self):
         self.index['oracle']['requestedRange']['fromTick'] = 41
         self.assertIn('CANONICAL_RECEIPT_UNVERIFIED', self.run_report()['issues'])
+
+    def test_captured_tick_must_follow_the_same_bound_in_both_clients(self):
+        self.observations['godot']['minimumTick'] = 39
+        self.assertIn('CAPTURE_TICK_MISMATCH',self.run_report()['issues'])
+        self.observations['godot']['minimumTick'] = 40
+        self.index['minimumTick'] = 43
+        self.assertIn('CAPTURE_TICK_MISMATCH',self.run_report()['issues'])
+
+    def test_unverified_accounts_subject_position_or_editor_digest_cannot_pass(self):
+        self.index['identities']['distinct'] = False
+        self.assertIn('CAPTURE_IDENTITIES_UNVERIFIED',self.run_report()['issues'])
+        self.index['identities'] = {'distinct':True,'subjectsAtSamePosition':False}
+        self.assertIn('CAPTURE_SUBJECT_POSITION_MISMATCH',self.run_report()['issues'])
+        self.index['editorBinary']['binarySha256'] = 'bad'
+        self.assertIn('GODOT_EXECUTABLE_UNVERIFIED',self.run_report()['issues'])
 
     def test_different_canonical_projection_digest_fails(self):
         self.observations['godot']['snapshot']['projectionDigest'] = '9'*64

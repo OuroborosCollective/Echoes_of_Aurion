@@ -382,8 +382,9 @@ export default function AurionOpenWorldRuntime() {
             targetMm: [view.lookAtX, view.lookAtY, view.lookAtZ].map(v => Math.round(v * 1000)), fovMilliDeg: Math.round(engine!.camera.fov * 1000) },
           chunks: read(containerRef.current?.dataset.chunkProjection),
           assets: read(worldAssetsEvidenceRef.current?.dataset.presentation),
-          player: read(modelEvidenceRef.current?.dataset.presentation),
-          npcs: read(npcEvidenceRef.current?.dataset.presentation),
+          selfEntityId: "player:" + user!.id,
+          player: engine!.player.glbPresentationEvidence() ? { ...engine!.player.glbPresentationEvidence(), visible: engine!.player.rootGroup.visible } : null,
+          npcs: serviceNpcRef.current?.evidence() ? { ...serviceNpcRef.current.evidence(), visible: serviceNpcRef.current.group.visible } : null,
           timeOfDay: engine!.timeOfDay,
         };
       }, () => engine!.renderer.domElement);
