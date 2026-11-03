@@ -6,7 +6,7 @@ Aurion owns gameplay, persistence, NPC logic, quests, world edits, security and 
 
 - Scene tree, inherited PackedScenes, @tool and EditorUndoRedoManager: scene/house/prop editor, with changes emitted only as Aurion typed proposals.
 - Godot advanced GLB import, EditorScenePostImport, SkeletonProfileHumanoid, BoneMap, AnimationTree and BoneAttachment3D: rig retargeting, attack/walk/idle animation and equipment anchors instead of custom bone handling.
-- MultiMeshInstance3D, visibility ranges, Godot LOD and occlusion: large numbers of trees/props, but only confirmed world geometry and with measured Tab A9 performance.
+- MultiMeshInstance3D, visibility ranges, Godot LOD and occlusion: large numbers of trees/props, but only confirmed world geometry and with bounded render/resource work in the stated test environment; physical-device performance is optional.
 - NavigationServer3D, NavigationMesh and AStar3D: editor visualization or client presentation only; NPC decisions stay server-authoritative.
 - Built-in debugger, remote scene tree, profiler and performance monitors: real device evidence; a successful headless import does not prove tablet FPS or visuals.
 - Control, Theme, anchors and InputMap: native HUD and touch rather than a rebuilt menu system.
@@ -36,5 +36,5 @@ Aurion owns gameplay, persistence, NPC logic, quests, world edits, security and 
 1. License and immutable upstream SHA/digest, tested version, Godot ABI, editor-only vs Android ARM64 runtime distinction.
 2. A temporary isolated editor stage: stage-editor-tools.mjs; real Godot 4.7.2 editor import in aurion-godot-editor-toolbox-proof.yml; inspect original logs. No changes to production godot-client source or main Android export.
 3. Only recognized authored proposals may reach Aurion; source change -> reviewed PR -> actual focused CI -> independent readback. NEVER copy an entire demo app into canonical gameplay code.
-4. Keep evidence for red failing tests, true render pixels, native packaging readback, signed APK, physical Tab A9 FPS separately.
+4. Keep evidence for red failing tests, true render pixels, native packaging readback, signed APK separately; physical Tab A9 FPS is optional compatibility evidence, never a required gate.
 5. Existing G19 PR #1183 remains separate. At head 31b9a4033719a96229699eccc4267437c2327d09, native rendered synthetic test run 40319340743 PASS, but Android Terrain3D ARM64 packaged binary and physical Tab A9 are still UNVERIFIED. Godot reported resource leaks at shutdown.

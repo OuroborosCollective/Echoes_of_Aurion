@@ -98,7 +98,7 @@ Die Datenbankmigration und Serverrouten sind Auth-/Transportänderungen. Gamepla
 - Auth-Grenze: Preview-Bearer wird nicht zu nativer Refresh-Autorität; Browser-Logout und Native-Logout sind explizit getrennte Sitzungen.
 - Zonenticket: nur authentisierte native Sitzung kann ausstellen; Ablauf und zweiter Konsum scheitern.
 - WSS: erlaubter Produkt-Origin plus echtes Ticket; Origin allein, falsches Ticket und fehlendes Ticket scheitern.
-- Echte Android-Probe auf dem Samsung Galaxy Tab A9: Systembrowser → App Link → Session → Ticket → WSS-Welcome → Logout → geschützter Request scheitert.
+- Echte native Android-Probe mit Backend im ausgewiesenen Testsystem: Systembrowser → App Link → Session → Ticket → WSS-Welcome → Logout → geschützter Request scheitert. Physische Tab-A9-Kompatibilität ist optional.
 
 Die Produktionsprobe aus #833/#904 ist eine getrennte, revisionsgebundene Admin-/CI-Freigabekette. Sie liefert weder Spielerlogin noch native App-Sitzung und darf nicht als G09-Evidence wiederverwendet werden.
 

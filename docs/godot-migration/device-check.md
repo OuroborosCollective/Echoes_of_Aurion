@@ -2,15 +2,15 @@
 description: "Kurzer, datenschutzsicherer Gerätecheck für das Samsung Galaxy Tab A9 ohne Engine- oder Skriptarbeit."
 ---
 
-# Tab A9: Gerätecheck für den Owner
+# Tab A9: optionaler Gerätecheck
 
 ## Bereits erledigt
 
 Der Owner hat am 15.10.2026 **4 GB RAM** bestätigt. Für die Planung ist jetzt keine Installation, kein Skript und keine Godot-Einstellung nötig.
 
-## Einmaliger Check, wenn der erste APK-Kandidat bereitsteht
+## Freiwilliger Check bei einem passenden APK-Kandidaten
 
-Der Agent fordert diese Angaben erst an, wenn sie eine konkrete Build- oder Diagnoseentscheidung beeinflussen:
+Dieser Ablauf ist freiwillig und keine Abschlussvoraussetzung. Nur bei gewünschter physischer Kompatibilitätsdiagnose helfen diese Angaben:
 
 1. **Einstellungen → Tablet-Info** öffnen und Modellname sowie Modellnummer mitteilen.
 2. Unter **Softwareinformationen** die Android-Version nennen.
@@ -31,5 +31,5 @@ Der Agent erstellt APK, Profil, Diagnoseansicht, Messstart, Auswertung und GitHu
 - Die spätere Diagnoseansicht belegt Modell, OS, Renderer und Laufzeitwerte des konkreten Geräts.
 - Ein Emulator oder Desktoplauf wird als solcher markiert und ersetzt die physische Probe nicht.
 
-Die verbindlichen Grenzen und das Testszenario stehen im [Tab-A9-Zielprofil](tab-a9-profile.md).
+Die optionalen Referenzbudgets und das Testszenario stehen im [Tab-A9-Profil](tab-a9-profile.md); maßgeblich ist die [geräteunabhängige Abnahme](acceptance-policy.md).
 

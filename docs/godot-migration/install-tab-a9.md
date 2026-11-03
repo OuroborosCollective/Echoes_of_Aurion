@@ -4,6 +4,9 @@ description: "Aurion Preview auf dem Samsung Galaxy Tab A9 installieren und den 
 
 # Aurion Preview auf dem Tab A9
 
+Aktuelle Owner-Vorgabe vom 03.11.2026: [geräteunabhängige Abnahme](acceptance-policy.md). Physische Tab-A9-Tests und modellbezogene Leistungsbudgets sind optionale Referenzdaten und kein Abschluss-, Merge- oder Releasegate.
+
+
 Die erste Test-App zeigt die vorbereitete Startansicht. Anmeldung und Online-Spiel sind noch nicht verfügbar. Für den Owner sind weder Godot-Editor noch SDK, Terminal oder Inspector nötig.
 
 ## Installation

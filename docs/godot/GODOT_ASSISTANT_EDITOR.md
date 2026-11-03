@@ -95,7 +95,7 @@ need a tested signed app update when embedded in the client.
    read-only scene inspection, one explicitly approved scene edit, UndoRedo,
    project source diff and safe process teardown. Do not infer this from CI.
 5. Separately test G21's server plan/apply/receipt/GET sequence on an authorized
-   staging target, then two authenticated clients and physical Tab A9. Require
+   staging target, then two authenticated clients; physical-device compatibility is optional. Require
    exact SHA, asset provenance and independent runtime receipts before claiming
    a live multiplayer change. A green CI run cannot substitute for this.
 
