@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rename, rm, stat } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
-import { prepareCaptureProject, publicObservation, assertDistinctCaptureUsers, awaitDurableTick, verifyEditorExecutable } from './startup-capture-contract.mjs';
+import { prepareCaptureProject, publicObservation, assertDistinctCaptureUsers, awaitDurableTick, verifyEditorExecutable, readStartupRuntimeIdentity } from './startup-capture-contract.mjs';
 
 const output = resolve(process.argv[2] || '.aurion-parity');
 const origin = 'https://arelogic.space';
@@ -20,7 +20,6 @@ const index = { schema: 'aurion.startup-capture-index.v1', nonce, status: 'FAIL'
 let editor, browser, nativeBrowser, page, authPage;
 let failure = 'CAPTURE_PREFLIGHT_FAILED';
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
-const runtimeIdentity = value => Object.fromEntries(['status','revision','runtimeImageDigest'].map(key => [key, value[key]]));
 const atomic = async (name, value) => {
   const path = join(privateDir, name);
   await writeFile(path + '.tmp', JSON.stringify(value), { mode: 0o600 });
@@ -59,9 +58,7 @@ try {
   if (!/^[a-f0-9]{40}$/.test(process.env.AURION_EXPECTED_REVISION || '') || process.env.AURION_EXPECTED_REVISION !== index.sourceRevision) throw Error('CHECKOUT_REVISION_MISMATCH');
   if (execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim()) throw Error('CHECKOUT_NOT_CLEAN');
   failure = 'LIVE_HEALTH_UNAVAILABLE';
-  const healthResponse = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(10_000) });
-  if (!healthResponse.ok()) throw Error(failure);
-  index.runtime = runtimeIdentity(await healthResponse.json());
+  index.runtime = await readStartupRuntimeIdentity(`${origin}/healthz`, failure);
   if (index.runtime.revision !== index.sourceRevision) throw Error('LIVE_REVISION_MISMATCH');
   if (!/^sha256:[a-f0-9]{64}$/.test(index.runtime.runtimeImageDigest || '')) throw Error('LIVE_IMAGE_UNVERIFIED');
   failure = 'AUTHENTICATED_BROWSER_NOT_CONFIGURED';
@@ -188,9 +185,7 @@ try {
   // Keep only the independent receipt/evidence, never full player/account state.
   index.receipt = Object.fromEntries(['worldId','zoneId','tick','sourceRevision','receiptHash','postStateHash'].map(k => [k, recorded.receipt?.[k]]));
   index.oracle = Object.fromEntries(['status','zoneId','sourceRevision','requestedRange','terminalReceiptHash','finalStateHash'].map(k => [k, oracle[k]]));
-  const after = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(10_000) });
-  index.runtimeAfter = runtimeIdentity(await after.json());
-  if (!after.ok()) throw Error('LIVE_HEALTH_AFTER_CAPTURE_FAILED');
+  index.runtimeAfter = await readStartupRuntimeIdentity(`${origin}/healthz`, 'LIVE_HEALTH_AFTER_CAPTURE_FAILED');
   index.status = 'CAPTURED';
 } catch (error) {
   // Error messages may include URLs/callbacks. Only bounded symbolic codes leave

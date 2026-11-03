@@ -4,7 +4,27 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { prepareCaptureProject, publicObservation, assertDistinctCaptureUsers, awaitDurableTick, verifyEditorExecutable } from './startup-capture-contract.mjs';
+import { createServer } from 'node:http';
+import { prepareCaptureProject, publicObservation, assertDistinctCaptureUsers, awaitDurableTick, verifyEditorExecutable, readStartupRuntimeIdentity } from './startup-capture-contract.mjs';
+
+test('startup and after-capture health use real HTTP Response status with explicitly synthetic identity', async () => {
+  const identity = {status:'ok',revision:'a'.repeat(40),runtimeImageDigest:'sha256:'+'b'.repeat(64)};
+  const server = createServer((request, response) => {
+    response.writeHead(request.url === '/healthy' ? 200 : 503, {'Content-Type':'application/json'});
+    response.end(JSON.stringify({...identity,privateExtra:'must not leave health readback'}));
+  });
+  await new Promise((ok,fail)=>server.once('error',fail).listen(0,'127.0.0.1',ok));
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    for (const failure of ['LIVE_HEALTH_UNAVAILABLE','LIVE_HEALTH_AFTER_CAPTURE_FAILED']) {
+      assert.deepEqual(await readStartupRuntimeIdentity(origin+'/healthy',failure), identity);
+      await assert.rejects(readStartupRuntimeIdentity(origin+'/unavailable',failure), {message:failure});
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise((ok,fail)=>server.close(error=>error?fail(error):ok()));
+  }
+});
 
 test('private capture copy enables the actual bridge without changing source settings or copying editor cache', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'aurion-capture-contract-'));

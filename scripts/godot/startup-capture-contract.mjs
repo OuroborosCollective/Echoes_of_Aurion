@@ -3,6 +3,13 @@ import { basename, dirname, join } from 'node:path';
 import { createHmac, createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 
+export async function readStartupRuntimeIdentity(url, failure) {
+  const response = await fetch(url, {signal:AbortSignal.timeout(10_000)});
+  if (!response.ok) throw Error(failure);
+  const value = await response.json();
+  return Object.fromEntries(['status','revision','runtimeImageDigest'].map(key => [key, value[key]]));
+}
+
 export function assertDistinctCaptureUsers(web, native) {
   if (![web?.id,native?.id].every(id => Number.isSafeInteger(id) && id > 0)) throw Error('CAPTURE_IDENTITIES_UNVERIFIED');
   if (web.id === native.id) throw Error('CAPTURE_IDENTITIES_SUPERSEDE');
