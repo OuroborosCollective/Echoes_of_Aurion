@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { GlbRuntimeCatalog } from "../shared/glbImportContract";
+import { NPC_FALLBACK_DISPLAY_PREFIX, type GlbRuntimeCatalog } from "../shared/glbImportContract";
 import { aurionStarterVillageQuestNpcs } from "./aurionStarterVillageContract";
 import {
   QUEST_NPC_STANDARD_HUMANOID_ASSET_ID,
@@ -15,6 +15,28 @@ const catalog = (entries: unknown[] = []) =>
   ({ revision: "a".repeat(64), entries }) as unknown as GlbRuntimeCatalog;
 
 describe("G16 server-owned starter quest NPC visual contract", () => {
+  it("adds stable approved fallback choices while keeping older clients' audited model contract", () => {
+    const entries = ["b", "c", "d", "e"].map((hex, index) => ({
+      assetId: "approved_npc_variant_" + index, sha256: hex.repeat(64),
+      storageUrl: "/api/assets/glb/" + hex.repeat(64) + ".glb",
+      assetType: "character", purpose: "npc-fallback", targetKey: null,
+      displayName: NPC_FALLBACK_DISPLAY_PREFIX + " Variant " + index, lods: [],
+    }));
+    const output = projectQuestNpcVisuals(catalog(entries));
+    expect(output).toEqual(projectQuestNpcVisuals(catalog(entries.slice().reverse())));
+    expect(new Set(output.npcs.map(row => row.fallbackModel?.sha256)).size).toBeGreaterThan(1);
+    for (const row of output.npcs) {
+      expect(row.model.source).toBe("audited-standard");
+      expect(row.fallbackModel).toMatchObject({source: "approved-fallback"});
+      expect(entries.some(entry => entry.assetId === row.fallbackModel!.catalogAssetId && entry.sha256 === row.fallbackModel!.sha256)).toBe(true);
+      expect(row.position).toEqual(aurionStarterVillageQuestNpcs[row.npcId].position);
+    }
+    const assigned = {...entries[0], targetKey: "npc_lyra"};
+    expect(projectQuestNpcVisuals(catalog([assigned, ...entries.slice(1)])).npcs[0].fallbackModel).toBeUndefined();
+    const wrongPurpose = entries.map(entry => ({...entry, purpose: "player-public"}));
+    expect(projectQuestNpcVisuals(catalog(wrongPurpose)).npcs.every(row => !row.fallbackModel)).toBe(true);
+  });
+
   it("projects three distinct canonical NPCs with the audited default model", () => {
     const output = projectQuestNpcVisuals(catalog());
     expect(output.version).toBe(QUEST_NPC_VISUAL_VERSION);

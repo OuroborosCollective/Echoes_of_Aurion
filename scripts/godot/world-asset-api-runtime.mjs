@@ -37,6 +37,6 @@ process.stdout.write(output);
 assert.ifError(failure);
 assert.equal(timedOut, false);
 assert.equal(exit, 0, 'world asset API Godot runtime failed');
-assert.equal(calls, 5);
+assert.equal(calls, 7);
 assert.equal(leaked, false, 'redirect was followed');
 assert.match(output, /GODOT_WORLD_ASSET_HTTP_PASS/);

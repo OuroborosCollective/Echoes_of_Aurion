@@ -367,7 +367,14 @@ func supply_asset(sha: String, bytes: PackedByteArray, connection_id: String) ->
 	_refresh()
 	return true
 
-static func _inspect_glb(bytes: PackedByteArray) -> Dictionary:
+## Animated content has its own admission profile. Static-world callers retain
+## the default rejection of every skin/animation and never create actor state.
+static func inspect_actor_glb(bytes: PackedByteArray) -> Dictionary:
+	if bytes.size() > 8 * 1024 * 1024:
+		return {}
+	return _inspect_glb(bytes, true)
+
+static func _inspect_glb(bytes: PackedByteArray, animated: bool = false) -> Dictionary:
 	if bytes.size() < 28 or bytes.decode_u32(0) != 0x46546c67 or bytes.decode_u32(4) != 2 or bytes.decode_u32(8) != bytes.size():
 		return {}
 	var length := int(bytes.decode_u32(12))
@@ -383,7 +390,7 @@ static func _inspect_glb(bytes: PackedByteArray) -> Dictionary:
 	for field in ["nodes", "meshes", "accessors", "bufferViews", "images", "scenes", "buffers", "skins", "animations"]:
 		if data.has(field) and (typeof(data[field]) != TYPE_ARRAY or data[field].size() > 8192):
 			return {}
-	if data.get("images", []).size() > 32 or not data.get("skins", []).is_empty() or not data.get("animations", []).is_empty():
+	if data.get("images", []).size() > 32 or (not animated and (not data.get("skins", []).is_empty() or not data.get("animations", []).is_empty())):
 		return {}
 	# Godot also constructs unreferenced materials and resource descriptors while
 	# parsing. Source bytes and rendered triangle counts alone do not bound them.
@@ -411,7 +418,9 @@ static func _inspect_glb(bytes: PackedByteArray) -> Dictionary:
 			if extension not in supported:
 				return {}
 	var pixels := _image_budget(data, bytes, binary_offset + 8, binary_length)
-	var geometry := _geometry_budget(data)
+	var geometry := _geometry_budget(data, animated)
+	if animated and not _actor_rig_valid(data):
+		return {}
 	if pixels < 0 or geometry.is_empty():
 		return {}
 	var pending: Array = [data]
@@ -431,7 +440,18 @@ static func _inspect_glb(bytes: PackedByteArray) -> Dictionary:
 			for child in value:
 				if typeof(child) in [TYPE_ARRAY, TYPE_DICTIONARY]:
 					pending.append(child)
-	return {"pixels":pixels,"vertices":geometry.vertices,"materials":data.get("materials", []).size(),"triangles":geometry.triangles,"instances":geometry.instances,"surfaces":geometry.surfaces}
+	var costs := {"pixels":pixels,"vertices":geometry.vertices,"materials":data.get("materials", []).size(),"triangles":geometry.triangles,"instances":geometry.instances,"surfaces":geometry.surfaces}
+	if animated:
+		# Conservative decoded allocation: both source/working buffers, expanded
+		# accessor scalars and RGBA textures including their mip chain.
+		var decoded := binary_length * 2 + pixels * 6
+		var widths := {"SCALAR":1,"VEC2":2,"VEC3":3,"VEC4":4,"MAT2":4,"MAT3":9,"MAT4":16}
+		for accessor in data.get("accessors", []):
+			decoded += int(accessor.count) * int(widths[accessor.type]) * 4
+		if decoded > 64 * 1024 * 1024:
+			return {}
+		costs["decoded"] = decoded
+	return costs
 
 ## Matches the server's bounded GLB buffer/accessor contract, with the glTF
 ## alignment and padded matrix rules checked before Godot's native decoder.
@@ -496,7 +516,7 @@ static func _buffer_accessors_valid(data: Dictionary, binary_length: int) -> boo
 
 ## Budget what the active glTF scene actually instantiates, not merely the
 ## shared mesh definitions. Reject animated/morph content for static world art.
-static func _geometry_budget(data: Dictionary) -> Dictionary:
+static func _geometry_budget(data: Dictionary, animated: bool = false) -> Dictionary:
 	var meshes: Variant = data.get("meshes", [])
 	var accessors: Variant = data.get("accessors", [])
 	var nodes: Variant = data.get("nodes", [])
@@ -516,11 +536,23 @@ static func _geometry_budget(data: Dictionary) -> Dictionary:
 			if typeof(position) != TYPE_DICTIONARY or not _whole(position.get("count"), 1, 250000) or position.get("type") != "VEC3":
 				return {}
 			var types := {"POSITION":["VEC3"],"NORMAL":["VEC3"],"TANGENT":["VEC4"],"TEXCOORD_0":["VEC2"],"TEXCOORD_1":["VEC2"],"COLOR_0":["VEC3","VEC4"]}
+			if animated:
+				types.merge({"JOINTS_0":["VEC4"], "WEIGHTS_0":["VEC4"]})
+				# Approved rigs use extra UV sets for material layers. Their
+				# accessors remain covered by the same decoded-memory budget.
+				for uv in range(2, 8):
+					types["TEXCOORD_" + str(uv)] = ["VEC2"]
+				if primitive.attributes.has("JOINTS_0") != primitive.attributes.has("WEIGHTS_0"):
+					return {}
 			for attribute in primitive.attributes:
-				if attribute not in ["POSITION", "NORMAL", "TANGENT", "TEXCOORD_0", "TEXCOORD_1", "COLOR_0"] or not _whole(primitive.attributes[attribute], 0, accessors.size() - 1):
+				if not types.has(attribute) or not _whole(primitive.attributes[attribute], 0, accessors.size() - 1):
 					return {}
 				var accessor: Variant = accessors[int(primitive.attributes[attribute])]
 				if typeof(accessor) != TYPE_DICTIONARY or not _whole(accessor.get("count"), int(position.count), int(position.count)) or accessor.get("type") not in types[attribute]:
+					return {}
+				if attribute == "JOINTS_0" and (int(accessor.componentType) not in [5121,5123] or accessor.get("normalized",false)):
+					return {}
+				if attribute == "WEIGHTS_0" and not (int(accessor.componentType) == 5126 or (int(accessor.componentType) in [5121,5123] and accessor.get("normalized",false))):
 					return {}
 			vertices += int(position.count)
 			var count: int = int(position.count)
@@ -558,7 +590,7 @@ static func _geometry_budget(data: Dictionary) -> Dictionary:
 		var index := int(raw)
 		seen[index] = true
 		var node: Variant = nodes[index]
-		if typeof(node) != TYPE_DICTIONARY or node.has("skin") or node.has("weights"):
+		if typeof(node) != TYPE_DICTIONARY or (node.has("skin") and not animated) or node.has("weights"):
 			return {}
 		if node.has("mesh"):
 			if not _whole(node.mesh, 0, mesh_costs.size() - 1):
@@ -578,6 +610,70 @@ static func _geometry_budget(data: Dictionary) -> Dictionary:
 	# Godot imports every mesh definition, including ones outside this scene.
 	# Reject unused definitions so their decoded arrays are also budgeted.
 	return {"vertices":scene_vertices,"triangles":scene_triangles,"instances":instances,"surfaces":scene_surfaces} if instances > 0 and scene_triangles > 0 and used_meshes.size() == mesh_costs.size() else {}
+
+## Bound rig and keyframe allocations before the native glTF decoder. Skins
+## and clips are presentation data; no callbacks, scripts or external URIs.
+static func _actor_rig_valid(data: Dictionary) -> bool:
+	var nodes: Array = data.get("nodes", [])
+	var accessors: Array = data.get("accessors", [])
+	var skins: Array = data.get("skins", [])
+	var animations: Array = data.get("animations", [])
+	if skins.is_empty() or skins.size() > 8 or animations.is_empty() or animations.size() > 64:
+		return false
+	var bone_count := 0
+	for skin in skins:
+		if typeof(skin) != TYPE_DICTIONARY or typeof(skin.get("joints")) != TYPE_ARRAY or skin.joints.is_empty():
+			return false
+		bone_count += skin.joints.size()
+		if bone_count > 128:
+			return false
+		var seen: Dictionary = {}
+		for joint in skin.joints:
+			if not _whole(joint, 0, nodes.size() - 1) or seen.has(int(joint)):
+				return false
+			seen[int(joint)] = true
+		if skin.has("skeleton") and not _whole(skin.skeleton, 0, nodes.size() - 1):
+			return false
+		if skin.has("inverseBindMatrices"):
+			if not _whole(skin.inverseBindMatrices, 0, accessors.size() - 1):
+				return false
+			var matrices: Dictionary = accessors[int(skin.inverseBindMatrices)]
+			if matrices.type != "MAT4" or int(matrices.componentType) != 5126 or int(matrices.count) != skin.joints.size():
+				return false
+	for node in nodes:
+		if typeof(node) != TYPE_DICTIONARY:
+			return false
+		if node.has("skin") and (not _whole(node.skin, 0, skins.size() - 1) or not node.has("mesh")):
+			return false
+	var keys := 0
+	var channels := 0
+	for animation in animations:
+		if typeof(animation) != TYPE_DICTIONARY or typeof(animation.get("channels")) != TYPE_ARRAY or typeof(animation.get("samplers")) != TYPE_ARRAY or animation.channels.is_empty() or animation.samplers.is_empty() or animation.samplers.size() > 1024:
+			return false
+		channels += animation.channels.size()
+		if channels > 4096:
+			return false
+		for sampler in animation.samplers:
+			if typeof(sampler) != TYPE_DICTIONARY or not _whole(sampler.get("input"), 0, accessors.size() - 1) or not _whole(sampler.get("output"), 0, accessors.size() - 1) or sampler.get("interpolation", "LINEAR") not in ["LINEAR", "STEP", "CUBICSPLINE"]:
+				return false
+			var input: Dictionary = accessors[int(sampler.input)]
+			var output: Dictionary = accessors[int(sampler.output)]
+			var factor := 3 if sampler.get("interpolation", "LINEAR") == "CUBICSPLINE" else 1
+			if input.type != "SCALAR" or int(input.componentType) != 5126 or int(output.componentType) != 5126 or int(output.count) != int(input.count) * factor:
+				return false
+			keys += int(output.count)
+			if keys > 250000:
+				return false
+		for channel in animation.channels:
+			if typeof(channel) != TYPE_DICTIONARY or not _whole(channel.get("sampler"), 0, animation.samplers.size() - 1) or typeof(channel.get("target")) != TYPE_DICTIONARY:
+				return false
+			var target: Dictionary = channel.target
+			if not _whole(target.get("node"), 0, nodes.size() - 1) or target.get("path") not in ["translation", "rotation", "scale"]:
+				return false
+			var output: Dictionary = accessors[int(animation.samplers[int(channel.sampler)].output)]
+			if output.type != ("VEC4" if target.path == "rotation" else "VEC3"):
+				return false
+	return true
 
 ## Reject implausibly large embedded textures before Godot decompresses them.
 ## This is a rendering budget, not a claim of physical-device performance.

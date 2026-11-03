@@ -5,7 +5,10 @@ const STANDARD_ASSET := "glb_2f447361e6ba5e6e38d8b38c19b78773a0d62fcf80e771d3"
 const VERSION := "aurion.quest-npc-visuals.v1"
 const PREPARED_VERSION := "aurion.godot-prepared-assets.v1"
 const ModularVisual = preload("res://actors/modular_npc_visual.gd")
+const CatalogModels = preload("res://actors/catalog_model_cache.gd")
+const Clips = preload("res://actors/animation_clips.gd")
 var diagnostic := "npc_not_loaded"
+var contract_rejected := false
 var _actors: Dictionary = {}
 var _identities: Dictionary = {}
 
@@ -57,22 +60,27 @@ func clear(root: Node3D) -> void:
 
 func _reject(root: Node3D, reason: String) -> bool:
 	clear(root)
+	contract_rejected = true
 	diagnostic = reason
 	return false
 
-func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
+func apply(root: Node3D, response: Variant, manifest: Variant, cache: Variant = null, catalog: Dictionary = {}) -> bool:
+	contract_rejected = false
 	if typeof(response) != TYPE_DICTIONARY or response.get("version") != VERSION or response.get("zoneId") != "observatory_threshold" or response.get("stateSource") != "aurion-canonical-quest-anchors" or not _hex(response.get("catalogRevision"), 64):
 		return _reject(root, "npc_contract_invalid")
 	var rows: Variant = response.get("npcs")
 	if typeof(rows) != TYPE_ARRAY or rows.is_empty() or rows.size() > 32:
 		return _reject(root, "npc_rows_invalid")
 	var planned: Dictionary = {}
+	var seen: Dictionary = {}
+	var waiting := false
 	for raw in rows:
 		if typeof(raw) != TYPE_DICTIONARY or not _npc_id(raw.get("npcId")) or raw.get("entityId") != "npc:" + str(raw.get("npcId")) or typeof(raw.get("displayName")) != TYPE_STRING:
 			return _reject(root, "npc_identity_invalid")
 		var id: String = raw.entityId
-		if planned.has(id):
+		if seen.has(id):
 			return _reject(root, "npc_duplicate_identity")
+		seen[id] = true
 		var coords: Variant = raw.get("position")
 		var model: Variant = raw.get("model")
 		if typeof(coords) != TYPE_DICTIONARY or not _mm(coords.get("x")) or not _mm(coords.get("z")) or typeof(model) != TYPE_DICTIONARY:
@@ -87,14 +95,46 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 				return _reject(root, "npc_standard_identity_invalid")
 		elif source != "approved-assignment":
 			return _reject(root, "npc_asset_source_invalid")
+		if cache != null and not cache.admits(id):
+			continue
 		var local: String = _local_path(manifest, str(sha))
-		if local.is_empty():
-			return _reject(root, "npc_prepared_model_missing")
+		var streamed: Dictionary = {}
+		var selected: Dictionary = model
+		var fallback: Variant = raw.get("fallbackModel")
+		if source == "audited-standard" and fallback != null:
+			if typeof(fallback) != TYPE_DICTIONARY or fallback.get("source") != "approved-fallback" or not _hex(fallback.get("sha256"), 64) or typeof(fallback.get("catalogAssetId")) != TYPE_STRING:
+				return _reject(root, "npc_fallback_invalid")
+			selected = fallback
+		if cache != null and catalog.get("revision") == response.catalogRevision:
+			var matches: Array = []
+			for entry in catalog.get("entries", []):
+				if typeof(entry) == TYPE_DICTIONARY and entry.get("assetId") == selected.catalogAssetId and entry.get("sha256") == selected.sha256 and entry.get("assetType") == "character" and entry.get("purpose") == "npc-fallback" and entry.get("targetKey") == (null if selected.get("source") == "approved-fallback" else "npc_" + str(raw.npcId)):
+					matches.append(entry)
+			if matches.size() > 1:
+				return _reject(root, "npc_catalog_ambiguous")
+			if matches.size() == 1:
+				streamed = cache.request(matches[0], id, "Idle")
+		var normalization: Dictionary = {}
+		var packed: PackedScene
+		if streamed.get("status") == "resolved":
+			packed = streamed.packedScene
+			local = streamed.resourcePath
+			sha = streamed.sha256
+			catalog_asset_id = streamed.catalogAssetId
+			normalization = streamed.normalization
+		elif local.is_empty():
+			# A failed download must not erase all other confirmed quest anchors.
+			# The shipped standard rig is already the server's audited fallback.
+			local = _local_path(manifest, STANDARD_SHA)
+			sha = STANDARD_SHA
+			waiting = true
+			if local.is_empty():
+				continue
 		var position := Vector3(float(coords.x) / 1000.0, 0.0, float(coords.z) / 1000.0)
-		planned[id] = {"resource": local, "assetId": catalog_asset_id, "sha": sha,
+		planned[id] = {"resource": local, "packedScene":packed,"normalization":normalization,"assetId": catalog_asset_id, "sha": sha,
 			"npcId": raw.npcId, "position": position, "displayName": raw.displayName,
-			"allowModular": source == "audited-standard",
-			"identityBase": str(source) + ":" + str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z) + ":" + str(raw.displayName)}
+			"allowModular": source == "audited-standard" and packed == null,
+			"identityBase": local + ":" + str(normalization.get("manifestSha256", "")) + ":" + str(source) + ":" + str(catalog_asset_id) + ":" + str(sha) + ":" + str(coords.x) + ":" + str(coords.z) + ":" + str(raw.displayName)}
 	# Validate every server row before mounting optional content. One snapshot
 	# suffices for identity; create() rechecks at each actual instantiation.
 	var has_modular_candidate := false
@@ -110,12 +150,12 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 				unchanged = false
 				break
 	if unchanged:
-		diagnostic = ""
+		diagnostic = "NPC-GLB wird geladen; Standardmodell sichtbar" if waiting else ""
 		return true
 	clear(root)
 	for id in planned.keys():
 		var item: Dictionary = planned[id]
-		var packed: PackedScene = load(item.resource) as PackedScene
+		var packed: PackedScene = item.packedScene if item.packedScene != null else load(item.resource) as PackedScene
 		if packed == null:
 			return _reject(root, "npc_packed_scene_missing")
 		var modular: Node3D = ModularVisual.create(str(id), str(item.displayName)) if item.allowModular and modular_available else null
@@ -152,6 +192,7 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		actor.set_meta("aurion_catalog_asset_id", item.assetId)
 		root.add_child(actor)
 		_actors[id] = actor
+		model_instance = CatalogModels.normalize_model(model_instance, item.normalization)
 		actor.add_child(model_instance)
 		var clips := actor.find_children("*", "AnimationPlayer", true, false)
 		var meshes := actor.find_children("*", "MeshInstance3D", true, false)
@@ -180,20 +221,44 @@ func apply(root: Node3D, response: Variant, manifest: Variant) -> bool:
 		if clips.size() != 1 or meshes.is_empty():
 			return _reject(root, "npc_model_rig_invalid")
 		var player: AnimationPlayer = clips[0]
-		if not player.has_animation("Idle"):
+		var idle: String = Clips.resolve(player, "Idle")
+		if idle.is_empty() and item.packedScene != null:
+			# A valid catalog rig need not have a recognizable idle clip. Keep
+			# this confirmed NPC on the audited standard without erasing peers.
+			cache.reject_pose(str(item.sha), "Idle")
+			actor.remove_child(model_instance)
+			model_instance.free()
+			var standard_path := _local_path(manifest, STANDARD_SHA)
+			var standard: PackedScene = load(standard_path) as PackedScene if not standard_path.is_empty() else null
+			if standard == null:
+				return _reject(root, "npc_standard_model_missing")
+			model_instance = standard.instantiate()
+			actor.add_child(model_instance)
+			clips = actor.find_children("*", "AnimationPlayer", true, false)
+			if clips.size() != 1:
+				return _reject(root, "npc_standard_rig_invalid")
+			player = clips[0]
+			idle = Clips.resolve(player, "Idle")
+			actor.set_meta("aurion_model_sha256", STANDARD_SHA)
+			actor.set_meta("aurion_catalog_asset_id", STANDARD_ASSET)
+			waiting = true
+		if idle.is_empty():
 			return _reject(root, "npc_idle_missing")
 		if modular == null:
 			for name in player.get_animation_library_list():
 				var library := player.get_animation_library(name).duplicate(true) as AnimationLibrary
 				player.remove_animation_library(name)
 				player.add_animation_library(name, library)
-				if library.has_animation("Idle"):
-					library.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
-			player.play("Idle")
+				for clip_name in library.get_animation_list():
+					var qualified: String = str(name) + "/" + str(clip_name) if not str(name).is_empty() else str(clip_name)
+					if qualified == idle:
+						library.get_animation(clip_name).loop_mode = Animation.LOOP_LINEAR
+			player.play(idle)
+			player.advance(0.0)
 		actor.visible = true
 		_identities[id] = item.identity
-	diagnostic = ""
-	return true
+	diagnostic = "NPC-GLB wird geladen; Standardmodell sichtbar" if waiting else ""
+	return not planned.is_empty()
 
 func visible_count() -> int:
 	var count := 0

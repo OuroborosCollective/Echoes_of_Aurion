@@ -2,6 +2,9 @@ extends Node3D
 ## Presentation only. The caller resolves an approved catalog model; this module
 ## never selects/equips assets, sends commands or changes confirmed Aurion state.
 const Registry = preload("res://projection/entity_registry.gd")
+const CatalogModels = preload("res://actors/catalog_model_cache.gd")
+const Clips = preload("res://actors/animation_clips.gd")
+var _clips: Dictionary = {}
 var entity_id := ""
 var asset_id := ""
 var diagnostic := "unbound"
@@ -13,7 +16,7 @@ var _seq := -1
 var _dead := false
 var _pose := ""
 
-func bind_confirmed(world: Variant, id: String, catalog_asset_id: String, packed: PackedScene) -> bool:
+func bind_confirmed(world: Variant, id: String, catalog_asset_id: String, packed: PackedScene, normalization: Dictionary = {}) -> bool:
 	if not entity_id.is_empty() or world == null or not world.has_state() or packed == null or catalog_asset_id.is_empty():
 		return false
 	var registry := Registry.new()
@@ -30,15 +33,18 @@ func bind_confirmed(world: Variant, id: String, catalog_asset_id: String, packed
 		model.free()
 		diagnostic = "animation_player_missing_or_ambiguous"
 		return false
-	_model = model
+	_model = CatalogModels.normalize_model(model, normalization)
 	_player = players[0]
+	for pose in ["Idle", "Walk", "Death"]:
+		_clips[pose] = Clips.resolve(_player, pose)
 	# Per-instance libraries: loop configuration cannot mutate shared imports.
 	for library_name in _player.get_animation_library_list():
 		var library := _player.get_animation_library(library_name).duplicate(true) as AnimationLibrary
 		_player.remove_animation_library(library_name)
 		_player.add_animation_library(library_name, library)
 		for clip in library.get_animation_list():
-			library.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if clip in ["Idle", "Walk"] else Animation.LOOP_NONE
+			var qualified: String = str(library_name) + "/" + str(clip) if not str(library_name).is_empty() else str(clip)
+			library.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if qualified in [_clips.Idle, _clips.Walk] else Animation.LOOP_NONE
 	entity_id = id
 	asset_id = catalog_asset_id
 	_connection = world.connection_id()
@@ -83,13 +89,15 @@ func project(world: Variant, interpolation: Variant, now_ms: int) -> bool:
 		_confirmed = confirmed.duplicate(true)
 		_seq = world.last_seq()
 	var moving: bool = point.distance_to(Vector2(confirmed["x"], confirmed["z"])) > 0.5
-	var clip := "Death" if _dead else ("Walk" if moving else "Idle")
-	diagnostic = "" if _player.has_animation(clip) else "missing_clip:" + clip
+	var pose := "Death" if _dead else ("Walk" if moving else "Idle")
+	var clip: String = _clips.get(pose, "")
+	diagnostic = "" if not clip.is_empty() else "missing_clip:" + pose
 	if _pose != clip:
 		if not _player.has_animation(clip):
 			_player.stop()
 		else:
 			_player.play(clip)
+			_player.advance(0.0)
 		_pose = clip
 	# Imported root/bone animation remains below this world-position wrapper.
 	position = Vector3(point.x / 1000.0, 0.0, point.y / 1000.0)
@@ -112,5 +120,6 @@ func clear() -> void:
 	_seq = -1
 	_dead = false
 	_pose = ""
+	_clips.clear()
 	visible = false
 	diagnostic = "unbound"

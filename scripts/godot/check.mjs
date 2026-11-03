@@ -30,6 +30,8 @@ async function stage(id, layer, file, args, marker) {
 const project = join(repo, 'godot-client');
 const godot = (...args) => ['--headless', '--path', project, ...args];
 await stage('doctor', 'static', process.execPath, ['scripts/godot/doctor.mjs'], '"editor": "ready"');
+await stage('prepare-native-actor-assets', 'static', process.execPath,
+  ['scripts/godot/prepare-assets.mjs'], '"manifest":"godot-client/assets/generated/manifest.json"');
 await stage('import', 'headless', executable, godot('--editor', '--import'));
 await stage('knowledge-doc-editor-smoke', 'headless', process.execPath,
   ['scripts/godot/knowledge-helper-editor-smoke.mjs', executable, project],
@@ -70,6 +72,7 @@ for (const [id, script, marker] of [
   ['g22-native-hud', 'test_hud_projection.gd', 'G22_NATIVE_HUD_PROJECTION_TOUCH_PASS (synthetic fixtures; no physical device)'],
   ['world-design-projection', 'test_world_design_projection.gd', 'GODOT_WORLD_DESIGN_PROJECTION_PASS'],
   ['starter-city-wall-scale', 'test_starter_city_wall.gd', 'GODOT_STARTER_CITY_WALL_SCALE_PASS'],
+  ['actor-catalog-import', 'test_actor_catalog_import.gd', 'GODOT_ACTOR_CATALOG_IMPORT_PASS'],
   ['world-glb-structure', 'test_world_glb_structure.gd', 'GODOT_WORLD_GLB_STRUCTURE_PASS'],
   ['world-design-active-scene', 'test_world_design_scene.gd', 'GODOT_WORLD_DESIGN_ACTIVE_SCENE_PASS'],
   ['world-design-large-readback', 'test_world_design_large_readback.gd', 'GODOT_WORLD_DESIGN_LARGE_READBACK_PASS'],

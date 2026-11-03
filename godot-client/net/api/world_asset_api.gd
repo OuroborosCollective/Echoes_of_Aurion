@@ -12,9 +12,11 @@ var _epoch := 0
 var _connection := ""
 var _generation := -1
 var _sha := ""
+var _max_bytes := MAX_BYTES
 
-func _init(auth: Node) -> void:
+func _init(auth: Node, max_bytes: int = MAX_BYTES) -> void:
 	_auth = auth
+	_max_bytes = clampi(max_bytes, 1, MAX_BYTES)
 
 func busy() -> bool:
 	return _active
@@ -41,7 +43,7 @@ func request_asset(base_url: String, request: Dictionary, connection_id: String,
 	_epoch += 1
 	var epoch := _epoch
 	_http = HTTPRequest.new()
-	_http.body_size_limit = MAX_BYTES
+	_http.body_size_limit = _max_bytes
 	_http.max_redirects = 0
 	_http.timeout = 15.0
 	add_child(_http)
@@ -59,7 +61,7 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 		_fail("WORLD_ASSET_SESSION_CHANGED")
 		return
 	if result != HTTPRequest.RESULT_SUCCESS:
-		_fail("WORLD_ASSET_REQUEST_FAILED")
+		_fail("WORLD_ASSET_TOO_LARGE" if result == HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED else "WORLD_ASSET_REQUEST_FAILED")
 		return
 	var valid_type := false
 	for header in headers:
@@ -71,7 +73,7 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 				mime = mime.substr(0, separator).strip_edges()
 			valid_type = mime in ["model/gltf-binary", "application/octet-stream"]
 			break
-	if code != 200 or not valid_type or body.is_empty() or body.size() > MAX_BYTES:
+	if code != 200 or not valid_type or body.is_empty() or body.size() > _max_bytes:
 		_fail("WORLD_ASSET_RESPONSE_INVALID")
 		return
 	var connection := _connection
