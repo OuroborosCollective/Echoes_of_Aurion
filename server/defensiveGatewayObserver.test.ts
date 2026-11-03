@@ -4,6 +4,7 @@ import { once } from "node:events";
 import WebSocket from "ws";
 import { describe, expect, it, vi } from "vitest";
 import { DefensiveGatewayObserver, type GatewayObservation } from "./defensiveGatewayObserver";
+import { createCorsMiddleware } from "./_core/corsMiddleware";
 import { registerZoneGateway } from "./zoneGateway";
 import { ZoneRegistry, AuthoritativeMovementZone } from "./zoneRuntime";
 import { AurionTickRecorder } from "./causality/tickRecorder";
@@ -23,14 +24,29 @@ describe("observe-only gateway telemetry", () => {
     const app = express(); app.use(observer.httpMiddleware); app.use((_req, res) => res.status(204).end());
     const server = createServer(app); const port = await listen(server);
     try {
-      for (const path of ["/api/native-auth/start?secret=private-value", "/api/oauth/start", "/api/trpc/auth.loginLocal", "/api/admin/test", "/healthz", "/api/administer"]) {
+      for (const path of ["/api/native-auth/start?secret=private-value", "/api/oauth/start", "/api/trpc/auth.loginLocal", "/api/trpc/auth.loginLocal,player.profile?batch=1", "/API/TRPC/auth.loginLocal", "/api/admin/test", "/healthz", "/api/administer"]) {
         const response = await fetch(`http://127.0.0.1:${port}${path}`, { headers: { authorization: "Bearer private-token", cookie: "session=private-cookie", "x-forwarded-for": "198.51.100.17" } });
         expect(response.status).toBe(204);
       }
       observer.flush();
-      expect(events[0].http).toEqual({ nativeAuth: 1, browserAuth: 2, admin: 1 });
+      expect(events[0].http).toEqual({ nativeAuth: 1, browserAuth: 4, admin: 1 });
       expect(JSON.stringify(events)).not.toMatch(/private|198\.51|start\?|cookie|Bearer/);
       observer.flush(); expect(events[1].http).toEqual({ nativeAuth: 0, browserAuth: 0, admin: 0 });
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+
+  it("records rejected HTTP origins while preserving preflight behavior", async () => {
+    const events: GatewayObservation[] = []; const observer = new DefensiveGatewayObserver(true, event => events.push(event));
+    const app = express(); app.use(observer.httpMiddleware); app.use(createCorsMiddleware(observer, "https://arelogic.space")); app.use((_req,res)=>res.sendStatus(204));
+    const server = createServer(app); const port = await listen(server);
+    try {
+      const url = `http://127.0.0.1:${port}/api/oauth/start`;
+      const rejected = await fetch(url, { method:"OPTIONS", headers:{ origin:"https://untrusted.invalid" } });
+      const allowed = await fetch(url, { method:"OPTIONS", headers:{ origin:"https://arelogic.space" } });
+      expect(rejected.status).toBe(403); expect(allowed.status).toBe(204);
+      expect(allowed.headers.get("access-control-allow-origin")).toBe("https://arelogic.space");
+      observer.flush(); expect(events[0].deniedOrigins.http).toBe(1); expect(events[0].http.browserAuth).toBe(2);
+      expect(JSON.stringify(events)).not.toContain("untrusted.invalid");
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 
@@ -70,6 +86,28 @@ describe("observe-only gateway telemetry", () => {
       releaseTicket(); first.terminate(); second.terminate(); gateway.close();
       await new Promise<void>(resolve => server.close(() => resolve()));
     }
+  });
+
+  it("counts rejected WebSocket origins and records bounded duration buckets without request data", async () => {
+    const events: GatewayObservation[] = [];
+    let clock = 100;
+    const observer = new DefensiveGatewayObserver(true, event => events.push(event), () => clock);
+    observer.observeOutbound(900, false); observer.observeOutbound(1200, true);
+    const end1 = observer.beginHandshake(); clock += 200; end1("completed");
+    const end2 = observer.beginHandshake(); clock += 800; end2("closed");
+    const end3 = observer.beginHandshake(); clock += 3000; end3("completed");
+    const end4 = observer.beginHandshake(); clock += 6000; end4("closed");
+    const server = createServer();
+    const gateway = registerZoneGateway(server, new ZoneRegistry(), async () => undefined, undefined, undefined, undefined, observer);
+    const port = await listen(server);
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`, { origin: "https://attacker.invalid" });
+    try {
+      await new Promise<void>(resolve => { socket.once("error", () => resolve()); });
+      await vi.waitFor(() => { observer.flush(); expect(events.some(event => event.deniedOrigins.websocket === 1)).toBe(true); });
+      expect(events[0].outbound).toEqual({ peakBufferedBytes: 1200, terminated: 1 });
+      expect(events[0].handshakes.durations).toEqual({ under250ms: 1, under1s: 1, under5s: 1, over5s: 1 });
+      expect(JSON.stringify(events)).not.toContain("attacker.invalid");
+    } finally { socket.terminate(); gateway.close(); await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 
   it("is off by default when constructed disabled and tolerates sink failures", () => {

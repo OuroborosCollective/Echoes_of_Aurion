@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { COOKIE_NAME } from "../shared/const";
 import { createContext, type TrpcContext } from "./_core/context";
 import { hashLocalPassword } from "./localAuth";
+import { authBodyLimit } from "./_core/authBodyLimit";
 
 const database = vi.hoisted(() => ({
   clearLocalAuthFailures: vi.fn(),
@@ -86,7 +87,8 @@ describe("Aurion local account router", () => {
   it("serializes an unknown local handle as tRPC JSON instead of an HTML fallback", async () => {
     database.getLocalCredential.mockResolvedValue(undefined);
     const app = express();
-    app.use(express.json());
+    app.use(authBodyLimit());
+    app.use(express.json({ limit: "50mb" }));
     app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
 
     const server = app.listen(0, "127.0.0.1");

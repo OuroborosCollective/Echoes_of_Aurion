@@ -1,3 +1,4 @@
+import { sendZoneMessage } from "./zoneOutboundPressure";
 import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
@@ -897,7 +898,7 @@ export class AuthoritativeMovementZone {
 
   private broadcastCombat(event: ConfirmedZoneCombatEvent): void {
     const serialized = serialize(event);
-    for (const peer of this.peers.values()) if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized);
+    for (const peer of this.peers.values()) sendZoneMessage(peer.socket, serialized);
   }
 
   private refreshPeerOrder(): void {
@@ -953,7 +954,7 @@ export class AuthoritativeMovementZone {
       resources: this.resourceRuntime.snapshot(this.tickNumber),
     };
     const serialized = serialize(snapshot);
-    for (const peer of this.peers.values()) if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized);
+    for (const peer of this.peers.values()) sendZoneMessage(peer.socket, serialized);
   }
 }
 
