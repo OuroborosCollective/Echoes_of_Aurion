@@ -249,6 +249,19 @@ async function verifyStoredIndex(tx:NpcTransaction,row:GraphRow,graph:NpcSemanti
   const expected=indexRows(row.id,graph);
   if(stableCatalogStringify(stripCreated(index))!==stableCatalogStringify(expected)) throw new Error("NPC_SEMANTIC_GRAPH_V2_INDEX_READBACK_MISMATCH");
 }
+/**
+ * Graph receipts form one hash chain per capsule pin. Rows written under an
+ * earlier pin cannot be re-verified with the current authority, so they stay an
+ * immutable historical chain: never a predecessor, never served as verified.
+ */
+function currentPinGraphRows(npcId:string){
+  return and(
+    eq(aurionSemanticGraphReceiptsV2.npcId,npcId),
+    eq(aurionSemanticGraphReceiptsV2.sourceRevision,pin.sourceRevision),
+    eq(aurionSemanticGraphReceiptsV2.sourceSha256,pin.sourceSha256),
+    eq(aurionSemanticGraphReceiptsV2.capsuleManifestSha256,pin.manifestSha256),
+  );
+}
 function verifyGraphRowEnvelope(row:GraphRow):void{
   assertPin();
   if(row.sourceRevision!==pin.sourceRevision||row.sourceSha256!==pin.sourceSha256||row.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_DRIFT");
@@ -289,7 +302,7 @@ async function verifiedGraphFromRow(
 
   const prior=(await tx.select().from(aurionSemanticGraphReceiptsV2)
     .where(and(
-      eq(aurionSemanticGraphReceiptsV2.npcId,row.npcId),
+      currentPinGraphRows(row.npcId),
       lt(aurionSemanticGraphReceiptsV2.generation,row.generation),
     ))
     .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
@@ -326,7 +339,7 @@ export async function appendNpcSemanticGraphV2(
   if(memory.row.sourceRevision!==pin.sourceRevision||memory.row.sourceSha256!==pin.sourceSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_MEMORY_SOURCE_DRIFT");
 
   const latest=(await tx.select().from(aurionSemanticGraphReceiptsV2)
-    .where(eq(aurionSemanticGraphReceiptsV2.npcId,memory.row.npcId))
+    .where(currentPinGraphRows(memory.row.npcId))
     .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
   if(latest&&latest.generation>memory.row.resolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_V2_GENERATION_REGRESSION");
   if(latest&&latest.generation===memory.row.resolutionIndex){
@@ -375,7 +388,8 @@ export async function appendNpcSemanticGraphV2(
 }
 
 export async function readVerifiedNpcSemanticGraphV2(tx:NpcTransaction,npcId:string){
-  const row=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(eq(aurionSemanticGraphReceiptsV2.npcId,npcId))
+  assertPin();
+  const row=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(currentPinGraphRows(npcId))
     .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
   return row?verifiedGraphFromRow(tx,row):null;
 }
@@ -412,6 +426,11 @@ function isActiveAt(status:string,from:number,until:number|null,index:number):bo
   return status==="active"&&index>=from&&(until===null||index<until);
 }
 
+function reportUnavailableNpcGraph(npcId:string,stateGeneration:number,graphGeneration:number|null):void{
+  console.warn(`[NpcSemanticGraph] UNAVAILABLE ${JSON.stringify({recordType:"aurion.npc-semantic-graph-unavailable",schemaVersion:1,npcId,stateGeneration,graphGeneration,
+    reason:graphGeneration===null?"NPC_SEMANTIC_GRAPH_CURRENT_PIN_GRAPH_MISSING":"NPC_SEMANTIC_GRAPH_CURRENT_GENERATION_LAG"})}`);
+}
+
 export async function readConfirmedNpcSemanticGraphPacket(userId:number){
   if(!Number.isSafeInteger(userId)||userId<1) throw new Error("NPC_SEMANTIC_GRAPH_PACKET_OWNER_INVALID");
   const db=await getDb(); if(!db) throw new Error("Game database is not available");
@@ -421,7 +440,12 @@ export async function readConfirmedNpcSemanticGraphPacket(userId:number){
     for(const state of states.sort((a,b)=>a.npcId<b.npcId?-1:a.npcId>b.npcId?1:0)){
       if(state.lastResolutionIndex<0) continue;
       const confirmed=await readVerifiedNpcSemanticGraphV2(tx,state.npcId);
-      if(!confirmed||confirmed.row.generation!==state.lastResolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_CURRENT_READBACK_REQUIRED");
+      if(!confirmed||confirmed.row.generation!==state.lastResolutionIndex){
+        // A missing or lagging graph for one NPC withholds only that NPC; it must
+        // not deny every other verified graph. Integrity failures still throw above.
+        reportUnavailableNpcGraph(state.npcId,state.lastResolutionIndex,confirmed?.row.generation??null);
+        continue;
+      }
       const query={logicalIndex:confirmed.graph.generation,startKeys:[state.npcId],maxDepth:4,maxCandidates:64,maxResults:32} as const;
       const result=retrieveNpcSemanticMemoryGraph(confirmed.graph,query);
       const resultIds=new Set(result.results.map(item=>item.nodeId));
