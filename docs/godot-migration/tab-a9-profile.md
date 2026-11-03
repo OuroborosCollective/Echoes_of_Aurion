@@ -1,8 +1,11 @@
 ---
-description: "Verbindliches Ziel- und Messprofil für Echoes of Aurion auf einem Samsung Galaxy Tab A9 mit 4 GB RAM."
+description: "Optionales Referenz- und Messprofil für Echoes of Aurion auf einem Samsung Galaxy Tab A9 mit 4 GB RAM."
 ---
 
-# Samsung Galaxy Tab A9: Ziel- und Abnahmeprofil
+# Samsung Galaxy Tab A9: optionales Referenzprofil
+
+Aktuelle Owner-Vorgabe vom 03.11.2026: [geräteunabhängige Abnahme](acceptance-policy.md). Physische Tab-A9-Tests und modellbezogene Leistungsbudgets sind optionale Referenzdaten und kein Abschluss-, Merge- oder Releasegate.
+
 
 ## Geltungsbereich
 
@@ -26,9 +29,9 @@ Der neue Client bleibt eine Eingabe- und Darstellungsschicht. Aurion bleibt alle
 
 Primärquelle für die Herstellerangaben: [Samsung Galaxy Tab A9](https://www.samsung.com/uk/business/tablets/galaxy-tab-a/galaxy-tab-a9-wifi-graphite-64gb-sm-x110nzaaeua/). Variantenbezogene Werte werden nicht auf das konkrete Owner-Gerät übertragen, solange dessen Modellnummer fehlt.
 
-## Verbindlicher Basismodus
+## Optionaler Referenzmodus
 
-- **Pflichtmodus:** 30 FPS im Querformat. 60 FPS ist eine optionale Qualitätsstufe und kein Freigabeblocker.
+- **Referenzziel:** 30 FPS im Querformat. 60 FPS ist eine optionale Qualitätsstufe; beide Werte sind keine gerätespezifischen Freigabeblocker.
 - **Messfenster:** drei Minuten Warmup, anschließend zwanzig Minuten zusammenhängende Messung.
 - **Darstellung:** native Displayfläche 1340 × 800; interne Renderauflösung und Skalierung werden mit dem Build protokolliert.
 - **Bedienung:** Touch ist vollständig nutzbar. Physische Tastatur und Maus bleiben ergänzend.
@@ -78,7 +81,7 @@ Der erste vergleichbare Gerätesweep wird später mit demselben freigegebenen Bu
 
 Jeder Lauf nennt mindestens Build-SHA, Engine und Version, Renderer, interne und physische Auflösung, Qualitätspreset, Zone, sichtbare Entitäten, Netzprofil, Android-Version, Gerätemodell, RAM-Klasse und Messdauer. Physisches Gerät, Emulator und Desktop werden getrennt ausgewiesen.
 
-## Abnahme und spätere Zuständigkeit
+## Optionale Kompatibilitätsmessung
 
-Dieses Dokument und [`tab_a9.json`](../../godot-client/config/device_profiles/tab_a9.json) frieren die Planungsbudgets ein. Der kurze Owner-Ablauf steht unter [Gerätecheck](device-check.md). Die spätere physische Messung gehört zu [G31 / #938](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/938); ein grüner Dokumentationscheck ersetzt sie nicht.
+Dieses Dokument und [`tab_a9.json`](../../godot-client/config/device_profiles/tab_a9.json) frieren die Planungsbudgets ein. Der kurze Owner-Ablauf steht unter [Gerätecheck](device-check.md). Eine freiwillige physische Messung kann den früheren [G31-Plan / #938](https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/938) als Methodik nutzen. Der Pflichtsweep ist abbestellt und blockiert keine andere Aufgabe; ein Dokumentationscheck ist weiterhin kein Gerätemesswert.
 
