@@ -14,6 +14,7 @@ const NativeIntentBridge = preload("res://platform/android/native_intent_bridge.
 const AppearanceApi = preload("res://net/api/appearance_api.gd")
 const AppearanceResolver = preload("res://actors/appearance_resolver.gd")
 const ActorScene = preload("res://actors/actor_view.tscn")
+const CatalogModelCache = preload("res://actors/catalog_model_cache.gd")
 const RemoteActorRegistry = preload("res://actors/remote_actor_registry.gd")
 const PublicAppearanceApi = preload("res://net/api/public_actor_appearance_api.gd")
 const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
@@ -111,6 +112,14 @@ var _chunk_has_request := false
 var _neighbor_attempts: Dictionary = {}
 var _chunk_diagnostic := "Nicht geladen"
 var _self_actor: Node3D
+var _self_actor_source := ""
+var _actor_models = CatalogModelCache.new()
+var _actor_asset_api: Node
+var _actor_asset_retry: Dictionary = {}
+var _actor_asset_inflight := ""
+var _self_appearance_response: Dictionary = {}
+var _remote_appearance_response: Dictionary = {}
+var _quest_npc_response: Dictionary = {}
 var _monster_api: Node
 var _monster_actors = RemoteActorRegistry.new(true)
 var _monster_catalog: Dictionary = {}
@@ -199,6 +208,10 @@ func _ready() -> void:
 	add_child(_world_design_api)
 	_world_design_api.npcs_ready.connect(_on_world_design_ready)
 	_world_design_api.request_failed.connect(_on_world_design_failed)
+	_actor_asset_api = WorldAssetApi.new(_auth_start, CatalogModelCache.MAX_ASSET_BYTES)
+	add_child(_actor_asset_api)
+	_actor_asset_api.asset_ready.connect(_on_actor_asset_ready)
+	_actor_asset_api.request_failed.connect(_on_actor_asset_failed)
 	_world_asset_api = WorldAssetApi.new(_auth_start)
 	add_child(_world_asset_api)
 	_world_asset_api.asset_ready.connect(_on_world_asset_ready)
@@ -737,6 +750,7 @@ func _process(_delta: float) -> void:
 	if _world_studio.visible:
 		_world_studio.set_inspection_context(_confirmed_zone, _entities, _world_is_stale)
 	_request_world_design(now_ms)
+	_request_actor_asset(now_ms)
 	_request_world_asset(now_ms)
 	_poll_move_intent(now_ms)
 	if not _world_input_permitted():
@@ -960,10 +974,19 @@ func _cancel_move_intent() -> void:
 		_movement.reset()
 
 func _clear_3d_actors() -> void:
+	_actor_models.clear()
+	_actor_asset_retry.clear()
+	_actor_asset_inflight = ""
+	_self_appearance_response.clear()
+	_remote_appearance_response.clear()
+	_quest_npc_response.clear()
+	if _actor_asset_api != null:
+		_actor_asset_api.cancel()
 	_remote_actors.clear(world_actors)
 	_monster_actors.clear(world_actors)
 	_quest_npc_actors.clear(quest_npc_root)
 	_self_actor = null
+	_self_actor_source = ""
 	for actor in world_actors.get_children():
 		actor.visible = false
 		world_actors.remove_child(actor)
@@ -987,8 +1010,21 @@ func _on_appearance_ready(response: Dictionary, connection_id: String, generatio
 	_remote_catalog = response.duplicate(true)
 	_remote_manifest = manifest.duplicate(true) if typeof(manifest) == TYPE_DICTIONARY else {}
 	_request_remote_appearances(Time.get_ticks_msec())
-	var resolution: Dictionary = AppearanceResolver.new().resolve_self(_confirmed_zone, response, manifest)
+	_self_appearance_response = response.duplicate(true)
+	_refresh_actor_owners()
+	var resolution: Dictionary = AppearanceResolver.new().resolve_self(_confirmed_zone, response, manifest, _actor_models)
+	_apply_self_resolution(resolution)
+
+func _apply_self_resolution(resolution: Dictionary) -> void:
 	if resolution.get("status") != "resolved":
+		if is_instance_valid(_self_actor):
+			_self_actor.visible = false
+			world_actors.remove_child(_self_actor)
+			_self_actor.queue_free()
+		_self_actor = null
+		_self_actor_source = ""
+		if resolution.get("status") != "pending":
+			_actor_models.forget(_confirmed_zone.self_entity_id())
 		_appearance_diagnostic = str(resolution.get("reason", "appearance_invalid"))
 		_update_3d_status()
 		return
@@ -999,7 +1035,10 @@ func _on_appearance_ready(response: Dictionary, connection_id: String, generatio
 func _mount_resolved_self(resolution: Dictionary) -> bool:
 	if not _confirmed_zone.has_state() or resolution.get("status") != "resolved" or resolution.get("entityId") != _confirmed_zone.self_entity_id():
 		return false
-	var packed: PackedScene = load(str(resolution.resourcePath)) as PackedScene
+	var source_key: String = str(resolution.resourcePath) + ":" + str(resolution.get("normalization", {}).get("manifestSha256", ""))
+	if is_instance_valid(_self_actor) and _self_actor.entity_id == resolution.entityId and _self_actor.asset_id == resolution.catalogAssetId and _self_actor_source == source_key:
+		return true
+	var packed: PackedScene = resolution.get("packedScene") if resolution.has("packedScene") else load(str(resolution.resourcePath)) as PackedScene
 	if packed == null:
 		_appearance_diagnostic = "packed_model_unavailable"
 		_update_3d_status()
@@ -1010,13 +1049,14 @@ func _mount_resolved_self(resolution: Dictionary) -> bool:
 		_self_actor = null
 	var actor: Node3D = ActorScene.instantiate()
 	world_actors.add_child(actor)
-	if not actor.bind_confirmed(_confirmed_zone, str(resolution.entityId), str(resolution.catalogAssetId), packed):
+	if not actor.bind_confirmed(_confirmed_zone, str(resolution.entityId), str(resolution.catalogAssetId), packed, resolution.get("normalization", {})):
 		world_actors.remove_child(actor)
 		actor.queue_free()
 		_appearance_diagnostic = "model_bind_rejected"
 		_update_3d_status()
 		return false
 	_self_actor = actor
+	_self_actor_source = source_key
 	_appearance_diagnostic = ""
 	_project_3d(Time.get_ticks_msec())
 	return true
@@ -1027,6 +1067,7 @@ func _project_3d(now_ms: int) -> void:
 		return
 	_remote_actors.project(_confirmed_zone, _visuals, now_ms, world_actors)
 	_monster_actors.project(_confirmed_zone, _visuals, now_ms, world_actors)
+	_bound_actor_animation()
 	if is_instance_valid(_self_actor):
 		var valid: bool = _self_actor.project(_confirmed_zone, _visuals, now_ms)
 		if not valid:
@@ -1111,6 +1152,10 @@ func _on_remote_appearance_ready(response: Dictionary, connection_id: String, ge
 func _on_remote_appearance_failed(_reason: String, connection_id: String) -> void:
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
 		return
+	_remote_appearance_response.clear()
+	for row in _confirmed_zone.current_state().get("presences", []):
+		if row.entityId != _confirmed_zone.self_entity_id():
+			_actor_models.forget(row.entityId)
 	_remote_actors.clear(world_actors)
 	_update_3d_status()
 
@@ -1118,7 +1163,9 @@ func _on_remote_appearance_failed(_reason: String, connection_id: String) -> voi
 ## labeled server protocol fixture; production only calls it after authenticated
 ## API, connection-generation, and currently confirmed presence checks.
 func _apply_remote_appearances(response: Dictionary, catalog: Dictionary, manifest: Dictionary) -> void:
-	_remote_actors.apply(_confirmed_zone, world_actors, response, catalog, manifest)
+	_remote_appearance_response = response.duplicate(true)
+	_refresh_actor_owners()
+	_remote_actors.apply(_confirmed_zone, world_actors, response, catalog, manifest, _actor_models)
 	_update_3d_status()
 
 ## Static Aurion quest anchors are NOT dynamic v5 gameplay NPCs.
@@ -1134,6 +1181,10 @@ func _on_quest_npc_ready(response: Dictionary, connection_id: String, generation
 func _on_quest_npc_failed(reason: String, connection_id: String) -> void:
 	if not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id:
 		return
+	for row in _quest_npc_response.get("npcs", []):
+		if typeof(row) == TYPE_DICTIONARY and typeof(row.get("entityId")) == TYPE_STRING:
+			_actor_models.forget(row.entityId)
+	_quest_npc_response.clear()
 	_quest_npc_actors.clear(quest_npc_root)
 	_quest_npc_diagnostic = reason
 	_update_3d_status()
@@ -1145,8 +1196,10 @@ func _apply_quest_npc_visuals(response: Dictionary, manifest: Variant) -> bool:
 		_quest_npc_diagnostic = "NPC-Zone nicht bestätigt"
 		_update_3d_status()
 		return false
-	var accepted: bool = _quest_npc_actors.apply(quest_npc_root, response, manifest)
-	_quest_npc_diagnostic = "" if accepted else _quest_npc_actors.diagnostic
+	_quest_npc_response = response.duplicate(true)
+	_refresh_actor_owners()
+	var accepted: bool = _quest_npc_actors.apply(quest_npc_root, response, manifest, _actor_models, _monster_catalog)
+	_quest_npc_diagnostic = _quest_npc_actors.diagnostic
 	_update_3d_status()
 	return accepted
 
@@ -1358,7 +1411,7 @@ func _request_monster_catalog(now_ms: int) -> void:
 	# catalog for a world that has no published authored designs.
 	if _entities.ids("mobs").is_empty():
 		var designs: Variant = _world_design_readback.get("designs", [])
-		if typeof(designs) != TYPE_ARRAY or designs.is_empty():
+		if (typeof(designs) != TYPE_ARRAY or designs.is_empty()) and _quest_npc_response.is_empty():
 			return
 	if _monster_last_poll_ms >= 0 and now_ms - _monster_last_poll_ms < PUBLIC_APPEARANCE_REFRESH_MS:
 		return
@@ -1390,8 +1443,7 @@ func _on_monster_catalog_failed(reason: String, connection_id: String) -> void:
 func _apply_monster_catalog(catalog: Dictionary, manifest: Dictionary) -> void:
 	_monster_catalog = catalog.duplicate(true)
 	_monster_manifest = manifest.duplicate(true)
-	_sync_monsters()
-	_project_3d(Time.get_ticks_msec())
+	_refresh_catalog_actors()
 
 func _request_world_design(now_ms: int) -> void:
 	if _tabletop_active: return
@@ -1446,7 +1498,7 @@ func _remember_world_design_surface(readback: Dictionary, connection_id: String,
 
 func _request_world_asset(now_ms: int) -> void:
 	if _tabletop_active: return
-	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed() or _world_asset_api.busy():
+	if not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed() or _world_asset_api.busy() or _actor_asset_api.busy():
 		return
 	for request in _world_design_visuals.needed_assets():
 		var sha: String = request.sha256
@@ -1478,8 +1530,87 @@ func _on_world_asset_failed(_reason: String, connection_id: String) -> void:
 	_world_asset_inflight = ""
 
 func _sync_monsters() -> void:
-	_monster_actors.apply(_confirmed_zone, world_actors, {}, _monster_catalog, _monster_manifest)
+	_refresh_actor_owners()
+	_monster_actors.apply(_confirmed_zone, world_actors, {}, _monster_catalog, _monster_manifest, _actor_models)
 	_monster_diagnostic = _monster_actors.diagnostic
+
+## All requested models belong to currently confirmed entities. Keep a bounded
+## near-field set; never download the full catalog merely because it is listed.
+func _refresh_actor_owners() -> void:
+	if not _confirmed_zone.has_state():
+		_actor_models.clear()
+		return
+	var owners: Array = [_confirmed_zone.self_entity_id()]
+	for row in _quest_npc_response.get("npcs", []):
+		if typeof(row) == TYPE_DICTIONARY and typeof(row.get("entityId")) == TYPE_STRING:
+			owners.append(row.entityId)
+	var state: Dictionary = _confirmed_zone.current_state()
+	var origin := Vector2.ZERO
+	for presence in state.get("presences", []):
+		if presence.entityId == _confirmed_zone.self_entity_id():
+			origin = Vector2(presence.position.x, presence.position.z)
+	var nearby: Array = []
+	for row in state.get("presences", []) + state.get("mobs", []):
+		if row.entityId != _confirmed_zone.self_entity_id():
+			nearby.append({"id":row.entityId,"distance":origin.distance_squared_to(Vector2(row.position.x,row.position.z))})
+	nearby.sort_custom(func(a: Dictionary, b: Dictionary): return a.distance < b.distance if a.distance != b.distance else a.id < b.id)
+	for row in nearby:
+		owners.append(row.id)
+	_actor_models.set_owners(_confirmed_zone.connection_id(), owners)
+
+## Pause distant mixers while keeping their actual authored resting pose visible.
+func _bound_actor_animation() -> void:
+	var origin := Vector3.ZERO
+	if is_instance_valid(_self_actor): origin = _self_actor.position
+	var candidates: Array = []
+	for actor in world_actors.get_children() + quest_npc_root.get_children():
+		if actor is Node3D:
+			candidates.append({"actor":actor,"distance":-1.0 if actor == _self_actor else actor.position.distance_squared_to(origin)})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary): return a.distance < b.distance if a.distance != b.distance else str(a.actor.name) < str(b.actor.name))
+	for index in range(candidates.size()):
+		for player: AnimationPlayer in candidates[index].actor.find_children("*","AnimationPlayer",true,false):
+			player.active = index < 8
+
+func _request_actor_asset(now_ms: int) -> void:
+	if _tabletop_active or not _confirmed_zone.has_state() or _world_is_stale or _lifecycle.is_suspended() or _zone_socket.state_name() != "connected" or not _auth_start.protected_response_allowed() or _actor_asset_api.busy() or _world_asset_api.busy():
+		return
+	for request in _actor_models.needed_assets():
+		var sha: String = request.sha256
+		if now_ms < int(_actor_asset_retry.get(sha, 0)):
+			continue
+		_actor_asset_inflight = sha
+		if not _actor_asset_api.request_asset(_config.server_base_url, request, _confirmed_zone.connection_id()):
+			_actor_asset_retry[sha] = now_ms + 30000
+			_actor_asset_inflight = ""
+		return
+
+func _on_actor_asset_ready(sha: String, bytes: PackedByteArray, connection_id: String, generation: int) -> void:
+	_actor_asset_inflight = ""
+	if _tabletop_active or not _confirmed_zone.has_state() or _confirmed_zone.connection_id() != connection_id or _world_is_stale or _lifecycle.is_suspended() or not _auth_start.protected_response_allowed() or _auth_start.session_generation() != generation or _zone_socket.state_name() != "connected":
+		return
+	if not _actor_models.supply_asset(sha, bytes, connection_id):
+		_actor_asset_retry[sha] = Time.get_ticks_msec() + 30000
+		return
+	_refresh_catalog_actors()
+
+func _on_actor_asset_failed(_reason: String, connection_id: String) -> void:
+	if _confirmed_zone.has_state() and _confirmed_zone.connection_id() == connection_id and not _actor_asset_inflight.is_empty():
+		_actor_asset_retry[_actor_asset_inflight] = Time.get_ticks_msec() + 30000
+	_actor_asset_inflight = ""
+
+func _refresh_catalog_actors() -> void:
+	_refresh_actor_owners()
+	if not _self_appearance_response.is_empty():
+		var resolution: Dictionary = AppearanceResolver.new().resolve_self(_confirmed_zone, _self_appearance_response, _remote_manifest, _actor_models)
+		_apply_self_resolution(resolution)
+	if not _remote_appearance_response.is_empty():
+		_remote_actors.apply(_confirmed_zone, world_actors, _remote_appearance_response, _remote_catalog, _remote_manifest, _actor_models)
+	if not _quest_npc_response.is_empty():
+		var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
+		_quest_npc_actors.apply(quest_npc_root, _quest_npc_response, manifest, _actor_models, _monster_catalog)
+		_quest_npc_diagnostic = _quest_npc_actors.diagnostic
+	_sync_monsters()
+	_project_3d(Time.get_ticks_msec())
 
 ## Aurion-acknowledged self position; chunk partition follows the existing
 ## server 64m center-shift rule, not a second world-generation pipeline.
@@ -1777,7 +1908,7 @@ func _set_tabletop(enabled: bool) -> bool:
 		for node in [confirmed_terrain, confirmed_neighbors, terrain3d_host, starter_village_visuals, unassigned_floor, world_actors, quest_npc_root, _world_design_visuals]:
 			_tabletop_saved_visibility[node] = node.visible
 			node.visible = false
-		for api in [_appearance_api, _chunk_api, _world_design_api, _world_asset_api, _remote_api, _quest_npc_api, _history_api, _monster_api]: api.cancel()
+		for api in [_appearance_api, _chunk_api, _world_design_api, _world_asset_api, _actor_asset_api, _remote_api, _quest_npc_api, _history_api, _monster_api]: api.cancel()
 		world_camera.set_tabletop(true, Vector3(float(coordinate.x) * 64.0, 0.0, float(coordinate.y) * 64.0))
 		_tabletop_layer.visible = not _tabletop_fallback
 		_tabletop_controls.visible = true

@@ -13,6 +13,8 @@ on:
       - "server/glb*.ts"
       - "server/adminMcp*.ts"
       - "shared/glbImportContract.ts"
+      - "shared/npcGlbSelection.ts"
+      - "server/aurionQuestNpcVisualProjection*.ts"
       - "client/src/hooks/useGlbCatalog.ts"
       - "client/src/xaurion/**"
       - "client/src/pages/Home.tsx"
@@ -94,6 +96,7 @@ jobs:
           server/glbAgentSession.test.ts
           server/glbImportMariaDb.test.ts
           server/glbImportPlan.test.ts
+          server/aurionQuestNpcVisualProjection.test.ts
           server/glbNormalization.test.ts
           server/starterCityWallMigration.test.ts
           server/starterCityWallPublication.test.ts
