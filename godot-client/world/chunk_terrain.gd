@@ -72,6 +72,11 @@ static func _validate(read_model: Variant) -> Dictionary:
 			return {"reason": "chunk_readmodel_invalid"}
 	if read_model.structures.size() > 24 or read_model.roads.size() > 32:
 		return {"reason": "chunk_overlays_unbounded"}
+	return _validate_tiles(tiles, coordinate)
+
+static func _validate_tiles(tiles: Variant, coordinate: Variant) -> Dictionary:
+	if not position_valid(coordinate) or typeof(tiles) != TYPE_ARRAY or tiles.size() != TILE_COUNT:
+		return {"reason": "chunk_tiles_incomplete"}
 	var tiles_by_index: Array = []
 	tiles_by_index.resize(TILE_COUNT)
 	for item in tiles:
@@ -94,6 +99,9 @@ static func _validate(read_model: Variant) -> Dictionary:
 			return {"reason": "chunk_tile_missing"}
 	return {"status": "validated", "tiles": tiles_by_index, "coordinate": coordinate}
 
+static func position_valid(coordinate: Variant) -> bool:
+	return typeof(coordinate) == TYPE_DICTIONARY and _whole(coordinate.get("x"), -1000000, 1000000) and _whole(coordinate.get("z"), -1000000, 1000000)
+
 static func _vertex(st: SurfaceTool, point: Vector3, uv: Vector2) -> void:
 	# Godot 4 uses clockwise front faces. Explicit +Y lighting is needed for
 	# horizontal tiles because clockwise XZ winding has a -Y cross product.
@@ -107,6 +115,18 @@ func apply_confirmed(read_model: Variant, connection_id: String) -> bool:
 	var checked := _validate(read_model)
 	if checked.get("status") != "validated":
 		return _reject(str(checked.get("reason", "chunk_unverified")))
+	return _render_validated(checked, read_model, connection_id)
+
+## Filtered WorldSlice tile seam; no invented legacy seed/hash/resource fields.
+func apply_filtered_tiles(tiles: Variant, coordinate: Variant, connection_id: String, ceiling: float = INF) -> bool:
+	if connection_id.is_empty() or connection_id.length() > 128 or is_nan(ceiling):
+		return _reject("chunk_connection_missing")
+	var checked := _validate_tiles(tiles, coordinate)
+	if checked.get("status") != "validated":
+		return _reject(str(checked.get("reason", "chunk_unverified")))
+	return _render_validated(checked, {"tiles": tiles, "coordinate": coordinate, "ceiling": ceiling}, connection_id, ceiling)
+
+func _render_validated(checked: Dictionary, read_model: Dictionary, connection_id: String, ceiling: float = INF) -> bool:
 	# Match the complete server-shaped readback, not merely a short FNV hash.
 	if _last_connection == connection_id and _last_model == read_model and get_child_count() == 1:
 		return true
@@ -130,7 +150,7 @@ func apply_confirmed(read_model: Variant, connection_id: String) -> bool:
 		st.set_material(material)
 		var count := 0
 		for tile in sorted_tiles:
-			if SURFACE_MATERIAL.get(tile.surface) != material_name:
+			if float(tile.heightMm) / 1000.0 > ceiling or SURFACE_MATERIAL.get(tile.surface) != material_name:
 				continue
 			count += 1
 			var x: float = origin_x + float(tile.x) * TILE_METERS
@@ -151,7 +171,9 @@ func apply_confirmed(read_model: Variant, connection_id: String) -> bool:
 		if count > 0:
 			st.commit(mesh)
 	if mesh.get_surface_count() == 0:
-		return _reject("chunk_mesh_empty")
+		clear()
+		diagnostic = "Schnitt: alle bestätigten Flächen ausgeblendet"
+		return true
 	clear()
 	var display := MeshInstance3D.new()
 	display.name = "ConfirmedChunkSurface"
