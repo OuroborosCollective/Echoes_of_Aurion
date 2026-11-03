@@ -1,3 +1,4 @@
+import { defensiveGatewayObserver } from "../defensiveGatewayObserver";
 import "dotenv/config";
 import { registerProductionProbeRoutes } from "../aurionProductionProbeHttp";
 import { createCorsOriginResolver } from "./corsOrigin";
@@ -75,6 +76,8 @@ async function startServer(){
   if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);
   app.use((req,res,next)=>{const origin=allowedCorsOrigin(req.headers.origin);if(origin){res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Access-Control-Allow-Credentials","true");res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization, X-Requested-With");res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");res.setHeader("Vary","Origin");}if(req.method==="OPTIONS"){if(!origin)return res.status(403).end();return res.status(204).end();}next();});
 
+  defensiveGatewayObserver.start();
+  app.use(defensiveGatewayObserver.httpMiddleware);
   app.use(rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 3000,
@@ -115,6 +118,7 @@ async function startServer(){
     shuttingDown=true;
     console.info(`[Aurion] graceful shutdown requested: ${signal}`);
     try{
+      defensiveGatewayObserver.stop();
       await godotFeed?.close();
       await drainAurionRuntimeForShutdown({
         closeZoneGateway:()=>zoneGateway.close(),

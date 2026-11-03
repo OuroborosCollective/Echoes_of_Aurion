@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - "server/zoneGateway.ts"
+      - "server/defensiveGatewayObserver.ts"
+      - "server/defensiveGatewayObserver.test.ts"
+      - "server/_core/index.ts"
       - "server/zoneGatewayIngress.test.ts"
       - "scripts/tests/zone-gateway-ingress-probe.mjs"
       - ".github/workflows/aurion-ws-ingress-regression.yml"
@@ -29,6 +32,6 @@ jobs:
       - name: Verify real isolated WebSocket ingress regressions
         run: pnpm exec vitest run server/zoneGatewayIngress.test.ts --reporter=verbose
       - name: Neighbor protocol checks
-        run: pnpm exec vitest run server/zoneGatewayPresence.test.ts --reporter=verbose
+        run: pnpm exec vitest run server/zoneGatewayPresence.test.ts server/defensiveGatewayObserver.test.ts server/zoneProtocol.test.ts --reporter=verbose
       - name: TypeScript
         run: pnpm check

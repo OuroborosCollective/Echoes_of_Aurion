@@ -1,3 +1,4 @@
+import { defensiveGatewayObserver, type DefensiveGatewayObserver } from "./defensiveGatewayObserver";
 import { clientVerificationRegistry } from "./causality/clientVerificationRegistry";
 import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
@@ -30,7 +31,7 @@ function rejectUnsupportedZoneVersion(socket:WebSocket):void{
 }
 
 /** `/v1/ws` is Aurion's live gameplay transport. AX1/WASD are historical provenance only; legacy tRPC/MCP encounter routes are not consulted. */
-export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink,recoverZone:ZoneRecoveryResolver=(zoneId)=>restorePersistedZoneHead(zoneId,globalCausalPersistence,globalTickRecorder)){
+export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink,recoverZone:ZoneRecoveryResolver=(zoneId)=>restorePersistedZoneHead(zoneId,globalCausalPersistence,globalTickRecorder),observer:DefensiveGatewayObserver=defensiveGatewayObserver){
   if(fixedTick&&(!Number.isSafeInteger(fixedTick.intervalTicks)||fixedTick.intervalTicks<1))throw new Error("ZONE_FIXED_TICK_INTERVAL_INVALID");
   const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const observationConnections=new Set<string>();const presenceObservers=new Set<()=>void>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();let isTicking=false;
   const tickTimer=setInterval(async()=>{
@@ -49,6 +50,8 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       console.warn("[Aurion Zone] WebSocket peer error:",error.message);
       socket.terminate();
     });
+    const finishObservation=observer.beginHandshake();
+    socket.once("close",()=>finishObservation("closed"));
     const helloTimeout=setTimeout(()=>closePolicyViolation(socket),HELLO_TIMEOUT_MS);socket.once("close",()=>clearTimeout(helloTimeout));socket.once("message",async(data,isBinary)=>{
     clearTimeout(helloTimeout);if(isBinary)return closePolicyViolation(socket);let raw:unknown;try{raw=parseMessage(data);}catch{return closePolicyViolation(socket);}const hello=parseZoneHello(raw);if(!hello){
       if(raw&&typeof raw==="object"&&(raw as {type?:unknown}).type==="hello"&&(raw as {protocolVersion?:unknown}).protocolVersion!==ZONE_PROTOCOL_VERSION){rejectUnsupportedZoneVersion(socket);return;}
@@ -57,7 +60,7 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
     try{const ticket=await consumeTicket({ticket:hello.ticket,zoneId:hello.zoneId});if(socket.readyState!==WebSocket.OPEN)return;if(!ticket)return closePolicyViolation(socket);const zone=await registry.getOrRecover(ticket.zoneId,recoverZone);const welcome=zone.join({userId:ticket.userId,socket,combatProfile:ticket.combatProfile});clientVerificationRegistry.open(ticket.userId,welcome.connectionId);observationConnections.add(welcome.connectionId);const presence=worldPresence?new ZonePresenceLifecycle(worldPresence,{userId:ticket.userId,connectionId:welcome.connectionId,zoneId:ticket.zoneId}):undefined;let refreshTimer:ReturnType<typeof setInterval>|undefined;
       const onPresenceFailure=(error:unknown)=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);};const observePresence=()=>{const position=zone.positionForConnection(welcome.connectionId);if(position)void presence?.observe(position)?.catch(onPresenceFailure);};
       socket.once("close",()=>{clientVerificationRegistry.close(welcome.connectionId);observationConnections.delete(welcome.connectionId);if(refreshTimer)clearInterval(refreshTimer);presenceObservers.delete(observePresence);zone.leave(welcome.connectionId);void presence?.close().catch(error=>console.error("[Aurion Zone] Presence lease release failed",error));});
-      const initialPosition=zone.positionForConnection(welcome.connectionId);if(!initialPosition){zone.leave(welcome.connectionId);return closePolicyViolation(socket);}try{await presence?.refresh(initialPosition);}catch(error){zone.leave(welcome.connectionId);console.error("[Aurion Zone] Presence lease registration failed",error);return closePolicyViolation(socket);}if(socket.readyState!==WebSocket.OPEN)return;if(presence)presenceObservers.add(observePresence);socket.send(JSON.stringify(welcome));
+      const initialPosition=zone.positionForConnection(welcome.connectionId);if(!initialPosition){zone.leave(welcome.connectionId);return closePolicyViolation(socket);}try{await presence?.refresh(initialPosition);}catch(error){zone.leave(welcome.connectionId);console.error("[Aurion Zone] Presence lease registration failed",error);return closePolicyViolation(socket);}if(socket.readyState!==WebSocket.OPEN)return;if(presence)presenceObservers.add(observePresence);socket.send(JSON.stringify(welcome));finishObservation("completed");
       socket.on("message",(nextData,nextBinary)=>{if(nextBinary)return rejectZoneInput(socket,"INVALID_MESSAGE");let nextRaw:unknown;try{nextRaw=parseMessage(nextData);}catch{return rejectZoneInput(socket,"INVALID_MESSAGE");}
         const move=parseZoneMove(nextRaw);if(move){const result=zone.submitMovement(welcome.connectionId,move);if(result==="stale")return rejectZoneInput(socket,"STALE_CLIENT_SEQUENCE");if(result==="missing")closePolicyViolation(socket);return;}
         const attack=parseZoneAttack(nextRaw);if(attack){const result=zone.submitAttack(welcome.connectionId,attack);if(result==="stale")return rejectZoneInput(socket,"STALE_CLIENT_SEQUENCE");if(result==="missing")return closePolicyViolation(socket);if(result==="invalid_target")return rejectZoneInput(socket,"INVALID_COMBAT_TARGET");if(result==="out_of_range")return rejectZoneInput(socket,"COMBAT_TARGET_OUT_OF_RANGE");if(result==="dead")return rejectZoneInput(socket,"COMBATANT_DEAD");if(result==="cooldown")return rejectZoneInput(socket,"COMBAT_SKILL_COOLDOWN");return;}
