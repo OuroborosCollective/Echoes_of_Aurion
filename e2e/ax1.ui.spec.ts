@@ -334,22 +334,24 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       });
 
       let ownDamage: ZoneCombatEvent | undefined;
+      const priorAttackReceipt = await page.locator("#three-viewport").getAttribute("data-confirmed-attack-receipt");
       for (let attempt = 0; attempt < 8 && !ownDamage; attempt += 1) {
         const before = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
+        const eventsBefore = combatEvents.length;
         await expect.poll(() => latestTick >= (latestCombatants.find(entry => entry.entityId === selfEntityId)?.effects?.attackUntil ?? 0), { timeout: 5_000 }).toBe(true);
         await attack.click();
         await expect.poll(
           () => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length,
           { timeout: 5_000 },
         ).toBeGreaterThan(before);
-        ownDamage = combatEvents.findLast(event => event.attackerEntityId === selfEntityId && event.damage > 0);
+        ownDamage = combatEvents.slice(eventsBefore).findLast(event => event.attackerEntityId === selfEntityId && event.damage > 0);
       }
       expect(ownDamage).toBeDefined();
       expect(ownDamage!.gameplaySourceRevision).toMatch(/^[a-f0-9]{40}$/);
       expect(ownDamage!.defenderEntityId).toMatch(/^mob_[1-9][0-9]{0,2}$/);
       expect(ownDamage!.defenderHealth).toBeGreaterThanOrEqual(0);
-      await page.locator("#three-viewport").getAttribute("data-confirmed-attack-receipt");
       await expect(page.locator("#three-viewport")).toHaveAttribute("data-confirmed-attack-receipt", /.+/);
+      await expect.poll(() => page.locator("#three-viewport").getAttribute("data-confirmed-attack-receipt"), { timeout: 5_000 }).not.toBe(priorAttackReceipt);
       await expect.poll(() => page.evaluate(() => (window as any).__ax1AttackSamples.length), { timeout: 10_000 }).toBeGreaterThan(1);
       const animation = await page.evaluate(() => (window as any).__ax1AttackSamples);
       expect(new Set(animation.map((sample: any) => sample.kind === "glb" ? `glb:${sample.bonePose}:${Math.round(sample.clipTime * 1000)}` : `procedural:${JSON.stringify(sample.arm)}`)).size).toBeGreaterThan(1);
