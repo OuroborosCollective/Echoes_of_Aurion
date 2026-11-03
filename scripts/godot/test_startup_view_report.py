@@ -29,6 +29,7 @@ class StartupReportControls(unittest.TestCase):
             self.observations[name] = {'schema':'aurion.startup-view.observation.v1','source':source,'nonce':self.nonce,'captureIndex':1,
                 'startedAtUtc':stamp,'capturedAtUtc':stamp,'connected':True,'viewportPx':[640,360],
                 'worldId':'echoes-of-aurion-global',
+                'worldVisible':True,
                 'snapshot':{'tick':42,'zoneId':'observatory_threshold','presences':[{'entityId':'player:1','position':{'x':0,'z':0}}],'mobs':[],'combatants':[]},
                 'camera':{'positionMm':[0,5000,10000],'targetMm':[0,1600,0],'fovMilliDeg':58000},
                 'chunks':{'status':'APPLIED','count':1}, 'assets':{'rendered':2,'loading':0,'failed':0}}
@@ -80,6 +81,17 @@ class StartupReportControls(unittest.TestCase):
         report = self.run_report()
         self.assertIn('AUTHENTICATED_BROWSER_NOT_CONFIGURED', report['issues'])
         self.assertNotIn('GODOT_ENVIRONMENT_MISSING', report['issues'])
+
+    def test_absent_health_does_not_invent_a_revision_difference(self):
+        self.index.pop('runtime')
+        self.index.pop('runtimeAfter')
+        report = self.run_report()
+        self.assertIn('LIVE_RUNTIME_IDENTITY_UNVERIFIED', report['issues'])
+        self.assertNotIn('LIVE_REVISION_MISMATCH', report['issues'])
+
+    def test_loading_screen_is_not_a_visible_game_view(self):
+        self.observations['aurion']['worldVisible'] = False
+        self.assertIn('BROWSER_WORLD_OBSCURED_BY_LOADING_SCREEN', self.run_report()['issues'])
 
     def test_separate_camera_asset_terrain_and_environment_diagnoses(self):
         native = self.observations['godot']

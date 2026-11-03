@@ -1149,6 +1149,12 @@
       "role": "CAPABILITY"
     },
     {
+      "path": "client/src/xaurion/integration/StartupViewCapture.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/integration/AurionPlayRoute.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",

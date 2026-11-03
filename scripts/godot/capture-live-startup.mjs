@@ -103,7 +103,10 @@ try {
   if (!/^https:\/\/arelogic\.space\/api\/native-auth\/browser\/[A-Za-z0-9_-]{32,128}$/.test(handoff.url)) throw Error('NATIVE_AUTH_URL_INVALID');
   authPage = await context.newPage();
   let callback;
-  await authPage.route(`${origin}/app/auth/callback?**`, async route => { callback = route.request().url(); await route.abort(); });
+  await authPage.route(`${origin}/app/auth/callback?**`, async route => {
+    callback = route.request().url();
+    await route.fulfill({ status: 200, contentType: 'text/plain', body: 'Rückgabe an den Godot-Client.' });
+  });
   await authPage.goto(handoff.url, { waitUntil: 'domcontentloaded' });
   failure = 'NATIVE_AUTH_CONFIRMATION_UNAVAILABLE';
   await authPage.getByRole('button', { name: 'Diese Anmeldung einmalig bestätigen', exact: true }).click();
@@ -111,12 +114,14 @@ try {
   await atomic('callback.json', { url: callback });
   callback = undefined;
   await authPage.close(); authPage = null;
+  await page.bringToFront();
   failure = 'GODOT_AUTH_OR_WORLD_NOT_READY';
   const native = await waitFor(async () => {
     const state = await maybeJson('godot-state.json');
     if (state?.failure) throw Error(state.failure);
     return state?.connected && state.worldVisible && state.terrain > 0 && state.tick > 0 ? state : null;
   }, failure, 45_000);
+  await waitFor(() => page.evaluate(() => Boolean(window.__aurionStartupCapture) && !document.querySelector('[data-testid="world-loading-screen"]')), 'BROWSER_WORLD_OBSCURED_BY_LOADING_SCREEN', 30_000);
   // One shared future committed tick, one capture attempt. A missed tick is red.
   const web = await page.evaluate(() => window.__aurionStartupCapture.state());
   const tick = Math.max(web.tick, native.tick) + 20;

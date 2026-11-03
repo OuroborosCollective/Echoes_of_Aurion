@@ -377,6 +377,7 @@ export default function AurionOpenWorldRuntime() {
         return {
           connected: zoneConnectedRef.current,
           worldId: GLOBAL_WORLD_ID,
+          worldVisible: !document.querySelector('[data-testid="world-loading-screen"]'),
           camera: { positionMm: engine!.camera.position.toArray().map(v => Math.round(v * 1000)),
             targetMm: [view.lookAtX, view.lookAtY, view.lookAtZ].map(v => Math.round(v * 1000)), fovMilliDeg: Math.round(engine!.camera.fov * 1000) },
           chunks: read(containerRef.current?.dataset.chunkProjection),

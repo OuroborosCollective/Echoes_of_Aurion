@@ -16,6 +16,7 @@ from live_view_parity import pixel_difference, _visual_stats, MAX_PNG_BYTES, MAX
 
 HINTS = {
     "LIVE_CAPTURE_INCOMPLETE": "Es liegt keine vollständige Live-Paaraufnahme vor. Den konkreten Start-/Verbindungsfehler zuerst beheben; fehlende Bilder sind kein visueller Erfolg.",
+    "LIVE_RUNTIME_IDENTITY_UNVERIFIED": "Ohne erfolgreichen Health-Readback ist der aktive Stand unbekannt; daraus wird keine behauptete Versionsabweichung abgeleitet.",
     "LIVE_REVISION_MISMATCH": "Web-Runtime und geprüfter Godot-Checkout haben verschiedene Git-Stände. Erst dieselbe geprüfte Revision ausliefern.",
     "AUTHENTICATED_BROWSER_NOT_CONFIGURED": "Kein erreichbarer, bereits angemeldeter Browser am lokalen CDP-Port. Die Aufnahme erzeugt keine Ersatzsitzung.",
     "BROWSER_AUTH_OR_WORLD_NOT_READY": "Der Browser hat nach dem Start keine authentifizierten Aurion-Snapshots empfangen. Anmeldung, Charakterauswahl und WebSocket prüfen.",
@@ -63,10 +64,13 @@ def build_report(directory: Path, now=None):
     after = index.get("runtimeAfter", {})
     if not isinstance(runtime, dict): runtime = {}
     if not isinstance(after, dict): after = {}
-    if runtime.get("status") != "ok" or after.get("status") != "ok": fail("LIVE_RUNTIME_NOT_HEALTHY")
-    if not isinstance(revision, str) or len(revision) != 40 or any(c not in "0123456789abcdef" for c in revision) or runtime.get("revision") != revision or after.get("revision") != revision: fail("LIVE_REVISION_MISMATCH")
     image = runtime.get("runtimeImageDigest")
-    if not isinstance(image, str) or len(image) != 71 or not image.startswith("sha256:") or any(c not in "0123456789abcdef" for c in image[7:]) or after.get("runtimeImageDigest") != image: fail("LIVE_IMAGE_MISMATCH")
+    if not runtime or not after:
+        fail("LIVE_RUNTIME_IDENTITY_UNVERIFIED")
+    else:
+        if runtime.get("status") != "ok" or after.get("status") != "ok": fail("LIVE_RUNTIME_NOT_HEALTHY")
+        if not isinstance(revision, str) or len(revision) != 40 or any(c not in "0123456789abcdef" for c in revision) or runtime.get("revision") != revision or after.get("revision") != revision: fail("LIVE_REVISION_MISMATCH")
+        if not isinstance(image, str) or len(image) != 71 or not image.startswith("sha256:") or any(c not in "0123456789abcdef" for c in image[7:]) or after.get("runtimeImageDigest") != image: fail("LIVE_IMAGE_MISMATCH")
     hashes = index.get("files", {})
     if not isinstance(hashes, dict): hashes = {}
     captured = []
@@ -127,6 +131,7 @@ def build_report(directory: Path, now=None):
         actors = godot.get("actors")
         if not isinstance(actors, list) or not actors or any(not isinstance(a, dict) or not a.get("assetId") for a in actors): fail("GODOT_ACTOR_MODELS_MISSING")
         if godot.get("worldVisible") is not True or godot.get("stale") is not False: fail("GODOT_WORLD_NOT_VISIBLE_OR_STALE")
+        if web.get("worldVisible") is not True: fail("BROWSER_WORLD_OBSCURED_BY_LOADING_SCREEN")
         for value, keys in ((web.get("assets"), ("loading", "failed")), (godot.get("actorCache"), ("pending",)), (godot.get("worldAssets"), ("pending",))):
             if not isinstance(value, dict) or any(type(value.get(k)) is not int or value[k] != 0 for k in keys): fail("ASSETS_LOADING_OR_FAILED")
         for value in (web.get("assets"), godot.get("worldAssets")):
