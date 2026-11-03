@@ -170,14 +170,6 @@ export class RemotePublicAppearanceProjection {
 
       const record = this.actors.get(presence.userId);
       if (!record) continue;
-      const desired = appearance ? this.physicalAppearance(appearance, band) : null;
-      if (appearance && desired && record.physicalStorageUrl !== desired.storageUrl) {
-        record.actor.group.visible = false;
-        record.actor.setAnimationEnabled(false);
-        void this.ensureActor(appearance, band);
-        continue;
-      }
-
       record.lod = band;
       record.actor.setAnimationEnabled(actorUsesSkinnedVisual(band));
       record.actor.group.position.set(worldX - originX, y, worldZ - originZ);
