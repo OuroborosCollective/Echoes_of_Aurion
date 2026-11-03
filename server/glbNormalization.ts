@@ -9,6 +9,7 @@ import {
   type GlbNormalizationManifest,
 } from "../shared/glbNormalizationContract";
 import { audit } from "../scripts/world-glb-geometry.mjs";
+import { AURION_STARTER_CITY_WALL_ENVELOPE_MM, isStarterCityWallSource } from "../shared/aurionStarterCityWallContract";
 
 const TRIANGLE_BUDGET_BY_LOD = [2_000_000, 1_000_000, 500_000, 250_000] as const;
 const RENDER_DISTANCE_BY_LOD_MM = [0, 24_000, 56_000, 120_000] as const;
@@ -55,8 +56,11 @@ function roundWorldMetersToMm(value: number): number {
   return value < 0 ? -rounded : rounded;
 }
 
-function profileFor(classification: GlbAssetClassification, purpose: GlbImportPurpose): Profile {
+function profileFor(classification: GlbAssetClassification, purpose: GlbImportPurpose, sourceSha256: string): Profile {
   if (classification.assetType !== "arena") return BASE_PROFILES[classification.assetType];
+  if (purpose === "world-environment" && classification.subcategory === "structure" && isStarterCityWallSource(sourceSha256)) {
+    return Object.freeze({ targetEnvelopeMm: AURION_STARTER_CITY_WALL_ENVELOPE_MM, maximumSourceExtentMm: 110_000, minimumLargestExtentMm: 90_000 });
+  }
   const familyDefault = purpose === "world-nature" ? "plant" : "structure";
   const envelope = WORLD_ENVELOPE_MM[classification.subcategory ?? familyDefault] ?? (purpose === "world-nature" ? 7_000 : 11_000);
   return Object.freeze({ targetEnvelopeMm: [envelope, envelope, envelope] as const, maximumSourceExtentMm: 1_000_000, minimumLargestExtentMm: 5 });
@@ -90,7 +94,8 @@ export async function buildGlbNormalizationManifest(
   purpose: GlbImportPurpose,
 ): Promise<GlbNormalizationManifest> {
   if (!/^[a-f0-9]{64}$/.test(sourceSha256)) throw new Error("GLB_NORMALIZATION_SOURCE_HASH_INVALID");
-  const profile = profileFor(classification, purpose);
+  if (isStarterCityWallSource(sourceSha256) && createHash("sha256").update(bytes).digest("hex") !== sourceSha256) throw new Error("GLB_NORMALIZATION_SOURCE_HASH_MISMATCH");
+  const profile = profileFor(classification, purpose, sourceSha256);
   const measured = await audit(bytes, 2_000_000, { requireMeshopt: false, includeVertices: false });
   const sourceMin = measured.bounds.min.map(roundWorldMetersToMm);
   const sourceMax = measured.bounds.max.map(roundWorldMetersToMm);

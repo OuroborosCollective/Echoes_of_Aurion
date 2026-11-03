@@ -1,0 +1,863 @@
+{
+  "provenance": "Measured from the three SHA-pinned GLBs, previous profile at 5c788c71d301d365ee2b5539d4f3b193a42cdd94. Metadata fixtures, not live DB evidence.",
+  "entries": [
+    {
+      "previous": {
+        "revision": "aurion.glb-normalization.v1",
+        "sourceSha256": "a6c164035b8c8f1855ccf52e38c3202731718acc28346cc07f4837591540f349",
+        "unitConvention": "gltf-rh-y-up-meter",
+        "unitToMm": 1000,
+        "axisConvention": "aurion-rh-y-up-forward-z",
+        "axisTransform3x3": [
+          1,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          1
+        ],
+        "sourceBoundsMm": {
+          "min": [
+            -50750,
+            0,
+            -44750
+          ],
+          "max": [
+            50750,
+            12300,
+            44750
+          ]
+        },
+        "normalizedBoundsMm": {
+          "min": [
+            -4000,
+            0,
+            -3527
+          ],
+          "max": [
+            4000,
+            969,
+            3527
+          ]
+        },
+        "targetEnvelopeMm": [
+          8000,
+          8000,
+          8000
+        ],
+        "aspectRatioE6": [
+          1000000,
+          121125,
+          881750
+        ],
+        "clearanceEnvelopeMm": [
+          0,
+          7031,
+          946
+        ],
+        "scaleE8": 7881773,
+        "sourcePivotMm": [
+          0,
+          0,
+          0
+        ],
+        "translationMm": [
+          0,
+          0,
+          0
+        ],
+        "gridSnap": {
+          "permitted": true,
+          "stepMm": 1000,
+          "aligned": true,
+          "errorMm": [
+            0,
+            0,
+            0
+          ]
+        },
+        "collision": {
+          "authority": "presentation-envelope-only",
+          "aabbMm": {
+            "min": [
+              -4000,
+              0,
+              -3527
+            ],
+            "max": [
+              4000,
+              969,
+              3527
+            ]
+          },
+          "obb": {
+            "centerMm": [
+              0,
+              485,
+              0
+            ],
+            "halfExtentsMm": [
+              4000,
+              485,
+              3527
+            ],
+            "orientationQ30": [
+              0,
+              0,
+              0,
+              1073741824
+            ]
+          },
+          "volumeMm3": "54682608000",
+          "volumeBudgetMm3": "512000000000",
+          "surfaceAreaMm2": "142038652",
+          "surfaceAreaBudgetMm2": "384000000",
+          "triangleCount": 19012,
+          "triangleBudget": 2000000
+        },
+        "lod": {
+          "level": 0,
+          "maxRenderDistanceMm": 0,
+          "triangleCount": 19012,
+          "triangleBudget": 2000000
+        },
+        "transformSha256": "eca6e1d50435bfee170825b10c17ba2455b0540c1975423fb896bffca0e2d555",
+        "manifestSha256": "57c32c6137bdd64e41b44824215c93b416e7289a61fee02eea3f8207a4777390"
+      },
+      "next": {
+        "version": "aurion.glb-import.v1",
+        "purpose": "world-environment",
+        "sha256": "a6c164035b8c8f1855ccf52e38c3202731718acc28346cc07f4837591540f349",
+        "bytes": 9299064,
+        "assetType": "arena",
+        "subcategory": "structure",
+        "equipmentSlot": null,
+        "worldFamily": "environment",
+        "rigContract": null,
+        "targetKey": null,
+        "normalizationRevision": "aurion.glb-normalization.v1",
+        "normalizationSha256": "37ed704666e8fa8d4852c5572359735c9d5e2baa9a52aeaf938da25b1c000464",
+        "classification": {
+          "assetType": "arena",
+          "subcategory": "structure",
+          "confidence": "medium",
+          "animationNames": [],
+          "nodeNames": [
+            "Merged_Aurion_holz_boden.001",
+            "Merged_Aurion_stein_mauer.001",
+            "Merged_Aurion_dach_ziegel.001",
+            "Merged_Aurion_stein_treppe.001"
+          ],
+          "skinCount": 0,
+          "socketCount": 0,
+          "lod": 0,
+          "rigContract": null,
+          "equipmentSlot": null,
+          "worldFamily": "environment"
+        },
+        "normalization": {
+          "revision": "aurion.glb-normalization.v1",
+          "sourceSha256": "a6c164035b8c8f1855ccf52e38c3202731718acc28346cc07f4837591540f349",
+          "unitConvention": "gltf-rh-y-up-meter",
+          "unitToMm": 1000,
+          "axisConvention": "aurion-rh-y-up-forward-z",
+          "axisTransform3x3": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1
+          ],
+          "sourceBoundsMm": {
+            "min": [
+              -50750,
+              0,
+              -44750
+            ],
+            "max": [
+              50750,
+              12300,
+              44750
+            ]
+          },
+          "normalizedBoundsMm": {
+            "min": [
+              -50750,
+              0,
+              -44750
+            ],
+            "max": [
+              50750,
+              12300,
+              44750
+            ]
+          },
+          "targetEnvelopeMm": [
+            110000,
+            20000,
+            110000
+          ],
+          "aspectRatioE6": [
+            1000000,
+            121182,
+            881773
+          ],
+          "clearanceEnvelopeMm": [
+            8500,
+            7700,
+            20500
+          ],
+          "scaleE8": 100000000,
+          "sourcePivotMm": [
+            0,
+            0,
+            0
+          ],
+          "translationMm": [
+            0,
+            0,
+            0
+          ],
+          "gridSnap": {
+            "permitted": true,
+            "stepMm": 1000,
+            "aligned": true,
+            "errorMm": [
+              0,
+              0,
+              0
+            ]
+          },
+          "collision": {
+            "authority": "presentation-envelope-only",
+            "aabbMm": {
+              "min": [
+                -50750,
+                0,
+                -44750
+              ],
+              "max": [
+                50750,
+                12300,
+                44750
+              ]
+            },
+            "obb": {
+              "centerMm": [
+                0,
+                6150,
+                0
+              ],
+              "halfExtentsMm": [
+                50750,
+                6150,
+                44750
+              ],
+              "orientationQ30": [
+                0,
+                0,
+                0,
+                1073741824
+              ]
+            },
+            "volumeMm3": "111736275000000",
+            "volumeBudgetMm3": "242000000000000",
+            "surfaceAreaMm2": "22867100000",
+            "surfaceAreaBudgetMm2": "33000000000",
+            "triangleCount": 19012,
+            "triangleBudget": 2000000
+          },
+          "lod": {
+            "level": 0,
+            "maxRenderDistanceMm": 0,
+            "triangleCount": 19012,
+            "triangleBudget": 2000000
+          },
+          "transformSha256": "ce81b28aa7c334b5e920da9530d8f17db3fe437e6ae5533dfb03663d2f38004b",
+          "manifestSha256": "37ed704666e8fa8d4852c5572359735c9d5e2baa9a52aeaf938da25b1c000464"
+        },
+        "assetId": "glb_a6c164035b8c8f1855ccf52e38c3202731718acc28346cc0",
+        "planSha256": "be952b615b60e6de06d56ede108db0b26f96ce915a2b9fb66632688f1a82bf7e"
+      }
+    },
+    {
+      "previous": {
+        "revision": "aurion.glb-normalization.v1",
+        "sourceSha256": "003420006a5e06fffe46f22e2d4e915b2fc45f752a5a09e75094de9e3e9f6f9d",
+        "unitConvention": "gltf-rh-y-up-meter",
+        "unitToMm": 1000,
+        "axisConvention": "aurion-rh-y-up-forward-z",
+        "axisTransform3x3": [
+          1,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          1
+        ],
+        "sourceBoundsMm": {
+          "min": [
+            -50750,
+            0,
+            -44750
+          ],
+          "max": [
+            50750,
+            12300,
+            44750
+          ]
+        },
+        "normalizedBoundsMm": {
+          "min": [
+            -4000,
+            0,
+            -3527
+          ],
+          "max": [
+            4000,
+            969,
+            3527
+          ]
+        },
+        "targetEnvelopeMm": [
+          8000,
+          8000,
+          8000
+        ],
+        "aspectRatioE6": [
+          1000000,
+          121125,
+          881750
+        ],
+        "clearanceEnvelopeMm": [
+          0,
+          7031,
+          946
+        ],
+        "scaleE8": 7881773,
+        "sourcePivotMm": [
+          0,
+          0,
+          0
+        ],
+        "translationMm": [
+          0,
+          0,
+          0
+        ],
+        "gridSnap": {
+          "permitted": true,
+          "stepMm": 1000,
+          "aligned": true,
+          "errorMm": [
+            0,
+            0,
+            0
+          ]
+        },
+        "collision": {
+          "authority": "presentation-envelope-only",
+          "aabbMm": {
+            "min": [
+              -4000,
+              0,
+              -3527
+            ],
+            "max": [
+              4000,
+              969,
+              3527
+            ]
+          },
+          "obb": {
+            "centerMm": [
+              0,
+              485,
+              0
+            ],
+            "halfExtentsMm": [
+              4000,
+              485,
+              3527
+            ],
+            "orientationQ30": [
+              0,
+              0,
+              0,
+              1073741824
+            ]
+          },
+          "volumeMm3": "54682608000",
+          "volumeBudgetMm3": "512000000000",
+          "surfaceAreaMm2": "142038652",
+          "surfaceAreaBudgetMm2": "384000000",
+          "triangleCount": 13170,
+          "triangleBudget": 1000000
+        },
+        "lod": {
+          "level": 1,
+          "maxRenderDistanceMm": 24000,
+          "triangleCount": 13170,
+          "triangleBudget": 1000000
+        },
+        "transformSha256": "f6bff73883b1f64a5944e34fe77cb8e4d1200848da8d0427d98a73b2a2dce7cb",
+        "manifestSha256": "45f869d6a81cf3f35fc3ed62c4e24f4265051b6e8d770e3d1071670dfa82dc03"
+      },
+      "next": {
+        "version": "aurion.glb-import.v1",
+        "purpose": "world-environment",
+        "sha256": "003420006a5e06fffe46f22e2d4e915b2fc45f752a5a09e75094de9e3e9f6f9d",
+        "bytes": 8421884,
+        "assetType": "arena",
+        "subcategory": "structure",
+        "equipmentSlot": null,
+        "worldFamily": "environment",
+        "rigContract": null,
+        "targetKey": null,
+        "normalizationRevision": "aurion.glb-normalization.v1",
+        "normalizationSha256": "ef447afc27bd0b20bb12e4ddbd5c09a7f808f87556a797ec313d34d7325afbc6",
+        "classification": {
+          "assetType": "arena",
+          "subcategory": "structure",
+          "confidence": "medium",
+          "animationNames": [],
+          "nodeNames": [
+            "Merged_Aurion_holz_boden.002",
+            "Merged_Aurion_stein_mauer.002",
+            "Merged_Aurion_dach_ziegel.002",
+            "Merged_Aurion_stein_treppe.002"
+          ],
+          "skinCount": 0,
+          "socketCount": 0,
+          "lod": 1,
+          "rigContract": null,
+          "equipmentSlot": null,
+          "worldFamily": "environment"
+        },
+        "normalization": {
+          "revision": "aurion.glb-normalization.v1",
+          "sourceSha256": "003420006a5e06fffe46f22e2d4e915b2fc45f752a5a09e75094de9e3e9f6f9d",
+          "unitConvention": "gltf-rh-y-up-meter",
+          "unitToMm": 1000,
+          "axisConvention": "aurion-rh-y-up-forward-z",
+          "axisTransform3x3": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1
+          ],
+          "sourceBoundsMm": {
+            "min": [
+              -50750,
+              0,
+              -44750
+            ],
+            "max": [
+              50750,
+              12300,
+              44750
+            ]
+          },
+          "normalizedBoundsMm": {
+            "min": [
+              -50750,
+              0,
+              -44750
+            ],
+            "max": [
+              50750,
+              12300,
+              44750
+            ]
+          },
+          "targetEnvelopeMm": [
+            110000,
+            20000,
+            110000
+          ],
+          "aspectRatioE6": [
+            1000000,
+            121182,
+            881773
+          ],
+          "clearanceEnvelopeMm": [
+            8500,
+            7700,
+            20500
+          ],
+          "scaleE8": 100000000,
+          "sourcePivotMm": [
+            0,
+            0,
+            0
+          ],
+          "translationMm": [
+            0,
+            0,
+            0
+          ],
+          "gridSnap": {
+            "permitted": true,
+            "stepMm": 1000,
+            "aligned": true,
+            "errorMm": [
+              0,
+              0,
+              0
+            ]
+          },
+          "collision": {
+            "authority": "presentation-envelope-only",
+            "aabbMm": {
+              "min": [
+                -50750,
+                0,
+                -44750
+              ],
+              "max": [
+                50750,
+                12300,
+                44750
+              ]
+            },
+            "obb": {
+              "centerMm": [
+                0,
+                6150,
+                0
+              ],
+              "halfExtentsMm": [
+                50750,
+                6150,
+                44750
+              ],
+              "orientationQ30": [
+                0,
+                0,
+                0,
+                1073741824
+              ]
+            },
+            "volumeMm3": "111736275000000",
+            "volumeBudgetMm3": "242000000000000",
+            "surfaceAreaMm2": "22867100000",
+            "surfaceAreaBudgetMm2": "33000000000",
+            "triangleCount": 13170,
+            "triangleBudget": 1000000
+          },
+          "lod": {
+            "level": 1,
+            "maxRenderDistanceMm": 24000,
+            "triangleCount": 13170,
+            "triangleBudget": 1000000
+          },
+          "transformSha256": "4b6b6d522d2b292bf3520eda38c2901c20be37339411625810d99d24a70298e1",
+          "manifestSha256": "ef447afc27bd0b20bb12e4ddbd5c09a7f808f87556a797ec313d34d7325afbc6"
+        },
+        "assetId": "glb_003420006a5e06fffe46f22e2d4e915b2fc45f752a5a09e7",
+        "planSha256": "5c6030b90c2a0c00bddce80835cbb31be3394d9e4e53d33bdbb749075a924c1d"
+      }
+    },
+    {
+      "previous": {
+        "revision": "aurion.glb-normalization.v1",
+        "sourceSha256": "1dab1c81a3c73d1970bbc2a68cc61f20452d4fda0384269dde0987ff04108a1d",
+        "unitConvention": "gltf-rh-y-up-meter",
+        "unitToMm": 1000,
+        "axisConvention": "aurion-rh-y-up-forward-z",
+        "axisTransform3x3": [
+          1,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          1
+        ],
+        "sourceBoundsMm": {
+          "min": [
+            -50750,
+            0,
+            -44750
+          ],
+          "max": [
+            50750,
+            12300,
+            44750
+          ]
+        },
+        "normalizedBoundsMm": {
+          "min": [
+            -4000,
+            0,
+            -3527
+          ],
+          "max": [
+            4000,
+            969,
+            3527
+          ]
+        },
+        "targetEnvelopeMm": [
+          8000,
+          8000,
+          8000
+        ],
+        "aspectRatioE6": [
+          1000000,
+          121125,
+          881750
+        ],
+        "clearanceEnvelopeMm": [
+          0,
+          7031,
+          946
+        ],
+        "scaleE8": 7881773,
+        "sourcePivotMm": [
+          0,
+          0,
+          0
+        ],
+        "translationMm": [
+          0,
+          0,
+          0
+        ],
+        "gridSnap": {
+          "permitted": true,
+          "stepMm": 1000,
+          "aligned": true,
+          "errorMm": [
+            0,
+            0,
+            0
+          ]
+        },
+        "collision": {
+          "authority": "presentation-envelope-only",
+          "aabbMm": {
+            "min": [
+              -4000,
+              0,
+              -3527
+            ],
+            "max": [
+              4000,
+              969,
+              3527
+            ]
+          },
+          "obb": {
+            "centerMm": [
+              0,
+              485,
+              0
+            ],
+            "halfExtentsMm": [
+              4000,
+              485,
+              3527
+            ],
+            "orientationQ30": [
+              0,
+              0,
+              0,
+              1073741824
+            ]
+          },
+          "volumeMm3": "54682608000",
+          "volumeBudgetMm3": "512000000000",
+          "surfaceAreaMm2": "142038652",
+          "surfaceAreaBudgetMm2": "384000000",
+          "triangleCount": 9836,
+          "triangleBudget": 500000
+        },
+        "lod": {
+          "level": 2,
+          "maxRenderDistanceMm": 56000,
+          "triangleCount": 9836,
+          "triangleBudget": 500000
+        },
+        "transformSha256": "a0edfd31c555616f2a6773601d015ec02c6d9eefbed94ec0b5836b0631fb0932",
+        "manifestSha256": "9f878c892589534186f811c72fc4b33465b4bf4792c7a75496343ac61ca69835"
+      },
+      "next": {
+        "version": "aurion.glb-import.v1",
+        "purpose": "world-environment",
+        "sha256": "1dab1c81a3c73d1970bbc2a68cc61f20452d4fda0384269dde0987ff04108a1d",
+        "bytes": 7921780,
+        "assetType": "arena",
+        "subcategory": "structure",
+        "equipmentSlot": null,
+        "worldFamily": "environment",
+        "rigContract": null,
+        "targetKey": null,
+        "normalizationRevision": "aurion.glb-normalization.v1",
+        "normalizationSha256": "448c4ae64e452eeaa207afdd80915783b0dfec7d500876ae06a8bb5d03b4eef3",
+        "classification": {
+          "assetType": "arena",
+          "subcategory": "structure",
+          "confidence": "medium",
+          "animationNames": [],
+          "nodeNames": [
+            "Merged_Aurion_holz_boden.002",
+            "Merged_Aurion_stein_mauer.002",
+            "Merged_Aurion_dach_ziegel.002",
+            "Merged_Aurion_stein_treppe.002"
+          ],
+          "skinCount": 0,
+          "socketCount": 0,
+          "lod": 2,
+          "rigContract": null,
+          "equipmentSlot": null,
+          "worldFamily": "environment"
+        },
+        "normalization": {
+          "revision": "aurion.glb-normalization.v1",
+          "sourceSha256": "1dab1c81a3c73d1970bbc2a68cc61f20452d4fda0384269dde0987ff04108a1d",
+          "unitConvention": "gltf-rh-y-up-meter",
+          "unitToMm": 1000,
+          "axisConvention": "aurion-rh-y-up-forward-z",
+          "axisTransform3x3": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1
+          ],
+          "sourceBoundsMm": {
+            "min": [
+              -50750,
+              0,
+              -44750
+            ],
+            "max": [
+              50750,
+              12300,
+              44750
+            ]
+          },
+          "normalizedBoundsMm": {
+            "min": [
+              -50750,
+              0,
+              -44750
+            ],
+            "max": [
+              50750,
+              12300,
+              44750
+            ]
+          },
+          "targetEnvelopeMm": [
+            110000,
+            20000,
+            110000
+          ],
+          "aspectRatioE6": [
+            1000000,
+            121182,
+            881773
+          ],
+          "clearanceEnvelopeMm": [
+            8500,
+            7700,
+            20500
+          ],
+          "scaleE8": 100000000,
+          "sourcePivotMm": [
+            0,
+            0,
+            0
+          ],
+          "translationMm": [
+            0,
+            0,
+            0
+          ],
+          "gridSnap": {
+            "permitted": true,
+            "stepMm": 1000,
+            "aligned": true,
+            "errorMm": [
+              0,
+              0,
+              0
+            ]
+          },
+          "collision": {
+            "authority": "presentation-envelope-only",
+            "aabbMm": {
+              "min": [
+                -50750,
+                0,
+                -44750
+              ],
+              "max": [
+                50750,
+                12300,
+                44750
+              ]
+            },
+            "obb": {
+              "centerMm": [
+                0,
+                6150,
+                0
+              ],
+              "halfExtentsMm": [
+                50750,
+                6150,
+                44750
+              ],
+              "orientationQ30": [
+                0,
+                0,
+                0,
+                1073741824
+              ]
+            },
+            "volumeMm3": "111736275000000",
+            "volumeBudgetMm3": "242000000000000",
+            "surfaceAreaMm2": "22867100000",
+            "surfaceAreaBudgetMm2": "33000000000",
+            "triangleCount": 9836,
+            "triangleBudget": 500000
+          },
+          "lod": {
+            "level": 2,
+            "maxRenderDistanceMm": 56000,
+            "triangleCount": 9836,
+            "triangleBudget": 500000
+          },
+          "transformSha256": "7b819f372133df566a4f52f1928e4595ef57ea2ef83f065b755efa8c9074c4c9",
+          "manifestSha256": "448c4ae64e452eeaa207afdd80915783b0dfec7d500876ae06a8bb5d03b4eef3"
+        },
+        "assetId": "glb_1dab1c81a3c73d1970bbc2a68cc61f20452d4fda0384269d",
+        "planSha256": "0457914cbf4712f4e9c034499fcf96bf61585caab341fe4dfcfbb26cd1c9bce4"
+      }
+    }
+  ]
+}

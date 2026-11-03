@@ -6,6 +6,7 @@ import { joinWorldChunkPositionMm, splitWorldChunkPositionMm, type WorldChunkCoo
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
 import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, villageStreetLampVisualPlacements, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
+import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
 
 type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
 const MAX_RENDERED = 18;
@@ -110,6 +111,7 @@ export class UploadedWorldCatalogProjection {
       placement.id.startsWith("aurion.return-stone")
       || placement.id.startsWith("aurion.village-fountain")
       || placement.id.startsWith("aurion.village-street-lamp")
+      || isStarterCityWallSource(placement.asset.sha256)
         ? 0
         : 1;
     placements.sort((left, right) => {
@@ -151,7 +153,10 @@ export class UploadedWorldCatalogProjection {
       const size = bounds.getSize(new THREE.Vector3());
       const maxDimension = Math.max(size.x, size.y, size.z);
       if (!Number.isFinite(maxDimension) || maxDimension <= 0.0001) return;
-      const scale = THREE.MathUtils.clamp((targetSizeMeters(placement.asset.subcategory) / maxDimension) * ((placement.scalePermille ?? 1_000) / 1_000), 0.05, 12);
+      // These pinned wall bytes are authored in metres and already normalized
+      // by the server manifest. Fitting a city perimeter to a 5 m prop destroys it.
+      const assetScale = isStarterCityWallSource(placement.asset.sha256) ? 1 : targetSizeMeters(placement.asset.subcategory) / maxDimension;
+      const scale = THREE.MathUtils.clamp(assetScale * ((placement.scalePermille ?? 1_000) / 1_000), 0.05, 12);
       const center = bounds.getCenter(new THREE.Vector3());
       const worldX = placement.xMm / 1000;
       const worldZ = placement.zMm / 1000;

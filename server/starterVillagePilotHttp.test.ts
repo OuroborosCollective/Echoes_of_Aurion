@@ -4,6 +4,7 @@ import { createPool, type RowDataPacket } from "mysql2/promise";
 import { describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { ZONE_PROTOCOL_VERSION } from "../shared/zonePresenceContract";
+import { AURION_COMBAT_RULES } from "../shared/aurionCombatRules";
 import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
 
 const enabled = process.env.AURION_STARTER_VILLAGE_HTTP_E2E === "1";
@@ -77,6 +78,7 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number, onNor
   const combatEvents: ZoneCombatEvent[] = [];
   const rejects: string[] = [];
   let welcomed = false;
+  let observedTick = 0;
 
   socket.on("message", raw => {
     const message = JSON.parse(raw.toString("utf8"));
@@ -85,6 +87,7 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number, onNor
       selfEntityId = String(message.selfEntityId ?? "");
     }
     if (message.type === "welcome" || message.type === "snapshot") {
+      if (Number.isSafeInteger(message.tick)) observedTick = Math.max(observedTick, message.tick);
       const self = message.presences?.find((presence: any) => presence.userId === userId);
       if (self) selfPosition = { x: self.position.x, z: self.position.z };
       if (Array.isArray(message.mobs)) mobs = message.mobs;
@@ -158,10 +161,24 @@ async function runAuthoritativeZoneJourney(cookie: string, userId: number, onNor
 
     const combatStarted = Date.now();
     let killed: ZoneCombatEvent | undefined;
+    let nextAttackTick = observedTick;
     while (!killed) {
       if (Date.now() - combatStarted > 30_000) throw new Error("ZONE_COMBAT_NOT_COMPLETED");
+      // Drive the real client at the confirmed v4 combat cadence. Repeated
+      // 120 ms attacks are correctly rejected during the eight-tick cooldown.
+      await waitUntil(() => observedTick >= nextAttackTick, "ZONE_COMBAT_TICK_NOT_CONFIRMED", 5_000);
+      const previousSequence = combatEvents.at(-1)?.sequence ?? -1;
+      const previousRejectCount = rejects.length;
       socket.send(JSON.stringify({ type: "attack", clientSeq: ++clientSeq, targetEntityId: target.entityId }));
-      await sleep(120);
+      const attackEvent = () => combatEvents.find(event =>
+        event.sequence > previousSequence
+        && event.attackerEntityId === selfEntityId
+        && event.defenderEntityId === target.entityId
+      );
+      await waitUntil(() => attackEvent() !== undefined || rejects.length > previousRejectCount, "ZONE_ATTACK_NOT_CONFIRMED", 5_000);
+      expect(rejects.slice(previousRejectCount), "valid paced attack must be admitted").toEqual([]);
+      const confirmed = attackEvent()!;
+      nextAttackTick = confirmed.tick + AURION_COMBAT_RULES.basic.cooldown;
       killed = combatEvents.find(event =>
         event.attackerEntityId === selfEntityId
         && event.defenderEntityId === target.entityId

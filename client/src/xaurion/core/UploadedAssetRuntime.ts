@@ -1,4 +1,5 @@
 import type { GlbCatalogEntry, GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
 import { WORLD_CHUNK_SIZE_MM, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import {
   AURION_RETURN_STONE_ASSET_ID,
@@ -182,6 +183,7 @@ export function uploadedWorldVisualsForChunk(
       && entry.assetType === "arena"
       && entry.targetKey === null
       && entry.sha256 !== AURION_RETURN_STONE_SOURCE_SHA256
+      && !isStarterCityWallSource(entry.sha256)
       && !AURION_VILLAGE_FOUNTAIN_LODS.some(lod => lod.sha256 === entry.sha256)
       && !AURION_VILLAGE_STREET_LAMP_LODS.some(lod => lod.sha256 === entry.sha256))
     .slice()

@@ -7,6 +7,7 @@ import {
 } from "../../../../server/glbImportFixtures";
 import { buildGlbImportPlan } from "../../../../server/glbImportPlan";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
+import { AURION_STARTER_CITY_WALL_LODS } from "@shared/aurionStarterCityWallContract";
 import {
   GlbResourcePool,
   fetchVerifiedGlb,
@@ -318,5 +319,41 @@ describe("bounded, verified GLB ownership", () => {
       glbManager.convertToRpgItem({ url: "/old.glb" } as any)
     ).toThrow("GLB_VISUAL_CATALOG_CANNOT_GRANT_ITEMS");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses a permitted lower LOD on phones without downloading the wall's oversized variants", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    // Real Three.js decoder and budget pool, with small static fixture GLBs.
+    // Catalog sizes reproduce all three actual approved wall file sizes.
+    const physical = await Promise.all(AURION_STARTER_CITY_WALL_LODS.map(async source => {
+      const bytes = testGlb(`Aurion_CityWall_LOD${source.level}`);
+      const plan = await buildGlbImportPlan(bytes.toString("base64"), "world-environment", source.fileName);
+      return { level: source.level, assetId: plan.assetId, sha256: plan.sha256, bytes: source.bytes,
+        storageUrl: `/api/assets/glb/${plan.sha256}.glb`, normalization: plan.normalization, targetKey: null, fixture: bytes };
+    }));
+    const entry = { ...physical[0]!, displayName: "Wall", purpose: "world-environment", assetType: "arena",
+      subcategory: "structure", equipmentSlot: null, lods: physical } as GlbCatalogEntry;
+    const fetch = vi.fn(async (url: string) => new Response(physical.find(lod => lod.storageUrl === url)!.fixture));
+    vi.stubGlobal("fetch", fetch);
+    const loaded = await glbManager.loadStaticLodFamily(entry);
+    expect(loaded.lodLevels).toEqual([2]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(physical[2]!.storageUrl, expect.anything());
+    expect(new THREE.Box3().setFromObject(loaded.scene).isEmpty()).toBe(false);
+    releaseGlbTree(loaded.scene);
+    await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.slice(0, 2) })).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not disguise an invalid permitted LOD as a budget fallback", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const bytes = testGlb("Aurion_Wall_LOD2");
+    const plan = await buildGlbImportPlan(bytes.toString("base64"), "world-environment", "Aurion_Wall_LOD2.glb");
+    const variant = { level: 2 as const, assetId: plan.assetId, sha256: plan.sha256, bytes: bytes.length,
+      storageUrl: `/api/assets/glb/${plan.sha256}.glb`, normalization: plan.normalization, targetKey: null };
+    const entry: GlbCatalogEntry = { ...variant, displayName: "Wall", purpose: "world-environment", assetType: "arena",
+      subcategory: "structure", equipmentSlot: null, lods: [variant] };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(testGlb("different content"))));
+    await expect(glbManager.loadStaticLodFamily(entry)).rejects.toThrow("GLB_HASH");
   });
 });

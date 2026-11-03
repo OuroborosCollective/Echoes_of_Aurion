@@ -94,6 +94,10 @@ jobs:
           server/glbAgentSession.test.ts
           server/glbImportMariaDb.test.ts
           server/glbImportPlan.test.ts
+          server/glbNormalization.test.ts
+          server/starterCityWallMigration.test.ts
+          server/starterCityWallPublication.test.ts
+          shared/aurionStarterCityWallContract.test.ts
           server/glbFileStore.test.ts
           server/glbImportCli.test.ts
           server/adminMcp.test.ts
@@ -104,6 +108,9 @@ jobs:
           server/glbSmartUpload.test.ts
           server/glbSmartUploadIntegrationContract.test.ts
           client/src/pages/GlbUpload.test.tsx
+          client/src/xaurion/core/GlbResourceBudget.test.ts
+          client/src/xaurion/core/UploadedAssetRuntime.test.ts
+          client/src/xaurion/integration/UploadedWorldCatalogProjection.test.ts
 
       - name: TypeScript check
         run: pnpm check
