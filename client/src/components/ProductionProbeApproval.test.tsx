@@ -112,3 +112,43 @@ describe("production approval list feedback over HTTP", () => {
     expect(calls).toBe(2);
   }, 20000);
 });
+
+describe("whole-release approval", () => {
+  it("requires its own explicit confirmation and posts exactly one run-bound release request", async () => {
+    const revision = "b".repeat(40);
+    const received: Array<{ url?: string; body: unknown }> = [];
+    const server = createServer((request, response) => {
+      let raw = ""; request.on("data", chunk => { raw += chunk; });
+      request.on("end", () => {
+        received.push({ url: request.url, body: JSON.parse(raw) });
+        const approval = (scope: string) => ({ approvalId: (scope.length % 2 ? "c" : "d").repeat(32), scope, purpose: "Produktionsrelease", expiresAtMs: 1_800_000_000_000, consumedAtMs: null, revokedAtMs: null,
+          run: { revision, runId: "41556371599", runAttempt: 1 } });
+        response.setHeader("Content-Type", "application/json");
+        response.end(JSON.stringify([approval("aurion.probe.admin-readback"), approval("aurion.probe.gameplay-session-readback")]));
+      });
+    });
+    server.listen(0, "127.0.0.1"); await once(server, "listening");
+    const port = (server.address() as { port: number }).port;
+    vi.stubGlobal("fetch", (path: string, options: RequestInit) => nativeFetch(`http://127.0.0.1:${port}${path}`, options));
+    stop = () => new Promise(resolve => { server.close(() => resolve()); server.closeAllConnections(); });
+    const previous = window.location.href;
+    window.history.replaceState({}, "", `/ops?aurion_revision=${revision}&aurion_run_id=41556371599&aurion_attempt=1&aurion_scope=aurion.probe.admin-readback`);
+    try {
+      render(<ProductionProbeApproval />);
+      const button = screen.getByRole("button", { name: "Gesamten Release freigeben (Preflight + Gameplay)" }) as HTMLButtonElement;
+      fireEvent.change(screen.getByLabelText("Aurion-Passwort erneut bestätigen"), { target: { value: "owner-secret" } });
+      expect(button.disabled).toBe(true);
+      fireEvent.click(screen.getByLabelText(/beide Freigaben/));
+      expect(button.disabled).toBe(false);
+      fireEvent.click(button);
+      await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Release-Freigaben gespeichert (2)"));
+      expect(received).toEqual([{ url: "/api/production-probe/approve-release", body: {
+        run: { repository: "OuroborosCollective/Echoes_of_Aurion", workflow: ".github/workflows/deploy-aurion-zone-runtime.yml", ref: "refs/heads/main",
+          revision, runId: "41556371599", runAttempt: 1, environment: "production", audience: "aurion-production-probe" },
+        password: "owner-secret", confirmed: true } }]);
+      expect(button.disabled).toBe(true);
+    } finally {
+      window.history.replaceState({}, "", new URL(previous).pathname);
+    }
+  });
+});

@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { AurionProductionProbeStore } from "./aurionProductionProbeStore";
+import { AURION_PROBE_MAX_APPROVAL_MS } from "./aurionProductionProbeApprovalContract";
 import { hashLocalPassword } from "./localAuth";
 const enabled=process.env.AURION_PROBE_E2E==='1';
 const suite=enabled?describe:describe.skip;
@@ -120,6 +121,32 @@ suite('real MariaDB one-shot transaction and role/reauth proof (isolated DB only
   finally { await pool.execute("UPDATE users SET role='admin' WHERE id=?",[userId]); }
   const [rows]=await pool.execute<RowDataPacket[]>('SELECT approvalId FROM aurionProductionProbeApprovals WHERE runJson=?',[JSON.stringify(runIdentity)]);
   expect(rows).toHaveLength(0);
+ });
+ it('approves a whole release in one owner step as two separately consumed scopes that outlast a full run',async()=>{
+  const r=identity();
+  const approved=await store.approveRelease(userId,password,r);
+  expect(approved.map(a=>a.scope)).toEqual(['aurion.probe.admin-readback','aurion.probe.gameplay-session-readback']);
+  expect(new Set(approved.map(a=>a.approvalId)).size).toBe(2);
+  expect(approved.every(a=>a.expiresAtMs-a.approvedAtMs===AURION_PROBE_MAX_APPROVAL_MS)).toBe(true);
+  // Approved at run start; the gameplay gate is reached about 90 minutes later in production.
+  await pool.execute('UPDATE aurionProductionProbeApprovals SET approvedAtMs=approvedAtMs-5400000, expiresAtMs=expiresAtMs-5400000 WHERE runJson=?',[JSON.stringify(r)]);
+  await store.consume(r,'aurion.probe.admin-readback');
+  await expect(store.consume(r,'aurion.probe.admin-readback')).rejects.toThrow();
+  await expect(store.hasPendingGameplayApproval(r)).resolves.toBe(true);
+  await store.consume(r,'aurion.probe.gameplay-session-readback');
+  // The read-only gameplay observation scope is never inferred from a release approval.
+  await expect(store.consume(r,'aurion.probe.gameplay-readback')).rejects.toThrow('PROBE_APPROVAL_REQUIRED');
+  await expect(store.hasPendingGameplayApproval(identity())).resolves.toBe(false);
+ });
+ it('creates no release approval on a wrong password or when one scope is already approved (atomic)',async()=>{
+  const r=identity();
+  await expect(store.approveRelease(userId,'wrong',r)).rejects.toThrow('PROBE_ADMIN_REAUTH_REQUIRED');
+  const count=async()=>{const [rows]=await pool.execute<RowDataPacket[]>('SELECT scope FROM aurionProductionProbeApprovals WHERE runJson=? ORDER BY scope',[JSON.stringify(r)]);return rows.map(row=>row.scope);};
+  expect(await count()).toEqual([]);
+  const [credential]=await pool.execute<RowDataPacket[]>('SELECT failedAttempts FROM localCredentials WHERE userId=?',[userId]);expect(Number(credential[0].failedAttempts)).toBe(1);
+  await store.approve(userId,password,r,'aurion.probe.admin-readback','pre-existing single approval');
+  await expect(store.approveRelease(userId,password,r)).rejects.toThrow();
+  expect(await count()).toEqual(['aurion.probe.admin-readback']);
  });
  it('commits failed-password lockout and rejects even correct password while locked',async()=>{
   for(let n=0;n<5;n++)await expect(store.approve(userId,'wrong',identity(),scope,'reauth failure proof')).rejects.toThrow();

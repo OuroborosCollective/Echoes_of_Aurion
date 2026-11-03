@@ -41,10 +41,23 @@ suite('isolated real HTTP + MariaDB + existing signed Aurion session (not produc
   expect((await post('approve',{...body,confirmed:false})).status).toBe(403);
   expect((await post('approve',{...body,password:'wrong'})).status).toBe(403);
   const approved=await post('approve',body);expect(approved.status).toBe(200);const receipt=await approved.json();
-  expect(receipt.expiresAtMs-receipt.approvedAtMs).toBe(300000);
+  expect(receipt.expiresAtMs-receipt.approvedAtMs).toBe(3*60*60*1000);
   expect((await (await post('list',{})).json()).some((a:any)=>a.approvalId===receipt.approvalId)).toBe(true);
   expect((await post('revoke',{approvalId:receipt.approvalId})).status).toBe(200);
   const rows=await (await post('list',{})).json();expect(rows.find((a:any)=>a.approvalId===receipt.approvalId).revokedAtMs).toBeGreaterThan(0);
+ });
+ it('approves a whole release only with exact body, explicit confirmation and fresh password',async()=>{
+  const releaseRun={...run,runId:'987654322'};
+  const body={run:releaseRun,password,confirmed:true};
+  expect((await post('approve-release',{...body,confirmed:false})).status).toBe(403);
+  expect((await post('approve-release',{...body,password:'wrong'})).status).toBe(403);
+  expect((await post('approve-release',{...body,scope:'aurion.probe.gameplay-readback'})).status).toBe(403);
+  expect((await post('approve-release',body,{origin:'https://evil.example'})).status).toBe(403);
+  const approved=await post('approve-release',body);expect(approved.status).toBe(200);
+  const receipts=await approved.json();
+  expect(receipts.map((a:any)=>a.scope)).toEqual(['aurion.probe.admin-readback','aurion.probe.gameplay-session-readback']);
+  expect(receipts.every((a:any)=>a.run.runId===releaseRun.runId&&a.consumedAtMs===null&&a.expiresAtMs-a.approvedAtMs===3*60*60*1000)).toBe(true);
+  expect((await post('approve-release',body)).status).toBe(403);
  });
  it('never accepts browser cookies or fabricated runner JWTs for consumption',async()=>{
   expect((await post('execute',{scope:'aurion.probe.admin-readback'})).status).toBe(403);
