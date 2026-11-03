@@ -169,6 +169,9 @@ export async function notifyApprovalWait(env, { revision, runId, runAttempt, wai
   } catch { return false; }
 }
 
+const TRANSIENT_OIDC_FAILURES = new Set(['PROBE_OIDC_REQUEST_NETWORK_FAILED', 'PROBE_OIDC_REQUEST_TIMEOUT']);
+const MAX_CONSECUTIVE_TRANSIENT_OIDC_FAILURES = 6;
+
 export async function waitForProductionAdminApproval(env = process.env, {
   now = () => performance.now(),
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
@@ -190,13 +193,21 @@ export async function waitForProductionAdminApproval(env = process.env, {
   const notified = await notify(identity, { revision: identity.GITHUB_SHA, runId: identity.GITHUB_RUN_ID,
     runAttempt: Number(identity.GITHUB_RUN_ATTEMPT), waitSeconds });
   report({ recordType: 'aurion.production-probe-approval-notify', delivered: notified === true });
+  let transientOidcFailures = 0;
   for (let attempt = 0; attempt < Math.ceil(waitSeconds / 10) && now() < deadline; attempt++) {
     try {
       const receipt = await executeProductionProbe(scope, identity);
       if (receipt.status !== 'AUTHORIZED') throw new Error('PROBE_PREFLIGHT_NOT_AUTHORIZED');
       return receipt;
     } catch (error) {
-      if (error?.message !== 'PROBE_AUTHORIZATION_DENIED' || error.httpStatus !== 403) throw error;
+      // Only the runner's own OIDC token request may be retried: it fails before
+      // any request reaches Aurion, so no approval can have been consumed. A lost
+      // execute response stays fatal because the server may already have consumed it.
+      if (TRANSIENT_OIDC_FAILURES.has(error?.message) && transientOidcFailures < MAX_CONSECUTIVE_TRANSIENT_OIDC_FAILURES) {
+        transientOidcFailures++;
+        report({ recordType: 'aurion.production-probe-approval-wait', status: 'TRANSIENT_OIDC_FAILURE', code: error.message, consecutive: transientOidcFailures });
+      } else if (error?.message !== 'PROBE_AUTHORIZATION_DENIED' || error.httpStatus !== 403) throw error;
+      else transientOidcFailures = 0;
     }
     if (attempt === 0 || attempt % 6 === 0) report({
       recordType: 'aurion.production-probe-approval-wait', status: 'NOT_AUTHORIZED_YET',

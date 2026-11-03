@@ -255,3 +255,44 @@ test('extended admin wait sends one notification without affecting gameplay gate
   assert.equal(clock,2400000);
   assert.equal(notices,1);
 });
+
+test('admin preflight survives bounded transient OIDC network failures but never retries a lost execute', async t => {
+  const nativeFetch = globalThis.fetch;
+  let mode = 'flaky', executions = 0, tokens = 0, clock = 0;
+  const reports = [];
+  const adminReceipt = { ...receipt, scope: 'aurion.probe.admin-readback', mutationAuthority: 'none', status: 'AUTHORIZED' };
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.url === '/token') {
+      tokens++;
+      if (mode === 'down' || (mode === 'flaky' && tokens <= 3)) { req.socket.destroy(); return; }
+      res.end(JSON.stringify({ value: (`test-token-${tokens}-`).repeat(20) })); return;
+    }
+    executions++;
+    if (mode === 'flaky' && executions < 2) { res.writeHead(403); res.end('{}'); return; }
+    res.end(JSON.stringify(adminReceipt));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const oidc = new URL(url).hostname === 'test.actions.githubusercontent.com';
+    return nativeFetch(`http://127.0.0.1:${server.address().port}/${oidc ? 'token' : 'execute'}`, options);
+  });
+  const options = { now: () => clock, sleep: async ms => { clock += ms; }, report: value => reports.push(value), notify: async () => false };
+  try {
+    assert.deepEqual(await waitForProductionAdminApproval(env, options), adminReceipt);
+    assert.equal(tokens, 5); assert.equal(executions, 2);
+    const transient = reports.filter(r => r.status === 'TRANSIENT_OIDC_FAILURE');
+    assert.deepEqual(transient.map(r => [r.code, r.consecutive]),
+      [['PROBE_OIDC_REQUEST_NETWORK_FAILED', 1], ['PROBE_OIDC_REQUEST_NETWORK_FAILED', 2], ['PROBE_OIDC_REQUEST_NETWORK_FAILED', 3]]);
+    assert.ok(!JSON.stringify(reports).includes('test-token'));
+
+    mode = 'down'; tokens = 0; executions = 0; clock = 0; reports.length = 0;
+    await assert.rejects(waitForProductionAdminApproval(env, options), { message: 'PROBE_OIDC_REQUEST_NETWORK_FAILED' });
+    assert.equal(tokens, 7, 'six consecutive transient OIDC failures are tolerated, the seventh is fatal');
+    assert.equal(executions, 0, 'Aurion is never contacted without a token');
+    assert.equal(clock, 60000);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
