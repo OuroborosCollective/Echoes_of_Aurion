@@ -28,6 +28,7 @@ const hash = (parts: readonly string[]) =>
   createHash("sha256").update(parts.join("\u001f"), "utf8").digest("hex");
 
 const clampUnit = (value: number) => Math.max(0, Math.min(1, Math.round(value * 10_000) / 10_000));
+const clampSigned = (value: number) => Math.max(-1, Math.min(1, Math.round(value * 10_000) / 10_000));
 
 type CivilizationLoopResult =
   | { action: "COLLAPSED"; ruinId: string; candidateId?: never; civilizationId?: never }
@@ -45,7 +46,7 @@ type CivilizationLoopResult =
  *   - Political instability erodes stability.
  *   - Caravan activity reduces scarcity (cross-hub supply routes).
  */
-function deriveEconomicDeltas(impact: EconomicCycleImpact | null) {
+export function deriveEconomicDeltas(impact: EconomicCycleImpact | null) {
   if (!impact) {
     return {
       populationDelta: 5,
@@ -66,7 +67,7 @@ function deriveEconomicDeltas(impact: EconomicCycleImpact | null) {
   const economyBoost = impact.totalEconomyPressure * 0.08;
   const politicsErosion = impact.totalPoliticsPressure * 0.06;
   const scarcityErosion = impact.totalScarcityPressure * 0.04;
-  const stabilityDelta = clampUnit(economyBoost - politicsErosion - scarcityErosion) - 0.02;
+  const stabilityDelta = clampSigned(economyBoost - politicsErosion - scarcityErosion) - 0.02;
 
   // Hazard index rises with hazard pressure, decays naturally.
   const hazardDelta = clampUnit(impact.totalHazardPressure * 0.12) - 0.02;
