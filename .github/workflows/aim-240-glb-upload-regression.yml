@@ -20,6 +20,8 @@ on:
       - "client/src/pages/Home.tsx"
       - "scripts/glb-import.mjs"
       - "e2e/glbImport.spec.ts"
+      - "e2e/glbZipImport.spec.ts"
+      - "e2e/localRegistration.ts"
       - "playwright.glb.config.ts"
       - "Dockerfile"
       - "docker-compose.traefik.yml"

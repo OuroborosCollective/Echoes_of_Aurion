@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { deflateRawSync } from "node:zlib";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
+import { completeLocalRegistration } from "./localRegistration";
 
 const CRC32_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -56,9 +57,7 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     await dialog.getByRole("tab", { name: "Konto anlegen", exact: true }).click();
     await dialog.getByLabel("Rufname", { exact: true }).fill("glb_zip_browser_admin");
     await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-glb-zip-test-only!");
-    await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
-    await expect(page.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet./ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible();
+    await completeLocalRegistration(page, "glb_zip_browser_admin");
     // Verify the session is authenticated but not yet admin, mirroring the
     // glbImport lane. This confirms the server has the user in its DB before
     // the direct MariaDB role elevation.
