@@ -14,7 +14,13 @@ export const AURION_PROBE_WORKFLOW = ".github/workflows/deploy-aurion-zone-runti
 export const AURION_PROBE_REF = "refs/heads/main";
 export const AURION_PROBE_ENVIRONMENT = "production";
 export const AURION_PROBE_OIDC_AUDIENCE = "aurion-production-probe";
-export const AURION_PROBE_MAX_APPROVAL_MS = 5 * 60 * 1000;
+/**
+ * Each approval stays bound to one exact run attempt and is consumed at most once.
+ * The window covers a complete release run (build, backup/recovery proof, schema
+ * apply, promotion, gameplay probe), so the owner can approve at run start
+ * instead of waiting at every gate. Unused approvals remain revocable.
+ */
+export const AURION_PROBE_MAX_APPROVAL_MS = 3 * 60 * 60 * 1000;
 
 export const AURION_PROBE_ADMIN_READBACK_SCOPE = "aurion.probe.admin-readback";
 export const AURION_PROBE_GAMEPLAY_READBACK_SCOPE = "aurion.probe.gameplay-readback";
@@ -24,6 +30,16 @@ export const AURION_PROBE_GAMEPLAY_READBACK_SCOPE = "aurion.probe.gameplay-readb
  * approval.
  */
 export const AURION_PROBE_GAMEPLAY_SESSION_READBACK_SCOPE = "aurion.probe.gameplay-session-readback";
+
+/**
+ * One explicit owner action may create exactly these two separate, individually
+ * consumed approvals for the same run. The gameplay scope is still never inferred
+ * from the read-only preflight; it is named and stored on its own.
+ */
+export const AURION_PROBE_RELEASE_APPROVALS = Object.freeze([
+  Object.freeze({ scope: "aurion.probe.admin-readback" as const, purpose: "Produktionsrelease Schema-Preflight" }),
+  Object.freeze({ scope: "aurion.probe.gameplay-session-readback" as const, purpose: "Produktionsrelease Gameplay-Join/Readback" }),
+]);
 
 export const AURION_PROBE_SCOPES = [
   AURION_PROBE_ADMIN_READBACK_SCOPE,

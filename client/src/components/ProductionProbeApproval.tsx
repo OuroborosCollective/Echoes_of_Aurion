@@ -45,7 +45,7 @@ export function ProductionProbeApproval() {
     ? preset.scope === "aurion.probe.gameplay-session-readback" ? "Produktionsrelease Gameplay-Join/Readback" : "Produktionsrelease Schema-Preflight"
     : "");
   const [scope, setScope] = useState<ProbeScope>(preset.scope); const [password, setPassword] = useState("");
-  const [confirmed, setConfirmed] = useState(false); const [busy, setBusy] = useState(false);
+  const [confirmed, setConfirmed] = useState(false); const [releaseConfirmed, setReleaseConfirmed] = useState(false); const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(""); const [approvals, setApprovals] = useState<Approval[]>([]);
   const request = async (operation: string, body: unknown) => {
     const controller = new AbortController();
@@ -63,6 +63,7 @@ export function ProductionProbeApproval() {
       const result: unknown = await response.json();
       if (operation === "list" && (!Array.isArray(result) || !result.every(isApproval))) throw new Error();
       if (operation === "approve" && !isApproval(result)) throw new Error();
+      if (operation === "approve-release" && (!Array.isArray(result) || result.length !== 2 || !result.every(isApproval))) throw new Error();
       return result;
     } catch {
       throw new Error(controller.signal.aborted
@@ -78,7 +79,7 @@ export function ProductionProbeApproval() {
   const act = async (work: () => Promise<void>) => { setBusy(true); setMessage("Anfrage läuft …"); try { await work(); } catch (error) { setMessage(error instanceof Error ? error.message : "Anfrage abgelehnt."); } finally { setBusy(false); setPassword(""); setConfirmed(false); } };
   return <Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader>
     <CardTitle>Einmalfreigabe für Produktionsprüfungen</CardTitle>
-    <CardDescription>Ein konkreter GitHub-Lauf, eine eng gebundene Berechtigung, maximal fünf Minuten. Schema- und Release-Freigaben bleiben separat. Der echte Gameplay-Join ist als effectful Probe ausdrücklich getrennt.</CardDescription>
+    <CardDescription>Ein konkreter GitHub-Lauf, eng gebundene und einmalig verbrauchte Berechtigungen, gültig bis zu drei Stunden, damit schon beim Start des Laufs freigegeben werden kann. Einzeln oder als gesamter Release: dann entstehen zwei getrennte Freigaben (Schema-Preflight lesend und Gameplay-Join/Readback kurzzeitig effectful). Ungenutzte Freigaben bleiben widerrufbar.</CardDescription>
   </CardHeader><CardContent className="space-y-4"><form className="space-y-3" onSubmit={event => { event.preventDefault(); void act(async () => {
     const run = { repository: "OuroborosCollective/Echoes_of_Aurion", workflow: ".github/workflows/deploy-aurion-zone-runtime.yml", ref: "refs/heads/main", revision, runId, runAttempt: attempt, environment: "production", audience: "aurion-production-probe" };
     const approved = await request("approve", { run, scope, purpose, password, confirmed }) as Approval;
@@ -92,9 +93,20 @@ export function ProductionProbeApproval() {
     <Label htmlFor="probe-scope">Zugelassene Prüfung</Label><select id="probe-scope" className="w-full bg-slate-900 p-2" value={scope} onChange={event => { setScope(event.target.value as ProbeScope); setConfirmed(false); }}>{scopes.map(value => <option key={value} value={value}>{scopeDetails[value].label}</option>)}</select>
     <Label htmlFor="probe-purpose">Zweck und geplante Leseaktionen</Label><Input id="probe-purpose" value={purpose} minLength={8} maxLength={240} required onChange={event => { setPurpose(event.target.value); setConfirmed(false); }} />
     <Label htmlFor="probe-password">Aurion-Passwort erneut bestätigen</Label><Input id="probe-password" type="password" autoComplete="current-password" value={password} maxLength={128} required onChange={event => setPassword(event.target.value)} />
-    <label className="flex gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} required />Ich bestätige genau diese Revision, Run-ID, diesen Versuch und Zweck. Ablauf spätestens fünf Minuten nach Bestätigung; {scopeDetails[scope].confirmation}.</label>
+    <label className="flex gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} required />Ich bestätige genau diese Revision, Run-ID, diesen Versuch und Zweck. Ablauf spätestens drei Stunden nach Bestätigung; {scopeDetails[scope].confirmation}.</label>
     <Button type="submit" disabled={busy || !confirmed}>Einmalig freigeben</Button>
-  </form><Button type="button" variant="outline" disabled={busy} onClick={() => void act(readApprovals)}>Gespeicherte Freigaben lesen</Button>
+  </form>
+  <div className="space-y-3 rounded border border-amber-200/20 p-3">
+    <p className="text-sm">Gesamten Release für genau diesen Lauf freigeben: Revision, Run-ID, Versuch und Passwort aus dem Formular oben.</p>
+    <label className="flex gap-2 text-sm"><input type="checkbox" checked={releaseConfirmed} onChange={event => setReleaseConfirmed(event.target.checked)} />Ich bestätige für genau diese Revision, Run-ID und diesen Versuch beide Freigaben: {scopeDetails["aurion.probe.admin-readback"].label} und {scopeDetails["aurion.probe.gameplay-session-readback"].label} ({scopeDetails["aurion.probe.gameplay-session-readback"].confirmation}). Ablauf spätestens drei Stunden nach Bestätigung.</label>
+    <Button type="button" disabled={busy || !releaseConfirmed || !/^[a-f0-9]{40}$/.test(revision) || !/^[1-9][0-9]{0,19}$/.test(runId) || !(attempt >= 1) || password.length < 1} onClick={() => void act(async () => {
+      const run = { repository: "OuroborosCollective/Echoes_of_Aurion", workflow: ".github/workflows/deploy-aurion-zone-runtime.yml", ref: "refs/heads/main", revision, runId, runAttempt: attempt, environment: "production", audience: "aurion-production-probe" };
+      const approved = await request("approve-release", { run, password, confirmed: releaseConfirmed }) as Approval[];
+      setApprovals(current => [...approved, ...current]); setReleaseConfirmed(false);
+      setMessage(`Release-Freigaben gespeichert (${approved.length}); Ablauf: ${new Date(approved[0].expiresAtMs).toLocaleString()}`);
+    })}>Gesamten Release freigeben (Preflight + Gameplay)</Button>
+  </div>
+  <Button type="button" variant="outline" disabled={busy} onClick={() => void act(readApprovals)}>Gespeicherte Freigaben lesen</Button>
     {message && <p role="status" className="text-sm">{message}</p>}
     {approvals.map(approval => <div key={approval.approvalId} className="rounded border border-cyan-200/20 p-3 text-sm break-all"><p>{approval.run.revision} · Run {approval.run.runId}/{approval.run.runAttempt}</p><p>{approval.scope} · {approval.purpose}</p><p>Ablauf {new Date(approval.expiresAtMs).toLocaleString()} · {approval.revokedAtMs ? "widerrufen" : approval.consumedAtMs ? "verbraucht" : "unverbraucht"}</p>{!approval.consumedAtMs && !approval.revokedAtMs && <Button type="button" variant="outline" disabled={busy} onClick={() => void act(async () => { await request("revoke", { approvalId: approval.approvalId }); await readApprovals(); })}>Widerrufen</Button>}</div>)}
   </CardContent></Card>;

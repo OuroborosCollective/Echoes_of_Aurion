@@ -96,12 +96,15 @@ func _rebuild() -> void:
 			line.surface_end()
 			_display(roads, line, Color(0.9, 0.85, 0.66), Vector3.ZERO)
 	var position: Dictionary = _slice.entities[0].position
+	# Derive a visual offset from the disclosed terrain at the confirmed X/Z.
+	# Fogged slices have no terrain and _height deliberately returns zero.
+	var local_position := {"x":int(position.x) - int(_slice.coordinate.x) * 64000 + 32000, "z":int(position.z) - int(_slice.coordinate.z) * 64000 + 32000}
 	var pin := SphereMesh.new()
 	pin.radius = 0.65
 	pin.height = 1.3
 	pin.radial_segments = 8
 	pin.rings = 4
-	_display(own_position, pin, Color(0.28, 0.86, 0.82), Vector3(float(position.x) / 1000.0, 2.5, float(position.z) / 1000.0))
+	_display(own_position, pin, Color(0.28, 0.86, 0.82), Vector3(float(position.x) / 1000.0, _height(local_position) + 2.5, float(position.z) / 1000.0))
 func set_ceiling(height: float) -> void:
 	if is_nan(height): return
 	var next := clampf(height, -100.0, 100.0) if is_finite(height) else INF

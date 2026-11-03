@@ -66,6 +66,22 @@ func verify() -> void:
 		layer.set_transparency(true)
 		require(layer.structures.get_child(0).material_override.albedo_color.a < 1.0, "structure transparency not visual")
 		require(JSON.stringify(input) == before and layer.readback_fingerprint() == input.fingerprint, "visual controls changed slice")
+		# Own-position height comes only from the already disclosed tile. A
+		# fixed world Y hides it below valid elevated terrain (synthetic DTO).
+		for height_mm in [10000, 100000, -100000]:
+			var elevated := fixture()
+			elevated.slice.chunks[0].tiles[8 * 16 + 8].heightMm = height_mm
+			var preserved := JSON.stringify(elevated)
+			require(layer.apply_readback(elevated, "zone_tabletop_fixture", "player:1", Vector2i.ZERO), "height fixture rejected")
+			var pin: MeshInstance3D = layer.own_position.get_child(0)
+			require(is_equal_approx(pin.position.y, float(height_mm) / 1000.0 + 2.5), "own marker ignores disclosed tile height: " + str(height_mm))
+			require(JSON.stringify(elevated) == preserved, "marker height changed confirmed DTO")
+		var no_terrain := fixture()
+		no_terrain.status = "FOGGED"
+		no_terrain.slice.knowledgeHash = null
+		no_terrain.slice.chunks = []
+		require(layer.apply_readback(no_terrain, "zone_tabletop_fixture", "player:1", Vector2i.ZERO), "fogged marker rejected")
+		require(layer.terrain.get_child_count() == 0 and is_equal_approx(layer.own_position.get_child(0).position.y, 2.5), "fogged marker invented terrain height")
 		var stale := input.duplicate(true)
 		stale.slice.epoch = 0
 		require(not layer.apply_readback(stale, "zone_tabletop_fixture", "player:1", Vector2i.ZERO) and layer.terrain.get_child_count() == 0, "invalidated read retained geometry")
