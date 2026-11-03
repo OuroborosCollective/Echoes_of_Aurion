@@ -30,6 +30,8 @@ async function stage(id, layer, file, args, marker) {
 const project = join(repo, 'godot-client');
 const godot = (...args) => ['--headless', '--path', project, ...args];
 await stage('doctor', 'static', process.execPath, ['scripts/godot/doctor.mjs'], '"editor": "ready"');
+await stage('prepare-native-actor-assets', 'static', process.execPath,
+  ['scripts/godot/prepare-assets.mjs'], '"manifest":"godot-client/assets/generated/manifest.json"');
 await stage('import', 'headless', executable, godot('--editor', '--import'));
 await stage('knowledge-doc-editor-smoke', 'headless', process.execPath,
   ['scripts/godot/knowledge-helper-editor-smoke.mjs', executable, project],

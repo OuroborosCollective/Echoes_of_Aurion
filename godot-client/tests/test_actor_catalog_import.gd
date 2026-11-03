@@ -29,7 +29,17 @@ func changed(bytes: PackedByteArray, mutate: Callable) -> PackedByteArray:
 	return result
 
 func verify() -> void:
-	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
+	var path := "res://assets/generated/manifest.json"
+	if not FileAccess.file_exists(path):
+		push_error("ACTOR_CATALOG_PREPARED_MANIFEST_MISSING")
+		quit(1)
+		return
+	var decoded = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not decoded is Dictionary or not decoded.get("sources") is Array:
+		push_error("ACTOR_CATALOG_PREPARED_MANIFEST_INVALID")
+		quit(1)
+		return
+	var manifest: Dictionary = decoded
 	var count := 0
 	for source: Dictionary in manifest.sources:
 		if source.role not in ["character", "monster"] or source.animations.is_empty():
