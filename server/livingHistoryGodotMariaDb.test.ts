@@ -5,6 +5,7 @@ import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
 import { listVisibleRuins, readPublicCollapseHistory } from "./aurionCivilizationHistoryPersistence";
 import { buildGlobalWorldPlan } from "./globalWorldProtocol";
 import { resolveWorldEpochReaction } from "./worldEpochReactionProtocol";
+import { aggregateEconomicImpact } from "./aurion/economicEventAggregator";
 
 const suite = process.env.AURION_EXPLORATION_MEMORY_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const worldA = "history-godot-proof-a";
@@ -47,6 +48,44 @@ suite("Living History: canonical ruin identity and world isolation", () => {
     expect(rows[0]).toMatchObject({ ruinId: first.ruinId, worldId: worldA, eventType: "CIVILIZATION_COLLAPSE" });
     const replay = await orchestrateCivilizationLoop(worldA, 3, "history-proof-receipt-a");
     expect(replay).toEqual(first);
+  });
+
+  it("persists economic stability erosion and reads it back from the economic event", async () => {
+    await pool.execute(
+      "INSERT INTO aurionActiveCivilizations (civilizationId,worldId,worldEpoch,population,stability,hazardIndex,scarcitySeverity,lastResolutionIndex) VALUES (?,?,?,?,?,?,?,?)",
+      ["history-proof-civ-a", worldA, 3, 500, 0.5, 0.1, 0.1, 4],
+    );
+    const unrest = aggregateEconomicImpact(3, [{
+      signal: { id: "history-proof-politics", kind: "politics", regionId: "emberfall", magnitude: 1, sourceReceiptId: "history-proof-econ", resolutionIndex: 1 },
+      sourceNpcId: "ax1_merchant_emberfall",
+      sourceHubId: "emberfall",
+    }], []);
+    expect(await orchestrateCivilizationLoop(worldA, 3, "history-proof-econ", unrest)).toMatchObject({ action: "ADVANCED" });
+    const [active] = await pool.execute<any[]>("SELECT stability,lastResolutionIndex FROM aurionActiveCivilizations WHERE worldId=?", [worldA]);
+    expect(Number(active[0].stability)).toBeCloseTo(0.42, 4);
+    const [events] = await pool.execute<any[]>(
+      "SELECT eventType,sourceReceiptId,occurredSequence FROM aurionCivilizationHistoryEvents WHERE worldId=? ORDER BY occurredSequence",
+      [worldA],
+    );
+    expect(events.map(row => [row.eventType, row.sourceReceiptId])).toEqual([
+      ["EPOCH_ADVANCE", "history-proof-econ"],
+      ["ECONOMIC_MARKET_DEVELOPMENT", "history-proof-econ"],
+    ]);
+    expect(Number(active[0].lastResolutionIndex)).toBe(Number(events[1].occurredSequence));
+  });
+
+  it("collapses a starving civilization for famine on the persisted scarcity scale", async () => {
+    await pool.execute(
+      "INSERT INTO aurionActiveCivilizations (civilizationId,worldId,worldEpoch,population,stability,hazardIndex,scarcitySeverity,lastResolutionIndex) VALUES (?,?,?,?,?,?,?,?)",
+      ["history-proof-civ-a", worldA, 3, 50, 0.5, 0.1, 0.9, 4],
+    );
+    const collapse = await orchestrateCivilizationLoop(worldA, 3, "history-proof-famine");
+    expect(collapse.action).toBe("COLLAPSED");
+    const [active] = await pool.execute<any[]>("SELECT * FROM aurionActiveCivilizations WHERE worldId=?", [worldA]);
+    expect(active).toHaveLength(0);
+    const [history] = await pool.execute<any[]>("SELECT eventType,sourceReceiptId FROM aurionCivilizationHistoryEvents WHERE worldId=?", [worldA]);
+    expect(history).toEqual([{ eventType: "CIVILIZATION_COLLAPSE", sourceReceiptId: "history-proof-famine" }]);
+    expect(await orchestrateCivilizationLoop(worldA, 3, "history-proof-famine")).toEqual(collapse);
   });
 
   it("returns only ruins whose collapse receipt belongs to the requested world", async () => {

@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The lifecycle loop is replaced only to drive the runtime's diagnostic wiring;
 // this test asserts logging, never NPC truth.
-const loop = vi.hoisted(() => ({ entries: [] as Array<Record<string, unknown>> }));
+const loop = vi.hoisted(() => ({ entries: [] as Array<Record<string, unknown>>, civilizationAction: null as string | null, failureCode: null as string | null }));
 vi.mock("./aurion/livingHistoryLoop.js", async importOriginal => ({
   ...(await importOriginal<typeof import("./aurion/livingHistoryLoop.js")>()),
-  executeLivingHistoryCycle: async () => ({ entries: loop.entries, interactions: [], interactionsHash: null, economicImpact: null }),
+  executeLivingHistoryCycle: async () => ({ entries: loop.entries, interactions: [], interactionsHash: null, economicImpact: null, civilizationAction: loop.civilizationAction, failureCode: loop.failureCode }),
 }));
 vi.mock("./wasdAurionRuntime", () => ({ readConfirmedNpcState: async () => null }));
 vi.mock("./npcActionGatewayPersistence", () => ({ readConfirmedMerchantActionSource: async () => null }));
@@ -20,7 +20,7 @@ const entry = (status: string, failureCode: string | null) => ({
 });
 
 describe("autonomous NPC life runtime degradation logging", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); loop.civilizationAction = null; loop.failureCode = null; });
 
   it("logs a coded degradation once and keeps the lifecycle readback unchanged", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -33,5 +33,26 @@ describe("autonomous NPC life runtime degradation logging", () => {
       event: "degraded", npcId: AUTONOMOUS_NPC_LIFE_NPC_ID, failureCode: "NPC_SEMANTIC_GRAPH_PROVENANCE_CONFLICT", consecutiveCycles: 1, cycle: 1,
     });
     expect(runtime.readback()).toMatchObject({ status: "degraded", failureCode: "NPC_SEMANTIC_GRAPH_PROVENANCE_CONFLICT", livingHistoryCycle: 3 });
+  });
+
+  it("logs a failed civilization step of the cycle and its recovery", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const runtime = createAutonomousNpcLifeRuntime({ enabled: true });
+    loop.entries = [entry("confirmed", null)];
+    loop.failureCode = "CIVILIZATION_ORCHESTRATION_FAILED:CIVILIZATION_TRANSITION_CONFLICT";
+    await runtime.resolveOnce({ tick: AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS });
+    const degraded = warn.mock.calls.map(call => String(call[0])).filter(line => line.startsWith("[NpcLife] DEGRADED "));
+    expect(degraded).toHaveLength(1);
+    expect(JSON.parse(degraded[0].slice("[NpcLife] DEGRADED ".length))).toMatchObject({
+      npcId: "aurion_civilization_loop", failureCode: loop.failureCode, consecutiveCycles: 1, cycle: 1,
+    });
+
+    loop.failureCode = null;
+    loop.civilizationAction = "ADVANCED";
+    await runtime.resolveOnce({ tick: 2 * AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS });
+    const recovered = info.mock.calls.map(call => String(call[0])).filter(line => line.startsWith("[NpcLife] RECOVERED "));
+    expect(recovered).toHaveLength(1);
+    expect(JSON.parse(recovered[0].slice("[NpcLife] RECOVERED ".length))).toMatchObject({ npcId: "aurion_civilization_loop", cycle: 2 });
   });
 });
