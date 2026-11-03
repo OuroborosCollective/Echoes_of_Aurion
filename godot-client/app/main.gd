@@ -1200,6 +1200,9 @@ func _apply_quest_npc_visuals(response: Dictionary, manifest: Variant) -> bool:
 	_refresh_actor_owners()
 	var accepted: bool = _quest_npc_actors.apply(quest_npc_root, response, manifest, _actor_models, _monster_catalog)
 	_quest_npc_diagnostic = _quest_npc_actors.diagnostic
+	if _quest_npc_actors.contract_rejected:
+		_quest_npc_response.clear()
+		_refresh_actor_owners()
 	_update_3d_status()
 	return accepted
 
@@ -1611,6 +1614,9 @@ func _refresh_catalog_actors() -> void:
 		var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/generated/manifest.json"))
 		_quest_npc_actors.apply(quest_npc_root, _quest_npc_response, manifest, _actor_models, _monster_catalog)
 		_quest_npc_diagnostic = _quest_npc_actors.diagnostic
+		if _quest_npc_actors.contract_rejected:
+			_quest_npc_response.clear()
+			_refresh_actor_owners()
 	_sync_monsters()
 	_project_3d(Time.get_ticks_msec())
 

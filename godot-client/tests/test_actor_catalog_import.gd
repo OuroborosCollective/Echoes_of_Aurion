@@ -243,6 +243,31 @@ func verify_scene(manifest: Dictionary) -> void:
 	var known_sha: String = character.sha256
 	scene._on_actor_asset_ready(known_sha,byte_map[known_sha],welcome.connectionId,0)
 	require(scene._actor_models.evidence().models == 2, "unauthorized callback changed the cache")
+	# One approved rig with unrecognized clips must not erase other quest NPCs.
+	var no_idle := changed(byte_map[known_sha], func(data: Dictionary):
+		for index in range(data.animations.size()): data.animations[index].name = "Gesture" + str(index))
+	var hash := HashingContext.new()
+	hash.start(HashingContext.HASH_SHA256)
+	hash.update(no_idle)
+	var no_idle_sha := hash.finish().hex_encode()
+	var no_idle_entry := npc_entry.duplicate(true)
+	no_idle_entry.assetId = "approved_no_idle_fixture"
+	no_idle_entry.sha256 = no_idle_sha
+	no_idle_entry.storageUrl = "/api/assets/glb/" + no_idle_sha + ".glb"
+	no_idle_entry.normalization.sourceSha256 = no_idle_sha
+	catalog.entries.append(no_idle_entry)
+	scene._quest_npc_response.npcs[0].fallbackModel = {"source":"approved-fallback","catalogAssetId":no_idle_entry.assetId,"sha256":no_idle_sha}
+	scene._refresh_catalog_actors()
+	require(scene._actor_models.supply_asset(no_idle_sha,no_idle,welcome.connectionId), "approved missing-idle fixture was not decoded")
+	scene._refresh_catalog_actors()
+	require(scene._quest_npc_actors.visible_count() == 3, "one unknown idle clip erased the other quest NPCs")
+	var malformed: Dictionary = scene._quest_npc_response.duplicate(true)
+	malformed.npcs = []
+	for index in range(11):
+		malformed.npcs.append({"entityId":"npc:ghost_" + str(index),"npcId":"INVALID"})
+	require(not scene._apply_quest_npc_visuals(malformed,manifest), "malformed NPC contract accepted")
+	scene._refresh_catalog_actors()
+	require(scene._quest_npc_response.is_empty() and scene.world_actors.get_child_count() == 12, "rejected NPC rows retained slots ahead of confirmed actors")
 	var snapshot := welcome.duplicate(true)
 	for key in ["protocolVersion","connectionId","selfEntityId"]: snapshot.erase(key)
 	snapshot.type = "snapshot"

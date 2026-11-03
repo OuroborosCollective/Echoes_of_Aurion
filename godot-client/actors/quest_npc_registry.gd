@@ -8,6 +8,7 @@ const ModularVisual = preload("res://actors/modular_npc_visual.gd")
 const CatalogModels = preload("res://actors/catalog_model_cache.gd")
 const Clips = preload("res://actors/animation_clips.gd")
 var diagnostic := "npc_not_loaded"
+var contract_rejected := false
 var _actors: Dictionary = {}
 var _identities: Dictionary = {}
 
@@ -59,10 +60,12 @@ func clear(root: Node3D) -> void:
 
 func _reject(root: Node3D, reason: String) -> bool:
 	clear(root)
+	contract_rejected = true
 	diagnostic = reason
 	return false
 
 func apply(root: Node3D, response: Variant, manifest: Variant, cache: Variant = null, catalog: Dictionary = {}) -> bool:
+	contract_rejected = false
 	if typeof(response) != TYPE_DICTIONARY or response.get("version") != VERSION or response.get("zoneId") != "observatory_threshold" or response.get("stateSource") != "aurion-canonical-quest-anchors" or not _hex(response.get("catalogRevision"), 64):
 		return _reject(root, "npc_contract_invalid")
 	var rows: Variant = response.get("npcs")
@@ -219,6 +222,25 @@ func apply(root: Node3D, response: Variant, manifest: Variant, cache: Variant = 
 			return _reject(root, "npc_model_rig_invalid")
 		var player: AnimationPlayer = clips[0]
 		var idle: String = Clips.resolve(player, "Idle")
+		if idle.is_empty() and item.packedScene != null:
+			# A valid catalog rig need not have a recognizable idle clip. Keep
+			# this confirmed NPC on the audited standard without erasing peers.
+			actor.remove_child(model_instance)
+			model_instance.free()
+			var standard_path := _local_path(manifest, STANDARD_SHA)
+			var standard: PackedScene = load(standard_path) as PackedScene if not standard_path.is_empty() else null
+			if standard == null:
+				return _reject(root, "npc_standard_model_missing")
+			model_instance = standard.instantiate()
+			actor.add_child(model_instance)
+			clips = actor.find_children("*", "AnimationPlayer", true, false)
+			if clips.size() != 1:
+				return _reject(root, "npc_standard_rig_invalid")
+			player = clips[0]
+			idle = Clips.resolve(player, "Idle")
+			actor.set_meta("aurion_model_sha256", STANDARD_SHA)
+			actor.set_meta("aurion_catalog_asset_id", STANDARD_ASSET)
+			waiting = true
 		if idle.is_empty():
 			return _reject(root, "npc_idle_missing")
 		if modular == null:
