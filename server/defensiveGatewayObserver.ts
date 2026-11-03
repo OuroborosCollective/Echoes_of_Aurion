@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { operationalDate } from "../shared/operationalClock";
 
 /** Aggregated operational telemetry only: no peer identity, request data or decisions. */
 export type GatewayObservation = Readonly<{
@@ -37,7 +38,7 @@ export class DefensiveGatewayObserver {
   private deniedOrigins = { http: 0, websocket: 0 };
   private outbound = { peakBufferedBytes: 0, terminated: 0 };
   private durations = { under250ms: 0, under1s: 0, under5s: 0, over5s: 0 };
-  private windowStart = new Date();
+  private windowStart = operationalDate();
   private timer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly enabled: boolean, private readonly sink: (event: GatewayObservation) => void = event => console.info("[Aurion Gateway Observation]", JSON.stringify(event)), private readonly monotonicNow: () => number = () => performance.now()) {}
@@ -90,7 +91,7 @@ export class DefensiveGatewayObserver {
   /** One bounded event per minute; sink failures never reach the request path. */
   flush(): void {
     if (!this.enabled) return;
-    const now = new Date();
+    const now = operationalDate();
     const event: GatewayObservation = Object.freeze({ schema: "aurion.gateway-observation.v2", windowStartedAt: this.windowStart.toISOString(), windowEndedAt: now.toISOString(),
       http: Object.freeze({ ...this.http }), deniedOrigins: Object.freeze({ ...this.deniedOrigins }), outbound: Object.freeze({ ...this.outbound }), handshakes: Object.freeze({ opened: this.opened, completed: this.completed, closed: this.closed, pending: this.pending, peakPending: this.peakPending, durations: Object.freeze({ ...this.durations }) }) });
     this.http = { nativeAuth: 0, browserAuth: 0, admin: 0 };
