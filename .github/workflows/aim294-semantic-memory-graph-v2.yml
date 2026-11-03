@@ -11,6 +11,9 @@ on:
       - "server/wasdAurionRuntime.ts"
       - "server/worldContext/sourceAdapter.ts"
       - "server/aim294SemanticGraphV2MariaDb.test.ts"
+      - "server/aurion/npc/semanticMemoryGraph.ts"
+      - "server/aurion/npc/multiMemory.ts"
+      - "server/npcHistoricalDecisionProvenanceMariaDb.test.ts"
       - "shared/npcSemanticGraphReadmodel.ts"
       - "shared/npcSemanticGraphProvenanceReadmodel.ts"
       - "server/npcProjectionProvenanceReadmodel.test.ts"
@@ -29,6 +32,9 @@ on:
       - "server/wasdAurionRuntime.ts"
       - "server/worldContext/sourceAdapter.ts"
       - "server/aim294SemanticGraphV2MariaDb.test.ts"
+      - "server/aurion/npc/semanticMemoryGraph.ts"
+      - "server/aurion/npc/multiMemory.ts"
+      - "server/npcHistoricalDecisionProvenanceMariaDb.test.ts"
       - "shared/npcSemanticGraphReadmodel.ts"
       - "shared/npcSemanticGraphProvenanceReadmodel.ts"
       - "server/npcProjectionProvenanceReadmodel.test.ts"
@@ -95,6 +101,7 @@ jobs:
             server/aim293NpcActionGatewayMariaDb.test.ts \
             server/autonomousNpcLifeMariaDb.test.ts \
             server/aim294SemanticGraphV2MariaDb.test.ts \
+            server/npcHistoricalDecisionProvenanceMariaDb.test.ts \
             client/src/xaurion/integration/NpcDecisionPanel.test.tsx \
             client/src/xaurion/integration/ax1FullCutover.test.tsx \
             server/npcProjectionProvenanceReadmodel.test.ts

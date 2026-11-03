@@ -502,6 +502,20 @@ function buildNpcSemanticMemoryGraph(input: NpcSemanticGraphBuildInput): NpcSema
     ...memory.procedural.flatMap((c) => c.provenance.map(decisionRef)),
   ]);
 
+  // A decision already recorded in memory keeps the authority it was recorded
+  // under. Re-verifying a historical receipt later must not restamp it with the
+  // current capsule pin, otherwise the same receipt carries two provenances.
+  const recordedDecisionRefs = new Map(
+    allMemoryProvenance.filter((ref) => ref.kind === "decision_receipt").map((ref) => [`${ref.id}:${ref.hash}`, ref] as const),
+  );
+  const performedDecisionRef = (decision: ConfirmedNpcDecision): NpcSemanticProvenanceRef => {
+    const confirmed = confirmedDecisionRef(decision);
+    const recorded = recordedDecisionRefs.get(`${confirmed.id}:${confirmed.hash}`);
+    if (!recorded) return confirmed;
+    if (recorded.logicalIndex !== confirmed.logicalIndex) throw new Error("NPC_SEMANTIC_GRAPH_DECISION_PROVENANCE_MISMATCH");
+    return recorded;
+  };
+
   const ensureIdentityNode = (
     kind: NpcSemanticNodeKind,
     key: string,
@@ -630,11 +644,11 @@ function buildNpcSemanticMemoryGraph(input: NpcSemanticGraphBuildInput): NpcSema
   for (const performedAction of performed.sort((a, b) => a.actionReceipt.resolutionIndex - b.actionReceipt.resolutionIndex || textOrder(a.actionReceipt.id, b.actionReceipt.id))) {
     const action = performedAction.actionReceipt;
     const provenance = mergeProvenance(
-      [confirmedDecisionRef(performedAction.sourceDecision)],
+      [performedDecisionRef(performedAction.sourceDecision)],
       [actionRef(action)],
       [effectRef(performedAction.effectReadback, authority.sourceSha256, action.resolutionIndex)],
       [linkRef(performedAction.memoryLink, authority)],
-      [confirmedDecisionRef(performedAction.successorDecision)],
+      [performedDecisionRef(performedAction.successorDecision)],
     );
     const actionNode = ensureIdentityNode("action", action.id, provenance, action.resolutionIndex, null);
     const outcomeNode = ensureIdentityNode("outcome", `${action.id}:committed`, provenance, action.resolutionIndex, null);
