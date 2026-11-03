@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
+import { isKnownNpcCapsulePin, npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import {
   aurionNpcActionConsentReceipts,
   aurionNpcActionEffectReadbacks,
@@ -10,6 +10,7 @@ import {
   aurionNpcActionMemoryLinks,
   aurionNpcActionReceipts,
   aurionNpcDecisionReceipts,
+  aurionNpcMemoryReceiptsV4,
   aurionNpcStates,
   aurionPolityStates,
   aurionWorldResolutions,
@@ -401,7 +402,16 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     if (!source) throw new Error("NPC_ACTION_SOURCE_RECEIPT_REQUIRED");
     if (source.resolutionIndex !== current.lastResolutionIndex) throw new Error("NPC_ACTION_SOURCE_STALE");
     const confirmed = verifyConfirmedNpcDecision(source.observationIdsJson,{...source,receiptId:source.id});
-    if (confirmed.authority.sourceRevision !== pin.sourceRevision || confirmed.authority.sourceSha256 !== pin.sourceSha256) throw new Error("NPC_ACTION_SOURCE_CAPSULE_DRIFT");
+    // verifyConfirmedNpcDecision always stamps the current pin, so that stamp proves
+    // nothing about the decision's origin. Bind the source to the authority recorded
+    // when this exact decision entered NPC memory, and accept only the documented pin
+    // lineage: historical decisions stay actionable, unknown origins are rejected.
+    const recordedSource = await tx.select({ sourceRevision: aurionNpcMemoryReceiptsV4.sourceRevision, sourceSha256: aurionNpcMemoryReceiptsV4.sourceSha256 })
+      .from(aurionNpcMemoryReceiptsV4)
+      .where(and(eq(aurionNpcMemoryReceiptsV4.npcId,npcId),eq(aurionNpcMemoryReceiptsV4.sourceDecisionReceiptId,source.id)))
+      .limit(2);
+    if (recordedSource.length !== 1) throw new Error("NPC_ACTION_SOURCE_MEMORY_RECORD_REQUIRED");
+    if (!isKnownNpcCapsulePin(recordedSource[0])) throw new Error("NPC_ACTION_SOURCE_CAPSULE_DRIFT");
 
     await ensureEpochSourceBound(tx);
     const locked = await lockedContext(tx,input.homeHubId,confirmed);
