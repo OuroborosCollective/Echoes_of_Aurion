@@ -215,6 +215,45 @@ suite("Aurion native auth in isolated MariaDB", () => {
       .rejects.toThrow("NATIVE_AUTH_SESSION_EXPIRED");
   });
 
+  it("enforces absolute expiry even after successful refreshes near the deadline", async () => {
+    const { exchange } = await handoff();
+    const issuedAt = NOW + 200;
+    const deadline = issuedAt + 30 * 24 * 60 * 60 * 1000;
+    let tokens = await exchangeNativeAuthHandoff(exchange, issuedAt);
+    for (const day of [6, 12, 18, 24, 29]) tokens = await refreshNativeAuthSession(tokens.refreshToken, issuedAt + day * 24 * 60 * 60 * 1000);
+    tokens = await refreshNativeAuthSession(tokens.refreshToken, deadline - 1);
+    expect(await authenticateNativeAuthAccess(tokens.accessToken, deadline - 1)).toMatchObject({ userId: USER });
+    expect(await authenticateNativeAuthAccess(tokens.accessToken, deadline)).toBeNull();
+    await expect(refreshNativeAuthSession(tokens.refreshToken, deadline)).rejects.toThrow("NATIVE_AUTH_SESSION_EXPIRED");
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT s.absoluteExpiresAtMs,s.idleExpiresAtMs,MAX(a.expiresAtMs) AS accessDeadline FROM aurionNativeAuthSessions s JOIN aurionNativeAuthAccessTokens a ON a.sessionId=s.id WHERE s.appBuild=? GROUP BY s.id",
+      [APP_BUILD],
+    );
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].absoluteExpiresAtMs)).toBe(deadline);
+    expect(Number(rows[0].idleExpiresAtMs)).toBe(deadline);
+    expect(Number(rows[0].accessDeadline)).toBe(deadline);
+  });
+
+  it("refuses global revoke with a rotated credential and isolates single-session logout", async () => {
+    const first = await handoff();
+    const second = await handoff(NOW + 1_000);
+    const foreign = await handoff(NOW + 2_000, OTHER_USER);
+    const firstTokens = await exchangeNativeAuthHandoff(first.exchange, NOW + 200);
+    const secondTokens = await exchangeNativeAuthHandoff(second.exchange, NOW + 1_200);
+    const foreignTokens = await exchangeNativeAuthHandoff(foreign.exchange, NOW + 2_200);
+    const rotated = await refreshNativeAuthSession(firstTokens.refreshToken, NOW + 3_000);
+    expect(await revokeNativeAuthSessions(firstTokens.refreshToken, "all_sessions", NOW + 3_001)).toBe(false);
+    expect(await authenticateNativeAuthAccess(rotated.accessToken, NOW + 3_002)).toMatchObject({ userId: USER });
+    expect(await revokeNativeAuthSessions(rotated.refreshToken, "session", NOW + 3_003)).toBe(true);
+    expect(await authenticateNativeAuthAccess(rotated.accessToken, NOW + 3_004)).toBeNull();
+    expect(await authenticateNativeAuthAccess(secondTokens.accessToken, NOW + 3_004)).toMatchObject({ userId: USER });
+    expect(await authenticateNativeAuthAccess(foreignTokens.accessToken, NOW + 3_004)).toMatchObject({ userId: OTHER_USER });
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT userId,revokedAtMs FROM aurionNativeAuthSessions WHERE appBuild=?", [APP_BUILD]);
+    expect(rows.filter(row => row.revokedAtMs !== null)).toHaveLength(1);
+    expect(rows.find(row => row.userId === OTHER_USER)?.revokedAtMs).toBeNull();
+  });
+
   it("revokes every native session for the credential user and preserves other users", async () => {
     const first = await handoff(NOW, USER);
     const second = await handoff(NOW + 1_000, USER);

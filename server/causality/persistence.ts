@@ -1,3 +1,4 @@
+import { CausalReceiptConflictError, receiptMismatchFields } from "./receiptConflictDiagnostics";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, lt, lte, sql as sqlDrizzle } from "drizzle-orm";
 import { getDb } from "../db";
@@ -93,15 +94,16 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
           eq(aurionCausalTickReceipts.tick, receipt.tick),
         )).limit(1);
         if (!existing) throw error;
-        const same = existing.worldId === receipt.worldId && existing.zoneId === receipt.zoneId && existing.tick === receipt.tick &&
-          existing.revision === receipt.sourceRevision && existing.rulesetVersion === receipt.rulesetVersion &&
-          existing.receiptSchema === receipt.schema &&
-          existing.preStateHash === receipt.preStateHash && existing.inputHash === receipt.orderedIntentHash &&
-          existing.inputJson === inputJson && existing.stageReceiptsJson === stageReceiptsJson &&
-          existing.transitionHash === receipt.transitionHash &&
-          existing.rngRootHash === receipt.rngRootHash && existing.postStateHash === receipt.postStateHash &&
-          existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
-        if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
+        const mismatchFields = receiptMismatchFields(existing, {
+          worldId: receipt.worldId, zoneId: receipt.zoneId, tick: receipt.tick,
+          revision: receipt.sourceRevision, rulesetVersion: receipt.rulesetVersion,
+          receiptSchema: receipt.schema, preStateHash: receipt.preStateHash,
+          inputHash: receipt.orderedIntentHash, inputJson, stageReceiptsJson,
+          transitionHash: receipt.transitionHash, rngRootHash: receipt.rngRootHash,
+          postStateHash: receipt.postStateHash, previousReceiptHash: receipt.previousReceiptHash,
+          receiptHash: receipt.receiptHash,
+        });
+        if (mismatchFields.length) throw new CausalReceiptConflictError(id, mismatchFields, error);
       }
       for (const victory of combatVictories ?? []) {
         await persistAurionCombatVictoryEvidenceInTransaction(tx, victory);
