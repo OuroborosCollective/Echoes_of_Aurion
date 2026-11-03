@@ -21,14 +21,22 @@ export function canonicalSerialize(obj: unknown): string {
     return JSON.stringify(obj);
   }
   if (Array.isArray(obj)) {
-    return "[" + obj.map(item => canonicalSerialize(item)).join(",") + "]";
+    let result = "[";
+    for (let i = 0; i < obj.length; i++) {
+      if (i > 0) result += ",";
+      result += canonicalSerialize(obj[i]);
+    }
+    return result + "]";
   }
   if (typeof obj === "object") {
     const sortedKeys = Object.keys(obj as Record<string, unknown>).sort();
-    const keyValues = sortedKeys.map(
-      key => `${JSON.stringify(key)}:${canonicalSerialize((obj as Record<string, unknown>)[key])}`
-    );
-    return "{" + keyValues.join(",") + "}";
+    let result = "{";
+    for (let i = 0; i < sortedKeys.length; i++) {
+      if (i > 0) result += ",";
+      const key = sortedKeys[i]!;
+      result += `${JSON.stringify(key)}:${canonicalSerialize((obj as Record<string, unknown>)[key])}`;
+    }
+    return result + "}";
   }
   return JSON.stringify(String(obj));
 }
@@ -37,7 +45,11 @@ export function canonicalSerialize(obj: unknown): string {
  * Domain-separated SHA-256 calculation.
  */
 export function sha256Canonical(elements: readonly unknown[]): string {
-  const serialized = elements.map(e => canonicalSerialize(e)).join("::");
+  let serialized = "";
+  for (let i = 0; i < elements.length; i++) {
+    if (i > 0) serialized += "::";
+    serialized += canonicalSerialize(elements[i]);
+  }
   return createHash("sha256").update(serialized, "utf-8").digest("hex");
 }
 
