@@ -109,6 +109,12 @@ jobs:
           server/glbSmartUploadIntegrationContract.test.ts
           client/src/pages/GlbUpload.test.tsx
           client/src/xaurion/core/GlbResourceBudget.test.ts
+          client/src/xaurion/core/ActorGlbPhysicalLod.test.ts
+          client/src/xaurion/core/EnemyGlbFallback.test.ts
+          client/src/xaurion/core/NpcGlbFallback.test.ts
+          client/src/xaurion/integration/MobCatalogProjection.test.ts
+          client/src/xaurion/integration/NpcFallbackProjection.test.ts
+          server/aim253GlbActors.test.ts
           client/src/xaurion/core/UploadedAssetRuntime.test.ts
           client/src/xaurion/integration/UploadedWorldCatalogProjection.test.ts
 

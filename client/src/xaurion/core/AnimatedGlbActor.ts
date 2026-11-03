@@ -1,4 +1,5 @@
 import { releaseGlbTree } from "./GlbModelLease";
+import { glbResourcePool } from "./GlbResourceBudget";
 import { extractCanonicalAvatarProfile } from "./CanonicalAvatarProfile";
 import type { CanonicalAvatarProfile } from "@shared/aurionCanonicalAvatarContract";
 import * as THREE from "three";
@@ -57,6 +58,10 @@ export class AnimatedGlbActor {
   private readonly restBoneQuaternions = new Map<THREE.Bone, THREE.Quaternion>();
   private active: THREE.AnimationAction | null = null;
   private fading: THREE.AnimationAction | null = null;
+  private releaseActiveAnimation: (() => void) | null = null;
+  private releaseFadingAnimation: (() => void) | null = null;
+  private animationEnabled = true;
+  private pausedBeforeLod = false;
   private fadeRemaining = 0;
   private locomotion: GlbPose = "idle";
   private oneShot = false;
@@ -150,21 +155,43 @@ export class AnimatedGlbActor {
   }
 
   private play(pose: GlbPose, once: boolean): boolean {
+    if (this.disposed || !this.animationEnabled) return false;
     const clip = this.resolveClip(pose) ?? (once ? undefined : this.resolveClip("idle"));
     if (!clip) return false;
+    if (!this.releaseActiveAnimation) {
+      this.releaseActiveAnimation = glbResourcePool.animationActions(1);
+      if (!this.releaseActiveAnimation) {
+        if (!this.active && !once) {
+          // Sample the authored resting pose once; a waiting actor keeps its
+          // textured model instead of becoming invisible or a primitive.
+          this.active = this.mixer.clipAction(clip);
+          this.active.play();
+          this.active.paused = true;
+          this.mixer.update(0);
+        }
+        return false;
+      }
+    }
     const next = this.mixer.clipAction(clip);
-    if (next === this.active && !once) return true;
+    if (next === this.active && !once) { next.paused = false; return true; }
     const previous = this.active;
     this.fading?.stop();
     this.fading = null;
+    this.releaseFadingAnimation?.();
+    this.releaseFadingAnimation = null;
     next.reset().setEffectiveTimeScale(this.playbackRate(pose, clip)).setEffectiveWeight(1);
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
     next.clampWhenFinished = once;
     next.play();
     if (previous && previous !== next) {
-      this.fadeRemaining = once ? ONESHOT_BLEND_SECONDS : LOCOMOTION_BLEND_SECONDS;
-      previous.crossFadeTo(next, this.fadeRemaining, false);
-      this.fading = previous;
+      this.releaseFadingAnimation = glbResourcePool.animationActions(1);
+      if (this.releaseFadingAnimation) {
+        this.fadeRemaining = once ? ONESHOT_BLEND_SECONDS : LOCOMOTION_BLEND_SECONDS;
+        previous.crossFadeTo(next, this.fadeRemaining, false);
+        this.fading = previous;
+      } else {
+        previous.stop();
+      }
     }
     this.active = next;
     return true;
@@ -173,6 +200,20 @@ export class AnimatedGlbActor {
   setLocomotion(speedMetersPerSecond: number): void {
     this.locomotion = speedMetersPerSecond >= GLB_RUN_THRESHOLD_METERS_PER_SECOND ? "run" : speedMetersPerSecond > 0.05 ? "walk" : "idle";
     if (!this.oneShot) this.play(this.locomotion, false);
+  }
+
+  /** Suspend distant animation without removing its real mesh or last pose. */
+  setAnimationEnabled(enabled: boolean): void {
+    if (this.disposed || this.animationEnabled === enabled) return;
+    this.animationEnabled = enabled;
+    if (enabled) return;
+    if (this.active) { this.pausedBeforeLod = this.active.paused; this.active.paused = true; }
+    this.fading?.stop();
+    this.fading = null;
+    this.releaseFadingAnimation?.();
+    this.releaseFadingAnimation = null;
+    this.releaseActiveAnimation?.();
+    this.releaseActiveAnimation = null;
   }
 
   playOnce(pose: "attack" | "jump" | "death" | "interact"): boolean {
@@ -310,11 +351,21 @@ export class AnimatedGlbActor {
   }
 
   update(delta: number): void {
-    if (this.disposed || !Number.isFinite(delta) || delta <= 0) return;
+    if (this.disposed || !this.animationEnabled || !Number.isFinite(delta) || delta <= 0) return;
+    if (!this.releaseActiveAnimation) {
+      if (this.active && this.oneShot) {
+        this.releaseActiveAnimation = glbResourcePool.animationActions(1);
+        if (!this.releaseActiveAnimation) return;
+        this.active.paused = this.pausedBeforeLod;
+      } else if (!this.play(this.locomotion, false)) return;
+    }
     const step = Math.min(delta, 0.25);
     this.mixer.update(step);
     this.fadeRemaining -= step;
-    if (this.fading && this.fadeRemaining <= 0) { this.fading.stop(); this.fading = null; }
+    if (this.fading && this.fadeRemaining <= 0) {
+      this.fading.stop(); this.fading = null;
+      this.releaseFadingAnimation?.(); this.releaseFadingAnimation = null;
+    }
     if (this.locomotion === "idle") this.relaxArmsTowardNaturalPose();
     this.applyStaticLocomotionFallback(step);
     this.group.rotation.z = 0;
@@ -336,7 +387,8 @@ export class AnimatedGlbActor {
     const supportedPoses = (Object.keys(clipNames) as GlbPose[]).filter(candidate => this.supportsPose(candidate));
     const animatedPoses = supportedPoses.filter(candidate => this.hasAnimatedPose(candidate));
     return { heightMeters: this.heightMeters, renderedHeightMeters: measured.max.y - measured.min.y, feetY: measured.min.y,
-      activeAnimationActions: Number(Boolean(this.active)) + Number(Boolean(this.fading)),
+      activeAnimationActions: Number(Boolean(this.releaseActiveAnimation)) + Number(Boolean(this.releaseFadingAnimation)),
+      animationDeferred: this.animationEnabled && !this.releaseActiveAnimation && this.clips.size > 0,
       clip: this.active?.getClip().name ?? null, clipTime: this.active?.time ?? 0, boneCount: this.bones.length, bonePose: pose.toString(16),
       supportedPoses,
       animatedPoses,
@@ -355,6 +407,8 @@ export class AnimatedGlbActor {
     for (const slot of [...this.attachments.keys()]) this.detachEquipment(slot);
     this.mixer.removeEventListener("finished", this.finished);
     this.mixer.stopAllAction();
+    this.releaseActiveAnimation?.(); this.releaseActiveAnimation = null;
+    this.releaseFadingAnimation?.(); this.releaseFadingAnimation = null;
     this.mixer.uncacheRoot(this.model);
     releaseGlbTree(this.model);
     this.group.removeFromParent();

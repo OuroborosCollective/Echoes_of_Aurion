@@ -17,7 +17,7 @@ const integer = (value: number, maximum = 1_073_741_824) => {
 export class GlbResourcePool {
   private activeJobs=0; private pending:Array<()=>void>=[];
   private models=0; private decoded=0; private textures=0; private network=0;
-  private actors=0; private animations=0;
+  private actors=0; private animations=0; private staticInstances=0;
   private peakWorkingSet=0;
   private peakDecoded=0; private peakNetwork=0; private peakJobs=0;
   private fetchedBytes=0; private decodedCount=0; private decodeMs=0; private maximumDecodeMs=0;
@@ -50,9 +50,26 @@ export class GlbResourcePool {
     this.actors++;this.animations+=animationActions;let released=false;
     return()=>{if(released)return;released=true;this.actors--;this.animations-=animationActions;};
   }
+  /** Static scenery/attachments have their own instance ceiling. They do not
+   * consume character or animation slots merely because they use the GLB loader. */
+  staticInstance(): (() => void) | null {
+    if (this.staticInstances >= this.limits.worldInstances) { this.rejected++; return null; }
+    this.staticInstances++;
+    let released = false;
+    return () => { if (released) return; released = true; this.staticInstances--; };
+  }
+  /** Animation admission may defer motion while the already admitted model
+   * stays visible. It is not a failed asset load and changes no memory limit. */
+  animationActions(count: number): (() => void) | null {
+    integer(count, 2);
+    if (this.animations + count > this.limits.animations) return null;
+    this.animations += count;
+    let released = false;
+    return () => { if (released) return; released = true; this.animations -= count; };
+  }
   fetched(bytes:number){this.fetchedBytes+=integer(bytes);}
   decodedModel(milliseconds:number){this.decodedCount++;this.decodeMs+=milliseconds;this.maximumDecodeMs=Math.max(this.maximumDecodeMs,milliseconds);}
-  evidence(){return{tier:this.tier,limits:this.limits,models:this.models,actors:this.actors,animations:this.animations,decoderJobs:this.activeJobs,pending:this.pending.length,
+  evidence(){return{tier:this.tier,limits:this.limits,models:this.models,actors:this.actors,staticInstances:this.staticInstances,animations:this.animations,decoderJobs:this.activeJobs,pending:this.pending.length,
     assetWorkingSetCeilingBytes:this.decoded+2*this.network,peakAssetWorkingSetCeilingBytes:this.peakWorkingSet,
     reservedDecodedBytes:this.decoded,reservedTextureBytes:this.textures,networkInFlightBytes:this.network,peakReservedDecodedBytes:this.peakDecoded,peakNetworkInFlightBytes:this.peakNetwork,
     peakDecoderJobs:this.peakJobs,fetchedBytes:this.fetchedBytes,decodedCount:this.decodedCount,totalDecodeMs:this.decodeMs,maxDecodeMs:this.maximumDecodeMs,rejected:this.rejected};}

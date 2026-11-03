@@ -173,11 +173,13 @@ export class RemotePublicAppearanceProjection {
       const desired = appearance ? this.physicalAppearance(appearance, band) : null;
       if (appearance && desired && record.physicalStorageUrl !== desired.storageUrl) {
         record.actor.group.visible = false;
+        record.actor.setAnimationEnabled(false);
         void this.ensureActor(appearance, band);
         continue;
       }
 
       record.lod = band;
+      record.actor.setAnimationEnabled(actorUsesSkinnedVisual(band));
       record.actor.group.position.set(worldX - originX, y, worldZ - originZ);
       const moved = record.lastPosition ? Math.hypot(presence.position.x - record.lastPosition.x, presence.position.z - record.lastPosition.z) : 0;
       record.lastPosition = { ...presence.position };

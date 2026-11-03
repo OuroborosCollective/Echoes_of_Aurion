@@ -130,6 +130,7 @@ export class MobCatalogProjection {
       if (v !== p.visual || v.group.userData.aurionConfirmedMob !== true) { this.remove(id, false); continue; }
       const desiredSelection = this.selection(v, p.fallbackOffset);
       if (v.data.hp > 0 && (!desiredSelection || desiredSelection.entry.sha256 !== p.sha256)) { this.remove(id); continue; }
+      p.actor.setAnimationEnabled(Math.hypot(v.data.x - this.engine.player.position.x, v.data.z - this.engine.player.position.z) < ACTOR_LOD_MID_MAX_METERS);
       if (v.data.hp <= 0) {
         if (p.deadSeconds === null) { p.deadSeconds = 0; p.actor.playOnce("death"); }
         p.deadSeconds += delta;

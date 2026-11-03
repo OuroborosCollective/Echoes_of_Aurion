@@ -350,10 +350,10 @@ export class GLBModelManager {
         if (this.pending.get(url) === pending) this.pending.delete(url);
       }
     }
-    const releaseActor = glbResourcePool.actor(
-      Math.min(entry.animations.length, 2)
-    );
-    if (!releaseActor) throw Error("GLB_ACTOR_BUDGET");
+    const releaseInstance = entry.animations.length
+      ? glbResourcePool.actor(0)
+      : glbResourcePool.staticInstance();
+    if (!releaseInstance) throw Error(entry.animations.length ? "GLB_ACTOR_BUDGET" : "GLB_STATIC_INSTANCE_BUDGET");
     entry.users++;
     entry.access = ++this.access;
     let scene: THREE.Group;
@@ -361,7 +361,7 @@ export class GLBModelManager {
       scene = cloneSkeleton(entry.scene) as THREE.Group;
     } catch (error) {
       entry.users--;
-      releaseActor();
+      releaseInstance();
       throw error;
     }
     scene.scale.setScalar(normalization.scaleE8 / 100_000_000);
@@ -378,7 +378,7 @@ export class GLBModelManager {
     });
     const borrowed = entry;
     registerGlbLease(scene, () => {
-      releaseActor();
+      releaseInstance();
       borrowed.users--;
     });
     return { scene, animations: entry.animations };

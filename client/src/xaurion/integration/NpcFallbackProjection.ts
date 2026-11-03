@@ -250,6 +250,7 @@ export class NpcFallbackProjection {
       const band = actorLodBand(this.distanceToCamera(npc));
       counts[band] += 1;
       projected.lod = band;
+      projected.actor.setAnimationEnabled(actorUsesSkinnedVisual(band));
       if (band === "very_far") {
         projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
         projected.actor.group.visible = true;
