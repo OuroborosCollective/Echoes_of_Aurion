@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { testGlb } from "./glbImportFixtures";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { glbNormalizationManifestSchema } from "../shared/glbNormalizationContract";
+import { AURION_STARTER_CITY_WALL_LODS } from "../shared/aurionStarterCityWallContract";
+import { buildGlbNormalizationManifest } from "./glbNormalization";
 
 function scaledTriangle(scale: readonly [number, number, number]): Buffer {
   const bytes = testGlb("Aurion_Spear_Weapon", {
@@ -13,6 +15,16 @@ function scaledTriangle(scale: readonly [number, number, number]): Buffer {
 }
 
 describe("deterministic GLB normalization manifest", () => {
+  it("does not grant the city-wall envelope to a renamed or falsely labelled model", async () => {
+    const bytes = testGlb("Aurion_CityWall_LOD0", {
+      nodes: [{ name: "Aurion_CityWall_LOD0", mesh: 0, scale: [100, 10, 100] }],
+    });
+    const plan = await buildGlbImportPlan(bytes.toString("base64"), "world-environment", "Aurion_CityWall_LOD0.glb");
+    expect(plan.normalization.targetEnvelopeMm).toEqual([8000, 8000, 8000]);
+    expect(plan.normalization.scaleE8).toBeLessThan(100_000_000);
+    await expect(buildGlbNormalizationManifest(bytes, AURION_STARTER_CITY_WALL_LODS[0].sha256, plan.classification, "world-environment"))
+      .rejects.toThrow("GLB_NORMALIZATION_SOURCE_HASH_MISMATCH");
+  });
   it("measures transformed scene geometry and grounds a centered pivot deterministically", async () => {
     const bytes = testGlb("Aurion_Spear_Weapon", {
       nodes: [

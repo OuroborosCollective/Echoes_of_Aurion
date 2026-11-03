@@ -69,6 +69,7 @@ for (const [id, script, marker] of [
   ['g21-target-action', 'test_g21_target_action.gd', 'G21 target UI and canonical attack over isolated local WebSocket verified (fixture, not live Aurion)'],
   ['g22-native-hud', 'test_hud_projection.gd', 'G22_NATIVE_HUD_PROJECTION_TOUCH_PASS (synthetic fixtures; no physical device)'],
   ['world-design-projection', 'test_world_design_projection.gd', 'GODOT_WORLD_DESIGN_PROJECTION_PASS'],
+  ['starter-city-wall-scale', 'test_starter_city_wall.gd', 'GODOT_STARTER_CITY_WALL_SCALE_PASS'],
   ['world-glb-structure', 'test_world_glb_structure.gd', 'GODOT_WORLD_GLB_STRUCTURE_PASS'],
   ['world-design-active-scene', 'test_world_design_scene.gd', 'GODOT_WORLD_DESIGN_ACTIVE_SCENE_PASS'],
   ['world-design-large-readback', 'test_world_design_large_readback.gd', 'GODOT_WORLD_DESIGN_LARGE_READBACK_PASS'],

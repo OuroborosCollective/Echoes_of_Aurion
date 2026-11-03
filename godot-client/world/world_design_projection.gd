@@ -19,6 +19,12 @@ const MAX_RENDERED_MESH_INSTANCES := 512
 const MAX_RENDERED_SURFACES := 512
 const CHUNK_MM := 64000
 const HALF_CHUNK_MM := 32000
+## Exact embedded-texture wall bytes; keep in parity with the shared contract.
+const STARTER_CITY_WALL_HASHES := [
+	"a6c164035b8c8f1855ccf52e38c3202731718acc28346cc07f4837591540f349",
+	"003420006a5e06fffe46f22e2d4e915b2fc45f752a5a09e75094de9e3e9f6f9d",
+	"1dab1c81a3c73d1970bbc2a68cc61f20452d4fda0384269dde0987ff04108a1d",
+]
 
 var diagnostic := "Kein bestätigter Weltentwurf"
 var _connection := ""
@@ -658,7 +664,7 @@ func _refresh() -> void:
 		holder.position = Vector3(float(item.chunk.x * CHUNK_MM + item.xMm - HALF_CHUNK_MM) / 1000.0,
 			float(tile.heightMm) / 1000.0, float(item.chunk.y * CHUNK_MM + item.zMm - HALF_CHUNK_MM) / 1000.0)
 		holder.rotation.y = float(item.rotation) * PI / 2.0
-		var factor := clampf((_target_size(item.subcategory) / dimension) * (float(item.scale) / 1000.0), 0.05, 12.0)
+		var factor := _visual_scale(item.sha256, item.subcategory, dimension, int(item.scale))
 		var midpoint: Vector3 = bounds.get_center()
 		model.scale = Vector3.ONE * factor
 		model.position = Vector3(-midpoint.x * factor, -bounds.position.y * factor, -midpoint.z * factor)
@@ -669,6 +675,10 @@ func _refresh() -> void:
 		rendered_mesh_instances += int(cost.instances)
 		rendered_surfaces += int(cost.surfaces)
 	diagnostic = "Aurion-Weltentwurf: %d Modelle, %d noch nicht dargestellt" % [rendered, desired.size() - rendered]
+
+static func _visual_scale(sha: String, category: Variant, dimension: float, scale_permille: int) -> float:
+	var asset_scale := 1.0 if sha in STARTER_CITY_WALL_HASHES else _target_size(category) / dimension
+	return clampf(asset_scale * (float(scale_permille) / 1000.0), 0.05, 12.0)
 
 static func _target_size(category: Variant) -> float:
 	match category:

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AURION_STARTER_CITY_WALL_LODS } from "@shared/aurionStarterCityWallContract";
 import type { GlbCatalogEntry, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { AURION_RETURN_STONE_ASSET_ID, AURION_RETURN_STONE_POSITION, AURION_RETURN_STONE_SOURCE_SHA256 } from "@shared/aurionReturnStoneContract";
 import { AURION_VILLAGE_FOUNTAIN_LODS, AURION_VILLAGE_FOUNTAIN_POSITION } from "@shared/aurionVillageFountainContract";
@@ -81,6 +82,17 @@ function returnStoneEntry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogE
 }
 
 describe("uploaded GLB runtime selection", () => {
+  it("reserves every approved wall LOD for explicit world designs instead of scattering city perimeters", () => {
+    const walls = AURION_STARTER_CITY_WALL_LODS.map(lod => entry({
+      assetId: `glb_${lod.sha256.slice(0, 48)}`, sha256: lod.sha256,
+      purpose: "world-environment", assetType: "arena", subcategory: "structure",
+    }));
+    expect(uploadedWorldVisualsForChunk(catalog(walls), { x: 0, z: 0 })).toEqual([]);
+    const ordinary = entry({ assetId: "glb_ordinary", purpose: "world-environment", assetType: "arena", subcategory: "structure" });
+    const placements = uploadedWorldVisualsForChunk(catalog([...walls, ordinary]), { x: 0, z: 0 });
+    expect(placements.length).toBeGreaterThan(0);
+    expect(placements.every(item => item.asset.assetId === ordinary.assetId)).toBe(true);
+  });
   it("exposes only the explicitly public once-selectable character lane", () => {
     const result = publicPlayerCharacterCatalog(catalog([
       entry({ assetId: "glb_public_b", purpose: "player-public", assetType: "character" }),
