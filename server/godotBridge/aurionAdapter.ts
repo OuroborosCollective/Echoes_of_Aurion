@@ -104,11 +104,16 @@ export async function startAurionGodotFeed(
   const unsubscribe = recorder.observeCommittedTicks(entry => {
     if (entry.receipt.zoneId !== zoneId) return;
     try {
-      const previousReceipt = lastProjectedReceipt ?? recorder.getReceipt(zoneId, entry.receipt.tick - 1);
+      // A tick whose durable write failed is never published, so the last projected
+      // receipt is not always the direct predecessor; re-anchor on Aurion's recorded one.
+      const previousTick = entry.receipt.tick - 1;
+      const previousReceipt = lastProjectedReceipt?.tick === previousTick
+        ? lastProjectedReceipt
+        : recorder.getReceipt(zoneId, previousTick);
       current = projectCommittedTick(entry, { ...observation, previousReceipt });
       lastProjectedReceipt = structuredClone(entry.receipt);
     }
-    catch (error) { current = undefined; feed.invalidate(); throw error; }
+    catch (error) { current = undefined; lastProjectedReceipt = undefined; feed.invalidate(); throw error; }
     lastObservedAt = operationalNow(clock); // Observer freshness only; never state/receipts.
     feed.onTick(current.identity.tick);
   });
