@@ -81,6 +81,7 @@ function physicalFamilyEntries(entry: EnemyGlbCatalogEntry): readonly PhysicalEn
         ...entry,
         assetId: lod.assetId,
         sha256: lod.sha256,
+        normalization: lod.normalization,
         bytes: lod.bytes,
         storageUrl: lod.storageUrl,
         targetKey: lod.targetKey,

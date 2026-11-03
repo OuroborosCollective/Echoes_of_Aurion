@@ -5,6 +5,8 @@ import { ZONE_COMBAT_CONTRACT_VERSION } from "@shared/zoneCombatContract";
 import { MobCatalogProjection, CLOCKWORK_STALKER_GLB_SHA as sha } from "./MobCatalogProjection";
 import { selectEnemyGlb } from "../core/EnemyGlbFallback";
 import { acceptConfirmedZoneCombat, projectConfirmedZoneSnapshot } from "./zoneCombatBridge";
+import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
+import { glbResourcePool } from "../core/GlbResourceBudget";
 
 const catalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "b".repeat(64), entries: [{ assetId: `glb_${sha.slice(0,48)}`, sha256: sha, displayName: "Enemy Fallback · Clockwork Stalker", purpose: "enemy-fallback", assetType: "enemy", subcategory: null, targetKey: null, equipmentSlot: null, storageUrl: `/api/assets/glb/${sha}.glb` }] };
 const lod1Sha = "1".repeat(64), lod2Sha = "2".repeat(64);
@@ -41,6 +43,32 @@ function setup(count = 1) {
 async function step(p: MobCatalogProjection, dt=.5) { p.update(dt); await Promise.resolve(); await Promise.resolve(); }
 
 describe("approved confirmed mob GLB presentation", () => {
+  it("plays a distant confirmed death once capacity returns, within the existing corpse lifetime", async () => {
+    const s = setup(); s.engine.player.position.x = 60;
+    const p = new MobCatalogProjection(s.engine as never, async () => loaded());
+    p.setCatalog(catalog);
+    const play = vi.spyOn(AnimatedGlbActor.prototype, "playOnce");
+    let release: (() => void) | null = null;
+    try {
+      await step(p); await step(p, .1);
+      const slots = Array.from({ length: glbResourcePool.limits.animations }, () => glbResourcePool.animationActions(1));
+      release = () => slots.forEach(dispose => dispose?.());
+      expect(slots.every(Boolean)).toBe(true);
+      s.mobs[0]!.data.hp = 0;
+      await step(p, .1);
+      expect(play.mock.results.at(-1)?.value).toBe(false);
+      release!(); release = null;
+      await step(p, .1);
+      expect(play.mock.calls.at(-1)).toEqual(["death"]);
+      expect(play.mock.results.at(-1)?.value).toBe(true);
+      const count = play.mock.calls.length;
+      await step(p, .1);
+      expect(play).toHaveBeenCalledTimes(count);
+      await step(p, 1.6);
+      expect(p.evidence().projected).toBe(0);
+      expect(s.mobs[0]!.data.hp).toBe(0);
+    } finally { release?.(); play.mockRestore(); p.dispose(); }
+  });
   it("keeps confirmed enemies visible until an approved GLB actually loads", async () => {
     const s=setup(3); s.mobs[1]!.data.type="aether_wisp";s.mobs[1]!.group.userData.aurionConfirmedMob=false;s.mobs[2]!.group.userData.aurionConfirmedMob=false;
     let resolve!: (v: ReturnType<typeof loaded>)=>void;

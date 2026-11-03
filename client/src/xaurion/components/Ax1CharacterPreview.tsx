@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { glbManager } from "../core/GLBModelManager";
 import { releaseGlbTree } from "../core/GlbModelLease";
+import { glbResourcePool } from "../core/GlbResourceBudget";
 
 export type ConfirmedCharacterAppearance = {
   assetId: string;
@@ -27,6 +28,8 @@ export function Ax1CharacterPreview({ open, appearance }: {
     let frame = 0;
     let model: THREE.Group | null = null;
     let mixer: THREE.AnimationMixer | null = null;
+    let idleClip: THREE.AnimationClip | undefined;
+    let releaseAnimation: (() => void) | null = null;
     let renderer: THREE.WebGLRenderer | null = null;
     const clock = new THREE.Clock();
     const canvas = canvasRef.current;
@@ -60,6 +63,13 @@ export function Ax1CharacterPreview({ open, appearance }: {
     const animate = () => {
       if (disposed || !renderer) return;
       const delta = Math.min(clock.getDelta(), 0.05);
+      if (model && idleClip && !mixer) {
+        releaseAnimation = glbResourcePool.animationActions(1);
+        if (releaseAnimation) {
+          mixer = new THREE.AnimationMixer(model);
+          mixer.clipAction(idleClip).setLoop(THREE.LoopRepeat, Infinity).play();
+        }
+      }
       mixer?.update(delta);
       if (model && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
         model.rotation.y = Math.sin(clock.elapsedTime * 0.45) * 0.06;
@@ -87,14 +97,7 @@ export function Ax1CharacterPreview({ open, appearance }: {
       model.position.y -= 1.25;
       scene.add(model);
 
-      const idle = loaded.animations.find(clip => /(^|[_\s-])idle($|[_\s-])/i.test(clip.name)) ?? loaded.animations.find(clip => /idle/i.test(clip.name));
-      if (idle) {
-        mixer = new THREE.AnimationMixer(model);
-        const action = mixer.clipAction(idle);
-        action.setLoop(THREE.LoopRepeat, Infinity);
-        action.clampWhenFinished = false;
-        action.play();
-      }
+      idleClip = loaded.animations.find(clip => /(^|[_\s-])idle($|[_\s-])/i.test(clip.name)) ?? loaded.animations.find(clip => /idle/i.test(clip.name));
       setState("ready");
       animate();
     }).catch(() => {
@@ -105,6 +108,7 @@ export function Ax1CharacterPreview({ open, appearance }: {
       disposed = true;
       window.cancelAnimationFrame(frame);
       mixer?.stopAllAction();
+      releaseAnimation?.();
       if (model) {
         scene.remove(model);
         releaseGlbTree(model);

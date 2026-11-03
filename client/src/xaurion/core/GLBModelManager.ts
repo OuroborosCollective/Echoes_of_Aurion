@@ -123,6 +123,7 @@ const CATALOG_LOD_HYSTERESIS = 0.1;
 type CachedModel = {
   scene: THREE.Group;
   animations: THREE.AnimationClip[];
+  hasRig: boolean;
   users: number;
   access: number;
   release: () => void;
@@ -274,7 +275,9 @@ export class GLBModelManager {
         ]);
         decoded = gltf.scene;
         requireDecodedMaterialTextures(gltf, json);
+        let hasRig = false;
         gltf.scene.traverse(node => {
+          if ((node as THREE.Bone).isBone || (node as THREE.SkinnedMesh).isSkinnedMesh) hasRig = true;
           if ((node as THREE.Mesh).isMesh) {
             node.castShadow = true;
             node.receiveShadow = true;
@@ -284,6 +287,7 @@ export class GLBModelManager {
         const entry = {
           scene: gltf.scene,
           animations: gltf.animations,
+          hasRig,
           users: 0,
           access: ++this.access,
           release,
@@ -350,10 +354,12 @@ export class GLBModelManager {
         if (this.pending.get(url) === pending) this.pending.delete(url);
       }
     }
-    const releaseActor = glbResourcePool.actor(
-      Math.min(entry.animations.length, 2)
-    );
-    if (!releaseActor) throw Error("GLB_ACTOR_BUDGET");
+    const actor = entry.hasRig || entry.animations.length > 0
+      || (found !== undefined && ["character_avatar", "mob", "mount"].includes(found.category));
+    const releaseInstance = actor
+      ? glbResourcePool.actor(0)
+      : glbResourcePool.staticInstance();
+    if (!releaseInstance) throw Error(actor ? "GLB_ACTOR_BUDGET" : "GLB_STATIC_INSTANCE_BUDGET");
     entry.users++;
     entry.access = ++this.access;
     let scene: THREE.Group;
@@ -361,7 +367,7 @@ export class GLBModelManager {
       scene = cloneSkeleton(entry.scene) as THREE.Group;
     } catch (error) {
       entry.users--;
-      releaseActor();
+      releaseInstance();
       throw error;
     }
     scene.scale.setScalar(normalization.scaleE8 / 100_000_000);
@@ -378,7 +384,7 @@ export class GLBModelManager {
     });
     const borrowed = entry;
     registerGlbLease(scene, () => {
-      releaseActor();
+      releaseInstance();
       borrowed.users--;
     });
     return { scene, animations: entry.animations };

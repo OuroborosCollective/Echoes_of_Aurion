@@ -12,7 +12,7 @@ import { enemyFallbackDiagnostics, selectEnemyGlb } from "../core/EnemyGlbFallba
 
 type MobVisual = MMOEngine["mobManager"]["mobs"][number];
 type Loaded = Awaited<ReturnType<typeof glbManager.loadModel>>;
-type Projected = { visual: MobVisual; actor: AnimatedGlbActor; assetId: string; variantKey: string; sha256: string; lodLevel: GlbLodLevel; triangles: number; bones: number; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; lastAttackSequence: number; fallbackOffset: number };
+type Projected = { visual: MobVisual; actor: AnimatedGlbActor; assetId: string; variantKey: string; sha256: string; lodLevel: GlbLodLevel; triangles: number; bones: number; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; deathStarted: boolean; lastAttackSequence: number; fallbackOffset: number };
 /** Exact authored presentation binding. Catalog approval/revocation remains
  * mandatory; a filename or a legacy occupied starter target cannot claim it. */
 /** Legacy fixture identity retained for tests/asset provenance only; runtime selection is generic. */
@@ -100,7 +100,7 @@ export class MobCatalogProjection {
       actor.group.position.copy(visual.group.position);
       this.engine.scene.add(actor.group);
       this.failures.delete(id);
-      this.projected.set(id, { visual, actor, assetId: selection.entry.assetId, variantKey: selection.variantKey, sha256: selection.entry.sha256, lodLevel: selection.lod, triangles, bones, oldBodyVisible: true, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0, fallbackOffset: failure?.attempts ?? 0 });
+      this.projected.set(id, { visual, actor, assetId: selection.entry.assetId, variantKey: selection.variantKey, sha256: selection.entry.sha256, lodLevel: selection.lod, triangles, bones, oldBodyVisible: true, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, deathStarted: false, lastAttackSequence: 0, fallbackOffset: failure?.attempts ?? 0 });
       visual.body.visible = false; actor = null;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
@@ -130,10 +130,12 @@ export class MobCatalogProjection {
       if (v !== p.visual || v.group.userData.aurionConfirmedMob !== true) { this.remove(id, false); continue; }
       const desiredSelection = this.selection(v, p.fallbackOffset);
       if (v.data.hp > 0 && (!desiredSelection || desiredSelection.entry.sha256 !== p.sha256)) { this.remove(id); continue; }
+      p.actor.setAnimationEnabled(v.data.hp <= 0 || Math.hypot(v.data.x - this.engine.player.position.x, v.data.z - this.engine.player.position.z) < ACTOR_LOD_MID_MAX_METERS);
       if (v.data.hp <= 0) {
-        if (p.deadSeconds === null) { p.deadSeconds = 0; p.actor.playOnce("death"); }
+        if (p.deadSeconds === null) p.deadSeconds = 0;
         p.deadSeconds += delta;
         if (p.deadSeconds > 1.8) { this.remove(id); continue; }
+        if (!p.deathStarted) p.deathStarted = p.actor.playOnce("death");
         p.actor.group.visible = true;
       } else {
         if (p.deadSeconds !== null) { this.remove(id); continue; }
