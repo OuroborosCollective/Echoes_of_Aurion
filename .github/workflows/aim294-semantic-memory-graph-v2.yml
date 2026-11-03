@@ -15,6 +15,7 @@ on:
       - "server/aurion/npc/multiMemory.ts"
       - "server/npcHistoricalDecisionProvenanceMariaDb.test.ts"
       - "server/npcGenesisAndSourceAuthorityMariaDb.test.ts"
+      - "server/npcSemanticGraphBoundedRetentionMariaDb.test.ts"
       - "server/aurion/livingHistoryLoop.ts"
       - "server/aurion/npc/merchantRules.ts"
       - "server/aurion/npc/authority.ts"
@@ -40,6 +41,7 @@ on:
       - "server/aurion/npc/multiMemory.ts"
       - "server/npcHistoricalDecisionProvenanceMariaDb.test.ts"
       - "server/npcGenesisAndSourceAuthorityMariaDb.test.ts"
+      - "server/npcSemanticGraphBoundedRetentionMariaDb.test.ts"
       - "server/aurion/livingHistoryLoop.ts"
       - "server/aurion/npc/merchantRules.ts"
       - "server/aurion/npc/authority.ts"
@@ -63,7 +65,8 @@ jobs:
   mariadb-contract:
     name: Real MariaDB graph rollback, provenance and retrieval
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # The bounded-retention suite records 4 x 260 real graph generations (~8 min locally).
+    timeout-minutes: 45
     services:
       mariadb:
         image: mariadb:11.4.13
@@ -111,6 +114,7 @@ jobs:
             server/aim294SemanticGraphV2MariaDb.test.ts \
             server/npcHistoricalDecisionProvenanceMariaDb.test.ts \
             server/npcGenesisAndSourceAuthorityMariaDb.test.ts \
+            server/npcSemanticGraphBoundedRetentionMariaDb.test.ts \
             client/src/xaurion/integration/NpcDecisionPanel.test.tsx \
             client/src/xaurion/integration/ax1FullCutover.test.tsx \
             server/npcProjectionProvenanceReadmodel.test.ts
