@@ -10,7 +10,10 @@ vi.mock("./aurion/livingHistoryLoop.js", async importOriginal => ({
 vi.mock("./wasdAurionRuntime", () => ({ readConfirmedNpcState: async () => null }));
 vi.mock("./npcActionGatewayPersistence", () => ({ readConfirmedMerchantActionSource: async () => null }));
 vi.mock("./npcMultiMemoryPersistence", () => ({ readConfirmedNpcMultiMemory: async () => null }));
-vi.mock("./aurion/npcGuildRuntime.js", () => ({ createNpcGuildRuntime: () => ({ executeCycle: async () => undefined, readback: () => null }) }));
+const guild = vi.hoisted(() => ({ failure: null as Error | null }));
+vi.mock("./aurion/npcGuildRuntime.js", () => ({
+  createNpcGuildRuntime: () => ({ executeCycle: async () => { if (guild.failure) throw guild.failure; }, readback: () => null }),
+}));
 
 const { createAutonomousNpcLifeRuntime, AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS, AUTONOMOUS_NPC_LIFE_NPC_ID } = await import("./autonomousNpcLifeRuntime");
 
@@ -20,7 +23,7 @@ const entry = (status: string, failureCode: string | null) => ({
 });
 
 describe("autonomous NPC life runtime degradation logging", () => {
-  afterEach(() => { vi.restoreAllMocks(); loop.civilizationAction = null; loop.failureCode = null; });
+  afterEach(() => { vi.restoreAllMocks(); loop.civilizationAction = null; loop.failureCode = null; guild.failure = null; });
 
   it("logs a coded degradation once and keeps the lifecycle readback unchanged", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -60,5 +63,32 @@ describe("autonomous NPC life runtime degradation logging", () => {
     const recovered = recoveredLines();
     expect(recovered).toHaveLength(1);
     expect(JSON.parse(recovered[0].slice("[NpcLife] RECOVERED ".length))).toMatchObject({ npcId: "aurion_civilization_loop", cycle: 3 });
+  });
+
+  it("keeps an open civilization degradation across a cycle aborted by a later runtime error", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const runtime = createAutonomousNpcLifeRuntime({ enabled: true });
+    const civilizationLines = (spy: typeof warn, prefix: string) =>
+      spy.mock.calls.map(call => String(call[0])).filter(line => line.startsWith(prefix) && line.includes("aurion_civilization_loop"));
+    loop.entries = [entry("confirmed", null)];
+    loop.failureCode = "CIVILIZATION_ORCHESTRATION_FAILED:CIVILIZATION_TRANSITION_CONFLICT";
+    await runtime.resolveOnce({ tick: AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS });
+
+    guild.failure = new Error("NPC_GUILD_READ_FAILED");
+    await expect(runtime.resolveOnce({ tick: 2 * AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS })).rejects.toThrow("NPC_GUILD_READ_FAILED");
+    expect(runtime.readback()).toMatchObject({ status: "degraded", failureCode: "NPC_GUILD_READ_FAILED" });
+
+    // The same civilization failure continues: no second DEGRADED event.
+    guild.failure = null;
+    await runtime.resolveOnce({ tick: 3 * AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS });
+    expect(civilizationLines(warn, "[NpcLife] DEGRADED ")).toHaveLength(1);
+
+    loop.failureCode = null;
+    loop.civilizationAction = "ADVANCED";
+    await runtime.resolveOnce({ tick: 4 * AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS });
+    const recovered = civilizationLines(info, "[NpcLife] RECOVERED ");
+    expect(recovered).toHaveLength(1);
+    expect(JSON.parse(recovered[0].slice("[NpcLife] RECOVERED ".length))).toMatchObject({ cycle: 4, consecutiveCycles: 3 });
   });
 });

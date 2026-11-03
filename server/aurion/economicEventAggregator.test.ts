@@ -137,6 +137,7 @@ describe("Aurion economic event aggregator", () => {
         signal("windhollow", "economy", 50), // clamped to 1 before summing
         signal("windhollow", "economy", -0.5),
         ...hubs.flatMap(h => [signal(h, "hazard", -4), signal(h, "hazard", 4), signal(h, "economy", -3)]),
+        ...hubs.flatMap(h => [signal(h, "politics", 4), signal(h, "politics", 4)]),
       ],
       hubs.flatMap(h => [interaction(h, "trade", 0.8), interaction(h, "resource_competition", 0.7)]),
     );
@@ -146,6 +147,7 @@ describe("Aurion economic event aggregator", () => {
       expect(snapshot.hazardPressure).toBe(1);
       expect(snapshot.tradeVolume).toBe(0.8);
       expect(snapshot.scarcityPressure).toBe(0.7);
+      expect(snapshot.politicsPressure).toBe(1);
       expect(snapshot.economyPressure).toBeGreaterThanOrEqual(-1);
       expect(snapshot.economyPressure).toBeLessThanOrEqual(1);
     }
@@ -157,6 +159,7 @@ describe("Aurion economic event aggregator", () => {
     expect(impact.totalTradeVolume).toBe(1);
     expect(impact.totalScarcityPressure).toBe(1);
     expect(impact.totalEconomyPressure).toBe(-1);
+    expect(impact.totalPoliticsPressure).toBe(1);
   });
 
   it("produces a deterministic impact hash that is order-independent across hubs and sensitive to cycle and content", () => {

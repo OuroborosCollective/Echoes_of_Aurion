@@ -280,7 +280,11 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         npcGuilds: guildRuntime.readback(),
       });
     } catch (error) {
-      reportDegradation([{ npcId: AUTONOMOUS_NPC_LIFE_NPC_ID, status: "degraded", failureCode: failureCode(error) }], cycleCount, tick);
+      reportDegradation([
+        { npcId: AUTONOMOUS_NPC_LIFE_NPC_ID, status: "degraded", failureCode: failureCode(error) },
+        // The civilization step was not observed in this cycle: keep its open degradation.
+        { npcId: AUTONOMOUS_CIVILIZATION_LOOP_MONITOR_ID, status: "skipped", failureCode: null },
+      ], cycleCount, tick);
       state = frozenReadback({
         ...state,
         enabled,
