@@ -142,6 +142,7 @@ async function startServer(){
           finally{clearInterval(progress);}
         },
         closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
+        persistenceStatus:()=>globalTickRecorder.getPersistenceStatus(),
       });
       // Emit the actual post-drain receipt synchronously before process.exit(0).
       // Buffered console output may be lost during an immediate process exit.

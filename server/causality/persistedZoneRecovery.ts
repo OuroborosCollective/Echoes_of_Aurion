@@ -80,6 +80,12 @@ export async function restorePersistedZoneHead(
     || state.ruleset !== latest.rulesetVersion || !isSupportedAurionZoneRuleset(state.ruleset)) {
     throw new Error(`${errorPrefix}_HEAD_INVALID`);
   }
+  if (state.players.length && errorPrefix === "PROBE_ZONE") {
+    // The production probe prepares its zone before its approval is consumed, so it
+    // must never commit a recovery tick. Only an authenticated player handshake
+    // (ticket already consumed) may recover persisted presence.
+    throw new Error(`${errorPrefix}_PRESENCE_RECOVERY_REQUIRED`);
+  }
   zone.restorePersistedHead(state, latest);
   if (state.players.length) await recoverPersistedPresence(zone, zoneId, latest, persistence, errorPrefix);
   return zone;
