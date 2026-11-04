@@ -1367,7 +1367,8 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import { scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
-          import { requireZoneRulesetEvidence, AURION_BINARY_AUTHORITY } from "./shared/aurionZoneRulesetContract.mjs";
+          import { requireZoneRulesetEvidence } from "./shared/aurionZoneRulesetContract.mjs";
+          import { AURION_BINARY_AUTHORITY } from "./shared/aurionZoneRulesetContract.mjs";
           import { isDeepStrictEqual } from "node:util";
           const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
           const installed=JSON.parse(fs.readFileSync("runtime-attestation/aurion-installed-runtime-readback.json","utf8"));
