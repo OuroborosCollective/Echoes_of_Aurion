@@ -422,6 +422,17 @@ export class AuthoritativeMovementZone {
     if (!this.isReplay) this.broadcastSnapshot();
   }
 
+  /**
+   * Leave every present peer through the canonical presence_leave intent, in a
+   * stable order. Used at the shutdown boundary and for presence recovery after a
+   * restart, where no persisted peer still has a live transport.
+   */
+  leaveAllPresences(): number {
+    const connectionIds = [...this.peers.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    for (const connectionId of connectionIds) this.leave(connectionId);
+    return connectionIds.length;
+  }
+
   connectionIdForUser(userId: number): string | undefined {
     return this.peersByEntityId.get(`player:${userId}`)?.connectionId;
   }
@@ -1142,6 +1153,18 @@ export class ZoneRegistry {
     this.zones.delete(zone.zoneId);
     this.dormantZones.set(zone.zoneId, zone);
     this.sortedZonesDirty = true;
+  }
+
+  /**
+   * Shutdown boundary: commit canonical leaves for every presence in one final
+   * receipted tick, so the persisted head never carries players without a live
+   * transport into the next process.
+   */
+  commitShutdownLeaves(): number {
+    let left = 0;
+    for (const zone of this.zones.values()) left += zone.leaveAllPresences();
+    if (left > 0) this.tick();
+    return left;
   }
 
   tick(): void {

@@ -123,8 +123,15 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
       const playerTick = await adapter.getRecordedTick(zoneId, 5);
       expect(playerTick!.receipt.previousReceiptHash).toBe(continued[1].receipt.receiptHash);
       expect(playerTick!.intents!.some(intent => intent.type === "presence_join" && intent.userId === 77)).toBe(true);
-      // A process restart must not silently erase that persisted player.
-      await expect(prepareProductionProbeZone(new ZoneRegistry(), adapter, new AurionTickRecorder(20, adapter))).rejects.toThrow("PROBE_ZONE_PRESENCE_RECOVERY_REQUIRED");
+      // A process restart must not silently erase that persisted player: it is left through
+      // one canonical, receipted presence_leave tick that is durable before the zone resumes.
+      const restarted = await prepareProductionProbeZone(new ZoneRegistry(), adapter, new AurionTickRecorder(20, adapter));
+      expect(restarted.zone.getTickNumber()).toBe(6);
+      expect(restarted.zone.getCanonicalZoneState().players).toEqual([]);
+      const leaveTick = await adapter.getRecordedTick(zoneId, 6);
+      expect(leaveTick!.receipt.previousReceiptHash).toBe(playerTick!.receipt.receiptHash);
+      expect(leaveTick!.intents!.filter(intent => intent.type === "presence_leave").map(intent => intent.userId)).toEqual([77]);
+      expect((await adapter.getLatestReceipt(zoneId))?.receiptHash).toBe(leaveTick!.receipt.receiptHash);
     } finally {
       await pool.execute("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
       await pool.execute("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);

@@ -1,4 +1,4 @@
-import { computeReceiptHash, isSupportedAurionZoneRuleset } from "../../shared/aurionCausalTickContract";
+import { computeReceiptHash, isSupportedAurionZoneRuleset, type AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import type { ZoneId } from "../zoneProtocol";
@@ -80,7 +80,36 @@ export async function restorePersistedZoneHead(
     || state.ruleset !== latest.rulesetVersion || !isSupportedAurionZoneRuleset(state.ruleset)) {
     throw new Error(`${errorPrefix}_HEAD_INVALID`);
   }
-  if (state.players.length) throw new Error(`${errorPrefix}_PRESENCE_RECOVERY_REQUIRED`);
   zone.restorePersistedHead(state, latest);
+  if (state.players.length) await recoverPersistedPresence(zone, zoneId, latest, persistence, errorPrefix);
   return zone;
+}
+
+/**
+ * Presence never survives a process restart: every persisted player lost its live
+ * transport. Leave them through the canonical presence_leave intent in one
+ * receipted tick, make that tick durable and read it back before the zone can be
+ * activated. Replay reproduces the tick from its recorded intents.
+ */
+async function recoverPersistedPresence(
+  zone: AuthoritativeMovementZone,
+  zoneId: string,
+  head: AurionCausalTickReceipt,
+  persistence: PersistedZoneRecoverySource,
+  errorPrefix: RecoveryErrorPrefix,
+): Promise<void> {
+  const present = zone.getCanonicalZoneState().players.length;
+  if (zone.leaveAllPresences() !== present) throw new Error(`${errorPrefix}_PRESENCE_RECOVERY_INVALID`);
+  zone.tick();
+  const recovered = zone.getCanonicalZoneState();
+  const receipt = zone.getLatestReceipt();
+  if (recovered.players.length !== 0 || recovered.tick !== head.tick + 1 || !receipt
+    || receipt.tick !== head.tick + 1 || receipt.previousReceiptHash !== head.receiptHash) {
+    throw new Error(`${errorPrefix}_PRESENCE_RECOVERY_FAILED`);
+  }
+  await zone.flushEvidencePersistence();
+  const persisted = await persistence.getLatestReceipt(zoneId);
+  if (!persisted || persisted.tick !== receipt.tick || persisted.receiptHash !== receipt.receiptHash) {
+    throw new Error(`${errorPrefix}_PRESENCE_RECOVERY_NOT_DURABLE`);
+  }
 }

@@ -71,5 +71,5 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       refreshTimer=presence?setInterval(()=>{const position=zone.positionForConnection(welcome.connectionId);if(!position)return;void presence.refresh(position).catch(error=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);});},WORLD_PRESENCE_REFRESH_MS):undefined;
     }catch(error){console.error("[Aurion Zone] Ticket handshake failed",error);closePolicyViolation(socket);}
   });});
-  return{registry,close:()=>{for(const id of observationConnections)clientVerificationRegistry.close(id);observationConnections.clear();clearInterval(tickTimer);presenceObservers.clear();wss.close();}};
+  return{registry,close:()=>{for(const id of observationConnections)clientVerificationRegistry.close(id);observationConnections.clear();clearInterval(tickTimer);try{const left=registry.commitShutdownLeaves();if(left)console.info(`[Aurion Zone] shutdown committed ${left} presence leave(s)`);}catch(error){console.error("[Aurion Zone] shutdown presence leave failed",error);}presenceObservers.clear();wss.close();}};
 }
