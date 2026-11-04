@@ -353,7 +353,9 @@ if [[ -n "$previous_aurion" && "$(docker inspect --format '{{.State.Running}}' "
   printf '{"recordType":"aurion.previous-runtime-drain","schemaVersion":1,"exitCode":%s,"drainReceipt":"%s"}\n' "$drain_exit" "$drain_receipt"
   if [[ "$drain_receipt" != complete ]]; then
     printf 'aurion-traefik-promoter warning: previous runtime drain receipt %s (exit %s); the next boot settles its zone head\n' "$drain_receipt" "$drain_exit" >&2
-    docker logs --since "$drain_since" "$previous_aurion" 2>&1 | grep -E '^\[Aurion( Zone)?\] (shutdown|graceful)' | tail -n 20 >&2 || true
+    # Only fixed stage names reach the release log; error text and persistence status lines
+    # can carry database detail and stay in the host's container log.
+    docker logs --since "$drain_since" "$previous_aurion" 2>&1 | grep -oE '^\[Aurion\] (shutdown stage: [a-z-]+|graceful causal shutdown (complete|failed))' | tail -n 20 >&2 || true
   fi
 fi
 # previous-runtime-drain-end

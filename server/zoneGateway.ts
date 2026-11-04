@@ -31,6 +31,9 @@ const SHUTDOWN_LEASE_RELEASE_MS=2000;
 // Boot work must fit the promoter's health budget (~30 s): only the lease release runs
 // before listen. Zone settlement runs in the background; admissions wait for it, bounded.
 const BOOT_LEASE_RELEASE_TIMEOUT_MS=5_000;const BOOT_SETTLEMENT_REPORT_MS=30_000;const ADMISSION_SETTLEMENT_WAIT_MS=10_000;
+// Shutdown waits for an in-flight boot settlement (it flushes its own recovery tick) before
+// the final tick and the causal flush, bounded inside the 25 s drain deadline.
+const SHUTDOWN_SETTLEMENT_WAIT_MS=5_000;
 function closePolicyViolation(socket:WebSocket):void{socket.close(1008,"zone authorization rejected");}
 // Server-side admission failure: retryable for clients, never reported as an authorization rejection.
 function closeZoneUnavailable(socket:WebSocket):void{if(socket.readyState===WebSocket.OPEN||socket.readyState===WebSocket.CONNECTING)socket.close(1011,"zone temporarily unavailable");}
@@ -43,8 +46,8 @@ function rejectUnsupportedZoneVersion(socket:WebSocket):void{
 }
 
 /** `/v1/ws` is Aurion's live gameplay transport. AX1/WASD are historical provenance only; legacy tRPC/MCP encounter routes are not consulted. */
-export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink,recoverZone:ZoneRecoveryResolver=(zoneId)=>restorePersistedZoneHead(zoneId,globalCausalPersistence,globalTickRecorder),observer:DefensiveGatewayObserver=defensiveGatewayObserver,joinHealth:ZoneJoinHealthMonitor=globalZoneJoinHealth,options:{admissionSettlementWaitMs?:number}={}){
-  const admissionSettlementWaitMs=options.admissionSettlementWaitMs??ADMISSION_SETTLEMENT_WAIT_MS;
+export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink,recoverZone:ZoneRecoveryResolver=(zoneId)=>restorePersistedZoneHead(zoneId,globalCausalPersistence,globalTickRecorder),observer:DefensiveGatewayObserver=defensiveGatewayObserver,joinHealth:ZoneJoinHealthMonitor=globalZoneJoinHealth,options:{admissionSettlementWaitMs?:number;shutdownSettlementWaitMs?:number}={}){
+  const admissionSettlementWaitMs=options.admissionSettlementWaitMs??ADMISSION_SETTLEMENT_WAIT_MS;const shutdownSettlementWaitMs=options.shutdownSettlementWaitMs??SHUTDOWN_SETTLEMENT_WAIT_MS;let bootSettlement:Promise<unknown>|undefined;
   if(fixedTick&&(!Number.isSafeInteger(fixedTick.intervalTicks)||fixedTick.intervalTicks<1))throw new Error("ZONE_FIXED_TICK_INTERVAL_INVALID");
   const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const observationConnections=new Set<string>();const presenceObservers=new Set<()=>void>();let closing=false;const presenceReleases=new Set<Promise<unknown>>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();let isTicking=false;
   const tickTimer=setInterval(async()=>{
@@ -90,8 +93,12 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
    * has been admitted yet, so every active lease is orphaned (inclusive boundary). Bounded;
    * a lease wrongly released later is restored by its owner's next refresh (upsert).
    */
-  const releaseOrphanedLeasesAtBoot=async(timeoutMs=BOOT_LEASE_RELEASE_TIMEOUT_MS)=>{
+  const releaseOrphanedLeasesAtBoot=async(requestedTimeoutMs=BOOT_LEASE_RELEASE_TIMEOUT_MS)=>{
     if(!worldPresence?.releaseOrphaned)return joinHealth.readback();
+    // The boundary is a fixed parameter captured before the UPDATE, and admission starts only
+    // after the UPDATE or this bound. A bound of at least 1 s keeps every lease admitted later
+    // strictly after the boundary even at second precision, so a late UPDATE never matches it.
+    const timeoutMs=Math.max(1_000,requestedTimeoutMs);
     const lastSeenBefore=operationalDate();let deadline:ReturnType<typeof setTimeout>|undefined;
     try{
       const outcome=await Promise.race([worldPresence.releaseOrphaned({lastSeenBefore}),new Promise<"timeout">(resolve=>{deadline=setTimeout(()=>resolve("timeout"),timeoutMs);})]);
@@ -110,7 +117,7 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
     joinHealth.bootSettlementStarted();let finished=false;
     const report=setTimeout(()=>{if(finished)return;joinHealth.bootSettlementFinished({status:"timed_out",code:"ZONE_BOOT_SETTLEMENT_TIMEOUT"});console.error(`[Aurion Zone] BOOT_SETTLEMENT ${JSON.stringify({status:"timed_out",afterMs:reportAfterMs})}`);},reportAfterMs);
     report.unref?.();
-    return(async()=>{
+    const settlement=(async()=>{
       let code:string|null=null;
       for(const zoneId of zoneIds){try{await registry.settlePersistedHead(zoneId,recoverZone);}catch(error){code??=zoneFailureCode(error);console.error(`[Aurion Zone] boot settlement failed for ${zoneId}`,error);}}
       finished=true;clearTimeout(report);
@@ -118,8 +125,13 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       console.info(`[Aurion Zone] BOOT_SETTLEMENT ${JSON.stringify({status:code?"failed":"settled",code})}`);
       return joinHealth.readback();
     })();
+    bootSettlement=settlement;
+    return settlement;
   };
   return{registry,releaseOrphanedLeasesAtBoot,settleZonesAtBoot,close:async()=>{closing=true;clearInterval(tickTimer);
+    // A boot settlement still committing its recovery tick must finish (it flushes that tick
+    // itself) before the final tick and the drain's flush; bounded.
+    if(bootSettlement){let wait:ReturnType<typeof setTimeout>|undefined;const settled=await Promise.race([bootSettlement.then(()=>true,()=>true),new Promise<boolean>(resolve=>{wait=setTimeout(()=>resolve(false),shutdownSettlementWaitMs);})]);clearTimeout(wait);if(!settled)console.warn(`[Aurion Zone] shutdown continued after ${shutdownSettlementWaitMs} ms while the boot settlement is still running`);}
     // Close every client first: their close handlers queue presence_leave and release
     // world-presence leases. Bounded: an unresponsive peer is terminated.
     await Promise.all([...wss.clients].map(client=>new Promise<void>(resolve=>{if(client.readyState===WebSocket.CLOSED)return resolve();const timer=setTimeout(()=>{client.terminate();resolve();},SHUTDOWN_CLIENT_CLOSE_MS);client.once("close",()=>{clearTimeout(timer);resolve();});client.close(1001,"server shutdown");})));

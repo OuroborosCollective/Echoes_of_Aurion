@@ -30,22 +30,34 @@ async function startGateway(options: {
   ticket?: () => Promise<unknown>;
   releaseOrphaned?: (values: { lastSeenBefore: Date }) => Promise<number>;
   admissionSettlementWaitMs?: number;
+  shutdownSettlementWaitMs?: number;
 }) {
   const server = createServer();
   const registry = options.registry ?? new ZoneRegistry();
   const health = options.health ?? quiet();
   const ticket = vi.fn(options.ticket ?? (async () => ({ userId: 91, zoneId: "observatory_threshold" as const, clientBuild: "fixture", expiresAt: new Date(Date.now() + 60_000) })));
   const presence = { upsert: vi.fn(async () => undefined), release: vi.fn(async () => undefined), ...(options.releaseOrphaned ? { releaseOrphaned: options.releaseOrphaned } : {}) };
-  const gateway = registerZoneGateway(server, registry, ticket as never, presence, undefined, options.recover as never, undefined, health, { admissionSettlementWaitMs: options.admissionSettlementWaitMs });
+  const gateway = registerZoneGateway(server, registry, ticket as never, presence, undefined, options.recover as never, undefined, health, { admissionSettlementWaitMs: options.admissionSettlementWaitMs, shutdownSettlementWaitMs: options.shutdownSettlementWaitMs ?? 50 });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address(); if (!address || typeof address === "string") throw new Error("ADDRESS_REQUIRED");
   const connect = () => new WebSocket(`ws://127.0.0.1:${address.port}/v1/ws`, { origin: "http://localhost" });
   return { server, registry, gateway, connect, health, ticket };
 }
 
+type Runtime = Awaited<ReturnType<typeof startGateway>>;
+/** Close each gateway (its tick timer and clients) and await each HTTP server's close callback. */
+async function closeAll(runtimes: Runtime[]) {
+  for (const runtime of runtimes.splice(0)) {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await runtime.gateway.close();
+    await new Promise<void>(resolve => runtime.server.close(() => resolve()));
+  }
+}
+
 describe("zone admission health and retryable failures", () => {
-  const servers: { close(): void }[] = [];
-  afterEach(() => { for (const server of servers.splice(0)) server.close(); vi.restoreAllMocks(); });
+  const servers: Runtime[] = [];
+  afterEach(async () => { await closeAll(servers); vi.restoreAllMocks(); });
 
   it("closes a server-side recovery failure with retryable 1011, reports it in the readback and clears it on the next join", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -56,7 +68,7 @@ describe("zone admission health and retryable failures", () => {
       health,
       recover: async zoneId => { if (locked) throw new Error("ZONE_PRESENCE_RECOVERY_REQUIRED"); return new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()); },
     });
-    servers.push(runtime.server);
+    servers.push(runtime);
     for (let attempt = 0; attempt < 2; attempt++) {
       const socket = runtime.connect(); await onceOpen(socket);
       const closed = onceClose(socket); socket.send(JSON.stringify(hello));
@@ -77,7 +89,7 @@ describe("zone admission health and retryable failures", () => {
   it("keeps 1008 for an invalid or reused ticket", async () => {
     const health = quiet();
     const runtime = await startGateway({ health, ticket: async () => undefined, recover: async zoneId => new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()) });
-    servers.push(runtime.server);
+    servers.push(runtime);
     const socket = runtime.connect(); await onceOpen(socket);
     const closed = onceClose(socket); socket.send(JSON.stringify(hello));
     expect(await closed).toBe(1008);
@@ -91,8 +103,8 @@ describe("zone admission health and retryable failures", () => {
 });
 
 describe("boot settlement", () => {
-  const servers: { close(): void }[] = [];
-  afterEach(() => { for (const server of servers.splice(0)) server.close(); vi.restoreAllMocks(); });
+  const servers: Runtime[] = [];
+  afterEach(async () => { await closeAll(servers); vi.restoreAllMocks(); });
 
   it("settles the head in the background without activating the zone; a join during settlement waits instead of racing it", async () => {
     vi.spyOn(console, "info").mockImplementation(() => undefined);
@@ -101,7 +113,7 @@ describe("boot settlement", () => {
     const gate = new Promise<void>(resolve => { release = resolve; });
     const recover = vi.fn(async (zoneId: "observatory_threshold") => { await gate; return new AuthoritativeMovementZone(zoneId, recorder); });
     const runtime = await startGateway({ recover });
-    servers.push(runtime.server);
+    servers.push(runtime);
     const settling = runtime.gateway.settleZonesAtBoot(["observatory_threshold"]);
     expect(runtime.health.readback().bootSettlement).toBe("pending");
     const socket = runtime.connect(); await onceOpen(socket);
@@ -122,13 +134,40 @@ describe("boot settlement", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const recover = vi.fn(() => new Promise<AuthoritativeMovementZone>(() => undefined));
     const runtime = await startGateway({ recover, admissionSettlementWaitMs: 50 });
-    servers.push(runtime.server);
+    servers.push(runtime);
     void runtime.gateway.settleZonesAtBoot(["observatory_threshold"], 10_000);
     const socket = runtime.connect(); await onceOpen(socket);
     const closed = onceClose(socket); socket.send(JSON.stringify(hello));
     expect(await closed).toBe(1011);
     expect(runtime.health.readback()).toMatchObject({ status: "failing", lastFailureCode: "ZONE_BOOT_SETTLEMENT_PENDING", bootSettlement: "pending" });
     expect(recover).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets shutdown wait for an in-flight boot settlement before its final tick, bounded", async () => {
+    // Review case: a drain that flushed before the recovery tick was queued reported completion
+    // while that evidence was not durable yet.
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const waiting = await startGateway({ recover: async zoneId => { await gate; return new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()); }, shutdownSettlementWaitMs: 5_000 });
+    void waiting.gateway.settleZonesAtBoot(["observatory_threshold"]);
+    let closed = false;
+    const closing = waiting.gateway.close().then(() => { closed = true; });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(closed).toBe(false);
+    release();
+    await closing;
+    expect(waiting.health.readback().bootSettlement).toBe("settled");
+    await new Promise<void>(resolve => waiting.server.close(() => resolve()));
+
+    const stuck = await startGateway({ recover: () => new Promise<AuthoritativeMovementZone>(() => undefined), shutdownSettlementWaitMs: 30 });
+    void stuck.gateway.settleZonesAtBoot(["observatory_threshold"], 10_000);
+    const started = Date.now();
+    await stuck.gateway.close();
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(warn.mock.calls.some(call => String(call[0]).includes("while the boot settlement is still running"))).toBe(true);
+    await new Promise<void>(resolve => stuck.server.close(() => resolve()));
   });
 
   it("never activates a zone at boot", async () => {
@@ -141,12 +180,12 @@ describe("boot settlement", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const failed = await startGateway({ recover: async () => { throw new Error("ZONE_RECEIPT_GAP"); } });
-    servers.push(failed.server);
+    servers.push(failed);
     expect(await failed.gateway.settleZonesAtBoot(["observatory_threshold"])).toMatchObject({ bootSettlement: "failed", bootSettlementCode: "ZONE_RECEIPT_GAP" });
 
     let release!: () => void;
     const stalled = await startGateway({ recover: zoneId => new Promise(resolve => { release = () => resolve(new AuthoritativeMovementZone(zoneId, new AurionTickRecorder())); }) });
-    servers.push(stalled.server);
+    servers.push(stalled);
     const settling = stalled.gateway.settleZonesAtBoot(["observatory_threshold"], 30);
     await vi.waitFor(() => expect(stalled.health.readback()).toMatchObject({ bootSettlement: "timed_out", bootSettlementCode: "ZONE_BOOT_SETTLEMENT_TIMEOUT" }));
     release();
@@ -158,13 +197,13 @@ describe("boot settlement", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const leases = vi.fn(async () => 3);
     const runtime = await startGateway({ recover: async zoneId => new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()), releaseOrphaned: leases });
-    servers.push(runtime.server);
+    servers.push(runtime);
     const before = Date.now();
     expect(await runtime.gateway.releaseOrphanedLeasesAtBoot()).toMatchObject({ orphanedLeasesReleased: 3, orphanedLeaseReleaseCode: null });
     expect((leases.mock.calls[0] as unknown as [{ lastSeenBefore: Date }])[0].lastSeenBefore.getTime()).toBeGreaterThanOrEqual(before);
 
     const stuck = await startGateway({ recover: async zoneId => new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()), releaseOrphaned: () => new Promise<number>(() => undefined) });
-    servers.push(stuck.server);
+    servers.push(stuck);
     const started = Date.now();
     expect(await stuck.gateway.releaseOrphanedLeasesAtBoot(40)).toMatchObject({ orphanedLeasesReleased: null, orphanedLeaseReleaseCode: "WORLD_PRESENCE_ORPHAN_RELEASE_TIMEOUT" });
     expect(Date.now() - started).toBeLessThan(2_000);
