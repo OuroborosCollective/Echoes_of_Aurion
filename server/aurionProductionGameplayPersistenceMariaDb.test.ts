@@ -82,6 +82,10 @@ suite("real Aurion membership receipts in isolated MariaDB (not production)", ()
     if (!/^aurion_.*test/.test(url.pathname.slice(1)) || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("ISOLATED_TEST_DB_REQUIRED");
     const pool = createPool(url.href), adapter = new MariaDBCausalPersistenceAdapter();
     const zoneId = "observatory_threshold";
+    // The real zone id is shared with other suites in the same isolated database;
+    // start from an empty chain regardless of file order.
+    await pool.execute("DELETE FROM aurionCausalTickReceipts WHERE zoneId=?", [zoneId]);
+    await pool.execute("DELETE FROM aurionCausalCheckpoints WHERE zoneId=?", [zoneId]);
     const old = new AuthoritativeMovementZone(zoneId, new AurionTickRecorder(20, adapter));
     old.restoreFromCanonicalState({ ...old.getCanonicalZoneState(), ruleset });
     old.sourceRevisionOverride = "a".repeat(40);

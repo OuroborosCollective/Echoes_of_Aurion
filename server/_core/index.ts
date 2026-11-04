@@ -29,7 +29,8 @@ import { startAurionGodotFeed } from "../godotBridge/aurionAdapter";
 import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
 import { registerGuildBankRoutes } from "../guildBankRoutes";
 import { registerGameDevelopmentStudioRuntime, resolveGameDevelopmentStudioRuntimeReadback } from "../gameDevelopmentStudioRuntime";
-import { canConnectToDatabase, isConfiguredDatabaseUrl, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
+import { canConnectToDatabase, isConfiguredDatabaseUrl, recordWorldPresenceLease, releaseOrphanedWorldPresenceLeases, releaseWorldPresenceLease } from "../db";
+import { globalZoneJoinHealth } from "../zoneJoinHealth";
 import { consumeZoneTicketWithCombatProfile } from "../zoneCombatPersistence";
 import { initialWolframCagRuntimeReadback, resolveWolframCagRuntimeReadback } from "../wolframCagRuntimeReadback";
 import { createAutonomousNpcLifeRuntime } from "../autonomousNpcLifeRuntime";
@@ -42,7 +43,7 @@ import { globalStateReconciliationService } from "../causality/globalStateReconc
 import { globalAssuranceService } from "../causality/assuranceService";
 import { globalTickRecorder } from "../causality/tickRecorder";
 import { createOtelHttpMiddleware } from "../observability/otelBoundary";
-import { drainAurionRuntimeForShutdown } from "./gracefulCausalShutdown";
+import { drainAurionRuntimeForShutdown, withShutdownDeadline } from "./gracefulCausalShutdown";
 import { assertProductionDatabaseConfigured, assertProductionDatabaseConnected } from "./productionDatabaseGate";
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
@@ -101,13 +102,14 @@ async function startServer(){
     gameDevelopmentStudio,
     wolframCag,
     npcLife: autonomousNpcLife.readback(),
+    zoneJoin: globalZoneJoinHealth.readback(),
     causalAssurance: globalAssuranceService.latest()
   });
   registerProductionProbeRoutes(app, healthPayload);
   app.get("/healthz", (_req, res) => res.status(200).json(healthPayload()));
   app.get("/api/health", (_req, res) => res.status(200).json(healthPayload()));
   registerGameDevelopmentStudioRuntime(app,gameDevelopmentStudio);registerGlbSmartUpload(app);registerGlbZipUpload(app);registerGlbAssetRoutes(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerNativeAuthHttpRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
-  const zoneGateway=registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
+  const zoneGateway=registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease,releaseOrphaned:releaseOrphanedWorldPresenceLeases},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
   const godotFeed = await startAurionGodotFeed().catch(error => {
     console.error("[Aurion Godot] Read-only observer unavailable", error);
     return undefined;
@@ -122,7 +124,7 @@ async function startServer(){
     try{
       defensiveGatewayObserver.stop();
       await godotFeed?.close();
-      await drainAurionRuntimeForShutdown({
+      await withShutdownDeadline(drainAurionRuntimeForShutdown({
         closeZoneGateway:()=>zoneGateway.close(),
         stopObservers:[
           ()=>globalAssuranceService.stop(),
@@ -143,7 +145,7 @@ async function startServer(){
         },
         closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
         persistenceStatus:()=>globalTickRecorder.getPersistenceStatus(),
-      });
+      }));
       // Emit the actual post-drain receipt synchronously before process.exit(0).
       // Buffered console output may be lost during an immediate process exit.
       writeSync(1, "[Aurion] graceful causal shutdown complete\n");
@@ -158,6 +160,9 @@ async function startServer(){
   // The shutdown guard above makes repeated signals idempotent.
   process.on("SIGTERM",()=>{void shutdown("SIGTERM");});
   process.on("SIGINT",()=>{void shutdown("SIGINT");});
+  // Settle what the previous process left (presences without a live transport, orphaned
+  // leases) before admitting any client. Bounded; it never activates a zone.
+  await zoneGateway.settleAtBoot(["observatory_threshold"]);
   server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
 startServer().catch(error=>{console.error(error);process.exit(1);});

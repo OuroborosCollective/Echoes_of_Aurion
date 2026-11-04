@@ -1,6 +1,8 @@
 extends RefCounted
-## Bound retries: immediate, then 500ms, then 1500ms; never forever.
-const DELAYS := [0, 500, 1500]
+## Bounded retries that outlast a release restart (container recreate, boot
+## settlement, health): immediate, 0.5 s, 1.5 s, 3 s, 5 s, 10 s, then every 15 s;
+## about 140 s in total, never forever.
+const DELAYS := [0, 500, 1500, 3000, 5000, 10000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000]
 var _active := false
 var _attempt := 0
 var _due := -1

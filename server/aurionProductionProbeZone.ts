@@ -12,6 +12,8 @@ export async function prepareProductionProbeZone(
   recorder: AurionTickRecorder = globalTickRecorder,
 ) {
   const zoneId = "observatory_threshold";
+  // Never restore concurrently with a boot settlement committing the same head.
+  await registry.waitForSettlement(zoneId);
   const active = registry.find(zoneId);
   if (active) {
     if (active.connectionIdForUser(AURION_PRODUCTION_GAMEPLAY_PROBE_USER_ID)

@@ -7,6 +7,7 @@ import { restorePersistedZoneHead } from "./causality/persistedZoneRecovery";
 import { ZoneRegistry, type AuthoritativeMovementZone } from "./zoneRuntime";
 import { registerZoneGateway } from "./zoneGateway";
 import type { ZoneId } from "./zoneProtocol";
+import { listActiveWorldPresence, recordWorldPresenceLease, releaseOrphanedWorldPresenceLeases } from "./db";
 
 // Production 2026-11-04: a release restarted the runtime while player:1210 was in the
 // zone. The persisted head kept that player, every later handshake failed with
@@ -107,6 +108,50 @@ suite("zone presence across process restarts (isolated MariaDB)", () => {
       expect(restarted.getCanonicalZoneState().players).toEqual([]);
       expect((await adapter.getLatestReceipt(zoneId))?.receiptHash).toBe(durableHead!.receiptHash);
     } finally { await cleanup(zoneId); }
+  }, 60_000);
+
+  it("settles a crashed head at boot without activating the zone, so the release probe and later joins need no recovery", async () => {
+    // Production 2026-11-04: the release probe was denied PROBE_ZONE_PRESENCE_RECOVERY_REQUIRED
+    // until a real player happened to log in, because only a handshake could settle the head.
+    const zoneId = "observatory_threshold:boot-settlement-test" as ZoneId;
+    const adapter = new MariaDBCausalPersistenceAdapter();
+    const pool = createPool(url().href);
+    const cleanupLeases = () => pool.execute("DELETE FROM aurionWorldPresenceLeases WHERE connectionId LIKE 'boot-settlement-%'");
+    await cleanup(zoneId); await cleanupLeases();
+    try {
+      // Crashed process: a player stays in the head and its lease is never released.
+      const crashed = await freshProcess(adapter)(zoneId);
+      crashed.join({ userId: 1210, socket: socket() });
+      crashed.tick();
+      await crashed.flushEvidencePersistence();
+      const head = await adapter.getLatestReceipt(zoneId);
+      await recordWorldPresenceLease({ userId: 1210, connectionId: "boot-settlement-crashed", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now: new Date(Date.now() - 10_000) });
+
+      // Boot of the next process.
+      // Boot late in a second: lastSeenAt has whole-second precision.
+      const bootedAt = new Date(Math.floor(Date.now() / 1000) * 1000 + 900);
+      const registry = new ZoneRegistry();
+      await registry.settlePersistedHead(zoneId, freshProcess(adapter));
+      expect(registry.find(zoneId)).toBeUndefined();
+      expect(await releaseOrphanedWorldPresenceLeases({ lastSeenBefore: bootedAt })).toBeGreaterThanOrEqual(1);
+      const leave = await adapter.getRecordedTick(zoneId, head!.tick + 1);
+      expect(leave!.receipt.previousReceiptHash).toBe(head!.receiptHash);
+      expect(leave!.intents!.map(intent => [intent.type, intent.userId])).toEqual([["presence_leave", 1210]]);
+      expect((await listActiveWorldPresence()).some(presence => presence.userId === 1210)).toBe(false);
+
+      // A lease admitted after boot is never treated as orphaned, even within the boot second.
+      await recordWorldPresenceLease({ userId: 1211, connectionId: "boot-settlement-live", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now: new Date(bootedAt.getTime() + 50) });
+      expect(await releaseOrphanedWorldPresenceLeases({ lastSeenBefore: bootedAt })).toBe(0);
+      expect((await listActiveWorldPresence()).some(presence => presence.userId === 1211)).toBe(true);
+
+      // The probe path refuses to recover, and no longer has to: the settled head carries no player.
+      const probe = await restorePersistedZoneHead(zoneId, adapter, new AurionTickRecorder(20, adapter), "PROBE_ZONE");
+      expect(probe.getCanonicalZoneState().players).toEqual([]);
+      // A later join activates the zone against the settled head without another recovery tick.
+      const active = await registry.getOrRecover(zoneId, freshProcess(adapter));
+      expect(active.getLatestReceipt()?.receiptHash).toBe(leave!.receipt.receiptHash);
+      expect(await receiptCount(zoneId)).toBe(head!.tick + 1);
+    } finally { await cleanup(zoneId); await cleanupLeases(); await pool.end(); }
   }, 60_000);
 });
 

@@ -2,6 +2,9 @@ services:
   aurion:
     image: echoes-of-aurion:${AURION_IMAGE_TAG:?AURION_IMAGE_TAG must identify a verified runtime image}
     restart: unless-stopped
+    # The runtime drain (final presence-leave tick + causal flush) has its own 25 s
+    # deadline; Docker must not SIGKILL it first (default grace is 10 s).
+    stop_grace_period: 30s
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

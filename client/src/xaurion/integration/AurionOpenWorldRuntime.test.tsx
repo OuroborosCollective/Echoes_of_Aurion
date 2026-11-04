@@ -219,6 +219,34 @@ describe("open world session ownership", () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it("keeps reconnecting across a release restart window instead of giving up after ~47 s", async () => {
+    // Production 2026-11-04: a release restart outlasts the old 8-attempt budget; the
+    // client then stayed on a frozen frame although the server came back.
+    vi.useFakeTimers();
+    try {
+      render(<AurionOpenWorldRuntime />); await enter();
+      act(() => fixture.tickets[0].onSuccess({ ticket: "before-restart" }));
+      act(() => fixture.statuses[0]("closed"));
+      // The server is down: every ticket request fails for two minutes.
+      for (let elapsed = 0; elapsed < 120_000; elapsed += 1_000) {
+        act(() => { vi.advanceTimersByTime(1_000); });
+        const pending = fixture.tickets[fixture.tickets.length - 1];
+        if (fixture.tickets.length > 1 && !(pending as { answered?: boolean }).answered) {
+          (pending as { answered?: boolean }).answered = true;
+          act(() => pending.onError());
+        }
+      }
+      expect(screen.queryByText(/Die Verbindung wurde nicht bestätigt/)).toBeNull();
+      const attemptsWhileDown = fixture.tickets.length;
+      // The server is back: the next scheduled ticket succeeds and reconnects.
+      act(() => { vi.advanceTimersByTime(30_000); });
+      expect(fixture.tickets.length).toBe(attemptsWhileDown + 1);
+      const last = fixture.tickets[fixture.tickets.length - 1];
+      act(() => last.onSuccess({ ticket: "after-restart" }));
+      expect(fixture.connections[fixture.connections.length - 1].connect).toHaveBeenCalledWith("after-restart");
+    } finally { vi.useRealTimers(); }
+  });
+
   it("does not retry a zone transport after an explicit fatal protocol rejection", async () => {
     vi.useFakeTimers();
     try {

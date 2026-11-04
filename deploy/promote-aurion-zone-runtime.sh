@@ -328,6 +328,25 @@ if [[ -n "$previous_aurion" ]]; then
   '
 fi
 # companion-memory-preflight-end
+# previous-runtime-drain-start
+# Stop the previous runtime explicitly so its drain receipt can be read before
+# --force-recreate removes the container and its logs. Report-only: the previous
+# runtime is already stopped here, so a missing receipt must never block promotion.
+phase=previous-runtime-drain
+if [[ -n "$previous_aurion" && "$(docker inspect --format '{{.State.Running}}' "$previous_aurion")" == "true" ]]; then
+  drain_since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  docker stop --time 30 "$previous_aurion" >/dev/null
+  drain_exit="$(docker inspect --format '{{.State.ExitCode}}' "$previous_aurion")"
+  drain_receipt=missing
+  if docker logs --since "$drain_since" "$previous_aurion" 2>&1 | grep -Fx '[Aurion] graceful causal shutdown complete' >/dev/null; then drain_receipt=complete; fi
+  [[ "$drain_exit" =~ ^[0-9]+$ ]] || drain_exit=-1
+  printf '{"recordType":"aurion.previous-runtime-drain","schemaVersion":1,"exitCode":%s,"drainReceipt":"%s"}\n' "$drain_exit" "$drain_receipt"
+  if [[ "$drain_receipt" != complete ]]; then
+    printf 'aurion-traefik-promoter warning: previous runtime drain receipt %s (exit %s); the next boot settles its zone head\n' "$drain_receipt" "$drain_exit" >&2
+    docker logs --since "$drain_since" "$previous_aurion" 2>&1 | grep -E '^\[Aurion( Zone)?\] (shutdown|graceful)' | tail -n 20 >&2 || true
+  fi
+fi
+# previous-runtime-drain-end
 phase=compose-promotion
 compose_digest_env=(
   "AURION_BUILD_INPUT_DIGEST=$build_input_digest"

@@ -1083,6 +1083,7 @@ export class ZoneRegistry {
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
   private readonly dormantZones = new Map<ZoneId, AuthoritativeMovementZone>();
   private readonly recoveryByZone = new Map<ZoneId, Promise<AuthoritativeMovementZone>>();
+  private readonly settlementByZone = new Map<ZoneId, Promise<void>>();
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
 
@@ -1110,6 +1111,8 @@ export class ZoneRegistry {
     zoneId: ZoneId,
     recover: (zoneId: ZoneId) => Promise<AuthoritativeMovementZone>,
   ): Promise<AuthoritativeMovementZone> {
+    // A boot settlement may be committing the durable head; never race it.
+    await this.waitForSettlement(zoneId);
     const active = this.zones.get(zoneId);
     if (active) { this.probeOwned.delete(active); return active; }
     const inFlight = this.recoveryByZone.get(zoneId);
@@ -1135,6 +1138,34 @@ export class ZoneRegistry {
     });
     this.recoveryByZone.set(zoneId, recovery);
     return recovery;
+  }
+
+  /**
+   * Boot boundary: settle the durable head of a zone left by the previous process
+   * (for example, commit canonical leaves for presences without a live transport)
+   * without activating it. The zone stays dormant: ticking still starts only with
+   * an authenticated join or an approved probe. A later activation re-verifies the
+   * durable head against the settled one.
+   */
+  settlePersistedHead(zoneId: ZoneId, recover: (zoneId: ZoneId) => Promise<AuthoritativeMovementZone>): Promise<void> {
+    const existing = this.settlementByZone.get(zoneId);
+    if (existing) return existing;
+    if (this.zones.has(zoneId) || this.recoveryByZone.has(zoneId)) return Promise.resolve();
+    let settlement!: Promise<void>;
+    settlement = Promise.resolve().then(() => recover(zoneId)).then(zone => {
+      if (zone.zoneId !== zoneId) throw new Error("ZONE_RECOVERY_ZONE_MISMATCH");
+      if (!this.zones.has(zoneId)) this.dormantZones.set(zoneId, zone);
+    }).finally(() => {
+      if (this.settlementByZone.get(zoneId) === settlement) this.settlementByZone.delete(zoneId);
+    });
+    this.settlementByZone.set(zoneId, settlement);
+    return settlement;
+  }
+
+  /** Resolves once no boot settlement is in flight for the zone; settlement errors are reported by its owner. */
+  async waitForSettlement(zoneId: ZoneId): Promise<void> {
+    const settlement = this.settlementByZone.get(zoneId);
+    if (settlement) await settlement.catch(() => undefined);
   }
 
   /** Called only after scope consumption, with a verified persisted head. */

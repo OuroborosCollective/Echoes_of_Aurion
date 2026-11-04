@@ -109,7 +109,21 @@ func verify() -> void:
 	require(retry.retry_after_failure(1500), "second transient failure not scheduled")
 	require(not retry.take_if_due(2999), "second retry happened before backoff")
 	require(retry.take_if_due(3000), "second backoff not honoured")
-	require(not retry.retry_after_failure(3000), "unbounded fourth reconnect allowed")
+	# Production 2026-11-04: a release restart outlasts ~2 s; the native client gave up
+	# and stayed on a frozen frame. The budget must span a restart and stay bounded.
+	var now := 3000
+	var attempts := 3
+	while retry.retry_after_failure(now):
+		attempts += 1
+		require(attempts <= 32, "unbounded reconnect allowed")
+		if attempts > 32:
+			break
+		var guard := 0
+		while not retry.take_if_due(now) and guard < 200:
+			now += 500
+			guard += 1
+		require(guard < 200, "scheduled reconnect never became due")
+	require(now - 1000 >= 120000, "reconnect budget ends before a release restart can finish")
 	require(not retry.active(), "exhausted policy still active")
 
 	var packed := load("res://app/main.tscn") as PackedScene
@@ -488,11 +502,23 @@ func verify() -> void:
 	require(scene._reconnect.active(), "closed handshake discarded final bounded retry")
 	require(auth.logout_calls == logouts_before, "second handshake failure revoked auth early")
 	issues_before = api.issues
-	scene._poll_reconnect(Time.get_ticks_msec() + 10000)
+	scene._poll_reconnect(Time.get_ticks_msec() + 20000)
 	require(api.issues == issues_before + 1, "closed handshake did not request third ticket")
-	scene._on_zone_ticket_succeeded(fresh_ticket)
-	socket.connected = false
-	scene._on_zone_closed("hello_timeout")
+	# Every further transport failure spends the bounded budget; auth survives until
+	# it is spent, and the budget spans a release restart (not only ~2 s).
+	var handshake_failures := 2
+	while true:
+		scene._on_zone_ticket_succeeded(fresh_ticket)
+		socket.connected = false
+		scene._on_zone_closed("hello_timeout")
+		handshake_failures += 1
+		if not scene._reconnect.active() or handshake_failures > 40:
+			break
+		require(auth.logout_calls == logouts_before, "handshake failure revoked auth before the retry budget was spent")
+		issues_before = api.issues
+		scene._poll_reconnect(Time.get_ticks_msec() + 20000)
+		require(api.issues == issues_before + 1, "bounded retry did not request the next fresh ticket")
+	require(handshake_failures >= 10 and handshake_failures <= 40, "handshake retry budget is not bounded to a release restart window")
 	require(not scene._reconnect.active(), "exhausted handshake attempts remained active")
 	require(auth.logout_calls == logouts_before + 1, "exhausted retry did not terminate native session")
 
@@ -502,9 +528,14 @@ func verify() -> void:
 	api.start_succeeds = false
 	var start_refusal_now: int = Time.get_ticks_msec()
 	require(scene._reconnect.begin(start_refusal_now), "ticket-start refusal setup could not reserve recovery")
-	scene._poll_reconnect(start_refusal_now)
-	scene._poll_reconnect(start_refusal_now + 500)
-	scene._poll_reconnect(start_refusal_now + 2000)
+	var refusal_at: int = start_refusal_now
+	var refusal_polls := 0
+	while scene._reconnect.active() and refusal_polls < 40:
+		require(auth.logout_calls == start_refusal_logouts_before, "ticket-start refusal revoked auth before the retry budget was spent")
+		scene._poll_reconnect(refusal_at)
+		refusal_at = maxi(refusal_at, Time.get_ticks_msec()) + 20000
+		refusal_polls += 1
+	require(refusal_polls >= 10, "ticket-start refusal budget cannot span a release restart")
 	require(not scene._reconnect.active(), "exhausted ticket-start refusals retained reconnect budget")
 	require(not scene._ticket_pending, "exhausted ticket-start refusals left a phantom request pending")
 	require(auth.logout_calls == start_refusal_logouts_before + 1, "exhausted ticket-start refusals did not terminate native session")
