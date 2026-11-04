@@ -10,6 +10,8 @@ on:
       - "server/_core/authBodyLimit.ts"
       - "server/_core/authBodyLimit.test.ts"
       - "server/_core/corsMiddleware.ts"
+      - "server/_core/corsOrigin.ts"
+      - "server/corsOrigin.test.ts"
       - "server/auth.local.test.ts"
       - "server/nativeAuthHttp.test.ts"
       - "server/zoneGatewayPresence.test.ts"
@@ -41,6 +43,6 @@ jobs:
       - name: Verify real isolated WebSocket ingress regressions
         run: pnpm exec vitest run server/zoneGatewayIngress.test.ts --reporter=verbose
       - name: Neighbor protocol checks
-        run: pnpm exec vitest run server/zoneGatewayPresence.test.ts server/defensiveGatewayObserver.test.ts server/zoneProtocol.test.ts server/zoneOutboundPressure.test.ts server/_core/authBodyLimit.test.ts server/auth.local.test.ts server/nativeAuthHttp.test.ts --reporter=verbose
+        run: pnpm exec vitest run server/zoneGatewayPresence.test.ts server/defensiveGatewayObserver.test.ts server/corsOrigin.test.ts server/zoneProtocol.test.ts server/zoneOutboundPressure.test.ts server/_core/authBodyLimit.test.ts server/auth.local.test.ts server/nativeAuthHttp.test.ts --reporter=verbose
       - name: TypeScript
         run: pnpm check

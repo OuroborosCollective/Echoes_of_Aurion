@@ -44,8 +44,16 @@ describe("observe-only gateway telemetry", () => {
       const rejected = await fetch(url, { method:"OPTIONS", headers:{ origin:"https://untrusted.invalid" } });
       const allowed = await fetch(url, { method:"OPTIONS", headers:{ origin:"https://arelogic.space" } });
       expect(rejected.status).toBe(403); expect(allowed.status).toBe(204);
+      expect(rejected.headers.get("access-control-allow-origin")).toBeNull();
+      expect(rejected.headers.get("access-control-allow-credentials")).toBeNull();
       expect(allowed.headers.get("access-control-allow-origin")).toBe("https://arelogic.space");
-      observer.flush(); expect(events[0].deniedOrigins.http).toBe(1); expect(events[0].http.browserAuth).toBe(2);
+      expect(allowed.headers.get("access-control-allow-credentials")).toBe("true");
+      for (const origin of ["https://arelogic.space.attacker.invalid", "null", "https://evil.itch.io"]) {
+        const response = await fetch(url, { headers: { origin } });
+        expect(response.headers.get("access-control-allow-origin")).toBeNull();
+        expect(response.headers.get("access-control-allow-credentials")).toBeNull();
+      }
+      observer.flush(); expect(events[0].deniedOrigins.http).toBe(4); expect(events[0].http.browserAuth).toBe(5);
       expect(JSON.stringify(events)).not.toContain("untrusted.invalid");
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });

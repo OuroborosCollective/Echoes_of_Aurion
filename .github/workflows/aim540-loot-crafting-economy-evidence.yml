@@ -44,15 +44,17 @@ jobs:
         image: mariadb:11.4
         env:
           MARIADB_ROOT_PASSWORD: auriontest
-          MARIADB_DATABASE: aurion_aim540_test
+          MARIADB_DATABASE: aurion_ui_test
         ports: ["3306:3306"]
         options: >-
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
           --health-interval=5s --health-timeout=3s --health-retries=30
     env:
-      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_aim540_test
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_ui_test
       NODE_ENV: test
       AURION_AIM540_E2E: "1"
+      AURION_UI_E2E: "1"
+      AURION_CRAFTING_E2E: "1"
       AURION_WORLD_EPOCH_E2E: "1"
       AURION_WORLD_CHUNK_E2E: "1"
       AURION_WORLD_E2E_ISOLATED: "1"
