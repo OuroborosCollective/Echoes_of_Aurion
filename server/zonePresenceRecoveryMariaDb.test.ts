@@ -113,14 +113,14 @@ suite("zone presence across process restarts (isolated MariaDB)", () => {
 describe("zone gateway shutdown boundary", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("commits presence leaves after stopping the tick timer and before closing sockets", () => {
+  it("commits presence leaves after stopping the tick timer and before closing sockets", async () => {
     const server = createServer();
     const registry = new ZoneRegistry();
     const order: string[] = [];
     vi.spyOn(registry, "commitShutdownLeaves").mockImplementation(() => { order.push("leaves"); return 0; });
     const clear = vi.spyOn(globalThis, "clearInterval").mockImplementation(((id: unknown) => { order.push("timer"); }) as typeof clearInterval);
     const gateway = registerZoneGateway(server, registry, async () => null);
-    try { gateway.close(); } finally { clear.mockRestore(); server.close(); }
+    try { await gateway.close(); } finally { clear.mockRestore(); server.close(); }
     expect(order.slice(0, 2)).toEqual(["timer", "leaves"]);
   });
 });

@@ -95,15 +95,25 @@ describe("Aurion graceful causal shutdown", () => {
       flushCausalPersistence: async () => {},
       closeHttpServer,
       persistenceStatus: () => ({ pending: 0, failures }),
-    })).rejects.toThrow("CAUSAL_SHUTDOWN_PERSISTENCE_INCOMPLETE:failures=1,pending=0");
+    })).rejects.toThrow("CAUSAL_SHUTDOWN_PERSISTENCE_INCOMPLETE:failures=1(+1 during shutdown),pending=0");
     expect(closeHttpServer).not.toHaveBeenCalled();
 
+    // An earlier failed receipt leaves a gap in the durable chain even if later writes succeed.
     await expect(drainAurionRuntimeForShutdown({
       closeZoneGateway: () => {},
       stopObservers: [],
       flushCausalPersistence: async () => {},
       closeHttpServer,
-      persistenceStatus: () => ({ pending: 0, failures: 7 }), // older failures before shutdown are not attributed to it
+      persistenceStatus: () => ({ pending: 0, failures: 7 }),
+    })).rejects.toThrow("CAUSAL_SHUTDOWN_PERSISTENCE_INCOMPLETE:failures=7(+0 during shutdown),pending=0");
+    expect(closeHttpServer).not.toHaveBeenCalled();
+
+    await expect(drainAurionRuntimeForShutdown({
+      closeZoneGateway: async () => {},
+      stopObservers: [],
+      flushCausalPersistence: async () => {},
+      closeHttpServer,
+      persistenceStatus: () => ({ pending: 0, failures: 0 }),
     })).resolves.toBeUndefined();
     expect(closeHttpServer).toHaveBeenCalledTimes(1);
   });
