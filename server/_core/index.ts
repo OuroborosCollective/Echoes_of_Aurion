@@ -1,6 +1,6 @@
+import "dotenv/config";
 import { authBodyLimit } from "./authBodyLimit";
 import { defensiveGatewayObserver } from "../defensiveGatewayObserver";
-import "dotenv/config";
 import { registerProductionProbeRoutes } from "../aurionProductionProbeHttp";
 import { createCorsMiddleware } from "./corsMiddleware";
 import express from "express";
