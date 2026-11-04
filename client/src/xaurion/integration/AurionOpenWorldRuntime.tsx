@@ -56,8 +56,10 @@ const classForAurion = (value: "unbound" | "vanguard" | "seer" | "warden" | unde
   return "knight";
 };
 
-const ZONE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000] as const;
-const ZONE_MAX_RECONNECT_ATTEMPTS = 8;
+// Bounded, but long enough to outlast a release restart (container recreate, boot
+// settlement, health): 1+2+4+8 s, then every 15 s, about 165 s in total.
+const ZONE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000] as const;
+const ZONE_MAX_RECONNECT_ATTEMPTS = 14;
 const FATAL_ZONE_REJECT_CODES = new Set(["PROTOCOL_VERSION_UNSUPPORTED", "INVALID_MESSAGE", "UNSUPPORTED_ZONE_COMMAND"]);
 const MOUNT_PENDING_MESSAGE = "Mount bleibt auf der Aurion-Taste Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.";
 const MOUNT_FEEDBACK_DURATION_MS = 4_000;

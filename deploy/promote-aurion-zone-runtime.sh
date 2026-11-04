@@ -336,6 +336,29 @@ compose_digest_env=(
   "AURION_RELEASE_ARCHIVE_DIGEST=$release_archive_digest"
 )
 env "${compose_digest_env[@]}" "${compose[@]}" config --quiet
+# previous-runtime-drain-start
+# Stop the previous runtime explicitly so its drain receipt can be read before
+# --force-recreate removes the container and its logs. Runs only after every
+# non-mutating Compose validation passed and immediately before `up`, so a rejected
+# release never stops the serving runtime. Report-only: a missing receipt must
+# never block promotion, because the previous runtime is already stopped here.
+phase=previous-runtime-drain
+if [[ -n "$previous_aurion" && "$(docker inspect --format '{{.State.Running}}' "$previous_aurion")" == "true" ]]; then
+  drain_since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  docker stop --time 30 "$previous_aurion" >/dev/null
+  drain_exit="$(docker inspect --format '{{.State.ExitCode}}' "$previous_aurion")"
+  drain_receipt=missing
+  if docker logs --since "$drain_since" "$previous_aurion" 2>&1 | grep -Fx '[Aurion] graceful causal shutdown complete' >/dev/null; then drain_receipt=complete; fi
+  [[ "$drain_exit" =~ ^[0-9]+$ ]] || drain_exit=-1
+  printf '{"recordType":"aurion.previous-runtime-drain","schemaVersion":1,"exitCode":%s,"drainReceipt":"%s"}\n' "$drain_exit" "$drain_receipt"
+  if [[ "$drain_receipt" != complete ]]; then
+    printf 'aurion-traefik-promoter warning: previous runtime drain receipt %s (exit %s); the next boot settles its zone head\n' "$drain_receipt" "$drain_exit" >&2
+    # Only fixed stage names reach the release log; error text and persistence status lines
+    # can carry database detail and stay in the host's container log.
+    docker logs --since "$drain_since" "$previous_aurion" 2>&1 | grep -oE '^\[Aurion\] (shutdown stage: [a-z-]+|graceful causal shutdown (complete|failed))' | tail -n 20 >&2 || true
+  fi
+fi
+# previous-runtime-drain-end
 env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion
 
 container_id="$("${compose[@]}" ps -q aurion)"

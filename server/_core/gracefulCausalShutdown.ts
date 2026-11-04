@@ -41,3 +41,19 @@ export async function drainAurionRuntimeForShutdown(
   await dependencies.closeHttpServer();
   console.info("[Aurion] shutdown stage: complete");
 }
+
+/**
+ * Docker sends SIGKILL after the container's stop_grace_period (30 s). A drain that
+ * outlives it ends without any receipt, and the next process must recover a crash.
+ * Fail explicitly before that point so the outcome is always logged.
+ */
+export const SHUTDOWN_DRAIN_DEADLINE_MS = 25_000;
+
+export function withShutdownDeadline<T>(work: Promise<T>, deadlineMs: number = SHUTDOWN_DRAIN_DEADLINE_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Referenced on purpose: it keeps the process alive until the drain settles or the deadline fires.
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`CAUSAL_SHUTDOWN_DEADLINE_EXCEEDED:${deadlineMs}ms`)), deadlineMs);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
