@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { runInNewContext } from "node:vm";
+import { isDeepStrictEqual } from "node:util";
 import { AURION_BINARY_AUTHORITY } from "../shared/aurionZoneRulesetContract.mjs";
 
 const workflow = readFileSync(".github/workflows/deploy-aurion-zone-runtime.yml", "utf8");
@@ -63,5 +64,20 @@ describe("release authority follows the canonical binary contract", () => {
       binaryDefaultRulesetVersion: AURION_BINARY_AUTHORITY.defaultRulesetVersion,
       authorityTickHz: AURION_BINARY_AUTHORITY.tickHz, causalReceipts: AURION_BINARY_AUTHORITY.causalReceipts,
     });
+  });
+
+  it("validates installed and public final-gate authorities without a legacy version pin", () => {
+    const final = workflow.split("      - name: Emit final Blocker 1 production gate")[1];
+    const guards = final.split("\n").filter(line => line.includes('throw new Error("FINAL_INSTALLED_AUTHORITY_MISMATCH")')
+      || line.includes('throw new Error("FINAL_PUBLIC_AUTHORITY_MISMATCH")')).join("\n");
+    expect(guards).toContain("FINAL_INSTALLED_AUTHORITY_MISMATCH");
+    expect(guards).toContain("FINAL_PUBLIC_AUTHORITY_MISMATCH");
+    const run = (installedAuthority: unknown, publicAuthority: unknown) => runInNewContext(guards, {
+      AURION_BINARY_AUTHORITY, isDeepStrictEqual,
+      installed: { authority: installedAuthority }, health: { authority: publicAuthority },
+    });
+    expect(() => run(AURION_BINARY_AUTHORITY, AURION_BINARY_AUTHORITY)).not.toThrow();
+    expect(() => run({ ...AURION_BINARY_AUTHORITY, supportedZoneRulesets: [] }, AURION_BINARY_AUTHORITY)).toThrow("FINAL_INSTALLED_AUTHORITY_MISMATCH");
+    expect(() => run(AURION_BINARY_AUTHORITY, { ...AURION_BINARY_AUTHORITY, tickHz: 9 })).toThrow("FINAL_PUBLIC_AUTHORITY_MISMATCH");
   });
 });

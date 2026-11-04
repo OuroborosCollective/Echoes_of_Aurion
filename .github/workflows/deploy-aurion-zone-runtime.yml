@@ -812,6 +812,8 @@ jobs:
           release_archive_digest="sha256:$(sha256sum "$runtime_archive" | awk '{print $1}')"
           node --input-type=module -e '
             import fs from "node:fs";
+            import { isDeepStrictEqual } from "node:util";
+            import { AURION_BINARY_AUTHORITY } from "./shared/aurionZoneRulesetContract.mjs";
             const [file, expected, releaseId, runtimeManifest, schemaManifest, buildInputDigest, artifactDigest, releaseArchiveDigest]=process.argv.slice(1);
             const receipt=JSON.parse(fs.readFileSync(file,"utf8"));
             if(
@@ -831,9 +833,7 @@ jobs:
               receipt.runtimeManifestSha256!==runtimeManifest ||
               receipt.schemaManifestSha256!==schemaManifest ||
               receipt.schemaMode!=="read_only" ||
-              receipt.authority?.ruleset!=="aurion-zone-v3" ||
-              receipt.authority?.tickHz!==10 ||
-              receipt.authority?.causalReceipts!==true
+              !isDeepStrictEqual(receipt.authority, AURION_BINARY_AUTHORITY)
             ) throw new Error("Traefik runtime readback mismatch");
             console.log(JSON.stringify({
               revision:receipt.revision,
@@ -1367,7 +1367,8 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import { scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
-          import { requireZoneRulesetEvidence } from "./shared/aurionZoneRulesetContract.mjs";
+          import { requireZoneRulesetEvidence, AURION_BINARY_AUTHORITY } from "./shared/aurionZoneRulesetContract.mjs";
+          import { isDeepStrictEqual } from "node:util";
           const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
           const installed=JSON.parse(fs.readFileSync("runtime-attestation/aurion-installed-runtime-readback.json","utf8"));
           const runtimeMeta=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.json","utf8"));
@@ -1392,8 +1393,8 @@ jobs:
           if(schema.summary?.migrationCount!==expectedTags.length||schema.summary?.matchCount!==expectedTags.length||schema.summary?.absentCount!==0||schema.summary?.driftCount!==0) throw new Error("FINAL_SCHEMA_SUMMARY_MISMATCH");
           if(installed.buildInputDigest!==identity.buildInputDigest||installed.artifactDigest!==identity.artifactDigest||installed.runtimeImageDigest!==identity.runtimeImageDigest||installed.releaseArchiveDigest!==identity.releaseArchiveDigest) throw new Error("FINAL_INSTALLED_DIGEST_MISMATCH");
           if(health.revision!==identity.sourceRevision||health.buildInputDigest!==identity.buildInputDigest||health.artifactDigest!==identity.artifactDigest||health.runtimeImageDigest!==identity.runtimeImageDigest||health.releaseArchiveDigest!==identity.releaseArchiveDigest) throw new Error("FINAL_PUBLIC_DIGEST_MISMATCH");
-          if(installed.authority?.ruleset!=="aurion-zone-v3"||installed.authority?.tickHz!==10||installed.authority?.causalReceipts!==true) throw new Error("FINAL_INSTALLED_AUTHORITY_MISMATCH");
-          if(health.authority?.ruleset!=="aurion-zone-v3"||health.authority?.tickHz!==10||health.authority?.causalReceipts!==true) throw new Error("FINAL_PUBLIC_AUTHORITY_MISMATCH");
+          if(!isDeepStrictEqual(installed.authority,AURION_BINARY_AUTHORITY)) throw new Error("FINAL_INSTALLED_AUTHORITY_MISMATCH");
+          if(!isDeepStrictEqual(health.authority,AURION_BINARY_AUTHORITY)) throw new Error("FINAL_PUBLIC_AUTHORITY_MISMATCH");
 
           // aurion-final-zone-ruleset-guard:start
           const zoneRulesetVersion=requireZoneRulesetEvidence(
@@ -1408,11 +1409,11 @@ jobs:
             artifactDigest:identity.artifactDigest,
             runtimeImageDigest:identity.runtimeImageDigest,
             releaseArchiveDigest:identity.releaseArchiveDigest,
-            binaryAuthorityRuleset:"aurion-zone-v3",
-            binaryAuthorityRulesetScope:"runtime-default",
-            binaryDefaultRulesetVersion:"aurion.zone.rules.v3",
-            authorityTickHz:10,
-            causalReceipts:true,
+            binaryAuthorityRuleset:AURION_BINARY_AUTHORITY.ruleset,
+            binaryAuthorityRulesetScope:AURION_BINARY_AUTHORITY.rulesetScope,
+            binaryDefaultRulesetVersion:AURION_BINARY_AUTHORITY.defaultRulesetVersion,
+            authorityTickHz:AURION_BINARY_AUTHORITY.tickHz,
+            causalReceipts:AURION_BINARY_AUTHORITY.causalReceipts,
             databaseConnectivity:"authenticated_select_1",
             schemaState:"PRESENT_SCHEMA_MATCH",
             schemaMigrationCount:expectedTags.length,
