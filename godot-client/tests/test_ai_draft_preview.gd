@@ -1,6 +1,12 @@
 extends "res://tests/test_world_design_projection.gd"
 ## Real Godot/GLB rendering with synthetic DTOs; never production evidence.
 const Preview = preload("res://authoring/ai_draft_preview.gd")
+class PreviewAuth:
+	extends Node
+	func session_generation() -> int: return 7
+	func protected_response_allowed() -> bool: return true
+	func access_token() -> String: return "fixture-only"
+
 const State = preload("res://authoring/world_authoring_state.gd")
 func verify() -> void:
 	var preview := Preview.new()
@@ -30,6 +36,28 @@ func verify() -> void:
 	require(not preview.stage(bad, {asset.assetId:asset}, "a".repeat(64), SESSION), "unknown asset accepted")
 	require(preview.get_child_count() == 0, "stale preview survived rejection")
 	require(not preview.stage(d, {asset.assetId:asset}, "b".repeat(64), SESSION), "stale catalog accepted")
+	var panel: VBoxContainer = load("res://ui/screens/ai_designer_panel.gd").new()
+	root.add_child(panel)
+	var auth := PreviewAuth.new()
+	root.add_child(auth)
+	panel.configure(auth, "http://127.0.0.1:3000", SESSION, true)
+	var other_bytes := small_glb(124)
+	var other_sha := digest(other_bytes)
+	var family := asset.duplicate(true)
+	family.lods = [
+		{"level":0,"assetId":"glb_primary_test","sha256":sha,"storageUrl":"/api/assets/glb/"+sha+".glb","targetKey":null,"normalization":{"sourceSha256":sha,"lod":{"level":0,"triangleCount":1}}},
+		{"level":2,"assetId":"glb_light_test","sha256":other_sha,"storageUrl":"/api/assets/glb/"+other_sha+".glb","targetKey":null,"normalization":{"sourceSha256":other_sha,"lod":{"level":2,"triangleCount":1}}},
+	]
+	require(panel.preview.stage(d, {family.assetId:family}, "a".repeat(64), SESSION), "preview LOD family not staged")
+	panel._pending_sha = other_sha
+	# Actual two-argument transport signal; no external HTTP call is made here.
+	panel._asset_api.request_failed.emit("HTTP_404", SESSION)
+	require(panel.preview.needed_assets()[0].sha256 == sha, "HTTP failure did not advance the real preview LOD selector")
+	panel._asset_ready(sha, PackedByteArray([1,2,3]), SESSION, 7)
+	require(panel.preview.needed_assets()[0].sha256 == other_sha, "invalid GLB did not advance the preview LOD selector")
+	panel.clear_session()
+	panel.free()
+	auth.free()
 	preview.free()
 	confirmed.free()
 	if not failures.is_empty():

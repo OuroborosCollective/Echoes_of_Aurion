@@ -1,4 +1,5 @@
 import { open, readFile, rename, unlink, mkdir } from "node:fs/promises";
+import { setTimeout as waitForLock } from "node:timers/promises";
 import { dirname, isAbsolute } from "node:path";
 import { z } from "zod";
 import { operationalNow } from "../../shared/operationalClock";
@@ -25,11 +26,20 @@ export class FabricLedger {
   constructor(readonly file: string, private readonly now = operationalNow) {
     if (!isAbsolute(file)) throw new FabricError("DURABLE_LEDGER_PATH_REQUIRED");
   }
+  private async acquireLock() {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      try { return await open(this.file + ".lock", "wx", 0o600); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw new FabricError("LEDGER_UNAVAILABLE");
+        if (attempt === 39) throw new FabricError("LEDGER_LOCKED");
+        await waitForLock(25); // Host-I/O contention only; never repeat inference.
+      }
+    }
+    throw new FabricError("LEDGER_LOCKED");
+  }
   private async transaction<T>(update: (s: State) => T): Promise<T> {
     await mkdir(dirname(this.file), { recursive: true, mode: 0o700 });
-    let lock;
-    try { lock = await open(this.file + ".lock", "wx", 0o600); }
-    catch { throw new FabricError("LEDGER_LOCKED"); }
+    const lock = await this.acquireLock();
     try {
       let state: State;
       try { state = StateSchema.parse(JSON.parse(await readFile(this.file, "utf8"))); }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, open, unlink } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FabricLedger } from "./ledger";
@@ -25,6 +26,14 @@ describe("operational budget with real durable filesystem (not live provider evi
     await expect(b.reserve(record("three"), 100, 50)).rejects.toThrow("COST_UNRESOLVED");
     const saved = JSON.parse(await readFile(a.file, "utf8"));
     expect(saved.records).toHaveLength(1);
+  });
+  it("settles a charged request after bounded lock contention without repeating inference", async () => {
+    const l = await ledger(); await l.reserve(record("charged"), 100, 50);
+    const lock = await open(l.file + ".lock", "wx");
+    const settlement = l.finish("charged", settled);
+    await delay(60); await lock.close(); await unlink(l.file + ".lock");
+    expect((await settlement).status).toBe("complete");
+    expect((await l.status(100)).spentMicros).toBe(30);
   });
   it("accounts for paid invalid responses and refuses exhausted budgets", async () => {
     const l = await ledger(); await l.reserve(record("one"), 100, 50); await l.finish("one", settled);

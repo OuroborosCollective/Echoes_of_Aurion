@@ -63,7 +63,7 @@ export default function AurionAuthoringWorkbench() {
     try {
       const response = await propose.mutateAsync({ kind, request: brief.trim() });
       setDraftJson(response.draftJson);
-      setResult(`Genkit-Vorschlag „${response.title}“ erzeugt. Noch nichts wurde veröffentlicht.`);
+      setResult(`KI-Vorschlag „${response.title}“ erzeugt. Noch nichts wurde veröffentlicht.`);
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : "Authoring-Vorschlag fehlgeschlagen.");
     }
@@ -153,7 +153,7 @@ export default function AurionAuthoringWorkbench() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-amber-100"><Compass className="h-5 w-5 text-cyan-300" /> Aurion Human + AI Authoring</CardTitle>
           <CardDescription>
-            Genkit schlägt vor. Aurion validiert, hasht und veröffentlicht erst nach deiner separaten Bestätigung. Game Development Studio liefert und prüft Assets; Gameplay-Authority bleibt ausschließlich bei Aurion.
+            Die KI schlägt vor. Aurion validiert, hasht und veröffentlicht erst nach deiner separaten Bestätigung. Game Development Studio liefert und prüft Assets; Gameplay-Authority bleibt ausschließlich bei Aurion.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2 text-xs">
@@ -177,7 +177,7 @@ export default function AurionAuthoringWorkbench() {
               <CardHeader>
                 <CardTitle className="text-base text-amber-100">1. Design-Brief</CardTitle>
                 <CardDescription>
-                  Beschreibe Ziele, Stimmung, Geometrie, Assets, Questschritte oder Dungeonräume. Dieser Schritt erzeugt nur einen bearbeitbaren Draft.
+                  Beschreibe Ziele, Stimmung, Geometrie, Assets, Questschritte oder Dungeonräume. Dieser Schritt erzeugt nur einen bearbeitbaren Draft. Weltentwürfe verwenden Auto (Local/Free) und benötigen eine aktive Spielverbindung desselben Kontos im bestätigten aktuellen Chunk.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">

@@ -21,6 +21,7 @@ var _allow_local := false
 var _preview_status: Label
 var _history: Array[Dictionary] = []
 var _attempted: Dictionary = {}
+var _pending_sha := ""
 var _world: Dictionary = {}
 var _diff: Label
 
@@ -112,8 +113,7 @@ func configure(auth: Node, server: String, connection: String, allow_local: bool
 	_asset_api = AssetApi.new(auth)
 	add_child(_asset_api)
 	_asset_api.asset_ready.connect(_asset_ready)
-	_asset_api.request_failed.connect(func(_reason: String, connection_id: String, generation: int):
-		if connection_id == _connection and generation == _generation: _next_asset())
+	_asset_api.request_failed.connect(_asset_failed.bind(_generation))
 
 func clear_session() -> void:
 	if is_instance_valid(_asset_api):
@@ -125,6 +125,7 @@ func clear_session() -> void:
 	_world.clear()
 	_history.clear()
 	_attempted.clear()
+	_pending_sha = ""
 	if is_instance_valid(preview): preview.clear()
 	if is_instance_valid(history):
 		history.clear()
@@ -179,6 +180,7 @@ func stage(draft: Variant, assets: Dictionary, revision: String) -> void:
 	if not is_instance_valid(preview): return
 	if is_instance_valid(_asset_api): _asset_api.cancel()
 	_attempted.clear()
+	_pending_sha = ""
 	if not preview.stage(draft, assets, revision, _connection):
 		_preview_status.text = "PREVIEW_ONLY · Entwurf oder Asset-Katalog noch ungültig"
 		return
@@ -201,13 +203,25 @@ func _next_asset() -> void:
 	for request in preview.needed_assets():
 		if not _attempted.has(request.sha256):
 			_attempted[request.sha256] = true
+			_pending_sha = request.sha256
 			if _asset_api.request_asset(_server, request, _connection, _allow_local): return
+			preview.try_next_asset(request.sha256, _connection)
+			call_deferred("_next_asset")
+			return
 	_preview_status.text = preview.diagnostic
 
 func _asset_ready(sha: String, bytes: PackedByteArray, connection: String, generation: int) -> void:
 	if connection != _connection or generation != _generation: return
-	preview.supply_asset(sha, bytes, connection)
-	_next_asset()
+	_pending_sha = ""
+	if not preview.supply_asset(sha, bytes, connection): preview.try_next_asset(sha, connection)
+	call_deferred("_next_asset")
+
+func _asset_failed(_reason: String, connection: String, generation: int) -> void:
+	if connection != _connection or generation != _generation: return
+	var failed_sha := _pending_sha
+	_pending_sha = ""
+	if not failed_sha.is_empty(): preview.try_next_asset(failed_sha, connection)
+	call_deferred("_next_asset")
 
 func _money(micros: Variant) -> String:
 	return "unbekannt" if micros == null else "%.6f USD" % (float(micros) / 1000000.0)

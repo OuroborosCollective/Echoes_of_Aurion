@@ -115,6 +115,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const stranger = aurionAuthoringRouter.createCaller({ user: { id: otherAdmin, role: "user" } } as TrpcContext);
     await expect(stranger.aiStatus()).rejects.toThrow();
     await expect(caller.aiPropose(input)).rejects.toThrow("AI_LIVE_SESSION_REQUIRED");
+    await expect(caller.propose({ kind: "world", request: input.request })).rejects.toThrow("AI_LIVE_SESSION_REQUIRED");
     const operationId = "c".repeat(32);
     const plan = await planWorldDesign(candidate, undefined, operationId);
     await expect(caller.worldApply({ draft: candidate, expectedPlanHash: plan.planHash, operationId, confirmation: "" } as never)).rejects.toThrow();

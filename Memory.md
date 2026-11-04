@@ -5679,3 +5679,10 @@ Evidence: `server/zoneRestartResilience.test.ts` (11; RED on the previous gatewa
 Learned: Prod `aurionCausalTickReceipts` unique index is (worldId, zoneId, tick); manual queries without `worldId` scan the table for minutes.
 Open: CI, review, merge, release; after release confirm `zoneJoin.bootSettlement=settled` and `orphanedLeaseReleaseCode=null` in health and the `aurion.previous-runtime-drain` record in the promote log.
 Next safe step: CI on the PR.
+
+### 2026-11-04 — Aurion AI World Designer (PR #1315)
+Status: IMPLEMENTED / ISOLATED_VERIFIED; neue Review-Korrekturen und finale Exact-Head-CI noch zu prüfen; Live-Modell-/Produktionsabnahme unbelegt.
+Change: AI-Fabric im bestehenden Authoring-Server (Local/Free, Premium aus, dauerhafte Reservierungen/Preisschranken), bestätigter World-Slice-Kontext und getrennte Godot-GLB-Vorschau; bestehender Web-Einstieg nutzt dieselbe Fabric. Aurion Plan/Bestätigung/Receipt/unabhängiger Readback bleiben kanonisch, 10 Hz unverändert.
+Learned: Präsentationshüllen beweisen keine physische Passierbarkeit. Bei Wiederholung eines ersten Applies greift bereits der geänderte Vorgänger; genau ein Receipt bleibt gespeichert. Review-Korrekturen: begrenzt auf Ledger-Sperren warten, Asset-Fehlersignal mit zwei Argumenten und zulässige LOD-Alternativen weiterladen, 360px-Layout einhalten.
+Evidence: 3a5f1b33b089b9f765b6056e0adbd6db7842aa4e / Run41915232998:43 Tests mit isolierter echter MariaDB plus TypeScript grün; 26f1694f49ddcd416d30944d1d0add5be0e47cbf / Run41914742327:Godot-Headless, native Desktop-/Mobil-Renderings und Android-Toolchain grün. Providerantworten in Tests sind ausdrücklich synthetisch; kein Live-Modell-/Weltbeweis.
+Open: Finale Review-/CI-Befunde, echte Provider-/OpenCode-Verifikation und bestätigter Marktplan mit konkreter Eigentümerfreigabe vor produktivem Apply; danach unabhängiger Runtime-/Welt-Readback. Anleitung: docs/godot-migration/ai-world-designer.md.
