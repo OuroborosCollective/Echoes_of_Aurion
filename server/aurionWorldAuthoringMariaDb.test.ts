@@ -106,6 +106,17 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
+  it("rejects world-only asset selections at the route boundary for quest and dungeon", async () => {
+    const caller = aurionAuthoringRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    for (const kind of ["quest", "dungeon"] as const) {
+      await expect(caller.propose({ kind, request: "Create a town market proposal", assetIds: [assetId] }))
+        .rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("ASSET_SELECTION_WORLD_ONLY") });
+    }
+    // The identical asset selection is valid for world and reaches its live-session guard.
+    await expect(caller.propose({ kind: "world", request: "Create a town market proposal", assetIds: [assetId] }))
+      .rejects.toThrow("AI_LIVE_SESSION_REQUIRED");
+  });
+
   it("passes a review-only AI candidate through the real canonical database contract", async () => {
     // Synthetic model output, real GLB catalog, real MariaDB transaction and readback.
     const input = DesignerInput.parse({ request: "Place the isolated catalog barrel", mode: "free", zoneId: "observatory_threshold", connectionId: "zone_peer_isolated_ai", chunkX: 0, chunkZ: 0 });

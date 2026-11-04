@@ -84,7 +84,9 @@ export const aurionAuthoringRouter = router({
       kind: z.enum(["world", "quest", "dungeon"]),
       assetIds: DesignerInput.shape.assetIds.optional(),
       request: z.string().trim().min(12).max(4_000),
-    }).strict())
+    }).strict().refine(input => input.kind === "world" || input.assetIds === undefined, {
+      message: "ASSET_SELECTION_WORLD_ONLY", path: ["assetIds"],
+    }))
     .mutation(async ({ ctx, input }) => {
       if (input.kind === "world") {
         // Compatibility for the existing web workbench: same fabric, current
@@ -113,7 +115,8 @@ export const aurionAuthoringRouter = router({
           })),
       };
       return proposeAurionAuthoringDraft({
-        ...input,
+        kind: input.kind,
+        request: input.request,
         actorRole: "admin",
         contextJson: JSON.stringify(context),
       });
