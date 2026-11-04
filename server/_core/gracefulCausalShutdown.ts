@@ -20,7 +20,11 @@ export async function drainAurionRuntimeForShutdown(
 ): Promise<void> {
   const before = dependencies.persistenceStatus?.();
   console.info("[Aurion] shutdown stage: zone-gateway-close");
-  dependencies.closeZoneGateway();
+  // A failed final presence-leave tick must fail the shutdown, but only after every
+  // already-enqueued causal write has been flushed.
+  let gatewayError: unknown;
+  try { dependencies.closeZoneGateway(); }
+  catch (error) { gatewayError = error; console.error("[Aurion] shutdown zone-gateway-close failed", error); }
   console.info("[Aurion] shutdown stage: observer-stop");
   for (const stop of dependencies.stopObservers) stop();
   console.info("[Aurion] shutdown stage: persistence-flush");
@@ -32,6 +36,7 @@ export async function drainAurionRuntimeForShutdown(
   if (before && after && (after.failures > before.failures || after.pending > 0)) {
     throw new Error(`CAUSAL_SHUTDOWN_PERSISTENCE_INCOMPLETE:failures=${after.failures - before.failures},pending=${after.pending}`);
   }
+  if (gatewayError !== undefined) throw new Error("CAUSAL_SHUTDOWN_ZONE_CLOSE_FAILED", { cause: gatewayError });
   console.info("[Aurion] shutdown stage: http-close");
   await dependencies.closeHttpServer();
   console.info("[Aurion] shutdown stage: complete");

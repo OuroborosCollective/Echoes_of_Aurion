@@ -81,17 +81,31 @@ suite("zone presence across process restarts (isolated MariaDB)", () => {
       const zone: AuthoritativeMovementZone = await registry.getOrRecover(zoneId, freshProcess(adapter));
       zone.join({ userId: 501, socket: socket() });
       zone.join({ userId: 502, socket: socket() });
+      const closing = zone.join({ userId: 503, socket: socket() });
       registry.tick();
+      // 503's socket closes after the last timer tick: its leave is queued and its peer is gone.
+      zone.leave(closing.connectionId);
       expect(registry.commitShutdownLeaves()).toBe(2);
       expect(registry.commitShutdownLeaves()).toBe(0);
       await zone.flushEvidencePersistence();
       const head = await adapter.getLatestReceipt(zoneId);
       const final = await adapter.getRecordedTick(zoneId, head!.tick);
-      expect(final!.intents!.filter(intent => intent.type === "presence_leave").map(intent => intent.userId).sort()).toEqual([501, 502]);
+      expect(final!.intents!.filter(intent => intent.type === "presence_leave").map(intent => intent.userId).sort()).toEqual([501, 502, 503]);
 
+      // Review case: the only remaining socket closed after the last timer tick. No presence is
+      // left to remove, but its queued leave must still be committed in the final tick.
+      const lastOne = zone.join({ userId: 601, socket: socket() });
+      registry.tick();
+      zone.leave(lastOne.connectionId);
+      expect(registry.commitShutdownLeaves()).toBe(0);
+      await zone.flushEvidencePersistence();
+      const onlyQueued = await adapter.getRecordedTick(zoneId, (await adapter.getLatestReceipt(zoneId))!.tick);
+      expect(onlyQueued!.intents!.filter(intent => intent.type === "presence_leave").map(intent => intent.userId)).toEqual([601]);
+
+      const durableHead = await adapter.getLatestReceipt(zoneId);
       const restarted = await freshProcess(adapter)(zoneId);
       expect(restarted.getCanonicalZoneState().players).toEqual([]);
-      expect((await adapter.getLatestReceipt(zoneId))?.receiptHash).toBe(head!.receiptHash);
+      expect((await adapter.getLatestReceipt(zoneId))?.receiptHash).toBe(durableHead!.receiptHash);
     } finally { await cleanup(zoneId); }
   }, 60_000);
 });

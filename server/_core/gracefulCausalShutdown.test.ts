@@ -107,4 +107,17 @@ describe("Aurion graceful causal shutdown", () => {
     })).resolves.toBeUndefined();
     expect(closeHttpServer).toHaveBeenCalledTimes(1);
   });
+
+  it("still flushes already-enqueued writes when the final presence-leave tick throws, then fails the shutdown", async () => {
+    const order: string[] = [];
+    const closeHttpServer = vi.fn(async () => { order.push("http"); });
+    await expect(drainAurionRuntimeForShutdown({
+      closeZoneGateway: () => { order.push("zone"); throw new Error("ZONE_FINAL_TICK_FAILED"); },
+      stopObservers: [() => { order.push("observer"); }],
+      flushCausalPersistence: async () => { order.push("flush"); },
+      closeHttpServer,
+    })).rejects.toThrow("CAUSAL_SHUTDOWN_ZONE_CLOSE_FAILED");
+    expect(order).toEqual(["zone", "observer", "flush"]);
+    expect(closeHttpServer).not.toHaveBeenCalled();
+  });
 });

@@ -1163,7 +1163,11 @@ export class ZoneRegistry {
   commitShutdownLeaves(): number {
     let left = 0;
     for (const zone of this.zones.values()) left += zone.leaveAllPresences();
-    if (left > 0) this.tick();
+    // A socket closed after the last timer tick has already queued its presence_leave
+    // and removed its peer; commit whenever any active zone still has pending intents.
+    let pending = false;
+    for (const zone of this.zones.values()) if (zone.getPendingIntents().length > 0) pending = true;
+    if (pending) this.tick();
     return left;
   }
 
