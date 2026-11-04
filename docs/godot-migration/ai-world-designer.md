@@ -8,7 +8,7 @@ Die Vermittlung liegt in `server/aiFabric`, innerhalb des vorhandenen Aurion-Ser
 
 | Fläche | Eigentümer und Wirkung |
 | --- | --- |
-| Kontext | Server liest echten GLB-Katalog, World-Design-Readback und aktive Verbindung des angemeldeten Users. Nach Inferenz werden Verbindung und Revisionen erneut geprüft. |
+| Kontext | Server liest echten GLB-Katalog, World-Design-Readback, aktive Verbindung und den bestehenden bestätigten World-Slice des Users. Nach Inferenz werden Verbindung, Revisionen, Epoche und Geometrie unabhängig erneut geprüft. |
 | Vorschlag | Local oder OpenRouter liefert untrusted JSON; Aurion validiert das vorhandene Draft-Schema, ausgewählte Assets, Chunk und Integer-Koordinaten. |
 | Vorschau | Separater Godot-Viewport mit cyanfarbenen Modellen; tatsächliche GLB-Hashes, Parser und Renderbudgets werden wiederverwendet. Keine erfundenen Readbacks. |
 | Weltänderung | Bestehender Aurion-Plan, konkrete Bestätigung, Apply, Receipt und unabhängiger GET-Readback. |
@@ -20,9 +20,9 @@ Die Vorschau zeigt höchstens 18 Objekte im ersten ausgewählten Chunk auf einer
 
 1. Das bestehende Godot-Projekt öffnen. Im Aurion-Dock **AI World Designer öffnen** wählen; der vorhandene Authoring-Einstieg startet.
 2. Mit dem Eigentümerkonto anmelden und die echte Zone verbinden. Ohne passende aktive Gameplay-Verbindung lehnt `aiPropose` ab.
-3. Katalog laden, **KI-Status und Budget prüfen** wählen. Auto bevorzugt gemäß Serverkonfiguration Local und dann Free. Premium bleibt ohne ausdrückliche Serverfreigabe deaktiviert.
+3. Den tatsächlich vom Spieler bestätigten aktuellen Chunk wählen. Unentdeckte, nicht kausal belegte oder außerhalb dieses Actor-Scope liegende Chunks werden abgelehnt. Katalog laden, **KI-Status und Budget prüfen** wählen. Auto bevorzugt gemäß Serverkonfiguration Local und dann Free. Premium bleibt ohne ausdrückliche Serverfreigabe deaktiviert.
 4. Chunk X/Z auswählen, bei Bedarf reale Asset-IDs aus dem Katalog eingrenzen und einen Auftrag eingeben. Beispielsweise: „Erstelle im freigegebenen Testbereich einen Markt mit zwei vorhandenen Marktständen und einem dekorativen Objekt.“
-5. Vorschlag anfordern. `AI_DRAFT` und `PREVIEW_ONLY` prüfen: Objektliste, Koordinaten, Differenz, Warnungen und Modellkosten. Der Verlauf hält bis zu 20 Vorschläge nur in dieser Sitzung. Für Überarbeitung **Aktuellen Entwurf zur Verbesserung mitsenden** wählen.
+5. Vorschlag anfordern. `AI_DRAFT` und `PREVIEW_ONLY` prüfen: Objektliste, Koordinaten, Differenz, Warnungen und Modellkosten. Der Verlauf hält bis zu 20 Vorschläge nur in dieser Sitzung. Für Überarbeitung **Entwurf verbessern** wählen.
 6. Den bestehenden **Aurion-Plan** anfordern. Plan-Hash, Vorgänger und betroffene Objekte prüfen. Erst die konkrete Bestätigung erlaubt Apply.
 7. Nach Receipt den unabhängigen Welt-Readback abwarten. `LIVE_READBACK_CONFIRMED` erscheint nur, wenn der aktuelle Zielentwurf zum Receipt passt. Ein inzwischen ersetzter Entwurf wird ausdrücklich als verändert angezeigt.
 8. Nach Unterbrechung die bestehende Recovery verwenden. Niemals blind Apply erneut senden. Unbekannte Ergebnisse bleiben `UNRESOLVED`.
@@ -113,6 +113,8 @@ ChatGPT Work kann bei tatsächlich vorhandenem autorisiertem Toolzugriff diese V
 ## Prüfbarkeit und verbleibende Grenzen
 
 `server/aiFabric/*.test.ts` prüft Dateipersistenz, Parallelitätsreservation, Routing, Metadaten und echten lokalen HTTP-Transport mit ausdrücklich synthetischen Providerantworten. Die isolierte MariaDB-Lane prüft echte Katalogeinlagerung, Plan/Bestätigung, Apply, Duplikatschutz, Receipt und separaten Readback. Godot-Headless prüft echte Engine, GLB-Parser, getrennte Vorschau, bestehende Weltprojektionen und HTTP-Transport. Diese Tests beweisen keine externe Modellantwort oder Produktionsweltänderung.
+
+Der Prompt erhält öffentliche Geländetiles, Straßen und Strukturen aus `readActorWorldSlice`, ohne Actor-ID oder private Zustände. Änderungen der Epoche oder Geometrie während des Modellaufrufs verwerfen den Vorschlag. Fortlaufende Ticks allein invalidieren unveränderte Geometrie nicht. Der bestehende World-Slice benötigt echte Kausal- und Discovery-Belege; deren Fehlen ist ein Blocker, keine Einladung zu Ersatzdaten.
 
 Vor produktiver Abnahme fehlen weiterhin ein echter freigegebener Modellaufruf, die aktive Eigentümersitzung, ein konkret ausgewiesener Testbereich und eine bestätigte kleine Marktplanung. Erst nach ausdrücklicher Bestätigung dieses Plans dürfen der echte Apply und Readback als Live-Abnahme erfolgen. Aktuelle GLB-Präsentationshüllen beweisen weder feste Gebäudekollisionen noch Passierbarkeit. Wolfram ist ein optionaler unabhängiger Analyseweg, keine Laufzeitpflicht. Bestehende visuelle Regressionsschwellen, Android/JNI-Prüfungen und Release-Gates werden nicht abgeschwächt.
 

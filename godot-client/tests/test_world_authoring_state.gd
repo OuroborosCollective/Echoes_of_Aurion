@@ -84,6 +84,8 @@ func verify() -> void:
 	concurrent.revision = "8".repeat(64)
 	require(state.accept_readback(concurrent), "same confirmed design rejected after unrelated revision change")
 	require(state.live_readback_confirmed, "matching independent readback was not marked live")
+	state.draft_changed()
+	require(not state.live_readback_confirmed, "edited preview retained a live confirmation flag")
 	state.close()
 	require(not state.session_matches(CONNECTION, 7), "closed session remained valid")
 	state = fresh()

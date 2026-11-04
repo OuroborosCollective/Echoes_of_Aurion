@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { DesignerInput, WorldDesigner } from "../aiFabric/worldDesigner";
+import { DesignerInput, designerSurface, WorldDesigner } from "../aiFabric/worldDesigner";
+import { readActorWorldSlice } from "../worldSlice";
+import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { fabricConfig } from "../aiFabric/policy";
 import { globalZoneRegistry } from "../zoneRuntime";
 import { zoneIdSchema } from "../zoneProtocol";
@@ -31,13 +33,20 @@ export const aurionAuthoringRouter = router({
     const zone = globalZoneRegistry.find(zoneIdSchema.parse(input.zoneId));
     const connected = () => zone?.liveConnectionIdForUser(ctx.user.id) === input.connectionId;
     if (!connected()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "AI_LIVE_SESSION_REQUIRED" });
-    const [catalog, world] = await Promise.all([glbImportStore().catalog(), readActiveWorldDesign()]);
+    const surfaceQuery = { worldId: GLOBAL_WORLD_ID, zoneId: input.zoneId, coordinate: { x: input.chunkX, z: input.chunkZ }, radius: 0, lod: "full" };
+    const [catalog, world, observed] = await Promise.all([glbImportStore().catalog(), readActiveWorldDesign(), readActorWorldSlice(ctx.user.id, surfaceQuery)]);
+    const surface = designerSurface(observed, input);
     const result = await new WorldDesigner(fabricConfig()).propose(input, {
-      catalog, world, zoneId: input.zoneId, tick: zone!.getTickNumber(), sourceRevision: activeProvenance.sourceRevision,
+      catalog, world, surface, zoneId: input.zoneId, tick: zone!.getTickNumber(), sourceRevision: activeProvenance.sourceRevision,
     });
     // The model runs outside the tick. Re-read both independently afterwards.
     const [currentCatalog, currentWorld] = await Promise.all([glbImportStore().catalog(), readActiveWorldDesign()]);
-    if (!connected() || currentCatalog.revision !== catalog.revision || currentWorld.revision !== world.revision) {
+    let geometryCurrent = false;
+    try {
+      const current = designerSurface(await readActorWorldSlice(ctx.user.id, surfaceQuery), input);
+      geometryCurrent = current.epoch === surface.epoch && current.geometryHash === surface.geometryHash;
+    } catch { /* Loss of confirmed scope never creates a substitute world. */ }
+    if (!connected() || !geometryCurrent || currentCatalog.revision !== catalog.revision || currentWorld.revision !== world.revision) {
       return { ...result, draftJson: "", status: "UNRESOLVED", failures: [...result.failures, { route: "context", code: "CONTEXT_CHANGED" }] };
     }
     return result;

@@ -2,9 +2,10 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { buildGlbImportPlan } from "../glbImportPlan";
 import { testGlb } from "../glbImportFixtures";
-import { WorldDesigner, DesignerInput, buildPrompt, validateProposal, type DesignerContext } from "./worldDesigner";
+import { WorldDesigner, DesignerInput, designerSurface, buildPrompt, validateProposal, type DesignerContext } from "./worldDesigner";
 import { FabricConfigSchema, FabricError } from "./policy";
 import { OpenCodeProvider, OpenRouterProvider, type Model } from "./providers";
 
@@ -83,4 +84,23 @@ describe("routing unit tests; provider responses are test doubles", () => {
     expect(s.remote.calls).toBe(0); s.remote.cost = null;
     expect((await s.designer.propose(input, context)).failures.at(-1)?.code).toBe("ZERO_COST_NOT_CONFIRMED");
   });
+});
+
+it("uses canonical observed geometry, redacts actor identity and rejects fog or wrong scope", () => {
+  // Synthetic observer DTO only; durable observer runtime is tested by its existing MariaDB/E2E lane.
+  const slice = { schema: "aurion.world-slice.v1", policy: "actor-observed-current-epoch.v1", worldId: GLOBAL_WORLD_ID,
+    zoneId: input.zoneId, actorId: "player:42", epoch: 1, worldRoot: "a".repeat(64), sourceRevision: "b".repeat(40), observedAtTick: 1,
+    coordinate: { x: 0, z: 0 }, radius: 0, lod: "full", knowledgeHash: "c".repeat(64),
+    chunks: [{ coordinate: { x: 0, z: 0 }, authorityReceiptHash: "d".repeat(64), roads: [], structures: [],
+      tiles: Array.from({ length: 256 }, (_, i) => ({ x: i % 16, z: Math.floor(i / 16), heightMm: 0, surface: "grass" })) }],
+    entities: [{ entityId: "player:42", position: { x: 0, z: 0 } }] };
+  const readback = { status: "VERIFIED", connectionId: input.connectionId, slice };
+  const surface = designerSurface(readback, input);
+  expect(JSON.stringify(surface)).not.toContain("player:42");
+  expect(designerSurface({ ...readback, slice: { ...slice, observedAtTick: 2 } }, input).geometryHash).toBe(surface.geometryHash);
+  expect(() => designerSurface({ ...readback, status: "FOGGED" }, input)).toThrow("WORLD_CONTEXT_UNVERIFIED");
+  expect(() => designerSurface(readback, { ...input, chunkX: 1 })).toThrow("WORLD_CONTEXT_UNVERIFIED");
+  expect(() => designerSurface({ ...readback, connectionId: "zone_peer_other" }, input)).toThrow("WORLD_CONTEXT_UNVERIFIED");
+  const prompt = buildPrompt({ ...context, surface }, input);
+  expect(prompt).toContain("observedSurface"); expect(prompt).not.toContain("player:42");
 });

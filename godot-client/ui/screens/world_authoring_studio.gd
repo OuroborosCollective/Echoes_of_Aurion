@@ -432,6 +432,8 @@ func _send(kind: String, payload: Dictionary = {}) -> bool:
 
 func _on_draft_changed() -> void:
 	_state.draft_changed()
+	if _state.phase in ["ready", "confirmed"] and is_instance_valid(_info):
+		_info.text = "PREVIEW_ONLY · Entwurf geändert; neuer Aurion-Plan erforderlich."
 	if is_instance_valid(_confirm):
 		_confirm.hide()
 	if is_instance_valid(_ai_panel): _ai_panel.stage(_current_draft(), _catalog_assets, _catalog_revision)

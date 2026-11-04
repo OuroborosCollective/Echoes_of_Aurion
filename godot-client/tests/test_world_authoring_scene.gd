@@ -228,6 +228,11 @@ func verify() -> void:
 	require(studio._state.phase == "closed" and studio._connection.is_empty(), "zone reset retained authoring session")
 	if studio.has_method("inspection_export"):
 		require(studio.inspection_export().is_empty(), "zone reset retained stale inspector state")
+	studio.visible = true
+	studio.quest_editor().visible = true
+	root.size = Vector2i(360, 640)
+	for frame in 6: await process_frame
+	require(studio._ai_panel.size.x <= 328 and studio.quest_editor().size.x <= 328, "AI controls widened the native studio on a 360px display")
 	scene.queue_free()
 	await process_frame
 	if FileAccess.file_exists(journal_path.path_join("record.json")): DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_path.path_join("record.json")))

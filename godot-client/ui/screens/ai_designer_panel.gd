@@ -65,7 +65,8 @@ func _ready() -> void:
 	asset_ids.placeholder_text = "Asset-IDs, durch Komma getrennt; leer = geeigneter Katalog"
 	add_child(asset_ids)
 	improve = CheckBox.new()
-	improve.text = "Aktuellen Entwurf zur Verbesserung mitsenden"
+	improve.text = "Entwurf verbessern"
+	improve.tooltip_text = "Aktuellen Entwurf zur Verbesserung mitsenden"
 	add_child(improve)
 	history = OptionButton.new()
 	history.fit_to_longest_item = false
