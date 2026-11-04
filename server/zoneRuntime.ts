@@ -162,6 +162,7 @@ export class AuthoritativeMovementZone {
   // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
   private sortedPresences: ZonePresence[] = [];
   private mobTargetPresences: ZonePresence[] = [];
+  private readonly frozenMobIds = new Set<string>();
   private sortedPeersDirty = false;
   private readonly actionSequenceWatermarks = new Map<number, number>();
   private pendingIntents: AurionZoneIntent[] = [];
@@ -821,7 +822,18 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    this.frozenMobIds.clear();
+    for (let i = 0; i < this.tactics.windups.length; i++) this.frozenMobIds.add(this.tactics.windups[i].mobId);
+    if (this.tickNumber % 2 === 0) {
+      for (const id in this.tactics.effects) {
+        if (this.tactics.effects.hasOwnProperty(id)) {
+          if ((this.tactics.effects[id].slowUntil ?? 0) > this.tickNumber) {
+            this.frozenMobIds.add(id);
+          }
+        }
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, this.frozenMobIds);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -834,10 +846,27 @@ export class AuthoritativeMovementZone {
       for (const [id, until] of peer.skillCooldownUntilTick) if (until <= this.tickNumber) { peer.skillCooldownUntilTick.delete(id); changed = true; }
     }
     if (this.tacticalCombat) {
-      this.tactics.windups = this.tactics.windups.filter(w => { const m = this.mobRuntime.stateFor(w.mobId); return m && m.health > 0 && m.state === "combat" && m.targetEntityId === w.targetId && (this.peersByEntityId.get(w.targetId)?.health ?? 0) > 0; });
-      for (const [id, effects] of Object.entries(this.tactics.effects)) {
-        for (const key of Object.keys(effects) as (keyof typeof effects)[]) if ((effects[key] ?? 0) <= this.tickNumber) { delete effects[key]; changed = true; }
-        if (!Object.keys(effects).length) delete this.tactics.effects[id];
+      for (let i = this.tactics.windups.length - 1; i >= 0; i--) {
+        const w = this.tactics.windups[i];
+        const m = this.mobRuntime.stateFor(w.mobId);
+        if (!(m && m.health > 0 && m.state === "combat" && m.targetEntityId === w.targetId && (this.peersByEntityId.get(w.targetId)?.health ?? 0) > 0)) {
+          this.tactics.windups.splice(i, 1);
+        }
+      }
+      for (const id in this.tactics.effects) {
+        if (!this.tactics.effects.hasOwnProperty(id)) continue;
+        const effects = this.tactics.effects[id];
+        let hasKeys = false;
+        for (const key in effects) {
+          if (!effects.hasOwnProperty(key)) continue;
+          if ((effects[key as keyof typeof effects] ?? 0) <= this.tickNumber) {
+            delete effects[key as keyof typeof effects];
+            changed = true;
+          } else {
+            hasKeys = true;
+          }
+        }
+        if (!hasKeys) delete this.tactics.effects[id];
       }
     }
     for (const peer of this.sortedPeers) {
