@@ -83,4 +83,51 @@ describe("Aurion graceful causal shutdown", () => {
     })).rejects.toThrow("CAUSAL_FLUSH_FAILED");
     expect(closeHttpServer).not.toHaveBeenCalled();
   });
+
+  it("fails the shutdown when the final presence-leave tick did not persist (recorder counted a failure)", async () => {
+    // Review finding on #1311: the recorder swallows write failures, so a clean flush alone
+    // must not report a clean shutdown while the persisted head still carries players.
+    let failures = 0;
+    const closeHttpServer = vi.fn(async () => {});
+    await expect(drainAurionRuntimeForShutdown({
+      closeZoneGateway: () => { failures += 1; }, // final tick enqueued, its write later fails
+      stopObservers: [],
+      flushCausalPersistence: async () => {},
+      closeHttpServer,
+      persistenceStatus: () => ({ pending: 0, failures }),
+    })).rejects.toThrow("CAUSAL_SHUTDOWN_PERSISTENCE_INCOMPLETE:failures=1(+1 during shutdown),pending=0");
+    expect(closeHttpServer).not.toHaveBeenCalled();
+
+    // An earlier failed receipt leaves a gap in the durable chain even if later writes succeed.
+    await expect(drainAurionRuntimeForShutdown({
+      closeZoneGateway: () => {},
+      stopObservers: [],
+      flushCausalPersistence: async () => {},
+      closeHttpServer,
+      persistenceStatus: () => ({ pending: 0, failures: 7 }),
+    })).rejects.toThrow("CAUSAL_SHUTDOWN_PERSISTENCE_INCOMPLETE:failures=7(+0 during shutdown),pending=0");
+    expect(closeHttpServer).not.toHaveBeenCalled();
+
+    await expect(drainAurionRuntimeForShutdown({
+      closeZoneGateway: async () => {},
+      stopObservers: [],
+      flushCausalPersistence: async () => {},
+      closeHttpServer,
+      persistenceStatus: () => ({ pending: 0, failures: 0 }),
+    })).resolves.toBeUndefined();
+    expect(closeHttpServer).toHaveBeenCalledTimes(1);
+  });
+
+  it("still flushes already-enqueued writes when the final presence-leave tick throws, then fails the shutdown", async () => {
+    const order: string[] = [];
+    const closeHttpServer = vi.fn(async () => { order.push("http"); });
+    await expect(drainAurionRuntimeForShutdown({
+      closeZoneGateway: () => { order.push("zone"); throw new Error("ZONE_FINAL_TICK_FAILED"); },
+      stopObservers: [() => { order.push("observer"); }],
+      flushCausalPersistence: async () => { order.push("flush"); },
+      closeHttpServer,
+    })).rejects.toThrow("CAUSAL_SHUTDOWN_ZONE_CLOSE_FAILED");
+    expect(order).toEqual(["zone", "observer", "flush"]);
+    expect(closeHttpServer).not.toHaveBeenCalled();
+  });
 });

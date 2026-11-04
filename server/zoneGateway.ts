@@ -5,7 +5,7 @@ import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { isAllowedZoneOrigin, parseZoneAttack, parseZoneHello, parseZoneMove, parseZoneSkill, ZONE_TICK_MS, type ZoneReject, type ZoneId } from "./zoneProtocol";
-import { WORLD_PRESENCE_REFRESH_MS } from "./worldPresenceProtocol";
+import { WORLD_PRESENCE_LEASE_MS, WORLD_PRESENCE_REFRESH_MS } from "./worldPresenceProtocol";
 import { globalZoneRegistry, ZoneRegistry, type AuthoritativeMovementZone, type ZoneCombatProfile } from "./zoneRuntime";
 import { ZonePresenceLifecycle } from "./zonePresenceLifecycle";
 import { ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
@@ -22,6 +22,10 @@ export type ZoneTicketConsumer=(values:{ticket:string;zoneId:"observatory_thresh
 export type WorldPresenceSink={upsert(values:{userId:number;connectionId:string;zoneId:"observatory_threshold";position:{x:number;z:number}}):Promise<unknown>;release(values:{connectionId:string}):Promise<unknown>;};
 export type ZoneFixedTickSink={intervalTicks:number;observe(values:{tick:number}):Promise<unknown>;};
 export type ZoneRecoveryResolver=(zoneId:ZoneId)=>Promise<AuthoritativeMovementZone>;
+const SHUTDOWN_CLIENT_CLOSE_MS=2000;
+// A stalled world-presence write must not hold back the final tick and the causal flush.
+// Leases are not causal evidence and expire on their own.
+const SHUTDOWN_LEASE_RELEASE_MS=2000;
 function closePolicyViolation(socket:WebSocket):void{socket.close(1008,"zone authorization rejected");}
 function parseMessage(data:WebSocket.RawData):unknown{if(typeof data==="string")return JSON.parse(data);if(Array.isArray(data))return JSON.parse(Buffer.concat(data).toString("utf8"));if(data instanceof ArrayBuffer)return JSON.parse(Buffer.from(new Uint8Array(data)).toString("utf8"));return JSON.parse(data.toString("utf8"));}
 function rejectZoneInput(socket:WebSocket,code:ZoneReject["code"]):void{sendZoneMessage(socket,JSON.stringify({type:"reject",code} satisfies ZoneReject));}
@@ -34,7 +38,7 @@ function rejectUnsupportedZoneVersion(socket:WebSocket):void{
 /** `/v1/ws` is Aurion's live gameplay transport. AX1/WASD are historical provenance only; legacy tRPC/MCP encounter routes are not consulted. */
 export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink,recoverZone:ZoneRecoveryResolver=(zoneId)=>restorePersistedZoneHead(zoneId,globalCausalPersistence,globalTickRecorder),observer:DefensiveGatewayObserver=defensiveGatewayObserver){
   if(fixedTick&&(!Number.isSafeInteger(fixedTick.intervalTicks)||fixedTick.intervalTicks<1))throw new Error("ZONE_FIXED_TICK_INTERVAL_INVALID");
-  const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const observationConnections=new Set<string>();const presenceObservers=new Set<()=>void>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();let isTicking=false;
+  const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const observationConnections=new Set<string>();const presenceObservers=new Set<()=>void>();let closing=false;const presenceReleases=new Set<Promise<unknown>>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();let isTicking=false;
   const tickTimer=setInterval(async()=>{
     if(isTicking)return;
     isTicking=true;
@@ -51,6 +55,8 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       console.warn("[Aurion Zone] WebSocket peer error:",error.message);
       socket.terminate();
     });
+    // Shutdown stops admission: no new handshake may join after the final tick.
+    if(closing){socket.close(1001,"server shutting down");return;}
     const finishObservation=observer.beginHandshake();
     socket.once("close",()=>finishObservation("closed"));
     const helloTimeout=setTimeout(()=>closePolicyViolation(socket),HELLO_TIMEOUT_MS);socket.once("close",()=>clearTimeout(helloTimeout));socket.once("message",async(data,isBinary)=>{
@@ -58,9 +64,9 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       if(raw&&typeof raw==="object"&&(raw as {type?:unknown}).type==="hello"&&(raw as {protocolVersion?:unknown}).protocolVersion!==ZONE_PROTOCOL_VERSION){rejectUnsupportedZoneVersion(socket);return;}
       return closePolicyViolation(socket);
     }
-    try{const ticket=await consumeTicket({ticket:hello.ticket,zoneId:hello.zoneId});if(socket.readyState!==WebSocket.OPEN)return;if(!ticket)return closePolicyViolation(socket);const zone=await registry.getOrRecover(ticket.zoneId,recoverZone);if(socket.readyState!==WebSocket.OPEN)return;const welcome=zone.join({userId:ticket.userId,socket,combatProfile:ticket.combatProfile});clientVerificationRegistry.open(ticket.userId,welcome.connectionId);observationConnections.add(welcome.connectionId);const presence=worldPresence?new ZonePresenceLifecycle(worldPresence,{userId:ticket.userId,connectionId:welcome.connectionId,zoneId:ticket.zoneId}):undefined;let refreshTimer:ReturnType<typeof setInterval>|undefined;
+    try{const ticket=await consumeTicket({ticket:hello.ticket,zoneId:hello.zoneId});if(socket.readyState!==WebSocket.OPEN)return;if(!ticket)return closePolicyViolation(socket);if(closing){socket.close(1001,"server shutting down");return;}const zone=await registry.getOrRecover(ticket.zoneId,recoverZone);if(socket.readyState!==WebSocket.OPEN)return;if(closing){socket.close(1001,"server shutting down");return;}const welcome=zone.join({userId:ticket.userId,socket,combatProfile:ticket.combatProfile});clientVerificationRegistry.open(ticket.userId,welcome.connectionId);observationConnections.add(welcome.connectionId);const presence=worldPresence?new ZonePresenceLifecycle(worldPresence,{userId:ticket.userId,connectionId:welcome.connectionId,zoneId:ticket.zoneId}):undefined;let refreshTimer:ReturnType<typeof setInterval>|undefined;
       const onPresenceFailure=(error:unknown)=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);};const observePresence=()=>{const position=zone.positionForConnection(welcome.connectionId);if(position)void presence?.observe(position)?.catch(onPresenceFailure);};
-      socket.once("close",()=>{clientVerificationRegistry.close(welcome.connectionId);observationConnections.delete(welcome.connectionId);if(refreshTimer)clearInterval(refreshTimer);presenceObservers.delete(observePresence);zone.leave(welcome.connectionId);void presence?.close().catch(error=>console.error("[Aurion Zone] Presence lease release failed",error));});
+      socket.once("close",()=>{clientVerificationRegistry.close(welcome.connectionId);observationConnections.delete(welcome.connectionId);if(refreshTimer)clearInterval(refreshTimer);presenceObservers.delete(observePresence);zone.leave(welcome.connectionId);const released=presence?.close().catch(error=>console.error("[Aurion Zone] Presence lease release failed",error));if(released){presenceReleases.add(released);void released.finally(()=>presenceReleases.delete(released));}});
       const initialPosition=zone.positionForConnection(welcome.connectionId);if(!initialPosition){zone.leave(welcome.connectionId);return closePolicyViolation(socket);}try{await presence?.refresh(initialPosition);}catch(error){zone.leave(welcome.connectionId);console.error("[Aurion Zone] Presence lease registration failed",error);return closePolicyViolation(socket);}if(socket.readyState!==WebSocket.OPEN)return;if(presence)presenceObservers.add(observePresence);if(!sendZoneMessage(socket,JSON.stringify(welcome)))return;finishObservation("completed");
       socket.on("message",(nextData,nextBinary)=>{if(nextBinary)return rejectZoneInput(socket,"INVALID_MESSAGE");let nextRaw:unknown;try{nextRaw=parseMessage(nextData);}catch{return rejectZoneInput(socket,"INVALID_MESSAGE");}
         const move=parseZoneMove(nextRaw);if(move){const result=zone.submitMovement(welcome.connectionId,move);if(result==="stale")return rejectZoneInput(socket,"STALE_CLIENT_SEQUENCE");if(result==="missing")closePolicyViolation(socket);return;}
@@ -71,5 +77,12 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       refreshTimer=presence?setInterval(()=>{const position=zone.positionForConnection(welcome.connectionId);if(!position)return;void presence.refresh(position).catch(error=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);});},WORLD_PRESENCE_REFRESH_MS):undefined;
     }catch(error){console.error("[Aurion Zone] Ticket handshake failed",error);closePolicyViolation(socket);}
   });});
-  return{registry,close:()=>{for(const id of observationConnections)clientVerificationRegistry.close(id);observationConnections.clear();clearInterval(tickTimer);presenceObservers.clear();wss.close();}};
+  return{registry,close:async()=>{closing=true;clearInterval(tickTimer);
+    // Close every client first: their close handlers queue presence_leave and release
+    // world-presence leases. Bounded: an unresponsive peer is terminated.
+    await Promise.all([...wss.clients].map(client=>new Promise<void>(resolve=>{if(client.readyState===WebSocket.CLOSED)return resolve();const timer=setTimeout(()=>{client.terminate();resolve();},SHUTDOWN_CLIENT_CLOSE_MS);client.once("close",()=>{clearTimeout(timer);resolve();});client.close(1001,"server shutdown");})));
+    // Bounded independently of socket closure; the referenced timer keeps the process alive while waiting.
+    const pendingReleases=[...presenceReleases];
+    if(pendingReleases.length){let deadline:ReturnType<typeof setTimeout>|undefined;const timedOut=await Promise.race([Promise.allSettled(pendingReleases).then(()=>false),new Promise<boolean>(resolve=>{deadline=setTimeout(()=>resolve(true),SHUTDOWN_LEASE_RELEASE_MS);})]);clearTimeout(deadline);if(timedOut)console.warn(`[Aurion Zone] shutdown continued with ${presenceReleases.size} world-presence lease release(s) still pending after ${SHUTDOWN_LEASE_RELEASE_MS} ms; they expire within ${WORLD_PRESENCE_LEASE_MS} ms`);}
+    for(const id of observationConnections)clientVerificationRegistry.close(id);observationConnections.clear();let leaveError:unknown;try{const left=registry.commitShutdownLeaves();if(left)console.info(`[Aurion Zone] shutdown enqueued ${left} presence leave(s) in the final tick`);}catch(error){console.error("[Aurion Zone] shutdown presence leave failed",error);leaveError=error;}presenceObservers.clear();wss.close();if(leaveError)throw leaveError;}};
 }
