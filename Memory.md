@@ -5623,3 +5623,14 @@ Evidence: Real local HTTP requests reproduced the incorrect Response.ok() call b
 Learned: Syntax-only Node checks missed a fetch/APIResponse mismatch, and a manual-only workflow also needs its expression contexts validated before dispatch.
 Open: Final exact-head CI/review, including the earlier relay readiness failure; production deployment and actual visual parity are still unverified.
 Next safe step: Complete the unchanged gates, merge PR1307 with expected-head protection, restore the release timer and use the canonical release/application-approval path, then capture the actual live clients.
+
+
+### 2026-11-04 — PR1307: camera calibration before live acceptance
+Status: PARTIAL
+Task: Resolve the camera-default review and check the earlier PR1281 boundary fixes in PR1307.
+Decisions: Explicitly calibrate both real cameras before the shared one-shot arm; preserve normal defaults, gameplay authority, HMAC privacy and the strict >75% pixel gate. Compare vertical FOV, position/target and near/far clipping.
+Touched surfaces: Browser presentation, native camera, private capture handshake, comparator, regressions and visual-parity documentation.
+Evidence: Local code 2d63c573 passed all 197 real Godot static/headless stages; 46 Python controls, 11 collector controls, 18 focused browser tests and TypeScript pass. Red controls reproduced missing calibration and omitted clipping before the fix. The nine existing HTTP approval tests pass under CI-compatible Node22 but eight fail under local Node24; the complete Node22 rerun is recorded separately. Codejaeger postfix graph: two resolved findings, three checked dead ends, bounded adjacent rerun complete.
+Learned: Strict camera equality requires an explicit pre-capture handshake; matching FOV alone misses clipping differences. A private append-only Codejaeger ledger now preserves red/fix/green checkpoints with revision and digest checks; it is separate from the game runtime.
+Open: Exact-head remote CI and authenticated display-backed production parity remain unverified. Local headless tests are not live acceptance.
+Next safe step: Publish this fix to existing PR1307, inspect its CI/review, then use the protected deployment and real paired-capture path.

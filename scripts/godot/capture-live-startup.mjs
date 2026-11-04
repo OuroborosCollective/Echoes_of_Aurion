@@ -141,6 +141,11 @@ try {
   await waitFor(() => page.evaluate(() => Boolean(window.__aurionStartupCapture) && !document.querySelector('[data-testid="world-loading-screen"]')), 'BROWSER_WORLD_OBSCURED_BY_LOADING_SCREEN', 30_000);
   // One shared lower bound, then the first actually published/rendered tick in
   // each client. Idle ticks need not be broadcast. No later-frame retry.
+  // Explicit calibration before the one-shot arm. Private absolute pose is
+  // derived from the actual web camera, then held in both real renderers.
+  const camera = await page.evaluate(() => window.__aurionStartupCapture.alignCamera());
+  await atomic('camera.json', {nonce, camera});
+  await waitFor(async () => (await maybeJson('godot-state.json'))?.cameraAligned === true, 'CAPTURE_CAMERA_NOT_ALIGNED');
   const web = await page.evaluate(() => window.__aurionStartupCapture.state());
   const minimumTick = Math.max(web.tick, native.tick) + 20;
   index.minimumTick = minimumTick;

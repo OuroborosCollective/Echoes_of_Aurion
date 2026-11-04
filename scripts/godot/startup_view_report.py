@@ -35,6 +35,7 @@ HINTS = {
     "BROWSER_TARGET_TICK_MISSED": "Der Browser hat den gemeinsamen Ziel-Tick nicht gerendert. Verbindungsunterbrechung, Hintergrund-Tab und Renderlatenz prüfen.",
     "GODOT_TARGET_TICK_MISSED": "Godot hat den gemeinsamen Ziel-Tick nicht gerendert. Snapshot-Verarbeitung, Verbindung und Renderlatenz prüfen.",
     "GODOT_RENDER_TICK_CHANGED": "Während Godot das Bild renderte, wurde bereits der nächste Snapshot angewendet. Das Bild lässt sich deshalb nicht demselben bestätigten Tick zuordnen.",
+    "CAPTURE_CAMERA_NOT_ALIGNED": "Die gemeinsame Kamera wurde vor der einmaligen Aufnahme nicht bestätigt. Privaten Kamera-Handoff und tatsächliche Projektion prüfen.",
     "CAPTURE_CAMERA_INVALID": "Der tatsächliche Kamera-Readback enthält ungültige Koordinaten oder ein ungültiges Sichtfeld. Die Aufnahme bleibt ungeprüft; Kamera-Initialisierung prüfen.",
     "CAMERA_PROJECTION_MISMATCH": "Kameraposition, Ziel oder Sichtfeld unterscheiden sich. Der Bericht enthält private Positionsvergleichswerte, relativen Kameraabstand und FOV; Startabstand, Terrainhöhe und FOV prüfen. Absolute Spielerpositionen werden nicht veröffentlicht.",
     "RENDER_VIEWPORT_SIZE_MISMATCH": "Die Original-Viewports haben unterschiedliche Pixelmaße. Fenstergröße und Geräte-Pixelfaktor angleichen; der Test skaliert keine Bilder.",
@@ -140,10 +141,10 @@ def build_report(directory: Path, now=None):
         if not SHA256.fullmatch(str(ws.get("projectionDigest", ""))): fail("CANONICAL_SNAPSHOT_MISMATCH")
         if web.get("camera") != godot.get("camera"): fail("CAMERA_PROJECTION_MISMATCH")
         for camera in (web.get("camera"), godot.get("camera")):
-            if not isinstance(camera, dict) or set(camera) != {"positionDigest", "targetDigest", "offsetMm", "fovMilliDeg"}:
+            if not isinstance(camera, dict) or set(camera) != {"positionDigest", "targetDigest", "offsetMm", "fovMilliDeg", "nearMm", "farMm"}:
                 fail("CAMERA_READBACK_MISSING")
                 continue
-            if any(not SHA256.fullmatch(str(camera[k])) for k in ("positionDigest", "targetDigest")) or not isinstance(camera["offsetMm"], list) or len(camera["offsetMm"]) != 3 or any(type(n) is not int or abs(n) > 2 * 10**10 for n in camera["offsetMm"]) or type(camera["fovMilliDeg"]) is not int or not 10000 <= camera["fovMilliDeg"] <= 150000: fail("CAMERA_READBACK_MISSING")
+            if any(not SHA256.fullmatch(str(camera[k])) for k in ("positionDigest", "targetDigest")) or not isinstance(camera["offsetMm"], list) or len(camera["offsetMm"]) != 3 or any(type(n) is not int or abs(n) > 2 * 10**10 for n in camera["offsetMm"]) or type(camera["fovMilliDeg"]) is not int or not 10000 <= camera["fovMilliDeg"] <= 150000 or type(camera["nearMm"]) is not int or type(camera["farMm"]) is not int or not 1 <= camera["nearMm"] < camera["farMm"] <= 10000000: fail("CAMERA_READBACK_MISSING")
         chunks = web.get("chunks")
         if not isinstance(chunks, dict) or chunks.get("status") != "APPLIED" or not isinstance(chunks.get("count"), int) or chunks["count"] < 1: fail("BROWSER_TERRAIN_MISSING")
         if not isinstance(chunks, dict) or type(chunks.get("desiredCount")) is not int or chunks["desiredCount"] < 1 or chunks.get("count") != chunks["desiredCount"] or chunks.get("pendingCount") != 0 or chunks.get("failedCount") != 0: fail("BROWSER_TERRAIN_INCOMPLETE")

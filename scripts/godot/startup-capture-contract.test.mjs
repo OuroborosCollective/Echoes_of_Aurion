@@ -80,10 +80,10 @@ test('resource depletion differences participate in the private canonical compar
 
 test('camera readback compares exact positions privately and exposes only the relative viewing offset', () => {
   const raw = {snapshot:{tick:42,zoneId:'zone',presences:[],mobs:[],combatants:[],resources:{revision:1,nodes:[]}},
-    camera:{positionMm:[12345678,5000,87654321],targetMm:[12345678,1600,87644321],fovMilliDeg:58000,privateExtra:'never publish'}};
+    camera:{positionMm:[12345678,5000,87654321],targetMm:[12345678,1600,87644321],fovMilliDeg:58000,nearMm:100,farMm:800000,privateExtra:'never publish'}};
   const key = Buffer.alloc(32, 3);
   const before = publicObservation(raw, key).camera;
-  assert.deepEqual(Object.keys(before).sort(), ['fovMilliDeg','offsetMm','positionDigest','targetDigest']);
+  assert.deepEqual(Object.keys(before).sort(), ['farMm','fovMilliDeg','nearMm','offsetMm','positionDigest','targetDigest']);
   assert.deepEqual(before.offsetMm, [0,3400,10000]);
   assert.match(before.positionDigest, /^[a-f0-9]{64}$/);
   assert.match(before.targetDigest, /^[a-f0-9]{64}$/);
@@ -103,7 +103,7 @@ test('camera readback compares exact positions privately and exposes only the re
 
 test('invalid camera coordinates cannot be converted to a valid public camera proof', () => {
   const raw = {snapshot:{tick:42,zoneId:'zone',presences:[],mobs:[],combatants:[],resources:{revision:1,nodes:[]}}};
-  const camera = {positionMm:[0,5000,10000],targetMm:[0,1600,0],fovMilliDeg:58000};
+  const camera = {positionMm:[0,5000,10000],targetMm:[0,1600,0],fovMilliDeg:58000,nearMm:100,farMm:800000};
   for (const invalid of [null, {}, {...camera,positionMm:[0,NaN,0]}, {...camera,targetMm:[0,0]},
     {...camera,positionMm:[0,10**10+1,0]}, {...camera,fovMilliDeg:0}]) {
     assert.throws(()=>publicObservation({...raw,camera:invalid}, 'private key'), /CAPTURE_CAMERA_INVALID/);
@@ -145,4 +145,12 @@ test('a modified same-version executable or foreign bootstrap receipt cannot pas
     await writeFile(join(directory,'editor-receipt.json'),JSON.stringify({...receipt,archiveSha256:'c'.repeat(64)}));
     await assert.rejects(verifyEditorExecutable(binary,engine),/GODOT_EXECUTABLE_UNVERIFIED/);
   } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('projection clip planes remain part of exact camera equality', () => {
+  const raw = {snapshot:{tick:42,zoneId:'zone',presences:[],mobs:[],combatants:[],resources:{revision:1,nodes:[]}},
+    camera:{positionMm:[0,5000,10000],targetMm:[0,1000,0],fovMilliDeg:58000,nearMm:100,farMm:800000}};
+  const first = publicObservation(raw, 'key').camera;
+  raw.camera.nearMm = 500;
+  assert.notDeepEqual(first, publicObservation(raw, 'key').camera);
 });

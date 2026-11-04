@@ -32,7 +32,7 @@ class StartupReportControls(unittest.TestCase):
                 'worldId':'echoes-of-aurion-global',
                 'worldVisible':True,
                 'snapshot':{'tick':42,'zoneId':'observatory_threshold','projectionDigest':'f'*64,'presenceCount':1,'mobCount':0},
-                'camera':{'positionDigest':'1'*64,'targetDigest':'2'*64,'offsetMm':[0,3400,10000],'fovMilliDeg':58000},
+                'camera':{'positionDigest':'1'*64,'targetDigest':'2'*64,'offsetMm':[0,3400,10000],'fovMilliDeg':58000,'nearMm':100,'farMm':800000},
                 'chunks':{'status':'APPLIED','count':9,'desiredCount':9,'pendingCount':0,'failedCount':0},
                 'player':{'visible':True,'renderedHeightMeters':1.8,'boneCount':30},
                 'npcs':{'visible':True,'renderedHeightMeters':1.8,'boneCount':30},
@@ -74,6 +74,12 @@ class StartupReportControls(unittest.TestCase):
         image.save(self.directory / 'godot.png')
         self.assertIn('REAL_VIEW_VISUAL_MISMATCH', self.run_report()['issues'])
 
+    def test_clip_difference_fails_even_with_identical_pixels(self):
+        self.observations['godot']['camera']['nearMm'] = 500
+        report = self.run_report()
+        self.assertEqual(report['visual']['differencePercent'], 0)
+        self.assertIn('CAMERA_PROJECTION_MISMATCH', report['issues'])
+
     def test_empty_cameras_cannot_match_as_valid_readback(self):
         for value in self.observations.values(): value['camera'] = {}
         self.assertIn('CAMERA_READBACK_MISSING', self.run_report()['issues'])
@@ -88,7 +94,7 @@ class StartupReportControls(unittest.TestCase):
 
     def test_invalid_camera_digest_and_legacy_absolute_coordinates_cannot_pass(self):
         for camera in [
-            {'positionMm':[0,5000,10000],'targetMm':[0,1600,0],'fovMilliDeg':58000},
+            {'positionMm':[0,5000,10000],'targetMm':[0,1600,0],'fovMilliDeg':58000,'nearMm':100,'farMm':800000},
             {**self.observations['godot']['camera'], 'positionDigest':'invalid'},
             {**self.observations['godot']['camera'], 'offsetMm':[0,True,0]},
         ]:

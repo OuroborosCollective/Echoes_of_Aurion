@@ -10,6 +10,7 @@ const MAX_DISTANCE := 12.0
 @export_range(0.001, 0.03, 0.0005) var touch_sensitivity := 0.004
 @export var invert_vertical := false
 @export_range(3.0, 12.0, 0.1) var orbit_distance := DEFAULT_DISTANCE
+var _capture_pose: Dictionary = {}
 var _tabletop := false
 var _player_view: Dictionary = {}
 var yaw_radians := 0.0
@@ -17,7 +18,37 @@ var pitch_radians := deg_to_rad(DEFAULT_PITCH)
 var _visual_target := Vector3.ZERO
 var _has_visual_target := false
 
+func align_capture_camera(pose: Variant) -> bool:
+	if not _capture_pose.is_empty() or typeof(pose) != TYPE_DICTIONARY: return false
+	for key in ["positionMm", "targetMm"]:
+		if typeof(pose.get(key)) != TYPE_ARRAY or pose[key].size() != 3: return false
+		for value in pose[key]:
+			if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or float(value) != floor(float(value)) or abs(float(value)) > 1e10: return false
+	for key in ["fovMilliDeg", "nearMm", "farMm"]:
+		if typeof(pose.get(key)) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(pose[key])) or float(pose[key]) != floor(float(pose[key])): return false
+	if pose.fovMilliDeg < 10000 or pose.fovMilliDeg > 150000 or pose.nearMm < 1 or pose.farMm <= pose.nearMm or pose.farMm > 10000000: return false
+	if pose.positionMm[0] == pose.targetMm[0] and pose.positionMm[2] == pose.targetMm[2]: return false
+	_capture_pose = pose.duplicate(true)
+	apply_capture_camera()
+	return true
+
+func apply_capture_camera() -> void:
+	if _capture_pose.is_empty(): return
+	var p: Array = _capture_pose.positionMm
+	var t: Array = _capture_pose.targetMm
+	_visual_target = Vector3(float(t[0]), float(t[1]), float(t[2])) / 1000.0
+	global_position = Vector3(float(p[0]), float(p[1]), float(p[2])) / 1000.0
+	projection = Camera3D.PROJECTION_PERSPECTIVE
+	keep_aspect = Camera3D.KEEP_HEIGHT # FOV is vertical, matching Three.js.
+	h_offset = 0.0
+	v_offset = 0.0
+	set_perspective(float(_capture_pose.fovMilliDeg) / 1000.0, float(_capture_pose.nearMm) / 1000.0, float(_capture_pose.farMm) / 1000.0)
+	look_at(_visual_target, Vector3.UP)
+
 func follow_confirmed(target: Vector3) -> void:
+	if not _capture_pose.is_empty():
+		apply_capture_camera()
+		return
 	if not target.is_finite():
 		return
 	_visual_target = target
@@ -34,6 +65,7 @@ func drag_orbit(delta: Vector2) -> void:
 		_update_visual_camera()
 
 func reset_view() -> void:
+	_capture_pose.clear()
 	_tabletop = false
 	_player_view.clear()
 	yaw_radians = 0.0
@@ -51,6 +83,9 @@ func zoom_visual(factor: float) -> void:
 	_update_visual_camera()
 
 func _update_visual_camera() -> void:
+	if not _capture_pose.is_empty():
+		apply_capture_camera()
+		return
 	if not _has_visual_target:
 		return
 	var x := sin(yaw_radians) * cos(pitch_radians) * orbit_distance

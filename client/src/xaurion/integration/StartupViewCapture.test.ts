@@ -46,3 +46,29 @@ describe('first-session capture', () => {
     expect(capture.state().armed).toBe(true);
   });
 });
+
+// Real Three.js camera objects; synthetic scene, not a production readback.
+import { PerspectiveCamera, Vector3 } from 'three';
+it('aligns before capture and holds the actual camera despite follow/resize updates', () => {
+  const camera = new PerspectiveCamera(58, 16/9, 0.1, 800);
+  camera.position.set(12.1234, 5, 18);
+  const target = new Vector3(12, 1, 8);
+  camera.lookAt(target);
+  const capture = new StartupViewCapture('a'.repeat(32), () => ({ camera: {
+    positionMm: camera.position.toArray().map(v => Math.round(v*1000)),
+    targetMm: target.toArray().map(v => Math.round(v*1000)), fovMilliDeg: Math.round(camera.fov*1000),
+    nearMm: Math.round(camera.near*1000), farMm: Math.round(camera.far*1000)
+  }}), () => ({width:1280,height:720,toDataURL:()=> 'unit-only'}) as HTMLCanvasElement);
+  capture.bindCamera(camera);
+  capture.observe({tick:1});
+  expect(() => capture.arm(2)).toThrow('CAPTURE_CAMERA_NOT_ALIGNED');
+  const pose = capture.alignCamera();
+  expect(pose.positionMm).toEqual([12123,5000,18000]);
+  camera.position.set(99,99,99); camera.fov=75; camera.near=1;
+  capture.beforeFrame();
+  expect(camera.position.toArray()).toEqual([12.123,5,18]);
+  expect(camera.fov).toBe(58); expect(camera.near).toBe(0.1);
+  expect(camera.getWorldDirection(new Vector3()).distanceTo(new Vector3(12,1,8).sub(camera.position).normalize())).toBeLessThan(1e-12);
+  expect(() => capture.alignCamera()).toThrow('CAPTURE_CAMERA_ALREADY_ALIGNED');
+  capture.arm(2);
+});

@@ -184,12 +184,14 @@ export class MMOEngine {
     dayNightInfo: DayNightInfo;
   }) => void;
 
+  public onBeforeFrameRendered?: () => void;
   public onFrameRendered?: () => void;
   public onProjectionTick?: (delta: number) => void;
   public onRuntimeError?: (error: unknown) => void;
   private disposed = false;
   private readonly frameLoop = new RuntimeFrameLoop(delta => {
     this.simulation.advanceProjection(delta, step => this.update(step));
+    this.onBeforeFrameRendered?.();
     this.renderer.render(this.scene, this.camera);
     this.onFrameRendered?.();
   }, error => this.failRuntime(error));
@@ -1355,6 +1357,7 @@ export class MMOEngine {
     if (this.disposed) return;
     try {
       this.handleResize();
+      this.onBeforeFrameRendered?.();
       this.renderer.render(this.scene, this.camera);
       this.onFrameRendered?.();
     } catch (error) {

@@ -67,6 +67,7 @@ for (const [id, script, marker] of [
   ['movement-input', 'test_movement_input.gd', 'Godot G20 native input and bounded move-intent regression verified (headless fixture only)'],
   ['multitouch-routing', 'test_multitouch_routing.gd', 'Godot G21 multitouch routing and confirmed-position camera orbit verified (headless fixture only)'],
   ['world-slice-tabletop', 'test_world_slice.gd', 'GODOT_WORLD_SLICE_PASS (DTO fixtures; no live receipt/device)'],
+  ['capture-camera-alignment', 'test_capture_camera.gd', 'CAPTURE_CAMERA_ALIGNMENT_PASS_SYNTHETIC_POSE_REAL_CAMERA3D'],
   ['camera-pinch-zoom', 'test_camera_zoom.gd', 'GODOT_CAMERA_PINCH_ZOOM_PASS (synthetic input; no physical device or live receipts)'],
   ['g21-target-action', 'test_g21_target_action.gd', 'G21 target UI and canonical attack over isolated local WebSocket verified (fixture, not live Aurion)'],
   ['g22-native-hud', 'test_hud_projection.gd', 'G22_NATIVE_HUD_PROJECTION_TOUCH_PASS (synthetic fixtures; no physical device)'],

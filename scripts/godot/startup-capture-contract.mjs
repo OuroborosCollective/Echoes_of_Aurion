@@ -66,14 +66,15 @@ const stable = value => Array.isArray(value) ? '[' + value.map(stable).join(',')
 function publicCamera(camera, privateRunKey) {
   if (!camera || !['positionMm','targetMm'].every(field => Array.isArray(camera[field]) && camera[field].length === 3 &&
     camera[field].every(n => Number.isSafeInteger(n) && Math.abs(n) <= 10**10)) ||
-    !Number.isSafeInteger(camera.fovMilliDeg) || camera.fovMilliDeg < 10000 || camera.fovMilliDeg > 150000) {
+    !Number.isSafeInteger(camera.fovMilliDeg) || camera.fovMilliDeg < 10000 || camera.fovMilliDeg > 150000 ||
+    !Number.isSafeInteger(camera.nearMm) || !Number.isSafeInteger(camera.farMm) || camera.nearMm < 1 || camera.farMm <= camera.nearMm || camera.farMm > 10000000) {
     throw Error('CAPTURE_CAMERA_INVALID');
   }
   // Following cameras reveal player locations too. Keep exact absolute equality
   // through run-private, domain-separated digests; publish only viewing geometry.
   const digest = field => createHmac('sha256', privateRunKey).update('camera:' + field + ':').update(stable(camera[field])).digest('hex');
   return {positionDigest:digest('positionMm'),targetDigest:digest('targetMm'),
-    offsetMm:camera.positionMm.map((n,i)=>n-camera.targetMm[i]),fovMilliDeg:camera.fovMilliDeg};
+    offsetMm:camera.positionMm.map((n,i)=>n-camera.targetMm[i]),fovMilliDeg:camera.fovMilliDeg,nearMm:camera.nearMm,farMm:camera.farMm};
 }
 
 export function publicObservation(raw, privateRunKey) {

@@ -1,6 +1,7 @@
 extends Node
 ## Explicit CI observation of the real editor-launched game. No fake session,
-## replay scene, camera override, movement, authoring command or screenshot retry.
+## replay scene, movement, authoring command or screenshot retry.
+## Explicit private camera calibration precedes the one-shot arm.
 var _main: Control
 var _directory := ""
 var _nonce := ""
@@ -10,6 +11,7 @@ var _last_state_ms := -1000
 var _target := -1
 var _captured_tick := -1
 var _done := false
+var _camera_aligned := false
 var _viewport_size := Vector2i.ZERO
 
 static func configure_viewport(main: Control, viewport_size: Vector2i) -> void:
@@ -86,17 +88,28 @@ func _process(_delta: float) -> void:
 		if typeof(callback) != TYPE_DICTIONARY or not _main.handle_native_auth_callback(str(callback.get("url", ""))):
 			_fail("NATIVE_CALLBACK_REJECTED")
 			return
+	var camera_path := _directory.path_join("camera.json")
+	if not _camera_aligned and FileAccess.file_exists(camera_path):
+		var config: Variant = JSON.parse_string(FileAccess.get_file_as_string(camera_path))
+		if typeof(config) != TYPE_DICTIONARY or config.get("nonce") != _nonce or not _main.world_camera.align_capture_camera(config.get("camera")):
+			_fail("CAPTURE_CAMERA_INVALID")
+			return
+		_camera_aligned = true
+	if _camera_aligned: _main.world_camera.apply_capture_camera()
 	var tick: int = _main._confirmed_zone.last_tick()
 	if Time.get_ticks_msec() - _last_state_ms >= 100:
 		_last_state_ms = Time.get_ticks_msec()
 		write_json(_directory.path_join("godot-state.json"), {"nonce":_nonce,"tick":tick,
 			"connected":_main._zone_socket.state_name() == "connected", "worldVisible":_main.world_view.visible,
-			"terrain":_main.confirmed_terrain.get_child_count(), "pid":OS.get_process_id()})
+			"cameraAligned":_camera_aligned,"terrain":_main.confirmed_terrain.get_child_count(), "pid":OS.get_process_id()})
 	var arm_path := _directory.path_join("arm.json")
 	if _target < 0 and FileAccess.file_exists(arm_path):
 		var arm: Variant = JSON.parse_string(FileAccess.get_file_as_string(arm_path))
 		if typeof(arm) != TYPE_DICTIONARY or arm.get("nonce") != _nonce or typeof(arm.get("tick")) not in [TYPE_INT, TYPE_FLOAT] or float(arm.tick) != floor(float(arm.tick)) or arm.tick <= tick or arm.tick > tick + 100:
 			_fail("GODOT_CAPTURE_ARM_INVALID")
+			return
+		if not _camera_aligned:
+			_fail("CAPTURE_CAMERA_NOT_ALIGNED")
 			return
 		_target = int(arm.tick)
 	if _target < 0 or tick < _target: return
@@ -142,7 +155,7 @@ func _capture() -> void:
 		"connected":_main._zone_socket.state_name() == "connected" and _main._auth_start.protected_response_allowed(),
 		"worldVisible":_main.world_view.visible,"stale":_main._world_is_stale,
 		"viewportPx":[pixels.get_width(), pixels.get_height()],
-		"camera":{"positionMm":_mm(camera.global_position),"targetMm":_mm(camera.get("_visual_target")),"fovMilliDeg":roundi(camera.fov * 1000)},
+		"camera":{"positionMm":_mm(camera.global_position),"targetMm":_mm(camera.get("_visual_target")),"fovMilliDeg":roundi(camera.fov * 1000),"nearMm":roundi(camera.near * 1000),"farMm":roundi(camera.far * 1000)},
 		"chunks":chunks,"actors":actors,"actorCache":_main._actor_models.evidence(),
 		"worldAssets":{"rendered":_main._world_design_visuals.get_child_count() + _main.starter_village_visuals.get_child_count(),
 			"publishedDesigns":_main._world_design_visuals.get_child_count(),"starterVillage":_main.starter_village_visuals.get_child_count(),

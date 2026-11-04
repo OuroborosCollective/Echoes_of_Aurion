@@ -379,7 +379,8 @@ export default function AurionOpenWorldRuntime() {
           worldId: GLOBAL_WORLD_ID,
           worldVisible: !document.querySelector('[data-testid="world-loading-screen"]'),
           camera: { positionMm: engine!.camera.position.toArray().map(v => Math.round(v * 1000)),
-            targetMm: [view.lookAtX, view.lookAtY, view.lookAtZ].map(v => Math.round(v * 1000)), fovMilliDeg: Math.round(engine!.camera.fov * 1000) },
+            targetMm: startupCaptureRef.current?.cameraTargetMm([view.lookAtX, view.lookAtY, view.lookAtZ].map(v => Math.round(v * 1000))), fovMilliDeg: Math.round(engine!.camera.fov * 1000),
+            nearMm: Math.round(engine!.camera.near * 1000), farMm: Math.round(engine!.camera.far * 1000) },
           chunks: read(containerRef.current?.dataset.chunkProjection),
           assets: read(worldAssetsEvidenceRef.current?.dataset.presentation),
           selfEntityId: "player:" + user!.id,
@@ -388,6 +389,8 @@ export default function AurionOpenWorldRuntime() {
           timeOfDay: engine!.timeOfDay,
         };
       }, () => engine!.renderer.domElement);
+      startupCaptureRef.current?.bindCamera(engine.camera);
+      engine.onBeforeFrameRendered = () => startupCaptureRef.current?.beforeFrame();
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
         center => rpcUtils.worldAssets.regionV2.fetch(center),
