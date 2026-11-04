@@ -13,6 +13,7 @@ var _pending_operation := ""
 var _planned: Dictionary = {}
 var _applying: Dictionary = {}
 var _receipt: Dictionary = {}
+var live_readback_confirmed := false
 
 func open(connection: String, session_generation: int, actor: Variant) -> bool:
 	close()
@@ -35,12 +36,14 @@ func close() -> void:
 	_planned.clear()
 	_applying.clear()
 	_receipt.clear()
+	live_readback_confirmed = false
 
 func session_matches(connection: String, session_generation: int) -> bool:
 	return phase != "closed" and connection == connection_id and session_generation == generation
 
 func mark_unresolved() -> void:
 	if phase != "closed":
+		live_readback_confirmed = false
 		phase = "unknown"
 		message = "Eine frühere Änderung ist ungeklärt. Vor einem neuen Apply Receipt und Weltstand unabhängig prüfen."
 
@@ -56,6 +59,8 @@ func not_submitted() -> void:
 static func _draft_valid(draft: Variant) -> bool:
 	if typeof(draft) != TYPE_DICTIONARY or draft.get("schemaVersion") != "aurion.world-design.v1":
 		return false
+	for key in draft:
+		if key not in ["schemaVersion", "designKey", "version", "title", "expectedCatalogRevision", "placements"]: return false
 	if not WorldProjection._id(draft.get("designKey")) or not WorldProjection._whole(draft.get("version"), 1, 1000000):
 		return false
 	if typeof(draft.get("title")) != TYPE_STRING or draft.title.strip_edges() != draft.title or draft.title.length() < 3 or draft.title.length() > 160:
@@ -66,12 +71,16 @@ static func _draft_valid(draft: Variant) -> bool:
 	for p in draft.placements:
 		if typeof(p) != TYPE_DICTIONARY or not WorldProjection._id(p.get("placementKey")) or keys.has(p.placementKey) or not WorldProjection._id(p.get("assetId"), true):
 			return false
+		for key in p:
+			if key not in ["assetId", "placementKey", "chunkX", "chunkZ", "xMm", "zMm", "rotationQuarterTurns", "scalePermille"]: return false
 		keys[p.placementKey] = true
 		if not WorldProjection._whole(p.get("chunkX"), -100000, 100000) or not WorldProjection._whole(p.get("chunkZ"), -100000, 100000) or not WorldProjection._whole(p.get("xMm"), 0, 63999) or not WorldProjection._whole(p.get("zMm"), 0, 63999) or not WorldProjection._whole(p.get("rotationQuarterTurns"), 0, 3) or not WorldProjection._whole(p.get("scalePermille"), 250, 4000):
 			return false
 	return true
 
 func draft_changed() -> void:
+	live_readback_confirmed = false
+	if phase == "confirmed": message = "Entwurf geändert · PREVIEW_ONLY; vorheriges Receipt bleibt lesbar."
 	_pending_plan.clear()
 	_pending_operation = ""
 	_planned.clear()
@@ -83,6 +92,7 @@ func begin_plan(draft: Variant, operation_id: String) -> bool:
 		return false
 	_applying.clear()
 	_receipt.clear()
+	live_readback_confirmed = false
 	_pending_plan = draft.duplicate(true)
 	_pending_operation = operation_id
 	_planned.clear()
@@ -129,6 +139,7 @@ func begin_apply(current_draft: Variant) -> Dictionary:
 	_applying = _planned.duplicate(true)
 	_planned.clear()
 	_receipt.clear()
+	live_readback_confirmed = false
 	phase = "applying"
 	message = "Aurion-Änderung angefordert."
 	return {"draft":_applying.draft.duplicate(true), "expectedPlanHash":_applying.planHash, "operationId":_applying.plan.operationId, "confirmation":"APPLY_WORLD_DESIGN"}
@@ -207,8 +218,24 @@ func accept_readback(readback: Variant) -> bool:
 	if phase != "awaiting_readback" or _receipt.is_empty() or not _world_valid(readback):
 		return false
 	phase = "confirmed"
-	message = "Aurion-Receipt und unabhängiger Weltstand stimmen überein." if _target_matches(readback, _applying.draft, _receipt.resultHash) else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
+	live_readback_confirmed = _target_matches(readback, _applying.draft, _receipt.resultHash)
+	message = "LIVE_READBACK_CONFIRMED · Aurion-Receipt und unabhängiger Weltstand stimmen überein." if live_readback_confirmed else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
 	return true
+
+## A receipt remains historical evidence; each later world read must confirm
+## its target again and must not bless a different local preview draft.
+func refresh_readback(readback: Variant, current_draft: Variant) -> void:
+	if phase != "confirmed":
+		return
+	live_readback_confirmed = false
+	if _receipt.is_empty() or _applying.is_empty() or not _world_valid(readback):
+		message = "UNRESOLVED · Aktueller Weltstand nicht bestätigt; vorheriges Receipt bleibt lesbar."
+		return
+	if not _draft_valid(current_draft) or JSON.stringify(current_draft) != JSON.stringify(_applying.draft):
+		message = "PREVIEW_ONLY · Entwurf geändert; vorheriges Receipt bestätigt diesen Entwurf nicht."
+		return
+	live_readback_confirmed = _target_matches(readback, _applying.draft, _receipt.resultHash)
+	message = "LIVE_READBACK_CONFIRMED · Aurion-Receipt und unabhängiger Weltstand stimmen überein." if live_readback_confirmed else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
 
 func failed(kind: String) -> void:
 	if kind == "worldApply" and phase == "applying":

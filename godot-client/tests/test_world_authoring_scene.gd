@@ -106,6 +106,16 @@ func verify() -> void:
 		require(studio.new_world_draft("owner.village", "Owner village", 1), "form could not create a local catalog-bound draft")
 		require(studio.stage_catalog_placement(draft().placements[0]), "first catalog placement could not enter an empty local draft")
 		require(studio.import_world_draft(JSON.stringify(draft())), "valid catalog-bound draft import rejected")
+		var unchanged: String = studio._draft.text
+		studio._ai_pending_draft = unchanged
+		studio._completed("aiPropose", {"kind":"world","status":"AI_DRAFT","requiresHumanReview":true,"draftJson":JSON.stringify({"schemaVersion":"invented"})}, SESSION, generation)
+		require(studio._draft.text == unchanged, "invalid AI output replaced the editor draft")
+		studio._ai_pending_draft = "an older draft"
+		studio._completed("aiPropose", {"kind":"world","status":"AI_DRAFT","requiresHumanReview":true,"draftJson":unchanged}, SESSION, generation)
+		require(studio._draft.text == unchanged and studio._info.text.contains("inzwischen"), "late AI output overwrote newer edits")
+		studio._ai_pending_draft = unchanged
+		studio._completed("aiPropose", {"kind":"world","status":"AI_DRAFT","requiresHumanReview":true,"draftJson":unchanged}, SESSION, generation)
+		require(studio._info.text.contains("PREVIEW_ONLY") and studio._state.phase == "ready", "AI proposal acquired server plan authority")
 		for forbidden in ["glb_bound_lod", "glb_unknown_target"]:
 			var forbidden_draft := draft()
 			forbidden_draft.placements[0].assetId = forbidden
@@ -178,6 +188,19 @@ func verify() -> void:
 	require(studio._state.phase == "confirmed" and scene._world_design_readback == design(), "confirmed result did not reach the existing world projection")
 	require(Journal.new(journal_path).read().is_empty(), "confirmed apply retained its pending marker")
 	require(scene._world_design_visuals.needed_assets().size() == 1, "confirmed readback did not request its catalog model")
+	var later: Dictionary = design().duplicate(true)
+	later.designs[0].version = 2
+	later.designs[0].designHash = "9".repeat(64)
+	studio._completed("readback", later, SESSION, generation)
+	require(not studio._state.live_readback_confirmed, "later world readback retained a stale live confirmation")
+	studio._close_requested()
+	require(studio.open_studio() and not studio._info.text.contains("LIVE_READBACK_CONFIRMED"), "reopening restored a stale live label")
+	studio._completed("readback", design(), SESSION, generation)
+	require(studio._state.live_readback_confirmed, "fresh matching readback did not restore the live confirmation")
+	studio._draft.text = JSON.stringify(edited)
+	studio._on_draft_changed()
+	studio._completed("readback", design(), SESSION, generation)
+	require(not studio._state.live_readback_confirmed, "readback of the previous draft confirmed a new local edit")
 	studio._draft.text = JSON.stringify(original)
 	studio._plan()
 	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
@@ -218,6 +241,11 @@ func verify() -> void:
 	require(studio._state.phase == "closed" and studio._connection.is_empty(), "zone reset retained authoring session")
 	if studio.has_method("inspection_export"):
 		require(studio.inspection_export().is_empty(), "zone reset retained stale inspector state")
+	studio.visible = true
+	studio.quest_editor().visible = true
+	root.size = Vector2i(360, 640)
+	for frame in 6: await process_frame
+	require(studio._ai_panel.size.x <= 328 and studio.quest_editor().size.x <= 328, "AI controls widened the native studio on a 360px display")
 	scene.queue_free()
 	await process_frame
 	if FileAccess.file_exists(journal_path.path_join("record.json")): DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_path.path_join("record.json")))

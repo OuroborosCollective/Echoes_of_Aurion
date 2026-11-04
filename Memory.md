@@ -5679,3 +5679,13 @@ Evidence: `server/zoneRestartResilience.test.ts` (11; RED on the previous gatewa
 Learned: Prod `aurionCausalTickReceipts` unique index is (worldId, zoneId, tick); manual queries without `worldId` scan the table for minutes.
 Open: CI, review, merge, release; after release confirm `zoneJoin.bootSettlement=settled` and `orphanedLeaseReleaseCode=null` in health and the `aurion.previous-runtime-drain` record in the promote log.
 Next safe step: CI on the PR.
+
+### 2026-11-04 — Aurion AI World Designer (PR #1315)
+Status: PARTIAL
+Task: AI-Fabric im bestehenden Authoring-Server und getrennte Godot-GLB-Entwurfsvorschau integrieren.
+Decisions: Local/Free bevorzugt, Premium aus; Aurion Plan/Bestätigung/Receipt/unabhängiger Readback bleiben kanonisch, 10 Hz unverändert.
+Touched surfaces: server/aiFabric, Authoring-Router/Persistenzexport, bestehender Web-Einstieg, Godot-Weltstudio/Projektion, Regressionen und Anleitung.
+Evidence: 3230d446aaa9bcf65b6b8bad12a14b100a59b76f: 19 Workflows success; Run41918133218:48 Tests mit echter isolierter MariaDB plus TypeScript; Run41918133168:201 Godot-Prüfungen und native Desktop-/Mobil-Renderings; Run41918133305:echter Android/JNI-Smoke; Run41918133330:isolierter Container-Health mit passender Source/Build/Artefakt/Image-Identität und 10 Hz. Neue Web-Tabwechsel-Korrektur separat nachprüfen. Providerantworten synthetisch; kein Live-Modell-/Produktionsweltbeweis.
+Learned: Präsentationshüllen beweisen keine Passierbarkeit. Geänderter Vorgänger verhindert wiederholten Apply; ein Receipt bleibt gespeichert. Ledgerfehler dürfen keine zweite Inferenz auslösen; verspätete Antworten dürfen keinen gewechselten Tab oder bearbeiteten Entwurf überschreiben.
+Open: Finale Exact-Head-CI, echte Provider-/OpenCode-Verifikation und bestätigter Marktplan mit konkreter Eigentümerfreigabe vor produktivem Apply; Anleitung docs/godot-migration/ai-world-designer.md.
+Next safe step: Neue Regression prüfen, grünen Head integrieren und unabhängig zurücklesen; Live-Konfiguration und bestätigten Marktversuch getrennt nachweisen.

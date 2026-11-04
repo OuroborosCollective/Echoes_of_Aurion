@@ -1,4 +1,14 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { DesignerInput, designerSurface, WorldDesigner, type DesignerRequest } from "../aiFabric/worldDesigner";
+import { readActorWorldSlice } from "../worldSlice";
+import { splitWorldChunkPositionMm } from "../../shared/worldChunkProtocol";
+import { WORLD_SLICE_ZONE } from "../../shared/worldSliceProtocol";
+import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
+import { fabricConfig } from "../aiFabric/policy";
+import { globalZoneRegistry } from "../zoneRuntime";
+import { zoneIdSchema } from "../zoneProtocol";
+import { activeProvenance } from "../aurionProvenance";
 import { adminProcedure, router } from "../_core/trpc";
 import { glbImportStore } from "../glbImportStore";
 import { proposeAurionAuthoringDraft } from "../liveDeveloperAuthoring";
@@ -16,7 +26,36 @@ import {
   recoverWorldAuthoringReceipt,
 } from "../aurionAuthoringPersistence";
 
+async function proposeWorldForSession(actorUserId: number, input: DesignerRequest) {
+    const zone = globalZoneRegistry.find(zoneIdSchema.parse(input.zoneId));
+    const connected = () => zone?.liveConnectionIdForUser(actorUserId) === input.connectionId;
+    if (!connected()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "AI_LIVE_SESSION_REQUIRED" });
+    const surfaceQuery = { worldId: GLOBAL_WORLD_ID, zoneId: input.zoneId, coordinate: { x: input.chunkX, z: input.chunkZ }, radius: 0, lod: "full" };
+    const [catalog, world, observed] = await Promise.all([glbImportStore().catalog(), readActiveWorldDesign(), readActorWorldSlice(actorUserId, surfaceQuery)]);
+    const surface = designerSurface(observed, input);
+    const result = await new WorldDesigner(fabricConfig()).propose(input, {
+      catalog, world, surface, zoneId: input.zoneId, tick: zone!.getTickNumber(), sourceRevision: activeProvenance.sourceRevision,
+    });
+    // The model runs outside the tick. Re-read both independently afterwards.
+    const [currentCatalog, currentWorld] = await Promise.all([glbImportStore().catalog(), readActiveWorldDesign()]);
+    let geometryCurrent = false;
+    try {
+      const current = designerSurface(await readActorWorldSlice(actorUserId, surfaceQuery), input);
+      geometryCurrent = current.epoch === surface.epoch && current.geometryHash === surface.geometryHash;
+    } catch { /* Loss of confirmed scope never creates a substitute world. */ }
+    if (!connected() || !geometryCurrent || currentCatalog.revision !== catalog.revision || currentWorld.revision !== world.revision) {
+      return { ...result, draftJson: "", status: "UNRESOLVED", failures: [...result.failures, { route: "context", code: "CONTEXT_CHANGED" }] };
+    }
+    return result;
+}
+
 export const aurionAuthoringRouter = router({
+  aiStatus: adminProcedure.query(async () => {
+    try { return await new WorldDesigner(fabricConfig()).status(); }
+    catch { return { status: "NOT_CONFIGURED", premiumEnabled: false, models: [], local: { status: "OFFLINE" } }; }
+  }),
+  aiPropose: adminProcedure.input(DesignerInput).mutation(({ ctx, input }) => proposeWorldForSession(ctx.user.id, input)),
+
   catalog: adminProcedure.query(async () => {
     const [catalog, world, dungeons] = await Promise.all([
       glbImportStore().catalog(),
@@ -33,6 +72,7 @@ export const aurionAuthoringRouter = router({
         assetType: entry.assetType,
         targetKey: entry.targetKey,
         subcategory: entry.subcategory,
+        normalization: entry.normalization, storageUrl: entry.storageUrl, lods: entry.lods,
       })),
       world,
       dungeons,
@@ -42,9 +82,24 @@ export const aurionAuthoringRouter = router({
   propose: adminProcedure
     .input(z.object({
       kind: z.enum(["world", "quest", "dungeon"]),
+      assetIds: DesignerInput.shape.assetIds.optional(),
       request: z.string().trim().min(12).max(4_000),
-    }).strict())
-    .mutation(async ({ input }) => {
+    }).strict().refine(input => input.kind === "world" || input.assetIds === undefined, {
+      message: "ASSET_SELECTION_WORLD_ONLY", path: ["assetIds"],
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.kind === "world") {
+        // Compatibility for the existing web workbench: same fabric, current
+        // live actor chunk, Auto (never premium). No legacy paid bypass.
+        const zone = globalZoneRegistry.find(WORLD_SLICE_ZONE);
+        const connectionId = zone?.liveConnectionIdForUser(ctx.user.id);
+        const position = connectionId ? zone?.positionForConnection(connectionId) : undefined;
+        if (!connectionId || !position) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "AI_LIVE_SESSION_REQUIRED" });
+        const coordinate = splitWorldChunkPositionMm(position).coordinate;
+        const result = await proposeWorldForSession(ctx.user.id, DesignerInput.parse({ request: input.request, assetIds: input.assetIds ?? [], mode: "auto", zoneId: WORLD_SLICE_ZONE, connectionId, chunkX: coordinate.x, chunkZ: coordinate.z }));
+        if (result.status !== "AI_DRAFT" || !("title" in result)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "AI_DRAFT_UNRESOLVED" });
+        return result;
+      }
       const catalog = await glbImportStore().catalog();
       const context = {
         glbCatalogRevision: catalog.revision,
@@ -60,7 +115,8 @@ export const aurionAuthoringRouter = router({
           })),
       };
       return proposeAurionAuthoringDraft({
-        ...input,
+        kind: input.kind,
+        request: input.request,
         actorRole: "admin",
         contextJson: JSON.stringify(context),
       });

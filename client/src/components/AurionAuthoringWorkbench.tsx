@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Compass, GitBranch, MapPinned, Network, ShieldCheck, Sparkles } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ export default function AurionAuthoringWorkbench() {
   const utils = trpc.useUtils();
   const catalog = trpc.aurionAuthoring.catalog.useQuery();
   const [kind, setKind] = useState<AuthoringKind>("world");
+  const draftGeneration = useRef(0);
+  const [worldAssets, setWorldAssets] = useState("");
   const [brief, setBrief] = useState("");
   const [draftJson, setDraftJson] = useState("");
   const [planHash, setPlanHash] = useState("");
@@ -42,7 +44,9 @@ export default function AurionAuthoringWorkbench() {
 
   const busy = propose.isPending || worldPlan.isPending || worldApply.isPending || dungeonPlan.isPending || dungeonApply.isPending || questDraft.isPending || questPlan.isPending || questPublish.isPending;
   const expectedConfirmation = confirmationFor(kind);
-  const mutationError = propose.error ?? worldPlan.error ?? worldApply.error ?? dungeonPlan.error ?? dungeonApply.error ?? questDraft.error ?? questPlan.error ?? questPublish.error;
+  // Proposal errors are scoped by requestDraft; the mutation hook may retain a
+  // rejected response after its tab or edited draft has already changed.
+  const mutationError = worldPlan.error ?? worldApply.error ?? dungeonPlan.error ?? dungeonApply.error ?? questDraft.error ?? questPlan.error ?? questPublish.error;
   const activeSummary = useMemo(() => ({
     world: catalog.data?.world.designs.length ?? 0,
     dungeons: catalog.data?.dungeons.length ?? 0,
@@ -50,6 +54,7 @@ export default function AurionAuthoringWorkbench() {
   }), [catalog.data]);
 
   const resetPlan = () => {
+    draftGeneration.current += 1;
     setPlanHash("");
     setConfirmation("");
     setProposalId("");
@@ -60,11 +65,14 @@ export default function AurionAuthoringWorkbench() {
   const requestDraft = async () => {
     setLocalError(null);
     resetPlan();
+    const generation = draftGeneration.current;
     try {
-      const response = await propose.mutateAsync({ kind, request: brief.trim() });
+      const response = await propose.mutateAsync({ kind, request: brief.trim(), ...(kind === "world" ? { assetIds: worldAssets.split(",").map(id => id.trim()).filter(Boolean) } : {}) });
+      if (generation !== draftGeneration.current) return;
       setDraftJson(response.draftJson);
-      setResult(`Genkit-Vorschlag „${response.title}“ erzeugt. Noch nichts wurde veröffentlicht.`);
+      setResult(`KI-Vorschlag „${response.title}“ erzeugt. Noch nichts wurde veröffentlicht.`);
     } catch (error) {
+      if (generation !== draftGeneration.current) return;
       setLocalError(error instanceof Error ? error.message : "Authoring-Vorschlag fehlgeschlagen.");
     }
   };
@@ -153,7 +161,7 @@ export default function AurionAuthoringWorkbench() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-amber-100"><Compass className="h-5 w-5 text-cyan-300" /> Aurion Human + AI Authoring</CardTitle>
           <CardDescription>
-            Genkit schlägt vor. Aurion validiert, hasht und veröffentlicht erst nach deiner separaten Bestätigung. Game Development Studio liefert und prüft Assets; Gameplay-Authority bleibt ausschließlich bei Aurion.
+            Die KI schlägt vor. Aurion validiert, hasht und veröffentlicht erst nach deiner separaten Bestätigung. Game Development Studio liefert und prüft Assets; Gameplay-Authority bleibt ausschließlich bei Aurion.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2 text-xs">
@@ -177,7 +185,7 @@ export default function AurionAuthoringWorkbench() {
               <CardHeader>
                 <CardTitle className="text-base text-amber-100">1. Design-Brief</CardTitle>
                 <CardDescription>
-                  Beschreibe Ziele, Stimmung, Geometrie, Assets, Questschritte oder Dungeonräume. Dieser Schritt erzeugt nur einen bearbeitbaren Draft.
+                  Beschreibe Ziele, Stimmung, Geometrie, Assets, Questschritte oder Dungeonräume. Dieser Schritt erzeugt nur einen bearbeitbaren Draft. Weltentwürfe verwenden Auto (Local/Free) und benötigen eine aktive Spielverbindung desselben Kontos im bestätigten aktuellen Chunk.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -193,6 +201,9 @@ export default function AurionAuthoringWorkbench() {
                       : "Dungeon unter Windhain: 6 Räume, Rätsel, Untotenwelle, Seitenziel und Runenwächter als Endboss…"}
                   className="w-full rounded-md border border-cyan-200/15 bg-slate-950 p-3 text-sm text-slate-100"
                 />
+                {tab === "world" && <label className="block text-sm">Asset-Auswahl (IDs, durch Komma getrennt; höchstens 160)
+                  <Input value={worldAssets} onChange={event => setWorldAssets(event.target.value)} placeholder="Leer: geeigneter Katalog; bei großem Katalog IDs eingrenzen" />
+                </label>}
                 <Button disabled={brief.trim().length < 12 || busy} onClick={() => void requestDraft()} className="bg-cyan-500 text-slate-950 hover:bg-cyan-300">
                   <Sparkles className="mr-2 h-4 w-4" /> KI-Draft erzeugen
                 </Button>

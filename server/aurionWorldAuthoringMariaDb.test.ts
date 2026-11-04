@@ -20,6 +20,7 @@ import type { TrpcContext } from "./_core/context";
 import { AdminQuestStudioService } from "./questCompiler/adminService";
 import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
+import { DesignerInput, validateProposal } from "./aiFabric/worldDesigner";
 import { aurionQuestRouter } from "./routes/aurionQuestRouter";
 
 vi.mock("./storage", async importOriginal => ({
@@ -103,6 +104,41 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     }
     if (store) await store.close();
     if (root) await rm(root, { recursive: true, force: true });
+  });
+
+  it("rejects world-only asset selections at the route boundary for quest and dungeon", async () => {
+    const caller = aurionAuthoringRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    for (const kind of ["quest", "dungeon"] as const) {
+      await expect(caller.propose({ kind, request: "Create a town market proposal", assetIds: [assetId] }))
+        .rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("ASSET_SELECTION_WORLD_ONLY") });
+    }
+    // The identical asset selection is valid for world and reaches its live-session guard.
+    await expect(caller.propose({ kind: "world", request: "Create a town market proposal", assetIds: [assetId] }))
+      .rejects.toThrow("AI_LIVE_SESSION_REQUIRED");
+  });
+
+  it("passes a review-only AI candidate through the real canonical database contract", async () => {
+    // Synthetic model output, real GLB catalog, real MariaDB transaction and readback.
+    const input = DesignerInput.parse({ request: "Place the isolated catalog barrel", mode: "free", zoneId: "observatory_threshold", connectionId: "zone_peer_isolated_ai", chunkX: 0, chunkZ: 0 });
+    const context = { catalog: await store.catalog(), world: await readActiveWorldDesign(), sourceRevision: "isolated-db-test", zoneId: input.zoneId, tick: 0 };
+    const candidate = validateProposal(draft("ai-isolated-market"), context, input).draft;
+    const caller = aurionAuthoringRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    const stranger = aurionAuthoringRouter.createCaller({ user: { id: otherAdmin, role: "user" } } as TrpcContext);
+    await expect(stranger.aiStatus()).rejects.toThrow();
+    await expect(caller.aiPropose(input)).rejects.toThrow("AI_LIVE_SESSION_REQUIRED");
+    await expect(caller.propose({ kind: "world", request: input.request })).rejects.toThrow("AI_LIVE_SESSION_REQUIRED");
+    const operationId = "c".repeat(32);
+    const plan = await planWorldDesign(candidate, undefined, operationId);
+    await expect(caller.worldApply({ draft: candidate, expectedPlanHash: plan.planHash, operationId, confirmation: "" } as never)).rejects.toThrow();
+    expect((await readActiveWorldDesign()).designs).toHaveLength(0);
+    const applied = await caller.worldApply({ draft: candidate, expectedPlanHash: plan.planHash, operationId, confirmation: "APPLY_WORLD_DESIGN" });
+    // The first apply changes the predecessor: the original plan is now stale.
+    await expect(applyWorldDesign(admin, candidate, plan.planHash, operationId)).rejects.toThrow("AUTHORING_WORLD_PLAN_CHANGED");
+    const [receipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionAuthoringReceipts WHERE planHash=?", [plan.planHash]);
+    expect(Number(receipts[0]!.n)).toBe(1);
+    const readback = await readActiveWorldDesign();
+    expect(readback.designs.find(d => d.designKey === candidate.designKey)?.designHash).toBe(applied.receipt.resultHash);
+    expect((await recoverWorldAuthoringReceipt(admin, { operationId, planHash: plan.planHash, designKey: candidate.designKey, version: candidate.version })).status).toBe("found");
   });
 
   it("recovers only the current admin's exact committed quest publication and rejects corrupt evidence", async () => {

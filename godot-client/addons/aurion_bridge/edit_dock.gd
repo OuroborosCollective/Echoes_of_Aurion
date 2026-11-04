@@ -51,7 +51,7 @@ func _build_ui() -> void:
     add_child(_btn_connect)
 
     var studio := Button.new()
-    studio.text = "Echte Welt bearbeiten (Aurion-Anmeldung)"
+    studio.text = "AI World Designer · echte Aurion-Welt"
     studio.pressed.connect(func(): EditorInterface.play_custom_scene("res://addons/aurion_bridge/authoring_entry.tscn"))
     add_child(studio)
 

@@ -46,7 +46,7 @@ export function authoringHash(value: unknown): string {
   return createHash("sha256").update(stableCatalogStringify(value), "utf8").digest("hex");
 }
 
-function worldAssetAllowed(entry: Awaited<ReturnType<ReturnType<typeof glbImportStore>["catalog"]>>["entries"][number]): boolean {
+export function worldAssetAllowed(entry: Awaited<ReturnType<ReturnType<typeof glbImportStore>["catalog"]>>["entries"][number]): boolean {
   return entry.assetType === "arena"
     && entry.targetKey === null
     && (entry.purpose === "world-environment" || entry.purpose === "world-nature");
