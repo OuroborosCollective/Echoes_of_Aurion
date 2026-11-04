@@ -92,9 +92,22 @@ function assertPriority(value: number): void {
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (Array.isArray(value)) {
+    let result = "[";
+    for (let i = 0; i < value.length; i++) {
+      if (i > 0) result += ",";
+      result += stableStringify(value[i]);
+    }
+    return result + "]";
+  }
   const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
+  const keys = Object.keys(record).sort();
+  let result = "{";
+  for (let i = 0; i < keys.length; i++) {
+    if (i > 0) result += ",";
+    result += `${JSON.stringify(keys[i])}:${stableStringify(record[keys[i]])}`;
+  }
+  return result + "}";
 }
 
 function projectionHash(value: unknown): string {
