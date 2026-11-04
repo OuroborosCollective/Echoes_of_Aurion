@@ -40,4 +40,47 @@ describe("outbound congestion guard", () => {
     }
   });
 
+  it("guards a tactical telegraph before the next snapshot on actual WebSocket connections", async () => {
+    vi.stubEnv("AURION_ZONE_OUTBOUND_MAX_BYTES", "65536");
+    vi.resetModules();
+    const { AuthoritativeMovementZone } = await import("./zoneRuntime");
+    const { AurionTickRecorder } = await import("./causality/tickRecorder");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("ADDRESS_REQUIRED");
+    const peers: WebSocket[] = []; server.on("connection", socket => peers.push(socket));
+    const slow = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    const healthy = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    try {
+      await Promise.all([once(slow, "open"), once(healthy, "open")]);
+      const zone = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder());
+      // Isolated encounter state, not production evidence. Retain the real FSM,
+      // tick, telegraph serialization and transport; only inject measured pressure.
+      const state = zone.getCanonicalZoneState();
+      state.ruleset = "aurion.zone.rules.v4";
+      for (const mob of state.mobs) { mob.x = 100000; mob.z = 100000; }
+      const elite = state.mobs.find(mob => mob.archetype === "corrupted_golem")!;
+      Object.assign(elite, { x: 1000, z: 0, state: "combat", targetEntityId: "player:1", nextAttackTick: 0 });
+      zone.restoreFromCanonicalState(state);
+      zone.join({ userId: 1, socket: peers[0] });
+      zone.join({ userId: 2, socket: peers[1] });
+      Object.defineProperty(peers[0], "bufferedAmount", { configurable: true, get: () => 65536 });
+      const sent = vi.spyOn(peers[0], "send");
+      const slowClose = once(slow, "close");
+      const telegraph = new Promise<Record<string, unknown>>(resolve => healthy.on("message", data => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "telegraph") resolve(message);
+      }));
+      zone.tick();
+      expect(zone.getCanonicalZoneState().combatTactics!.windups).toHaveLength(1);
+      expect(sent.mock.calls, "TELEGRAPH_PRESSURE_BYPASS").toHaveLength(0);
+      expect(await telegraph).toMatchObject({ type: "telegraph", attackerEntityId: elite.entityId });
+      await slowClose;
+      expect(healthy.readyState).toBe(WebSocket.OPEN);
+    } finally {
+      slow.terminate(); healthy.terminate();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+      vi.unstubAllEnvs(); vi.resetModules();
+    }
+  });
 });
