@@ -524,6 +524,9 @@ func _apply() -> void:
 	_info.text = _state.message
 
 func _readback() -> void:
+	if _state.phase == "confirmed":
+		_state.refresh_readback({}, _current_draft())
+		_info.text = _state.message
 	if not _send("readback"):
 		_info.text = "Weltstand konnte nicht angefordert werden."
 
@@ -574,7 +577,11 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_asset_choice.add_item(str(_catalog_assets[id].get("displayName", id)).left(160) + " · " + id)
 				_asset_choice.set_item_metadata(_asset_choice.item_count - 1, id)
 			_catalog_info.text = "Katalog %s · %d mögliche Weltassets\n%s" % [data.glbCatalogRevision, eligible.size(), ", ".join(eligible.slice(0, 12))]
-			if typeof(data.get("world")) == TYPE_DICTIONARY: _ai_panel.set_world(data.world)
+			if typeof(data.get("world")) == TYPE_DICTIONARY:
+				_ai_panel.set_world(data.world)
+				if _state.phase == "confirmed":
+					_state.refresh_readback(data.world, _current_draft())
+					_info.text = _state.message
 		"aiPropose":
 			_ai_panel.proposal(data)
 			var proposal_draft: Variant = JSON.parse_string(str(data.get("draftJson", "")))
@@ -624,12 +631,16 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				if not _state.accept_readback(data):
 					_info.text = "Receipt erhalten, aber der separate Weltstand ist ungültig oder unvollständig."
 					return
+				_state.refresh_readback(data, _current_draft())
 				var applied: Dictionary = _state.applying_identity()
 				if not _journal.clear_confirmed(applied.draft, _state.actor_id, applied.planHash, applied.plan.operationId):
 					_state.mark_unresolved()
 					_info.text = "Receipt und Weltstand stimmen; die lokale Vormerkung konnte nicht entfernt werden."
 				else:
 					_info.text = _state.message
+			elif _state.phase == "confirmed":
+				_state.refresh_readback(data, _current_draft())
+				_info.text = _state.message
 			else:
 				_info.text = "Weltstand gelesen; ein vorheriges unbekanntes Apply wird dadurch nicht bewiesen."
 			if data.get("schemaVersion") == "aurion.world-design.v1" and WorldProjection._hex(data.get("revision"), 64) and typeof(data.get("designs")) == TYPE_ARRAY:

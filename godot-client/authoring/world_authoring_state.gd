@@ -43,6 +43,7 @@ func session_matches(connection: String, session_generation: int) -> bool:
 
 func mark_unresolved() -> void:
 	if phase != "closed":
+		live_readback_confirmed = false
 		phase = "unknown"
 		message = "Eine frühere Änderung ist ungeklärt. Vor einem neuen Apply Receipt und Weltstand unabhängig prüfen."
 
@@ -220,6 +221,21 @@ func accept_readback(readback: Variant) -> bool:
 	live_readback_confirmed = _target_matches(readback, _applying.draft, _receipt.resultHash)
 	message = "LIVE_READBACK_CONFIRMED · Aurion-Receipt und unabhängiger Weltstand stimmen überein." if live_readback_confirmed else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
 	return true
+
+## A receipt remains historical evidence; each later world read must confirm
+## its target again and must not bless a different local preview draft.
+func refresh_readback(readback: Variant, current_draft: Variant) -> void:
+	if phase != "confirmed":
+		return
+	live_readback_confirmed = false
+	if _receipt.is_empty() or _applying.is_empty() or not _world_valid(readback):
+		message = "UNRESOLVED · Aktueller Weltstand nicht bestätigt; vorheriges Receipt bleibt lesbar."
+		return
+	if not _draft_valid(current_draft) or JSON.stringify(current_draft) != JSON.stringify(_applying.draft):
+		message = "PREVIEW_ONLY · Entwurf geändert; vorheriges Receipt bestätigt diesen Entwurf nicht."
+		return
+	live_readback_confirmed = _target_matches(readback, _applying.draft, _receipt.resultHash)
+	message = "LIVE_READBACK_CONFIRMED · Aurion-Receipt und unabhängiger Weltstand stimmen überein." if live_readback_confirmed else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
 
 func failed(kind: String) -> void:
 	if kind == "worldApply" and phase == "applying":
