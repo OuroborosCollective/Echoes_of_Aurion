@@ -28,6 +28,30 @@ MAX_CAPTURE_SKEW_SECONDS = 2
 MAX_PIXELS = 4096 * 2160
 MAX_MANIFEST_BYTES = 1_048_576
 MAX_PNG_BYTES = 24_000_000
+# Owner acceptance rule. Compare original, equally sized viewport pixels;
+# never resize, align, recolor or mask a failing image to make it pass.
+MAX_DIFFERENCE_PERCENT = 75
+PIXEL_CHANNEL_TOLERANCE = 24
+
+
+def pixel_difference(a: Image.Image, b: Image.Image) -> dict[str, float | int | bool]:
+    if a.size != b.size:
+        raise ValueError("RENDER_VIEWPORT_SIZE_MISMATCH")
+    diff = ImageChops.difference(a.convert("RGB"), b.convert("RGB"))
+    channels = diff.split()
+    largest = ImageChops.lighter(ImageChops.lighter(channels[0], channels[1]), channels[2])
+    histogram = largest.histogram()
+    different = sum(histogram[PIXEL_CHANNEL_TOLERANCE + 1:])
+    total = a.width * a.height
+    if total == 0:
+        raise ValueError("RENDER_VIEWPORT_EMPTY")
+    return {"differentPixels": different, "totalPixels": total,
+            "differencePercent": round(different * 100 / total, 6),
+            "maxDifferencePercent": MAX_DIFFERENCE_PERCENT,
+            "channelTolerance": PIXEL_CHANNEL_TOLERANCE,
+            # Integer comparison preserves the exact boundary; 75% is allowed,
+            # even one pixel over it fails before any display rounding.
+            "exceedsThreshold": different * 100 > total * MAX_DIFFERENCE_PERCENT}
 
 
 def digest(path: Path) -> str:
@@ -283,8 +307,8 @@ def compare(
             mean_rgb = ImageStat.Stat(diff).mean
             mae = sum(mean_rgb) / (3 * 255)
             ssim = _tile_ssim(a, b)
-            visual = {"normalizedPixelError": round(mae, 5), "tileSsim": ssim, "width": a.width, "height": a.height}
-            if mae > 0.22 or ssim < 0.62:
+            visual = {**pixel_difference(a, b), "normalizedPixelError": round(mae, 5), "tileSsim": ssim, "width": a.width, "height": a.height}
+            if visual["exceedsThreshold"]:
                 _fail(issues, "REAL_VIEW_VISUAL_MISMATCH")
     if not frames:
         _fail(issues, "LIVE_VISUAL_EVIDENCE_MISSING")
@@ -306,7 +330,13 @@ def compare(
     if "CAMERA_PROJECTION_MISMATCH" in issues:
         diagnosis.append("Kameras oder Sichtfelder stimmen nicht überein. Ein Bildvergleich wäre hier unzulässig.")
     if "REAL_VIEW_VISUAL_MISMATCH" in issues:
-        diagnosis.append("Beide Viewports zeigen sichtbar unterschiedliche Pixelinhalte. difference.png lokalisiert die Abweichungen.")
+        diagnosis.append(f"{visual['differencePercent']:.2f}% der Originalpixel unterscheiden sich; erlaubt sind höchstens 75%. difference.png lokalisiert die Abweichungen. Prüfe Kamera, fehlende GLBs, Terrain, Beleuchtung und Materialimport anhand der getrennten Readbacks.")
+    if any("REVISION_MISMATCH" in x or "IMAGE_MISMATCH" in x for x in issues):
+        diagnosis.append("Client oder Editor verwendet eine andere Runtime-Revision. Auslieferungsstand und Editor-Projektpfad prüfen.")
+    if any("RECEIPTHASH_MISMATCH" in x or "STATEHASH_MISMATCH" in x or "TICK_MISMATCH" in x or "CAPTURE_TIME" in x for x in issues):
+        diagnosis.append("Die Aufnahmen gehören nicht zum selben bestätigten Spielzustand. Snapshot-Eingang, Verbindung und Aufnahmezeit prüfen.")
+    if "WORLD_RENDEREDASSETIDS_MISMATCH" in issues:
+        diagnosis.append("Die gerenderten Asset-IDs unterscheiden sich. Katalogzulassung, GLB-Downloads, LOD und Importfehler prüfen.")
     if not diagnosis and issues:
         diagnosis.append("Live-Vergleich nicht zulässig: siehe konkrete Identitäts-, Capture- oder Bildfehler.")
 
@@ -327,7 +357,7 @@ def compare(
         },
     }
     (out_dir / "parity.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    rows = [f"# Aurion ↔ Godot Bildvergleich (Diagnose): {status}", "", f"- Aurion Runtime-SHA: `{expected_revision}`", f"- Runtime-Image-ID: `{expected_image_id}`", "- Live-Abnahme: UNVERIFIED. Herkunft der Bilder und Sidecars ist nicht unabhängig bestätigt.", ""]
+    rows = [f"# Aurion ↔ Godot Bildvergleich (Diagnose): {status}", "", f"- Bildabweichung: {str(visual.get('differencePercent', 'nicht messbar'))}%; Rot bei mehr als 75%.", f"- Pixeltoleranz: {PIXEL_CHANNEL_TOLERANCE}/255 je Farbkanal; Vergleich ohne Skalierung oder Masken.", f"- Aurion Runtime-SHA: `{expected_revision}`", f"- Runtime-Image-ID: `{expected_image_id}`", "- Live-Abnahme: UNVERIFIED. Herkunft der Bilder und Sidecars ist nicht unabhängig bestätigt.", ""]
     rows.append("## Ursachen / Blocker")
     rows.extend([f"- `{x}`" for x in issues] or ["- Keine"])  # Never declare live without the complete gate.
     rows.extend(["", "## Diagnose der Godot-Ansicht"] + [f"- {x}" for x in diagnosis])

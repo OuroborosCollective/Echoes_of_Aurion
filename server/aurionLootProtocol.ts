@@ -1,3 +1,4 @@
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { createHash } from "node:crypto";
 
 /**
@@ -5,6 +6,8 @@ import { createHash } from "node:crypto";
  * The caller must derive every context field from receipts and trusted catalog data.
  */
 export const AURION_LOOT_RULESET_VERSION = "aurion-loot.v2" as const;
+
+export const AURION_LOOT_V3_RULESET_VERSION = "aurion-loot.v3" as const;
 
 export const aurionItemCategories = ["weapon", "armor", "accessory", "focus", "relic", "crafting_component", "shaping_component"] as const;
 export type AurionItemCategory = (typeof aurionItemCategories)[number];
@@ -26,6 +29,7 @@ export type LootBaseDefinition = Readonly<{
   baseStats: Readonly<Record<string, number>>;
   affixSlots: readonly AurionAffixSlot[];
   tags: readonly string[];
+  effectTags?: readonly string[];
 }>;
 export type LootAffixDefinition = Readonly<{
   id: string;
@@ -77,6 +81,14 @@ export type DeterministicLootResult = Readonly<{
   itemPower: number;
   contextHash: string;
   deterministicHash: string;
+  contract?: Readonly<{
+    version: typeof AURION_LOOT_V3_RULESET_VERSION;
+    catalogHash: string;
+    source: Readonly<{ worldId: string; zoneId: string; encounterReceiptId: string; resolutionIndex: number; contentVersion: string }>;
+    familyId: string;
+    variantParameters: Readonly<{ itemLevelExact: string; affixBudget: number }>;
+    effects: Readonly<{ stats: Readonly<Record<string, number>>; tags: readonly string[] }>;
+  }>;
 }>;
 
 const qualitySlots: Readonly<Record<AurionLootQuality, number>> = Object.freeze({ normal: 0, magic: 1, rare: 3, set: 3, unique: 4, mythic: 5 });
@@ -96,7 +108,8 @@ function normalizeBps(value: number, label: string): number {
 
 function deterministicRoll(context: ServerConfirmedLootContext, label: string, maximumExclusive: number): number {
   if (!Number.isSafeInteger(maximumExclusive) || maximumExclusive < 1) throw new Error("loot roll bound must be a positive integer");
-  const raw = digest(AURION_LOOT_RULESET_VERSION, context.serverSeedDigest, context.encounterReceiptId, context.worldId, context.zoneId, context.monsterArchetypeId, String(context.resolutionIndex), label);
+  const domain = context.ruleSetVersion === AURION_LOOT_V3_RULESET_VERSION ? `${AURION_LOOT_V3_RULESET_VERSION}:${context.contentVersion}` : AURION_LOOT_RULESET_VERSION;
+  const raw = digest(domain, context.serverSeedDigest, context.encounterReceiptId, context.worldId, context.zoneId, context.monsterArchetypeId, String(context.resolutionIndex), label);
   return Number.parseInt(raw.slice(0, 12), 16) % maximumExclusive;
 }
 
@@ -190,13 +203,14 @@ function resolveAffixStats(context: ServerConfirmedLootContext, affix: LootAffix
 }
 
 function chooseAffixes(context: ServerConfirmedLootContext, base: LootBaseDefinition, quality: AurionLootQuality, definitions: readonly LootAffixDefinition[], level: bigint): readonly ResolvedLootAffix[] {
-  const desired = qualitySlots[quality];
+  const desired = context.ruleSetVersion === AURION_LOOT_V3_RULESET_VERSION ? Math.min(qualitySlots[quality], base.affixSlots.length) : qualitySlots[quality];
   if (desired === 0) return Object.freeze([]);
   const catalog = stableDefinitions(definitions);
   const groups = new Set<string>();
   const selected: ResolvedLootAffix[] = [];
   for (let index = 0; index < desired; index += 1) {
-    const candidates = catalog.filter(affix => validAffix(affix, base, level, groups));
+    const candidates = catalog.filter(affix => validAffix(affix, base, level, groups)
+      && (context.ruleSetVersion !== AURION_LOOT_V3_RULESET_VERSION || !selected.some(prior => catalog.find(def => def.id === prior.id)?.excludesGroupIds?.includes(affix.groupId))));
     if (candidates.length === 0) throw new Error("loot catalog has insufficient compatible affixes for the resolved quality");
     const affix = candidates[deterministicRoll(context, `affix:${index}`, candidates.length)]!;
     groups.add(affix.groupId);
@@ -224,13 +238,39 @@ export function resolveDeterministicLoot(input: Readonly<{
 }>): DeterministicLootResult {
   assertContext(input.context);
   const itemLevel = levelFor(input.context);
-  const quality = qualityFor(input.context);
+  const v3 = input.context.ruleSetVersion === AURION_LOOT_V3_RULESET_VERSION;
+  if (v3) {
+    validateLootCatalogV3(input);
+    for (const value of [input.context.worldId, input.context.zoneId, input.context.monsterArchetypeId, input.context.encounterReceiptId, input.context.contentVersion]) {
+      if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("LOOT_V3_CONTEXT_INVALID");
+    }
+    if (!/^[a-f0-9]{64}$/.test(input.context.serverSeedDigest)) throw new Error("LOOT_V3_SEED_INVALID");
+    for (const value of [input.context.playerLevelExact, input.context.zoneLevelExact, input.context.monsterLevelExact]) if (value.length > 128) throw new Error("LOOT_V3_LEVEL_BOUND");
+  }
+  let quality = qualityFor(input.context);
   const base = chooseBase(input.context, input.baseItems, itemLevel);
+  // V3 special eligibility: a base without a set definition rolls rare instead.
+  if (v3 && quality === "set" && !input.sets.some(set => set.pieceBaseItemIds.includes(base.id))) quality = "rare";
   const resolvedAffixes = chooseAffixes(input.context, base, quality, input.affixes, itemLevel);
   const setId = chooseSet(input.context, quality, base, input.sets);
   const itemPower = sumStats(base.baseStats) + resolvedAffixes.reduce((total, affix) => total + sumStats(affix.stats), 0);
   const resolvedContextHash = contextHash(input.context);
   const deterministicHash = digest(AURION_LOOT_RULESET_VERSION, resolvedContextHash, base.id, quality, itemLevel.toString(10), ...resolvedAffixes.flatMap(affix => [affix.id, affix.slot, affix.groupId, ...Object.entries(affix.stats).sort(([left], [right]) => textCompare(left, right)).map(([stat, value]) => `${stat}:${value}`)]), setId ?? "none", String(itemPower));
+  if (v3) {
+    const stats: Record<string, number> = { ...base.baseStats };
+    for (const affix of resolvedAffixes) for (const [key, value] of Object.entries(affix.stats)) stats[key] = (stats[key] ?? 0) + value;
+    if (Object.values(stats).some(value => !Number.isSafeInteger(value) || Math.abs(value) > 2147483647)) throw new Error("LOOT_V3_EFFECT_OVERFLOW");
+    const contract = Object.freeze({ version: AURION_LOOT_V3_RULESET_VERSION,
+      catalogHash: lootCatalogHashV3(input),
+      source: Object.freeze({ worldId: input.context.worldId, zoneId: input.context.zoneId, encounterReceiptId: input.context.encounterReceiptId, resolutionIndex: input.context.resolutionIndex, contentVersion: input.context.contentVersion }),
+      familyId: base.familyId, variantParameters: Object.freeze({ itemLevelExact: itemLevel.toString(10), affixBudget: Math.min(qualitySlots[quality], base.affixSlots.length) }),
+      effects: Object.freeze({ stats: Object.freeze(stats), tags: Object.freeze([...(base.effectTags ?? [])].sort(textCompare)) }),
+    });
+    const power = lootItemPower(base, resolvedAffixes);
+    const result = { itemDefinitionId: base.id, category: base.category, equipmentSlot: base.equipmentSlot, quality, itemLevelExact: itemLevel.toString(10), affixes: resolvedAffixes, setId, itemPower: power,
+      contextHash: canonicalSha256({ domain: AURION_LOOT_V3_RULESET_VERSION, context: input.context }).slice(7), contract };
+    return Object.freeze({ ...result, deterministicHash: canonicalSha256(result).slice(7) });
+  }
   return Object.freeze({ itemDefinitionId: base.id, category: base.category, equipmentSlot: base.equipmentSlot, quality, itemLevelExact: itemLevel.toString(10), affixes: resolvedAffixes, setId, itemPower, contextHash: resolvedContextHash, deterministicHash });
 }
 
@@ -301,4 +341,60 @@ export function resolveEquippedSetBonuses(input: Readonly<{ equippedBaseItemIds:
     }
   }
   return Object.freeze(Object.fromEntries(Array.from(totals.entries()).sort(([left], [right]) => textCompare(left, right))));
+}
+
+
+/** Reserved utility taxonomy is not a reward until a catalog and persistence type exist. */
+export const aurionRewardTaxonomyV3 = Object.freeze({
+  active: aurionItemCategories,
+  reserved: Object.freeze(["utility"] as const),
+});
+type LootCatalog = Readonly<{ baseItems: readonly LootBaseDefinition[]; affixes: readonly LootAffixDefinition[]; sets: readonly LootSetDefinition[] }>;
+export function validateLootCatalogV3(catalog: LootCatalog): void {
+  const token = (value: string) => { if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("LOOT_V3_TOKEN_INVALID"); };
+  const list = (values: readonly string[], allowed?: readonly string[]) => {
+    if (values.length > 64 || new Set(values).size !== values.length) throw new Error("LOOT_V3_LIST_INVALID");
+    for (const value of values) { token(value); if (allowed && !allowed.includes(value)) throw new Error("LOOT_V3_ENUM_INVALID"); }
+  };
+  const stats = (values: Readonly<Record<string, number>>) => {
+    if (Object.keys(values).length > 64) throw new Error("LOOT_V3_STAT_BOUND");
+    for (const [key, value] of Object.entries(values)) { token(key); if (!Number.isSafeInteger(value) || Math.abs(value) > 2147483647) throw new Error("LOOT_V3_STAT_INVALID"); }
+  };
+  const levels = (value: { minItemLevelExact: string; maxItemLevelExact?: string }) => {
+    if (value.minItemLevelExact.length > 128 || (value.maxItemLevelExact?.length ?? 0) > 128) throw new Error("LOOT_V3_LEVEL_BOUND");
+    const min = parseExact(value.minItemLevelExact, "min level");
+    if (value.maxItemLevelExact !== undefined && parseExact(value.maxItemLevelExact, "max level") < min) throw new Error("LOOT_V3_LEVEL_RANGE");
+  };
+  if (!catalog.baseItems.length || catalog.baseItems.length > 4096 || catalog.affixes.length > 2048 || catalog.sets.length > 512) throw new Error("LOOT_V3_CATALOG_BOUND");
+  for (const base of stableDefinitions(catalog.baseItems)) {
+    token(base.id); token(base.familyId); levels(base); stats(base.baseStats);
+    if (!aurionItemCategories.includes(base.category)) throw new Error("LOOT_V3_CATEGORY_INVALID");
+    const slots: Partial<Record<AurionItemCategory, readonly AurionEquipmentSlot[]>> = {
+      weapon: ["main_hand", "off_hand"], armor: ["head", "chest", "hands", "legs", "feet", "belt"], accessory: ["ring", "amulet"], focus: ["focus"], relic: ["relic"],
+    };
+    if (slots[base.category] ? !slots[base.category]!.includes(base.equipmentSlot!) : base.equipmentSlot !== undefined) throw new Error("LOOT_V3_SLOT_INVALID");
+    list(base.affixSlots, aurionAffixSlots); list(base.tags); list(base.effectTags ?? []);
+  }
+  for (const affix of stableDefinitions(catalog.affixes)) {
+    token(affix.id); token(affix.groupId); levels(affix);
+    list([affix.slot], aurionAffixSlots); list(affix.allowedCategories, aurionItemCategories); list(affix.requiredTags ?? []); list(affix.excludesGroupIds ?? []);
+    if (!Object.keys(affix.statRanges).length || Object.keys(affix.statRanges).length > 64) throw new Error("LOOT_V3_STAT_BOUND");
+    for (const [key, range] of Object.entries(affix.statRanges)) { stats({ [key]: range.min }); stats({ [key]: range.max }); if (range.min > range.max) throw new Error("LOOT_V3_STAT_RANGE"); }
+  }
+  const ids = new Set(catalog.baseItems.map(base => base.id));
+  for (const set of stableDefinitions(catalog.sets)) {
+    token(set.id); list(set.pieceBaseItemIds);
+    if (!set.pieceBaseItemIds.length || set.pieceBaseItemIds.some(id => !ids.has(id))) throw new Error("LOOT_V3_SET_REFERENCE");
+    for (const [count, bonus] of Object.entries(set.bonusesByPieces)) {
+      if (!/^[1-9][0-9]*$/.test(count) || BigInt(count) > BigInt(set.pieceBaseItemIds.length)) throw new Error("LOOT_V3_SET_THRESHOLD");
+      stats(bonus);
+    }
+  }
+}
+export function lootCatalogHashV3(catalog: LootCatalog): string {
+  return canonicalSha256({ domain: "aurion.loot-catalog.v3",
+    baseItems: stableDefinitions(catalog.baseItems).map(base => ({ ...base, tags: [...base.tags].sort(textCompare), effectTags: [...(base.effectTags ?? [])].sort(textCompare), affixSlots: [...base.affixSlots].sort(textCompare) })),
+    affixes: stableDefinitions(catalog.affixes).map(affix => ({ ...affix, allowedCategories: [...affix.allowedCategories].sort(textCompare), requiredTags: [...(affix.requiredTags ?? [])].sort(textCompare), excludesGroupIds: [...(affix.excludesGroupIds ?? [])].sort(textCompare) })),
+    sets: stableDefinitions(catalog.sets).map(set => ({ ...set, pieceBaseItemIds: [...set.pieceBaseItemIds].sort(textCompare) })),
+  });
 }

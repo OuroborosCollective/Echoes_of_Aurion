@@ -3,6 +3,7 @@ name: AIM-540 Loot Crafting Economy Evidence
 on:
   pull_request:
     paths:
+      - "server/aurionLootV3.test.ts"
       - "server/aurionLootProtocol.ts"
       - "server/aurionLootCatalog.ts"
       - "server/economy/aim540*.ts"
@@ -22,6 +23,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "server/aurionLootV3.test.ts"
       - "server/aurionLootProtocol.ts"
       - "server/aurionLootCatalog.ts"
       - "server/economy/aim540*.ts"
@@ -42,15 +44,20 @@ jobs:
         image: mariadb:11.4
         env:
           MARIADB_ROOT_PASSWORD: auriontest
-          MARIADB_DATABASE: aurion_aim540_test
+          MARIADB_DATABASE: aurion_ui_test
         ports: ["3306:3306"]
         options: >-
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
           --health-interval=5s --health-timeout=3s --health-retries=30
     env:
-      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_aim540_test
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_ui_test
       NODE_ENV: test
       AURION_AIM540_E2E: "1"
+      AURION_UI_E2E: "1"
+      AURION_CRAFTING_E2E: "1"
+      AURION_WORLD_EPOCH_E2E: "1"
+      AURION_WORLD_CHUNK_E2E: "1"
+      AURION_WORLD_E2E_ISOLATED: "1"
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       JWT_SECRET: aim540-ci-disposable-never-production
       VITE_APP_ID: aim540-ci
@@ -75,7 +82,7 @@ jobs:
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
       - name: Deterministic loot vectors and fuzz
-        run: pnpm exec vitest run server/economy/aim540LootCraftingEconomyEvidence.test.ts server/economy/aim540EvidenceSummary.test.ts --no-file-parallelism
+        run: pnpm exec vitest run server/aurionLootV3.test.ts server/economy/aim540LootCraftingEconomyEvidence.test.ts server/economy/aim540EvidenceSummary.test.ts --no-file-parallelism
       - name: Real MariaDB reward and visual readback
         run: pnpm exec vitest run server/economy/aim540LootCraftingEconomyMariaDb.test.ts server/aurionLootV2.e2e.test.ts server/confirmedEquipmentVisualReadback.mariadb.test.ts server/craftingReceipt.e2e.test.ts --no-file-parallelism
       - name: Existing economic ledger proof

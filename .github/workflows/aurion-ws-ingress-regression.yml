@@ -4,6 +4,21 @@ on:
   pull_request:
     paths:
       - "server/zoneGateway.ts"
+      - "server/zoneRuntime.ts"
+      - "server/zoneOutboundPressure.ts"
+      - "server/zoneOutboundPressure.test.ts"
+      - "server/_core/authBodyLimit.ts"
+      - "server/_core/authBodyLimit.test.ts"
+      - "server/_core/dotenvGatewayInitialization.test.ts"
+      - "server/_core/corsMiddleware.ts"
+      - "server/_core/corsOrigin.ts"
+      - "server/corsOrigin.test.ts"
+      - "server/auth.local.test.ts"
+      - "server/nativeAuthHttp.test.ts"
+      - "server/zoneGatewayPresence.test.ts"
+      - "server/defensiveGatewayObserver.ts"
+      - "server/defensiveGatewayObserver.test.ts"
+      - "server/_core/index.ts"
       - "server/zoneGatewayIngress.test.ts"
       - "scripts/tests/zone-gateway-ingress-probe.mjs"
       - ".github/workflows/aurion-ws-ingress-regression.yml"
@@ -26,9 +41,69 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Prove dotenv regression rejects the previous import order
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$(mktemp)"
+          cp server/_core/index.ts "$original"
+          trap 'cp "$original" server/_core/index.ts; rm -f "$original"' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("server/_core/index.ts")
+          source = path.read_text()
+          fixed = 'import "dotenv/config";\nimport { authBodyLimit } from "./authBodyLimit";\nimport { defensiveGatewayObserver } from "../defensiveGatewayObserver";'
+          previous = 'import { authBodyLimit } from "./authBodyLimit";\nimport { defensiveGatewayObserver } from "../defensiveGatewayObserver";\nimport "dotenv/config";'
+          assert source.count(fixed) == 1
+          path.write_text(source.replace(fixed, previous, 1))
+          PY
+          set +e
+          pnpm exec vitest run server/_core/dotenvGatewayInitialization.test.ts --reporter=json --outputFile="$RUNNER_TEMP/dotenv-red.json"
+          test_status=$?
+          set -e
+          test "$test_status" -ne 0
+          python3 - "$RUNNER_TEMP/dotenv-red.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          failures = [case for suite in report["testResults"] for case in suite["assertionResults"] if case["status"] == "failed"]
+          assert len(failures) == 1 and any("DOTENV_GATEWAY_NOT_ENABLED" in message for message in failures[0]["failureMessages"])
+          print("PREVIOUS_DOTENV_GATEWAY_ORDER_REPRODUCED_ISOLATED_ONLY")
+          PY
+          cp "$original" server/_core/index.ts
+          git diff --exit-code -- server/_core/index.ts
+      - name: Prove the telegraph regression rejects the previous unguarded send
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$(mktemp)"
+          cp server/zoneRuntime.ts "$original"
+          trap 'cp "$original" server/zoneRuntime.ts; rm -f "$original"' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("server/zoneRuntime.ts")
+          source = path.read_text()
+          fixed = "for (const client of this.sortedPeers) sendZoneMessage(client.socket, wire);"
+          previous = "for (const client of this.sortedPeers) if (client.socket.readyState === client.socket.OPEN) client.socket.send(wire);"
+          assert source.count(fixed) == 1
+          path.write_text(source.replace(fixed, previous))
+          PY
+          set +e
+          pnpm exec vitest run server/zoneOutboundPressure.test.ts -t 'guards a tactical telegraph' --reporter=json --outputFile="$RUNNER_TEMP/telegraph-red.json"
+          test_status=$?
+          set -e
+          test "$test_status" -ne 0
+          python3 - "$RUNNER_TEMP/telegraph-red.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          failures = [case for suite in report["testResults"] for case in suite["assertionResults"] if case["status"] == "failed"]
+          assert len(failures) == 1 and any("TELEGRAPH_PRESSURE_BYPASS" in message for message in failures[0]["failureMessages"])
+          print("PREVIOUS_TELEGRAPH_BYPASS_REPRODUCED_ISOLATED_ONLY")
+          PY
+          cp "$original" server/zoneRuntime.ts
+          git diff --exit-code -- server/zoneRuntime.ts
       - name: Verify real isolated WebSocket ingress regressions
         run: pnpm exec vitest run server/zoneGatewayIngress.test.ts --reporter=verbose
       - name: Neighbor protocol checks
-        run: pnpm exec vitest run server/zoneGatewayPresence.test.ts --reporter=verbose
+        run: pnpm exec vitest run server/zoneGatewayPresence.test.ts server/defensiveGatewayObserver.test.ts server/corsOrigin.test.ts server/zoneProtocol.test.ts server/zoneOutboundPressure.test.ts server/_core/authBodyLimit.test.ts server/_core/dotenvGatewayInitialization.test.ts server/auth.local.test.ts server/nativeAuthHttp.test.ts --reporter=verbose
       - name: TypeScript
         run: pnpm check

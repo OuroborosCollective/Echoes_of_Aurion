@@ -23,7 +23,9 @@ jobs:
       - name: Install SHA-locked Godot editor
         run: node scripts/godot/bootstrap.mjs
       - name: Import source assets with real Godot
-        run: .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
+        run: |
+          node scripts/godot/prepare-assets.mjs
+          .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot-client --editor --import
       - name: Install software OpenGL display
         run: |
           sudo apt-get update -qq
@@ -35,6 +37,8 @@ jobs:
         run: |
           xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_confirmed_world.gd
           xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_world_design.gd
+          xvfb-run -a -s '-screen 0 1280x800x24' .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64 --path godot-client --rendering-method gl_compatibility --audio-driver Dummy --script tests/capture_startup_viewport.gd
+          xvfb-run -a -s '-screen 0 1280x800x24' node scripts/godot/startup-editor-launch.mjs .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64
       - name: Upload original render evidence
         if: always()
         uses: actions/upload-artifact@v4

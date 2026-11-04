@@ -71,9 +71,10 @@ const exact = (value: string, label: string): bigint => {
 };
 const nonEmpty = (value: string, code: string) => { if (!value.trim()) throw new Error(code); };
 const canonicalRecord = (value: Readonly<Record<string, number>>, code: string): Readonly<Record<string, number>> => {
-  const entries = Object.entries(value).sort(([a], [b]) => textCompare(a, b));
+  const keys = Object.keys(value).sort(textCompare);
   const result: Record<string, number> = {};
-  for (const [key, quantity] of entries) {
+  for (const key of keys) {
+    const quantity = value[key];
     nonEmpty(key, code);
     if (!Number.isSafeInteger(quantity) || quantity < 0) throw new Error(code);
     if (quantity > 0) result[key] = quantity;

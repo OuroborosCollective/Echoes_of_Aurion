@@ -71,3 +71,11 @@ export const aurionLootCatalogV2 = Object.freeze({
   affixes: aurionLootAffixCatalog,
   sets: aurionLootSetCatalog,
 });
+
+
+/** Same content identities, explicit V3 semantics; V2 remains available for replay. */
+export const aurionLootCatalogV3 = Object.freeze({
+  ...aurionLootCatalogV2,
+  ruleSetVersion: "aurion-loot.v3" as const,
+  contentVersion: "aurion-loot-content.v3" as const,
+});

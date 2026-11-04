@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Server,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -28,8 +29,11 @@ export default function SystemStatusDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex h-40 items-center justify-center space-x-2 text-cyan-200/60">
-        <RefreshCw className="h-5 w-5 animate-spin" />
+      <div
+        className="flex h-40 items-center justify-center space-x-2 text-cyan-200/60"
+        aria-busy="true"
+      >
+        <Loader2 className="h-5 w-5 animate-spin" />
         <span className="text-sm">Verifying system connectivity...</span>
       </div>
     );
@@ -45,8 +49,15 @@ export default function SystemStatusDashboard() {
         <button
           onClick={() => refetch()}
           disabled={isFetching}
-          className="mt-4 text-xs underline hover:text-red-100 rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-busy={isFetching}
+          title={
+            isFetching
+              ? "Verbindungsaufbau läuft..."
+              : "Verbindung erneut versuchen"
+          }
+          className="mt-4 flex items-center justify-center gap-1.5 text-xs underline hover:text-red-100 rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
+          {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {isFetching ? "Retrying..." : "Retry Connection"}
         </button>
       </div>
@@ -62,11 +73,19 @@ export default function SystemStatusDashboard() {
         <button
           onClick={() => refetch()}
           disabled={isFetching}
+          aria-busy={isFetching}
+          title={
+            isFetching
+              ? "Aktualisiere Systemstatus..."
+              : "Systemstatus manuell aktualisieren"
+          }
           className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`}
-          />
+          {isFetching ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
           {isFetching ? "Refreshing..." : "Force Refresh"}
         </button>
       </div>

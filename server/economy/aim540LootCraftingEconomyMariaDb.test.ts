@@ -35,7 +35,7 @@ suite("AIM-540 real MariaDB end-to-end reward/economy proof",()=>{
   beforeEach(cleanup);
   afterAll(async()=>{ await cleanup(); if(pool) await pool.end(); });
 
-  it("materializes loot, inventory, visual readback, system sale and replay without duplicating the reward",async()=>{
+  it("materializes loot, confirms pickup and reads visuals without duplicating the reward on replay",async()=>{
     const db=await getDb(); expect(db).not.toBeNull(); if(!db) return;
     await db.insert(playerProfiles).values({userId:USER_ID});
 
@@ -72,7 +72,11 @@ suite("AIM-540 real MariaDB end-to-end reward/economy proof",()=>{
     expect(first.applied).toBe(true);
     expect(replay).toMatchObject({applied:false,receipt:{id:first.receipt.id},item:{id:first.item.id}});
 
-    await collectPlayerLoot(USER_ID,{itemId:first.item.id,lootReceiptId:first.receipt.id} as any);
+    const ref = { id: first.item.id, version: "aurion_v2" as const };
+    const collected = await collectPlayerLoot(USER_ID, ref);
+    expect(collected.items.find(item => item.id === ref.id && item.version === ref.version))
+      .toMatchObject({ status: "owned", receiptId: first.receipt.id });
+    expect(await collectPlayerLoot(USER_ID, ref)).toEqual(collected);
     const visual=await readConfirmedEquipmentVisuals(USER_ID);
     expect(visual.version).toBe("aurion-equipment-visuals.v2");
 

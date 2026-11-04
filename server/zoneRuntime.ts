@@ -1,6 +1,8 @@
 import { combatRule, insideCombatLine, type ZoneCombatTactics } from "../shared/aurionCombatRules";
 import { ZONE_TELEGRAPH_CONTRACT_VERSION, ZONE_TELEGRAPH_VISUAL_SOURCE_REVISION, ZONE_TELEGRAPH_AUTHORITY_RULESET } from "../shared/zoneTelegraphContract";
 import { zoneMobTelegraphWindupTicks, zoneMobTelegraphWidthFixed } from "./zoneMobTelegraphPolicy";
+import { sendZoneMessage } from "./zoneOutboundPressure";
+
 import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
@@ -759,7 +761,7 @@ export class AuthoritativeMovementZone {
           rngEvents.push(...resolution.rngEvents);
         } else if (this.tacticalCombat && !this.isReplay) {
           const code = resolution.result === "no_stamina" ? "COMBAT_NO_STAMINA" : resolution.result === "out_of_range" ? "COMBAT_TARGET_OUT_OF_RANGE" : resolution.result === "cooldown" ? "COMBAT_SKILL_COOLDOWN" : "INVALID_COMBAT_TARGET";
-          peer.socket.send(JSON.stringify({ type: "reject", code }));
+          sendZoneMessage(peer.socket, JSON.stringify({ type: "reject", code }));
         }
       } else if (intent.type === "skill" && this.tacticalCombat) {
         const events = this.resolveTacticalSkill(peer, intent.skillId as Ax1BladeSkillId, intent.targetEntityId, () => ++actionIndex);
@@ -927,7 +929,7 @@ export class AuthoritativeMovementZone {
       peer.stamina = result.changed ? initialStamina - rule.cost : initialStamina;
     }
     if (result.changed) peer.skillCooldownUntilTick.set(skillId, this.tickNumber + rule.cooldown);
-    else if (!this.isReplay) peer.socket.send(JSON.stringify({type:"reject",code:"INVALID_COMBAT_TARGET"}));
+    else if (!this.isReplay) sendZoneMessage(peer.socket, JSON.stringify({type:"reject",code:"INVALID_COMBAT_TARGET"}));
     return result;
   }
 
@@ -958,7 +960,7 @@ export class AuthoritativeMovementZone {
             this.tactics.windups.push(pending);
             if (!this.isReplay) {
               const wire = JSON.stringify({ type: "telegraph", contractVersion: ZONE_TELEGRAPH_CONTRACT_VERSION, id: `telegraph:${pending.mobId}:${sequence}`, sequence, startTick: this.tickNumber, impactTick: pending.impactTick, attackerEntityId: pending.mobId, targetEntityId: pending.targetId, kind: "line", origin: pending.origin, target: pending.target, widthFixed: pending.width, color: "#ef4444", visualSourceRevision: ZONE_TELEGRAPH_VISUAL_SOURCE_REVISION, authorityRuleset: ZONE_TELEGRAPH_AUTHORITY_RULESET });
-              for (const client of this.sortedPeers) if (client.socket.readyState === client.socket.OPEN) client.socket.send(wire);
+              for (const client of this.sortedPeers) sendZoneMessage(client.socket, wire);
             }
             changed = true; continue;
           }
@@ -1005,7 +1007,7 @@ export class AuthoritativeMovementZone {
 
   private broadcastCombat(event: ConfirmedZoneCombatEvent): void {
     const serialized = serialize(event);
-    for (const peer of this.peers.values()) if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized);
+    for (const peer of this.peers.values()) sendZoneMessage(peer.socket, serialized);
   }
 
   private refreshPeerOrder(): void {
@@ -1061,7 +1063,7 @@ export class AuthoritativeMovementZone {
       resources: this.resourceRuntime.snapshot(this.tickNumber),
     };
     const serialized = serialize(snapshot);
-    for (const peer of this.peers.values()) if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized);
+    for (const peer of this.peers.values()) sendZoneMessage(peer.socket, serialized);
   }
 }
 

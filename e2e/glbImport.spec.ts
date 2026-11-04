@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { createHash } from "node:crypto";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
+import { completeLocalRegistration } from "./localRegistration";
 
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable GLB CI database");
 test("admin upload persists bytes and assignment, deduplicates, scrolls on mobile, and renders the published avatar", async ({ page, baseURL }, testInfo) => {
@@ -18,9 +19,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await dialog.getByRole('tab', { name: 'Konto anlegen', exact: true }).click();
     await dialog.getByLabel('Rufname', { exact: true }).fill('glb_browser_admin');
     await dialog.getByLabel('Passwort', { exact: true }).fill('Aurion-isolated-glb-test-only!');
-    await dialog.getByRole('button', { name: 'Aurion-Konto erstellen', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /Eine Welt, die nicht auf dich wartet./ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'SPIEL BETRETEN', exact: true })).toBeVisible();
+    await completeLocalRegistration(page, 'glb_browser_admin');
     expect((await page.request.get('/api/admin/glb-import/status')).status()).toBe(403);
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='glb_browser_admin'");
     await page.setViewportSize({ width: 412, height: 732 });

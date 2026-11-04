@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { aurionItemInstancesV2, itemInstances, playerProfiles } from "../drizzle/schema";
 import { getDb } from "./db";
-import { executeAurionInventoryTransaction, readAurionInventorySnapshot } from "./aurionInventoryBackendAdapter";
+import { executeAurionInventoryTransaction, readAurionInventorySnapshot, readWorldTableOwnedStock } from "./aurionInventoryBackendAdapter";
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 
 const enabled = process.env.AURION_INVENTORY_DB_E2E === "1" && !!process.env.DATABASE_URL;
@@ -57,6 +57,42 @@ suite("aurion inventory backend adapter MariaDB", () => {
     await db.delete(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId, OTHER_USER_ID));
     await db.delete(playerProfiles).where(eq(playerProfiles.userId, USER_ID));
     await db.delete(playerProfiles).where(eq(playerProfiles.userId, OTHER_USER_ID));
+  });
+
+  it("reads bounded exact owned stock without exposing another actor or creating effects", async () => {
+    const db = await dbRef();
+    if (!db) throw new Error("DATABASE_UNAVAILABLE");
+    const prefix = `worldtable-${RUN_ID}`;
+    await db.insert(aurionItemInstancesV2).values([
+      v2Item(prefix + "-own", USER_ID, prefix + "-loot-own", "17"),
+      v2Item(prefix + "-foreign", OTHER_USER_ID, prefix + "-loot-foreign", "9"),
+      { ...v2Item(prefix + "-equipped", USER_ID, prefix + "-loot-equipped", "1"), status: "equipped" },
+      { ...v2Item(prefix + "-pickup", USER_ID, prefix + "-loot-pickup", "2"), status: "pending_pickup" },
+    ]);
+    const before = await readAurionInventorySnapshot(USER_ID);
+    const stock = await readWorldTableOwnedStock(USER_ID);
+    expect(stock.actorId).toBe(`player:${USER_ID}`);
+    expect(stock.revisionExact).toBe(before.revisionExact);
+    expect(stock.stacks.filter(stack => stack.id.startsWith(prefix))).toEqual([
+      { id: prefix + "-own", definitionId: "aurion-oak-component-v2", quantityExact: "17", version: "aurion_v2" },
+    ]);
+    expect(stock).not.toHaveProperty("ownerUserId");
+    expect(await readWorldTableOwnedStock(USER_ID)).toEqual(stock);
+    expect(await readAurionInventorySnapshot(USER_ID)).toEqual(before);
+    const caller = (await import("./routers")).appRouter.createCaller({ req: { headers: {} }, res: {}, user: null } as any);
+    await expect(caller.player.worldTableOwnedStock()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("rejects an oversized stock instead of silently returning an incomplete material list", async () => {
+    const db = await dbRef();
+    if (!db) throw new Error("DATABASE_UNAVAILABLE");
+    const ids = Array.from({ length: 257 }, (_, index) => `stock-cap-${RUN_ID}-${index}`);
+    try {
+      await db.insert(aurionItemInstancesV2).values(ids.map(id => v2Item(id, OTHER_USER_ID, `loot-${id}`, "1")));
+      await expect(readWorldTableOwnedStock(OTHER_USER_ID)).rejects.toThrow("WORLD_TABLE_STOCK_LIMIT_EXCEEDED");
+    } finally {
+      for (const id of ids) await db.delete(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.id, id));
+    }
   });
 
   it("applies merge atomically and replays the exact receipt", async () => {

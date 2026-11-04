@@ -42,6 +42,15 @@ func _ready() -> void:
         _dock.bind_client(_client)
     if is_instance_valid(_client) and _client.is_node_ready() and protected_editor_autoconnect_allowed(_client.credential_source_path, _client.token, _client.url):
         _client.connect_to_bridge()
+    call_deferred("_start_parity_observation")
+
+
+func _start_parity_observation() -> void:
+    var capture = preload("res://addons/aurion_bridge/startup_capture.gd")
+    var directory: String = capture.requested_directory()
+    if directory.is_empty(): return
+    capture.write_json(directory.path_join("editor-start.json"), {"nonce":OS.get_environment("AURION_PARITY_NONCE"),"pid":OS.get_process_id(),"editor":Engine.is_editor_hint(),"scene":"res://addons/aurion_bridge/authoring_entry.tscn"})
+    EditorInterface.play_custom_scene("res://addons/aurion_bridge/authoring_entry.tscn")
 
 
 func _exit_tree() -> void:

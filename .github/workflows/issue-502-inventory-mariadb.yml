@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "server/aurionInventoryBackendAdapter.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
       - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
       - "server/aurionInventoryTransactionProtocol.ts"
       - "server/aurionInventoryStackIdentity.ts"
@@ -11,6 +13,7 @@ on:
       - "server/confirmedEquipmentVisualReadback.ts"
       - "server/confirmedEquipmentVisualReadback.mariadb.test.ts"
       - "e2e/issue502.inventory.spec.ts"
+      - "e2e/localRegistration.ts"
       - "server/playerUiMariaDb.test.ts"
       - "server/routers.ts"
       - "server/db.ts"
@@ -27,11 +30,14 @@ on:
     branches: [main]
     paths:
       - "server/aurionInventoryBackendAdapter.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
       - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
       - "server/aurionInventoryTransactionProtocol.ts"
       - "server/aurionInventoryStackIdentity.ts"
       - "server/playerUiPersistence.ts"
       - "e2e/issue502.inventory.spec.ts"
+      - "e2e/localRegistration.ts"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
       - "drizzle/0034_ax1_starter_equipment_receipts.sql"
       - "drizzle/0066_aurion_inventory_transaction_kernel.sql"

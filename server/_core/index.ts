@@ -1,6 +1,8 @@
 import "dotenv/config";
+import { authBodyLimit } from "./authBodyLimit";
+import { defensiveGatewayObserver } from "../defensiveGatewayObserver";
 import { registerProductionProbeRoutes } from "../aurionProductionProbeHttp";
-import { createCorsOriginResolver } from "./corsOrigin";
+import { createCorsMiddleware } from "./corsMiddleware";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -45,7 +47,6 @@ import { assertProductionDatabaseConfigured, assertProductionDatabaseConnected }
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
-const allowedCorsOrigin = createCorsOriginResolver(process.env.AURION_ALLOWED_ORIGINS);
 
 async function startServer(){
   assertProductionDatabaseConfigured(process.env.NODE_ENV, process.env.DATABASE_URL);
@@ -74,7 +75,9 @@ async function startServer(){
   app.use(createOtelHttpMiddleware());
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
   if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);
-  app.use((req,res,next)=>{const origin=allowedCorsOrigin(req.headers.origin);if(origin){res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Access-Control-Allow-Credentials","true");res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization, X-Requested-With");res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");res.setHeader("Vary","Origin");}if(req.method==="OPTIONS"){if(!origin)return res.status(403).end();return res.status(204).end();}next();});
+  defensiveGatewayObserver.start();
+  app.use(defensiveGatewayObserver.httpMiddleware);
+  app.use(createCorsMiddleware(defensiveGatewayObserver, process.env.AURION_ALLOWED_ORIGINS));
 
   app.use(rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -83,6 +86,7 @@ async function startServer(){
     legacyHeaders: false
   }));
 
+  app.use(authBodyLimit());
   app.use(express.json({limit:"50mb"}));app.use(express.urlencoded({limit:"50mb",extended:true}));
   const healthPayload = () => ({
     status: "ok",
@@ -116,6 +120,7 @@ async function startServer(){
     shuttingDown=true;
     console.info(`[Aurion] graceful shutdown requested: ${signal}`);
     try{
+      defensiveGatewayObserver.stop();
       await godotFeed?.close();
       await drainAurionRuntimeForShutdown({
         closeZoneGateway:()=>zoneGateway.close(),

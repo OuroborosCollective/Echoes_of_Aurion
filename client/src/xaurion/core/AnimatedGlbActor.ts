@@ -384,12 +384,19 @@ export class AnimatedGlbActor {
   }
 
   evidence() {
+    // The procedural player is a sibling that is intentionally hidden after
+    // a GLB equips. Follow this actual model's ancestors to the active scene.
+    let visible = false;
+    for (let node: THREE.Object3D | null = this.model; node && !this.disposed; node = node.parent) {
+      if (!node.visible) break;
+      if ((node as THREE.Scene).isScene) { visible = true; break; }
+    }
     const measured = new THREE.Box3().setFromObject(this.model, true);
     let pose = 2166136261;
     for (const bone of this.bones) for (const value of [...bone.quaternion.toArray(), ...bone.position.toArray()]) pose = Math.imul(pose ^ Math.round(value * 100_000), 16777619) >>> 0;
     const supportedPoses = (Object.keys(clipNames) as GlbPose[]).filter(candidate => this.supportsPose(candidate));
     const animatedPoses = supportedPoses.filter(candidate => this.hasAnimatedPose(candidate));
-    return { heightMeters: this.heightMeters, renderedHeightMeters: measured.max.y - measured.min.y, feetY: measured.min.y,
+    return { visible, heightMeters: this.heightMeters, renderedHeightMeters: measured.max.y - measured.min.y, feetY: measured.min.y,
       activeAnimationActions: Number(Boolean(this.releaseActiveAnimation)) + Number(Boolean(this.releaseFadingAnimation)),
       animationDeferred: this.animationEnabled && !this.releaseActiveAnimation && this.clips.size > 0,
       clip: this.active?.getClip().name ?? null, clipTime: this.active?.time ?? 0, boneCount: this.bones.length, bonePose: pose.toString(16),
