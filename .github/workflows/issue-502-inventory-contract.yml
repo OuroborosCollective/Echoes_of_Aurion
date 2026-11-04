@@ -7,6 +7,8 @@ on:
       - "server/aurionInventoryTransactionProtocol.test.ts"
       - "server/aurionInventoryStackIdentity.ts"
       - "server/aurionInventoryBackendAdapter.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
       - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
       - "shared/playerUiProtocol.ts"
       - "server/playerUiPersistence.ts"
@@ -23,6 +25,8 @@ on:
       - "server/aurionInventoryTransactionProtocol.test.ts"
       - "server/aurionInventoryStackIdentity.ts"
       - "server/aurionInventoryBackendAdapter.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
       - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
       - "shared/playerUiProtocol.ts"
       - "server/playerUiPersistence.ts"
@@ -65,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm verify:migrations
-          pnpm exec vitest run server/aurionInventoryTransactionProtocol.test.ts --no-file-parallelism
+          pnpm exec vitest run shared/worldTableInventoryProtocol.test.ts server/aurionInventoryTransactionProtocol.test.ts --no-file-parallelism
       - name: TypeScript and production build
         run: |
           set -euo pipefail

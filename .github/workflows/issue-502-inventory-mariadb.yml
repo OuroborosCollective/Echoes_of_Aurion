@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "server/aurionInventoryBackendAdapter.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
       - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
       - "server/aurionInventoryTransactionProtocol.ts"
       - "server/aurionInventoryStackIdentity.ts"
@@ -27,6 +29,8 @@ on:
     branches: [main]
     paths:
       - "server/aurionInventoryBackendAdapter.ts"
+      - "shared/worldTableInventoryProtocol.ts"
+      - "shared/worldTableInventoryProtocol.test.ts"
       - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
       - "server/aurionInventoryTransactionProtocol.ts"
       - "server/aurionInventoryStackIdentity.ts"

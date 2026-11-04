@@ -1,3 +1,4 @@
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
@@ -21,7 +22,7 @@ const digest = (...parts: readonly string[]): string => createHash("sha256").upd
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const exactLevelSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
 
-/** Strict parser for the immutable `resolvedJson` stored with aurion-loot.v2 receipts. */
+/** Strict parser for immutable V2/V3 resolvedJson, with version-specific hash readback. */
 export const storedDeterministicLootResultSchema = z.object({
   itemDefinitionId: z.string().min(1).max(160),
   category: z.enum(aurionItemCategories),
@@ -38,9 +39,20 @@ export const storedDeterministicLootResultSchema = z.object({
   itemPower: z.number().int().nonnegative(),
   contextHash: sha256Schema,
   deterministicHash: sha256Schema,
+  contract: z.object({
+    version: z.literal("aurion-loot.v3"), catalogHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    source: z.object({ worldId: z.string().min(1).max(128), zoneId: z.string().min(1).max(128), encounterReceiptId: z.string().min(1).max(128), resolutionIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), contentVersion: z.string().min(1).max(128) }).strict(),
+    familyId: z.string().min(1).max(128),
+    variantParameters: z.object({ itemLevelExact: exactLevelSchema, affixBudget: z.number().int().min(0).max(5) }).strict(),
+    effects: z.object({ stats: z.record(z.string(), z.number().int().min(-2147483647).max(2147483647)), tags: z.array(z.string().min(1).max(128)).max(64) }).strict(),
+  }).strict().optional(),
 }).strict();
 
 export function rederiveStoredDeterministicLootHash(loot: Omit<DeterministicLootResult, "deterministicHash">): string {
+  if (loot.contract?.version === "aurion-loot.v3") {
+    const { deterministicHash: _stored, ...payload } = loot as DeterministicLootResult;
+    return canonicalSha256(payload).slice(7);
+  }
   return digest(
     AURION_LOOT_RULESET_VERSION,
     loot.contextHash,

@@ -1,3 +1,4 @@
+import { WORLD_TABLE_STOCK_LIMIT, worldTableInventorySchema } from "../shared/worldTableInventoryProtocol";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { aurionInventoryReceipts, aurionItemInstancesV2, itemInstances, playerProfiles } from "../drizzle/schema";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
@@ -475,4 +476,33 @@ export function replayAurionInventoryReceipts(rows: readonly {
   }
   if (!finalState) throw new Error("INVENTORY_REPLAY_EMPTY");
   return finalState;
+}
+
+/** Bounded readmodel in the inventory owner, without reservations or remote stock. */
+export async function readWorldTableOwnedStock(userId: number) {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("OWNER_USER_ID_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  return db.transaction(async tx => {
+    // Use the same profile serialization boundary as canonical inventory writes.
+    const revisionExact = await readPlayerRevision(tx, userId);
+    const legacy = await tx.select({ id: itemInstances.id, definitionId: itemInstances.baseItemKey,
+      quantityExact: itemInstances.quantityExact }).from(itemInstances)
+      .where(and(eq(itemInstances.ownerUserId, userId), eq(itemInstances.status, "owned")))
+      .orderBy(asc(itemInstances.id)).limit(WORLD_TABLE_STOCK_LIMIT + 1);
+    const current = await tx.select({ id: aurionItemInstancesV2.id, definitionId: aurionItemInstancesV2.baseItemDefinitionId,
+      quantityExact: aurionItemInstancesV2.quantityExact }).from(aurionItemInstancesV2)
+      .where(and(eq(aurionItemInstancesV2.ownerUserId, userId), eq(aurionItemInstancesV2.status, "owned")))
+      .orderBy(asc(aurionItemInstancesV2.id)).limit(WORLD_TABLE_STOCK_LIMIT + 1);
+    if (legacy.length + current.length > WORLD_TABLE_STOCK_LIMIT) throw new Error("WORLD_TABLE_STOCK_LIMIT_EXCEEDED");
+    const stacks = [
+      ...legacy.map(row => ({ ...row, version: "legacy" as const })),
+      ...current.map(row => ({ ...row, version: "aurion_v2" as const })),
+    ].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const stock = { schema: "aurion.worldtable-owned-stock.v1" as const,
+      actorId: `player:${userId}`, revisionExact, stacks, mutationAuthority: "none" as const };
+    const result = worldTableInventorySchema.parse({ ...stock, stockHash: canonicalSha256(stock) });
+    if (Buffer.byteLength(JSON.stringify(result), "utf8") > 65536) throw new Error("WORLD_TABLE_STOCK_BYTES_EXCEEDED");
+    return result;
+  });
 }

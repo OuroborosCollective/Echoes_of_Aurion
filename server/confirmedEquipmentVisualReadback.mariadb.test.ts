@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { aurionEquipmentSlots, aurionItemInstancesV2, aurionLootDropReceiptsV2, expeditionResultReceipts, playerProfiles, users } from "../drizzle/schema";
-import { AURION_LOOT_CONTENT_VERSION, aurionLootCatalogV2 } from "./aurionLootCatalog";
+import { AURION_LOOT_CONTENT_VERSION, aurionLootCatalogV2, aurionLootCatalogV3 } from "./aurionLootCatalog";
 import { resolveDeterministicLoot } from "./aurionLootProtocol";
 import { createValidatedAurionLootDropV2, getDb, recordValidatedExpeditionResult } from "./db";
 import { collectPlayerLoot, equipPlayerItem, readPlayerUi } from "./playerUiPersistence";
@@ -46,7 +46,7 @@ suite("AIM-286 real MariaDB visual item runtime readback", () => {
 
   afterAll(async () => { if (pool) { if (isolated) await clean(); await pool.end(); } });
 
-  async function createEquippedV2Item() {
+  async function createEquippedV2Item(catalog: typeof aurionLootCatalogV2 | typeof aurionLootCatalogV3 = aurionLootCatalogV2) {
     const accepted = await recordValidatedExpeditionResult({
       userId: USER_ID,
       expeditionKey: `${PREFIX}:expedition`,
@@ -60,8 +60,8 @@ suite("AIM-286 real MariaDB visual item runtime readback", () => {
       zoneId: "windhollow",
       monsterArchetypeId: "ash-sentinel",
       encounterReceiptId: accepted.receipt.id,
-      ruleSetVersion: aurionLootCatalogV2.ruleSetVersion,
-      contentVersion: AURION_LOOT_CONTENT_VERSION,
+      ruleSetVersion: catalog.ruleSetVersion,
+      contentVersion: catalog.contentVersion,
       playerLevelExact: "42",
       zoneLevelExact: "42",
       monsterLevelExact: "42",
@@ -70,7 +70,7 @@ suite("AIM-286 real MariaDB visual item runtime readback", () => {
     } as const;
     let resolutionIndex = -1;
     for (let candidate = 0; candidate < 256; candidate += 1) {
-      const result = resolveDeterministicLoot({ context: { ...baseContext, resolutionIndex: candidate }, ...aurionLootCatalogV2 });
+      const result = resolveDeterministicLoot({ context: { ...baseContext, resolutionIndex: candidate }, ...catalog });
       if (["main_hand", "off_hand", "head", "chest", "hands", "legs", "feet"].includes(result.equipmentSlot ?? "")) { resolutionIndex = candidate; break; }
     }
     if (resolutionIndex < 0) throw new Error("AIM286_EQUIPMENT_FIXTURE_NOT_FOUND");
@@ -88,8 +88,8 @@ suite("AIM-286 real MariaDB visual item runtime readback", () => {
     return drop;
   }
 
-  it("reads a receipt-derived descriptor from a real equipped V2 item without mutating gameplay truth", async () => {
-    const drop = await createEquippedV2Item();
+  it.each([aurionLootCatalogV2, aurionLootCatalogV3])("reads a receipt-derived descriptor for $ruleSetVersion without mutating gameplay truth", async (catalog) => {
+    const drop = await createEquippedV2Item(catalog);
     const db = (await getDb())!;
     const beforeItem = (await db.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.id, drop.item.id)))[0]!;
     const beforeReceipt = (await db.select().from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.id, drop.receipt.id)))[0]!;

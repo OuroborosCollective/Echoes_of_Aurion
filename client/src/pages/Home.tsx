@@ -180,7 +180,7 @@ export default function Home() {
                   }}
                   className="group min-h-12 rounded-xl bg-cyan-300 px-6 font-bold text-slate-950 shadow-lg shadow-cyan-950/30 transition-all hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
                 >
-                  <Compass className="mr-2 inline size-4" />
+                  <Compass className="mr-2 inline size-4 transition-transform motion-safe:group-hover:scale-110" />
                   SPIEL BETRETEN
                 </button>
               ) : (
@@ -193,7 +193,7 @@ export default function Home() {
                   onClick={openAccountAccess}
                   className="group min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 shadow-lg shadow-amber-950/20 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
                 >
-                  <ShieldCheck className="mr-2 inline size-4" />
+                  <ShieldCheck className="mr-2 inline size-4 transition-transform motion-safe:group-hover:scale-110 group-disabled:motion-safe:group-hover:scale-100" />
                   {loading ? "WIRD GELADEN..." : "KONTO ANLEGEN / ANMELDEN"}
                 </button>
               )}
@@ -365,9 +365,9 @@ export default function Home() {
             aria-busy={loading}
             title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Signalraum öffnen"}
             onClick={() => openCommunity("chat")}
-            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
+            className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
           >
-            <MessageCircle className="mr-2 size-4 text-cyan-300" />
+            <MessageCircle className="mr-2 size-4 text-cyan-300 transition-transform motion-safe:group-hover:scale-110 group-disabled:motion-safe:group-hover:scale-100" />
             Signalraum
           </button>
           <button
@@ -375,9 +375,9 @@ export default function Home() {
             aria-haspopup="dialog"
             title="Forum öffnen"
             onClick={() => openCommunity("forum")}
-            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+            className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
           >
-            <FileText className="mr-2 size-4 text-cyan-300" />
+            <FileText className="mr-2 size-4 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
             Forum
           </button>
           <button
@@ -385,9 +385,9 @@ export default function Home() {
             aria-haspopup="dialog"
             title="Asset-Katalog öffnen"
             onClick={() => openCommunity("assets")}
-            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+            className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
           >
-            <Box className="mr-2 size-4 text-cyan-300" />
+            <Box className="mr-2 size-4 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
             Asset-Katalog
           </button>
           <button
@@ -395,9 +395,9 @@ export default function Home() {
             aria-haspopup="dialog"
             title="Events öffnen"
             onClick={() => openCommunity("events")}
-            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+            className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
           >
-            <CalendarDays className="mr-2 size-4 text-cyan-300" />
+            <CalendarDays className="mr-2 size-4 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
             Events
           </button>
           <button
@@ -405,9 +405,9 @@ export default function Home() {
             aria-haspopup="dialog"
             title="Fehlerberichte öffnen"
             onClick={() => openCommunity("issues")}
-            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+            className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
           >
-            <Bug className="mr-2 size-4 text-cyan-300" />
+            <Bug className="mr-2 size-4 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
             Fehler
           </button>
           <button
@@ -417,9 +417,9 @@ export default function Home() {
             aria-busy={loading}
             title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Gildenübersicht öffnen"}
             onClick={() => openCommunity("guild")}
-            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
+            className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
           >
-            <UsersRound className="mr-2 size-4 text-cyan-300" />
+            <UsersRound className="mr-2 size-4 text-cyan-300 transition-transform motion-safe:group-hover:scale-110 group-disabled:motion-safe:group-hover:scale-100" />
             Gilden
           </button>
           <button
@@ -427,9 +427,9 @@ export default function Home() {
             aria-haspopup="dialog"
             title="Rangliste öffnen"
             onClick={() => openCommunity("leaderboard")}
-            className="inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+            className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
           >
-            <Trophy className="mr-2 size-4 text-cyan-300" />
+            <Trophy className="mr-2 size-4 text-cyan-300 transition-transform motion-safe:group-hover:scale-110" />
             Rangliste
           </button>
         </div>
@@ -484,9 +484,9 @@ export default function Home() {
                   window.dispatchEvent(new Event(AX1_PLAY_REQUEST_EVENT))
                 }
                 title="Spiel betreten"
-                className="min-h-12 rounded-xl bg-cyan-300 px-6 font-bold text-slate-950 transition-all hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+                className="group min-h-12 rounded-xl bg-cyan-300 px-6 font-bold text-slate-950 transition-all hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
               >
-                <Compass className="mr-2 inline size-4" />
+                <Compass className="mr-2 inline size-4 transition-transform motion-safe:group-hover:scale-110" />
                 IN DIE WELT
               </button>
             ) : (
@@ -497,9 +497,9 @@ export default function Home() {
                 aria-busy={loading}
                 title={loading ? "Ladevorgang läuft..." : "Zugang erstellen"}
                 onClick={openAccountAccess}
-                className="min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
+                className="group min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
               >
-                <ShieldCheck className="mr-2 inline size-4" />
+                <ShieldCheck className="mr-2 inline size-4 transition-transform motion-safe:group-hover:scale-110 group-disabled:motion-safe:group-hover:scale-100" />
                 ZUGANG ERSTELLEN
               </button>
             )}

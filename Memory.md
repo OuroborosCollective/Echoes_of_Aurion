@@ -5634,3 +5634,14 @@ Evidence: Local code 2d63c573 passed all 197 real Godot static/headless stages; 
 Learned: Strict camera equality requires an explicit pre-capture handshake; matching FOV alone misses clipping differences. A private append-only Codejaeger ledger now preserves red/fix/green checkpoints with revision and digest checks; it is separate from the game runtime.
 Open: Exact-head remote CI and authenticated display-backed production parity remain unverified. Local headless tests are not live acceptance.
 Next safe step: Publish this fix to existing PR1307, inspect its CI/review, then use the protected deployment and real paired-capture path.
+
+
+### 2026-11-04 — Offene PRs in #1307 konsolidieren
+Status: PARTIAL
+Task: Alle 14 offenen PRs prüfen, brauchbare Teile in #1307 übernehmen, ungeeignete Vorschläge schließen und nach Prüfung ausrollen.
+Decisions: Übernahme #1288/#1293/#1286/#1279/#1278; Teilübernahme #1287 (besitzgebundener Inventar-Readback, keine zweite Welttisch-UI) und #1272 (Item-Kanonisierung). Keine Übernahme von #1282 (unvollständiger Zonen-/Migrationsvertrag), #1280/#1304 (Serialisierungsdrift), #1275 (geänderte Probe-Hashes), #1273 (überlappender Loot-Umbau) oder #1308 (quadratische splice-Pfade).
+Touched surfaces: Inventar-Readmodel, versionierter Loot-Vertrag, HTTP/WS-Schutz, UI-Feedback und bestehende FSM/Item-Helfer.
+Evidence: Exakte Quellstände und Diffs aller offenen PRs geprüft. Produktionsreadback vor Änderung: Revision689dc2c, Tick10Hz, Release-Timer inactive. Gesamte kombinierte CI und reale MariaDB-Regression stehen noch aus.
+Learned: Ältere Welttisch-Drafts überschreiben inzwischen vorhandene Godot-Verträge; pauschale Optimierungen können persistierte Hashes verändern.
+Open: Kombinierte Exact-Head-CI/Review, Merge, Schema-Preflight und geschützter Release mit unabhängigem Runtime/DB-Readback. Keine Migration oder Live-Auslieferung behauptet.
+Next safe step: Kombinierten PR prüfen; erst nach grünen Gates mergen, Release-Timer wiederherstellen und kanonischen Release-/Schema-Pfad ausführen.

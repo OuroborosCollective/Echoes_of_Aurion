@@ -36,6 +36,34 @@ function onceClose(socket: WebSocket): Promise<void> {
 }
 
 describe("zoneGateway world presence bridge", () => {
+  it("does not join or create a presence after the socket closes during zone recovery", async () => {
+    const server = createServer();
+    const registry = new ZoneRegistry();
+    const zone = new AuthoritativeMovementZone("observatory_threshold", new AurionTickRecorder());
+    let release!: () => void;
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    const recovery = vi.fn(async () => { await wait; return zone; });
+    const upsert = vi.fn(async () => undefined), releasePresence = vi.fn(async () => undefined);
+    const ticket = vi.fn(async () => ({ userId: 81, zoneId: "observatory_threshold" as const, clientBuild: "fixture", expiresAt: new Date(Date.now() + 60000) }));
+    const join = vi.spyOn(zone, "join");
+    const gateway = registerZoneGateway(server, registry, ticket, { upsert, release: releasePresence }, undefined, recovery);
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("ADDRESS_REQUIRED");
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/v1/ws`, { origin: "http://localhost" });
+    try {
+      await onceOpen(socket);
+      socket.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION }));
+      await vi.waitFor(() => expect(recovery).toHaveBeenCalledTimes(1));
+      const closed = onceClose(socket); socket.close(); await closed;
+      release();
+      await vi.waitFor(() => expect(registry.find("observatory_threshold")).toBe(zone));
+      await new Promise(resolve => setImmediate(resolve));
+      expect(join).not.toHaveBeenCalled();
+      expect(zone.liveConnectionIdForUser(81)).toBeUndefined();
+      expect(upsert).not.toHaveBeenCalled();
+    } finally { release(); socket.terminate(); gateway.close(); await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+
   it("creates and releases a server-observed world presence only around an accepted current-protocol zone connection", async () => {
     const server = createServer();
     const upsert = vi.fn(async () => undefined);
