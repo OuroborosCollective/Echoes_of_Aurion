@@ -5681,8 +5681,11 @@ Open: CI, review, merge, release; after release confirm `zoneJoin.bootSettlement
 Next safe step: CI on the PR.
 
 ### 2026-11-04 — Aurion AI World Designer (PR #1315)
-Status: IMPLEMENTED / ISOLATED_VERIFIED; neue Review-Korrekturen und finale Exact-Head-CI noch zu prüfen; Live-Modell-/Produktionsabnahme unbelegt.
-Change: AI-Fabric im bestehenden Authoring-Server (Local/Free, Premium aus, dauerhafte Reservierungen/Preisschranken), bestätigter World-Slice-Kontext und getrennte Godot-GLB-Vorschau; bestehender Web-Einstieg nutzt dieselbe Fabric. Aurion Plan/Bestätigung/Receipt/unabhängiger Readback bleiben kanonisch, 10 Hz unverändert.
-Learned: Präsentationshüllen beweisen keine physische Passierbarkeit. Bei Wiederholung eines ersten Applies greift bereits der geänderte Vorgänger; genau ein Receipt bleibt gespeichert. Review-Korrekturen: begrenzt auf Ledger-Sperren warten, Asset-Fehlersignal mit zwei Argumenten und zulässige LOD-Alternativen weiterladen, 360px-Layout einhalten.
-Evidence: 3a5f1b33b089b9f765b6056e0adbd6db7842aa4e / Run41915232998:43 Tests mit isolierter echter MariaDB plus TypeScript grün; 26f1694f49ddcd416d30944d1d0add5be0e47cbf / Run41914742327:Godot-Headless, native Desktop-/Mobil-Renderings und Android-Toolchain grün. Providerantworten in Tests sind ausdrücklich synthetisch; kein Live-Modell-/Weltbeweis.
-Open: Finale Review-/CI-Befunde, echte Provider-/OpenCode-Verifikation und bestätigter Marktplan mit konkreter Eigentümerfreigabe vor produktivem Apply; danach unabhängiger Runtime-/Welt-Readback. Anleitung: docs/godot-migration/ai-world-designer.md.
+Status: PARTIAL
+Task: AI-Fabric im bestehenden Authoring-Server und getrennte Godot-GLB-Entwurfsvorschau integrieren.
+Decisions: Local/Free bevorzugt, Premium aus; Aurion Plan/Bestätigung/Receipt/unabhängiger Readback bleiben kanonisch, 10 Hz unverändert.
+Touched surfaces: server/aiFabric, Authoring-Router/Persistenzexport, bestehender Web-Einstieg, Godot-Weltstudio/Projektion, Regressionen und Anleitung.
+Evidence: 3230d446aaa9bcf65b6b8bad12a14b100a59b76f: 19 Workflows success; Run41918133218:48 Tests mit echter isolierter MariaDB plus TypeScript; Run41918133168:201 Godot-Prüfungen und native Desktop-/Mobil-Renderings; Run41918133305:echter Android/JNI-Smoke; Run41918133330:isolierter Container-Health mit passender Source/Build/Artefakt/Image-Identität und 10 Hz. Neue Web-Tabwechsel-Korrektur separat nachprüfen. Providerantworten synthetisch; kein Live-Modell-/Produktionsweltbeweis.
+Learned: Präsentationshüllen beweisen keine Passierbarkeit. Geänderter Vorgänger verhindert wiederholten Apply; ein Receipt bleibt gespeichert. Ledgerfehler dürfen keine zweite Inferenz auslösen; verspätete Antworten dürfen keinen gewechselten Tab oder bearbeiteten Entwurf überschreiben.
+Open: Finale Exact-Head-CI, echte Provider-/OpenCode-Verifikation und bestätigter Marktplan mit konkreter Eigentümerfreigabe vor produktivem Apply; Anleitung docs/godot-migration/ai-world-designer.md.
+Next safe step: Neue Regression prüfen, grünen Head integrieren und unabhängig zurücklesen; Live-Konfiguration und bestätigten Marktversuch getrennt nachweisen.

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Compass, GitBranch, MapPinned, Network, ShieldCheck, Sparkles } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ export default function AurionAuthoringWorkbench() {
   const utils = trpc.useUtils();
   const catalog = trpc.aurionAuthoring.catalog.useQuery();
   const [kind, setKind] = useState<AuthoringKind>("world");
+  const draftGeneration = useRef(0);
   const [worldAssets, setWorldAssets] = useState("");
   const [brief, setBrief] = useState("");
   const [draftJson, setDraftJson] = useState("");
@@ -43,7 +44,9 @@ export default function AurionAuthoringWorkbench() {
 
   const busy = propose.isPending || worldPlan.isPending || worldApply.isPending || dungeonPlan.isPending || dungeonApply.isPending || questDraft.isPending || questPlan.isPending || questPublish.isPending;
   const expectedConfirmation = confirmationFor(kind);
-  const mutationError = propose.error ?? worldPlan.error ?? worldApply.error ?? dungeonPlan.error ?? dungeonApply.error ?? questDraft.error ?? questPlan.error ?? questPublish.error;
+  // Proposal errors are scoped by requestDraft; the mutation hook may retain a
+  // rejected response after its tab or edited draft has already changed.
+  const mutationError = worldPlan.error ?? worldApply.error ?? dungeonPlan.error ?? dungeonApply.error ?? questDraft.error ?? questPlan.error ?? questPublish.error;
   const activeSummary = useMemo(() => ({
     world: catalog.data?.world.designs.length ?? 0,
     dungeons: catalog.data?.dungeons.length ?? 0,
@@ -51,6 +54,7 @@ export default function AurionAuthoringWorkbench() {
   }), [catalog.data]);
 
   const resetPlan = () => {
+    draftGeneration.current += 1;
     setPlanHash("");
     setConfirmation("");
     setProposalId("");
@@ -61,11 +65,14 @@ export default function AurionAuthoringWorkbench() {
   const requestDraft = async () => {
     setLocalError(null);
     resetPlan();
+    const generation = draftGeneration.current;
     try {
       const response = await propose.mutateAsync({ kind, request: brief.trim(), ...(kind === "world" ? { assetIds: worldAssets.split(",").map(id => id.trim()).filter(Boolean) } : {}) });
+      if (generation !== draftGeneration.current) return;
       setDraftJson(response.draftJson);
       setResult(`KI-Vorschlag „${response.title}“ erzeugt. Noch nichts wurde veröffentlicht.`);
     } catch (error) {
+      if (generation !== draftGeneration.current) return;
       setLocalError(error instanceof Error ? error.message : "Authoring-Vorschlag fehlgeschlagen.");
     }
   };
