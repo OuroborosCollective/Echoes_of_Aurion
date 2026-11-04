@@ -89,9 +89,9 @@ describe("routing unit tests; provider responses are test doubles", () => {
 it("uses canonical observed geometry, redacts actor identity and rejects fog or wrong scope", () => {
   // Synthetic observer DTO only; durable observer runtime is tested by its existing MariaDB/E2E lane.
   const slice = { schema: "aurion.world-slice.v1", policy: "actor-observed-current-epoch.v1", worldId: GLOBAL_WORLD_ID,
-    zoneId: input.zoneId, actorId: "player:42", epoch: 1, worldRoot: "a".repeat(64), sourceRevision: "b".repeat(40), observedAtTick: 1,
-    coordinate: { x: 0, z: 0 }, radius: 0, lod: "full", knowledgeHash: "c".repeat(64),
-    chunks: [{ coordinate: { x: 0, z: 0 }, authorityReceiptHash: "d".repeat(64), roads: [], structures: [],
+    zoneId: input.zoneId, actorId: "player:42", epoch: 1, worldRoot: "sha256:" + "a".repeat(64), sourceRevision: "b".repeat(40), observedAtTick: 1,
+    coordinate: { x: 0, z: 0 }, radius: 0, lod: "full", knowledgeHash: "sha256:" + "c".repeat(64),
+    chunks: [{ coordinate: { x: 0, z: 0 }, authorityReceiptHash: "sha256:" + "d".repeat(64), roads: [], structures: [],
       tiles: Array.from({ length: 256 }, (_, i) => ({ x: i % 16, z: Math.floor(i / 16), heightMm: 0, surface: "grass" })) }],
     entities: [{ entityId: "player:42", position: { x: 0, z: 0 } }] };
   const readback = { status: "VERIFIED", connectionId: input.connectionId, slice };

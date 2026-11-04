@@ -48,6 +48,8 @@ describe("operational budget with real durable filesystem (not live provider evi
     await expect(l.reserve(record("21", "free"), 0, 21)).rejects.toThrow("FREE_RATE_LIMIT");
     time += 60001;
     await l.reserve(record("21", "free"), 0, 21); await l.finish("21", { ...settled, actualMicros: null }, true);
+    expect((await l.status(100)).blocked).toBe(true);
+    await expect(l.reserve({ ...record("premium-after-unknown"), model: "another-model" }, 100, 50)).rejects.toThrow("COST_UNRESOLVED");
     time += 60001;
     await expect(l.reserve(record("22", "free"), 0, 21)).rejects.toThrow("FREE_RATE_LIMIT");
     time += 86400000;

@@ -55,7 +55,7 @@ export class FabricLedger {
       if (s.blocked) throw new FabricError("COST_UNRESOLVED");
       if (record.route === "premium") {
         if (limitMicros <= 0) throw new FabricError("PREMIUM_NOT_APPROVED");
-        if (s.blocked || s.records.some(r => r.route === "premium" && r.status !== "complete")) throw new FabricError("COST_UNRESOLVED");
+        if (s.blocked || s.records.some(r => r.status !== "complete")) throw new FabricError("COST_UNRESOLVED");
         if (s.spentMicros + record.reservedMicros > limitMicros) throw new FabricError("BUDGET_EXHAUSTED");
       }
       if (record.route === "free") {
@@ -91,7 +91,7 @@ export class FabricLedger {
     return this.transaction(s => ({
       spentMicros: s.spentMicros,
       remainingMicros: Math.max(0, limitMicros - s.spentMicros - s.records.filter(r => r.route === "premium" && r.status === "reserved").reduce((n, r) => n + r.reservedMicros, 0)),
-      blocked: s.blocked || s.records.some(r => r.route === "premium" && r.status !== "complete"),
+      blocked: s.blocked || s.records.some(r => r.status !== "complete"),
       freeAttempts: Math.floor(this.now() / 86_400_000) > s.day ? 0 : s.freeAttempts,
       freeMinuteAttempts: s.minute.filter(at => this.now() - at < 60_000).length,
       cooldowns: s.cooldowns,
