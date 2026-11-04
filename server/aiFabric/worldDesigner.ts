@@ -95,6 +95,7 @@ export class WorldDesigner {
     const failures: { route: string; code: string; audit?: TaskRecord }[] = [];
     for (const route of routing(input.mode, this.config)) {
       let lastAudit: TaskRecord | undefined;
+      let settling = false;
       let modelId = this.config.openCodeModel;
       let reserve = 0;
       let freeDailyLimit = this.config.freeDailyLimit;
@@ -134,15 +135,17 @@ export class WorldDesigner {
           catch (error) { throw error instanceof FabricError ? error : new FabricError("INVALID_DRAFT"); }
         } catch (error) { failure = errorCode(error); }
         // Settle cost even for invalid JSON/schema. A failed task is not a free task.
+        settling = true;
         const audit = await this.ledger.finish(taskId, { actualMicros: result?.costMicros ?? null, actualModel: result?.model ?? null, outputHash, provider: result?.provider ?? null,
           tokens: result?.tokens ?? null, validation: failure ?? "SCHEMA_VALID_PREVIEW_ONLY" }, !!failure);
         lastAudit = audit;
-        if (failure || !parsed) throw new FabricError(failure ?? "INVALID_DRAFT");
+        if (failure || !parsed) { settling = false; throw new FabricError(failure ?? "INVALID_DRAFT"); }
         return { kind: "world" as const, title: parsed.draft.title, draftJson: JSON.stringify(parsed.draft), requiresHumanReview: true as const,
           status: "AI_DRAFT", reviewNotes: parsed.reviewNotes, audit: { ...audit, atMs: record.atMs, actualModel: result!.model },
           worldRevision: context.world.revision, catalogRevision: context.catalog.revision, surfaceEvidence: context.surface ? { worldRoot: context.surface.worldRoot, sourceRevision: context.surface.sourceRevision, geometryHash: context.surface.geometryHash, observedAtTick: context.surface.observedAtTick } : null,
           budget: await this.ledger.status(premiumLimit(this.config)), failures };
       } catch (error) {
+        if (settling || errorCode(error).startsWith("LEDGER_")) throw error;
         failures.push({ route, code: errorCode(error), ...(lastAudit ? { audit: lastAudit } : {}) });
         // Never retry an ambiguous paid call; local->free is the only default fallback.
         if (route === "premium" || input.mode !== "auto") break;

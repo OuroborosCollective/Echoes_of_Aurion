@@ -23,6 +23,7 @@ export default function AurionAuthoringWorkbench() {
   const utils = trpc.useUtils();
   const catalog = trpc.aurionAuthoring.catalog.useQuery();
   const [kind, setKind] = useState<AuthoringKind>("world");
+  const [worldAssets, setWorldAssets] = useState("");
   const [brief, setBrief] = useState("");
   const [draftJson, setDraftJson] = useState("");
   const [planHash, setPlanHash] = useState("");
@@ -61,7 +62,7 @@ export default function AurionAuthoringWorkbench() {
     setLocalError(null);
     resetPlan();
     try {
-      const response = await propose.mutateAsync({ kind, request: brief.trim() });
+      const response = await propose.mutateAsync({ kind, request: brief.trim(), ...(kind === "world" ? { assetIds: worldAssets.split(",").map(id => id.trim()).filter(Boolean) } : {}) });
       setDraftJson(response.draftJson);
       setResult(`KI-Vorschlag „${response.title}“ erzeugt. Noch nichts wurde veröffentlicht.`);
     } catch (error) {
@@ -193,6 +194,9 @@ export default function AurionAuthoringWorkbench() {
                       : "Dungeon unter Windhain: 6 Räume, Rätsel, Untotenwelle, Seitenziel und Runenwächter als Endboss…"}
                   className="w-full rounded-md border border-cyan-200/15 bg-slate-950 p-3 text-sm text-slate-100"
                 />
+                {tab === "world" && <label className="block text-sm">Asset-Auswahl (IDs, durch Komma getrennt; höchstens 160)
+                  <Input value={worldAssets} onChange={event => setWorldAssets(event.target.value)} placeholder="Leer: geeigneter Katalog; bei großem Katalog IDs eingrenzen" />
+                </label>}
                 <Button disabled={brief.trim().length < 12 || busy} onClick={() => void requestDraft()} className="bg-cyan-500 text-slate-950 hover:bg-cyan-300">
                   <Sparkles className="mr-2 h-4 w-4" /> KI-Draft erzeugen
                 </Button>

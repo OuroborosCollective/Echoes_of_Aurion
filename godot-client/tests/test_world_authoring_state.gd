@@ -51,6 +51,12 @@ func verified_plan(state: Variant, d: Dictionary) -> void:
 func verify() -> void:
 	verify_quest_contract()
 	var d: Dictionary = JSON.parse_string(JSON.stringify(draft()))
+	var extra := d.duplicate(true)
+	extra.invented = true
+	require(not State._draft_valid(extra), "unknown draft field accepted")
+	extra = d.duplicate(true)
+	extra.placements[0].invented = true
+	require(not State._draft_valid(extra), "unknown placement field accepted")
 	var state: Variant = fresh()
 	require(state.session_matches(CONNECTION, 7), "bound session not recognized")
 	require(not state.session_matches(CONNECTION, 8), "other generation accepted")

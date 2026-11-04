@@ -86,6 +86,8 @@ export class OpenRouterProvider {
       usage: z.object({ total_tokens: z.number().int().nonnegative().optional(), cost: z.number().nonnegative().finite().optional() }).optional(),
     }).parse(await boundedJson("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST", headers: { Authorization: `Bearer ${this.key}`, "Content-Type": "application/json" },
+      // Usage accounting is automatic; usage.include is deprecated by OpenRouter.
+      // https://openrouter.ai/docs/cookbook/administration/usage-accounting
       body: JSON.stringify({ model: model.id, max_tokens: OUTPUT_TOKENS, stream: false,
         provider: { allow_fallbacks: false, require_parameters: true, max_price: providerPriceCeiling(model) },
         messages: [{ role: "user", content: prompt }],
@@ -112,15 +114,26 @@ export class OpenCodeProvider {
     if (!this.config.openCodePassword) throw new FabricError("AUTH_FAILED");
     return boundedJson(loopbackUrl(this.config.openCodeUrl) + path, {
       method: body === undefined ? "GET" : "POST",
-      headers: { Authorization: `Basic ${Buffer.from(`${this.config.openCodeUsername}:${this.config.openCodePassword}`).toString("base64")}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Basic ${Buffer.from(`${this.config.openCodeUsername}:${this.config.openCodePassword}`).toString("base64")}`, "Content-Type": "application/json", Accept: "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }, timeout);
+  }
+  private async specification() {
+    // v1.19.5 publishes JSON at /openapi.json; legacy servers may publish JSON
+    // at /doc. Never parse HTML or follow spec URLs supplied by the provider.
+    for (const path of ["/openapi.json", "/doc"]) {
+      try { return z.object({ paths: JsonObject }).parse(await this.request(path)); }
+      catch (error) {
+        if (error instanceof FabricError && ["AUTH_FAILED", "OFFLINE", "TIMEOUT", "TRANSPORT_UNCERTAIN"].includes(error.code)) throw error;
+      }
+    }
+    throw new FabricError("OPENCODE_API_UNSUPPORTED");
   }
   async inspect(promptBytes = 0) {
     if (!this.config.openCodeUrl) throw new FabricError("OFFLINE");
     const health = z.object({ healthy: z.literal(true), version: z.string() }).parse(await this.request("/global/health"));
     if (!this.config.openCodeVersion || health.version !== this.config.openCodeVersion) throw new FabricError("OPENCODE_VERSION_UNVERIFIED");
-    const spec = z.object({ paths: JsonObject }).parse(await this.request("/doc"));
+    const spec = await this.specification();
     if (!spec.paths["/session"] || !spec.paths["/session/{sessionID}/message"]) throw new FabricError("OPENCODE_API_UNSUPPORTED");
     const config = JsonObject.parse(await this.request("/config"));
     // Deny every tool, MCP, plugin and automatic compaction in the dedicated instance.

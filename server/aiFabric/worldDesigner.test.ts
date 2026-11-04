@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -103,4 +103,18 @@ it("uses canonical observed geometry, redacts actor identity and rejects fog or 
   expect(() => designerSurface({ ...readback, connectionId: "zone_peer_other" }, input)).toThrow("WORLD_CONTEXT_UNVERIFIED");
   const prompt = buildPrompt({ ...context, surface }, input);
   expect(prompt).toContain("observedSurface"); expect(prompt).not.toContain("player:42");
+});
+
+it.each(["finish", "status"] as const)("does not resubmit inference after ledger %s failure (explicit testdouble)", async operation => {
+  const s = await setup(); s.local.available = true;
+  vi.spyOn(s.designer.ledger, operation).mockRejectedValue(new FabricError("LEDGER_LOCKED"));
+  await expect(s.designer.propose(input, context)).rejects.toThrow("LEDGER_LOCKED");
+  expect(s.local.calls).toBe(1); expect(s.remote.calls).toBe(0);
+});
+
+it("lets an explicit catalog selection bound a large valid world catalog", () => {
+  const large = { ...context, catalog: { ...context.catalog, entries: Array.from({ length: 161 }, (_, i) => ({ ...context.catalog.entries[0]!, assetId: `glb_fixture_${i}` })) } };
+  expect(() => buildPrompt(large, input)).toThrow("SELECT_FEWER_ASSETS");
+  const prompt = buildPrompt(large, { ...input, assetIds: ["glb_fixture_160"] });
+  expect(prompt).toContain("glb_fixture_160"); expect(prompt).not.toContain('"assetId":"glb_fixture_0"');
 });

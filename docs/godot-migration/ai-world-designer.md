@@ -18,7 +18,7 @@ Die Vorschau zeigt höchstens 18 Objekte im ersten ausgewählten Chunk auf einer
 
 ## Bedienung
 
-1. Das bestehende Godot-Projekt öffnen. Im Aurion-Dock **AI World Designer öffnen** wählen; der vorhandene Authoring-Einstieg startet.
+1. Das bestehende Godot-Projekt öffnen. Unter **Project Settings → Plugins** zuerst **Aurion Bridge** aktivieren. Im Aurion-Dock **AI World Designer · echte Aurion-Welt** wählen; der vorhandene Authoring-Einstieg startet.
 2. Mit dem Eigentümerkonto anmelden und die echte Zone verbinden. Ohne passende aktive Gameplay-Verbindung lehnt `aiPropose` ab.
 3. Den tatsächlich vom Spieler bestätigten aktuellen Chunk wählen. Unentdeckte, nicht kausal belegte oder außerhalb dieses Actor-Scope liegende Chunks werden abgelehnt. Katalog laden, **KI-Status und Budget prüfen** wählen. Auto bevorzugt gemäß Serverkonfiguration Local und dann Free. Premium bleibt ohne ausdrückliche Serverfreigabe deaktiviert.
 4. Chunk X/Z auswählen, bei Bedarf reale Asset-IDs aus dem Katalog eingrenzen und einen Auftrag eingeben. Beispielsweise: „Erstelle im freigegebenen Testbereich einen Markt mit zwei vorhandenen Marktständen und einem dekorativen Objekt.“
@@ -63,7 +63,7 @@ Audit enthält Task-ID, Template-Version, erwartetes/tatsächliches Modell, Prov
 
 Die Eigentümerinstallation wurde noch nicht verbunden. „NVIDIA Nemotron Flash“ ist keine verifizierte Modell-ID. Vor Aktivierung die installierte Version, `/doc`, Modell-ID, Provider, Kontext und Inferenzadresse prüfen. Ein lokales OpenCode mit NVIDIA-Cloud-Endpunkt gilt nicht als lokale Inferenz. Dieser Adapter akzeptiert zunächst ausschließlich nachgewiesene Loopback-Inferenz mit Nullpreismetadaten; externe NVIDIA-Inferenz benötigt eine eigene Kostenpolicy und ist hier nicht freigeschaltet.
 
-Eine **dedizierte** OpenCode-Instanz ohne produktiven Repositoryzugriff, MCP oder Plugins verwenden. Die normale interaktive OpenCode-Konfiguration wird nicht verändert. `OPENCODE_SERVER_PASSWORD` setzen, dann `opencode serve --hostname 127.0.0.1 --port 4096`. Version exakt in `AURION_AI_OPENCODE_VERSION` eintragen. Vor Verbindung `/config`, `/agent`, `/config/providers` und die lokale OpenAPI-Spezifikation prüfen.
+Eine **dedizierte** OpenCode-Instanz ohne produktiven Repositoryzugriff, MCP oder Plugins verwenden. Die normale interaktive OpenCode-Konfiguration wird nicht verändert. `OPENCODE_SERVER_PASSWORD` setzen, dann `opencode serve --hostname 127.0.0.1 --port 4096`. Version exakt in `AURION_AI_OPENCODE_VERSION` eintragen. Vor Verbindung `/config`, `/agent`, `/config/providers` und die lokale OpenAPI-Spezifikation prüfen. Der Adapter liest JSON aus `/openapi.json` (im Release v1.19.5 dokumentierter Source-Vertrag) oder aus dem älteren JSON-Pfad `/doc`; HTML wird nicht als Spec akzeptiert. Nur Installationen mit den geprüften Session-/Message-/Config-Verträgen werden verbunden, keine pauschale Zusage für jede OpenCode-Version.
 
 Erforderlicher Konfigurationsauszug (Platzhalter durch die tatsächlich geprüften IDs ersetzen):
 
@@ -89,6 +89,8 @@ Erforderlicher Konfigurationsauszug (Platzhalter durch die tatsächlich geprüft
   }
 }
 ```
+
+OpenRouter liefert Usage/Cost laut aktueller [Usage-Dokumentation](https://openrouter.ai/docs/cookbook/administration/usage-accounting) automatisch; der frühere Parameter `usage.include` ist wirkungslos und wird nicht als Kostennachweis verwendet. Fehlende reale Kosten bleiben ungeklärt.
 
 Die Providerdefinition einschließlich SDK und Modellfähigkeiten muss zur echten Installation passen; der Auszug installiert kein Modell. Auch automatische Nebenmodelle müssen dieselbe kostenlose lokale Inferenz verwenden. Der Adapter prüft dies, verlangt einen deny-all-Agenten und erzeugt eine eigene Session mit deny-all-Berechtigung. Ein Auftrag darf nur Text zurückgeben; Toolteile werden abgelehnt.
 

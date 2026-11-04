@@ -51,13 +51,15 @@ describe("model metadata and private connectivity", () => {
 });
 
 it("checks OpenCode contracts over real loopback HTTP with synthetic inference", async () => {
-  let unsafe = false, calls = 0, toolRequested = false;
+  let unsafe = false, calls = 0, toolRequested = false, legacySpec = false, htmlDoc = false;
   const localModel = "local/nemotron-fixture";
   const base = await serve(async (req, res) => {
     if (req.headers.authorization !== `Basic ${Buffer.from("opencode:isolated-password").toString("base64")}`) { res.writeHead(401).end(); return; }
     let value: unknown;
     if (req.url === "/global/health") value = { healthy: true, version: "fixture-1" };
-    else if (req.url === "/doc") value = { paths: { "/session": {}, "/session/{sessionID}/message": {} } };
+    else if (req.url === "/openapi.json" && legacySpec) { res.writeHead(404).end(); return; }
+    else if (req.url === "/doc" && htmlDoc) { res.writeHead(200, { "Content-Type": "text/html" }).end("<html>Docs</html>"); return; }
+    else if (req.url === "/openapi.json" || req.url === "/doc") value = { paths: { "/session": {}, "/session/{sessionID}/message": {} } };
     else if (req.url === "/config") value = { permission: "deny", model: localModel, small_model: unsafe ? "paid/other" : localModel, compaction: { auto: false },
       agent: { "aurion-designer": { model: localModel, steps: 1 } }, provider: { local: { options: { baseURL: "http://127.0.0.1:8000/v1" } } } };
     else if (req.url === "/agent") value = [{ name: "aurion-designer", permission: [{ permission: "*", pattern: "*", action: "deny" }] }];
@@ -76,6 +78,9 @@ it("checks OpenCode contracts over real loopback HTTP with synthetic inference",
   expect((await provider.inspect()).inference).toBe("loopback");
   expect(await provider.generate("isolated test prompt")).toMatchObject({ content: "{}", costMicros: 0, model: "nemotron-fixture" });
   expect(toolRequested).toBe(false); expect(calls).toBe(1);
+  legacySpec = true; expect((await provider.inspect()).status).toBe("CONNECTED");
+  htmlDoc = true; await expect(provider.inspect()).rejects.toThrow("OPENCODE_API_UNSUPPORTED");
+  legacySpec = false; expect((await provider.inspect()).status).toBe("CONNECTED");
   unsafe = true; await expect(provider.generate("never submitted")).rejects.toThrow("OPENCODE_AUXILIARY_MODEL_UNSAFE"); expect(calls).toBe(1);
   await expect(new OpenCodeProvider({ ...config, openCodePassword: "wrong" }).inspect()).rejects.toThrow("AUTH_FAILED");
   await expect(new OpenCodeProvider({ ...config, openCodeVersion: "wrong" }).inspect()).rejects.toThrow("OPENCODE_VERSION_UNVERIFIED");

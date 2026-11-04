@@ -82,6 +82,7 @@ export const aurionAuthoringRouter = router({
   propose: adminProcedure
     .input(z.object({
       kind: z.enum(["world", "quest", "dungeon"]),
+      assetIds: DesignerInput.shape.assetIds.optional(),
       request: z.string().trim().min(12).max(4_000),
     }).strict())
     .mutation(async ({ ctx, input }) => {
@@ -93,7 +94,7 @@ export const aurionAuthoringRouter = router({
         const position = connectionId ? zone?.positionForConnection(connectionId) : undefined;
         if (!connectionId || !position) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "AI_LIVE_SESSION_REQUIRED" });
         const coordinate = splitWorldChunkPositionMm(position).coordinate;
-        const result = await proposeWorldForSession(ctx.user.id, DesignerInput.parse({ request: input.request, mode: "auto", zoneId: WORLD_SLICE_ZONE, connectionId, chunkX: coordinate.x, chunkZ: coordinate.z }));
+        const result = await proposeWorldForSession(ctx.user.id, DesignerInput.parse({ request: input.request, assetIds: input.assetIds ?? [], mode: "auto", zoneId: WORLD_SLICE_ZONE, connectionId, chunkX: coordinate.x, chunkZ: coordinate.z }));
         if (result.status !== "AI_DRAFT" || !("title" in result)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "AI_DRAFT_UNRESOLVED" });
         return result;
       }

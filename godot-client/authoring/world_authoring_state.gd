@@ -58,6 +58,8 @@ func not_submitted() -> void:
 static func _draft_valid(draft: Variant) -> bool:
 	if typeof(draft) != TYPE_DICTIONARY or draft.get("schemaVersion") != "aurion.world-design.v1":
 		return false
+	for key in draft:
+		if key not in ["schemaVersion", "designKey", "version", "title", "expectedCatalogRevision", "placements"]: return false
 	if not WorldProjection._id(draft.get("designKey")) or not WorldProjection._whole(draft.get("version"), 1, 1000000):
 		return false
 	if typeof(draft.get("title")) != TYPE_STRING or draft.title.strip_edges() != draft.title or draft.title.length() < 3 or draft.title.length() > 160:
@@ -68,6 +70,8 @@ static func _draft_valid(draft: Variant) -> bool:
 	for p in draft.placements:
 		if typeof(p) != TYPE_DICTIONARY or not WorldProjection._id(p.get("placementKey")) or keys.has(p.placementKey) or not WorldProjection._id(p.get("assetId"), true):
 			return false
+		for key in p:
+			if key not in ["assetId", "placementKey", "chunkX", "chunkZ", "xMm", "zMm", "rotationQuarterTurns", "scalePermille"]: return false
 		keys[p.placementKey] = true
 		if not WorldProjection._whole(p.get("chunkX"), -100000, 100000) or not WorldProjection._whole(p.get("chunkZ"), -100000, 100000) or not WorldProjection._whole(p.get("xMm"), 0, 63999) or not WorldProjection._whole(p.get("zMm"), 0, 63999) or not WorldProjection._whole(p.get("rotationQuarterTurns"), 0, 3) or not WorldProjection._whole(p.get("scalePermille"), 250, 4000):
 			return false
