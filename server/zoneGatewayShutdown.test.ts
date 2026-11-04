@@ -68,6 +68,27 @@ describe("zone gateway shutdown quiescence", () => {
     expect(last?.intents?.filter(intent => intent.type === "presence_leave").map(intent => intent.userId)).toEqual([91]);
   });
 
+  it("bounds a stalled world-presence release and still commits the final leave tick", async () => {
+    // Review case: a lease write stalled by the database must not block the final tick and causal flush.
+    const runtime = await startGateway({ releaseGate: new Promise<void>(() => undefined) });
+    servers.push(runtime.server);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const socket = runtime.connect();
+    await onceOpen(socket);
+    const welcomed = onceWelcome(socket);
+    socket.send(JSON.stringify(hello));
+    await welcomed;
+    runtime.registry.tick();
+    const started = Date.now();
+    await runtime.gateway.close();
+    expect(Date.now() - started).toBeLessThan(4_000);
+    expect(runtime.released).toEqual([]);
+    expect(runtime.zone.getCanonicalZoneState().players).toEqual([]);
+    const head = runtime.zone.getLatestReceipt();
+    expect(runtime.recorder.getEntry("observatory_threshold", head!.tick)?.intents?.filter(intent => intent.type === "presence_leave").map(intent => intent.userId)).toEqual([91]);
+    expect(warn.mock.calls.map(call => String(call[0])).some(line => line.includes("1 world-presence lease release(s) still pending"))).toBe(true);
+  }, 10_000);
+
   it("never joins a handshake that resumes after shutdown started", async () => {
     let releaseTicket!: () => void;
     const ticketGate = new Promise<void>(resolve => { releaseTicket = resolve; });
