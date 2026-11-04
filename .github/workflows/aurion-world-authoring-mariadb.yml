@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/aurion-world-authoring-mariadb.yml"
+      - "server/aiFabric/**"
       - "server/aurionAuthoringPersistence.ts"
       - "server/aurionWorldAuthoringMariaDb.test.ts"
       - "server/routes/aurionAuthoringRouter.ts"
@@ -61,6 +62,6 @@ jobs:
       - name: Migrate isolated MariaDB
         run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
       - name: Run world authoring transaction and compatibility tests
-        run: pnpm exec vitest run server/aurionWorldAuthoringMariaDb.test.ts server/databaseSmoke.test.ts
+        run: pnpm exec vitest run server/aiFabric server/aurionWorldAuthoringMariaDb.test.ts server/databaseSmoke.test.ts
       - name: TypeScript check
         run: pnpm check

@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { DesignerInput, WorldDesigner } from "../aiFabric/worldDesigner";
+import { fabricConfig } from "../aiFabric/policy";
+import { globalZoneRegistry } from "../zoneRuntime";
+import { zoneIdSchema } from "../zoneProtocol";
+import { activeProvenance } from "../aurionProvenance";
 import { adminProcedure, router } from "../_core/trpc";
 import { glbImportStore } from "../glbImportStore";
 import { proposeAurionAuthoringDraft } from "../liveDeveloperAuthoring";
@@ -17,6 +23,25 @@ import {
 } from "../aurionAuthoringPersistence";
 
 export const aurionAuthoringRouter = router({
+  aiStatus: adminProcedure.query(async () => {
+    try { return await new WorldDesigner(fabricConfig()).status(); }
+    catch { return { status: "NOT_CONFIGURED", premiumEnabled: false, models: [], local: { status: "OFFLINE" } }; }
+  }),
+  aiPropose: adminProcedure.input(DesignerInput).mutation(async ({ ctx, input }) => {
+    const zone = globalZoneRegistry.find(zoneIdSchema.parse(input.zoneId));
+    const connected = () => zone?.liveConnectionIdForUser(ctx.user.id) === input.connectionId;
+    if (!connected()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "AI_LIVE_SESSION_REQUIRED" });
+    const [catalog, world] = await Promise.all([glbImportStore().catalog(), readActiveWorldDesign()]);
+    const result = await new WorldDesigner(fabricConfig()).propose(input, {
+      catalog, world, zoneId: input.zoneId, tick: zone!.getTickNumber(), sourceRevision: activeProvenance.sourceRevision,
+    });
+    // The model runs outside the tick. Re-read both independently afterwards.
+    const [currentCatalog, currentWorld] = await Promise.all([glbImportStore().catalog(), readActiveWorldDesign()]);
+    if (!connected() || currentCatalog.revision !== catalog.revision || currentWorld.revision !== world.revision) {
+      return { ...result, draftJson: "", status: "UNRESOLVED", failures: [...result.failures, { route: "context", code: "CONTEXT_CHANGED" }] };
+    }
+    return result;
+  }),
   catalog: adminProcedure.query(async () => {
     const [catalog, world, dungeons] = await Promise.all([
       glbImportStore().catalog(),
@@ -33,6 +58,7 @@ export const aurionAuthoringRouter = router({
         assetType: entry.assetType,
         targetKey: entry.targetKey,
         subcategory: entry.subcategory,
+        normalization: entry.normalization, storageUrl: entry.storageUrl, lods: entry.lods,
       })),
       world,
       dungeons,
@@ -45,6 +71,7 @@ export const aurionAuthoringRouter = router({
       request: z.string().trim().min(12).max(4_000),
     }).strict())
     .mutation(async ({ input }) => {
+      if (input.kind === "world") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "USE_AI_PROPOSE_WITH_LIVE_SESSION" });
       const catalog = await glbImportStore().catalog();
       const context = {
         glbCatalogRevision: catalog.revision,
