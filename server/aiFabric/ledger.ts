@@ -9,7 +9,7 @@ const RecordSchema = z.object({
   taskId: z.string(), atMs: amount, route: z.enum(["local", "free", "premium"]), model: z.string(),
   reservedMicros: amount, actualMicros: amount.nullable(), status: z.enum(["reserved", "complete", "unresolved"]),
   inputHash: z.string(), outputHash: z.string().nullable(), sourceRevision: z.string(),
-  promptVersion: z.string(), provider: z.string().nullable(), tokens: amount.nullable(), validation: z.string(),
+  promptVersion: z.string(), actualModel: z.string().nullable().default(null), provider: z.string().nullable(), tokens: amount.nullable(), validation: z.string(),
 }).strict();
 export type TaskRecord = z.infer<typeof RecordSchema>;
 const StateSchema = z.object({
@@ -47,11 +47,12 @@ export class FabricLedger {
       return result;
     } finally { await lock.close(); await unlink(this.file + ".lock"); }
   }
-  async reserve(record: Omit<TaskRecord, "atMs" | "actualMicros" | "status" | "outputHash" | "provider" | "tokens" | "validation">, limitMicros: number, freeDailyLimit: number) {
+  async reserve(record: Omit<TaskRecord, "atMs" | "actualMicros" | "status" | "outputHash" | "provider" | "tokens" | "validation" | "actualModel">, limitMicros: number, freeDailyLimit: number) {
     return this.transaction(s => {
       const now = this.now();
       if (s.records.some(r => r.taskId === record.taskId)) throw new FabricError("TASK_ALREADY_SUBMITTED");
       if ((s.cooldowns[record.model] ?? 0) > now) throw new FabricError("CIRCUIT_OPEN");
+      if (s.blocked) throw new FabricError("COST_UNRESOLVED");
       if (record.route === "premium") {
         if (limitMicros <= 0) throw new FabricError("PREMIUM_NOT_APPROVED");
         if (s.blocked || s.records.some(r => r.route === "premium" && r.status !== "complete")) throw new FabricError("COST_UNRESOLVED");
@@ -66,17 +67,18 @@ export class FabricLedger {
       }
       // Bounded audit storage: explicit rotation needed, never silently erase history.
       if (s.records.length >= 1000) throw new FabricError("LEDGER_CAPACITY");
-      const item: TaskRecord = { ...record, atMs: now, actualMicros: null, status: "reserved", outputHash: null, provider: null, tokens: null, validation: "PENDING" };
+      const item: TaskRecord = { ...record, atMs: now, actualMicros: null, status: "reserved", outputHash: null, actualModel: null, provider: null, tokens: null, validation: "PENDING" };
       s.records.push(item);
       return item;
     });
   }
-  async finish(taskId: string, result: Pick<TaskRecord, "actualMicros" | "outputHash" | "provider" | "tokens" | "validation">, failed = false) {
+  async finish(taskId: string, result: Pick<TaskRecord, "actualMicros" | "outputHash" | "provider" | "tokens" | "validation"> & { actualModel?: string | null }, failed = false) {
     return this.transaction(s => {
       const item = s.records.find(r => r.taskId === taskId);
       if (!item || item.status !== "reserved") throw new FabricError("TASK_NOT_PENDING");
       Object.assign(item, result);
       item.status = result.actualMicros === null ? "unresolved" : "complete";
+      if (item.route !== "premium" && result.actualMicros !== null && result.actualMicros > 0) { s.blocked = true; s.spentMicros += result.actualMicros; }
       if (item.route === "premium") {
         if (result.actualMicros === null || result.actualMicros > item.reservedMicros) s.blocked = true;
         s.spentMicros += result.actualMicros ?? item.reservedMicros;

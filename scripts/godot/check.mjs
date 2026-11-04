@@ -77,6 +77,7 @@ for (const [id, script, marker] of [
   ['world-glb-structure', 'test_world_glb_structure.gd', 'GODOT_WORLD_GLB_STRUCTURE_PASS'],
   ['world-design-active-scene', 'test_world_design_scene.gd', 'GODOT_WORLD_DESIGN_ACTIVE_SCENE_PASS'],
   ['world-design-large-readback', 'test_world_design_large_readback.gd', 'GODOT_WORLD_DESIGN_LARGE_READBACK_PASS'],
+  ['ai-draft-preview', 'test_ai_draft_preview.gd', 'AI_DRAFT_PREVIEW_PASS_ISOLATED_REAL_GODOT'],
   ['world-authoring-state', 'test_world_authoring_state.gd', 'GODOT_WORLD_AUTHORING_STATE_PASS'],
   ['world-authoring-scene', 'test_world_authoring_scene.gd', 'GODOT_WORLD_AUTHORING_SCENE_PASS'],
   ['world-editor-draft', 'test_world_editor_draft.gd', 'GODOT_WORLD_EDITOR_DRAFT_PASS'],

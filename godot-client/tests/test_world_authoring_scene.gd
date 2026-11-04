@@ -106,6 +106,16 @@ func verify() -> void:
 		require(studio.new_world_draft("owner.village", "Owner village", 1), "form could not create a local catalog-bound draft")
 		require(studio.stage_catalog_placement(draft().placements[0]), "first catalog placement could not enter an empty local draft")
 		require(studio.import_world_draft(JSON.stringify(draft())), "valid catalog-bound draft import rejected")
+		var unchanged: String = studio._draft.text
+		studio._ai_pending_draft = unchanged
+		studio._completed("aiPropose", {"kind":"world","status":"AI_DRAFT","requiresHumanReview":true,"draftJson":JSON.stringify({"schemaVersion":"invented"})}, SESSION, generation)
+		require(studio._draft.text == unchanged, "invalid AI output replaced the editor draft")
+		studio._ai_pending_draft = "an older draft"
+		studio._completed("aiPropose", {"kind":"world","status":"AI_DRAFT","requiresHumanReview":true,"draftJson":unchanged}, SESSION, generation)
+		require(studio._draft.text == unchanged and studio._info.text.contains("inzwischen"), "late AI output overwrote newer edits")
+		studio._ai_pending_draft = unchanged
+		studio._completed("aiPropose", {"kind":"world","status":"AI_DRAFT","requiresHumanReview":true,"draftJson":unchanged}, SESSION, generation)
+		require(studio._info.text.contains("PREVIEW_ONLY") and studio._state.phase == "ready", "AI proposal acquired server plan authority")
 		for forbidden in ["glb_bound_lod", "glb_unknown_target"]:
 			var forbidden_draft := draft()
 			forbidden_draft.placements[0].assetId = forbidden

@@ -83,6 +83,7 @@ func verify() -> void:
 	var concurrent := readback()
 	concurrent.revision = "8".repeat(64)
 	require(state.accept_readback(concurrent), "same confirmed design rejected after unrelated revision change")
+	require(state.live_readback_confirmed, "matching independent readback was not marked live")
 	state.close()
 	require(not state.session_matches(CONNECTION, 7), "closed session remained valid")
 	state = fresh()
@@ -112,6 +113,7 @@ func verify() -> void:
 	replaced.designs[0].version = 2
 	replaced.designs[0].designHash = "9".repeat(64)
 	require(state.accept_readback(replaced) and state.phase == "confirmed" and state.message.contains("verändert"), "confirmed receipt and newer world were not distinguished")
+	require(not state.live_readback_confirmed, "superseded design falsely marked live")
 	state.close()
 	var path := "user://aurion-test-journal-%d" % Time.get_ticks_usec()
 	var first := Journal.new(path)

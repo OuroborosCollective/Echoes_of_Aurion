@@ -35,6 +35,13 @@ describe("operational budget with real durable filesystem (not live provider evi
     const l = await ledger(); await l.reserve(record("one"), 100, 50); await l.finish("one", { ...settled, actualMicros: null }, true);
     expect((await new FabricLedger(l.file).status(100)).blocked).toBe(true);
   });
+  it("records unexpected free charges and blocks all further inference", async () => {
+    const l = await ledger(); await l.reserve(record("unexpected", "free"), 100, 50);
+    await l.finish("unexpected", { ...settled, actualModel: "provider-reported-model" });
+    expect((await l.status(100)).spentMicros).toBe(30);
+    await expect(l.reserve(record("next", "free"), 100, 50)).rejects.toThrow("COST_UNRESOLVED");
+    expect(JSON.parse(await readFile(l.file, "utf8")).records[0].actualModel).toBe("provider-reported-model");
+  });
   it("counts failed free requests and enforces the minute and day caps", async () => {
     let time = 1000; const l = await ledger(() => time);
     for (let i = 0; i < 20; i++) { await l.reserve(record(String(i), "free"), 0, 21); await l.finish(String(i), { ...settled, actualMicros: 0 }); }

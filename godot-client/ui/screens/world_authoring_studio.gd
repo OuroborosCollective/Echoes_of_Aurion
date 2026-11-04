@@ -5,6 +5,7 @@ const AuthoringApi = preload("res://net/api/world_authoring_api.gd")
 const AuthoringState = preload("res://authoring/world_authoring_state.gd")
 const AuthoringJournal = preload("res://authoring/world_authoring_journal.gd")
 const WorldProjection = preload("res://world/world_design_projection.gd")
+const AiDesignerPanel = preload("res://ui/screens/ai_designer_panel.gd")
 const QuestEditor = preload("res://ui/screens/quest_authoring_editor.gd")
 signal confirmed_world(readback: Dictionary, connection_id: String, generation: int)
 signal closed
@@ -40,6 +41,8 @@ var _new_design_key: LineEdit
 var _new_design_title: LineEdit
 var _new_design_version: SpinBox
 var _quest_editor: VBoxContainer
+var _ai_panel: VBoxContainer
+var _ai_pending_draft := ""
 
 func _ready() -> void:
 	visible = false
@@ -62,7 +65,7 @@ func _ready() -> void:
 	stack.add_theme_constant_override("separation", 8)
 	scroll.add_child(stack)
 	var heading := Label.new()
-	heading.text = "Aurion Weltstudio · Admin"
+	heading.text = "Aurion Weltstudio · AI World Designer"
 	heading.add_theme_font_size_override("font_size", 22)
 	stack.add_child(heading)
 	_catalog_info = Label.new()
@@ -81,6 +84,10 @@ func _ready() -> void:
 	_brief.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_brief.custom_minimum_size.y = 90
 	stack.add_child(_brief)
+	_ai_panel = AiDesignerPanel.new()
+	stack.add_child(_ai_panel)
+	_ai_panel.status_requested.connect(func(): _send("aiStatus"))
+	_ai_panel.history_selected.connect(func(text: String): import_world_draft(text))
 	_button(stack, "KI-Entwurf anfordern", _propose)
 	_draft = TextEdit.new()
 	_draft.placeholder_text = "Aurion-Weltentwurf als JSON prüfen und bearbeiten"
@@ -346,6 +353,7 @@ func configure(auth: Node, server: String, connection: String, allow_local: bool
 	add_child(_api)
 	_api.completed.connect(_completed)
 	_api.failed.connect(_failed)
+	_ai_panel.configure(auth, server, connection, allow_local)
 
 func open_studio() -> bool:
 	if not _session_valid() or _api == null or _api.busy():
@@ -370,6 +378,8 @@ func close_session() -> void:
 		_auth.refresh_succeeded.disconnect(_on_refresh_succeeded)
 	_api = null
 	_state.close()
+	_ai_pending_draft = ""
+	if is_instance_valid(_ai_panel): _ai_panel.clear_session()
 	if is_instance_valid(_quest_editor): _quest_editor.close_context()
 	_catalog_revision = ""
 	_catalog_assets.clear()
@@ -423,17 +433,31 @@ func _on_draft_changed() -> void:
 	_state.draft_changed()
 	if is_instance_valid(_confirm):
 		_confirm.hide()
+	if is_instance_valid(_ai_panel): _ai_panel.stage(_current_draft(), _catalog_assets, _catalog_revision)
 
 func _current_draft() -> Variant:
 	return JSON.parse_string(_draft.text)
 
 func _propose() -> void:
 	var brief := _brief.text.strip_edges()
-	if _state.phase == "closed" or brief.length() < 12 or brief.length() > 4000:
-		_info.text = "Admin-Zugang und ein Text mit 12 bis 4000 Zeichen sind erforderlich."
+	if not _draft_editable() or brief.length() < 12 or brief.length() > 4000:
+		_info.text = "Bestätigte Admin-Sitzung, geklärter Weltstand und 12 bis 4000 Zeichen sind erforderlich."
 		return
-	if _send("propose", {"kind":"world", "request":brief}):
-		_info.text = "Unverbindlicher Entwurf wird angefordert."
+	if _inspection.is_empty() or _inspection.get("stale", true):
+		_info.text = "Zuerst eine aktive bestätigte Zone verbinden."
+		return
+	var payload: Dictionary = _ai_panel.options()
+	payload.request = brief
+	payload.zoneId = _inspection.zoneId
+	payload.connectionId = _connection
+	if _ai_panel.improve.button_pressed:
+		if not _catalog_draft_valid(_current_draft()):
+			_info.text = "Für Verbesserung zuerst einen gültigen Entwurf laden."
+			return
+		payload.draft = _current_draft()
+	_ai_pending_draft = _draft.text
+	if _send("aiPropose", payload):
+		_info.text = "AI_DRAFT wird angefordert; keine Weltänderung."
 
 func _plan() -> void:
 	# A journal entry for this session's in-flight apply is not an unknown
@@ -527,6 +551,8 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 			_catalog_info.text = "Adminrolle bestätigt; Katalog wird geladen."
 			_quest_editor.open_context(connection, generation, data.get("id"), _send)
 			_send("catalog")
+		"aiStatus":
+			_ai_panel.provider_status(data)
 		"catalog":
 			_catalog_revision = ""
 			_catalog_assets.clear()
@@ -545,6 +571,18 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_asset_choice.add_item(str(_catalog_assets[id].get("displayName", id)).left(160) + " · " + id)
 				_asset_choice.set_item_metadata(_asset_choice.item_count - 1, id)
 			_catalog_info.text = "Katalog %s · %d mögliche Weltassets\n%s" % [data.glbCatalogRevision, eligible.size(), ", ".join(eligible.slice(0, 12))]
+			if typeof(data.get("world")) == TYPE_DICTIONARY: _ai_panel.set_world(data.world)
+		"aiPropose":
+			_ai_panel.proposal(data)
+			var proposal_draft: Variant = JSON.parse_string(str(data.get("draftJson", "")))
+			if _draft.text != _ai_pending_draft:
+				_info.text = "Entwurf inzwischen bearbeitet; KI-Vorschlag liegt nur im Verlauf."
+			elif data.get("status") == "AI_DRAFT" and data.get("requiresHumanReview") == true and _catalog_draft_valid(proposal_draft):
+				_draft.text = JSON.stringify(proposal_draft, "\t")
+				_on_draft_changed()
+				_info.text = "AI_DRAFT · PREVIEW_ONLY · Aurion-Plan und Bestätigung stehen aus."
+			else:
+				_info.text = "UNRESOLVED · " + JSON.stringify(data.get("failures", []))
 		"propose":
 			var draft: Variant = JSON.parse_string(str(data.get("draftJson", "")))
 			if data.get("kind") == "world" and data.get("requiresHumanReview") == true and typeof(draft) == TYPE_DICTIONARY:
@@ -592,6 +630,7 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 			else:
 				_info.text = "Weltstand gelesen; ein vorheriges unbekanntes Apply wird dadurch nicht bewiesen."
 			if data.get("schemaVersion") == "aurion.world-design.v1" and WorldProjection._hex(data.get("revision"), 64) and typeof(data.get("designs")) == TYPE_ARRAY:
+				_ai_panel.set_world(data)
 				confirmed_world.emit(data, connection, generation)
 
 func _failed(kind: String, _reason: String, connection: String, generation: int) -> void:
@@ -601,6 +640,10 @@ func _failed(kind: String, _reason: String, connection: String, generation: int)
 		_quest_editor.failed(kind)
 		return
 	_state.failed(kind)
+	if kind in ["aiStatus", "aiPropose"]:
+		_ai_panel.status.text = "UNRESOLVED · " + _reason
+		_info.text = "KI-Anfrage nicht bestätigt; bestehender Entwurf bleibt erhalten."
+		return
 	_info.text = _state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden."
 
 func _close_requested() -> void:

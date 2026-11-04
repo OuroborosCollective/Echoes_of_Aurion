@@ -30,12 +30,20 @@ const server = createServer(async (req, res) => {
       res.writeHead(302, { Location: 'http://127.0.0.1:3000/redirect-sink' }).end();
       return;
     }
+    if (req.url === '/api/trpc/aurionAuthoring.aiStatus') {
+      assert.equal(req.method, 'GET');
+      response(res, envelope({ premiumEnabled: false, local: { status: 'OFFLINE' } }));
+      return;
+    }
     assert.equal(req.method, 'POST');
     assert.equal(req.headers['content-type'], 'application/json');
     let body = '';
     for await (const chunk of req) body += chunk;
     const data = JSON.parse(body).json;
-    if (req.url === '/api/trpc/aurionQuest.authoringTemplates') {
+    if (req.url === '/api/trpc/aurionAuthoring.aiPropose') {
+      assert.deepEqual(data, { fixture: 'review-only' });
+      response(res, envelope({ status: 'AI_DRAFT', requiresHumanReview: true, draftJson: '{}' }));
+    } else if (req.url === '/api/trpc/aurionQuest.authoringTemplates') {
       templatePages++;
       assert.deepEqual(data, templatePages === 1 ? {} : { after: { templateId: 'quest.http-fixture', version: 1 } });
       response(res, envelope({ schemaVersion: 'aurion.quest-template-page.v1', items: [{ templateId: 'quest.http-fixture', version: 1, title: 'Fixture', active: true, quarantined: false }], nextCursor: templatePages === 1 ? { templateId: 'quest.http-fixture', version: 1 } : null }));

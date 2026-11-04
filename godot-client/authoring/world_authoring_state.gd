@@ -13,6 +13,7 @@ var _pending_operation := ""
 var _planned: Dictionary = {}
 var _applying: Dictionary = {}
 var _receipt: Dictionary = {}
+var live_readback_confirmed := false
 
 func open(connection: String, session_generation: int, actor: Variant) -> bool:
 	close()
@@ -35,6 +36,7 @@ func close() -> void:
 	_planned.clear()
 	_applying.clear()
 	_receipt.clear()
+	live_readback_confirmed = false
 
 func session_matches(connection: String, session_generation: int) -> bool:
 	return phase != "closed" and connection == connection_id and session_generation == generation
@@ -72,6 +74,8 @@ static func _draft_valid(draft: Variant) -> bool:
 	return true
 
 func draft_changed() -> void:
+	live_readback_confirmed = false
+	if phase == "confirmed": message = "Entwurf geändert · PREVIEW_ONLY; vorheriges Receipt bleibt lesbar."
 	_pending_plan.clear()
 	_pending_operation = ""
 	_planned.clear()
@@ -83,6 +87,7 @@ func begin_plan(draft: Variant, operation_id: String) -> bool:
 		return false
 	_applying.clear()
 	_receipt.clear()
+	live_readback_confirmed = false
 	_pending_plan = draft.duplicate(true)
 	_pending_operation = operation_id
 	_planned.clear()
@@ -129,6 +134,7 @@ func begin_apply(current_draft: Variant) -> Dictionary:
 	_applying = _planned.duplicate(true)
 	_planned.clear()
 	_receipt.clear()
+	live_readback_confirmed = false
 	phase = "applying"
 	message = "Aurion-Änderung angefordert."
 	return {"draft":_applying.draft.duplicate(true), "expectedPlanHash":_applying.planHash, "operationId":_applying.plan.operationId, "confirmation":"APPLY_WORLD_DESIGN"}
@@ -207,7 +213,8 @@ func accept_readback(readback: Variant) -> bool:
 	if phase != "awaiting_readback" or _receipt.is_empty() or not _world_valid(readback):
 		return false
 	phase = "confirmed"
-	message = "Aurion-Receipt und unabhängiger Weltstand stimmen überein." if _target_matches(readback, _applying.draft, _receipt.resultHash) else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
+	live_readback_confirmed = _target_matches(readback, _applying.draft, _receipt.resultHash)
+	message = "LIVE_READBACK_CONFIRMED · Aurion-Receipt und unabhängiger Weltstand stimmen überein." if live_readback_confirmed else "Aurion-Receipt bestätigt; der aktuelle Weltstand wurde inzwischen verändert."
 	return true
 
 func failed(kind: String) -> void:

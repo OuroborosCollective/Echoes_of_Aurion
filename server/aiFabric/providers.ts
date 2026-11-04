@@ -54,7 +54,7 @@ export function reservationMicros(model: Model, promptBytes: number): number {
   if (!Number.isSafeInteger(micros)) throw new FabricError("PRICE_UNKNOWN");
   return micros;
 }
-export type Generation = { content: string; model: string; provider: string; tokens: number | null; costMicros: number | null };
+export type Generation = { content: string; model: string; provider: string; tokens: number | null; costMicros: number | null; policyViolation?: boolean };
 export class OpenRouterProvider {
   constructor(private readonly key: string) {}
   async models(): Promise<Model[]> {
@@ -64,9 +64,14 @@ export class OpenRouterProvider {
   async account() {
     if (!this.key) throw new FabricError("AUTH_FAILED");
     const raw = z.object({ data: JsonObject }).parse(await boundedJson("https://openrouter.ai/api/v1/key", { headers: { Authorization: `Bearer ${this.key}` } }, 10_000)).data;
+    let purchasedCreditsVerified = false;
+    try {
+      const credits = z.object({ data: z.object({ total_credits: z.number().nonnegative(), total_usage: z.number().nonnegative() }) }).parse(await boundedJson("https://openrouter.ai/api/v1/credits", { headers: { Authorization: `Bearer ${this.key}` } }, 8000));
+      purchasedCreditsVerified = credits.data.total_credits >= 10 && credits.data.total_credits >= credits.data.total_usage;
+    } catch { /* Restricted execution keys may not inspect purchases. Keep the lower cap. */ }
     // No API key labels/ids or arbitrary provider metadata leave this boundary.
     return { limitRemainingUsd: typeof raw.limit_remaining === "number" ? raw.limit_remaining : null, usageDailyUsd: typeof raw.usage_daily === "number" ? raw.usage_daily : null,
-      freeTier: typeof raw.is_free_tier === "boolean" ? raw.is_free_tier : null, purchasedCreditsVerified: false };
+      freeTier: typeof raw.is_free_tier === "boolean" ? raw.is_free_tier : null, purchasedCreditsVerified };
   }
   async generate(model: Model, prompt: string): Promise<Generation> {
     if (!this.key) throw new FabricError("AUTH_FAILED");
@@ -115,6 +120,11 @@ export class OpenCodeProvider {
     // Deny every tool, MCP, plugin and automatic compaction in the dedicated instance.
     // Never rely on prompt instructions to confine a coding agent.
     if (config.permission !== "deny" || Object.keys((config.mcp ?? {}) as object).length || (Array.isArray(config.plugin) && config.plugin.length)) throw new FabricError("OPENCODE_TOOL_POLICY_UNSAFE");
+    const configuredModel = `${this.config.openCodeProvider}/${this.config.openCodeModel}`;
+    const auxiliary = config.agent as Record<string, { model?: string; steps?: number }> | undefined;
+    if (config.model !== configuredModel || config.small_model !== configuredModel || auxiliary?.["aurion-designer"]?.model !== configuredModel
+      || auxiliary?.["aurion-designer"]?.steps !== 1 || (config.compaction as { auto?: boolean } | undefined)?.auto !== false
+      || Object.values(auxiliary ?? {}).some(a => a.model !== undefined && a.model !== configuredModel)) throw new FabricError("OPENCODE_AUXILIARY_MODEL_UNSAFE");
     const agents = z.array(z.object({ name: z.string(), permission: z.array(z.object({ permission: z.string(), pattern: z.string(), action: z.string() })) })).parse(await this.request("/agent"));
     const agent = agents.find(a => a.name === "aurion-designer");
     if (!agent || !agent.permission.some(p => p.permission === "*" && p.pattern === "*" && p.action === "deny") || agent.permission.some(p => p.action !== "deny")) throw new FabricError("OPENCODE_TOOL_POLICY_UNSAFE");
@@ -139,8 +149,9 @@ export class OpenCodeProvider {
       agent: "aurion-designer", model: { providerID: this.config.openCodeProvider, modelID: this.config.openCodeModel },
       parts: [{ type: "text", text: prompt }],
     }, 40_000));
-    if (response.info.cost !== 0 || response.parts.some(p => p.type === "tool")) throw new FabricError("OPENCODE_POLICY_VIOLATION");
+    const micros = Math.ceil(response.info.cost * 1_000_000);
     return { content: response.parts.filter(p => p.type === "text").map(p => p.text ?? "").join("\n"), model: response.info.modelID,
-      provider: response.info.providerID, costMicros: 0, tokens: response.info.tokens.input + response.info.tokens.output };
+      provider: response.info.providerID, costMicros: Number.isSafeInteger(micros) ? micros : null,
+      policyViolation: response.info.cost !== 0 || response.parts.some(p => p.type === "tool"), tokens: response.info.tokens.input + response.info.tokens.output };
   }
 }

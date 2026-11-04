@@ -764,16 +764,13 @@ func _refresh() -> void:
 		if not is_finite(dimension) or dimension <= 0.0001:
 			model.free()
 			continue
-		var row: int = int(item.zMm / 4000)
-		var column: int = int(item.xMm / 4000)
-		var tile: Dictionary = _chunks[item.chunk][row * 16 + column]
 		var holder := Node3D.new()
 		holder.name = "WorldVisual_%d" % rendered
 		holder.set_meta("aurion_design_key", item.designKey)
 		holder.set_meta("aurion_placement_key", item.placementKey)
 		holder.set_meta("aurion_asset_sha256", item.sha256)
 		holder.position = Vector3(float(item.chunk.x * CHUNK_MM + item.xMm - HALF_CHUNK_MM) / 1000.0,
-			float(tile.heightMm) / 1000.0, float(item.chunk.y * CHUNK_MM + item.zMm - HALF_CHUNK_MM) / 1000.0)
+			_placement_height(item), float(item.chunk.y * CHUNK_MM + item.zMm - HALF_CHUNK_MM) / 1000.0)
 		holder.rotation.y = float(item.rotation) * PI / 2.0
 		var factor := _visual_scale(item.sha256, item.subcategory, dimension, int(item.scale))
 		var midpoint: Vector3 = bounds.get_center()
@@ -786,6 +783,11 @@ func _refresh() -> void:
 		rendered_mesh_instances += int(cost.instances)
 		rendered_surfaces += int(cost.surfaces)
 	diagnostic = "Aurion-Weltentwurf: %d Modelle, %d noch nicht dargestellt" % [rendered, desired.size() - rendered]
+
+func _placement_height(item: Dictionary) -> float:
+	var row: int = int(item.zMm / 4000)
+	var column: int = int(item.xMm / 4000)
+	return float(_chunks[item.chunk][row * 16 + column].heightMm) / 1000.0
 
 static func _visual_scale(sha: String, category: Variant, dimension: float, scale_permille: int) -> float:
 	var asset_scale := 1.0 if sha in STARTER_CITY_WALL_HASHES else _target_size(category) / dimension

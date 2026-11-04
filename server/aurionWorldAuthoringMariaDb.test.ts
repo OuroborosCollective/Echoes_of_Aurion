@@ -20,6 +20,7 @@ import type { TrpcContext } from "./_core/context";
 import { AdminQuestStudioService } from "./questCompiler/adminService";
 import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
+import { DesignerInput, validateProposal } from "./aiFabric/worldDesigner";
 import { aurionQuestRouter } from "./routes/aurionQuestRouter";
 
 vi.mock("./storage", async importOriginal => ({
@@ -103,6 +104,26 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     }
     if (store) await store.close();
     if (root) await rm(root, { recursive: true, force: true });
+  });
+
+  it("passes a review-only AI candidate through the real canonical database contract", async () => {
+    // Synthetic model output, real GLB catalog, real MariaDB transaction and readback.
+    const input = DesignerInput.parse({ request: "Place the isolated catalog barrel", mode: "free", zoneId: "observatory_threshold", connectionId: "zone_peer_isolated_ai", chunkX: 0, chunkZ: 0 });
+    const context = { catalog: await store.catalog(), world: await readActiveWorldDesign(), sourceRevision: "isolated-db-test", zoneId: input.zoneId, tick: 0 };
+    const candidate = validateProposal(draft("ai-isolated-market"), context, input).draft;
+    const caller = aurionAuthoringRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    const stranger = aurionAuthoringRouter.createCaller({ user: { id: otherAdmin, role: "user" } } as TrpcContext);
+    await expect(stranger.aiStatus()).rejects.toThrow();
+    await expect(caller.aiPropose(input)).rejects.toThrow("AI_LIVE_SESSION_REQUIRED");
+    const operationId = "c".repeat(32);
+    const plan = await planWorldDesign(candidate, undefined, operationId);
+    await expect(caller.worldApply({ draft: candidate, expectedPlanHash: plan.planHash, operationId, confirmation: "" } as never)).rejects.toThrow();
+    expect((await readActiveWorldDesign()).designs).toHaveLength(0);
+    const applied = await caller.worldApply({ draft: candidate, expectedPlanHash: plan.planHash, operationId, confirmation: "APPLY_WORLD_DESIGN" });
+    await expect(applyWorldDesign(admin, candidate, plan.planHash, operationId)).rejects.toThrow("AUTHORING_OPERATION_ALREADY_USED");
+    const readback = await readActiveWorldDesign();
+    expect(readback.designs.find(d => d.designKey === candidate.designKey)?.designHash).toBe(applied.receipt.resultHash);
+    expect((await recoverWorldAuthoringReceipt(admin, { operationId, planHash: plan.planHash, designKey: candidate.designKey, version: candidate.version })).status).toBe("found");
   });
 
   it("recovers only the current admin's exact committed quest publication and rejects corrupt evidence", async () => {
