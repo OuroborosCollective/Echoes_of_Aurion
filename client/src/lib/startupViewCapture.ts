@@ -1,6 +1,8 @@
 import { PerspectiveCamera, Vector3 } from "three";
 import { operationalDate } from "@shared/operationalClock";
 
+type CaptureCameraPose = { positionMm: number[]; targetMm: number[]; fovMilliDeg: number; nearMm: number; farMm: number };
+
 /** Opt-in, one-shot observation of the real renderer. Never sends a game intent. */
 export class StartupViewCapture {
   private snapshot: any = null;
@@ -9,11 +11,11 @@ export class StartupViewCapture {
   private failure: string | null = null;
   private frames = 0;
   private camera: PerspectiveCamera | null = null;
-  private pose: { positionMm: number[]; targetMm: number[]; fovMilliDeg: number; nearMm: number; farMm: number } | null = null;
+  private pose: CaptureCameraPose | null = null;
   bindCamera(camera: PerspectiveCamera) { this.camera = camera; }
   alignCamera() {
     if (this.pose || this.target !== null) throw Error("CAPTURE_CAMERA_ALREADY_ALIGNED");
-    const raw = this.read().camera as NonNullable<typeof this.pose>;
+    const raw = this.read().camera as CaptureCameraPose;
     if (!this.camera || !this.snapshot || !raw || ![raw.positionMm, raw.targetMm].every(v => Array.isArray(v) && v.length === 3 && v.every(n => Number.isSafeInteger(n) && Math.abs(n) <= 10**10)) ||
       !Number.isSafeInteger(raw.fovMilliDeg) || raw.fovMilliDeg < 10000 || raw.fovMilliDeg > 150000 ||
       !Number.isSafeInteger(raw.nearMm) || !Number.isSafeInteger(raw.farMm) || raw.nearMm < 1 || raw.farMm <= raw.nearMm || raw.farMm > 10000000 ||
