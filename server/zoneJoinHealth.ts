@@ -18,6 +18,7 @@ export type ZoneJoinHealthReadback = Readonly<{
   bootSettlement: ZoneBootSettlement;
   bootSettlementCode: string | null;
   orphanedLeasesReleased: number | null;
+  orphanedLeaseReleaseCode: string | null;
 }>;
 
 const CODE = /^[A-Z][A-Z0-9_:]{0,95}$/;
@@ -38,6 +39,7 @@ export class ZoneJoinHealthMonitor {
   private bootSettlement: ZoneBootSettlement = "not_run";
   private bootSettlementCode: string | null = null;
   private orphanedLeasesReleased: number | null = null;
+  private orphanedLeaseReleaseCode: string | null = null;
 
   constructor(
     private readonly warn: (line: string) => void = line => console.error(line),
@@ -68,10 +70,13 @@ export class ZoneJoinHealthMonitor {
   }
 
   bootSettlementStarted(): void { this.bootSettlement = "pending"; this.bootSettlementCode = null; }
-  bootSettlementFinished(result: { status: Exclude<ZoneBootSettlement, "pending" | "not_run">; code?: string | null; orphanedLeasesReleased?: number | null }): void {
+  bootSettlementFinished(result: { status: Exclude<ZoneBootSettlement, "pending" | "not_run">; code?: string | null }): void {
     this.bootSettlement = result.status;
     this.bootSettlementCode = result.code ?? null;
-    if (result.orphanedLeasesReleased !== undefined) this.orphanedLeasesReleased = result.orphanedLeasesReleased;
+  }
+  orphanedLeaseReleaseFinished(released: number | null, code: string | null = null): void {
+    this.orphanedLeasesReleased = released;
+    this.orphanedLeaseReleaseCode = code;
   }
 
   readback(): ZoneJoinHealthReadback {
@@ -86,6 +91,7 @@ export class ZoneJoinHealthMonitor {
       bootSettlement: this.bootSettlement,
       bootSettlementCode: this.bootSettlementCode,
       orphanedLeasesReleased: this.orphanedLeasesReleased,
+      orphanedLeaseReleaseCode: this.orphanedLeaseReleaseCode,
     });
   }
 }

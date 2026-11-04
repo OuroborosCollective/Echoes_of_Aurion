@@ -328,10 +328,20 @@ if [[ -n "$previous_aurion" ]]; then
   '
 fi
 # companion-memory-preflight-end
+phase=compose-promotion
+compose_digest_env=(
+  "AURION_BUILD_INPUT_DIGEST=$build_input_digest"
+  "AURION_ARTIFACT_DIGEST=$artifact_digest"
+  "AURION_RUNTIME_IMAGE_DIGEST=$runtime_image_id"
+  "AURION_RELEASE_ARCHIVE_DIGEST=$release_archive_digest"
+)
+env "${compose_digest_env[@]}" "${compose[@]}" config --quiet
 # previous-runtime-drain-start
 # Stop the previous runtime explicitly so its drain receipt can be read before
-# --force-recreate removes the container and its logs. Report-only: the previous
-# runtime is already stopped here, so a missing receipt must never block promotion.
+# --force-recreate removes the container and its logs. Runs only after every
+# non-mutating Compose validation passed and immediately before `up`, so a rejected
+# release never stops the serving runtime. Report-only: a missing receipt must
+# never block promotion, because the previous runtime is already stopped here.
 phase=previous-runtime-drain
 if [[ -n "$previous_aurion" && "$(docker inspect --format '{{.State.Running}}' "$previous_aurion")" == "true" ]]; then
   drain_since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -347,14 +357,6 @@ if [[ -n "$previous_aurion" && "$(docker inspect --format '{{.State.Running}}' "
   fi
 fi
 # previous-runtime-drain-end
-phase=compose-promotion
-compose_digest_env=(
-  "AURION_BUILD_INPUT_DIGEST=$build_input_digest"
-  "AURION_ARTIFACT_DIGEST=$artifact_digest"
-  "AURION_RUNTIME_IMAGE_DIGEST=$runtime_image_id"
-  "AURION_RELEASE_ARCHIVE_DIGEST=$release_archive_digest"
-)
-env "${compose_digest_env[@]}" "${compose[@]}" config --quiet
 env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion
 
 container_id="$("${compose[@]}" ps -q aurion)"

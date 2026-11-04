@@ -1162,10 +1162,19 @@ export class ZoneRegistry {
     return settlement;
   }
 
-  /** Resolves once no boot settlement is in flight for the zone; settlement errors are reported by its owner. */
-  async waitForSettlement(zoneId: ZoneId): Promise<void> {
+  /**
+   * Resolves true once no boot settlement is in flight for the zone (settlement errors are
+   * reported by its owner), or false when `timeoutMs` elapses first.
+   */
+  async waitForSettlement(zoneId: ZoneId, timeoutMs?: number): Promise<boolean> {
     const settlement = this.settlementByZone.get(zoneId);
-    if (settlement) await settlement.catch(() => undefined);
+    if (!settlement) return true;
+    const settled = settlement.then(() => true, () => true);
+    if (timeoutMs === undefined) return settled;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const outcome = await Promise.race([settled, new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); })]);
+    clearTimeout(timer);
+    return outcome;
   }
 
   /** Called only after scope consumption, with a verified persisted head. */

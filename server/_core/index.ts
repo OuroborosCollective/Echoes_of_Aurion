@@ -122,9 +122,11 @@ async function startServer(){
     shuttingDown=true;
     console.info(`[Aurion] graceful shutdown requested: ${signal}`);
     try{
+      // The deadline covers the whole sequence: a stalled feed close must not outlive it either.
+      await withShutdownDeadline((async()=>{
       defensiveGatewayObserver.stop();
       await godotFeed?.close();
-      await withShutdownDeadline(drainAurionRuntimeForShutdown({
+      await drainAurionRuntimeForShutdown({
         closeZoneGateway:()=>zoneGateway.close(),
         stopObservers:[
           ()=>globalAssuranceService.stop(),
@@ -145,7 +147,8 @@ async function startServer(){
         },
         closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
         persistenceStatus:()=>globalTickRecorder.getPersistenceStatus(),
-      }));
+      });
+      })());
       // Emit the actual post-drain receipt synchronously before process.exit(0).
       // Buffered console output may be lost during an immediate process exit.
       writeSync(1, "[Aurion] graceful causal shutdown complete\n");
@@ -160,9 +163,11 @@ async function startServer(){
   // The shutdown guard above makes repeated signals idempotent.
   process.on("SIGTERM",()=>{void shutdown("SIGTERM");});
   process.on("SIGINT",()=>{void shutdown("SIGINT");});
-  // Settle what the previous process left (presences without a live transport, orphaned
-  // leases) before admitting any client. Bounded; it never activates a zone.
-  await zoneGateway.settleAtBoot(["observatory_threshold"]);
+  // Release leases the previous process left before admitting any client (bounded, fast),
+  // then settle its zone heads in the background: never activates a zone and never delays
+  // listen beyond the promoter's health budget. Admissions wait for the settlement, bounded.
+  await zoneGateway.releaseOrphanedLeasesAtBoot();
+  void zoneGateway.settleZonesAtBoot(["observatory_threshold"]);
   server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
 startServer().catch(error=>{console.error(error);process.exit(1);});

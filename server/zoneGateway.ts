@@ -28,9 +28,9 @@ const SHUTDOWN_CLIENT_CLOSE_MS=2000;
 // A stalled world-presence write must not hold back the final tick and the causal flush.
 // Leases are not causal evidence and expire on their own.
 const SHUTDOWN_LEASE_RELEASE_MS=2000;
-// Boot settlement is bounded so a stalled database cannot keep the process from listening;
-// handshakes still wait for an unfinished settlement before activating the zone.
-const BOOT_SETTLEMENT_TIMEOUT_MS=30_000;
+// Boot work must fit the promoter's health budget (~30 s): only the lease release runs
+// before listen. Zone settlement runs in the background; admissions wait for it, bounded.
+const BOOT_LEASE_RELEASE_TIMEOUT_MS=5_000;const BOOT_SETTLEMENT_REPORT_MS=30_000;const ADMISSION_SETTLEMENT_WAIT_MS=10_000;
 function closePolicyViolation(socket:WebSocket):void{socket.close(1008,"zone authorization rejected");}
 // Server-side admission failure: retryable for clients, never reported as an authorization rejection.
 function closeZoneUnavailable(socket:WebSocket):void{if(socket.readyState===WebSocket.OPEN||socket.readyState===WebSocket.CONNECTING)socket.close(1011,"zone temporarily unavailable");}
@@ -43,7 +43,8 @@ function rejectUnsupportedZoneVersion(socket:WebSocket):void{
 }
 
 /** `/v1/ws` is Aurion's live gameplay transport. AX1/WASD are historical provenance only; legacy tRPC/MCP encounter routes are not consulted. */
-export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink,recoverZone:ZoneRecoveryResolver=(zoneId)=>restorePersistedZoneHead(zoneId,globalCausalPersistence,globalTickRecorder),observer:DefensiveGatewayObserver=defensiveGatewayObserver,joinHealth:ZoneJoinHealthMonitor=globalZoneJoinHealth){
+export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink,recoverZone:ZoneRecoveryResolver=(zoneId)=>restorePersistedZoneHead(zoneId,globalCausalPersistence,globalTickRecorder),observer:DefensiveGatewayObserver=defensiveGatewayObserver,joinHealth:ZoneJoinHealthMonitor=globalZoneJoinHealth,options:{admissionSettlementWaitMs?:number}={}){
+  const admissionSettlementWaitMs=options.admissionSettlementWaitMs??ADMISSION_SETTLEMENT_WAIT_MS;
   if(fixedTick&&(!Number.isSafeInteger(fixedTick.intervalTicks)||fixedTick.intervalTicks<1))throw new Error("ZONE_FIXED_TICK_INTERVAL_INVALID");
   const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const observationConnections=new Set<string>();const presenceObservers=new Set<()=>void>();let closing=false;const presenceReleases=new Set<Promise<unknown>>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();let isTicking=false;
   const tickTimer=setInterval(async()=>{
@@ -71,7 +72,7 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       if(raw&&typeof raw==="object"&&(raw as {type?:unknown}).type==="hello"&&(raw as {protocolVersion?:unknown}).protocolVersion!==ZONE_PROTOCOL_VERSION){rejectUnsupportedZoneVersion(socket);return;}
       return closePolicyViolation(socket);
     }
-    try{const ticket=await consumeTicket({ticket:hello.ticket,zoneId:hello.zoneId});if(socket.readyState!==WebSocket.OPEN)return;if(!ticket)return closePolicyViolation(socket);if(closing){socket.close(1001,"server shutting down");return;}const zone=await registry.getOrRecover(ticket.zoneId,recoverZone);if(socket.readyState!==WebSocket.OPEN)return;if(closing){socket.close(1001,"server shutting down");return;}const welcome=zone.join({userId:ticket.userId,socket,combatProfile:ticket.combatProfile});clientVerificationRegistry.open(ticket.userId,welcome.connectionId);observationConnections.add(welcome.connectionId);const presence=worldPresence?new ZonePresenceLifecycle(worldPresence,{userId:ticket.userId,connectionId:welcome.connectionId,zoneId:ticket.zoneId}):undefined;let refreshTimer:ReturnType<typeof setInterval>|undefined;
+    try{const ticket=await consumeTicket({ticket:hello.ticket,zoneId:hello.zoneId});if(socket.readyState!==WebSocket.OPEN)return;if(!ticket)return closePolicyViolation(socket);if(closing){socket.close(1001,"server shutting down");return;}if(!(await registry.waitForSettlement(ticket.zoneId,admissionSettlementWaitMs)))throw new Error("ZONE_BOOT_SETTLEMENT_PENDING");if(socket.readyState!==WebSocket.OPEN)return;const zone=await registry.getOrRecover(ticket.zoneId,recoverZone);if(socket.readyState!==WebSocket.OPEN)return;if(closing){socket.close(1001,"server shutting down");return;}const welcome=zone.join({userId:ticket.userId,socket,combatProfile:ticket.combatProfile});clientVerificationRegistry.open(ticket.userId,welcome.connectionId);observationConnections.add(welcome.connectionId);const presence=worldPresence?new ZonePresenceLifecycle(worldPresence,{userId:ticket.userId,connectionId:welcome.connectionId,zoneId:ticket.zoneId}):undefined;let refreshTimer:ReturnType<typeof setInterval>|undefined;
       const onPresenceFailure=(error:unknown)=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);};const observePresence=()=>{const position=zone.positionForConnection(welcome.connectionId);if(position)void presence?.observe(position)?.catch(onPresenceFailure);};
       socket.once("close",()=>{clientVerificationRegistry.close(welcome.connectionId);observationConnections.delete(welcome.connectionId);if(refreshTimer)clearInterval(refreshTimer);presenceObservers.delete(observePresence);zone.leave(welcome.connectionId);const released=presence?.close().catch(error=>console.error("[Aurion Zone] Presence lease release failed",error));if(released){presenceReleases.add(released);void released.finally(()=>presenceReleases.delete(released));}});
       const initialPosition=zone.positionForConnection(welcome.connectionId);if(!initialPosition){zone.leave(welcome.connectionId);return closePolicyViolation(socket);}try{await presence?.refresh(initialPosition);}catch(error){zone.leave(welcome.connectionId);console.error("[Aurion Zone] Presence lease registration failed",error);joinHealth.failed(error);return closeZoneUnavailable(socket);}if(socket.readyState!==WebSocket.OPEN)return;if(presence)presenceObservers.add(observePresence);if(!sendZoneMessage(socket,JSON.stringify(welcome)))return;joinHealth.joined();finishObservation("completed");
@@ -84,25 +85,41 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
       refreshTimer=presence?setInterval(()=>{const position=zone.positionForConnection(welcome.connectionId);if(!position)return;void presence.refresh(position).catch(error=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);});},WORLD_PRESENCE_REFRESH_MS):undefined;
     }catch(error){console.error("[Aurion Zone] Ticket handshake failed",error);joinHealth.failed(error);closeZoneUnavailable(socket);}
   });});
-  /** Boot: settle persisted zone heads and orphaned leases before admitting clients. Never activates a zone. */
-  const settleAtBoot=async(zoneIds:readonly ZoneId[],timeoutMs=BOOT_SETTLEMENT_TIMEOUT_MS)=>{
-    const lastSeenBefore=operationalDate();joinHealth.bootSettlementStarted();
-    const work=(async()=>{
-      let code:string|null=null;
-      for(const zoneId of zoneIds){try{await registry.settlePersistedHead(zoneId,recoverZone);}catch(error){code??=zoneFailureCode(error);console.error(`[Aurion Zone] boot settlement failed for ${zoneId}`,error);}}
-      let released:number|null=null;
-      if(worldPresence?.releaseOrphaned){try{released=await worldPresence.releaseOrphaned({lastSeenBefore});}catch(error){code??="WORLD_PRESENCE_ORPHAN_RELEASE_FAILED";console.error("[Aurion Zone] orphaned world-presence release failed",error);}}
-      return{code,released};
-    })();
-    const finish=(result:{code:string|null;released:number|null})=>{joinHealth.bootSettlementFinished({status:result.code?"failed":"settled",code:result.code,orphanedLeasesReleased:result.released});console.info(`[Aurion Zone] BOOT_SETTLEMENT ${JSON.stringify({status:result.code?"failed":"settled",code:result.code,orphanedLeasesReleased:result.released})}`);};
-    let deadline:ReturnType<typeof setTimeout>|undefined;
-    const outcome=await Promise.race([work,new Promise<"timeout">(resolve=>{deadline=setTimeout(()=>resolve("timeout"),timeoutMs);})]);
-    clearTimeout(deadline);
-    if(outcome==="timeout"){joinHealth.bootSettlementFinished({status:"timed_out",code:"ZONE_BOOT_SETTLEMENT_TIMEOUT"});console.error(`[Aurion Zone] BOOT_SETTLEMENT ${JSON.stringify({status:"timed_out",timeoutMs})}`);void work.then(finish);}
-    else finish(outcome);
+  /**
+   * Boot, before listen: release world-presence leases of the previous process. No client
+   * has been admitted yet, so every active lease is orphaned (inclusive boundary). Bounded;
+   * a lease wrongly released later is restored by its owner's next refresh (upsert).
+   */
+  const releaseOrphanedLeasesAtBoot=async(timeoutMs=BOOT_LEASE_RELEASE_TIMEOUT_MS)=>{
+    if(!worldPresence?.releaseOrphaned)return joinHealth.readback();
+    const lastSeenBefore=operationalDate();let deadline:ReturnType<typeof setTimeout>|undefined;
+    try{
+      const outcome=await Promise.race([worldPresence.releaseOrphaned({lastSeenBefore}),new Promise<"timeout">(resolve=>{deadline=setTimeout(()=>resolve("timeout"),timeoutMs);})]);
+      if(outcome==="timeout"){joinHealth.orphanedLeaseReleaseFinished(null,"WORLD_PRESENCE_ORPHAN_RELEASE_TIMEOUT");console.error(`[Aurion Zone] orphaned world-presence release exceeded ${timeoutMs} ms`);}
+      else{joinHealth.orphanedLeaseReleaseFinished(outcome);console.info(`[Aurion Zone] ORPHANED_LEASES_RELEASED ${JSON.stringify({released:outcome})}`);}
+    }catch(error){joinHealth.orphanedLeaseReleaseFinished(null,"WORLD_PRESENCE_ORPHAN_RELEASE_FAILED");console.error("[Aurion Zone] orphaned world-presence release failed",error);}
+    finally{clearTimeout(deadline);}
     return joinHealth.readback();
   };
-  return{registry,settleAtBoot,close:async()=>{closing=true;clearInterval(tickTimer);
+  /**
+   * Boot, in the background: settle persisted zone heads (canonical leave tick for presences
+   * without a transport) without activating them. Never blocks listen; admissions wait for it
+   * up to the admission bound. A settlement still running at `reportAfterMs` is reported.
+   */
+  const settleZonesAtBoot=(zoneIds:readonly ZoneId[],reportAfterMs=BOOT_SETTLEMENT_REPORT_MS)=>{
+    joinHealth.bootSettlementStarted();let finished=false;
+    const report=setTimeout(()=>{if(finished)return;joinHealth.bootSettlementFinished({status:"timed_out",code:"ZONE_BOOT_SETTLEMENT_TIMEOUT"});console.error(`[Aurion Zone] BOOT_SETTLEMENT ${JSON.stringify({status:"timed_out",afterMs:reportAfterMs})}`);},reportAfterMs);
+    report.unref?.();
+    return(async()=>{
+      let code:string|null=null;
+      for(const zoneId of zoneIds){try{await registry.settlePersistedHead(zoneId,recoverZone);}catch(error){code??=zoneFailureCode(error);console.error(`[Aurion Zone] boot settlement failed for ${zoneId}`,error);}}
+      finished=true;clearTimeout(report);
+      joinHealth.bootSettlementFinished({status:code?"failed":"settled",code});
+      console.info(`[Aurion Zone] BOOT_SETTLEMENT ${JSON.stringify({status:code?"failed":"settled",code})}`);
+      return joinHealth.readback();
+    })();
+  };
+  return{registry,releaseOrphanedLeasesAtBoot,settleZonesAtBoot,close:async()=>{closing=true;clearInterval(tickTimer);
     // Close every client first: their close handlers queue presence_leave and release
     // world-presence leases. Bounded: an unresponsive peer is terminated.
     await Promise.all([...wss.clients].map(client=>new Promise<void>(resolve=>{if(client.readyState===WebSocket.CLOSED)return resolve();const timer=setTimeout(()=>{client.terminate();resolve();},SHUTDOWN_CLIENT_CLOSE_MS);client.once("close",()=>{clearTimeout(timer);resolve();});client.close(1001,"server shutdown");})));

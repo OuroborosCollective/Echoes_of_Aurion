@@ -274,19 +274,18 @@ export async function releaseWorldPresenceLease(values: { connectionId: string; 
  * Boot boundary: a crashed or killed process never releases its leases, and its
  * connection ids are never reused, so they would stay "active" until expiry and
  * feed ghost presences into world snapshots. One runtime owns every zone
- * connection; leases last seen before this process admitted any client are orphaned.
+ * connection; at boot, before admission, every active lease is orphaned.
  */
 export async function releaseOrphanedWorldPresenceLeases(values: { lastSeenBefore: Date; now?: Date }): Promise<number> {
   const db = await requireDb();
   const now = values.now ?? operationalDate();
-  // lastSeenAt is stored with whole-second precision. A lease admitted in the boot
-  // second is stored at or after that second's start; never compare it to a
-  // sub-second boundary, or a live lease would be released as orphaned.
-  const before = new Date(Math.floor(values.lastSeenBefore.getTime() / 1000) * 1000);
+  // Called before the process admits any client, so the boundary is inclusive:
+  // lastSeenAt has whole-second precision, and an orphan refreshed in the boot
+  // second is stored at that second's start, which is <= the boundary.
   const result = await db.update(aurionWorldPresenceLeases).set({ disconnectedAt: now }).where(and(
     isNull(aurionWorldPresenceLeases.disconnectedAt),
     gt(aurionWorldPresenceLeases.expiresAt, now),
-    lt(aurionWorldPresenceLeases.lastSeenAt, before),
+    lte(aurionWorldPresenceLeases.lastSeenAt, values.lastSeenBefore),
   ));
   return affectedRowCount(result);
 }

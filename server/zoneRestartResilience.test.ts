@@ -9,6 +9,7 @@ import { replayZoneTick } from "./causality/replayZoneTick";
 import { observatoryMobDefinitions } from "./ax1MobContent";
 import { ZoneJoinHealthMonitor, zoneFailureCode } from "./zoneJoinHealth";
 import { withShutdownDeadline } from "./_core/gracefulCausalShutdown";
+import { readFileSync } from "node:fs";
 
 // Production 2026-11-04 follow-ups: the zone lock was invisible, server-side failures
 // were reported as authorization rejections, the next process could not settle the
@@ -28,13 +29,14 @@ async function startGateway(options: {
   health?: ZoneJoinHealthMonitor;
   ticket?: () => Promise<unknown>;
   releaseOrphaned?: (values: { lastSeenBefore: Date }) => Promise<number>;
+  admissionSettlementWaitMs?: number;
 }) {
   const server = createServer();
   const registry = options.registry ?? new ZoneRegistry();
   const health = options.health ?? quiet();
   const ticket = vi.fn(options.ticket ?? (async () => ({ userId: 91, zoneId: "observatory_threshold" as const, clientBuild: "fixture", expiresAt: new Date(Date.now() + 60_000) })));
   const presence = { upsert: vi.fn(async () => undefined), release: vi.fn(async () => undefined), ...(options.releaseOrphaned ? { releaseOrphaned: options.releaseOrphaned } : {}) };
-  const gateway = registerZoneGateway(server, registry, ticket as never, presence, undefined, options.recover as never, undefined, health);
+  const gateway = registerZoneGateway(server, registry, ticket as never, presence, undefined, options.recover as never, undefined, health, { admissionSettlementWaitMs: options.admissionSettlementWaitMs });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address(); if (!address || typeof address === "string") throw new Error("ADDRESS_REQUIRED");
   const connect = () => new WebSocket(`ws://127.0.0.1:${address.port}/v1/ws`, { origin: "http://localhost" });
@@ -92,53 +94,97 @@ describe("boot settlement", () => {
   const servers: { close(): void }[] = [];
   afterEach(() => { for (const server of servers.splice(0)) server.close(); vi.restoreAllMocks(); });
 
-  it("settles the head without activating the zone, then later joins re-verify instead of racing it", async () => {
+  it("settles the head in the background without activating the zone; a join during settlement waits instead of racing it", async () => {
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const recorder = new AurionTickRecorder();
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     const recover = vi.fn(async (zoneId: "observatory_threshold") => { await gate; return new AuthoritativeMovementZone(zoneId, recorder); });
-    const leases = vi.fn(async () => 3);
-    const runtime = await startGateway({ recover, releaseOrphaned: leases });
+    const runtime = await startGateway({ recover });
     servers.push(runtime.server);
-    const startedAt = Date.now();
-    const settling = runtime.gateway.settleAtBoot(["observatory_threshold"]);
-    // A join that arrives during settlement waits for it instead of recovering concurrently.
+    const settling = runtime.gateway.settleZonesAtBoot(["observatory_threshold"]);
+    expect(runtime.health.readback().bootSettlement).toBe("pending");
     const socket = runtime.connect(); await onceOpen(socket);
     const welcomed = onceWelcome(socket); socket.send(JSON.stringify(hello));
     await vi.waitFor(() => expect(runtime.ticket).toHaveBeenCalledTimes(1));
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(recover).toHaveBeenCalledTimes(1);
     release();
-    const readback = await settling;
-    expect(readback).toMatchObject({ bootSettlement: "settled", bootSettlementCode: null, orphanedLeasesReleased: 3 });
-    expect((leases.mock.calls[0] as unknown as [{ lastSeenBefore: Date }])[0].lastSeenBefore.getTime()).toBeLessThanOrEqual(startedAt + 5);
+    expect(await settling).toMatchObject({ bootSettlement: "settled", bootSettlementCode: null });
     await welcomed;
     expect(recover).toHaveBeenCalledTimes(2);
     expect(runtime.registry.find("observatory_threshold")).toBeDefined();
     socket.close();
   });
 
+  it("closes a join with retryable 1011 instead of hanging when the settlement stays stuck", async () => {
+    // Review case: a stuck settlement left consumed-ticket handshakes open indefinitely.
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const recover = vi.fn(() => new Promise<AuthoritativeMovementZone>(() => undefined));
+    const runtime = await startGateway({ recover, admissionSettlementWaitMs: 50 });
+    servers.push(runtime.server);
+    void runtime.gateway.settleZonesAtBoot(["observatory_threshold"], 10_000);
+    const socket = runtime.connect(); await onceOpen(socket);
+    const closed = onceClose(socket); socket.send(JSON.stringify(hello));
+    expect(await closed).toBe(1011);
+    expect(runtime.health.readback()).toMatchObject({ status: "failing", lastFailureCode: "ZONE_BOOT_SETTLEMENT_PENDING", bootSettlement: "pending" });
+    expect(recover).toHaveBeenCalledTimes(1);
+  });
+
   it("never activates a zone at boot", async () => {
-    vi.spyOn(console, "info").mockImplementation(() => undefined);
     const registry = new ZoneRegistry();
     await registry.settlePersistedHead("observatory_threshold", async zoneId => new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()));
     expect(registry.find("observatory_threshold")).toBeUndefined();
   });
 
-  it("reports a failed settlement and a bounded timeout without blocking boot", async () => {
+  it("reports a failed settlement, and a settlement still running after the report bound, then its completion", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const failed = await startGateway({ recover: async () => { throw new Error("ZONE_RECEIPT_GAP"); } });
     servers.push(failed.server);
-    expect(await failed.gateway.settleAtBoot(["observatory_threshold"])).toMatchObject({ bootSettlement: "failed", bootSettlementCode: "ZONE_RECEIPT_GAP" });
+    expect(await failed.gateway.settleZonesAtBoot(["observatory_threshold"])).toMatchObject({ bootSettlement: "failed", bootSettlementCode: "ZONE_RECEIPT_GAP" });
 
     let release!: () => void;
     const stalled = await startGateway({ recover: zoneId => new Promise(resolve => { release = () => resolve(new AuthoritativeMovementZone(zoneId, new AurionTickRecorder())); }) });
     servers.push(stalled.server);
-    expect(await stalled.gateway.settleAtBoot(["observatory_threshold"], 50)).toMatchObject({ bootSettlement: "timed_out", bootSettlementCode: "ZONE_BOOT_SETTLEMENT_TIMEOUT" });
+    const settling = stalled.gateway.settleZonesAtBoot(["observatory_threshold"], 30);
+    await vi.waitFor(() => expect(stalled.health.readback()).toMatchObject({ bootSettlement: "timed_out", bootSettlementCode: "ZONE_BOOT_SETTLEMENT_TIMEOUT" }));
     release();
-    await vi.waitFor(() => expect(stalled.health.readback().bootSettlement).toBe("settled"));
+    expect(await settling).toMatchObject({ bootSettlement: "settled" });
+  });
+
+  it("releases orphaned leases before admission with an inclusive boundary, bounded", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const leases = vi.fn(async () => 3);
+    const runtime = await startGateway({ recover: async zoneId => new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()), releaseOrphaned: leases });
+    servers.push(runtime.server);
+    const before = Date.now();
+    expect(await runtime.gateway.releaseOrphanedLeasesAtBoot()).toMatchObject({ orphanedLeasesReleased: 3, orphanedLeaseReleaseCode: null });
+    expect((leases.mock.calls[0] as unknown as [{ lastSeenBefore: Date }])[0].lastSeenBefore.getTime()).toBeGreaterThanOrEqual(before);
+
+    const stuck = await startGateway({ recover: async zoneId => new AuthoritativeMovementZone(zoneId, new AurionTickRecorder()), releaseOrphaned: () => new Promise<number>(() => undefined) });
+    servers.push(stuck.server);
+    const started = Date.now();
+    expect(await stuck.gateway.releaseOrphanedLeasesAtBoot(40)).toMatchObject({ orphanedLeasesReleased: null, orphanedLeaseReleaseCode: "WORLD_PRESENCE_ORPHAN_RELEASE_TIMEOUT" });
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});
+
+describe("release promotion ordering", () => {
+  it("stops the serving runtime only after every Compose validation, immediately before up", () => {
+    // Review case: stopping it before `config --quiet` turned an invalid release into an outage.
+    const promoter = readFileSync("deploy/promote-aurion-zone-runtime.sh", "utf8");
+    const validate = promoter.indexOf('"${compose[@]}" config --quiet');
+    const stop = promoter.indexOf("# previous-runtime-drain-start");
+    const end = promoter.indexOf("# previous-runtime-drain-end");
+    const up = promoter.indexOf('env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion');
+    expect(validate).toBeGreaterThan(0);
+    expect(stop).toBeGreaterThan(validate);
+    expect(up).toBeGreaterThan(end);
+    expect(promoter.slice(end, up).trim()).toBe("# previous-runtime-drain-end");
+    expect(promoter.slice(stop, end)).not.toMatch(/^\s*exit\b|set -e|\|\| false/m);
+    expect(readFileSync("docker-compose.traefik.yml", "utf8")).toMatch(/^    stop_grace_period: 30s$/m);
   });
 });
 

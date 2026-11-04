@@ -126,30 +126,37 @@ suite("zone presence across process restarts (isolated MariaDB)", () => {
       await crashed.flushEvidencePersistence();
       const head = await adapter.getLatestReceipt(zoneId);
       await recordWorldPresenceLease({ userId: 1210, connectionId: "boot-settlement-crashed", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now: new Date(Date.now() - 10_000) });
+      // Review case: a fast crash/restart within one second. Its last refresh is stored at the
+      // start of the boot second (second precision) and must still be released.
+      const bootedAt = new Date(Math.floor(Date.now() / 1000) * 1000 + 900);
+      await recordWorldPresenceLease({ userId: 1212, connectionId: "boot-settlement-same-second", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now: new Date(bootedAt.getTime() - 800) });
 
       // Boot of the next process.
-      // Boot late in a second: lastSeenAt has whole-second precision.
-      const bootedAt = new Date(Math.floor(Date.now() / 1000) * 1000 + 900);
+      // Boot: leases are released before admission, then the head is settled.
+      expect(await releaseOrphanedWorldPresenceLeases({ lastSeenBefore: bootedAt })).toBeGreaterThanOrEqual(2);
       const registry = new ZoneRegistry();
       await registry.settlePersistedHead(zoneId, freshProcess(adapter));
       expect(registry.find(zoneId)).toBeUndefined();
-      expect(await releaseOrphanedWorldPresenceLeases({ lastSeenBefore: bootedAt })).toBeGreaterThanOrEqual(1);
       const leave = await adapter.getRecordedTick(zoneId, head!.tick + 1);
       expect(leave!.receipt.previousReceiptHash).toBe(head!.receiptHash);
       expect(leave!.intents!.map(intent => [intent.type, intent.userId])).toEqual([["presence_leave", 1210]]);
-      expect((await listActiveWorldPresence()).some(presence => presence.userId === 1210)).toBe(false);
+      const active = await listActiveWorldPresence();
+      expect(active.some(presence => presence.userId === 1210 || presence.userId === 1212)).toBe(false);
 
-      // A lease admitted after boot is never treated as orphaned, even within the boot second.
+      // A lease admitted after the boot release stays active; a refresh restores a lease
+      // even if a late release had marked it (upsert clears disconnectedAt).
       await recordWorldPresenceLease({ userId: 1211, connectionId: "boot-settlement-live", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now: new Date(bootedAt.getTime() + 50) });
-      expect(await releaseOrphanedWorldPresenceLeases({ lastSeenBefore: bootedAt })).toBe(0);
+      expect((await listActiveWorldPresence()).some(presence => presence.userId === 1211)).toBe(true);
+      await pool.execute("UPDATE aurionWorldPresenceLeases SET disconnectedAt=NOW() WHERE connectionId='boot-settlement-live'");
+      await recordWorldPresenceLease({ userId: 1211, connectionId: "boot-settlement-live", zoneId: "observatory_threshold", position: { x: 0, z: 0 } });
       expect((await listActiveWorldPresence()).some(presence => presence.userId === 1211)).toBe(true);
 
       // The probe path refuses to recover, and no longer has to: the settled head carries no player.
       const probe = await restorePersistedZoneHead(zoneId, adapter, new AurionTickRecorder(20, adapter), "PROBE_ZONE");
       expect(probe.getCanonicalZoneState().players).toEqual([]);
       // A later join activates the zone against the settled head without another recovery tick.
-      const active = await registry.getOrRecover(zoneId, freshProcess(adapter));
-      expect(active.getLatestReceipt()?.receiptHash).toBe(leave!.receipt.receiptHash);
+      const activated = await registry.getOrRecover(zoneId, freshProcess(adapter));
+      expect(activated.getLatestReceipt()?.receiptHash).toBe(leave!.receipt.receiptHash);
       expect(await receiptCount(zoneId)).toBe(head!.tick + 1);
     } finally { await cleanup(zoneId); await cleanupLeases(); await pool.end(); }
   }, 60_000);
