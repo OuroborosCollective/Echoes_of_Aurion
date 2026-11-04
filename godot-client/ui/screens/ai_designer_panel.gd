@@ -205,8 +205,11 @@ func _next_asset() -> void:
 			_attempted[request.sha256] = true
 			_pending_sha = request.sha256
 			if _asset_api.request_asset(_server, request, _connection, _allow_local): return
-			preview.try_next_asset(request.sha256, _connection)
-			call_deferred("_next_asset")
+			# A synchronous transport failure may already have emitted its signal.
+			if _pending_sha == request.sha256:
+				_pending_sha = ""
+				preview.try_next_asset(request.sha256, _connection)
+				call_deferred("_next_asset")
 			return
 	_preview_status.text = preview.diagnostic
 

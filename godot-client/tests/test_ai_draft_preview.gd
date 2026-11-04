@@ -7,6 +7,15 @@ class PreviewAuth:
 	func protected_response_allowed() -> bool: return true
 	func access_token() -> String: return "fixture-only"
 
+class UnstartedAssetApi:
+	extends Node
+	signal request_failed(reason: String, connection: String)
+	func busy() -> bool: return false
+	func cancel() -> void: pass
+	func request_asset(_server: String, _request: Dictionary, connection: String, _allow_local: bool) -> bool:
+		request_failed.emit("REQUEST_NOT_STARTED", connection)
+		return false
+
 const State = preload("res://authoring/world_authoring_state.gd")
 func verify() -> void:
 	var preview := Preview.new()
@@ -55,6 +64,14 @@ func verify() -> void:
 	require(panel.preview.needed_assets()[0].sha256 == sha, "HTTP failure did not advance the real preview LOD selector")
 	panel._asset_ready(sha, PackedByteArray([1,2,3]), SESSION, 7)
 	require(panel.preview.needed_assets()[0].sha256 == other_sha, "invalid GLB did not advance the preview LOD selector")
+	panel._asset_api.free()
+	var unstarted := UnstartedAssetApi.new()
+	panel.add_child(unstarted)
+	panel._asset_api = unstarted
+	unstarted.request_failed.connect(panel._asset_failed.bind(7))
+	panel._attempted.clear()
+	panel._next_asset()
+	require(panel.preview.needed_assets()[0].sha256 == sha, "synchronous failure advanced the LOD family twice")
 	panel.clear_session()
 	panel.free()
 	auth.free()
