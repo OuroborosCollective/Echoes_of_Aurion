@@ -45,6 +45,12 @@ export function suitable(model: Model, promptBytes: number): boolean {
     && model.context_length >= promptBytes + OUTPUT_TOKENS + 1024
     && (model.top_provider?.max_completion_tokens ?? OUTPUT_TOKENS) >= OUTPUT_TOKENS;
 }
+export function providerPriceCeiling(model: Model) {
+  // OpenRouter max_price token fields are USD per million tokens, whereas
+  // /models pricing is per token. Constrain routing to the reserved tariff.
+  return { prompt: Math.max(price(model.pricing.prompt), price(model.pricing.input_cache_read ?? "0"), price(model.pricing.input_cache_write ?? "0")) * 1_000_000,
+    completion: price(model.pricing.completion) * 1_000_000, request: price(model.pricing.request ?? "0") };
+}
 export function reservationMicros(model: Model, promptBytes: number): number {
   // Refuse unmodelled nonzero billable dimensions (images, web search, reasoning extras).
   for (const [key, value] of Object.entries(model.pricing)) if (!["prompt", "completion", "request", "input_cache_read", "input_cache_write"].includes(key) && price(value) !== 0) throw new FabricError("PRICE_DIMENSION_UNSUPPORTED");
@@ -81,7 +87,7 @@ export class OpenRouterProvider {
     }).parse(await boundedJson("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST", headers: { Authorization: `Bearer ${this.key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: model.id, max_tokens: OUTPUT_TOKENS, stream: false,
-        provider: { allow_fallbacks: false, require_parameters: true, ...(freeModel(model) ? { max_price: { prompt: 0, completion: 0, request: 0 } } : {}) },
+        provider: { allow_fallbacks: false, require_parameters: true, max_price: providerPriceCeiling(model) },
         messages: [{ role: "user", content: prompt }],
         ...(model.supported_parameters.includes("response_format") ? { response_format: { type: "json_object" } } : {}),
       }),

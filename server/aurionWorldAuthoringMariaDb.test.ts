@@ -120,7 +120,10 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     await expect(caller.worldApply({ draft: candidate, expectedPlanHash: plan.planHash, operationId, confirmation: "" } as never)).rejects.toThrow();
     expect((await readActiveWorldDesign()).designs).toHaveLength(0);
     const applied = await caller.worldApply({ draft: candidate, expectedPlanHash: plan.planHash, operationId, confirmation: "APPLY_WORLD_DESIGN" });
-    await expect(applyWorldDesign(admin, candidate, plan.planHash, operationId)).rejects.toThrow("AUTHORING_OPERATION_ALREADY_USED");
+    // The first apply changes the predecessor: the original plan is now stale.
+    await expect(applyWorldDesign(admin, candidate, plan.planHash, operationId)).rejects.toThrow("AUTHORING_WORLD_PLAN_CHANGED");
+    const [receipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionAuthoringReceipts WHERE planHash=?", [plan.planHash]);
+    expect(Number(receipts[0]!.n)).toBe(1);
     const readback = await readActiveWorldDesign();
     expect(readback.designs.find(d => d.designKey === candidate.designKey)?.designHash).toBe(applied.receipt.resultHash);
     expect((await recoverWorldAuthoringReceipt(admin, { operationId, planHash: plan.planHash, designKey: candidate.designKey, version: candidate.version })).status).toBe("found");

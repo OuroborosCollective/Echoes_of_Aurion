@@ -27,24 +27,28 @@ var _diff: Label
 func _ready() -> void:
 	var heading := Label.new()
 	heading.text = "Aurion AI World Designer"
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(heading)
 	mode = OptionButton.new()
 	for value in ["Auto", "Local", "Free", "Premium"]: mode.add_item(value)
 	mode.set_item_disabled(3, true)
 	add_child(mode)
 	model = OptionButton.new()
+	model.fit_to_longest_item = false
+	model.clip_text = true
 	model.add_item("Modell gemäß Server-Policy")
 	model.set_item_metadata(0, "")
 	add_child(model)
 	var refresh := Button.new()
-	refresh.text = "Modelle, Verbindung und Budget prüfen"
+	refresh.text = "KI-Status und Budget prüfen"
 	refresh.pressed.connect(func(): status_requested.emit())
 	add_child(refresh)
 	status = Label.new()
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status.text = "Provider noch nicht geprüft · Premium standardmäßig aus"
 	add_child(status)
-	var chunk_row := HBoxContainer.new()
+	var chunk_row := GridContainer.new()
+	chunk_row.columns = 2
 	add_child(chunk_row)
 	for label_text in ["Chunk X", "Chunk Z"]:
 		var label := Label.new()
@@ -64,6 +68,8 @@ func _ready() -> void:
 	improve.text = "Aktuellen Entwurf zur Verbesserung mitsenden"
 	add_child(improve)
 	history = OptionButton.new()
+	history.fit_to_longest_item = false
+	history.clip_text = true
 	history.add_item("Vorschlagsverlauf (nur diese Sitzung)")
 	history.item_selected.connect(func(index: int):
 		if index > 0 and index <= _history.size(): history_selected.emit(str(_history[index - 1].draftJson)))

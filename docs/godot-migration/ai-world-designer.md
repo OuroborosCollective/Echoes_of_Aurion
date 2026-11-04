@@ -20,7 +20,7 @@ Die Vorschau zeigt höchstens 18 Objekte im ersten ausgewählten Chunk auf einer
 
 1. Das bestehende Godot-Projekt öffnen. Im Aurion-Dock **AI World Designer öffnen** wählen; der vorhandene Authoring-Einstieg startet.
 2. Mit dem Eigentümerkonto anmelden und die echte Zone verbinden. Ohne passende aktive Gameplay-Verbindung lehnt `aiPropose` ab.
-3. Katalog laden, **Modelle, Verbindung und Budget prüfen** wählen. Auto bevorzugt gemäß Serverkonfiguration Local und dann Free. Premium bleibt ohne ausdrückliche Serverfreigabe deaktiviert.
+3. Katalog laden, **KI-Status und Budget prüfen** wählen. Auto bevorzugt gemäß Serverkonfiguration Local und dann Free. Premium bleibt ohne ausdrückliche Serverfreigabe deaktiviert.
 4. Chunk X/Z auswählen, bei Bedarf reale Asset-IDs aus dem Katalog eingrenzen und einen Auftrag eingeben. Beispielsweise: „Erstelle im freigegebenen Testbereich einen Markt mit zwei vorhandenen Marktständen und einem dekorativen Objekt.“
 5. Vorschlag anfordern. `AI_DRAFT` und `PREVIEW_ONLY` prüfen: Objektliste, Koordinaten, Differenz, Warnungen und Modellkosten. Der Verlauf hält bis zu 20 Vorschläge nur in dieser Sitzung. Für Überarbeitung **Aktuellen Entwurf zur Verbesserung mitsenden** wählen.
 6. Den bestehenden **Aurion-Plan** anfordern. Plan-Hash, Vorgänger und betroffene Objekte prüfen. Erst die konkrete Bestätigung erlaubt Apply.

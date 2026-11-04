@@ -66,6 +66,7 @@ func _ready() -> void:
 	scroll.add_child(stack)
 	var heading := Label.new()
 	heading.text = "Aurion Weltstudio · AI World Designer"
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	heading.add_theme_font_size_override("font_size", 22)
 	stack.add_child(heading)
 	_catalog_info = Label.new()

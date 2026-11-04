@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { FabricConfigSchema } from "./policy";
-import { OpenCodeProvider, boundedJson, freeModel, loopbackUrl, reservationMicros, suitable, type Model } from "./providers";
+import { OpenCodeProvider, providerPriceCeiling, boundedJson, freeModel, loopbackUrl, reservationMicros, suitable, type Model } from "./providers";
 const model: Model = { id: "fixture/model:free", context_length: 100000, architecture: { input_modalities: ["text"], output_modalities: ["text"] }, supported_parameters: [], pricing: { prompt: "0", completion: "0" } };
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => { for (const s of servers.splice(0)) { s.closeAllConnections(); await new Promise<void>(r => s.close(() => r())); } });
@@ -39,6 +39,7 @@ describe("model metadata and private connectivity", () => {
     expect(suitable({ ...model, architecture: { input_modalities: ["text"], output_modalities: ["image"] } }, 100)).toBe(false);
   });
   it("reserves pessimistically and rejects unpriced dimensions", () => {
+    expect(providerPriceCeiling({ ...model, pricing: { prompt: "0.000001", completion: "0.000002", request: "0.01" } })).toEqual({ prompt: 1, completion: 2, request: 0.01 });
     expect(reservationMicros({ ...model, pricing: { prompt: "0.000001", completion: "0.000002" } }, 1000)).toBeGreaterThan(18000);
     expect(() => reservationMicros({ ...model, pricing: { ...model.pricing, image: "1" } }, 100)).toThrow("PRICE_DIMENSION_UNSUPPORTED");
     expect(() => reservationMicros({ ...model, pricing: { completion: "0" } }, 100)).toThrow("PRICE_UNKNOWN");
