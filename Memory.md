@@ -5647,7 +5647,11 @@ Open: Kombinierte Exact-Head-CI/Review, Merge, Schema-Preflight und geschützter
 Next safe step: Kombinierten PR prüfen; erst nach grünen Gates mergen, Release-Timer wiederherstellen und kanonischen Release-/Schema-Pfad ausführen.
 
 ### 2026-11-04 — PR1310: Release-Authority an kanonischen Vertrag binden
-Änderung: Promotions-/Final-Gates und erwartete Metadaten verwenden die vollständige AURION_BINARY_AUTHORITY; keine Änderung der Simulation oder 10-Hz-Tickrate.
-Erkenntnis: Die gesunde v4-Produktion wurde durch feste v3-Erwartungen abgelehnt. Die bestehende Ruleset-Gegenprobe benötigt ihre unveränderte Importform; deren zwischenzeitliche Regression wurde korrigiert, ohne Tests abzuschalten.
-Evidence: RED ebd23cb1 (Run41784502783) reproduzierte drei Authority-Fehler; 28885e89 (Run41785257816) zeigte zwölf Import-Gegenprobenfehler. GREEN 6aa3d3c2 (Run41785900875, Job126427866734): 2614 bestanden/319 ausgelassen, einschließlich 10 neuer und 19 benachbarter Gate-Tests; Log-SHA256 a74fa071053a6abc50020cff6f22da962df4d0e8d6641e1041dd10936bd708c0. Davon getrennte Produktion e2ddb002/Run41774465405: echtes Backup mit 185/185 Tabellen wiederhergestellt, Schema55/55 ohne Drift, installierter Container gesund; Final-/Gameplay-Abschluss wegen des Gate-Fehlers nicht bewiesen.
-Offen: Prüfung dieses finalen Heads und neuer kontrollierter Produktionsrelease mit Gameplay-/Godot-Readback.
+Status: PARTIAL
+Task: Produktionsrelease nach falscher v3-Erwartung wieder prüfbar machen.
+Decisions: Promotions-/Final-Gates und erwartete Metadaten verwenden vollständige AURION_BINARY_AUTHORITY; Simulation und 10-Hz-Tickrate unverändert.
+Touched surfaces: Release-Workflow, Promotions-/Final-Validatoren, erwartete Final-Metadaten und zugehörige Regressionstests.
+Evidence: RED ebd23cb1537508e8cf659b2b8f110136a268f575/Run41784502783 reproduzierte drei Authority-Fehler; 28885e892ded2a4b6af0df39dd7cb4e5619c1261/Run41785257816 zeigte zwölf Import-Gegenprobenfehler. GREEN 85433b8121d8ee99ef8f9e3bc3d7a1247ad15d71/Run41786827426/Job126430774306:2614 bestanden319 ausgelassen, einschließlich10 neuer und19 benachbarter Gate-Tests; LogSHA25616bec06e207d0a9feb82bd9c636602efa6a5bc19bced3ee4555bd33e8ec97285. Getrennte Produktion e2ddb002dd12f641af11cee0916f34bbdaa67ac3/Run41774465405: Image sha256:a91845e94bb75361051296651d7323f36f5039cf136a1b3c4b01fd173d4c9fc4, unabhängig HTTP200/ok und Dockerhealthy bei10Hz; Root-ReadbackSHA256d6e232381ed32cbb231da2805b5ef73639ce8c3df97624dda7fc5a93dfa2b659. Echtes Backup mit185/185 Tabellen wiederhergestellt, Schema55/55 ohne Drift (Apply-ReceiptSHA2565873fafec26c25f0b1d0c295242db579cfabd515839b171388833f3598a3d7b7).
+Learned: Gesunde v4-Produktion scheiterte an festen v3-Gates; exakte Importform der bestehenden Ruleset-Gegenprobe erhalten, keine Tests abschalten.
+Open: Prüfung dieses finalen Dokumentations-Heads und neuer kontrollierter Produktionsrelease; Final-/Gameplay-/Godot-Abschluss nicht bewiesen.
+Next safe step: Exact-Head-CI und Review abschließen, mit Head-Schutz mergen, neuen Main-Release mit gebundener App-Freigabe und unabhängigem Gameplay-/Godot-Readback ausführen.
