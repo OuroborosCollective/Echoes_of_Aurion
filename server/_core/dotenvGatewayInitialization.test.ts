@@ -17,8 +17,8 @@ describe("gateway startup configuration", () => {
     // deployment or a synthetic simulation/runtime receipt.
     const script = `await import(${JSON.stringify(entry)});\n` +
       `const { defensiveGatewayObserver } = await import(${JSON.stringify(observer)});\n` +
-      `defensiveGatewayObserver.originDenied("http"); defensiveGatewayObserver.flush(); process.exit(0);`;
-    const env = { ...process.env, NODE_ENV: "test", DOTENV_CONFIG_PATH: dotenvPath, DATABASE_URL: "", AURION_GAME_DEV_REQUIRED: "false" };
+      `defensiveGatewayObserver.originDenied("http"); defensiveGatewayObserver.flush(); process.stdout.write("", () => process.exit(0));`;
+    const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "development", DOTENV_CONFIG_PATH: dotenvPath, DATABASE_URL: "", AURION_GAME_DEV_REQUIRED: "false" };
     delete env.AURION_GATEWAY_OBSERVE_ONLY;
     try {
       const result = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", script], {

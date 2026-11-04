@@ -7,6 +7,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../server/routers";
 type Outputs = inferRouterOutputs<AppRouter>;
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "../server/aurionInventoryStackIdentity";
+import { completeLocalRegistration } from "./localRegistration";
 
 test.skip(process.env.AURION_UI_E2E !== "1", "Isolated authenticated runtime required");
 test.setTimeout(60_000);
@@ -35,8 +36,7 @@ test("authenticated inventory projection preserves quantities, equipment, and st
     const handle = `issue502_${Date.now()}`;
     await auth.getByLabel("Rufname", { exact: true }).fill(handle);
     await auth.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-ui-regression!");
-    await auth.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
-    await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
+    await completeLocalRegistration(page, handle);
 
     // Establish the profile through the canonical account read before inventory commands.
     await rpc(page, "player.me");
