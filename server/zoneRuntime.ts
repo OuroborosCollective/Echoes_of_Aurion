@@ -162,6 +162,7 @@ export class AuthoritativeMovementZone {
   // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
   private sortedPresences: ZonePresence[] = [];
   private mobTargetPresences: ZonePresence[] = [];
+  private frozenMobs = new Set<string>();
   private sortedPeersDirty = false;
   private readonly actionSequenceWatermarks = new Map<number, number>();
   private pendingIntents: AurionZoneIntent[] = [];
@@ -821,7 +822,19 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    this.frozenMobs.clear();
+    for (const windup of this.tactics.windups) {
+      this.frozenMobs.add(windup.mobId);
+    }
+    for (const id in this.tactics.effects) {
+      if (Object.prototype.hasOwnProperty.call(this.tactics.effects, id)) {
+        const effect = this.tactics.effects[id];
+        if (effect && (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0) {
+          this.frozenMobs.add(id);
+        }
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, this.frozenMobs);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -929,7 +942,16 @@ export class AuthoritativeMovementZone {
       else effects.overdriveUntil = this.tickNumber + 50;
       result.changed = true;
     } else {
-      const targets = skillId === "k_whirlwind" ? this.mobRuntime.orderedStates().filter(m => m.health > 0 && mobDistance(peer.position, m.position) <= rule.range).map(m => m.definition.entityId) : [targetId];
+      const targets: string[] = [];
+      if (skillId === "k_whirlwind") {
+        for (const m of this.mobRuntime.orderedStates()) {
+          if (m.health > 0 && mobDistance(peer.position, m.position) <= rule.range) {
+            targets.push(m.definition.entityId);
+          }
+        }
+      } else {
+        targets.push(targetId);
+      }
       const initialStamina = peer.stamina;
       for (const target of targets) {
         peer.stamina = initialStamina;
