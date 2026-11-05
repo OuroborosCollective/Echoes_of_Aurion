@@ -17,6 +17,25 @@ const sha = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const revision = z.string().regex(/^[a-f0-9]{40}$/);
 const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 const Promote = z.object({ archetypeId: id, expectedRevision: z.number().int().min(0).max(2147483646), mutationReceiptId: id, sourceRevision: revision }).strict();
+/**
+ * Controller evaluation is a shadow/diagnostic path: only database or transport
+ * failures may abort the surrounding canonical transaction (they leave nothing
+ * half-written). Any other failure, including a programming error such as a
+ * TypeError on unusual NPC data, must fall back to the canonical controller
+ * instead of blocking the NPC's genesis or action on every retry.
+ */
+export function isNpcControllerDatabaseFailure(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current && typeof current === "object" && depth < 4; depth += 1) {
+    const candidate = current as { sqlState?: unknown; errno?: unknown; code?: unknown; name?: unknown; cause?: unknown };
+    if (typeof candidate.sqlState === "string" || typeof candidate.errno === "number") return true;
+    if (typeof candidate.code === "string" && /^(ER_|PROTOCOL_|ECONN|ETIMEDOUT|EPIPE|ENOTFOUND)/.test(candidate.code)) return true;
+    if (candidate.name === "DrizzleQueryError") return true;
+    current = candidate.cause;
+  }
+  return false;
+}
+
 const definitionHash = (archetypeId: string) => canonicalSha256(NPC_CONTROLLER_ARCHETYPES[archetypeId as keyof typeof NPC_CONTROLLER_ARCHETYPES]);
 
 /** Reuse existing append-only per-NPC custody. No new external approval authority.
@@ -144,8 +163,8 @@ export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: stri
         binding.status = "BOUND_SHADOW";
         binding.reason = "AUTHORITATIVE_ADMISSION_NOT_RELEASED";
       } catch (error) {
-        // Only known invalid-controller failures are recoverable; SQL/transport failures abort atomically.
-        if (!(error instanceof z.ZodError) && !(error instanceof SyntaxError) && !(error instanceof Error && error.message.startsWith("NPC_"))) throw error;
+        // SQL/transport failures abort atomically; every controller failure falls back.
+        if (isNpcControllerDatabaseFailure(error)) throw error;
         binding.artifactHash = null;
         binding.status = "CANONICAL_FALLBACK";
         binding.reason = "CONTROLLER_VERIFICATION_FAILED";

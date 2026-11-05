@@ -1,18 +1,14 @@
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { aurionNpcActionReceipts, aurionNpcActionEffectReadbacks, aurionNpcControllerShadowReceipts } from "../drizzle/schema";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { buildPlannerContext } from "../shared/npcUtilityPlannerDebug";
 import { evaluateBehavior } from "./aiFabric/behaviorForge";
-import { readBoundController, readNpcControllerBindingInTransaction } from "./npcArchetypePersistence";
+import { isNpcControllerDatabaseFailure, readBoundController, readNpcControllerBindingInTransaction } from "./npcArchetypePersistence";
 import type { NpcTransaction } from "./wasdNpcEvolutionPersistence";
 import { getDb } from "./db";
 import { isConfirmedNpcDecision, type ConfirmedNpcDecision } from "./aurion/npc/multiMemory";
 import type { MerchantActionReceipt } from "./aurion/npc/actionGateway";
 
-function recoverable(error: unknown) {
-  return error instanceof z.ZodError || error instanceof SyntaxError || error instanceof Error && error.message.startsWith("NPC_");
-}
 
 /** Diagnostic sidecar only, appended AFTER the real action effect/readback. A
  * matching proposal is not execution authorization; a mismatch cannot rewrite
@@ -46,7 +42,8 @@ export async function appendNpcControllerShadowReceipt(tx: NpcTransaction, confi
       reason = proposal ? "SHADOW_COMPARISON_ONLY" : "NO_ELIGIBLE_OFFER";
     } else reason = bound.binding.reason;
   } catch (error) {
-    if (!recoverable(error)) throw error;
+    // Never block the canonical action: only database/transport failures abort it.
+    if (isNpcControllerDatabaseFailure(error)) throw error;
     bindingExists = true;
     reason = "CONTROLLER_VERIFICATION_FAILED";
   }
