@@ -118,7 +118,7 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
     expect((await db.transaction(tx => readBoundController(tx, "registry-test-unknown"))).candidate).toBeNull();
   });
 
-  it("links a bounded proposal to real canonical validation, committed effects and independent receipt readback", async () => {
+  it("compares a shadow proposal with separately validated canonical effects and persisted receipt readback", async () => {
     // Disposable isolated inventory epochs; no production data or mocks.
     await pool.query("TRUNCATE TABLE aurionNpcActionEpochStates");
     for (const market of Object.values(merchantBootstrapMarkets)) {
@@ -138,7 +138,7 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
     expect(shadow).toMatchObject({ execution: "shadow", mutationAuthority: "none", npcId: merchantIds[0], bindingHash: firstBinding!.bindingHash,
       canonicalActionReceiptId: result.actionReceiptId, canonicalAction: result.resolution.action, sourceDecisionReceiptId: source.receiptId });
     expect(shadow!.proposal).not.toBeNull();
-    expect(["MATCHES_CANONICAL_ACTION", "REJECTED_CANONICAL_ACTION_MISMATCH"]).toContain(shadow!.proposalDisposition);
+    expect(["MATCHES_CANONICAL_ACTION", "DIFFERS_FROM_CANONICAL_ACTION"]).toContain(shadow!.proposalDisposition);
     expect((await executeConfirmedMerchantAction(input)).status).toBe("persisted");
     expect(await readNpcControllerShadowReceipt(result.actionReceiptId)).toEqual(shadow);
     const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionNpcControllerShadowReceipts WHERE actionReceiptId=?", [result.actionReceiptId]);

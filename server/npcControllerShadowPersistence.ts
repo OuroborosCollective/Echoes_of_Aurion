@@ -61,7 +61,7 @@ export async function appendNpcControllerShadowReceipt(tx: NpcTransaction, confi
     expectedEpoch: receipt.expectedEpoch, resolutionIndex: receipt.resolutionIndex,
     // The merchant contract has a resolution index, not a verified zone-tick/chunk identity.
     tickChunkBinding: "UNAVAILABLE_AUTHORITATIVE_ADMISSION_BLOCKED" as const,
-    proposal, proposalDisposition: !proposal ? "CANONICAL_FALLBACK" as const : proposal.action === receipt.action ? "MATCHES_CANONICAL_ACTION" as const : "REJECTED_CANONICAL_ACTION_MISMATCH" as const,
+    proposal, proposalDisposition: !proposal ? "CANONICAL_FALLBACK" as const : proposal.action === receipt.action ? "MATCHES_CANONICAL_ACTION" as const : "DIFFERS_FROM_CANONICAL_ACTION" as const,
     reason,
   };
   const receiptHash = canonicalSha256(payload);

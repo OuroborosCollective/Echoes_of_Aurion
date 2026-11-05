@@ -23,15 +23,15 @@ const definitionHash = (archetypeId: string) => canonicalSha256(NPC_CONTROLLER_A
  * This admits SHADOW candidates only; it does not grant release/deployment rights.
  */
 async function approvedPolicy(tx: NpcTransaction, mutationReceiptId: string) {
-  const receipt = (await tx.select().from(mutations).where(eq(mutations.id, mutationReceiptId)).limit(1))[0];
+  const receipt = (await tx.select().from(mutations).where(eq(mutations.id, mutationReceiptId)).limit(1).for("update"))[0];
   if (!receipt || receipt.verdict !== "accepted" || !receipt.nextVersionId) throw Error("NPC_CONTROLLER_APPROVAL_REQUIRED");
-  const policy = (await tx.select().from(versions).where(eq(versions.id, receipt.nextVersionId)).limit(1))[0];
+  const policy = (await tx.select().from(versions).where(eq(versions.id, receipt.nextVersionId)).limit(1).for("update"))[0];
   if (!policy || policy.npcId !== receipt.npcId || policy.policyHash !== receipt.nextPolicyHash) throw Error("NPC_CONTROLLER_POLICY_MISMATCH");
   const candidate = verifyArchetypeCandidate(JSON.parse(policy.payloadJson));
   if (npcHash(candidate) !== policy.policyHash || receipt.envelopeHash !== policy.policyHash || receipt.provenanceDigest !== canonicalSha256(candidate)) throw Error("NPC_CONTROLLER_POLICY_HASH_MISMATCH");
   if (policy.sourceRevision !== npcCapsulePin.sourceRevision || policy.sourceSha256 !== npcCapsulePin.sourceSha256 || receipt.sourceRevision !== policy.sourceRevision || receipt.sourceSha256 !== policy.sourceSha256) throw Error("NPC_CONTROLLER_POLICY_SOURCE_MISMATCH");
   if (receipt.fitnessContractVersion !== candidate.regression.suite || receipt.fitnessResultDigest !== candidate.regression.resultDigest.slice(7) || receipt.mutationRuleVersion !== "npc-archetype-registry.v1") throw Error("NPC_CONTROLLER_REGRESSION_MISMATCH");
-  const previous = receipt.previousVersionId ? (await tx.select().from(versions).where(eq(versions.id, receipt.previousVersionId)).limit(1))[0] : null;
+  const previous = receipt.previousVersionId ? (await tx.select().from(versions).where(eq(versions.id, receipt.previousVersionId)).limit(1).for("update"))[0] : null;
   if (receipt.previousVersionId && (!previous || previous.npcId !== policy.npcId || previous.policyHash !== receipt.previousPolicyHash)) throw Error("NPC_CONTROLLER_PREDECESSOR_MISMATCH");
   const original = {
     mutationReceiptId: receipt.id, npcId: receipt.npcId, previousVersion: previous?.version ?? null,
@@ -53,16 +53,18 @@ async function approvedPolicy(tx: NpcTransaction, mutationReceiptId: string) {
  */
 export async function promoteNpcArchetype(tx: NpcTransaction, raw: z.infer<typeof Promote>) {
   const input = Promote.parse(raw);
-  const approved = await approvedPolicy(tx, input.mutationReceiptId);
-  if (approved.candidate.archetypeId !== input.archetypeId || approved.candidate.regression.sourceRevision !== input.sourceRevision) throw Error("NPC_CONTROLLER_RELEASE_SCOPE_MISMATCH");
-  // INSERT IGNORE does not run an UPDATE against the append-only artifact table.
-  const artifact = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1))[0];
-  if (!artifact) await tx.insert(artifacts).ignore().values({ artifactHash: approved.candidate.artifactHash, artifactJson: JSON.stringify(approved.candidate.artifact) });
-  const stored = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1).for("update"))[0];
-  if (!stored || canonicalSha256(JSON.parse(stored.artifactJson)) !== approved.candidate.artifactHash) throw Error("NPC_CONTROLLER_ARTIFACT_HASH_MISMATCH");
+  // All registry writers serialize pointer -> approval -> artifact; current reads
+  // also remain correct when genesis already holds an older REPEATABLE READ view.
   await tx.insert(pointers).values({ archetypeId: input.archetypeId, revision: 0, releaseHash: null }).onDuplicateKeyUpdate({ set: { archetypeId: input.archetypeId } });
   const current = (await tx.select().from(pointers).where(eq(pointers.archetypeId, input.archetypeId)).for("update"))[0];
   if (current.revision !== input.expectedRevision) throw Error("NPC_ARCHETYPE_RELEASE_STALE");
+  const approved = await approvedPolicy(tx, input.mutationReceiptId);
+  if (approved.candidate.archetypeId !== input.archetypeId || approved.candidate.regression.sourceRevision !== input.sourceRevision) throw Error("NPC_CONTROLLER_RELEASE_SCOPE_MISMATCH");
+  // INSERT IGNORE does not run an UPDATE against the append-only artifact table.
+  const artifact = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1).for("update"))[0];
+  if (!artifact) await tx.insert(artifacts).ignore().values({ artifactHash: approved.candidate.artifactHash, artifactJson: JSON.stringify(approved.candidate.artifact) });
+  const stored = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1).for("update"))[0];
+  if (!stored || canonicalSha256(JSON.parse(stored.artifactJson)) !== approved.candidate.artifactHash) throw Error("NPC_CONTROLLER_ARTIFACT_HASH_MISMATCH");
   const release = {
     schemaVersion: "aurion.npc-archetype-release.v1" as const, archetypeId: input.archetypeId,
     revision: current.revision + 1, previousReleaseHash: current.releaseHash,
@@ -87,7 +89,7 @@ const Binding = z.object({
 export type NpcControllerBinding = z.infer<typeof Binding> & { bindingHash: string };
 
 async function readRelease(tx: NpcTransaction, releaseHash: string) {
-  const row = (await tx.select().from(releases).where(eq(releases.releaseHash, releaseHash)).limit(1))[0];
+  const row = (await tx.select().from(releases).where(eq(releases.releaseHash, releaseHash)).limit(1).for("update"))[0];
   if (!row) throw Error("NPC_ARCHETYPE_RELEASE_MISSING");
   const release = JSON.parse(row.payloadJson);
   if (canonicalSha256(release) !== releaseHash || release.archetypeId !== row.archetypeId || release.revision !== row.revision || release.artifactHash !== row.artifactHash || release.policyVersionId !== row.policyVersionId || release.mutationReceiptId !== row.mutationReceiptId || release.execution !== "shadow" || release.definitionHash !== definitionHash(row.archetypeId)) throw Error("NPC_ARCHETYPE_RELEASE_CORRUPT");
@@ -100,10 +102,10 @@ async function readRelease(tx: NpcTransaction, releaseHash: string) {
  * client route, lazy binding of old NPCs, or automatic per-tick version refresh.
  */
 export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: string, genesisReceiptId: string) {
-  const prior = (await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1))[0];
+  const prior = (await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1).for("update"))[0];
   if (prior) throw Error("NPC_CONTROLLER_EXPLICIT_MIGRATION_REQUIRED");
-  const decisions = await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.npcId, npcId)).limit(2);
-  const state = (await tx.select().from(aurionNpcStates).where(eq(aurionNpcStates.npcId, npcId)).limit(1))[0];
+  const decisions = await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.npcId, npcId)).limit(2).for("update");
+  const state = (await tx.select().from(aurionNpcStates).where(eq(aurionNpcStates.npcId, npcId)).limit(1).for("update"))[0];
   if (decisions.length !== 1 || decisions[0].id !== genesisReceiptId || !state || state.lastResolutionIndex !== decisions[0].resolutionIndex) throw Error("NPC_CONTROLLER_GENESIS_REQUIRED");
   const archetypeId = controllerArchetypeForNpc(npcId);
   const binding: z.infer<typeof Binding> = {
@@ -121,9 +123,9 @@ export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: stri
         binding.registryRevision = release.revision;
         binding.releaseHash = pointer.releaseHash;
         binding.artifactHash = release.artifactHash;
-        const individual = (await tx.select().from(individualPointers).where(eq(individualPointers.npcId, npcId)).limit(1))[0];
+        const individual = (await tx.select().from(individualPointers).where(eq(individualPointers.npcId, npcId)).limit(1).for("update"))[0];
         if (individual) {
-          const receipts = await tx.select().from(mutations).where(and(eq(mutations.npcId, npcId), eq(mutations.nextVersionId, individual.activeVersionId), eq(mutations.verdict, "accepted"))).limit(2);
+          const receipts = await tx.select().from(mutations).where(and(eq(mutations.npcId, npcId), eq(mutations.nextVersionId, individual.activeVersionId), eq(mutations.verdict, "accepted"))).limit(2).for("update");
           if (receipts.length !== 1) throw Error("NPC_INDIVIDUAL_POLICY_APPROVAL_REQUIRED");
           const override = await approvedPolicy(tx, receipts[0].id);
           if (override.candidate.archetypeId !== archetypeId || override.policy.policyHash !== individual.activePolicyHash) throw Error("NPC_INDIVIDUAL_POLICY_INCOMPATIBLE");
@@ -132,7 +134,7 @@ export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: stri
           binding.individualMutationReceiptId = override.receipt.id;
           await tx.insert(artifacts).ignore().values({ artifactHash: override.candidate.artifactHash, artifactJson: JSON.stringify(override.candidate.artifact) });
         }
-        const row = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, binding.artifactHash!)).limit(1))[0];
+        const row = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, binding.artifactHash!)).limit(1).for("update"))[0];
         if (!row || canonicalSha256(JSON.parse(row.artifactJson)) !== binding.artifactHash) throw Error("NPC_CONTROLLER_ARTIFACT_HASH_MISMATCH");
         binding.status = "BOUND_SHADOW";
         binding.reason = "AUTHORITATIVE_ADMISSION_NOT_RELEASED";
@@ -151,7 +153,7 @@ export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: stri
 }
 
 export async function readNpcControllerBindingInTransaction(tx: NpcTransaction, npcId: string): Promise<NpcControllerBinding | null> {
-  const row = (await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1))[0];
+  const row = (await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1).for("update"))[0];
   if (!row) return null; // pre-registry NPC: no migration by reading
   const binding = Binding.parse(JSON.parse(row.bindingJson));
   if (binding.npcId !== npcId || binding.genesisReceiptId !== row.genesisReceiptId || canonicalSha256(binding) !== row.bindingHash) throw Error("NPC_CONTROLLER_BINDING_CORRUPT");
@@ -170,7 +172,7 @@ export async function readBoundController(tx: NpcTransaction, npcId: string) {
   const { release, approved } = await readRelease(tx, binding.releaseHash);
   const selected = binding.individualMutationReceiptId ? await approvedPolicy(tx, binding.individualMutationReceiptId) : approved;
   if (binding.archetypeId !== release.archetypeId || binding.registryRevision !== release.revision || binding.artifactHash !== selected.candidate.artifactHash || selected.candidate.archetypeId !== binding.archetypeId || (binding.individualVersionId && (selected.policy.id !== binding.individualVersionId || selected.policy.npcId !== npcId))) throw Error("NPC_CONTROLLER_BINDING_SCOPE_MISMATCH");
-  const row = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, binding.artifactHash!)).limit(1))[0];
+  const row = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, binding.artifactHash!)).limit(1).for("update"))[0];
   if (!row || canonicalSha256(JSON.parse(row.artifactJson)) !== binding.artifactHash) throw Error("NPC_CONTROLLER_ARTIFACT_HASH_MISMATCH");
   return { binding, candidate: selected.candidate };
 }
