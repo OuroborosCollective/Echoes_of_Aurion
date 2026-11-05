@@ -102,7 +102,9 @@ async function readRelease(tx: NpcTransaction, releaseHash: string) {
  * client route, lazy binding of old NPCs, or automatic per-tick version refresh.
  */
 export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: string, genesisReceiptId: string) {
-  const prior = (await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1).for("update"))[0];
+  // The canonical NPC state lock serializes this identity. A locking miss here
+  // would gap-lock unrelated NPCs and deadlock concurrent first spawns.
+  const prior = (await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1))[0];
   if (prior) throw Error("NPC_CONTROLLER_EXPLICIT_MIGRATION_REQUIRED");
   const decisions = await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.npcId, npcId)).limit(2).for("update");
   const state = (await tx.select().from(aurionNpcStates).where(eq(aurionNpcStates.npcId, npcId)).limit(1).for("update"))[0];
@@ -114,6 +116,8 @@ export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: stri
     status: "CANONICAL_FALLBACK", reason: archetypeId ? "NO_APPROVED_RELEASE" : "UNMAPPED_CONTROLLER_ARCHETYPE", fallbackId: CANONICAL_NPC_FALLBACK.id,
   };
   if (archetypeId) {
+    // Materialize a stable serialization row even before the first release.
+    await tx.insert(pointers).values({ archetypeId, revision: 0, releaseHash: null }).onDuplicateKeyUpdate({ set: { archetypeId } });
     const pointer = (await tx.select().from(pointers).where(eq(pointers.archetypeId, archetypeId)).limit(1).for("update"))[0];
     if (pointer?.releaseHash) {
       // Controller corruption must not prevent canonical NPC genesis.
