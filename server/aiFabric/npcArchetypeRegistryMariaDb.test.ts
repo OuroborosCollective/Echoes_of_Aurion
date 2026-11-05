@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { aurionNpcStates } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { commitNpcPolicyMutation } from "../wasdNpcEvolutionPersistence";
 import { npcCapsulePin as pin } from "../aurion/npc/authority";
@@ -79,9 +80,17 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
       mutationRule: { version: "npc-archetype-registry.v1" }, envelopeHash: npcHash(payload), rollbackTargetVersion: null,
       sourceRevision: pin.sourceRevision, sourceSha256: pin.sourceSha256, payload,
     }));
-    const requests = await Promise.allSettled([0,1].map(() => db.transaction(tx => promoteNpcArchetype(tx, {
-      archetypeId: payload.archetypeId, expectedRevision: 1, mutationReceiptId: "registry-test-approval-2", sourceRevision: payload.regression.sourceRevision,
-    }))));
+    await resolveAndRecordNpc(merchantGenesisRequest("emberfall"));
+    const source = (await readConfirmedMerchantActionSource(npcIdentity("emberfall")))!;
+    const requests = await db.transaction(async tx => {
+      // Hold an older read view while another connection commits the next release.
+      await tx.select().from(aurionNpcStates).limit(1);
+      const results = await Promise.allSettled([0,1].map(() => db.transaction(other => promoteNpcArchetype(other, {
+        archetypeId: payload.archetypeId, expectedRevision: 1, mutationReceiptId: "registry-test-approval-2", sourceRevision: payload.regression.sourceRevision,
+      }))));
+      await bindNpcControllerAtGenesis(tx, npcIdentity("emberfall"), source.receiptId);
+      return results;
+    }, { isolationLevel: "repeatable read" });
     expect(requests.filter(r => r.status === "fulfilled")).toHaveLength(1);
     expect(requests.filter(r => r.status === "rejected")).toHaveLength(1);
     await resolveAndRecordNpc(merchantGenesisRequest("emberfall"), undefined, { bindControllerAtGenesis: true });
