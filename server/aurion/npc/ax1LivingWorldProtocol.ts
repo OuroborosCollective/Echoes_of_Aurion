@@ -172,7 +172,8 @@ export function readMerchantRouteExperience(memory: readonly string[], from: Hub
 
 /** Bounded planning on the existing four-hub route graph. It proposes one
  * existing route edge; it does not implement a second navigation simulation.
- * Copper scores are integers and include cargo/wealth exposure and path cost.
+ * Scores estimate the next hub market opportunity, not settled cargo profit.
+ * Existing caravans settle at origin and carry no persistent cargo/itinerary.
  */
 export function planMerchantJourney(input: Readonly<{
   origin: MarketState; npc: NpcEconomyState; commodity: CommodityId; quantity: number;
@@ -189,14 +190,10 @@ export function planMerchantJourney(input: Readonly<{
   const evaluations: Array<{targetHubId:HubId;path:HubId[];securityBps:number;opportunityCopper:number;riskCostCopper:number;journeyCostCopper:number;scoreCopper:number}> = [];
   for (const target of markets) {
     if (target.market.hubId===input.origin.hubId) continue;
-    const paths: HubId[][]=[];
-    const visit=(path:HubId[])=>{
-      const at=path[path.length-1]!;
-      if(at===target.market.hubId){paths.push(path);return;}
-      if(path.length>=4)return;
-      for(const next of hubs) if(available.has(next)&&!path.includes(next)&&hasLivingWorldRoute(at,next)) visit([...path,next]);
-    };
-    visit([input.origin.hubId]);
+    // A distant market cannot justify a first leg without an authoritative
+    // itinerary/cargo contract. Only the actual next hub is valued here.
+    if (!hasLivingWorldRoute(input.origin.hubId,target.market.hubId)) continue;
+    const paths: HubId[][]=[[input.origin.hubId,target.market.hubId]];
     const destinationPrice=marketPriceCopper({commodity:input.commodity,stock:Math.min(target.market.stock[input.commodity],1e6),demandBps:10000,taxRateBasisPoints:target.market.taxRateBasisPoints});
     for(const path of paths){
       let securityBps=10000;
@@ -209,7 +206,7 @@ export function planMerchantJourney(input: Readonly<{
   }
   evaluations.sort((a,b)=>b.scoreCopper-a.scoreCopper||a.path.length-b.path.length||hubs.indexOf(a.targetHubId)-hubs.indexOf(b.targetHubId)||(a.path.join("|")<b.path.join("|")?-1:a.path.join("|")>b.path.join("|")?1:0));
   const selected=quantity>0&&evaluations[0]?.scoreCopper>0 ? evaluations[0] : null;
-  return Object.freeze({version:MERCHANT_TRAVEL_POLICY,decision:selected?"TRAVEL" as const:"LOCAL" as const,
+  return Object.freeze({version:MERCHANT_TRAVEL_POLICY,valueBasis:"NEXT_HOP_MARKET_OPPORTUNITY_NOT_SETTLED_PROFIT" as const,decision:selected?"TRAVEL" as const:"LOCAL" as const,
     reason:quantity===0?"REPLENISH_LOCAL_STOCK":selected?"BENEFIT_EXCEEDS_ROUTE_RISK":evaluations.length?"LOCAL_ACTION_HAS_BETTER_VALUE":"NO_REACHABLE_MARKET",
     destinationHubId:selected?.targetHubId??null,nextHopHubId:selected?.path[1]??null,path:selected?.path??[input.origin.hubId],
     observationHash:hash(stableCatalogStringify({origin:input.origin,npc:input.npc,markets,resolutionIndex:input.resolutionIndex})),evaluations,
@@ -326,7 +323,7 @@ export function resolveLivingWorldTick(input: Readonly<{
   const caravanThreshold = input.preferredGoal === "expand_influence" ? 0.25 : 0.45;
 
   let travelPlan: ReturnType<typeof planMerchantJourney> | undefined;
-  if (action === "trade" && input.travelPolicyVersion === MERCHANT_TRAVEL_POLICY) {
+  if ((action === "trade" || (action === "consume" && input.market.stock[commodity] === 0)) && input.travelPolicyVersion === MERCHANT_TRAVEL_POLICY) {
     if(!input.travelMarkets) throw new Error("NPC_TRAVEL_OBSERVATION_REQUIRED");
     travelPlan=planMerchantJourney({origin:input.market,npc:input.npc,commodity,quantity:requestedQuantity,unitPriceCopper,markets:input.travelMarkets,resolutionIndex:input.resolutionIndex});
     if(travelPlan.reason==="REPLENISH_LOCAL_STOCK") action="produce";
@@ -344,9 +341,10 @@ export function resolveLivingWorldTick(input: Readonly<{
   }
 
   // A partial trade must declare and credit the same units that leave stock.
-  // Empty markets still produce an unavailable intent for the gateway to reject.
+  // Historical empty contexts still fail closed. The versioned planner above
+  // replenishes before consumption; finite partial consumption stays bounded.
   const quantity =
-    (action === "trade" || action === "caravan") && input.market.stock[commodity] > 0
+    (action === "trade" || action === "caravan" || (action === "consume" && input.travelPolicyVersion === MERCHANT_TRAVEL_POLICY)) && input.market.stock[commodity] > 0
       ? Math.min(requestedQuantity, input.market.stock[commodity])
       : requestedQuantity;
 

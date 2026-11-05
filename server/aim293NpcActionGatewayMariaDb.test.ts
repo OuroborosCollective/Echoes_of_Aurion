@@ -143,6 +143,29 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     }, {isolationLevel: "repeatable read"});
   });
 
+  it("reads an earlier action after a subsequent canonical polity transition without rewinding current truth",async()=>{
+    const source=await seedSource();
+    const input={worldSeed:"historical-polity-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    const first=await executeConfirmedMerchantAction(input);
+    expect(first.status).toBe("committed");
+    if(first.status!=="committed") throw Error("FIRST_ACTION_NOT_COMMITTED");
+    const [rows]=await pool.query<RowDataPacket[]>("SELECT effectSetJson FROM aurionNpcActionReceipts WHERE id=?",[first.actionReceiptId]);
+    const request=JSON.parse(rows[0].effectSetJson).polityRequest;
+    const db=(await getDb())!;
+    const later=await db.transaction(tx=>persistPolity(tx,{...request,activeDiplomacy:["trade","alliance"]}));
+    expect(later.reactionHash).not.toBe(first.polity.reactionHash);
+    const retry=await executeConfirmedMerchantAction(input);
+    expect(retry.status).toBe("persisted");
+    if(retry.status!=="persisted") throw Error("HISTORICAL_RETRY_NOT_PERSISTED");
+    expect(retry.polity).toEqual(first.polity);
+    expect(retry.resolution).toEqual(first.resolution);
+    expect(retry.npc.memory).toEqual(first.npc.memory);
+    const packet=await readConfirmedNpcActionPacket(10);
+    expect(packet.actions.some(action=>action.actionReceiptId===first.actionReceiptId)).toBe(true);
+    const [current]=await pool.query<RowDataPacket[]>("SELECT reactionHash FROM aurionPolityStates WHERE polityId=?",[later.polityId]);
+    expect(current[0].reactionHash).toBe(later.reactionHash);
+  });
+
   it("commits replenishment for a hungry merchant with empty stock instead of repeating a blocked consume",async()=>{
     const market={...merchantBootstrapMarkets[homeHub],stock:{grain:0,sandstone:0,bronze:0,aether:0,salve:0,rune_core:0}};
     const ownerId=`market:${homeHub}`;

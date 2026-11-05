@@ -15,6 +15,7 @@ import {
   npcRequestHash,
   parseNpcMemory,
   planMerchantAction,
+  planMerchantJourney,
   hasLivingWorldRoute,
   readMerchantRouteExperience,
   resolveNpcNeeds,
@@ -105,6 +106,20 @@ describe("Wave 2 Step 26 WASD AIM-293 action gateway contract",()=>{
     expect(readMerchantRouteExperience(memory,"windhollow","emberfall",99).observations).toEqual([]);
     expect(readMerchantRouteExperience(memory,"windhollow","emberfall",3601)).toEqual({rememberedThreat:10,observations:[]});
     expect(readMerchantRouteExperience(memory,"emberfall","windhollow",101)).toEqual(recent);
+  });
+
+  it("uses route memory in the next plan and restores the baseline after logical expiry",()=>{
+    const base=context(0);
+    const origin={...merchantBootstrapMarkets.windhollow,stock:{...merchantBootstrapMarkets.windhollow.stock,grain:1000}};
+    const target={...merchantBootstrapMarkets.emberfall,stock:{...merchantBootstrapMarkets.emberfall.stock,grain:0}};
+    const input={origin,npc:{...base.npc,currentHubId:"windhollow" as const,wealthCopper:100,memory:[] as string[]},commodity:"grain" as const,quantity:3,unitPriceCopper:10,markets:[{market:target,polityStability:72}],resolutionIndex:101};
+    const baseline=planMerchantJourney(input);
+    const remembered={...input,npc:{...input.npc,memory:["journey:v1:windhollow:emberfall:100:ambushed"]}};
+    const cautious=planMerchantJourney(remembered);
+    expect(cautious.evaluations[0].riskCostCopper).toBeGreaterThan(baseline.evaluations[0].riskCostCopper);
+    expect(cautious.evaluations[0].scoreCopper).toBeLessThan(baseline.evaluations[0].scoreCopper);
+    expect(planMerchantJourney({...remembered,resolutionIndex:3600}).evaluations).toEqual(baseline.evaluations);
+    expect(planMerchantJourney(input)).toEqual(baseline);
   });
 
   it("plans reachable route edges, compares risk with value, and keeps unreachable travel as a local decision",()=>{
