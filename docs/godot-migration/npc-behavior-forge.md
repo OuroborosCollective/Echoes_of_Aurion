@@ -75,8 +75,79 @@ Offen sind die kanonische Controller-Zulassung mit echter Regression-Evidence, v
 
 Unbegrenzter Lagerplatz bedeutet keine unbegrenzten Waren. `aurion.merchant-storage.unbounded.v1` hebt für neue serverseitige Händleraktionen das Kapazitätslimit auf. Tatsächliche Mengen, Bestandshashes und Transaktionsprüfungen bleiben erhalten. Die numerische Darstellungsgrenze wird ausdrücklich geprüft; Überlauf wird niemals gerundet oder als Lagerbestand übernommen. Die vorhandene Preisfunktion sättigt ihren Knappheitsfaktor bereits oberhalb von 600 Einheiten; größere Bestände verwenden denselben gesättigten Preisbereich. Historische Kontexte ohne die neue Policy behalten ihre alte Kapazitätsprüfung. Neue Intents und Receipts binden die Policy-Version; bereits persistierte Aktionen werden unverändert zurückgelesen.
 
-`aurion.merchant-travel.v1` verwendet den bestehenden Vier-Hub-Routengraphen und aktuelle serverseitige Marktdaten. Für begrenzte einfache Pfade vergleicht sie das erwartete Marktpotenzial mit Reisekosten und Risiko für Waren sowie einen Anteil des Vermögens. Route-Sicherheit, bestätigte Gefahrenerinnerungen und politische Stabilität beeinflussen die Bewertung. Bei positivem Nutzen wird nur die erste gültige Routenkante vorgeschlagen; bei fehlender Erreichbarkeit oder schlechterem Nutzen bleibt der Händler beim lokalen Handel. Leere Handelsbestände führen zur lokalen Produktion statt zur wiederholten identischen Fehlanfrage. Aurions bestehende Ziel-, Reichweiten-, Lease- und Inventarprüfungen bleiben die Ausführungsschranke.
+`aurion.merchant-travel.v1` verwendet den bestehenden Vier-Hub-Routengraphen und aktuelle serverseitige Marktdaten. Für unmittelbar benachbarte Märkte vergleicht sie die Standortchance mit Reisekosten und einer Risikoabschätzung anhand des lokalen Handelswerts sowie eines Vermögensanteils. Route-Sicherheit, bestätigte Gefahrenerinnerungen und politische Stabilität beeinflussen die Bewertung. Bei positiver Standortbewertung wird genau eine gültige Routenkante vorgeschlagen; bei fehlender Erreichbarkeit oder schlechterem Nutzen bleibt der Händler beim lokalen Handel. Leere Handelsbestände führen zur lokalen Produktion statt zur wiederholten identischen Fehlanfrage. Dasselbe gilt für einen hungrigen Händler ohne Bestand; vorhandene Teilmengen dürfen begrenzt verbraucht werden. Aurions bestehende Ziel-, Reichweiten-, Lease- und Inventarprüfungen bleiben die Ausführungsschranke.
+
+Die Standortchance ist ausdrücklich kein bereits verdienter Reisegewinn (`NEXT_HOP_MARKET_OPPORTUNITY_NOT_SETTLED_PROFIT`). Der vorhandene Karawaneneffekt rechnet am Ursprung ab; er besitzt weder transportierte Fracht noch einen persistierten Mehrhop-Auftrag. Deshalb darf ein lukrativer ferner Markt keine unrentable erste Etappe rechtfertigen. Mehrtägige Reisen und tatsächliche Ankunftsverkäufe benötigen einen gesonderten kanonischen Transportvertrag.
 
 Diese Planung ist ein begrenzter Hub-Planer, kein physischer Navmesh-Wegfindungsnachweis. Sie erfindet keine Monster- oder Kriegsbeobachtungen: `live_monster_positions` und `warfront` stehen im Beleg noch als unbeobachtet. Die neuronale Forge bleibt weiterhin Shadow-only; die beiden Händlerregeln sind ausdrückliche kanonische Regeländerungen, keine heimliche Freigabe eines Controllers. Deployment, genauer neuer Head und produktive Wirkung bleiben nach den laufenden Regressionen gesondert nachzuweisen.
 
 Tatsächlich durch Aurion aufgelöste Karawanenfahrten ergänzen das bestehende NPC-Gedächtnis um begrenzte `journey:v1`-Einträge mit Ausgang, Ziel, logischem Beobachtungsindex und `passed`/`ambushed`. Sie gelangen erst mit dem bestätigten Action-/Memory-Commit in die persistierte Wahrheit. Die nächste Reiseplanung berücksichtigt passende Routenerfahrung; zukünftige, fremde und nach 3500 NPC-Resolutionen veraltete Einträge sind nicht verwertbar. Eine erfolgreiche Durchfahrt erklärt die Route nicht für monsterfrei. Es handelt sich um tatsächlich aufgelöste abstrakte Reiseereignisse, noch nicht um einzelne Monster-Sichtungen mit Entity-ID, Weltrevision, Chunk und Position. Für solche Sichtungen fehlt weiterhin der bestätigte Perception-Adapter; es wird kein separates KI-Dataset als Gameplay-Quelle angelegt.
+
+Historische Aktions-Readbacks rekonstruieren den damaligen Polity-Nachfolger aus dem bereits hashgeprüften Effektauftrag und vergleichen den gespeicherten Nachfolgerhash. Eine spätere kanonische Polityänderung darf den früheren Reisebeleg nicht zerstören; der aktuelle Zustand wird dabei niemals zurückgeschrieben. Die Regression führt einen echten Commit, einen weiteren kanonischen Polity-Commit und danach Retry/Packet-Readback aus.
+
+Der Registry-Restarttest startet zwei unabhängige Node-Prozesse mit je 30 Sekunden Obergrenze. Sein Gesamtbudget beträgt explizit 75 Sekunden; sämtliche Inhalts-, Versions- und Hashprüfungen bleiben erhalten. Der vorherige Vitest-Standard von fünf Sekunden reichte in einem CI-Lauf nicht für beide Prozessstarts.
+
+## Klassifikation der geänderten Flächen
+
+| Datei | Klasse |
+| --- | --- |
+| `.github/workflows/aurion-journal-watermark-regression.yml` | Produktion · Persistenz |
+| `.github/workflows/aurion-production-schema-readback.yml` | Produktion · Persistenz |
+| `.github/workflows/aurion-root-reconciliation-artifact-proof.yml` | Produktion |
+| `.github/workflows/aurion-root-schema-apply-artifact-proof.yml` | Produktion · Persistenz |
+| `.github/workflows/aurion-schema-reconciliation-proof.yml` | Produktion · Persistenz |
+| `.github/workflows/deploy-aurion-zone-runtime.yml` | Produktion |
+| `SUMMARY.md` | Produktion (Dokumentation) |
+| `Memory.md` | Produktion (Dokumentation) |
+| `config/aurion-migration-wave-0021-0077-manifest.json` | Persistenz · Produktion |
+| `deploy/aurion-production-schema-apply-core` | Produktion · Persistenz |
+| `deploy/promote-aurion-zone-runtime.sh` | Produktion |
+| `deploy/verify-aurion-production-schema-apply-artifact.mjs` | Produktion · Persistenz |
+| `deploy/verify-aurion-production-schema-reconcile-artifact.mjs` | Produktion · Persistenz |
+| `docs/godot-migration/npc-behavior-forge.md` | Produktion (Dokumentation) |
+| `drizzle/0077_aurion_npc_archetype_registry.sql` | Persistenz · Produktion |
+| `drizzle/meta/_journal.json` | Persistenz · Produktion |
+| `drizzle/schema.ts` | Persistenz · Produktion |
+| `godot-client/net/api/world_authoring_api.gd` | Runtime-Projektion |
+| `godot-client/tests/test_behavior_forge.gd` | Test · Runtime-Projektion |
+| `godot-client/tests/test_behavior_forge.gd.uid` | Test · Runtime-Projektion |
+| `godot-client/ui/screens/behavior_forge_panel.gd` | Runtime-Projektion |
+| `godot-client/ui/screens/behavior_forge_panel.gd.uid` | Test · Runtime-Projektion |
+| `godot-client/ui/screens/world_authoring_studio.gd` | Runtime-Projektion |
+| `scripts/aurionProductionSchemaReconciliation.ts` | Produktion · Persistenz |
+| `scripts/aurionSchemaRepairPlan.ts` | Produktion · Persistenz |
+| `scripts/build-aurion-production-apply-artifact.mjs` | Produktion |
+| `scripts/build-aurion-production-reconcile-artifact.mjs` | Produktion |
+| `scripts/build-aurion-wasd-migration-ledger.mjs` | Produktion · Persistenz |
+| `scripts/build-aurion-wasd-migration-ledger.test.mjs` | Test |
+| `scripts/godot/check.mjs` | Test |
+| `scripts/prepare-native-auth-test-schema.mjs` | Test |
+| `scripts/schema-repair-proof-fixture.mjs` | Test |
+| `server/aiFabric/behaviorAuthoring.test.ts` | Test |
+| `server/aiFabric/behaviorAuthoring.ts` | Core · Produktion |
+| `server/aiFabric/behaviorAuthoringMariaDb.test.ts` | Test |
+| `server/aiFabric/behaviorForge.test.ts` | Test |
+| `server/aiFabric/behaviorForge.ts` | Core · Produktion |
+| `server/aiFabric/npcArchetypeRegistry.test.ts` | Test |
+| `server/aiFabric/npcArchetypeRegistry.ts` | Core · Produktion |
+| `server/aiFabric/npcArchetypeRegistryMariaDb.test.ts` | Test |
+| `server/aim293NpcActionGatewayContract.test.ts` | Test |
+| `server/aim293NpcActionGatewayMariaDb.test.ts` | Test |
+| `server/aurion/livingHistoryLoop.ts` | Core · Effekt |
+| `server/aurion/npc/actionGateway.ts` | Core · Effekt |
+| `server/aurion/npc/ax1LivingWorldProtocol.ts` | Core · Effekt |
+| `server/aurionProductionReadbackChain.test.ts` | Test |
+| `server/aurionProductionSchemaApplyDockerRunner.test.ts` | Test |
+| `server/aurionProductionSchemaReconcileDockerRunner.test.ts` | Test |
+| `server/aurionProductionSchemaReconciliation.test.ts` | Test |
+| `server/aurionSchemaRepairPlan.test.ts` | Test |
+| `server/autonomousNpcLifeMariaDb.test.ts` | Test |
+| `server/blocker3Compliance.test.ts` | Test |
+| `server/nativeAuthSchemaIsolation.test.ts` | Test |
+| `server/npcActionGatewayPersistence.ts` | Core · Persistenz · Effekt |
+| `server/npcArchetypePersistence.ts` | Core · Persistenz · Effekt |
+| `server/npcControllerShadowPersistence.ts` | Core · Persistenz · Effekt |
+| `server/npcGenesisAndSourceAuthorityMariaDb.test.ts` | Test |
+| `server/npcSemanticGraphBoundedRetentionMariaDb.test.ts` | Test |
+| `server/routes/aurionAuthoringRouter.ts` | Core · Produktion |
+| `server/wasdAurionRuntime.ts` | Core · Persistenz · Effekt |

@@ -167,7 +167,7 @@ describe("Wave 2 Step 26 WASD AIM-293 action gateway contract",()=>{
   it("replans hungry empty-stock consumption and permits finite partial consumption",()=>{
     for(const stock of [0,1]) {
       const original=context(0);
-      const s=source(0,true,{...original.npc,hungerBps:8000});
+      const s=source(0,true,{currentHubId:original.npc.currentHubId,wealthCopper:original.npc.wealthCopper,hungerBps:8000,fatigueBps:1500,tradeProwessBps:10500,harvestYieldBps:10000});
       const market={...original.market,stock:Object.fromEntries(Object.keys(original.market.stock).map(key=>[key,stock])) as typeof original.market.stock};
       const entries=original.inventory.entries.map(entry=>({...entry,quantity:stock}));
       const legacy={...original,confirmedDecision:s.confirmed,npc:confirmedNpcEconomy(s.hub,s.confirmed.snapshot),market,

@@ -357,9 +357,13 @@ async function readPersistedAction(tx: NpcTransaction, row: ActionRow): Promise<
   const worldRow = (await tx.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.id,row.successorWorldReceiptId)).limit(1))[0];
   if (!worldRow || worldRow.reactionHash !== effectReadback.worldReactionHash) throw new Error("NPC_ACTION_COMMITTED_WORLD_READBACK_MISMATCH");
   const world = parsed<WorldReaction>(worldRow.reactionJson,"NPC_ACTION_WORLD_JSON_INVALID");
-  const polityRow = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId,effectReadback.polityId)).limit(1))[0];
-  if (!polityRow || polityRow.reactionHash !== row.successorPolityHash) throw new Error("NPC_ACTION_COMMITTED_POLITY_READBACK_MISMATCH");
-  const polity = parsed<PolityState>(polityRow.stateJson,"NPC_ACTION_POLITY_JSON_INVALID");
+  // The mutable polity row can legitimately be newer than this action. Recover
+  // its historical successor from the already hash-verified immutable effect
+  // request, then verify the originally committed successor hash. This read
+  // neither writes nor rolls back the current polity.
+  const polity = resolvePolityState(effects.polityRequest);
+  if (polity.polityId !== effectReadback.polityId || polity.polityId !== readbackPayload.polityId
+      || polity.reactionHash !== row.successorPolityHash) throw new Error("NPC_ACTION_COMMITTED_POLITY_READBACK_MISMATCH");
   return Object.freeze({ status:"persisted" as const, actionReceiptId:row.id, effectReadbackId:effectReadback.id, effectReadbackHash:effectReadback.readbackHash, resolution:effects.resolution, npc:Object.freeze({ ...snapshot, multiMemory:memory.memory }), world, polity });
 }
 
