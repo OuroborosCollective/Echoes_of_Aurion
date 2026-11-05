@@ -48,7 +48,7 @@ export function inspectFadenwerk(input: unknown): { questlines: LegacyQuestline[
   const rootIssues: LegacyIssue[] = [];
   extras(root, ["version","questlines","seed","items","itemsSource","treasureClasses","generators","npcs","placements"], "root", rootIssues);
   if (root.seed !== undefined) issue(rootIssues, "WORLD_SEED_NOT_IMPORTED", "root.seed", "Ein Browser-Seed ist keine Aurion-Seed-Autorität.", "note");
-  for (const field of ["items","treasureClasses","generators","npcs","placements"]) {
+  for (const field of ["items","itemsSource","treasureClasses","generators","npcs","placements"]) {
     unknownContent(root[field], rootIssues, "EXTERNAL_CATALOG_NOT_IMPORTED", "root." + field);
   }
   const questlines: LegacyQuestline[] = [];
@@ -99,6 +99,16 @@ export function inspectFadenwerk(input: unknown): { questlines: LegacyQuestline[
     const graphNodes = new Map(nodes.map(n => [n.id, n] as const));
     for (const node of nodes) for (const choice of node.choices) {
       if (!graphNodes.has(choice.nextNode)) fail("DANGLING_EDGE", base + "." + node.id + "." + choice.id);
+    }
+    // Preserve the runtime's single unconditional start transition.
+    if (graphNodes.get(entryNode)!.choices.length !== 1) {
+      issue(lineIssues, "START_EDGE_COUNT", base + ".graph." + entryNode, "Aurion benötigt genau einen Startübergang; Entscheidungen gehören in einen nachfolgenden Verzweigungsknoten.");
+    }
+    const generatedEdges = new Set<string>();
+    for (const node of nodes) for (const choice of node.choices) {
+      const edgeId = "edge_" + node.id + "_" + choice.id;
+      if (generatedEdges.has(edgeId)) issue(lineIssues, "EDGE_ID_COLLISION", base + ".graph." + node.id, "Quellkennungen ergeben keine eindeutigen kanonischen Kantenkennungen.");
+      generatedEdges.add(edgeId);
     }
     const visited = new Set<string>();
     const active = new Set<string>();

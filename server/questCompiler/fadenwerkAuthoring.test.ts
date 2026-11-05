@@ -58,7 +58,7 @@ describe("shared Fadenwerk native authoring boundary", () => {
   });
   it("rejects dense drafts beyond persistence capacity before presenting an import", async () => {
     const graph = Object.fromEntries(Array.from({length:50}, (_, i) => ["n"+i, {
-      id:"n"+i,title:"Node "+i,choices:i===49?[]:Array.from({length:16},(_,j)=>({id:"c"+j,label:"Weiter",nextNode:"n"+(i+1)})),
+      id:"n"+i,title:"Node "+i,choices:i===49?[]:Array.from({length:i===0?1:16},(_,j)=>({id:"c"+j,label:"Weiter",nextNode:"n"+(i+1)})),
     }]));
     const document = {version:1,questlines:[{id:"dense",title:"Dense",entryNode:"n0",graph}]};
     const sourceJson = JSON.stringify(document);
@@ -67,6 +67,23 @@ describe("shared Fadenwerk native authoring boundary", () => {
     expect(QuestValidator.validateTemplate(template).valid).toBe(true);
     expect(Buffer.byteLength(JSON.stringify(template),"utf8")).toBeGreaterThan(65535);
     await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toThrow("FADENWERK_DRAFT_TOO_LARGE");
+  });
+
+  it("surfaces external item sources, colliding edges and ambiguous starts before conversion", async () => {
+    const external = {...source(),itemsSource:"private-items.json"};
+    const ambiguous = source();
+    ambiguous.questlines[0]!.graph.start.choices.push({id:"also",label:"Also",nextNode:"end"});
+    const collision = {version:1,questlines:[{id:"collision",title:"Collision",entryNode:"a",graph:{
+      a:{id:"a",title:"A",choices:[{id:"b_c",label:"Continue",nextNode:"a_b"}]},
+      a_b:{id:"a_b",title:"B",choices:[{id:"c",label:"Finish",nextNode:"end"}]},
+      end:{id:"end",title:"End",choices:[]},
+    }}]};
+    for (const [document,code] of [[external,"EXTERNAL_CATALOG_NOT_IMPORTED"],[ambiguous,"START_EDGE_COUNT"],[collision,"EDGE_ID_COLLISION"]] as const) {
+      const sourceJson = JSON.stringify(document);
+      const inspected = await caller().fadenwerkInspect({sourceJson});
+      expect(inspected.questlines[0]!.issues).toContainEqual(expect.objectContaining({code,severity:"blocker"}));
+      await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toMatchObject({code:"BAD_REQUEST",message:"FADENWERK_UNMAPPED"});
+    }
   });
 
 });
