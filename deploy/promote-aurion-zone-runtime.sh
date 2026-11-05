@@ -616,6 +616,29 @@ else
   exit 70
 fi
 
+# release-retention-start
+# Every promotion leaves a full release directory (incl. its runtime image tar)
+# behind; 300 of them filled 121 GB on 2026-11-04 and blocked the recovery
+# capacity gate. Keep the active release and the newest others up to
+# retention_keep. Report-only: pruning never fails an already promoted release.
+phase=release-retention
+retention_keep=5
+releases_root="${runtime_base}/releases"
+active_release="$(readlink -f "${runtime_base}/current")"
+pruned=0
+kept=0
+# Newest first; only real release directories count toward the kept set, so other
+# entries (notes, symlinks) never displace a release.
+while IFS= read -r candidate; do
+  [[ "$(dirname -- "$candidate")" == "$releases_root" ]] || continue
+  [[ "$(basename -- "$candidate")" =~ ^[a-f0-9]{40}-[0-9]+$ && -d "$candidate" && ! -L "$candidate" ]] || continue
+  if (( kept < retention_keep )); then kept=$((kept + 1)); continue; fi
+  [[ "$candidate" != "$active_release" && "$candidate" != "$release" ]] || continue
+  if rm -rf -- "${candidate:?}"; then pruned=$((pruned + 1)); fi
+done < <(ls -1dt -- "${releases_root}"/*/ 2>/dev/null | sed 's#/$##' || true)
+printf '{"recordType":"aurion.release-retention","schemaVersion":1,"keep":%s,"pruned":%s}\n' "$retention_keep" "$pruned"
+# release-retention-end
+
 printf '{"service":"aurion-traefik-runtime","revision":"%s","image":"%s","container":"%s","mode":"traefik-labelled"}\n' \
   "$expected_sha" "$runtime_image" "$container_id"
 
