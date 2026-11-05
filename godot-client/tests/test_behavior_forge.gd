@@ -58,6 +58,12 @@ func run() -> void:
 	panel.completed("behaviorJourneyMemory", journey)
 	check(panel._status.text.begins_with("READBACK"), "receipt-backed journey view displayed")
 	check(panel._status.text.contains("UNAVAILABLE") and panel._status.text.contains("Ältere"), "bounded history and missing perception explicit")
+	var populated: Dictionary = journey.duplicate(true)
+	populated.memory.entries = [{"fromHubId":"windhollow","toHubId":"emberfall","outcome":"ambushed","ageInResolutions":0,"retainedInMemory":true,"actionReceiptHash":"1".repeat(64),"effectsHash":"2".repeat(64),"effectReadbackHash":"3".repeat(64),"worldSeedSha256":"4".repeat(64)}]
+	panel._journey_memory()
+	panel.completed("behaviorJourneyMemory", populated)
+	check(panel._graph.get_root().get_child_count() == 1, "confirmed journey creates one display row")
+	check(panel._graph.get_root().get_first_child().get_text(0).contains("windhollow → emberfall · ambushed"), "journey endpoints and outcome displayed")
 	panel.close_context()
 	check(panel._actors.is_empty() and panel._draft.text.is_empty(), "logout clears data")
 	check(not panel._request("behaviorActors"), "closed session cannot request")

@@ -237,7 +237,11 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     expect(await counts()).toEqual(beforeReadCounts);
     await expect(readConfirmedMerchantJourneyMemory(npcId,2)).rejects.toThrow("JOURNEY_DECISION_REQUIRED");
     await expect(readConfirmedMerchantJourneyMemory("lyra",1)).rejects.toThrow("JOURNEY_ACTOR_UNSUPPORTED");
-    await pool.query("DELETE FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId]);
+    await expect(pool.query("DELETE FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId])).rejects.toThrow("AURION_NPC_ACTION_MEMORY_LINKS_APPEND_ONLY");
+    // Isolated destructive fixture, as in cleanup(): preserve append-only
+    // triggers and model a missing table population, never a production edit.
+    if(!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    await pool.query("TRUNCATE TABLE aurionNpcActionMemoryLinks");
     await expect(readConfirmedMerchantJourneyMemory(npcId,1)).rejects.toThrow("COMMITTED_MEMORY_LINK_REQUIRED");
   });
 
