@@ -179,8 +179,10 @@ async function realNovncAndBasic(browser, render, guard) {
         init.writeUInt16BE(32,0);init.writeUInt16BE(32,2);Buffer.from([32,24,0,1]).copy(init,4);
         for(const offset of [8,10,12]) init.writeUInt16BE(255,offset);
         init[14]=16;init[15]=8;init.writeUInt32BE(name.length,20);name.copy(init,24);
-        // Same message as ServerInit: exercise the earliest clipboard callback.
-        ws.send(Buffer.concat([init,serverCut(callback),serverCut(login)]));
+        // Immediately following frame: noVNC 1.0 consumes only the handshake
+        // from a ServerInit frame and processes normal messages on the next.
+        ws.send(init);
+        ws.send(Buffer.concat([serverCut(callback),serverCut(login)]));
       }
       while(phase===3&&pending.length) {
         const type=pending[0];let length={0:20,3:10,4:8,5:6}[type];
