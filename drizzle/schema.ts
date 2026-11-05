@@ -2238,3 +2238,39 @@ export const aurionProductionProbeSessionFence = mysqlTable("aurionProductionPro
   ownerId: varchar("ownerId", { length: 32 }).notNull(),
   createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
 });
+
+// Additive NPC policy custody: immutable artifacts, releases and genesis bindings.
+export const aurionNpcControllerArtifacts = mysqlTable("aurionNpcControllerArtifacts", {
+  artifactHash: varchar("artifactHash", { length: 71 }).primaryKey(),
+  artifactJson: text("artifactJson").notNull(),
+});
+
+export const aurionNpcArchetypeReleases = mysqlTable("aurionNpcArchetypeReleases", {
+  releaseHash: varchar("releaseHash", { length: 71 }).primaryKey(),
+  archetypeId: varchar("archetypeId", { length: 96 }).notNull(),
+  revision: int("revision").notNull(),
+  artifactHash: varchar("artifactHash", { length: 71 }).notNull(),
+  policyVersionId: varchar("policyVersionId", { length: 128 }).notNull(),
+  mutationReceiptId: varchar("mutationReceiptId", { length: 128 }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+}, table => [uniqueIndex("aurionNpcArchetypeReleases_revision_uq").on(table.archetypeId, table.revision)]);
+
+export const aurionNpcArchetypePointers = mysqlTable("aurionNpcArchetypePointers", {
+  archetypeId: varchar("archetypeId", { length: 96 }).primaryKey(),
+  revision: int("revision").notNull(),
+  releaseHash: varchar("releaseHash", { length: 71 }),
+});
+
+export const aurionNpcControllerBindings = mysqlTable("aurionNpcControllerBindings", {
+  npcId: varchar("npcId", { length: 96 }).primaryKey(),
+  bindingHash: varchar("bindingHash", { length: 71 }).notNull(),
+  genesisReceiptId: varchar("genesisReceiptId", { length: 128 }).notNull(),
+  bindingJson: text("bindingJson").notNull(),
+});
+
+export const aurionNpcControllerShadowReceipts = mysqlTable("aurionNpcControllerShadowReceipts", {
+  actionReceiptId: varchar("actionReceiptId", { length: 128 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 71 }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+});

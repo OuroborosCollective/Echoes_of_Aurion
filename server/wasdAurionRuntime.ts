@@ -11,6 +11,7 @@ import { appendNpcSemanticGraphV2 } from "./wasdSemanticGraphV2Persistence";
 import type { NpcMemoryV4 } from "./wasdNpcCapsule";
 import { recordNpcDecisionLog } from "./aurion/npcDecisionLog";
 import { assertStarterVillageNpcResidence } from "./starterVillageNpcResidence";
+import { bindNpcControllerAtGenesis } from "./npcArchetypePersistence";
 import {
   AURION_WASD_CONTENT_VERSION,
   AURION_WASD_RULESET_VERSION,
@@ -236,6 +237,7 @@ export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: 
     const row = (await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.id, id)).limit(1))[0];
     if (!row) throw new Error("NPC decision readback failed");
     const readback = decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash: v3RequestHash });
+    if (current.lastResolutionIndex < 0) await bindNpcControllerAtGenesis(tx, input.npcId, id);
     const confirmedMemory = await appendNpcMultiMemory(tx,row,previousMultiMemory);
     await appendNpcSemanticGraphV2(tx,confirmedMemory);
 
