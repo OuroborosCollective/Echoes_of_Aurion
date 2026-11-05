@@ -5,12 +5,14 @@ const Journal = preload("res://authoring/world_authoring_journal.gd")
 class FakeAuthoringApi:
 	extends Node
 	var sent: Array[Dictionary] = []
+	var attempts := 0
 	var start_ok := true
 	var in_flight := false
 	var on_refuse: Callable
 	func busy() -> bool: return in_flight
 	func cancel() -> void: pass
 	func request(kind: String, _server: String, _connection: String, payload: Dictionary = {}, _allow_local: bool = false) -> bool:
+		attempts += 1
 		if not start_ok:
 			if on_refuse.is_valid(): on_refuse.call()
 			return false
@@ -322,11 +324,13 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(editor._state.phase == "planning", "another auth generation supplied a quest plan")
 	studio._completed("questPlan", plan_value, SESSION, generation)
 	# Synthetic synchronous refusal through the real configure() signal connection.
+	var before_refused_publish := transport.attempts
 	transport.start_ok = false
 	transport.on_refuse = func(): signal_api.failed.emit("questPublish", "REQUEST_NOT_STARTED", SESSION, generation)
 	editor._publish()
 	require(editor._state.phase == "ready" and editor._journal.read().is_empty(), "synchronous unstarted quest publish retained uncertainty or journal")
 	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "synchronous publish failure diagnostic overwritten")
+	require(transport.attempts == before_refused_publish + 1, "refused publication attempted more than once")
 	transport.on_refuse = Callable()
 	transport.start_ok = true
 	editor.request_plan()
@@ -361,17 +365,23 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(editor._status.text.contains(quest_failure), "quest editor discarded native transport diagnostics")
 	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "transport diagnostics cleared an unconfirmed quest publication")
 	require(transport.sent.size() == before_failed_readback, "quest transport failure automatically retried")
+	var before_refused_readback := transport.attempts
 	transport.start_ok = false
 	transport.on_refuse = func(): signal_api.failed.emit("questReadback", "REQUEST_NOT_STARTED", SESSION, generation)
 	editor.load_templates()
 	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "synchronous readback failure diagnostic overwritten")
 	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "unstarted readback discarded publication journal")
 	require(transport.sent.size() == before_failed_readback, "synchronous failure retried a request")
+	require(transport.attempts == before_refused_readback + 1, "readback refusal attempted more than once")
 	transport.on_refuse = Callable()
 	editor.load_templates()
 	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "callback-free readback refusal lost pending receipt")
 	require(not editor._status.text.contains("REQUEST_NOT_STARTED"), "callback-free readback retained stale diagnostic")
+	require(transport.attempts == before_refused_readback + 2, "callback-free readback refusal attempted more than once")
 	transport.start_ok = true
+	signal_api.failed.emit("questReadback", quest_failure, SESSION, generation)
+	editor.load_templates()
+	require(not editor._status.text.contains(quest_failure) and editor._status.text.contains("läuft"), "started readback retained a stale failure label")
 	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
 	require(not editor._journal.read().is_empty(), "a catalog page stood in for independent publication readback")
 	studio._completed("questReadback", {"templates":[]}, SESSION, generation)

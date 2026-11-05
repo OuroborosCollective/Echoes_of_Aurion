@@ -126,7 +126,9 @@ func _request(kind: String, payload: Dictionary = {}) -> bool:
 	# that return before deciding whether publication could have been sent.
 	if _request_failure_notified and (started or kind != "questPublish"):
 		_state.failed(kind)
-		_show_status()
+	_show_status()
+	if started and not _request_failure_notified:
+		_set_message("Aurion-Anfrage läuft.")
 	return started
 
 func _can_edit() -> bool:
