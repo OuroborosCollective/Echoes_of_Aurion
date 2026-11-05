@@ -57,3 +57,50 @@ jobs:
           path: .aurion-tablet-login-proof/
           include-hidden-files: true
           retention-days: 7
+  native-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_tablet_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_tablet_test
+      AURION_NATIVE_AUTH_E2E: '1'
+      JWT_SECRET: isolated-ci-tablet-fixture-never-production
+      VITE_APP_ID: aurion-isolated-tablet-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Migrate only disposable localhost test database
+        run: |
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+          node scripts/prepare-native-auth-test-schema.mjs
+      - name: Existing real MariaDB native auth replay and race regressions
+        run: pnpm exec vitest run server/nativeAuthBrowserMariaDb.test.ts server/nativeAuthPersistenceMariaDb.test.ts
+      - name: Install repository-pinned official Godot
+        run: node scripts/godot/bootstrap.mjs
+      - name: Existing native auth in minimal isolated Godot project
+        run: |
+          mkdir -p "$RUNNER_TEMP/aurion-native-fixture/tests"
+          cp -r godot-client/net godot-client/config godot-client/platform "$RUNNER_TEMP/aurion-native-fixture/"
+          cp godot-client/tests/test_native_auth_{flow,tokens,start_runtime}.gd "$RUNNER_TEMP/aurion-native-fixture/tests/"
+          printf 'config_version=5\n[application]\nconfig/name="Native auth fixture"\n' > "$RUNNER_TEMP/aurion-native-fixture/project.godot"
+          editor=.aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64
+          "$editor" --headless --path "$RUNNER_TEMP/aurion-native-fixture" --script tests/test_native_auth_flow.gd
+          "$editor" --headless --path "$RUNNER_TEMP/aurion-native-fixture" --script tests/test_native_auth_tokens.gd
+          node scripts/godot/native-auth-start-runtime.mjs "$editor" "$RUNNER_TEMP/aurion-native-fixture"
