@@ -47,7 +47,7 @@ jobs:
           python3 -m py_compile deploy/aurion-tablet-login/build_page.py deploy/aurion-tablet-login/one_attempt.py
           python3 deploy/aurion-tablet-login/build_page.py --self-test
       - name: Existing native authentication boundaries
-        run: pnpm exec vitest run server/nativeAuthHttp.test.ts server/nativeAuthProtocol.test.ts server/nativeAuthStateSeal.test.ts server/_core/sdkNativeAuth.test.ts
+        run: pnpm exec vitest run server/nativeAuthHttp.test.ts server/nativeAuthProtocol.test.ts server/nativeAuthStateSeal.test.ts server/_core/sdkNativeAuth.test.ts server/observability/otelBoundary.test.ts
       - name: Verify whitespace
         run: git diff --check
       - uses: actions/upload-artifact@v4
