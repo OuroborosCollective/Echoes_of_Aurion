@@ -1,0 +1,48 @@
+name: Aurion tablet login proof
+on:
+  push:
+    branches: ['test/tablet-godot-login-*']
+    paths:
+      - 'deploy/aurion-tablet-login/**'
+      - '.github/workflows/aurion-tablet-login-proof.yml'
+  pull_request:
+    paths:
+      - 'deploy/aurion-tablet-login/**'
+      - '.github/workflows/aurion-tablet-login-proof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen repository dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install official Chromium test runtime
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Browser-only positive and negative fixtures
+        run: node deploy/aurion-tablet-login/browser-proof.mjs
+      - name: Canonical browser consent Origin regression
+        run: node --test scripts/native-auth-browser-origin.test.mjs
+      - name: Python helper syntax
+        run: python3 -m py_compile deploy/aurion-tablet-login/build_page.py deploy/aurion-tablet-login/one_attempt.py
+      - name: Existing native authentication boundaries
+        run: pnpm exec vitest run server/nativeAuthHttp.test.ts server/nativeAuthProtocol.test.ts server/nativeAuthStateSeal.test.ts server/_core/sdkNativeAuth.test.ts
+      - name: Verify whitespace
+        run: git diff --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aurion-tablet-login-proof-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .aurion-tablet-login-proof/
+          include-hidden-files: true
+          retention-days: 7
