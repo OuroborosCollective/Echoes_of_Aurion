@@ -13,6 +13,7 @@ describe("behavior authoring routes",()=>{
   });
   it("requires admin and rejects unknown effect-bearing inputs",async()=>{
     await expect(caller("user").behaviorActors()).rejects.toMatchObject({code:"FORBIDDEN"});
+    await expect(caller("user").behaviorJourneyMemory({npcId:"lyra",expectedObservationHash:"sha256:"+"a".repeat(64)})).rejects.toMatchObject({code:"FORBIDDEN"});
     await expect(caller("user").behaviorDraft({role:"guard",mode:"tree",brief:"Guard this area safely."})).rejects.toMatchObject({code:"FORBIDDEN"});
     await expect(caller().behaviorDraft({role:"guard",mode:"tree",brief:"Guard this area safely.",apply:true} as never)).rejects.toThrow();
   });

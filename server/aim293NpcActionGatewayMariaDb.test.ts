@@ -1,7 +1,7 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
-import { executeConfirmedMerchantAction, persistPolity, readConfirmedMerchantActionSource, readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
+import { executeConfirmedMerchantAction, persistPolity, readConfirmedMerchantActionSource, readConfirmedNpcActionPacket, readConfirmedMerchantJourneyMemory } from "./npcActionGatewayPersistence";
 import { eq } from "drizzle-orm";
 import { aurionPolityStates } from "../drizzle/schema";
 import { getDb } from "./db";
@@ -203,6 +203,7 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     const input={worldSeed:"journey-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
     await expect(executeConfirmedMerchantAction({...input,failureInjection:"before_memory_commit"})).rejects.toThrow();
     expect((await readConfirmedNpcState(npcId))!.memory.some(m=>m.startsWith("journey:v1:"))).toBe(false);
+    expect((await readConfirmedMerchantJourneyMemory(npcId,0)).entries).toEqual([]);
     const result=await executeConfirmedMerchantAction(input);
     expect(result.status).toBe("committed");
     if(result.status!=="committed") throw Error("JOURNEY_ACTION_NOT_COMMITTED");
@@ -217,6 +218,17 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     expect(retry.status).toBe("persisted");
     if(retry.status==="persisted") expect(retry.npc.memory).toEqual(result.npc.memory);
     expect((await readConfirmedNpcState(npcId))!.memory.filter(m=>m===record)).toHaveLength(1);
+    const readback=await readConfirmedMerchantJourneyMemory(npcId,1);
+    expect(readback).toMatchObject({schemaVersion:"aurion.npc-journey-memory.v1",npcId,asOfResolutionIndex:1,scope:"CONFIRMED_ABSTRACT_JOURNEYS",mutationAuthority:"none",spatialPerception:"UNAVAILABLE",hasOlderActions:false});
+    expect(readback.entries).toHaveLength(1);
+    expect(readback.entries[0]).toMatchObject({actionReceiptId:result.actionReceiptId,fromHubId:"windhollow",toHubId:result.resolution.caravan.destination,outcome:result.resolution.caravan.ambushed?"ambushed":"passed",observedResolutionIndex:1,retainedInMemory:true,ageInResolutions:0,confidenceBps:10000});
+    expect(readback.entries[0].worldSeedSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect((await readConfirmedMerchantJourneyMemory(npcId,0)).entries).toEqual([]);
+    expect(await readConfirmedMerchantJourneyMemory(npcId,1)).toEqual(readback);
+    await expect(readConfirmedMerchantJourneyMemory(npcId,2)).rejects.toThrow("JOURNEY_DECISION_REQUIRED");
+    await expect(readConfirmedMerchantJourneyMemory("lyra",1)).rejects.toThrow("JOURNEY_ACTOR_UNSUPPORTED");
+    await pool.query("DELETE FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId]);
+    await expect(readConfirmedMerchantJourneyMemory(npcId,1)).rejects.toThrow("COMMITTED_MEMORY_LINK_REQUIRED");
   });
 
   it("persists unlimited storage above the old cap with rollback, receipt binding and exact retry",async()=>{
