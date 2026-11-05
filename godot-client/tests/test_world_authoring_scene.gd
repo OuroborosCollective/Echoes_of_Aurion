@@ -152,7 +152,14 @@ func verify() -> void:
 		require(fake.sent.size() == before_staging, "local staging/import submitted a world change")
 	var original := draft()
 	studio._draft.text = JSON.stringify(original)
+	fake.start_ok = false
+	fake.on_refuse = func(): signal_api.failed.emit("worldPlan", "REQUEST_NOT_STARTED", SESSION, generation)
 	studio._plan()
+	require(studio._info.text.contains("REQUEST_NOT_STARTED") and studio._state.phase == "ready", "world plan lost synchronous diagnostic")
+	fake.start_ok = true
+	fake.on_refuse = Callable()
+	studio._plan()
+	require(not studio._info.text.contains("REQUEST_NOT_STARTED"), "world plan retry retained stale diagnostic")
 	require(fake.sent.back().kind == "worldPlan", "plan was not sent")
 	fake.in_flight = true
 	studio._close_requested()
@@ -190,6 +197,12 @@ func verify() -> void:
 	require(studio.visible, "studio closed during the receipt readback")
 	fake.in_flight = false
 	studio._failed("readback", "fixture", SESSION, generation)
+	fake.start_ok = false
+	fake.on_refuse = func(): signal_api.failed.emit("readback", "REQUEST_NOT_STARTED", SESSION, generation)
+	studio._readback()
+	require(studio._info.text.contains("REQUEST_NOT_STARTED") and not Journal.new(journal_path).read().is_empty(), "world readback lost synchronous diagnostic or journal")
+	fake.start_ok = true
+	fake.on_refuse = Callable()
 	studio._plan()
 	require(studio._state.phase == "awaiting_readback", "repeated plan tap discarded a received receipt")
 	studio._close_requested()
@@ -236,9 +249,29 @@ func verify() -> void:
 	studio._request_confirmation()
 	studio._confirm.confirmed.emit()
 	require(studio._state.phase == "ready" and Journal.new(journal_path).read().is_empty(), "unstarted request retained an ambiguous apply")
-	require(studio._info.text.contains("nicht gestartet"), "world apply lost its actionable not-started explanation")
+	require(studio._info.text.contains("nicht gestartet") and studio._info.text.contains("REQUEST_NOT_STARTED"), "world apply lost its native not-started diagnostic")
 	fake.on_refuse = Callable()
 	fake.start_ok = true
+	studio._plan()
+	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
+	studio._apply()
+	signal_api.failed.emit("worldApply", "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0", SESSION, generation)
+	fake.start_ok = false
+	fake.on_refuse = func(): signal_api.failed.emit("worldReceipt", "REQUEST_NOT_STARTED", SESSION, generation)
+	studio._recover_receipt()
+	require(studio._info.text.contains("REQUEST_NOT_STARTED") and studio._state.phase == "unknown" and not Journal.new(journal_path).read().is_empty(), "world receipt refusal lost diagnostic or uncertainty")
+	fake.start_ok = true
+	fake.on_refuse = Callable()
+	studio._recover_receipt()
+	require(not studio._info.text.contains("REQUEST_NOT_STARTED"), "world receipt retry retained stale diagnostic")
+	# Synthetic known matching recovery; never a live server claim.
+	var recovery_plan: Dictionary = studio._state._applying.plan
+	var recovery_response := receipt_response()
+	recovery_response.status = "found"
+	recovery_response.plan = recovery_plan
+	studio._completed("worldReceipt", recovery_response, SESSION, generation)
+	studio._completed("readback", design(), SESSION, generation)
+	require(Journal.new(journal_path).read().is_empty(), "synthetic world recovery did not clear matching journal")
 	studio._plan()
 	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	fake.start_ok = false
@@ -306,6 +339,7 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
 	require(editor.copy_template(0), "native quest editor could not copy the confirmed template")
 	require(transport.sent.back().kind == "questTemplate" and transport.sent.back().payload.version == 1, "quest copy did not request the selected canonical version")
+	require(editor._status.text.contains("läuft") and not editor._json.editable, "template copy lost its running status or allowed draft editing")
 	studio._completed("questTemplate", {"templates":[template], "nextVersion":8}, SESSION, generation)
 	var inactive: Dictionary = editor.current_draft()
 	require(inactive.version == 8 and inactive.active == false and inactive.quarantined == true, "quest copy ignored the server version or became active without review")
@@ -392,11 +426,34 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(transport.sent.back().kind == "questReadback", "pending publication fell back to unbounded history readback")
 	studio._completed("questReadback", {"templates":[draft_value], "durable":true}, SESSION, generation)
 	require(editor._state.phase == "confirmed" and editor._journal.read().is_empty(), "matching independent quest readback did not confirm/clear publication")
-	# Once transport has started, failure must retain uncertainty and the journal.
+	# A different publication must never reserve the previous confirmed identity.
+	var second_draft := draft_value.duplicate(true)
+	second_draft.version = 9
+	second_draft.title = "Second synthetic quest version"
+	editor._json.text = JSON.stringify(second_draft)
+	var second_proposal := proposal.duplicate(true)
+	second_proposal.id = "prop_native_scene_distinct"
+	second_proposal.templateVersion = 9
+	second_proposal.proposedDataJson = JSON.stringify(second_draft)
+	second_proposal.receiptHash = "1".repeat(64)
+	var second_plan := plan_value.duplicate(true)
+	second_plan.proposalId = second_proposal.id
+	second_plan.proposalReceiptHash = second_proposal.receiptHash
+	second_plan.template = second_draft
+	second_plan.templateHash = "2".repeat(64)
+	second_plan.planHash = "3".repeat(64)
+	var second_receipt := receipt.duplicate(true)
+	second_receipt.targetId = second_proposal.id
+	second_receipt.planHash = second_plan.planHash
+	second_receipt.resultHash = second_plan.templateHash
+	second_receipt.receiptHash = "4".repeat(64)
+	second_receipt.receiptId = "authoring:quest:" + "4".repeat(24)
 	editor.request_plan()
-	studio._completed("questPropose", proposal, SESSION, generation)
-	studio._completed("questPlan", plan_value, SESSION, generation)
+	studio._completed("questPropose", second_proposal, SESSION, generation)
+	studio._completed("questPlan", second_plan, SESSION, generation)
 	editor._publish()
+	var second_pending: Dictionary = editor._journal.read()
+	require(second_pending.get("proposalId") == second_proposal.id and second_pending.get("planHash") == second_plan.planHash and second_pending.get("version") == 9 and second_pending.get("templateHash") == second_plan.templateHash, "second publication reserved the previous confirmed identity")
 	var before_uncertain := transport.sent.size()
 	signal_api.failed.emit("questPublish", quest_failure, SESSION, generation)
 	require(editor._state.phase == "unknown" and not editor._journal.read().is_empty(), "started publication failure discarded uncertainty or journal")
@@ -404,9 +461,14 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	editor._publish()
 	require(transport.sent.size() == before_uncertain, "uncertain publication automatically retried")
 	editor.recover_receipt()
-	require(transport.sent.back().kind == "questReceipt", "uncertain publication bypassed receipt recovery")
+	require(transport.sent.back().kind == "questReceipt" and transport.sent.back().payload.proposalId == second_proposal.id, "uncertain publication recovered the wrong receipt identity")
 	studio._completed("questReceipt", {"status":"found", "plan":plan_value, "receipt":receipt}, SESSION, generation)
+	require(editor._state.phase == "unknown" and editor._journal.read() == second_pending, "previous confirmed receipt resolved the second uncertain publication")
+	studio._completed("questReceipt", {"status":"found", "plan":second_plan, "receipt":second_receipt}, SESSION, generation)
 	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "recovered receipt bypassed independent readback")
+	require(transport.sent.back().kind == "questReadback" and transport.sent.back().payload.version == 9, "recovery requested the previous template version")
 	studio._completed("questReadback", {"templates":[draft_value], "durable":true}, SESSION, generation)
+	require(editor._state.phase == "awaiting_readback" and editor._journal.read() == second_pending, "previous template readback cleared the second publication")
+	studio._completed("questReadback", {"templates":[second_draft], "durable":true}, SESSION, generation)
 	require(editor._state.phase == "confirmed" and editor._journal.read().is_empty(), "recovered publication failed matching independent readback")
 	studio._close_requested()

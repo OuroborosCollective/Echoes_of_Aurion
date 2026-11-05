@@ -166,9 +166,11 @@ func copy_template(index: int) -> bool:
 	if not _can_edit() or index < 0 or index >= _templates.size(): return false
 	var summary: Dictionary = _templates[index]
 	var payload := {"templateId":summary.templateId, "version":int(summary.version)}
-	if not _request("questTemplate", payload): return false
 	_copying = payload
-	_show_status()
+	if not _request("questTemplate", payload):
+		_copying.clear()
+		_show_status()
+		return false
 	return true
 
 func _accept_copy(data: Dictionary) -> void:
