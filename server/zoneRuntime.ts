@@ -162,6 +162,7 @@ export class AuthoritativeMovementZone {
   // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
   private sortedPresences: ZonePresence[] = [];
   private mobTargetPresences: ZonePresence[] = [];
+  private activeCombatTactics = new Set<string>();
   private sortedPeersDirty = false;
   private readonly actionSequenceWatermarks = new Map<number, number>();
   private pendingIntents: AurionZoneIntent[] = [];
@@ -638,7 +639,9 @@ export class AuthoritativeMovementZone {
       effects.attackUntil = this.tickNumber + 8;
       if (skillId === "k_charge") {
         (this.tactics.effects[defender.id] ??= {}).slowUntil = this.tickNumber + 30;
-        this.tactics.windups = this.tactics.windups.filter(w => w.mobId !== defender.id);
+        for (let i = this.tactics.windups.length - 1; i >= 0; i--) {
+          if (this.tactics.windups[i].mobId === defender.id) this.tactics.windups.splice(i, 1);
+        }
         this.mobRuntime.applyCombatState(defender.id, { health: mob.health, nextAttackTick: this.tickNumber + 10 });
       }
     }
@@ -821,7 +824,18 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    this.activeCombatTactics.clear();
+    for (let i = 0; i < this.tactics.windups.length; i++) this.activeCombatTactics.add(this.tactics.windups[i].mobId);
+    if (this.tickNumber % 2 === 0) {
+      for (const id in this.tactics.effects) {
+        if (Object.prototype.hasOwnProperty.call(this.tactics.effects, id)) {
+          if ((this.tactics.effects[id].slowUntil ?? 0) > this.tickNumber) {
+            this.activeCombatTactics.add(id);
+          }
+        }
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, this.activeCombatTactics);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -834,10 +848,29 @@ export class AuthoritativeMovementZone {
       for (const [id, until] of peer.skillCooldownUntilTick) if (until <= this.tickNumber) { peer.skillCooldownUntilTick.delete(id); changed = true; }
     }
     if (this.tacticalCombat) {
-      this.tactics.windups = this.tactics.windups.filter(w => { const m = this.mobRuntime.stateFor(w.mobId); return m && m.health > 0 && m.state === "combat" && m.targetEntityId === w.targetId && (this.peersByEntityId.get(w.targetId)?.health ?? 0) > 0; });
-      for (const [id, effects] of Object.entries(this.tactics.effects)) {
-        for (const key of Object.keys(effects) as (keyof typeof effects)[]) if ((effects[key] ?? 0) <= this.tickNumber) { delete effects[key]; changed = true; }
-        if (!Object.keys(effects).length) delete this.tactics.effects[id];
+      for (let i = this.tactics.windups.length - 1; i >= 0; i--) {
+        const w = this.tactics.windups[i];
+        const m = this.mobRuntime.stateFor(w.mobId);
+        if (!(m && m.health > 0 && m.state === "combat" && m.targetEntityId === w.targetId && (this.peersByEntityId.get(w.targetId)?.health ?? 0) > 0)) {
+          this.tactics.windups.splice(i, 1);
+        }
+      }
+      for (const id in this.tactics.effects) {
+        if (Object.prototype.hasOwnProperty.call(this.tactics.effects, id)) {
+          const effects = this.tactics.effects[id];
+          let hasEffects = false;
+          for (const key in effects) {
+            if (Object.prototype.hasOwnProperty.call(effects, key)) {
+              if ((effects[key as keyof typeof effects] ?? 0) <= this.tickNumber) {
+                delete effects[key as keyof typeof effects];
+                changed = true;
+              } else {
+                hasEffects = true;
+              }
+            }
+          }
+          if (!hasEffects) delete this.tactics.effects[id];
+        }
       }
     }
     for (const peer of this.sortedPeers) {
@@ -954,10 +987,17 @@ export class AuthoritativeMovementZone {
       const peer = this.peersByEntityId.get(mob.targetEntityId);
       if (!peer || peer.health <= 0) continue;
       if (this.tacticalCombat) {
-        const windup = this.tactics.windups.find(w => w.mobId === mob.definition.entityId);
-        if (windup) {
+        let windupIndex = -1;
+        for (let i = 0; i < this.tactics.windups.length; i++) {
+          if (this.tactics.windups[i].mobId === mob.definition.entityId) {
+            windupIndex = i;
+            break;
+          }
+        }
+        if (windupIndex !== -1) {
+          const windup = this.tactics.windups[windupIndex];
           if (this.tickNumber < windup.impactTick) continue;
-          this.tactics.windups = this.tactics.windups.filter(w => w !== windup);
+          this.tactics.windups.splice(windupIndex, 1);
           if (!insideCombatLine(peer.position, windup)) {
             this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, nextAttackTick: this.tickNumber + mob.definition.attackCooldownTicks });
             changed = true; continue;
