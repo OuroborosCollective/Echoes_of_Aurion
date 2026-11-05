@@ -77,6 +77,10 @@ func verify() -> void:
 	require(last_value.get("nextVersion") == 301, "quest copy lost the server-allocated next version")
 	await send(api, "questReadback", {"templateId":"quest.http-fixture", "version":300})
 	require(last_value.get("templates", []).size() == 1 and last_value.templates[0].version == 300 and last_value.get("durable") == true, "exact-version independent durable quest readback failed")
+	await send(api, "questFadenInspect", {"sourceJson":'{"fixture":"fadenwerk"}'})
+	require(last_value.get("previewOnly") == true and last_value.get("sourceHash") == "c".repeat(64), "Fadenwerk inspection lost preview or source binding")
+	await send(api, "questFadenDraft", {"sourceJson":'{"fixture":"fadenwerk"}', "questlineIndex":0, "version":7})
+	require(last_value.get("previewOnly") == true and last_value.get("template", {}).get("quarantined") == true, "Fadenwerk conversion lost quarantine")
 	await send(api, "questPublish", {"proposalId":"prop_http_fixture", "expectedPlanHash":"a".repeat(64), "confirmation":"PUBLISH_QUEST_TEMPLATE"})
 	require(last_error == "HTTP_503", "quest publish uncertainty was not surfaced")
 	done = false

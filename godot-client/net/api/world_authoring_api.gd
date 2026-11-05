@@ -6,7 +6,7 @@ signal completed(kind: String, data: Dictionary, connection_id: String, generati
 signal failed(kind: String, reason: String, connection_id: String, generation: int)
 
 const ROOT := "/api/trpc/aurionAuthoring."
-const QUEST_ROUTES := {"questTemplates":"authoringTemplates", "questTemplate":"authoringTemplate", "questReadback":"authoringTemplate", "questPropose":"proposeDraft", "questPlan":"publishPlan", "questPublish":"publish", "questReceipt":"publishReceipt"}
+const QUEST_ROUTES := {"questFadenInspect":"fadenwerkInspect", "questFadenDraft":"fadenwerkDraft", "questTemplates":"authoringTemplates", "questTemplate":"authoringTemplate", "questReadback":"authoringTemplate", "questPropose":"proposeDraft", "questPlan":"publishPlan", "questPublish":"publish", "questReceipt":"publishReceipt"}
 const MAX_SMALL := 1024 * 1024
 const MAX_WORLD := 8 * 1024 * 1024
 var _auth: Node
