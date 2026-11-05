@@ -107,7 +107,7 @@ export function inspectFadenwerk(input: unknown): { questlines: LegacyQuestline[
     const generatedEdges = new Set<string>();
     for (const node of nodes) for (const choice of node.choices) {
       const edgeId = "edge_" + node.id + "_" + choice.id;
-      if (edgeId.length > 96) issue(lineIssues, "EDGE_ID_TOO_LONG", base + ".graph." + node.id, "Kantenkennung überschreitet Aurions Auswahlvertrag mit 96 Zeichen.");
+      if (node.id !== entryNode && edgeId.length > 96) issue(lineIssues, "EDGE_ID_TOO_LONG", base + ".graph." + node.id, "Kantenkennung überschreitet Aurions Auswahlvertrag mit 96 Zeichen.");
       if (generatedEdges.has(edgeId)) issue(lineIssues, "EDGE_ID_COLLISION", base + ".graph." + node.id, "Quellkennungen ergeben keine eindeutigen kanonischen Kantenkennungen.");
       generatedEdges.add(edgeId);
     }

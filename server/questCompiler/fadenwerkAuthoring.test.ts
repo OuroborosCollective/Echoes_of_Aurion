@@ -121,6 +121,17 @@ describe("shared Fadenwerk native authoring boundary", () => {
     expect((await caller().fadenwerkInspect({sourceJson})).questlines[0]!.issues)
       .toContainEqual(expect.objectContaining({code:"EDGE_ID_TOO_LONG",severity:"blocker"}));
     await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toThrow("FADENWERK_UNMAPPED");
+    const automaticSource = JSON.stringify({version:1,questlines:[{id:"automatic",title:"Automatic",entryNode:nodeId,graph:{
+      [nodeId]:{id:nodeId,title:"Start",choices:[{id:choiceId,label:"Begin",nextNode:"end"}]},
+      end:{id:"end",title:"End",choices:[]},
+    }}]});
+    expect((await caller().fadenwerkInspect({sourceJson:automaticSource})).questlines[0]!.issues).toEqual([]);
+    const converted = await caller().fadenwerkDraft({sourceJson:automaticSource,questlineIndex:0,version:1});
+    expect(converted.template.edges[0]!.id.length).toBeGreaterThan(96);
+    const template = {...converted.template,active:true,quarantined:false};
+    const engine = new QuestRuntimeEngine(new WorldFactEngine(),new QuestTemplateRegistry([template]),fixedOperationalClock(0));
+    const offered = engine.compileAndOfferQuest({worldId:"isolated-fadenwerk",playerUserId:42,triggerEventId:"isolated-long-start",requestedTemplateId:template.templateId});
+    expect(engine.acceptQuest(offered.instance,offered.plan).updatedInstance.currentNodeId).toBe("end");
   });
 
 });
