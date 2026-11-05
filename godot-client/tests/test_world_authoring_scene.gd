@@ -256,6 +256,9 @@ func verify() -> void:
 	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	studio._apply()
 	signal_api.failed.emit("worldApply", "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0", SESSION, generation)
+	studio._send("questTemplates", {"limit":20})
+	studio.open_studio()
+	require(studio._info.text.contains("TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"), "quest request erased unresolved world diagnostic")
 	fake.start_ok = false
 	fake.on_refuse = func(): signal_api.failed.emit("worldReceipt", "REQUEST_NOT_STARTED", SESSION, generation)
 	studio._recover_receipt()

@@ -430,7 +430,8 @@ func _on_refresh_succeeded() -> void:
 		_info.text = "Sitzung erneuert. Bitte die gewünschte Aktion erneut auswählen."
 
 func _send(kind: String, payload: Dictionary = {}) -> bool:
-	_failure_reason = ""
+	if not kind.begins_with("quest"):
+		_failure_reason = ""
 	if not _ensure_access() or _api == null or _api.busy():
 		return false
 	return _api.request(kind, _server, _connection, payload, _allow_local)
