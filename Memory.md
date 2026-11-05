@@ -5701,3 +5701,28 @@ Open: Exact-head CI/review and verified editor delivery; full world/model parity
 Next safe step: Review and integrate the tested fix, then independently confirm the existing session renders its server-selected model.
 
 CI-Nachtrag zum selben Integrationsblock: Head cee17220c1c275171bafb3adac26529eaff3729d hat alle ausgeführten Code-Checks bestanden, darunter echter Godot-Import/Render (126958850453), native Viewport-Projektion (126958849687), Repository-Regression (126958849609), Android/JNI (126958849568) und Browser-E2E (126958850048). Vier bedingte Jobs skipped, nicht als bestanden gezählt; Devin/CodeRabbit ohne offene Review-Threads. GitBook-Vorschau m21D80HLwtyeajGnaah5 enthält exakt diesen Head, GitHub meldet dennoch pending. Merge durch automatische Freigabeprüfung abgelehnt; keine Umgehung oder Live-Codeänderung. Nach dieser Dokumentationsfortschreibung ist der neue Head erneut zu prüfen; Live-Darstellung bleibt unbelegt.
+
+
+### 2026-11-05 — Native WorldStudio transport diagnostics
+Status: PARTIAL
+Task: Preserve actionable native HTTP failures while investigating unresolved authenticated WorldStudio requests.
+Decisions: Include only numeric Godot result and HTTP status; retain uncertainty, session binding, response limits and one-shot apply semantics.
+Touched surfaces: Godot authoring API, existing studio error label, HTTP fixture and scene regressions.
+Evidence: Base `161e5694dc6df37890b62623944762e4348026a9`; native Godot 4.7.2 loopback body-limit test RED before / GREEN after (`RESULT_7_HTTP_200`), two explicitly requested HTTP calls; native authoring-state and imported main-scene tests PASS. Fixtures are not live evidence. Separate anonymous native HTTPS probes reached production health/auth endpoints in 90/110 ms.
+Learned: Generic TRANSPORT_UNCERTAIN hid the native failure; anonymous connectivity does not prove authenticated authoring health.
+Open: Exact failed live request cause, authenticated replay, full CI and owner-confirmed AI authoring remain unverified.
+Next safe step: Complete CI/review, deploy the diagnostic change with revision readback, then diagnose an authenticated studio request before requesting any world mutation.
+
+Review follow-up (same integration block): identity/catalog failures now appear in the top access label; pending, rejected and cleared sessions reset that label. Native main-scene regression passes with the entire identity error label inside the initial 360×640 viewport and a subsequent catalog failure visible there. This is headless layout evidence, not a physical tablet or authenticated live proof.
+
+Additional review follow-up (same block): the shared WorldStudio transport also forwards its safe diagnostic to the quest editor. Native scene regression passes for a failed quest readback while preserving its receipt-awaiting state and durable pending journal, with no automatic retry.
+
+Synchronous-failure review follow-up (same block): defer quest failure state transitions until the transport start result is known; preserve diagnostics through caller status updates. Real Godot scene regression is RED on the prior editor / GREEN with the correction; callback-free refusal, readback journal retention and configure()-connected production failure signals are covered. Wolfram enumerated eight abstract publish cases and reproduced the old false-unknown counterexample with no violation in the revised model; this is analysis, not runtime evidence. CI/review and live delivery remain pending.
+
+Codejaeger adjacent rerun (same block): isolated original-code quest-readback reproduction also fails solely on the overwritten diagnostic. Expanded native scene regression passes for synchronous World Apply refusal with its actionable not-started message, plus asynchronous Quest Publish uncertainty, retained journal, no duplicate publish and receipt recovery followed by independent readback. No additional state/persistence defect verified on the four inspected neighbor directions.
+
+Final review follow-up (same block): successful quest request starts now refresh the visible label immediately; native stale-readback-label regression RED before / GREEN after. Synthetic transport counts every request attempt, including refused starts, with exact one-attempt assertions. No gameplay or receipt contract changes.
+
+Review identity/status correction (same block): a distinct second quest publication reproduced a stale pending identity at head 7a7ea2974d5edf4dffbc470482034cc1d630e331. Beginning a new editable proposal now discards only the completed publication identity; unknown/readback-pending phases remain locked. Native RED/GREEN tests reject the previous receipt/template for the second operation and confirm only its matching independent readback. World request-start diagnostics and template-copy running status are also retained; all four world actions and quest copy are covered. Native synthetic scene GREEN; production delivery and final CI remain pending.
+
+Cross-editor follow-up (same block): starting a quest read no longer clears an unresolved world transport reason. Native scene RED on 54c3567b6a84d96cfa99bc28d4bdec8a707d1a5c / GREEN after request-family isolation; no state or receipt change.

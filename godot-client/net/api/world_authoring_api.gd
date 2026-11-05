@@ -77,7 +77,9 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 		_finish_failure("REDIRECT_REJECTED")
 		return
 	if result != HTTPRequest.RESULT_SUCCESS:
-		_finish_failure("TRANSPORT_UNCERTAIN")
+		# Numeric engine/status codes only: never expose headers, URLs or response bodies.
+		# A transport failure still says nothing about whether an apply committed.
+		_finish_failure("TRANSPORT_UNCERTAIN_RESULT_%d_HTTP_%d" % [result, code])
 		return
 	if code != 200:
 		_finish_failure("HTTP_%d" % code)
