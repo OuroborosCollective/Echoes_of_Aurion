@@ -176,17 +176,26 @@ export async function bindNpcControllerAtGenesis(tx: NpcTransaction, npcId: stri
   return { ...parsed, bindingHash };
 }
 
-export async function readNpcControllerBindingInTransaction(tx: NpcTransaction, npcId: string): Promise<NpcControllerBinding | null> {
-  const row = (await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1).for("update"))[0];
+function verifiedBinding(row: typeof bindings.$inferSelect | undefined, npcId: string): NpcControllerBinding | null {
   if (!row) return null; // pre-registry NPC: no migration by reading
   const binding = Binding.parse(JSON.parse(row.bindingJson));
   if (binding.npcId !== npcId || binding.genesisReceiptId !== row.genesisReceiptId || canonicalSha256(binding) !== row.bindingHash) throw Error("NPC_CONTROLLER_BINDING_CORRUPT");
   return { ...binding, bindingHash: row.bindingHash };
 }
 
+/** Canonical callers lock the binding row inside their transaction. */
+export async function readNpcControllerBindingInTransaction(tx: NpcTransaction, npcId: string): Promise<NpcControllerBinding | null> {
+  return verifiedBinding((await tx.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1).for("update"))[0], npcId);
+}
+
+/**
+ * Public read-only view. Bindings are append-only (update/delete triggers), so a plain
+ * read is sufficient; a locking read of a missing key would take a gap lock and make a
+ * concurrent genesis binding insert wait for this unrelated reader.
+ */
 export async function readNpcControllerBinding(npcId: string) {
   const db = await getDb(); if (!db) throw Error("NPC_DATABASE_REQUIRED");
-  return db.transaction(tx => readNpcControllerBindingInTransaction(tx, npcId));
+  return verifiedBinding((await db.select().from(bindings).where(eq(bindings.npcId, npcId)).limit(1))[0], npcId);
 }
 
 /** Always resolves the immutable binding, never the current archetype pointer. */

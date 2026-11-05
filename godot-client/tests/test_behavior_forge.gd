@@ -17,8 +17,15 @@ func run() -> void:
 	await process_frame
 	panel.open_context(send)
 	check(panel._request("behaviorActors"), "read starts")
-	panel.completed("behaviorActors", {"schemaVersion":"aurion.behavior-actors.v1", "actors":[{"npcId":"isolated", "resolutionIndex":1, "decisionHash":"b".repeat(64), "observationHash":"sha256:" + "a".repeat(64)}]})
-	check(panel._actors.size() == 1, "server actors displayed")
+	panel.completed("behaviorActors", {"schemaVersion":"aurion.behavior-actors.v1", "actors":[{"npcId":"isolated", "resolutionIndex":1, "decisionHash":"b".repeat(64), "observationHash":"sha256:" + "a".repeat(64), "journeyMemorySupported":true}, {"npcId":"lyra", "resolutionIndex":4, "decisionHash":"e".repeat(64), "observationHash":"sha256:" + "f".repeat(64), "journeyMemorySupported":false}]})
+	check(panel._actors.size() == 2, "server actors displayed")
+	# A non-merchant never sends the merchant-only journey readback.
+	panel._choice.select(1)
+	var before_journey := requests.size()
+	panel._journey_memory()
+	check(requests.size() == before_journey and panel._pending.is_empty(), "non-merchant journey request not sent")
+	check(panel._status.text.contains("nicht unterstützt"), "non-merchant journey shows explicit unsupported state")
+	panel._choice.select(0)
 	panel._brief.text = "Describe an isolated NPC."
 	panel._prepare()
 	panel._brief.text = "Changed during request."

@@ -1,3 +1,4 @@
+import { controllerArchetypeForNpc } from "./npcArchetypeRegistry";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
@@ -22,7 +23,9 @@ export async function readBehaviorActors(userId:number) {
     mutationAuthority:"none",activation:"BLOCKED",blockers:ACTIVATION_BLOCKERS,
     actors:await Promise.all(npcs.map(async npc=>({npcId:npc.npcId,regionId:npc.regionId,resolutionIndex:npc.resolutionIndex,
       decisionHash:npc.decisionHash,observationHash:canonicalSha256({sourceRevision:activeProvenance.sourceRevision,npc}),
-      activeController:null,controllerBinding:await readNpcControllerBinding(npc.npcId),controllerStatus:"NO_AUTHORITATIVE_FORGE_CONTROLLER",visualStatus:"UNVERIFIED"})))};
+      activeController:null,controllerBinding:await readNpcControllerBinding(npc.npcId),controllerStatus:"NO_AUTHORITATIVE_FORGE_CONTROLLER",visualStatus:"UNVERIFIED",
+      // Same canonical mapping as the merchant-only journey readback.
+      journeyMemorySupported:controllerArchetypeForNpc(npc.npcId)==="aurion.merchant.economy.v1"})))};
 }
 
 /** Template selection is explicit. The brief is data, not a keyword-based pseudo-LLM. */

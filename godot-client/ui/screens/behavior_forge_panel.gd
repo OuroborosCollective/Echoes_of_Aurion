@@ -127,6 +127,10 @@ func _test() -> void:
 func _journey_memory() -> void:
 	if not _pending.is_empty() or _choice.selected < 0 or _choice.selected >= _actors.size(): return
 	var actor: Dictionary = _actors[_choice.selected]
+	# The server only keeps receipt-backed journeys for merchants; never send others.
+	if actor.get("journeyMemorySupported") != true:
+		_status.text = "Reiseerinnerungen sind nur für Händler belegt. %s: nicht unterstützt." % str(actor.npcId)
+		return
 	_pending_actor = str(actor.npcId)
 	_pending_observation = str(actor.observationHash)
 	_request("behaviorJourneyMemory", {"npcId":actor.npcId,"expectedObservationHash":actor.observationHash})
