@@ -364,6 +364,7 @@ func open_studio() -> bool:
 		_info.text = _state.message
 		return true
 	_info.text = "Admin-Sitzung wird bei Aurion geprüft."
+	_catalog_info.text = _info.text
 	_send("identity")
 	return true
 
@@ -384,6 +385,7 @@ func close_session() -> void:
 	if is_instance_valid(_quest_editor): _quest_editor.close_context()
 	_catalog_revision = ""
 	_catalog_assets.clear()
+	if is_instance_valid(_catalog_info): _catalog_info.text = "Admin-Zugang und Katalog noch nicht geprüft."
 	if is_instance_valid(_asset_choice): _asset_choice.clear()
 	if is_instance_valid(_draft_import): _draft_import.text = ""
 	_inspection.clear()
@@ -550,6 +552,7 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 		"identity":
 			if data.get("role") != "admin" or not _state.open(connection, generation, data.get("id")):
 				_info.text = "Für das Weltstudio ist eine bestätigte Aurion-Adminrolle erforderlich."
+				_catalog_info.text = _info.text
 				return
 			if not _journal.read().is_empty():
 				_state.mark_unresolved()
@@ -660,6 +663,8 @@ func _failed(kind: String, _reason: String, connection: String, generation: int)
 		return
 	_info.text = _state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden."
 	_info.text += " · " + _reason
+	if kind in ["identity", "catalog"]:
+		_catalog_info.text = ("Zugangsprüfung fehlgeschlagen" if kind == "identity" else "Katalogabfrage fehlgeschlagen") + " · " + _reason
 
 func _close_requested() -> void:
 	# A hidden response is deliberately ignored, so do not hide while any

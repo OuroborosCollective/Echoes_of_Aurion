@@ -5712,3 +5712,5 @@ Evidence: Base `161e5694dc6df37890b62623944762e4348026a9`; native Godot 4.7.2 lo
 Learned: Generic TRANSPORT_UNCERTAIN hid the native failure; anonymous connectivity does not prove authenticated authoring health.
 Open: Exact failed live request cause, authenticated replay, full CI and owner-confirmed AI authoring remain unverified.
 Next safe step: Complete CI/review, deploy the diagnostic change with revision readback, then diagnose an authenticated studio request before requesting any world mutation.
+
+Review follow-up (same integration block): identity/catalog failures now appear in the top access label; pending, rejected and cleared sessions reset that label. Native main-scene regression passes with the entire identity error label inside the initial 360×640 viewport and a subsequent catalog failure visible there. This is headless layout evidence, not a physical tablet or authenticated live proof.

@@ -68,9 +68,15 @@ func verify() -> void:
 	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/WorldStudio").pressed.emit()
 	require(studio.visible and not scene._world_input_permitted() and not scene.mobile_joystick.visible, "open studio allowed movement or joystick")
 	require(fake.sent.size() == 1 and fake.sent[0].kind == "identity", "studio did not request confirmed identity")
+	root.size = Vector2i(360, 640)
+	await process_frame
 	var transport_reason := "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"
 	studio._failed("identity", transport_reason, SESSION, generation)
+	await process_frame
+	await process_frame
 	require(studio._info.text.contains(transport_reason), "identity transport diagnostics were hidden")
+	require(studio._catalog_info.text.contains(transport_reason) and studio._catalog_info.is_visible_in_tree(), "identity failure missing from access status")
+	require(Rect2(Vector2.ZERO, Vector2(root.size)).encloses(studio._catalog_info.get_global_rect()), "identity failure outside initial 360x640 viewport")
 	require(fake.sent.size() == 1, "identity failure automatically retried")
 	# Inspector consumes the existing authenticated zone projection. Export and
 	# filtering must neither send gameplay commands nor invent causal evidence.
@@ -98,6 +104,9 @@ func verify() -> void:
 		studio._toggle_inspector()
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
 	require(fake.sent.back().kind == "catalog", "admin identity did not request catalog")
+	require(not studio._catalog_info.text.contains(transport_reason), "confirmed identity retained a stale access failure")
+	studio._failed("catalog", "HTTP_403", SESSION, generation)
+	require(studio._catalog_info.text.contains("HTTP_403"), "catalog failure missing from access status")
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
 	require(studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"), "WorldStudio lacks catalog-bound draft staging/import")
 	if studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"):
