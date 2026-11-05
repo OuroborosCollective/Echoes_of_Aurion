@@ -136,7 +136,15 @@ export function enemyFallbackDiagnostics(
     score: variant.key.startsWith("rigged-monster · monster ") ? 1 : variant.entries[0]?.entry.purpose === "auto" ? Math.max(2, matchScore(variant.key, archetype)) : matchScore(variant.key, archetype),
     physical: variant.entries,
   }));
-  const bestMatchScore = evaluated.length ? Math.min(...evaluated.map(candidate => candidate.score)) : null;
+  let bestMatchScore: number | null = null;
+  if (evaluated.length) {
+    bestMatchScore = evaluated[0]!.score;
+    for (let i = 1; i < evaluated.length; i++) {
+      if (evaluated[i]!.score < bestMatchScore) {
+        bestMatchScore = evaluated[i]!.score;
+      }
+    }
+  }
   const matched = bestMatchScore === null ? [] : evaluated.filter(candidate => candidate.score === bestMatchScore);
   const physical = matched.flatMap(candidate => candidate.physical);
   const compatibleCandidates = physical.filter(candidate => fitsTier(candidate.entry, tier)).length;
@@ -177,7 +185,12 @@ export function selectEnemyGlb(
     .filter(candidate => candidate.physical.length > 0);
   if (!eligible.length) return null;
 
-  const bestScore = Math.min(...eligible.map(candidate => candidate.score));
+  let bestScore = eligible[0]!.score;
+  for (let i = 1; i < eligible.length; i++) {
+    if (eligible[i]!.score < bestScore) {
+      bestScore = eligible[i]!.score;
+    }
+  }
   const ranked = eligible.filter(candidate => candidate.score === bestScore);
   // Numbered confirmed entities walk the sorted approved families without hash
   // collisions. A non-numbered identity retains stable FNV selection.
