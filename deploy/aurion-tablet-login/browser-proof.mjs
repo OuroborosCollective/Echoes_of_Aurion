@@ -208,7 +208,7 @@ async function realNovncAndBasic(browser, render, guard) {
       if(scope==='path') assert.equal(probeAuthorization,false,'viewer Basic credentials must not escape /godot-live/');
       await c.close();
     }
-    for(const mode of ['writable','view-only','disconnect','replace']) {
+    for(const mode of ['writable','view-only','disconnect','replace','reconnect']) {
       cutCount=0;cutMatches=false;
       const c=await browser.newContext({httpCredentials:{username:'fixture',password:'synthetic-only',origin}});
       await c.addInitScript(()=>{
@@ -219,25 +219,27 @@ async function realNovncAndBasic(browser, render, guard) {
           return d.set.call(this,value);
         }});
       });
-      const p=await c.newPage(), cdp=await c.newCDPSession(p);
+      await c.addInitScript(({login,callback,html})=>{
+        // Only the consent adapter is mocked in this RFB transport test.
+        // Real canonical fetch/Origin/CSRF/redirect behavior is tested above.
+        const original=window.fetch.bind(window);
+        window.syntheticCallbackCount=0;
+        window.fetch=async(url,init={})=>{
+          if(url!==login&&url!==login+'/confirm') return original(url,init);
+          const response=new Response(init.method==='POST'?'':html,{status:200,headers:{'Content-Type':'text/html'}});
+          Object.defineProperty(response,'url',{value:init.method==='POST'?callback:login});
+          if(init.method==='POST') window.syntheticCallbackCount++;
+          return response;
+        };
+      },{login,callback,html:render('T'.repeat(43),csrf)});
+      // No real external endpoint can be contacted by this transport fixture.
+      await c.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+      const p=await c.newPage();
       let leaks=false, callbacks=0, error=null;
       const failedRequests=[];p.on('requestfailed',r=>failedRequests.push({path:new URL(r.url()).pathname,reason:r.failure()?.errorText}));
       p.on('console',m=>{if(m.text().includes('code=')||m.text().includes('T'.repeat(43)))leaks=true;});
       p.on('pageerror',e=>{error=e.message;});
-      await cdp.send('Fetch.enable',{patterns:[{urlPattern:'https://*',requestStage:'Request'}]});
-      cdp.on('Fetch.requestPaused',async e=>{
-        const fulfill=(status,headers,body='')=>cdp.send('Fetch.fulfillRequest',{requestId:e.requestId,responseCode:status,responseHeaders:Object.entries(headers).map(([name,value])=>({name,value})),body:Buffer.from(body).toString('base64')});
-        try {
-          // This real noVNC page is loopback HTTP, so synthesize CORS solely
-          // in the fixture. Production remains strictly HTTPS same-origin.
-          const cors={'Access-Control-Allow-Origin':origin,'Content-Type':'text/html'};
-          if(e.request.url===login) return await fulfill(200,cors,render('T'.repeat(43),csrf));
-          if(e.request.url===login+'/confirm') return await fulfill(303,{...cors,Location:callback});
-          if(e.request.url===callback) {callbacks++;return await fulfill(200,cors,'<p>Synthetic callback</p>');}
-          await cdp.send('Fetch.failRequest',{requestId:e.requestId,errorReason:'BlockedByClient'});
-        } catch (_) {error='fixture interception failed';}
-      });
-      await p.goto(origin+'/godot-live/auth.html');
+      assert.equal((await p.goto(origin+'/godot-live/auth.html')).status(),200,'real Basic viewer challenge accepted');
       await p.goto(origin+'/godot-live/aurion.html?autoconnect=1&encrypt=0&host=127.0.0.1&port='+server.address().port+'&path=godot-live%2Fwebsockify');
       try { await p.waitForFunction(()=>document.querySelector('#aurion-login button')?.hidden===false); }
       catch(failure) {
@@ -250,6 +252,19 @@ async function realNovncAndBasic(browser, render, guard) {
         throw failure;
       }
       assert.equal(await p.evaluate(()=>window.clipboardRendered),false,'clipboard must never render even at initial handshake');
+      if(mode==='reconnect') {
+        const before=sockets.length;
+        await p.evaluate(async()=>{const {default:UI}=await import('./app/aurion-novnc-ui.js');UI.disconnect();});
+        await p.waitForFunction(async()=>{const {default:UI}=await import('./app/aurion-novnc-ui.js');return UI.rfb===undefined;});
+        await p.evaluate(async()=>{const {default:UI}=await import('./app/aurion-novnc-ui.js');UI.connect();});
+        await p.waitForFunction(async()=>{const {default:UI}=await import('./app/aurion-novnc-ui.js');return UI.connected;});
+        assert.equal(sockets.length,before+1);
+        assert.equal(await p.evaluate(()=>window.clipboardRendered),false,'reconnect must not render early clipboard');
+        assert.equal(await p.locator('#aurion-login button').first().isHidden(),true,'same transaction cannot resume on replaced connection');
+        assert.equal(cutCount,0);assert.equal(callbacks,0);assert.equal(leaks,false);assert.equal(error,null);
+        console.log(JSON.stringify({fixtureOnly:true,realNovnc:'1.0.0',mode,rfbCutTextCount:0,clipboardRendered:false,staleTransactionBlocked:true}));
+        await c.close();continue;
+      }
       await p.evaluate(async mode=>{
         const {default:UI}=await import('./app/aurion-novnc-ui.js');
         if(mode==='view-only') UI.rfb.viewOnly=true;
@@ -261,11 +276,12 @@ async function realNovncAndBasic(browser, render, guard) {
       if(mode==='writable') await new Promise((resolve,reject)=>{
         const until=Date.now()+3000;const poll=()=>cutCount?resolve():Date.now()>until?reject(new Error('no RFB clientCutText received')):setTimeout(poll,10);poll();
       });
+      callbacks=await p.evaluate(()=>window.syntheticCallbackCount);
       assert.equal(cutCount,mode==='writable'?1:0);
       if(mode==='writable') assert.ok(cutMatches);
       assert.equal(await p.evaluate(()=>window.clipboardRendered),false);
       assert.equal(leaks,false);assert.equal(error,null);
-      console.log(JSON.stringify({fixtureOnly:true,realNovnc:'1.0.0',mode,rfbCutTextCount:cutCount,callbackRequests:callbacks,clipboardRendered:false,consoleLeak:false}));
+      console.log(JSON.stringify({fixtureOnly:true,realNovnc:'1.0.0',mode,rfbCutTextCount:cutCount,syntheticConfirmResponses:callbacks,clipboardRendered:false,consoleLeak:false}));
       await c.close();
     }
   } finally {
