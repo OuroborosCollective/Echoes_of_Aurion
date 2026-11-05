@@ -1,11 +1,13 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
-import { executeConfirmedMerchantAction, persistPolity, readConfirmedMerchantActionSource, readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
+import { executeConfirmedMerchantAction, persistPolity, readConfirmedMerchantActionSource, readConfirmedNpcActionPacket, readConfirmedMerchantJourneyMemory } from "./npcActionGatewayPersistence";
 import { eq } from "drizzle-orm";
 import { aurionPolityStates } from "../drizzle/schema";
 import { getDb } from "./db";
-import { resolveAndRecordNpc } from "./wasdAurionRuntime";
+import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
+import type { TrpcContext } from "./_core/context";
+import { readConfirmedNpcState, resolveAndRecordNpc } from "./wasdAurionRuntime";
 import {
   merchantBootstrapMarkets,
   AURION_WASD_CONTENT_VERSION,
@@ -141,6 +143,138 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
       expect(readback.reactionHash).toBe(current.reactionHash);
       expect(readback.stateJson).toBe(stableCatalogStringify(current));
     }, {isolationLevel: "repeatable read"});
+  });
+
+  it("reads an earlier action after a subsequent canonical polity transition without rewinding current truth",async()=>{
+    const source=await seedSource();
+    const input={worldSeed:"historical-polity-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    const first=await executeConfirmedMerchantAction(input);
+    expect(first.status).toBe("committed");
+    if(first.status!=="committed") throw Error("FIRST_ACTION_NOT_COMMITTED");
+    const [rows]=await pool.query<RowDataPacket[]>("SELECT effectSetJson FROM aurionNpcActionReceipts WHERE id=?",[first.actionReceiptId]);
+    const request=JSON.parse(rows[0].effectSetJson).polityRequest;
+    const db=(await getDb())!;
+    const later=await db.transaction(tx=>persistPolity(tx,{...request,activeDiplomacy:["trade","alliance"]}));
+    expect(later.reactionHash).not.toBe(first.polity.reactionHash);
+    const retry=await executeConfirmedMerchantAction(input);
+    expect(retry.status).toBe("persisted");
+    if(retry.status!=="persisted") throw Error("HISTORICAL_RETRY_NOT_PERSISTED");
+    expect(retry.polity).toEqual(first.polity);
+    expect(retry.resolution).toEqual(first.resolution);
+    expect(retry.npc.memory).toEqual(first.npc.memory);
+    const packet=await readConfirmedNpcActionPacket(10);
+    expect(packet.actions.some(action=>action.actionReceiptId===first.actionReceiptId)).toBe(true);
+    const [current]=await pool.query<RowDataPacket[]>("SELECT reactionHash FROM aurionPolityStates WHERE polityId=?",[later.polityId]);
+    expect(current[0].reactionHash).toBe(later.reactionHash);
+  });
+
+  it("commits replenishment for a hungry merchant with empty stock instead of repeating a blocked consume",async()=>{
+    const market={...merchantBootstrapMarkets[homeHub],stock:{grain:0,sandstone:0,bronze:0,aether:0,salve:0,rune_core:0}};
+    const ownerId=`market:${homeHub}`;
+    const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
+    const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};
+    await pool.query("UPDATE aurionNpcActionEpochStates SET marketJson=?,marketHash=?,inventoryJson=?,inventoryHash=? WHERE hubId=?",
+      [JSON.stringify(market),merchantMarketStateHash(market),JSON.stringify(inventory),inventory.stateHash,homeHub]);
+    const request=sourceRequest(0);
+    await resolveAndRecordNpc({...request,economy:{...request.economy,hungerBps:8000}});
+    const source=(await readConfirmedMerchantActionSource(npcId))!;
+    const input={worldSeed:"hungry-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    const result=await executeConfirmedMerchantAction(input);
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed") throw Error("HUNGRY_REPLAN_NOT_COMMITTED");
+    expect(result.resolution.action).toBe("produce");
+    const [rows]=await pool.query<RowDataPacket[]>("SELECT marketJson FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
+    expect(JSON.parse(rows[0].marketJson).stock[result.resolution.commodity]).toBe(result.resolution.quantity);
+    expect((await readConfirmedMerchantActionSource(npcId))!.resolutionIndex).toBe(1);
+    expect((await executeConfirmedMerchantAction(input)).status).toBe("persisted");
+  });
+
+  it("records actual route experience only after committed travel and independently rereads NPC memory",async()=>{
+    for(const hubId of hubs){
+      const market={...merchantBootstrapMarkets[hubId],stock:{...merchantBootstrapMarkets[hubId].stock,grain:hubId==="emberfall"?0:1000}};
+      const ownerId=`market:${hubId}`;
+      const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
+      const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};
+      await pool.query("UPDATE aurionNpcActionEpochStates SET marketJson=?,marketHash=?,inventoryJson=?,inventoryHash=? WHERE hubId=?",
+        [JSON.stringify(market),merchantMarketStateHash(market),JSON.stringify(inventory),inventory.stateHash,hubId]);
+    }
+    const request=sourceRequest(0);
+    await resolveAndRecordNpc({...request,economy:{...request.economy,currentHubId:"windhollow",wealthCopper:100},
+      needEvents:(["safety","resources","belonging","status","wealth","power"] as const).map(need=>({id:`journey:${need}`,need,delta:need==="wealth"?-1:1,sourceReceiptId:"journey-source",resolutionIndex:0}))});
+    const source=(await readConfirmedMerchantActionSource(npcId))!;
+    const input={worldSeed:"journey-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    await expect(executeConfirmedMerchantAction({...input,failureInjection:"before_memory_commit"})).rejects.toThrow();
+    expect((await readConfirmedNpcState(npcId))!.memory.some(m=>m.startsWith("journey:v1:"))).toBe(false);
+    expect((await readConfirmedMerchantJourneyMemory(npcId,0)).entries).toEqual([]);
+    const result=await executeConfirmedMerchantAction(input);
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed") throw Error("JOURNEY_ACTION_NOT_COMMITTED");
+    expect(result.resolution.action).toBe("caravan");
+    const record=`journey:v1:windhollow:${result.resolution.caravan.destination}:1:${result.resolution.caravan.ambushed?"ambushed":"passed"}`;
+    expect(result.npc.memory).toContain(record);
+    expect((await readConfirmedNpcState(npcId))!.memory).toContain(record);
+    const [links]=await pool.query<RowDataPacket[]>("SELECT npcId,resolutionIndex FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId]);
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({npcId,resolutionIndex:1});
+    const retry=await executeConfirmedMerchantAction(input);
+    expect(retry.status).toBe("persisted");
+    if(retry.status==="persisted") expect(retry.npc.memory).toEqual(result.npc.memory);
+    expect((await readConfirmedNpcState(npcId))!.memory.filter(m=>m===record)).toHaveLength(1);
+    const readback=await readConfirmedMerchantJourneyMemory(npcId,1);
+    expect(readback).toMatchObject({schemaVersion:"aurion.npc-journey-memory.v1",npcId,asOfResolutionIndex:1,scope:"CONFIRMED_ABSTRACT_JOURNEYS",mutationAuthority:"none",spatialPerception:"UNAVAILABLE",hasOlderActions:false});
+    expect(readback.entries).toHaveLength(1);
+    expect(readback.entries[0]).toMatchObject({actionReceiptId:result.actionReceiptId,fromHubId:"windhollow",toHubId:result.resolution.caravan.destination,outcome:result.resolution.caravan.ambushed?"ambushed":"passed",observedResolutionIndex:1,retainedInMemory:true,ageInResolutions:0,confidenceBps:10000});
+    expect(readback.entries[0].worldSeedSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect((await readConfirmedMerchantJourneyMemory(npcId,0)).entries).toEqual([]);
+    expect(await readConfirmedMerchantJourneyMemory(npcId,1)).toEqual(readback);
+    const beforeReadCounts=await counts();
+    const caller=aurionAuthoringRouter.createCaller({user:{id:42,role:"admin"}} as TrpcContext);
+    const actor=(await caller.behaviorActors()).actors.find(actor=>actor.npcId===npcId)!;
+    expect(actor).toBeDefined();
+    expect(await caller.behaviorJourneyMemory({npcId,expectedObservationHash:actor.observationHash})).toMatchObject({status:"READBACK",observationHash:actor.observationHash,memory:readback});
+    await expect(caller.behaviorJourneyMemory({npcId,expectedObservationHash:"sha256:"+"0".repeat(64)})).rejects.toThrow("BEHAVIOR_OBSERVATION_CHANGED");
+    await expect(caller.behaviorJourneyMemory({npcId:"invented",expectedObservationHash:actor.observationHash})).rejects.toThrow("BEHAVIOR_NPC_NOT_CONFIRMED");
+    expect(await counts()).toEqual(beforeReadCounts);
+    await expect(readConfirmedMerchantJourneyMemory(npcId,2)).rejects.toThrow("JOURNEY_DECISION_REQUIRED");
+    await expect(readConfirmedMerchantJourneyMemory("lyra",1)).rejects.toThrow("JOURNEY_ACTOR_UNSUPPORTED");
+    await expect(pool.query("DELETE FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId])).rejects.toThrow("AURION_NPC_ACTION_MEMORY_LINKS_APPEND_ONLY");
+    // Isolated destructive fixture, as in cleanup(): preserve append-only
+    // triggers and model a missing table population, never a production edit.
+    if(!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    await pool.query("TRUNCATE TABLE aurionNpcActionMemoryLinks");
+    await expect(readConfirmedMerchantJourneyMemory(npcId,1)).rejects.toThrow("COMMITTED_MEMORY_LINK_REQUIRED");
+  });
+
+  it("persists unlimited storage above the old cap with rollback, receipt binding and exact retry",async()=>{
+    const market={...merchantBootstrapMarkets[homeHub],stock:{grain:1_000_001,sandstone:1_000_001,bronze:1_000_001,aether:1_000_001,salve:1_000_001,rune_core:1_000_001}};
+    const ownerId=`market:${homeHub}`;
+    const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
+    const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};
+    await pool.query("UPDATE aurionNpcActionEpochStates SET marketJson=?,marketHash=?,inventoryJson=?,inventoryHash=? WHERE hubId=?",
+      [JSON.stringify(market),merchantMarketStateHash(market),JSON.stringify(inventory),inventory.stateHash,homeHub]);
+    await resolveAndRecordNpc({...sourceRequest(0),needEvents:(["safety","resources","belonging","status","wealth","power"] as const).map(need=>({
+      id:`storage:${need}`,need,delta:need==="resources"?-1:1,sourceReceiptId:"storage-source",resolutionIndex:0,
+    }))});
+    const source=(await readConfirmedMerchantActionSource(npcId))!;
+    const input={worldSeed:"storage-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    await expect(executeConfirmedMerchantAction({...input,failureInjection:"after_epoch_effect"})).rejects.toThrow();
+    const [rolledBack]=await pool.query<RowDataPacket[]>("SELECT marketHash,inventoryHash FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
+    expect(rolledBack[0]).toMatchObject({marketHash:merchantMarketStateHash(market),inventoryHash:inventory.stateHash});
+    const result=await executeConfirmedMerchantAction(input);
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed") throw Error("STORAGE_ACTION_NOT_COMMITTED");
+    expect(result.resolution.action).toBe("produce");
+    const [rows]=await pool.query<RowDataPacket[]>("SELECT receiptJson,receiptHash FROM aurionNpcActionReceipts WHERE id=?",[result.actionReceiptId]);
+    expect(JSON.parse(rows[0].receiptJson).storagePolicyVersion).toBe("aurion.merchant-storage.unbounded.v1");
+    const [epochs]=await pool.query<RowDataPacket[]>("SELECT inventoryJson FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
+    const entry=JSON.parse(epochs[0].inventoryJson).entries.find((e:{itemId:string})=>e.itemId===result.resolution.commodity);
+    expect(entry.quantity).toBe(1_000_001+result.resolution.quantity);
+    expect(entry.capacity).toBe(1_000_000); // Historical field does not define the new policy.
+    const before=await counts();
+    expect((await executeConfirmedMerchantAction(input)).status).toBe("persisted");
+    expect(await counts()).toEqual(before);
+    const [retry]=await pool.query<RowDataPacket[]>("SELECT receiptJson,receiptHash FROM aurionNpcActionReceipts WHERE id=?",[result.actionReceiptId]);
+    expect(retry).toEqual(rows);
   });
 
   it("commits the scarce three-unit trade with matching DB inventory, receipt and idempotent readback",async()=>{

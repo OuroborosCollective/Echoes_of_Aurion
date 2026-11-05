@@ -46,16 +46,27 @@ describe("bounded Aurion schema repair plan", () => {
     expect(a.operations).toEqual([]);
     expect(a.journalInsertions).toEqual([]);
   });
-  it("reconstructs the approved missing non-contiguous migration tables, including 0075, from pinned SQL", () => {
+  it("reconstructs the approved missing non-contiguous migration tables, including 0077, from pinned SQL", () => {
     const p = plan(missingTables());
     expect(p.blockers).toEqual([]);
     expect(p.decision).toBe("ADDITIVE_REPAIR_READY");
     expect(p.operations.filter(o => o.kind === "CREATE_TABLE")).toHaveLength(contracts.filter(m => (REPAIR_POLICY.absent as readonly string[]).includes(m.tag)).flatMap(m => m.createdTableNames ?? []).length);
     expect(p.journalInsertions.map(e => e.tag)).toEqual(REPAIR_POLICY.absent);
+    expect(p.operations.filter(o => o.kind === "CREATE_TRIGGER")).toHaveLength(8);
     for (const op of p.operations) {
       expect(op.sql).toBe(sources[op.tag].split("--> statement-breakpoint").map(x => x.trim()).filter(Boolean)[op.statementIndex]);
       expect(op.sqlSha256).toBe(sqlHash(op.sql));
     }
+  });
+  it("never replaces a damaged registry trigger or certifies weakened append-only protection", () => {
+    const o = full();
+    o.observedTables = o.observedTables.map(t => t.name !== "aurionNpcControllerArtifacts" ? t : { ...t,
+      triggers: t.triggers?.map(trigger => ({ ...trigger, statement: "SET @ignored = 1" })),
+    });
+    const p = plan(classify(o));
+    expect(p.decision).toBe("BLOCKED_OPERATOR_REVIEW");
+    expect(p.blockers.some(b => b.includes("trigger_contract"))).toBe(true);
+    expect(p.operations.some(op => op.kind === "CREATE_TRIGGER")).toBe(false);
   });
   it("plans the missing world-join column and its index without rerunning 0068's DROP statements", () => {
     const o = full(), table = o.observedTables.find(t => t.name === "aurionItemInstancesV2")!;

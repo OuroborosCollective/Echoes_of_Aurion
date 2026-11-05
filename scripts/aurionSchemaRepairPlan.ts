@@ -7,7 +7,7 @@ import { proposeReviewed0068Transitions } from "./aurionSchemaReviewedTransition
 import { REVIEWED_JOURNAL, reviewedDialogueTable, type ReviewedJournalContract } from "./aurionSchemaReviewedJournal";
 
 export const REPAIR_POLICY = {
-  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts"],
+  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts", "0077_aurion_npc_archetype_registry"],
   drift: ["0025_aurion_loot_mastery_ethos", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0033_aurion_ax1_ui_controls", "0066_aurion_inventory_transaction_kernel", "0068_aurion_item_manipulation_runtime"],
 } as const;
 export const REPAIR_MAX_AGE_MS = 15 * 60 * 1000;
@@ -20,7 +20,7 @@ export type RepairObservation = {
 };
 export type RepairOperation = {
   tag: string; statementIndex: number; sql: string; sqlSha256: string;
-  kind: "CREATE_TABLE" | "ADD_COLUMN" | "ADD_INDEX" | "ADD_CHECK" | "REPLACE_CHECK_ATOMIC" | "DROP_REVIEWED_INDEX";
+  kind: "CREATE_TABLE" | "CREATE_TRIGGER" | "ADD_COLUMN" | "ADD_INDEX" | "ADD_CHECK" | "REPLACE_CHECK_ATOMIC" | "DROP_REVIEWED_INDEX";
   sourceStatementIndexes?: number[]; sourceSqlSha256?: string[];
 };
 export function canonicalJson(value: unknown): string {
@@ -119,6 +119,10 @@ export function buildSchemaRepairPlan(input: {
       const index = clean.match(/^CREATE\s+(?:UNIQUE\s+)?INDEX\s+`([^`]+)`\s+ON\s+`([^`]+)`/i)
         ?? clean.match(/^ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+(?:UNIQUE\s+)?(?:KEY|INDEX)\s+`([^`]+)`/i)?.map((v, i, a) => i === 1 ? a[2] : i === 2 ? a[1] : v);
       const check = clean.match(/^ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+CONSTRAINT\s+`([^`]+)`\s+CHECK\b/i);
+      // Only the eight pinned registry append-only guards may be created.
+      // An existing or differently defined trigger remains operator-review drift.
+      const trigger = m.tag === "0077_aurion_npc_archetype_registry" ? clean.match(/^CREATE TRIGGER `(aurionNpc(?:ControllerArtifacts|ArchetypeReleases|ControllerBindings|ControllerShadowReceipts))_no_(update|delete)` BEFORE (UPDATE|DELETE) ON `([^`]+)` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'NPC_REGISTRY_APPEND_ONLY';$/) : null;
+      const allowedTrigger = trigger && trigger[1] === trigger[4] && trigger[2].toUpperCase() === trigger[3];
       let kind: RepairOperation["kind"] | undefined;
       let tableName: string | undefined;
       if (create && !simulated.has(create[1])) {
@@ -133,6 +137,9 @@ export function buildSchemaRepairPlan(input: {
       } else if (check && simulated.has(check[1]) && !(simulated.get(check[1])!.checks ?? []).some(c => c.name === check[2])) {
         kind = "ADD_CHECK"; tableName = check[1];
       }
+      if (allowedTrigger && simulated.has(trigger[4]) && !(simulated.get(trigger[4])!.triggers ?? []).some(t => t.name === `${trigger[1]}_no_${trigger[2]}`)) {
+        kind = "CREATE_TRIGGER"; tableName = trigger[4];
+      }
       if (!kind || !tableName) continue;
       const before = simulated.get(tableName);
       const canonicalBefore = before && {
@@ -143,6 +150,10 @@ export function buildSchemaRepairPlan(input: {
         const declared = m.tables.find(t => t.name === tableName)?.indexes.find(i => i.name === index[1]);
         if (!declared) throw new Error("REPAIR_INDEX_SOURCE_INVALID");
         next = { ...before, indexes: [...before.indexes, declared] };
+      } else if (kind === "CREATE_TRIGGER" && trigger && before) {
+        const declared = m.tables.find(t => t.name === tableName)?.triggers?.find(t => t.name === `${trigger[1]}_no_${trigger[2]}`);
+        if (!declared) throw new Error("REPAIR_TRIGGER_SOURCE_INVALID");
+        next = { ...before, triggers: [...(before.triggers ?? []), declared] };
       } else {
         const parsed = parseLateMigrationSql(m.tag, sql, new Map(canonicalBefore ? [[tableName, canonicalBefore]] : []));
         next = asObserved(parsed.tables.find(table => table.name === tableName)!);

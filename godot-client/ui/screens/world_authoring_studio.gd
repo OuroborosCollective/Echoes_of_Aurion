@@ -6,6 +6,7 @@ const AuthoringState = preload("res://authoring/world_authoring_state.gd")
 const AuthoringJournal = preload("res://authoring/world_authoring_journal.gd")
 const WorldProjection = preload("res://world/world_design_projection.gd")
 const AiDesignerPanel = preload("res://ui/screens/ai_designer_panel.gd")
+const BehaviorForge = preload("res://ui/screens/behavior_forge_panel.gd")
 const QuestEditor = preload("res://ui/screens/quest_authoring_editor.gd")
 signal confirmed_world(readback: Dictionary, connection_id: String, generation: int)
 signal closed
@@ -40,6 +41,7 @@ var _draft_import: TextEdit
 var _new_design_key: LineEdit
 var _new_design_title: LineEdit
 var _new_design_version: SpinBox
+var _behavior_forge: VBoxContainer
 var _quest_editor: VBoxContainer
 var _ai_panel: VBoxContainer
 var _ai_pending_draft := ""
@@ -81,6 +83,11 @@ func _ready() -> void:
 	_quest_editor.visible = false
 	_button(stack, "Questvorlagen und Graphentwürfe", func(): _quest_editor.visible = not _quest_editor.visible)
 	stack.add_child(_quest_editor)
+	_behavior_forge = BehaviorForge.new()
+	_behavior_forge.name = "BehaviorForge"
+	_behavior_forge.visible = false
+	_button(stack, "NPC Behavior Forge", func(): _behavior_forge.visible = not _behavior_forge.visible)
+	stack.add_child(_behavior_forge)
 	_brief = TextEdit.new()
 	_brief.placeholder_text = "Idee für KI-Entwurf"
 	_brief.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
@@ -384,6 +391,7 @@ func close_session() -> void:
 	_ai_pending_draft = ""
 	if is_instance_valid(_ai_panel): _ai_panel.clear_session()
 	if is_instance_valid(_quest_editor): _quest_editor.close_context()
+	if is_instance_valid(_behavior_forge): _behavior_forge.close_context()
 	_catalog_revision = ""
 	_catalog_assets.clear()
 	if is_instance_valid(_catalog_info): _catalog_info.text = "Admin-Zugang und Katalog noch nicht geprüft."
@@ -552,6 +560,9 @@ func _recover_receipt() -> void:
 func _completed(kind: String, data: Dictionary, connection: String, generation: int) -> void:
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
 		return
+	if kind.begins_with("behavior"):
+		_behavior_forge.completed(kind, data)
+		return
 	if kind.begins_with("quest"):
 		_quest_editor.completed(kind, data)
 		return
@@ -567,6 +578,7 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_set_info(_state.message)
 			_catalog_info.text = "Adminrolle bestätigt; Katalog wird geladen."
 			_quest_editor.open_context(connection, generation, data.get("id"), _send)
+			_behavior_forge.open_context(_send)
 			_send("catalog")
 		"aiStatus":
 			_ai_panel.provider_status(data)
@@ -663,6 +675,9 @@ func _set_info(value: String) -> void:
 
 func _failed(kind: String, _reason: String, connection: String, generation: int) -> void:
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
+		return
+	if kind.begins_with("behavior"):
+		_behavior_forge.failed(kind, _reason)
 		return
 	if kind.begins_with("quest"):
 		_quest_editor.failed(kind, _reason)

@@ -50,7 +50,7 @@ try {
     assert.equal(run("reconcile").status, 0);
   } else if (["prepare-additive", "prepare-reviewed"].includes(mode)) {
     const history = JSON.parse(fs.readFileSync("dist-production-apply/drizzle/meta/repair-history.json", "utf8"));
-    for (const tag of ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts"]) {
+    for (const tag of ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts", "0077_aurion_npc_archetype_registry"]) {
       const sql = fs.readFileSync(`drizzle/${tag}.sql`, "utf8");
       for (const match of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)? `([^`]+)`/g)) {
         const [rows] = await db.query(`SELECT COUNT(*) AS n FROM \`${match[1]}\``);
@@ -82,7 +82,7 @@ try {
       AURION_SCHEMA_APPLY_PLAN_SHA256: process.env.AURION_APPLY_TEST_PLAN };
     const run = args => spawnSync(process.execPath, ["dist-production-apply/bin/repair.cjs", ...args], { env, encoding: "utf8" });
     const planned = run(["plan"]);
-    assert.equal(planned.status, 0);
+    assert.equal(planned.status, 0, planned.stdout);
     const original = JSON.parse(planned.stdout);
     assert.equal(original.decision, "REVIEWED_REPAIR_READY");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "schema-plan-proof-"));

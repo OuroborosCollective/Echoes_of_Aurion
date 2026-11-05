@@ -47,12 +47,17 @@ try {
   const envelope = JSON.parse(receiptRows[0].observationIdsJson);
   if (envelope.version !== "aurion-npc-decision.v3" || envelope.snapshot?.npcId !== life.npcId || envelope.snapshot?.regionId !== life.currentHubId || envelope.snapshot?.decision?.resolutionIndex !== life.lastResolutionIndex || envelope.snapshot?.decision?.decisionHash !== life.decisionHash || envelope.snapshot?.lifeState?.stateHash !== life.lifeStateHash || envelope.snapshot?.lifeState?.economy?.currentHubId !== life.currentHubId) throw new Error("NPC_LIFE_V3_RECEIPT_MISMATCH");
 
-  const [worldRows] = await pool.query("SELECT id,regionId,resolutionIndex,reactionHash FROM aurionWorldResolutions WHERE regionId=? AND resolutionIndex=?", [life.worldRegionId, life.lastResolutionIndex]);
-  if (worldRows.length !== 1 || worldRows[0].regionId !== life.worldRegionId || worldRows[0].resolutionIndex !== life.lastResolutionIndex || worldRows[0].reactionHash !== life.worldReactionHash) throw new Error("NPC_LIFE_WORLD_RECEIPT_MISMATCH");
-
   const [actionRows] = await pool.query("SELECT * FROM aurionNpcActionReceipts WHERE id=?",[life.actionReceiptId]);
   if(actionRows.length!==1) throw new Error("NPC_ACTION_RECEIPT_REQUIRED");
   const actionRow=actionRows[0];
+  // World resolutions live on the region timeline (one row per region and index); a
+  // merchant action takes the region's next index, not its own resolution index. Read
+  // the world row the action committed instead of reconstructing its key.
+  const [worldRows] = await pool.query("SELECT id,regionId,resolutionIndex,reactionHash FROM aurionWorldResolutions WHERE id=?", [actionRow.successorWorldReceiptId]);
+  // The committed world slot is the hash-bound effect request's index (region timeline), not the NPC index.
+  const committedWorld = JSON.parse(actionRow.effectSetJson).worldRequest;
+  if (worldRows.length !== 1 || worldRows[0].regionId !== life.worldRegionId || worldRows[0].reactionHash !== life.worldReactionHash
+      || committedWorld?.regionId !== worldRows[0].regionId || Number(worldRows[0].resolutionIndex) !== committedWorld?.resolutionIndex) throw new Error("NPC_LIFE_WORLD_RECEIPT_MISMATCH");
   if(actionRow.npcId!==life.npcId||Number(actionRow.resolutionIndex)!==life.lastResolutionIndex||actionRow.sourceRevision!==npcPin.sourceRevision||actionRow.successorNpcReceiptId!==receiptRows[0].id||actionRow.successorWorldReceiptId!==worldRows[0].id) throw new Error("NPC_ACTION_RECEIPT_RUNTIME_MISMATCH");
   const [readbackRows]=await pool.query("SELECT * FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",[life.actionReceiptId]);
   if(readbackRows.length!==1) throw new Error("NPC_ACTION_EFFECT_READBACK_REQUIRED");

@@ -219,7 +219,7 @@ async function executeSingleNpcLifecycle(
     // Never-started hub merchant: record exactly one deterministic genesis decision
     // through the canonical resolveAndRecordNpc path. It acts from the next cycle.
     // An NPC with any recorded state never re-enters this branch.
-    const genesis = await resolveAndRecordNpc(merchantGenesisRequest(hubId));
+    const genesis = await resolveAndRecordNpc(merchantGenesisRequest(hubId), undefined, { bindControllerAtGenesis: true });
     if (genesis.npcId !== npcId || genesis.decision.resolutionIndex !== 0) throw new Error("NPC_GENESIS_READBACK_MISMATCH");
     const confirmedGenesis = await readConfirmedMerchantActionSource(npcId);
     if (!confirmedGenesis || confirmedGenesis.resolutionIndex !== 0) throw new Error("NPC_GENESIS_SOURCE_READBACK_REQUIRED");

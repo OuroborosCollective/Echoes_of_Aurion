@@ -107,12 +107,16 @@ function canonicalTerrainMatrix(chunk: BaseWorldChunk): readonly (readonly numbe
 }
 
 export function summarizeWorldChunkTerrain(chunk: BaseWorldChunk): AurionTerrainInvariantSummary {
+  // canonicalTerrainMatrix always yields the full, non-empty chunk grid.
   const matrix = canonicalTerrainMatrix(chunk);
-  const values = matrix.flat();
   let maxAdjacentDeltaMm = 0;
+  let minHeightMm = Number.POSITIVE_INFINITY;
+  let maxHeightMm = Number.NEGATIVE_INFINITY;
   for (let z = 0; z < matrix.length; z += 1) {
     for (let x = 0; x < matrix[z]!.length; x += 1) {
       const current = matrix[z]![x]!;
+      if (current < minHeightMm) minHeightMm = current;
+      if (current > maxHeightMm) maxHeightMm = current;
       if (x + 1 < matrix[z]!.length) {
         maxAdjacentDeltaMm = Math.max(maxAdjacentDeltaMm, Math.abs(current - matrix[z]![x + 1]!));
       }
@@ -124,8 +128,8 @@ export function summarizeWorldChunkTerrain(chunk: BaseWorldChunk): AurionTerrain
   return Object.freeze({
     tileCount: chunk.tiles.length,
     roadTileCount: chunk.tiles.filter(isBaseChunkRoadTile).length,
-    minHeightMm: Math.min(...values),
-    maxHeightMm: Math.max(...values),
+    minHeightMm,
+    maxHeightMm,
     maxAdjacentDeltaMm,
   });
 }
@@ -267,13 +271,21 @@ function canonicalSurfaceMatrix(chunk: BaseWorldChunk): readonly (readonly numbe
 export function summarizeWorldChunkTerrainContinuity(chunk: BaseWorldChunk): AurionTerrainContinuitySummary {
   const heightMatrix = canonicalTerrainMatrix(chunk);
   const surfaceMatrix = canonicalSurfaceMatrix(chunk);
-  const heights = heightMatrix.flat();
 
   // Exact sample variance, rounded to nearest integer with ties to even, as in Wolfram Round.
   // Integer arithmetic also avoids cancellation for large, safe-integer heights.
-  const count = BigInt(heights.length);
-  const sum = heights.reduce((total, height) => total + BigInt(height), 0n);
-  const squares = heights.reduce((total, height) => total + BigInt(height) ** 2n, 0n);
+  let sum = 0n;
+  let squares = 0n;
+  let cells = 0;
+  for (const row of heightMatrix) {
+    for (const height of row) {
+      const value = BigInt(height);
+      sum += value;
+      squares += value * value;
+      cells += 1;
+    }
+  }
+  const count = BigInt(cells);
   const numerator = count * squares - sum * sum;
   const denominator = count * (count - 1n);
   const quotient = numerator / denominator;
