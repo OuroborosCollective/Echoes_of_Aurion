@@ -61,8 +61,9 @@ export async function promoteNpcArchetype(tx: NpcTransaction, raw: z.infer<typeo
   const approved = await approvedPolicy(tx, input.mutationReceiptId);
   if (approved.candidate.archetypeId !== input.archetypeId || approved.candidate.regression.sourceRevision !== input.sourceRevision) throw Error("NPC_CONTROLLER_RELEASE_SCOPE_MISMATCH");
   // INSERT IGNORE does not run an UPDATE against the append-only artifact table.
-  const artifact = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1).for("update"))[0];
-  if (!artifact) await tx.insert(artifacts).ignore().values({ artifactHash: approved.candidate.artifactHash, artifactJson: JSON.stringify(approved.candidate.artifact) });
+  // Insert before reading: independent archetype releases must not gap-lock
+  // their missing hashes in the shared artifact table.
+  await tx.insert(artifacts).ignore().values({ artifactHash: approved.candidate.artifactHash, artifactJson: JSON.stringify(approved.candidate.artifact) });
   const stored = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1).for("update"))[0];
   if (!stored || canonicalSha256(JSON.parse(stored.artifactJson)) !== approved.candidate.artifactHash) throw Error("NPC_CONTROLLER_ARTIFACT_HASH_MISMATCH");
   const release = {

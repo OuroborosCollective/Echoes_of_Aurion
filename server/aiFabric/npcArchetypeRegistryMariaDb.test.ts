@@ -30,9 +30,11 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
   it("can create distinct canonical NPCs concurrently before any registry approval exists", async () => {
     await Promise.all((["observatory_threshold", "windhollow"] as const).map(hub => resolveAndRecordNpc(merchantGenesisRequest(hub), undefined, { bindControllerAtGenesis: true })));
     for (const npcId of merchantIds) expect(await readNpcControllerBinding(npcId)).toMatchObject({ status: "CANONICAL_FALLBACK", artifactHash: null });
-    // End these isolated test lifetimes; the subsequent fixture uses identical
-    // canonical genesis input, so retained immutable memory remains consistent.
-    await pool.query("TRUNCATE TABLE aurionNpcControllerBindings");
+    // End the entire isolated fixture lifetime, including immutable memory.
+    // Keeping its memory while deleting state correctly fails STATE_GAP.
+    for (const table of ["aurionNpcControllerBindings", "aurionSemanticGraphIndexV2",
+      "aurionSemanticGraphProvenanceV2", "aurionSemanticGraphEdgesV2", "aurionSemanticGraphNodesV2",
+      "aurionSemanticGraphReceiptsV2", "aurionNpcMemoryReceiptsV4"]) await pool.query(`TRUNCATE TABLE ${table}`);
     await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId IN (?,?)", merchantIds);
     await pool.query("DELETE FROM aurionNpcStates WHERE npcId IN (?,?)", merchantIds);
   });
@@ -176,6 +178,34 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
       await pool.query("UPDATE aurionNpcControllerArtifacts SET artifactJson=? WHERE artifactHash=?", [JSON.stringify(originalPayload.artifact), originalPayload.artifactHash]);
       await pool.query(ddl);
     }
+  });
+
+  it("releases different archetypes concurrently without granting resident commerce rights", async () => {
+    const db = (await getDb())!;
+    const candidates = [
+      { archetypeId: "aurion.merchant.economy.v1", expectedRevision: 3, artifact: { ...behaviorTemplate("blacksmith", "utility"), version: 3 } },
+      { archetypeId: "aurion.resident.social.v1", expectedRevision: 0, artifact: behaviorTemplate("questgiver", "utility") },
+    ];
+    for (const [index, candidate] of candidates.entries()) {
+      const payload = { ...originalPayload, archetypeId: candidate.archetypeId, artifact: candidate.artifact, artifactHash: canonicalSha256(candidate.artifact) };
+      await db.transaction(tx => commitNpcPolicyMutation(tx, {
+        mutationReceiptId: `registry-cross-archetype-${index}`, npcId: `registry-test-authoring-${index}`, previousVersion: null, previousPolicyHash: null,
+        nextVersion: 1, nextPolicyHash: npcHash(payload), rejectedCandidateHash: null, verdict: "accepted", reason: "Isolated cross-archetype concurrency",
+        provenanceDigest: canonicalSha256(payload), evidenceWindow: { startIndex: 0, endIndex: 0 },
+        fitnessContract: { version: payload.regression.suite, resultDigest: payload.regression.resultDigest.slice(7) },
+        mutationRule: { version: "npc-archetype-registry.v1" }, envelopeHash: npcHash(payload), rollbackTargetVersion: null,
+        sourceRevision: pin.sourceRevision, sourceSha256: pin.sourceSha256, payload,
+      }));
+    }
+    const released = await Promise.all(candidates.map((candidate, index) => db.transaction(tx => promoteNpcArchetype(tx, {
+      archetypeId: candidate.archetypeId, expectedRevision: candidate.expectedRevision,
+      mutationReceiptId: `registry-cross-archetype-${index}`, sourceRevision: originalPayload.regression.sourceRevision,
+    }))));
+    expect(released.map(r => r.revision)).toEqual([4, 1]);
+    expect(new Set(released.map(r => r.artifactHash)).size).toBe(2);
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT artifactJson FROM aurionNpcControllerArtifacts WHERE artifactHash=?", [released[1].artifactHash]);
+    expect(JSON.parse(rows[0].artifactJson).allowedActions).toEqual(["socialize", "rest", "consume"]);
+    expect(await readNpcControllerBinding(merchantIds[0])).toEqual(firstBinding);
   });
 
 });

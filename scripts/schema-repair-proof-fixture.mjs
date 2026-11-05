@@ -82,7 +82,7 @@ try {
       AURION_SCHEMA_APPLY_PLAN_SHA256: process.env.AURION_APPLY_TEST_PLAN };
     const run = args => spawnSync(process.execPath, ["dist-production-apply/bin/repair.cjs", ...args], { env, encoding: "utf8" });
     const planned = run(["plan"]);
-    assert.equal(planned.status, 0);
+    assert.equal(planned.status, 0, planned.stdout);
     const original = JSON.parse(planned.stdout);
     assert.equal(original.decision, "REVIEWED_REPAIR_READY");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "schema-plan-proof-"));

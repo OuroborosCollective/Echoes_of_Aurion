@@ -44,7 +44,7 @@ function opportunities(tick:number, hub:HubId) {
   }));
 }
 
-function source(tick=0, withPlan=true, economy={currentHubId:"observatory_threshold" as HubId,wealthCopper:1200,hungerBps:2000,fatigueBps:1500,tradeProwessBps:10500,harvestYieldBps:10000}) {
+function source(tick=0, withPlan=true, economy={currentHubId:"observatory_threshold" as HubId,wealthCopper:1200,hungerBps:2000,fatigueBps:1500,tradeProwessBps:10500,harvestYieldBps:10000}, gatherResources=false) {
   const hub:HubId="observatory_threshold";
   const npcId=npcIdentity(hub);
   const request=normalizeNpcRequest({
@@ -60,7 +60,7 @@ function source(tick=0, withPlan=true, economy={currentHubId:"observatory_thresh
   });
   const snapshot=createNpcLifeSnapshot({
     ...request,
-    needs:resolveNpcNeeds({current:{safety:1,resources:1,belonging:1,status:1,wealth:0,power:1},events:[]}),
+    needs:resolveNpcNeeds({current:{safety:1,resources:gatherResources?0:1,belonging:1,status:1,wealth:gatherResources?1:0,power:1},events:[]}),
     memoryState:advanceNpcMemory(parseNpcMemory("[]",-1),[],tick),
   });
   const raw=encodeNpcLifeReceipt(npcRequestHash(request,NPC_LIFE_RECEIPT_VERSION),snapshot);
@@ -68,9 +68,9 @@ function source(tick=0, withPlan=true, economy={currentHubId:"observatory_thresh
   return {raw,expected,confirmed:verifyConfirmedNpcDecision(raw,expected),hub};
 }
 
-function context(tick=0, scarceStock?:number):MerchantGatewayContext {
+function context(tick=0, scarceStock?:number, gatherResources=false):MerchantGatewayContext {
   // Read-only production metadata at source resolution 19506; this remains an isolated fixture.
-  const s=source(tick,true,scarceStock===undefined ? undefined : {currentHubId:"observatory_threshold",wealthCopper:1781659,hungerBps:4710,fatigueBps:8210,tradeProwessBps:10500,harvestYieldBps:10000});
+  const s=source(tick,true,scarceStock===undefined ? undefined : {currentHubId:"observatory_threshold",wealthCopper:1781659,hungerBps:4710,fatigueBps:8210,tradeProwessBps:10500,harvestYieldBps:10000},gatherResources);
   const npc=confirmedNpcEconomy(s.hub,s.confirmed.snapshot);
   const bootstrap=merchantBootstrapMarkets[npc.currentHubId];
   const market=scarceStock===undefined ? bootstrap : {...bootstrap,stock:{grain:150,sandstone:100,bronze:80,aether:40,salve:48,rune_core:scarceStock}};
@@ -94,6 +94,44 @@ function context(tick=0, scarceStock?:number):MerchantGatewayContext {
 }
 
 describe("Wave 2 Step 26 WASD AIM-293 action gateway contract",()=>{
+  it("removes merchant storage capacity only under the receipt-bound policy, preserving legacy replay",()=>{
+    const original=context(0,undefined,true);
+    const entries=original.inventory.entries.map(entry=>({...entry,capacity:entry.quantity}));
+    const legacy={...original,inventory:{...original.inventory,entries,stateHash:merchantInventoryStateHash({ownerId:original.inventory.ownerId,market:original.market,entries})}};
+    const before=planMerchantAction(legacy);
+    expect(before).toMatchObject({status:"blocked",code:"INVENTORY_UNAVAILABLE",action:"produce"});
+    const unlimited={...legacy,storagePolicyVersion:"aurion.merchant-storage.unbounded.v1" as const};
+    const ready=planMerchantAction(unlimited);
+    expect(ready.status).toBe("ready");
+    if(ready.status!=="ready") throw Error("UNLIMITED_STORAGE_NOT_ADMITTED");
+    const accepted=validateMerchantAction({context:unlimited,intent:ready.intent,lease:ready.proposedLease});
+    expect(accepted.status).toBe("validated");
+    if(accepted.status==="validated") {
+      expect(accepted.receipt).toHaveProperty("storagePolicyVersion",unlimited.storagePolicyVersion);
+      expect(accepted.resolution.market.stock[accepted.resolution.commodity]).toBeGreaterThan(entries.find(e=>e.itemId===accepted.resolution.commodity)!.capacity);
+    }
+    expect(validateMerchantAction({context:legacy,intent:ready.intent,lease:ready.proposedLease}).status).toBe("blocked");
+    expect(planMerchantAction(legacy)).toEqual(before);
+  });
+
+  it("accepts more than one million stored units but rejects numeric overflow without fabricating stock",()=>{
+    const original=context(0,undefined,true);
+    const make=(quantity:number)=>{
+      const market={...original.market,stock:Object.fromEntries(Object.keys(original.market.stock).map(key=>[key,quantity])) as typeof original.market.stock};
+      const entries=original.inventory.entries.map(entry=>({...entry,quantity}));
+      return {...original,storagePolicyVersion:"aurion.merchant-storage.unbounded.v1" as const,market,
+        marketEvidence:{...original.marketEvidence,stateHash:merchantMarketStateHash(market)},
+        inventory:{...original.inventory,entries,stateHash:merchantInventoryStateHash({ownerId:original.inventory.ownerId,market,entries})},
+        targets:original.targets.map(t=>t.market.hubId===market.hubId?{...t,market}:t)};
+    };
+    const ready=planMerchantAction(make(1_000_001));
+    expect(ready.status).toBe("ready");
+    if(ready.status==="ready") expect(ready.resolution.market.stock[ready.resolution.commodity]).toBeGreaterThan(1_000_001);
+    expect(()=>planMerchantAction(make(Number.MAX_SAFE_INTEGER))).toThrow("NPC_MERCHANT_STOCK_NUMERIC_RANGE");
+    const empty={...context(19506,0),storagePolicyVersion:"aurion.merchant-storage.unbounded.v1" as const};
+    expect(planMerchantAction(empty)).toMatchObject({status:"blocked",code:"INVENTORY_UNAVAILABLE"});
+  });
+
   it("admits a confirmed partial trade and accounts only for the three available units",()=>{
     const ctx=context(19506,3);
     expect(ctx.confirmedDecision.snapshot.decision.goal).toBe("trade");

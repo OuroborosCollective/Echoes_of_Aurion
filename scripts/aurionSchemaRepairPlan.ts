@@ -150,6 +150,10 @@ export function buildSchemaRepairPlan(input: {
         const declared = m.tables.find(t => t.name === tableName)?.indexes.find(i => i.name === index[1]);
         if (!declared) throw new Error("REPAIR_INDEX_SOURCE_INVALID");
         next = { ...before, indexes: [...before.indexes, declared] };
+      } else if (kind === "CREATE_TRIGGER" && trigger && before) {
+        const declared = m.tables.find(t => t.name === tableName)?.triggers?.find(t => t.name === `${trigger[1]}_no_${trigger[2]}`);
+        if (!declared) throw new Error("REPAIR_TRIGGER_SOURCE_INVALID");
+        next = { ...before, triggers: [...(before.triggers ?? []), declared] };
       } else {
         const parsed = parseLateMigrationSql(m.tag, sql, new Map(canonicalBefore ? [[tableName, canonicalBefore]] : []));
         next = asObserved(parsed.tables.find(table => table.name === tableName)!);
