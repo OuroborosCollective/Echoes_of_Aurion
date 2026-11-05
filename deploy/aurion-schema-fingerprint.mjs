@@ -2,12 +2,17 @@
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
-// A MariaDB --no-data dump includes the next row ID, which changes under DML.
-// Keep every byte except that table-level counter. Column AUTO_INCREMENT,
-// quoted values, comments, routines, engine, collation and constraints remain.
+/**
+ * Return a MariaDB --no-data dump with only table-level next-row counters
+ * removed. Preserve column AUTO_INCREMENT, quotes, comments, routine bodies
+ * and all other definition bytes; reject unterminated lexical constructs.
+ * @param {string} sql Complete UTF-8 metadata dump from mariadb-dump.
+ * @returns {string} Schema definition used by aurion.schema-definition.v1.
+ */
 export function schemaDefinition(sql) {
   let i = 0, delimiter = ";", tokens = [];
   const removals = [];
+  /** Normalize one completed top-level CREATE TABLE statement's options. */
   function finish() {
     if (tokens[0]?.text.toUpperCase() !== "CREATE" || tokens[1]?.text.toUpperCase() !== "TABLE") {
       tokens = []; return;
@@ -70,6 +75,7 @@ export function schemaDefinition(sql) {
   return result + sql.slice(previous);
 }
 
+/** SHA-256 of the versioned schema definition, without mutable row counters. */
 export const fingerprint = sql => createHash("sha256").update(schemaDefinition(sql)).digest("hex");
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

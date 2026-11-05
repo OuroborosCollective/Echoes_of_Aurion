@@ -5690,6 +5690,18 @@ Learned: Präsentationshüllen beweisen keine Passierbarkeit. Geänderter Vorgä
 Open: Finale Exact-Head-CI, echte Provider-/OpenCode-Verifikation und bestätigter Marktplan mit konkreter Eigentümerfreigabe vor produktivem Apply; Anleitung docs/godot-migration/ai-world-designer.md.
 Next safe step: Neue Regression prüfen, grünen Head integrieren und unabhängig zurücklesen; Live-Konfiguration und bestätigten Marktversuch getrennt nachweisen.
 
+### 2026-11-05 — Godot actor normalization across the actual JSON boundary
+Status: PARTIAL
+Task: Repair valid authenticated catalog actors rejected after native login.
+Decisions: Validate each identity-matrix component as an exact finite integer-valued number; retain identity, bounds, hashes, session ownership and render budgets.
+Touched surfaces: Godot catalog_model_cache and existing actual-GLB actor import regression.
+Evidence: Base a7a765fea3e19a2e68575d62bc4a4f1f3d5af2dd live client authenticated/connected, non-stale tick 2003009, zero actors; absent prepared assets separately restored from exact-head CI artifact 13370115167 (ZIP SHA256 343262c1b9bdd94e95e218d09e6f091a737682f55351deeadfc8d0f9c315dea3), yielding eight fallback monsters but no selected player. Native Godot 4.7.2 isolated JSON-roundtrip regression RED on original code, GREEN with fix; actor projection, world-design projection and AI preview regressions also exit 0. Malformed/nonidentity/string/boolean axes remain rejected. These isolated tests are not live deployment proof.
+Learned: Godot Array equality distinguishes JSON floats from literal integers; hand-built fixture dictionaries hid the HTTP failure.
+Open: Exact-head CI/review and verified editor delivery; full world/model parity and AI market acceptance remain unverified.
+Next safe step: Review and integrate the tested fix, then independently confirm the existing session renders its server-selected model.
+
+CI-Nachtrag zum selben Integrationsblock: Head cee17220c1c275171bafb3adac26529eaff3729d hat alle ausgeführten Code-Checks bestanden, darunter echter Godot-Import/Render (126958850453), native Viewport-Projektion (126958849687), Repository-Regression (126958849609), Android/JNI (126958849568) und Browser-E2E (126958850048). Vier bedingte Jobs skipped, nicht als bestanden gezählt; Devin/CodeRabbit ohne offene Review-Threads. GitBook-Vorschau m21D80HLwtyeajGnaah5 enthält exakt diesen Head, GitHub meldet dennoch pending. Merge durch automatische Freigabeprüfung abgelehnt; keine Umgehung oder Live-Codeänderung. Nach dieser Dokumentationsfortschreibung ist der neue Head erneut zu prüfen; Live-Darstellung bleibt unbelegt.
+
 
 ### 2026-11-05 — Recovery schema fingerprint under live row inserts
 Status: PARTIAL
