@@ -493,10 +493,10 @@ chmod 0600 "$backup_file"
 backup_created=true
 
 phase=ISOLATED_RECOVERY_PROOF
-# Non-locking metadata snapshot, consistent with the successful backup dump.
+# Non-locking schema definition: DML row counters are not schema identity.
 # Preserve distinct timeout/interruption phases without emitting DB credentials.
 set +e
-source_schema_sha256="$(production_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')"
+source_schema_sha256="$(production_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | node "${release}/deploy/aurion-schema-fingerprint.mjs")"
 source_fingerprint_status=$?
 set -e
 if [[ "$source_fingerprint_status" -ne 0 ]]; then
@@ -560,7 +560,7 @@ rm -f "$recovery_stderr"
 [[ "$recovery_restore_status" -eq 0 ]] || { phase=RECOVERY_RESTORE_FAILED; exit "$recovery_restore_status"; }
 [[ "$recovery_restore_marker" == AURION_RECOVERY_RESTORE_COMPLETE ]] || { phase=RECOVERY_COMPLETION_MARKER_MISSING; exit 70; }
 recovery_table_count="$(recovery_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=RECOVERY_TABLE_COUNT_READ_FAILED; exit 69; }
-recovery_schema_sha256="$(recovery_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=RECOVERY_SCHEMA_FINGERPRINT_FAILED; exit 69; }
+recovery_schema_sha256="$(recovery_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | node "${release}/deploy/aurion-schema-fingerprint.mjs")" || { phase=RECOVERY_SCHEMA_FINGERPRINT_FAILED; exit 69; }
 [[ "$recovery_table_count" =~ ^[0-9]+$ && "$recovery_schema_sha256" =~ ^[a-f0-9]{64}$ && "$recovery_table_count" == "$source_table_count" && "$recovery_schema_sha256" == "$source_schema_sha256" ]] || { phase=RECOVERY_PROOF_MISMATCH; exit 70; }
 if [[ "$preflight_mode" == "repair" ]]; then
   # Restore can outlast the 15-minute observation window. Re-read production
@@ -648,9 +648,9 @@ if [[ "$preflight_mode" == "repair" ]]; then
 
   phase=VERIFY_REFRESHED_RECOVERY
   refreshed_source_tables="$(production_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=REFRESHED_SOURCE_TABLE_COUNT_FAILED; exit 69; }
-  refreshed_source_schema_sha256="$(production_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=REFRESHED_SOURCE_SCHEMA_HASH_FAILED; exit 69; }
+  refreshed_source_schema_sha256="$(production_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | node "${release}/deploy/aurion-schema-fingerprint.mjs")" || { phase=REFRESHED_SOURCE_SCHEMA_HASH_FAILED; exit 69; }
   recovery_table_count="$(recovery_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=REFRESHED_RECOVERY_TABLE_COUNT_FAILED; exit 69; }
-  recovery_schema_sha256="$(recovery_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=REFRESHED_RECOVERY_SCHEMA_HASH_FAILED; exit 69; }
+  recovery_schema_sha256="$(recovery_client dump --no-data --single-transaction --skip-lock-tables --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | node "${release}/deploy/aurion-schema-fingerprint.mjs")" || { phase=REFRESHED_RECOVERY_SCHEMA_HASH_FAILED; exit 69; }
   [[ "$refreshed_source_tables" =~ ^[0-9]+$ && "$refreshed_source_schema_sha256" =~ ^[a-f0-9]{64}$ && "$recovery_table_count" == "$refreshed_source_tables" && "$recovery_schema_sha256" == "$refreshed_source_schema_sha256" ]] || { phase=REFRESHED_RECOVERY_PROOF_MISMATCH; exit 70; }
   source_table_count="$refreshed_source_tables"
   source_schema_sha256="$refreshed_source_schema_sha256"
