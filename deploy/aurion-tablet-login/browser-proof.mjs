@@ -10,6 +10,7 @@ await mkdir(evidence, {recursive:true});
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext();
+  await context.setOffline(true);
   const page = await context.newPage();
   const failures = [];
   page.on('pageerror', error => failures.push(error.message));
@@ -60,36 +61,54 @@ try {
     let posts=0, acceptedOrigin=false, cookiePresent=false, foreignRequests=0, callbackRequests=0;
     const requestAudit=[];
     isolated.on('request', req=>{const u=new URL(req.url());requestAudit.push({method:req.method(),origin:u.origin,path:u.pathname,redirect:!!req.redirectedFrom()});});
-    await isolated.route('**/*', async route=>{
-      const req=route.request(), u=new URL(req.url());
-      if(u.origin!=='https://arelogic.space') {foreignRequests++;return route.abort();}
-      if(u.pathname==='/fixture/entry.html') return route.fulfill({status:200,contentType:'text/html',body:entry});
-      if(u.pathname==='/fixture/real-flow.js') return route.fulfill({status:200,contentType:'text/javascript',body:script});
-      if(u.pathname==='/fixture/aurion-login-core.js') return route.fulfill({status:200,contentType:'text/javascript',body:await readFile(path.join(root,'aurion-login-core.js'),'utf8')});
-      if(req.url()===login&&req.method()==='GET') {
-        const headers=await req.allHeaders();
+    const p=await isolated.newPage();
+    const cdp=await isolated.newCDPSession(p);
+    let interceptionFailure=null;
+    // Playwright's route API handles only the first URL of a redirect chain.
+    // CDP pauses EVERY hop; offline mode independently prevents real egress.
+    async function intercept(event) {
+      const req=event.request, u=new URL(req.url);
+      const fulfill=async ({status=200,contentType='text/html',headers={},body=''})=>cdp.send('Fetch.fulfillRequest',{
+        requestId:event.requestId,responseCode:status,
+        responseHeaders:Object.entries({'Content-Type':contentType,...headers}).map(([name,value])=>({name,value})),
+        body:Buffer.from(body).toString('base64'),
+      });
+      if(u.origin!=='https://arelogic.space') {foreignRequests++;return cdp.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'});}
+      if(u.pathname==='/fixture/entry.html') return fulfill({body:entry});
+      if(u.pathname==='/fixture/real-flow.js') return fulfill({contentType:'text/javascript',body:script});
+      if(u.pathname==='/fixture/aurion-login-core.js') return fulfill({contentType:'text/javascript',body:await readFile(path.join(root,'aurion-login-core.js'),'utf8')});
+      if(req.url===login&&req.method==='GET') {
+        const headers=Object.fromEntries(Object.entries(req.headers).map(([k,v])=>[k.toLowerCase(),v]));
         cookiePresent=String(headers.cookie).includes('qa_web_session=synthetic-only');
-        return route.fulfill({status:200,contentType:'text/html',headers:{'Cache-Control':'no-store','Set-Cookie':'qa_binding=synthetic-only; Secure; HttpOnly; SameSite=Lax; Path=/'},body:render(transaction,cookiePresent?csrf:null)});
+        return fulfill({headers:{'Cache-Control':'no-store','Set-Cookie':'qa_binding=synthetic-only; Secure; HttpOnly; SameSite=Lax; Path=/'},body:render(transaction,cookiePresent?csrf:null)});
       }
-      if(req.url()===login+'/confirm'&&req.method()==='POST') {
+      if(req.url===login+'/confirm'&&req.method==='POST') {
         posts++;
-        const headers=await req.allHeaders();
+        const headers=Object.fromEntries(Object.entries(req.headers).map(([k,v])=>[k.toLowerCase(),v]));
         acceptedOrigin=guard({headers});
         assert.equal(headers.referer,undefined,'callback workflow must not disclose a referrer');
-        assert.equal(req.postData(),'csrf='+csrf);
+        assert.equal(req.postData,'csrf='+csrf);
         assert.ok(String(headers.cookie).includes('qa_binding=synthetic-only'));
-        return route.fulfill({status:acceptedOrigin?303:403,headers:acceptedOrigin?{Location:foreignRedirect?'https://unapproved.invalid/return':callback}:{},body:''});
+        return fulfill({status:acceptedOrigin?303:403,headers:acceptedOrigin?{Location:foreignRedirect?'https://unapproved.invalid/return':callback}:{},body:''});
       }
-      if(req.url()===callback) {callbackRequests++;return route.fulfill({status:200,contentType:'text/html',headers:{'Content-Security-Policy':"default-src 'none'; base-uri 'none'; frame-ancestors 'none'",'Referrer-Policy':'no-referrer'},body:'<p>Return to Aurion</p>'});}
+      if(req.url===callback) {callbackRequests++;return fulfill({headers:{'Content-Security-Policy':"default-src 'none'; base-uri 'none'; frame-ancestors 'none'",'Referrer-Policy':'no-referrer'},body:'<p>Return to Aurion</p>'});}
+      if(u.pathname==='/favicon.ico') return fulfill({status:204});
       throw new Error('Unexpected fixture request');
+    }
+    cdp.on('Fetch.requestPaused', event=>{
+      intercept(event).catch(async error=>{
+        interceptionFailure=error;
+        await cdp.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'}).catch(()=>{});
+      });
     });
-    const p=await isolated.newPage();
+    await cdp.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
     await p.goto('https://arelogic.space/fixture/entry.html');
     await p.waitForFunction(()=>document.querySelector('#phase').textContent==='ready');
     await p.locator('#confirm').click();
     await p.waitForFunction(()=>['delivered','failed'].includes(document.querySelector('#phase').textContent));
     const observed=await p.evaluate(()=>({phase:document.querySelector('#phase').textContent,deliveryCount:window.deliveryCount,callbackMatches:window.callbackMatches,localKeys:localStorage.length,sessionKeys:sessionStorage.length,queryInPage:document.body.textContent.includes('code=')}));
     console.log(JSON.stringify({fixtureOnly:true,foreignRedirect,posts,acceptedOrigin,cookiePresent,foreignRequests,callbackRequests,observed,requestAudit}));
+    assert.equal(interceptionFailure,null);
     assert.equal(posts,1);assert.ok(acceptedOrigin&&cookiePresent);assert.equal(foreignRequests,0);
     assert.equal(observed.phase,foreignRedirect?'failed':'delivered');
     assert.equal(observed.deliveryCount,foreignRedirect?0:1);assert.equal(callbackRequests,foreignRedirect?0:1);

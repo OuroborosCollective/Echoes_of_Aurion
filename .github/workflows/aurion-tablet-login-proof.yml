@@ -34,7 +34,9 @@ jobs:
       - name: Canonical browser consent Origin regression
         run: node --test scripts/native-auth-browser-origin.test.mjs
       - name: Python helper syntax
-        run: python3 -m py_compile deploy/aurion-tablet-login/build_page.py deploy/aurion-tablet-login/one_attempt.py
+        run: |
+          python3 -m py_compile deploy/aurion-tablet-login/build_page.py deploy/aurion-tablet-login/one_attempt.py
+          python3 deploy/aurion-tablet-login/build_page.py --self-test
       - name: Existing native authentication boundaries
         run: pnpm exec vitest run server/nativeAuthHttp.test.ts server/nativeAuthProtocol.test.ts server/nativeAuthStateSeal.test.ts server/_core/sdkNativeAuth.test.ts
       - name: Verify whitespace
