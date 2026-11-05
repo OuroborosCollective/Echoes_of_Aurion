@@ -13,6 +13,7 @@ const segment = core.slice(start, end);
 
 function runSchemaFingerprint(mode) {
   const fixture = `set -euo pipefail
+    release="$AURION_FINGERPRINT_TEST_ROOT"
     database_name=aurion_test
     phase=START
     trap 'printf "OBSERVED_PHASE=%s\\n" "$phase"' EXIT
@@ -32,7 +33,7 @@ function runSchemaFingerprint(mode) {
     ${segment}
     printf 'SCHEMA_SHA256=%s\\n' "$source_schema_sha256"
   `;
-  return spawnSync("bash", ["-c", fixture], { encoding: "utf8", timeout: 8000 });
+  return spawnSync("bash", ["-c", fixture], { encoding: "utf8", timeout: 8000, env: { ...process.env, AURION_FINGERPRINT_TEST_ROOT: fileURLToPath(new URL("..", import.meta.url)) } });
 }
 
 test("successful source schema fingerprint remains SHA-256 of the complete dump", () => {

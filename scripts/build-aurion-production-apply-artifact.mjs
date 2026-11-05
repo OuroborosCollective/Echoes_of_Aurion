@@ -55,6 +55,7 @@ const deployFiles = [
   "aurion-schema-apply-lifecycle.mjs",
   "aurion-schema-apply-job-client.mjs",
   "aurion-schema-restore",
+  "aurion-schema-fingerprint.mjs",
   "aurion-schema-repair-failure-receipt.mjs",
   "aurion-production-schema-apply.environment.template",
   "aurion-production-schema-apply.sudoers",

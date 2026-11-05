@@ -53,6 +53,7 @@ const requiredFiles = [
   "deploy/aurion-schema-apply-lifecycle.mjs",
   "deploy/aurion-schema-apply-job-client.mjs",
   "deploy/aurion-schema-restore",
+  "deploy/aurion-schema-fingerprint.mjs",
   "deploy/aurion-schema-repair-failure-receipt.mjs",
   "deploy/aurion-production-schema-apply.environment.template",
   "deploy/aurion-production-schema-apply.sudoers",
