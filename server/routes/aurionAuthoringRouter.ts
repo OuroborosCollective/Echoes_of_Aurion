@@ -1,3 +1,4 @@
+import { BehaviorDraftInput, BehaviorTestInput, draftBehavior, readBehaviorActors, testBehavior } from "../aiFabric/behaviorAuthoring";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { DesignerInput, designerSurface, WorldDesigner, type DesignerRequest } from "../aiFabric/worldDesigner";
@@ -50,6 +51,9 @@ async function proposeWorldForSession(actorUserId: number, input: DesignerReques
 }
 
 export const aurionAuthoringRouter = router({
+  behaviorActors: adminProcedure.query(({ctx}) => readBehaviorActors(ctx.user.id)),
+  behaviorDraft: adminProcedure.input(BehaviorDraftInput).mutation(({input}) => draftBehavior(input)),
+  behaviorTest: adminProcedure.input(BehaviorTestInput).mutation(({ctx,input}) => testBehavior(ctx.user.id,input)),
   aiStatus: adminProcedure.query(async () => {
     try { return await new WorldDesigner(fabricConfig()).status(); }
     catch { return { status: "NOT_CONFIGURED", premiumEnabled: false, models: [], local: { status: "OFFLINE" } }; }
