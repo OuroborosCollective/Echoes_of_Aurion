@@ -43,7 +43,8 @@ def build(source, output, code):
         raise ValueError("NOVNC_INITIALIZER_NOT_UNIQUE")
     replacements = []
     for match in scripts:
-        if match not in targets and not re.search(r"\bsrc\s*=", match.group(), re.I):
+        opening_tag = match.group().split('>', 1)[0]
+        if match not in targets and not re.search(r"\bsrc\s*=", opening_tag, re.I):
             body = re.sub(r'^<script\b[^>]*>|</script>$', '', match.group(), flags=re.I).strip()
             if ''.join(body.split()) not in LEGACY_INLINE:
                 raise ValueError("UNEXPECTED_INLINE_SCRIPT")
@@ -89,6 +90,21 @@ def self_test():
         source.joinpath('vnc.html').write_text('<head><script>window._noVNC_has_module_support = true;</script><script src="app/ui.js"></script></head>')
         build(source, root / 'legacy', Path(__file__).parent)
         assert '_noVNC_has_module_support' not in (root / 'legacy/aurion.html').read_text()
+        loader = '''window.addEventListener("load", function() {
+            if (window._noVNC_has_module_support) return;
+            var loader = document.createElement("script");
+            loader.src = "vendor/browser-es-module-loader/dist/browser-es-module-loader.js";
+            document.head.appendChild(loader);
+        });'''
+        source.joinpath('vnc.html').write_text('<head><script>' + loader + '</script><script src="app/ui.js"></script></head>')
+        build(source, root / 'legacy-loader', Path(__file__).parent)
+        assert 'loader.src' not in (root / 'legacy-loader/aurion.html').read_text()
+        source.joinpath('vnc.html').write_text('<head><script>loader.src = "unexpected";</script><script src="app/ui.js"></script></head>')
+        try:
+            build(source, root / 'unknown-loader', Path(__file__).parent)
+            raise AssertionError('inline src expression treated as script attribute')
+        except ValueError as error:
+            assert str(error) == 'UNEXPECTED_INLINE_SCRIPT'
         source.joinpath('vnc.html').write_text('<head><script>unexpected()</script><script src="app/ui.js"></script></head>')
         try:
             build(source, root / 'unexpected', Path(__file__).parent)

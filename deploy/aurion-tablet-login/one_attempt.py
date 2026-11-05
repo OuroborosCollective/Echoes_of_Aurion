@@ -22,7 +22,10 @@ def report(phase):
 async def run(expected_pid, start_new_attempt=False):
     async with Client("http://127.0.0.1:39090/mcp") as client:
         async def evaluate(expression):
-            result = await client.call_tool("godot_debugger_evaluate_expression", {"expression": expression})
+            result = await asyncio.wait_for(
+                client.call_tool("godot_debugger_evaluate_expression", {"expression": expression}),
+                timeout=10,
+            )
             value = result.structured_content
             if not isinstance(value, dict) or not value.get("evaluated") or value.get("error"):
                 raise RuntimeError("GODOT_PROBE_REJECTED")
@@ -156,7 +159,7 @@ if __name__ == "__main__":
     if args.expected_pid <= 0:
         parser.error('expected PID must be positive')
     try:
-        asyncio.run(run(args.expected_pid, args.start_new_attempt))
+        asyncio.run(asyncio.wait_for(run(args.expected_pid, args.start_new_attempt), timeout=620))
     except Exception:
         # Exceptions from connectors may contain request context. Never print them.
         report("helper_failed_no_secret_details")
