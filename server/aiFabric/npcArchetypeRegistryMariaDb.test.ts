@@ -27,6 +27,16 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
   });
   afterAll(async () => { await pool?.end(); });
 
+  it("can create distinct canonical NPCs concurrently before any registry approval exists", async () => {
+    await Promise.all((["observatory_threshold", "windhollow"] as const).map(hub => resolveAndRecordNpc(merchantGenesisRequest(hub), undefined, { bindControllerAtGenesis: true })));
+    for (const npcId of merchantIds) expect(await readNpcControllerBinding(npcId)).toMatchObject({ status: "CANONICAL_FALLBACK", artifactHash: null });
+    // End these isolated test lifetimes; the subsequent fixture uses identical
+    // canonical genesis input, so retained immutable memory remains consistent.
+    await pool.query("TRUNCATE TABLE aurionNpcControllerBindings");
+    await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId IN (?,?)", merchantIds);
+    await pool.query("DELETE FROM aurionNpcStates WHERE npcId IN (?,?)", merchantIds);
+  });
+
   it("binds two canonical NPC identities to one shared approved artifact, then reads the binding independently", async () => {
     const db = (await getDb())!;
     const artifact = behaviorTemplate("blacksmith", "utility");
@@ -55,7 +65,7 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
       sourceRevision: pin.sourceRevision, sourceSha256: pin.sourceSha256, payload,
     }));
     await db.transaction(tx => promoteNpcArchetype(tx, { archetypeId: payload.archetypeId, expectedRevision: 0, mutationReceiptId: "registry-test-approval-1", sourceRevision: payload.regression.sourceRevision }));
-    for (const hub of ["observatory_threshold", "windhollow"] as const) await resolveAndRecordNpc(merchantGenesisRequest(hub), undefined, { bindControllerAtGenesis: true });
+    await Promise.all((["observatory_threshold", "windhollow"] as const).map(hub => resolveAndRecordNpc(merchantGenesisRequest(hub), undefined, { bindControllerAtGenesis: true })));
     const first = await readNpcControllerBinding(merchantIds[0]);
     const second = await readNpcControllerBinding(merchantIds[1]);
     firstBinding = first;
