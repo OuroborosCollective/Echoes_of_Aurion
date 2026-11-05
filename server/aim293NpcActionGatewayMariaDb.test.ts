@@ -143,9 +143,30 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     }, {isolationLevel: "repeatable read"});
   });
 
+  it("commits replenishment for a hungry merchant with empty stock instead of repeating a blocked consume",async()=>{
+    const market={...merchantBootstrapMarkets[homeHub],stock:{grain:0,sandstone:0,bronze:0,aether:0,salve:0,rune_core:0}};
+    const ownerId=`market:${homeHub}`;
+    const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
+    const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};
+    await pool.query("UPDATE aurionNpcActionEpochStates SET marketJson=?,marketHash=?,inventoryJson=?,inventoryHash=? WHERE hubId=?",
+      [JSON.stringify(market),merchantMarketStateHash(market),JSON.stringify(inventory),inventory.stateHash,homeHub]);
+    const request=sourceRequest(0);
+    await resolveAndRecordNpc({...request,economy:{...request.economy,hungerBps:8000}});
+    const source=(await readConfirmedMerchantActionSource(npcId))!;
+    const input={worldSeed:"hungry-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    const result=await executeConfirmedMerchantAction(input);
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed") throw Error("HUNGRY_REPLAN_NOT_COMMITTED");
+    expect(result.resolution.action).toBe("produce");
+    const [rows]=await pool.query<RowDataPacket[]>("SELECT marketJson FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
+    expect(JSON.parse(rows[0].marketJson).stock[result.resolution.commodity]).toBe(result.resolution.quantity);
+    expect((await readConfirmedMerchantActionSource(npcId))!.resolutionIndex).toBe(1);
+    expect((await executeConfirmedMerchantAction(input)).status).toBe("persisted");
+  });
+
   it("records actual route experience only after committed travel and independently rereads NPC memory",async()=>{
     for(const hubId of hubs){
-      const market={...merchantBootstrapMarkets[hubId],stock:{...merchantBootstrapMarkets[hubId].stock,grain:hubId==="cinder_vault"?0:1000}};
+      const market={...merchantBootstrapMarkets[hubId],stock:{...merchantBootstrapMarkets[hubId].stock,grain:hubId==="emberfall"?0:1000}};
       const ownerId=`market:${hubId}`;
       const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
       const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};

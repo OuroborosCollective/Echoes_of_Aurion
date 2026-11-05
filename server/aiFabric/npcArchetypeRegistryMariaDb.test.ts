@@ -121,7 +121,9 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
       expect(restarted.binding).toEqual(firstBinding);
       expect(restarted.hash).toBe((await resolveAndRecordNpc(merchantGenesisRequest("observatory_threshold"))).decision.decisionHash);
     }
-  });
+  // Two independent server processes each have a 30s startup/readback bound.
+  // Keep an explicit total budget instead of Vitest's unrelated 5s default.
+  }, 75_000);
 
   it("unknown identities gain no merchant rights even when their profession claims merchant", async () => {
     await resolveAndRecordNpc({ npcId: "registry-test-unknown", regionId: "observatory_threshold", roleId: "merchant", resolutionIndex: 0, needEvents: [], observationIds: [], memory: [] }, undefined, { bindControllerAtGenesis: true });
