@@ -148,14 +148,32 @@ func completed(kind: String, data: Dictionary) -> void:
 		if _draft.text != _pending_draft or _choice.selected < 0 or _choice.selected >= _actors.size(): return
 		var actor: Dictionary = _actors[_choice.selected]
 		if actor.npcId != _pending_actor or actor.observationHash != _pending_observation or data.get("npcId") != _pending_actor or data.get("observationHash") != _pending_observation or data.get("status") != "TESTED": return
+		var artifact: Dictionary = JSON.parse_string(_draft.text)
+		if typeof(data.get("artifact")) != TYPE_DICTIONARY or JSON.stringify(data.artifact) != JSON.stringify(artifact): return
+		var comparison: Variant = data.get("comparison")
+		if typeof(comparison) != TYPE_DICTIONARY: return
+		if comparison.get("schemaVersion") != "aurion.behavior-comparison.v1" or comparison.get("mutationAuthority") != "none" or comparison.get("execution") != "offline": return
+		if comparison.get("controllerId") != artifact.get("controllerId") or comparison.get("controllerVersion") != artifact.get("version"): return
+		for field in ["controllerHash", "observationHash", "comparisonHash"]:
+			if not _hash_valid(comparison.get(field)): return
 		_result.text = JSON.stringify(data, "\t")
-		_render_graph(JSON.parse_string(_draft.text))
+		_render_graph(artifact)
 		_status.text = "TESTED · Nur Offline-Vergleich. PROPOSED / VALIDATED / APPLIED / LIVE_VERIFIED: nicht erreicht."
 
 func _render_graph(artifact: Dictionary) -> void:
 	_graph.clear()
 	var root := _graph.create_item()
 	root.set_text(0, str(artifact.get("mode", "")) + " · Empfehlung")
+	if artifact.get("mode") != "tree":
+		var formula := _graph.create_item(root)
+		formula.set_text(0, "Score = Bias %s + Gewichte %s × [Bedarf, Nutzen, Risiko, Kosten]" % [str(artifact.get("bias", "?")), str(artifact.get("weights", []))])
+		if artifact.get("mode") == "micro-shadow":
+			var activation := _graph.create_item(formula)
+			activation.set_text(0, "ReLU: max(0, Score) · nur Forschung")
+		for action in artifact.get("allowedActions", []):
+			var offer := _graph.create_item(formula)
+			offer.set_text(0, str(action))
+		return
 	for rule in artifact.get("rules", []):
 		if typeof(rule) != TYPE_DICTIONARY: continue
 		var condition := _graph.create_item(root)
@@ -167,3 +185,9 @@ func failed(kind: String, reason: String) -> void:
 	if kind != _pending: return
 	_pending = ""
 	_status.text = "UNVERIFIED · " + reason + " · Keine automatische Wiederholung."
+
+func _hash_valid(value: Variant) -> bool:
+	if typeof(value) != TYPE_STRING or value.length() != 71 or not value.begins_with("sha256:"): return false
+	for character in value.substr(7):
+		if not character in "0123456789abcdef": return false
+	return true

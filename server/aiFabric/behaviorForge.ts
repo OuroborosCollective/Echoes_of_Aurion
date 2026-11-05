@@ -63,7 +63,7 @@ export function evaluateBehavior(raw: unknown, context: NpcUtilityPlannerContext
   const result = { schemaVersion:"aurion.behavior-comparison.v1" as const,
     mutationAuthority:"none" as const, execution:"offline" as const,
     controllerHash:canonicalSha256(artifact), controllerId:artifact.controllerId, controllerVersion:artifact.version,
-    observationHash:canonicalSha256(context), sourceReceiptId:context.sourceReceiptId,resolutionIndex:context.resolutionIndex,
+    observationHash:canonicalSha256(context), plannerContextKey:context.sourceReceiptId,resolutionIndex:context.resolutionIndex,
     proposal:selected ? {candidateId:selected.candidateId,action:selected.action} : null,
     fallback:selected ? null : "NO_RECOMMENDATION_KEEP_CANONICAL_RUNTIME" as const,
     baseline:baseline ? {candidateId:baseline.id,action:baseline.action,scoreBps:baseline.scoreBps} : null,

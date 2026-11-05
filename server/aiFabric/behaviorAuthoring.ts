@@ -46,6 +46,7 @@ export async function testBehavior(userId:number,raw:z.infer<typeof BehaviorTest
   if(!current || canonicalSha256({sourceRevision:activeProvenance.sourceRevision,npc:current})!==observationHash)
     throw new TRPCError({code:"CONFLICT",message:"BEHAVIOR_OBSERVATION_CHANGED"});
   return {status:"TESTED",scope:"OFFLINE_COMPARISON_ON_CONFIRMED_NEEDS",npcId:npc.npcId,observationHash,
+    artifact:input.artifact,decisionHash:npc.decisionHash,plannerContextProvenance:"DERIVED_NOT_A_RECEIPT_ID",
     sourceRevision:activeProvenance.sourceRevision,comparison,activation:"BLOCKED",blockers:ACTIVATION_BLOCKERS,
     warning:"Planner candidates are derived from confirmed needs; this comparison does not validate navigation, inventory, targets or live execution."};
 }

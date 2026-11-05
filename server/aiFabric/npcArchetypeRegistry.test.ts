@@ -10,7 +10,7 @@ export function candidate(version = 1) {
     schemaVersion: "NpcArchetypeControllerRegistry.v1" as const,
     archetypeId: "aurion.merchant.economy.v1",
     observationSchema: "aurion-npc-utility-planner.v1",
-    actionSchema: "aurion-merchant-action-intent.v1",
+    actionSchema: "wasd-npc-action-gateway.v1",
     execution: "shadow" as const,
     artifact, artifactHash: canonicalSha256(artifact),
     regression: { sourceRevision: "e97a0027d69c6a3a3bf32c3590fdcac38b2d114b", suite: "npc-archetype-regression.v1", resultDigest: canonicalSha256({ synthetic: true, version }), verdict: "passed" as const },
