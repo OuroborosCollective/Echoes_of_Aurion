@@ -37,6 +37,8 @@ on:
       - "deploy/aurion-schema-apply-lifecycle.mjs"
       - "deploy/aurion-schema-apply-job-client.mjs"
       - "deploy/aurion-schema-restore"
+      - "deploy/aurion-schema-fingerprint.mjs"
+      - "scripts/aurion-schema-definition.test.mjs"
       - "scripts/aurion-schema-apply-proof-client.mjs"
       - "scripts/aurion-schema-apply-lifecycle.test.mjs"
       - "scripts/aurion-schema-restore.test.mjs"
@@ -146,7 +148,7 @@ jobs:
           set -euo pipefail
           pnpm check
           pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts server/aurionSchemaRepairRefresh.test.ts server/aurionSchemaRepairFailureReceipt.test.ts
-          node --test scripts/aurion-production-schema-apply-core.test.mjs scripts/aurion-production-schema-fingerprint.test.mjs
+          node --test scripts/aurion-production-schema-apply-core.test.mjs scripts/aurion-production-schema-fingerprint.test.mjs scripts/aurion-schema-definition.test.mjs
           bash -n deploy/aurion-production-schema-apply
           bash -n deploy/aurion-production-schema-apply-core
           bash -n deploy/install-aurion-production-schema-apply
@@ -176,6 +178,11 @@ jobs:
             sleep 1
           done
           test "$ready" -eq 1
+
+      - name: Verify schema fingerprint against real MariaDB DML and restore
+        env:
+          AURION_FINGERPRINT_TEST_DB: ${{ env.AURION_APPLY_TEST_DB }}
+        run: node --test scripts/aurion-schema-definition.test.mjs
 
       - name: Verify real lifecycle cancellation and isolated restore
         env:
