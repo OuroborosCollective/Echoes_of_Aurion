@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 
 const [godot, project] = process.argv.slice(2);
 assert.ok(godot && project, 'Godot and project required');
-let identity = 0, applies = 0, questPublishes = 0, templatePages = 0, templateReads = 0, redirects = 0, failures;
+let identity = 0, aiStatuses = 0, applies = 0, questPublishes = 0, templatePages = 0, templateReads = 0, redirects = 0, failures;
 const response = (res, value) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(value));
 const envelope = json => ({ result: { data: { json } } });
 const server = createServer(async (req, res) => {
@@ -32,7 +32,12 @@ const server = createServer(async (req, res) => {
     }
     if (req.url === '/api/trpc/aurionAuthoring.aiStatus') {
       assert.equal(req.method, 'GET');
-      response(res, envelope({ premiumEnabled: false, local: { status: 'OFFLINE' } }));
+      aiStatuses++;
+      if (aiStatuses === 2) {
+        // Real native HTTP body-limit failure, never live Aurion evidence.
+        const oversized = 'x'.repeat(1024 * 1024 + 1);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': oversized.length }).end(oversized);
+      } else response(res, envelope({ premiumEnabled: false, local: { status: 'OFFLINE' } }));
       return;
     }
     assert.equal(req.method, 'POST');
@@ -79,6 +84,7 @@ assert.ifError(failures);
 assert.equal(timedOut, false);
 assert.equal(exit, 0);
 assert.equal(identity, 2);
+assert.equal(aiStatuses, 2, 'a failed status request was automatically repeated');
 assert.equal(applies, 1, 'an apply was automatically repeated');
 assert.equal(questPublishes, 1, 'a quest publication was automatically repeated');
 assert.equal(templatePages, 2, 'template selection did not follow bounded pages');

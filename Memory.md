@@ -5701,3 +5701,14 @@ Open: Exact-head CI/review and verified editor delivery; full world/model parity
 Next safe step: Review and integrate the tested fix, then independently confirm the existing session renders its server-selected model.
 
 CI-Nachtrag zum selben Integrationsblock: Head cee17220c1c275171bafb3adac26529eaff3729d hat alle ausgeführten Code-Checks bestanden, darunter echter Godot-Import/Render (126958850453), native Viewport-Projektion (126958849687), Repository-Regression (126958849609), Android/JNI (126958849568) und Browser-E2E (126958850048). Vier bedingte Jobs skipped, nicht als bestanden gezählt; Devin/CodeRabbit ohne offene Review-Threads. GitBook-Vorschau m21D80HLwtyeajGnaah5 enthält exakt diesen Head, GitHub meldet dennoch pending. Merge durch automatische Freigabeprüfung abgelehnt; keine Umgehung oder Live-Codeänderung. Nach dieser Dokumentationsfortschreibung ist der neue Head erneut zu prüfen; Live-Darstellung bleibt unbelegt.
+
+
+### 2026-11-05 — Native WorldStudio transport diagnostics
+Status: PARTIAL
+Task: Preserve actionable native HTTP failures while investigating unresolved authenticated WorldStudio requests.
+Decisions: Include only numeric Godot result and HTTP status; retain uncertainty, session binding, response limits and one-shot apply semantics.
+Touched surfaces: Godot authoring API, existing studio error label, HTTP fixture and scene regressions.
+Evidence: Base `161e5694dc6df37890b62623944762e4348026a9`; native Godot 4.7.2 loopback body-limit test RED before / GREEN after (`RESULT_7_HTTP_200`), two explicitly requested HTTP calls; native authoring-state and imported main-scene tests PASS. Fixtures are not live evidence. Separate anonymous native HTTPS probes reached production health/auth endpoints in 90/110 ms.
+Learned: Generic TRANSPORT_UNCERTAIN hid the native failure; anonymous connectivity does not prove authenticated authoring health.
+Open: Exact failed live request cause, authenticated replay, full CI and owner-confirmed AI authoring remain unverified.
+Next safe step: Complete CI/review, deploy the diagnostic change with revision readback, then diagnose an authenticated studio request before requesting any world mutation.

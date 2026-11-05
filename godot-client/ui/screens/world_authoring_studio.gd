@@ -659,6 +659,7 @@ func _failed(kind: String, _reason: String, connection: String, generation: int)
 		_info.text = "KI-Anfrage nicht bestätigt; bestehender Entwurf bleibt erhalten."
 		return
 	_info.text = _state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden."
+	_info.text += " · " + _reason
 
 func _close_requested() -> void:
 	# A hidden response is deliberately ignored, so do not hide while any

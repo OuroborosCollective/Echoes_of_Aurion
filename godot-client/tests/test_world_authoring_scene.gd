@@ -68,6 +68,10 @@ func verify() -> void:
 	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/WorldStudio").pressed.emit()
 	require(studio.visible and not scene._world_input_permitted() and not scene.mobile_joystick.visible, "open studio allowed movement or joystick")
 	require(fake.sent.size() == 1 and fake.sent[0].kind == "identity", "studio did not request confirmed identity")
+	var transport_reason := "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"
+	studio._failed("identity", transport_reason, SESSION, generation)
+	require(studio._info.text.contains(transport_reason), "identity transport diagnostics were hidden")
+	require(fake.sent.size() == 1, "identity failure automatically retried")
 	# Inspector consumes the existing authenticated zone projection. Export and
 	# filtering must neither send gameplay commands nor invent causal evidence.
 	require(studio.has_method("inspection_export"), "WorldStudio lacks confirmed-state inspector")
