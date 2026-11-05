@@ -47,6 +47,8 @@ export type MerchantStoragePolicy = typeof MERCHANT_STORAGE_POLICY;
 export const MERCHANT_TRAVEL_POLICY = "aurion.merchant-travel.v1" as const;
 export type MerchantTravelPolicy = typeof MERCHANT_TRAVEL_POLICY;
 export type MerchantTravelMarket = Readonly<{ market: MarketState; polityStability: number }>;
+/** The action gateway rejects NPC wealth and market treasuries above this value. */
+export const MERCHANT_COPPER_CEILING = 1_000_000_000;
 
 
 export type LivingWorldResolution = Readonly<{
@@ -322,6 +324,13 @@ export function resolveLivingWorldTick(input: Readonly<{
   let ambushed = false;
   const caravanThreshold = input.preferredGoal === "expand_influence" ? 0.25 : 0.45;
 
+  // Versioned liveness rule: the gateway only admits a consumption the merchant can
+  // pay in full. A hungry merchant who cannot afford it earns instead (sells stock,
+  // or produces when the shelf is empty), so the fixed-seed live loop never re-plans
+  // the same unaffordable consumption into the same block.
+  if (input.travelPolicyVersion === MERCHANT_TRAVEL_POLICY && action === "consume" && input.npc.wealthCopper < unitPriceCopper) {
+    action = input.market.stock[commodity] > 0 ? "trade" : "produce";
+  }
   let travelPlan: ReturnType<typeof planMerchantJourney> | undefined;
   if ((action === "trade" || (action === "consume" && input.market.stock[commodity] === 0)) && input.travelPolicyVersion === MERCHANT_TRAVEL_POLICY) {
     if(!input.travelMarkets) throw new Error("NPC_TRAVEL_OBSERVATION_REQUIRED");
@@ -374,9 +383,12 @@ export function resolveLivingWorldTick(input: Readonly<{
 
   const nextStock = input.market.stock[commodity] + stockDelta;
   if (unboundedStorage && (!Number.isSafeInteger(nextStock) || nextStock < 0)) throw new Error("NPC_MERCHANT_STOCK_NUMERIC_RANGE");
+  // Versioned: copper balances saturate at the gateway's validated ceiling instead of
+  // growing past it, which would make every later action context invalid.
+  const copperCeiling = input.travelPolicyVersion === MERCHANT_TRAVEL_POLICY ? MERCHANT_COPPER_CEILING : Number.POSITIVE_INFINITY;
   const market = Object.freeze({
     ...input.market,
-    treasuryCopper: input.market.treasuryCopper + taxCopper,
+    treasuryCopper: Math.min(copperCeiling, input.market.treasuryCopper + taxCopper),
     stock: Object.freeze({ ...input.market.stock, [commodity]: Math.max(0, nextStock) }),
   });
 
@@ -396,7 +408,7 @@ export function resolveLivingWorldTick(input: Readonly<{
   const npc = Object.freeze({
     ...input.npc,
     currentHubId,
-    wealthCopper: Math.max(0, input.npc.wealthCopper + wealthDelta),
+    wealthCopper: Math.min(copperCeiling, Math.max(0, input.npc.wealthCopper + wealthDelta)),
     hungerBps: Math.round(clamp(hunger + hungerDelta, 0, 1e4)),
     fatigueBps: Math.round(clamp(fatigue + fatigueDelta, 0, 1e4)),
     memory: nextMemory,

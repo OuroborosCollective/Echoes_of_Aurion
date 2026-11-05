@@ -109,6 +109,25 @@ function parsed<T>(raw: string, code: string): T {
 function worldRowId(regionId: string, resolutionIndex: number): string {
   return `world_${createHash("sha256").update(`${regionId}\u001f${resolutionIndex}`).digest("hex").slice(0,58)}`;
 }
+/**
+ * aurionWorldResolutions holds one resolution per region and index (the region's
+ * world timeline). A merchant's resolution index counts per NPC, so reusing it as the
+ * world index collided with another actor's earlier row in that region (production:
+ * ~23k main-merchant rows spread over all four regions) and re-failed
+ * NPC_ACTION_WORLD_READBACK_MISMATCH on every retry. New actions take the next free
+ * index on the region timeline. Callers hold the epoch row locks, which serialize all
+ * merchant action transactions.
+ */
+async function nextRegionWorldIndex(tx: NpcTransaction, regionId: string): Promise<number> {
+  // Locking read: lifecycles run concurrently and wait on the epoch locks; a plain read
+  // would return the REPEATABLE READ snapshot taken before the previous action
+  // committed its world row, and the insert would then collide with it.
+  const head = (await tx.select({ value: aurionWorldResolutions.resolutionIndex }).from(aurionWorldResolutions)
+    .where(eq(aurionWorldResolutions.regionId, regionId)).orderBy(desc(aurionWorldResolutions.resolutionIndex)).limit(1).for("update"))[0];
+  const next = head === undefined ? 0 : Number(head.value) + 1;
+  if (!Number.isSafeInteger(next) || next > 2147483647) throw new Error("NPC_ACTION_WORLD_INDEX_EXHAUSTED");
+  return next;
+}
 
 function canonicalSignals(signals: readonly WorldSignal[]): string {
   const values = signals.map(signal => ({
@@ -427,7 +446,8 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     const locked = await lockedContext(tx,input.homeHubId,confirmed);
     // New actions use the owner-defined storage rule. Existing receipts return
     // above before this selection, preserving their exact historical identity.
-    const context = { ...withWorldSeed(locked.context,input.worldSeed), storagePolicyVersion: MERCHANT_STORAGE_POLICY, travelPolicyVersion: MERCHANT_TRAVEL_POLICY };
+    const context = { ...withWorldSeed(locked.context,input.worldSeed), storagePolicyVersion: MERCHANT_STORAGE_POLICY, travelPolicyVersion: MERCHANT_TRAVEL_POLICY,
+      worldResolutionIndex: await nextRegionWorldIndex(tx, locked.context.market.hubId) };
     const planned = planMerchantAction(context);
     if (planned.status === "blocked") return Object.freeze({status:"blocked" as const,code:planned.code,replanHash:planned.replanHash});
 

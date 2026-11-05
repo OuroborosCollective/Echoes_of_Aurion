@@ -73,6 +73,11 @@ export type MerchantPolityEvidence = Readonly<{
   stateHash: string;
 }>;
 export type MerchantGatewayContext = Readonly<{
+  /**
+   * Next free index on the region's world timeline (one world resolution per region
+   * and index). Absent: the historical behavior reuses the NPC's own resolution index.
+   */
+  worldResolutionIndex?: number;
   storagePolicyVersion?: MerchantStoragePolicy;
   travelPolicyVersion?: MerchantTravelPolicy;
   worldSeed: string;
@@ -297,6 +302,7 @@ function sourceDecisionFrom(confirmed: ConfirmedNpcDecision): { sourceDecision: 
 }
 
 interface NormalizedContext {
+  worldResolutionIndex?: number;
   travelMarkets: readonly MerchantTravelMarket[];
   storagePolicyVersion?: MerchantStoragePolicy;
   travelPolicyVersion?: MerchantTravelPolicy;
@@ -324,6 +330,7 @@ function normalizeContext(input: MerchantGatewayContext): NormalizedContext {
   if (input.storagePolicyVersion !== undefined && input.storagePolicyVersion !== MERCHANT_STORAGE_POLICY) throw new Error("NPC_MERCHANT_STORAGE_POLICY_INVALID");
   const unboundedStorage = input.storagePolicyVersion === MERCHANT_STORAGE_POLICY;
   if(input.travelPolicyVersion!==undefined&&input.travelPolicyVersion!==MERCHANT_TRAVEL_POLICY) throw new Error("NPC_MERCHANT_TRAVEL_POLICY_INVALID");
+  if (input.worldResolutionIndex !== undefined && (!Number.isSafeInteger(input.worldResolutionIndex) || input.worldResolutionIndex < 0 || input.worldResolutionIndex > 2147483647)) throw new Error("NPC_ACTION_WORLD_INDEX_INVALID");
   const epoch = freezeEpoch(input.epoch);
   const source = sourceDecisionFrom(input.confirmedDecision);
   const npc = freezeNpc(input.npc), market = freezeMarket(input.market, unboundedStorage), marketEvidence = freezeMarketEvidence(input.marketEvidence), polity = freezePolity(input.polity), inventory = freezeInventory(input.inventory, unboundedStorage);
@@ -339,7 +346,7 @@ function normalizeContext(input: MerchantGatewayContext): NormalizedContext {
     if(t.polityStability===undefined) throw new Error("NPC_TRAVEL_OBSERVATION_REQUIRED");
     return Object.freeze({market:freezeMarket(t.market,unboundedStorage),polityStability:t.polityStability});
   }) : [];
-  return Object.freeze({ travelMarkets, ...storagePolicyFields(input), worldSeed: input.worldSeed, homeHubId: input.homeHubId, logicalIndex: input.logicalIndex, confirmedDecision: input.confirmedDecision, sourceDecision: source.sourceDecision, sourcePlanIsPlanned: source.planIsPlanned, epoch, npc, market, marketEvidence, marketValid, polity, polityValid, inventory, inventoryStateValid, targets: Object.freeze(targets), targetsValid }) as NormalizedContext;
+  return Object.freeze({ ...(input.worldResolutionIndex !== undefined ? { worldResolutionIndex: input.worldResolutionIndex } : {}), travelMarkets, ...storagePolicyFields(input), worldSeed: input.worldSeed, homeHubId: input.homeHubId, logicalIndex: input.logicalIndex, confirmedDecision: input.confirmedDecision, sourceDecision: source.sourceDecision, sourcePlanIsPlanned: source.planIsPlanned, epoch, npc, market, marketEvidence, marketValid, polity, polityValid, inventory, inventoryStateValid, targets: Object.freeze(targets), targetsValid }) as NormalizedContext;
 }
 function resolutionFor(context: NormalizedContext): LivingWorldResolution {
   return resolveLivingWorldTick({ worldSeed: context.worldSeed, resolutionIndex: context.logicalIndex, market: context.market, npc: context.npc, polityStability: context.polity.stability, preferredGoal: context.sourceDecision.goal, ...storagePolicyFields(context), travelMarkets:context.travelMarkets });
@@ -417,7 +424,10 @@ function requestsFromValidatedAction(context: NormalizedContext, resolution: Liv
   ];
   const governmentType = resolution.market.hubId === "emberfall" ? "trade_republic" : resolution.market.hubId === "cinder_vault" ? "warband" : "council";
   const npcRequest = { npcId: resolution.npc.npcId, regionId: resolution.npc.currentHubId, resolutionIndex: resolution.resolutionIndex, roleId: "merchant", needEvents, observationIds: [receiptId, `market:${resolution.market.hubId}:${resolution.commodity}:${resolution.unitPriceCopper}`], memory: context.travelPolicyVersion && resolution.action === "caravan" ? resolution.nextMemory.slice(-2) : resolution.nextMemory.length ? [resolution.nextMemory[resolution.nextMemory.length - 1]] : [], opportunities: lifeOpportunities(resolution, receiptId), economy: { currentHubId: resolution.npc.currentHubId, wealthCopper: resolution.npc.wealthCopper, hungerBps: resolution.npc.hungerBps, fatigueBps: resolution.npc.fatigueBps, tradeProwessBps: resolution.npc.tradeProwessBps, harvestYieldBps: resolution.npc.harvestYieldBps } };
-  return deepFreeze({ resolution, npcRequest, worldRequest: { worldSeed: context.worldSeed, regionId: resolution.market.hubId, resolutionIndex: resolution.resolutionIndex, signals: [economySignal, politicsSignal] }, polityRequest: { polityId: `polity:${resolution.market.hubId}`, governmentType, territoryIds: [resolution.market.hubId], stability: Math.max(0, Math.min(100, context.polity.stability + resolution.stabilityDelta)), activeDiplomacy: resolution.action === "caravan" ? ["trade"] : ["non_aggression"], warSignals: resolution.caravan.ambushed ? [politicsSignal] : [] }, receiptId }) as MerchantDecisionRequests;
+  // The world resolution lives on the region's timeline; signals must carry its index.
+  const worldIndex = context.worldResolutionIndex;
+  const worldSignals = worldIndex === undefined ? [economySignal, politicsSignal] : [{ ...economySignal, resolutionIndex: worldIndex }, { ...politicsSignal, resolutionIndex: worldIndex }];
+  return deepFreeze({ resolution, npcRequest, worldRequest: { worldSeed: context.worldSeed, regionId: resolution.market.hubId, resolutionIndex: worldIndex ?? resolution.resolutionIndex, signals: worldSignals }, polityRequest: { polityId: `polity:${resolution.market.hubId}`, governmentType, territoryIds: [resolution.market.hubId], stability: Math.max(0, Math.min(100, context.polity.stability + resolution.stabilityDelta)), activeDiplomacy: resolution.action === "caravan" ? ["trade"] : ["non_aggression"], warSignals: resolution.caravan.ambushed ? [politicsSignal] : [] }, receiptId }) as MerchantDecisionRequests;
 }
 
 export function planMerchantAction(input: MerchantGatewayContext): MerchantActionReady | MerchantActionBlocked {
