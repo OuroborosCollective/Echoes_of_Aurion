@@ -155,7 +155,10 @@ async function realNovncAndBasic(browser, render, guard) {
   });
   const wss=new WebSocketServer({noServer:true});
   server.on('upgrade',(req,socket,head)=>{
-    if(req.url!=='/godot-live/websockify'||req.headers.authorization!==basic) {socket.destroy();return;}
+    if(req.url!=='/godot-live/websockify') {socket.destroy();return;}
+    if(req.headers.authorization!==basic) {
+      socket.end('HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="aurion-fixture"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');return;
+    }
     wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws));
   });
   function serverCut(text) { const b=Buffer.from(text), h=Buffer.alloc(8);h[0]=3;h.writeUInt32BE(b.length,4);return Buffer.concat([h,b]); }
@@ -215,6 +218,7 @@ async function realNovncAndBasic(browser, render, guard) {
       });
       const p=await c.newPage(), cdp=await c.newCDPSession(p);
       let leaks=false, callbacks=0, error=null;
+      const failedRequests=[];p.on('requestfailed',r=>failedRequests.push({path:new URL(r.url()).pathname,reason:r.failure()?.errorText}));
       p.on('console',m=>{if(m.text().includes('code=')||m.text().includes('T'.repeat(43)))leaks=true;});
       p.on('pageerror',e=>{error=e.message;});
       await cdp.send('Fetch.enable',{patterns:[{urlPattern:'https://*',requestStage:'Request'}]});
@@ -239,7 +243,16 @@ async function realNovncAndBasic(browser, render, guard) {
       });
       await p.goto(origin+'/godot-live/auth.html');
       await p.goto(origin+'/godot-live/aurion.html?autoconnect=1&encrypt=0&host=127.0.0.1&port='+server.address().port+'&path=godot-live%2Fwebsockify');
-      await p.waitForFunction(()=>document.querySelector('#aurion-login button')?.hidden===false);
+      try { await p.waitForFunction(()=>document.querySelector('#aurion-login button')?.hidden===false); }
+      catch(failure) {
+        const state=await p.evaluate(async()=>{
+          let result={phase:document.querySelector('#aurion-login [role=status]')?.textContent??'panel absent'};
+          try {const {default:UI}=await import('./app/aurion-novnc-ui.js');Object.assign(result,{connected:UI.connected,rfbState:UI.rfb?._rfb_connection_state,viewOnly:UI.rfb?.viewOnly,socket:UI.rfb?._sock?._websocket?.readyState});}catch(_){result.uiImportFailed=true;}
+          return result;
+        });
+        console.log(JSON.stringify({fixtureOnly:true,mode,state,error,failedRequests,socketCount:sockets.length}));
+        throw failure;
+      }
       assert.equal(await p.evaluate(()=>window.clipboardRendered),false,'clipboard must never render even at initial handshake');
       await p.evaluate(async mode=>{
         const {default:UI}=await import('./app/aurion-novnc-ui.js');
