@@ -27,6 +27,7 @@ export function fadenwerkDraft(sourceJson: string, questlineIndex: number, versi
   const line = checked.questlines[questlineIndex];
   if (!line || line.issues.some(issue => issue.severity === "blocker")) throw new TRPCError({ code: "BAD_REQUEST", message: "FADENWERK_UNMAPPED" });
   const template = QuestTemplateVersionSchema.parse(toQuarantinedQuestTemplate(line, version));
-  if (Buffer.byteLength(JSON.stringify(template), "utf8") > 120_000) throw new TRPCError({ code: "BAD_REQUEST", message: "FADENWERK_DRAFT_TOO_LARGE" });
+  // Leave room for the canonical plan envelope in the existing 65,535-byte TEXT contract.
+  if (Buffer.byteLength(JSON.stringify(template), "utf8") > 64_000) throw new TRPCError({ code: "BAD_REQUEST", message: "FADENWERK_DRAFT_TOO_LARGE" });
   return { previewOnly: true as const, sourceHash: checked.sourceHash, questlineId: line.id, template };
 }

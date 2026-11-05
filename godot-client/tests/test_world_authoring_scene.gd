@@ -360,6 +360,20 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	studio._completed("questPlan", plan_value, SESSION, generation + 1)
 	require(editor._state.phase == "planning", "another auth generation supplied a quest plan")
 	studio._completed("questPlan", plan_value, SESSION, generation)
+	# Read-only Fadenwerk failures must preserve an unrelated validated quest plan.
+	editor._faden_source.text = "{}"
+	for faden_kind in ["questFadenInspect", "questFadenDraft"]:
+		for failure_mode in ["async", "sync", "refused"]:
+			transport.start_ok = failure_mode == "async"
+			transport.on_refuse = func(): signal_api.failed.emit(faden_kind, "REQUEST_NOT_STARTED", SESSION, generation)
+			if failure_mode == "refused": transport.on_refuse = Callable()
+			var started: bool = editor._request_fadenwerk(faden_kind, {"sourceJson":"{}"})
+			require(started == (failure_mode == "async"), "Fadenwerk failure fixture did not reach expected boundary")
+			if started: signal_api.failed.emit(faden_kind, "HTTP_400", SESSION, generation)
+			require(editor._state.phase == "planned" and editor.State.same_json(editor._state.planned_summary(), plan_value), "read-only Fadenwerk failure discarded existing quest plan")
+			require(editor.State.same_json(editor.current_draft(), draft_value) and editor._faden_pending.is_empty() and editor._json.editable, "read-only Fadenwerk failure altered draft or stranded edit lock")
+	transport.start_ok = true
+	transport.on_refuse = Callable()
 	# Synthetic synchronous refusal through the real configure() signal connection.
 	var before_refused_publish := transport.attempts
 	transport.start_ok = false
@@ -509,6 +523,22 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	transport.on_refuse = func(): signal_api.failed.emit("questFadenInspect", "REQUEST_NOT_STARTED", SESSION, generation)
 	require(not editor.inspect_fadenwerk() and editor._faden_pending.is_empty() and editor._json.editable, "Fadenwerk start refusal stranded edit lock")
 	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "Fadenwerk refusal lost diagnostics")
+	# Canonical persistence bytes are independent from whitespace in the editor.
+	var dense := converted.duplicate(true)
+	dense.nodes = []
+	dense.edges = []
+	for index in range(50):
+		dense.nodes.append({"id":"n%d" % index,"title":"Node %d" % index,"type":"start" if index == 0 else ("end" if index == 49 else "branch")})
+		if index < 49:
+			for choice in range(8):
+				dense.edges.append({"id":"edge_%d_%d" % [index,choice],"fromNodeId":"n%d" % index,"toNodeId":"n%d" % (index+1),"choiceLabel":"Weiter","priority":0})
+	require(JSON.stringify(dense).to_utf8_buffer().size() < 64000, "dense fixture exceeds canonical import budget")
+	editor._json.text = JSON.stringify(dense, " ".repeat(20))
+	require(editor._json.text.to_utf8_buffer().size() > 120000, "dense fixture did not exercise presentation overhead")
+	require(editor.State.same_json(editor.current_draft(),dense), "presentation whitespace invalidated a persistable draft")
+	dense.description = "x".repeat(65536)
+	editor._json.text = JSON.stringify(dense)
+	require(editor.current_draft().is_empty(), "oversized canonical draft bypassed persistence budget")
 	transport.start_ok = true
 	transport.on_refuse = Callable()
 	studio._close_requested()

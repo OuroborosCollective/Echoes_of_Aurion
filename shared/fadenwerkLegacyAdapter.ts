@@ -113,6 +113,7 @@ export function inspectFadenwerk(input: unknown): { questlines: LegacyQuestline[
     walk(entryNode);
     if (visited.size !== nodes.length) fail("UNREACHABLE_NODE", base);
     if (!nodes.some(n => n.choices.length === 0)) fail("MISSING_TERMINAL_NODE", base);
+    if (nodes.length === 1) issue(lineIssues, "DISTINCT_END_NODE_REQUIRED", base + ".graph", "Aurion benötigt einen separaten Endknoten; ein einzelner Startknoten wird nicht umgedeutet.");
     questlines.push({ id: lineId, title: label(raw.title, base + ".title"), entryNode, nodes, issues: lineIssues });
   }
   return { questlines, issues: questlines.flatMap(q => q.issues) };

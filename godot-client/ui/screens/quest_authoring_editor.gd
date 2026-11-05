@@ -159,7 +159,7 @@ func _request(kind: String, payload: Dictionary = {}) -> bool:
 	_request_in_progress = false
 	# Native request-start errors emit failed before returning false. Wait for
 	# that return before deciding whether publication could have been sent.
-	if _request_failure_notified and (started or kind != "questPublish"):
+	if _request_failure_notified and kind not in ["questFadenInspect", "questFadenDraft"] and (started or kind != "questPublish"):
 		_state.failed(kind)
 	_show_status()
 	if started and not _request_failure_notified:
@@ -170,9 +170,11 @@ func _can_edit() -> bool:
 	return _state.phase in ["ready", "planned", "confirmed"] and _journal.read().is_empty() and _copying.is_empty() and _faden_pending.is_empty()
 
 func current_draft() -> Dictionary:
-	if not is_instance_valid(_json) or _json.text.to_utf8_buffer().size() > 120000: return {}
+	## Bound presentation parsing separately; whitespace is not persisted.
+	if not is_instance_valid(_json) or _json.text.to_utf8_buffer().size() > 1048576: return {}
 	var parser := JSON.new()
 	if parser.parse(_json.text) != OK or not State.draft_valid(parser.data): return {}
+	if JSON.stringify(parser.data).to_utf8_buffer().size() > 65535: return {}
 	return parser.data.duplicate(true)
 
 func load_templates() -> void:
@@ -398,7 +400,12 @@ func failed(kind: String, reason: String = "") -> void:
 	_request_failure_notified = true
 	_failure_reason = reason
 	if kind == "questTemplate": _copying.clear()
-	if kind in ["questFadenInspect", "questFadenDraft"]: _faden_pending.clear()
+	if kind in ["questFadenInspect", "questFadenDraft"]:
+		_faden_pending.clear()
+		if not _request_in_progress:
+			_show_status()
+			_set_message("Fadenwerk-Anfrage fehlgeschlagen; bestehender Questplan bleibt unverändert.")
+		return
 	if _request_in_progress: return
 	_state.failed(kind)
 	_show_status()
@@ -514,7 +521,7 @@ func _accept_fadenwerk(kind: String, data: Dictionary) -> void:
 	else:
 		var index: int = pending.index
 		var value: Variant = data.get("template")
-		if index < 0 or index >= _faden_lines.size() or index != _faden_choice.selected or pending.version != int(_faden_version.value) or data.get("questlineId") != _faden_lines[index].id or not State.draft_valid(value) or value.templateId != "fadenwerk_" + str(_faden_lines[index].id) or value.version != pending.version or value.active or not value.quarantined:
+		if index < 0 or index >= _faden_lines.size() or index != _faden_choice.selected or pending.version != int(_faden_version.value) or data.get("questlineId") != _faden_lines[index].id or not State.draft_valid(value) or value.templateId != "fadenwerk_" + str(_faden_lines[index].id) or value.version != pending.version or value.active or not value.quarantined or JSON.stringify(value).to_utf8_buffer().size() > 64000:
 			_set_message("Fadenwerk-Entwurf ungültig oder Auswahl geändert; keine Übernahme.")
 			return
 		_json.text = JSON.stringify(value, "\t")

@@ -173,9 +173,11 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     expect(typeof recovery).toBe("function");
     const service = new AdminQuestStudioService();
     const template = { ...(await service.getTemplates())[0]!, templateId: "inspector-native-quest", version: 1, active: true, quarantined: false };
-    const proposal = await service.createDraftProposal({ authorUserId: admin, templateId: template.templateId, templateVersion: template.version, proposedDataJson: JSON.stringify(template) });
-    const plan = await service.planPublishProposal(proposal.id);
+    // Use the same canonical router registry for proposal, plan and publish.
+    // A fresh service has a different template set after earlier publications.
     const caller = aurionQuestRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    const proposal = await caller.proposeDraft({ templateId: template.templateId, templateVersion: template.version, proposedDataJson: JSON.stringify(template) });
+    const plan = await caller.publishPlan({ proposalId: proposal.id });
     expect(await caller.publishPlan({ proposalId: proposal.id })).toEqual(plan);
     const lookup = { proposalId: proposal.id, planHash: plan.planHash };
     expect(await recovery(admin, lookup)).toEqual({ status: "unresolved" });

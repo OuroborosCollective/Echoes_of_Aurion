@@ -3,6 +3,7 @@ import { aurionQuestRouter } from "../routes/aurionQuestRouter";
 import type { TrpcContext } from "../_core/context";
 import { inspectFadenwerk, toQuarantinedQuestTemplate } from "../../shared/fadenwerkLegacyAdapter";
 import { QuestTemplateVersionSchema } from "../../shared/aurionQuestContract";
+import { QuestValidator } from "./validator";
 
 const source = () => ({version:1,questlines:[{id:"native",title:"Native Faden",entryNode:"start",
   graph:{start:{id:"start",title:"Start",choices:[{id:"go",label:"Weiter",nextNode:"end"}]},
@@ -47,4 +48,25 @@ describe("shared Fadenwerk native authoring boundary", () => {
     expect((await caller().fadenwerkInspect({sourceJson})).questlines[0]!.issues.some(i=>i.code==="UNMAPPED_REWARD")).toBe(true);
     await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toThrow("FADENWERK_UNMAPPED");
   });
+  it("blocks a lone start node before conversion instead of inventing an end", async () => {
+    const sourceJson = JSON.stringify({version:1,questlines:[{id:"one",title:"One",entryNode:"entry",graph:{entry:{id:"entry",title:"Entry",choices:[]}}}]});
+    const inspected = await caller().fadenwerkInspect({sourceJson});
+    expect(inspected.questlines[0]!.issues).toContainEqual(expect.objectContaining({code:"DISTINCT_END_NODE_REQUIRED",severity:"blocker"}));
+    await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toThrow("FADENWERK_UNMAPPED");
+    const valid = await caller().fadenwerkDraft({sourceJson:JSON.stringify(source()),questlineIndex:0,version:1});
+    expect(QuestValidator.validateTemplate(valid.template).valid).toBe(true);
+  });
+  it("rejects dense drafts beyond persistence capacity before presenting an import", async () => {
+    const graph = Object.fromEntries(Array.from({length:50}, (_, i) => ["n"+i, {
+      id:"n"+i,title:"Node "+i,choices:i===49?[]:Array.from({length:16},(_,j)=>({id:"c"+j,label:"Weiter",nextNode:"n"+(i+1)})),
+    }]));
+    const document = {version:1,questlines:[{id:"dense",title:"Dense",entryNode:"n0",graph}]};
+    const sourceJson = JSON.stringify(document);
+    expect(Buffer.byteLength(sourceJson,"utf8")).toBeLessThan(120000);
+    const template = toQuarantinedQuestTemplate(inspectFadenwerk(document).questlines[0]!,1);
+    expect(QuestValidator.validateTemplate(template).valid).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(template),"utf8")).toBeGreaterThan(65535);
+    await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toThrow("FADENWERK_DRAFT_TOO_LARGE");
+  });
+
 });
