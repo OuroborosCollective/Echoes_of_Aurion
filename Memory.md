@@ -5703,12 +5703,44 @@ Next safe step: Review and integrate the tested fix, then independently confirm 
 CI-Nachtrag zum selben Integrationsblock: Head cee17220c1c275171bafb3adac26529eaff3729d hat alle ausgeführten Code-Checks bestanden, darunter echter Godot-Import/Render (126958850453), native Viewport-Projektion (126958849687), Repository-Regression (126958849609), Android/JNI (126958849568) und Browser-E2E (126958850048). Vier bedingte Jobs skipped, nicht als bestanden gezählt; Devin/CodeRabbit ohne offene Review-Threads. GitBook-Vorschau m21D80HLwtyeajGnaah5 enthält exakt diesen Head, GitHub meldet dennoch pending. Merge durch automatische Freigabeprüfung abgelehnt; keine Umgehung oder Live-Codeänderung. Nach dieser Dokumentationsfortschreibung ist der neue Head erneut zu prüfen; Live-Darstellung bleibt unbelegt.
 
 
-### 2026-11-05 — Recovery schema fingerprint under live row inserts
+### 2026-11-05 — Native WorldStudio transport diagnostics
 Status: PARTIAL
-Task: Diagnose AI Designer release 41926028646 blocked by RECOVERY_PROOF_MISMATCH after successful isolated restore.
-Decisions: Exclude only MariaDB dump table-level next-ID counters from schema identity; keep column AUTO_INCREMENT, quoted text, routines/triggers, engine, collation and constraints; all four source/recovery paths use the same manifest-bound helper and versioned fingerprint receipt. No production runner patched.
-Touched surfaces: Existing schema-apply core/artifact and isolated CI; SQL-aware fingerprint helper and regressions.
-Evidence: Source a7a765fea3e19a2e68575d62bc4a4f1f3d5af2dd; child 41935851491/126944400080 restore exit 0, apply not reached. Backup SHA256 540b15fa9f4d37456219b38df10155fb5d1f375b870f4abed588aa3fda7dc4f6. Readback 446c72457adf4abc9bb8d489c88c9c3d: 185 backup/current table definitions, one counter-only difference, no other table-definition change. PR #1319 initial head cf3d4fca984500550af76a7ec58959ebcb2ca118 job 126981064442 passes source contracts and real isolated MariaDB dump/insert/restore/ALTER test; original raw dump comparison differs under DML. Final-head full CI/review still pending.
-Learned: A byte hash of a no-data dump includes mutable row-counter state; this does not establish a structural schema change. The removed recovery container prevents a retrospective full comparison with its dump.
-Open: Final CI/review, merge and authorized release with independent runtime readback; current production remains f0c6b369e08294028180ce58b47c0394b349fb64 at 10 Hz. Godot model fix #1318 separately pending; world rendering and AI market acceptance remain unverified.
-Next safe step: Finish exact-head isolated recovery and artifact checks before canonical delivery; never bypass the production gate.
+Task: Preserve actionable native HTTP failures while investigating unresolved authenticated WorldStudio requests.
+Decisions: Include only numeric Godot result and HTTP status; retain uncertainty, session binding, response limits and one-shot apply semantics.
+Touched surfaces: Godot authoring API, existing studio error label, HTTP fixture and scene regressions.
+Evidence: Base `161e5694dc6df37890b62623944762e4348026a9`; native Godot 4.7.2 loopback body-limit test RED before / GREEN after (`RESULT_7_HTTP_200`), two explicitly requested HTTP calls; native authoring-state and imported main-scene tests PASS. Fixtures are not live evidence. Separate anonymous native HTTPS probes reached production health/auth endpoints in 90/110 ms.
+Learned: Generic TRANSPORT_UNCERTAIN hid the native failure; anonymous connectivity does not prove authenticated authoring health.
+Open: Exact failed live request cause, authenticated replay, full CI and owner-confirmed AI authoring remain unverified.
+Next safe step: Complete CI/review, deploy the diagnostic change with revision readback, then diagnose an authenticated studio request before requesting any world mutation.
+
+Review follow-up (same integration block): identity/catalog failures now appear in the top access label; pending, rejected and cleared sessions reset that label. Native main-scene regression passes with the entire identity error label inside the initial 360×640 viewport and a subsequent catalog failure visible there. This is headless layout evidence, not a physical tablet or authenticated live proof.
+
+Additional review follow-up (same block): the shared WorldStudio transport also forwards its safe diagnostic to the quest editor. Native scene regression passes for a failed quest readback while preserving its receipt-awaiting state and durable pending journal, with no automatic retry.
+
+Synchronous-failure review follow-up (same block): defer quest failure state transitions until the transport start result is known; preserve diagnostics through caller status updates. Real Godot scene regression is RED on the prior editor / GREEN with the correction; callback-free refusal, readback journal retention and configure()-connected production failure signals are covered. Wolfram enumerated eight abstract publish cases and reproduced the old false-unknown counterexample with no violation in the revised model; this is analysis, not runtime evidence. CI/review and live delivery remain pending.
+
+Codejaeger adjacent rerun (same block): isolated original-code quest-readback reproduction also fails solely on the overwritten diagnostic. Expanded native scene regression passes for synchronous World Apply refusal with its actionable not-started message, plus asynchronous Quest Publish uncertainty, retained journal, no duplicate publish and receipt recovery followed by independent readback. No additional state/persistence defect verified on the four inspected neighbor directions.
+
+Final review follow-up (same block): successful quest request starts now refresh the visible label immediately; native stale-readback-label regression RED before / GREEN after. Synthetic transport counts every request attempt, including refused starts, with exact one-attempt assertions. No gameplay or receipt contract changes.
+
+Review identity/status correction (same block): a distinct second quest publication reproduced a stale pending identity at head 7a7ea2974d5edf4dffbc470482034cc1d630e331. Beginning a new editable proposal now discards only the completed publication identity; unknown/readback-pending phases remain locked. Native RED/GREEN tests reject the previous receipt/template for the second operation and confirm only its matching independent readback. World request-start diagnostics and template-copy running status are also retained; all four world actions and quest copy are covered. Native synthetic scene GREEN; production delivery and final CI remain pending.
+
+Cross-editor follow-up (same block): starting a quest read no longer clears an unresolved world transport reason. Native scene RED on 54c3567b6a84d96cfa99bc28d4bdec8a707d1a5c / GREEN after request-family isolation; no state or receipt change.
+
+### 2026-11-05 — Fadenwerk inside the native quest editor
+Status: PARTIAL
+Task: Connect the existing Fadenwerk capabilities directly to Godot's canonical quest editor.
+Decisions: Browser and server reuse one shared structure adapter; authenticated read-only inspection/conversion returns inactive quarantined QuestTemplateVersion previews. Existing proposal/plan/owner-confirmation/publish/receipt/readback remains authoritative.
+Touched surfaces: Shared Fadenwerk adapter, Aurion quest authoring routes, native WorldStudio quest controls, HTTP/scene and isolated MariaDB regressions.
+Evidence: Native Godot 4.7.2 scene passes with synthetic Fadenwerk responses, actual scene loading and 360×640 layout; source-change rejection, blocked semantics, inactive staging, title editing, uncertainty locks and synchronous failures checked. TypeScript, real HTTP routing and MariaDB integration run in CI; not yet claimed passed.
+Learned: Fadenwerk already contains usable graph authoring; a shared adapter avoids a second importer or quest runtime.
+Open: Exact-head CI/review, server/client deployment and authenticated live use.
+Next safe step: Verify CI, merge only with no open review findings, deploy exact revisions and independently read back the authenticated native workflow.
+
+Review follow-up (same Fadenwerk block): single-node strands now report a distinct-end blocker; converted templates reserve plan-envelope capacity and native draft validation measures compact canonical bytes separately from bounded presentation text. Read-only failures preserve an existing validated plan for asynchronous, synchronous and callback-free refusals. Native Godot RED `2c4d9cd6c2363a7797ed606ef5e5f818838bee97f91211b2688810aeb830a604` / GREEN `6c56378c91c06be058380aba98b668070ca04b960ae5d5ba1491a3eb2ef8f3f2`. The MariaDB recovery test now creates its proposal through the same canonical route registry as plan/publish; template-set guards and all assertions remain intact. Server/dense-graph regression results await exact-head CI.
+
+Adjacent import review (same block): inspection now blocks non-empty itemsSource catalogs, generated edge-ID collisions and entry nodes without exactly one transition, matching QuestRuntime.acceptQuest. No source choices, catalogs or identifiers are silently reinterpreted; canonical runtime remains unchanged. Regression includes all three safe failures and a dense graph with a valid single start transition.
+
+Runtime-bound neighbor check (same block): generated edge IDs also obey the existing 96-character player-choice route. Added actual QuestRuntimeEngine compile/accept/branch regression with fixed operational clock and repeat-equal receipts; no engine behavior changed. Prior head af312a9447460f7512aa90df206cef72b0aca528 passed isolated MariaDB and authenticated browser checks; native source hashes independently matched that head. Wolfram enumerated 64 topologically ordered four-node DAGs: 21 reachable, 18 rejected by the single-start-edge constraint, three accepted with zero constraint violations; identifier concatenation collision independently reproduced. Mathematical/test evidence is not live activation.
+
+Choice-boundary refinement (same block): the 96-character ID bound applies only to branch edges submitted through the player-choice route. Long automatic start transitions remain importable and are exercised through the real engine; the long branch-edge rejection stays covered.

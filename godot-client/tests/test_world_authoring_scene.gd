@@ -5,12 +5,14 @@ const Journal = preload("res://authoring/world_authoring_journal.gd")
 class FakeAuthoringApi:
 	extends Node
 	var sent: Array[Dictionary] = []
+	var attempts := 0
 	var start_ok := true
 	var in_flight := false
 	var on_refuse: Callable
 	func busy() -> bool: return in_flight
 	func cancel() -> void: pass
 	func request(kind: String, _server: String, _connection: String, payload: Dictionary = {}, _allow_local: bool = false) -> bool:
+		attempts += 1
 		if not start_ok:
 			if on_refuse.is_valid(): on_refuse.call()
 			return false
@@ -59,7 +61,7 @@ func verify() -> void:
 	var journal_path := "user://aurion-test-scene-%d.json" % Time.get_ticks_usec()
 	studio._journal = Journal.new(journal_path)
 	studio.configure(scene._auth_start, "http://127.0.0.1:3000", SESSION, true)
-	studio._api.queue_free()
+	var signal_api: Node = studio._api # Keep configure() signal wiring under test.
 	var fake := FakeAuthoringApi.new()
 	studio.add_child(fake)
 	studio._api = fake
@@ -68,6 +70,16 @@ func verify() -> void:
 	scene.mobile_hud.get_node("MenuPanel/Scroll/Content/WorldStudio").pressed.emit()
 	require(studio.visible and not scene._world_input_permitted() and not scene.mobile_joystick.visible, "open studio allowed movement or joystick")
 	require(fake.sent.size() == 1 and fake.sent[0].kind == "identity", "studio did not request confirmed identity")
+	root.size = Vector2i(360, 640)
+	await process_frame
+	var transport_reason := "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"
+	signal_api.failed.emit("identity", transport_reason, SESSION, generation)
+	await process_frame
+	await process_frame
+	require(studio._info.text.contains(transport_reason), "identity transport diagnostics were hidden")
+	require(studio._catalog_info.text.contains(transport_reason) and studio._catalog_info.is_visible_in_tree(), "identity failure missing from access status")
+	require(Rect2(Vector2.ZERO, Vector2(root.size)).encloses(studio._catalog_info.get_global_rect()), "identity failure outside initial 360x640 viewport")
+	require(fake.sent.size() == 1, "identity failure automatically retried")
 	# Inspector consumes the existing authenticated zone projection. Export and
 	# filtering must neither send gameplay commands nor invent causal evidence.
 	require(studio.has_method("inspection_export"), "WorldStudio lacks confirmed-state inspector")
@@ -94,6 +106,9 @@ func verify() -> void:
 		studio._toggle_inspector()
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
 	require(fake.sent.back().kind == "catalog", "admin identity did not request catalog")
+	require(not studio._catalog_info.text.contains(transport_reason), "confirmed identity retained a stale access failure")
+	signal_api.failed.emit("catalog", "HTTP_403", SESSION, generation)
+	require(studio._catalog_info.text.contains("HTTP_403"), "catalog failure missing from access status")
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
 	require(studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"), "WorldStudio lacks catalog-bound draft staging/import")
 	if studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"):
@@ -137,7 +152,14 @@ func verify() -> void:
 		require(fake.sent.size() == before_staging, "local staging/import submitted a world change")
 	var original := draft()
 	studio._draft.text = JSON.stringify(original)
+	fake.start_ok = false
+	fake.on_refuse = func(): signal_api.failed.emit("worldPlan", "REQUEST_NOT_STARTED", SESSION, generation)
 	studio._plan()
+	require(studio._info.text.contains("REQUEST_NOT_STARTED") and studio._state.phase == "ready", "world plan lost synchronous diagnostic")
+	fake.start_ok = true
+	fake.on_refuse = Callable()
+	studio._plan()
+	require(not studio._info.text.contains("REQUEST_NOT_STARTED"), "world plan retry retained stale diagnostic")
 	require(fake.sent.back().kind == "worldPlan", "plan was not sent")
 	fake.in_flight = true
 	studio._close_requested()
@@ -175,6 +197,12 @@ func verify() -> void:
 	require(studio.visible, "studio closed during the receipt readback")
 	fake.in_flight = false
 	studio._failed("readback", "fixture", SESSION, generation)
+	fake.start_ok = false
+	fake.on_refuse = func(): signal_api.failed.emit("readback", "REQUEST_NOT_STARTED", SESSION, generation)
+	studio._readback()
+	require(studio._info.text.contains("REQUEST_NOT_STARTED") and not Journal.new(journal_path).read().is_empty(), "world readback lost synchronous diagnostic or journal")
+	fake.start_ok = true
+	fake.on_refuse = Callable()
 	studio._plan()
 	require(studio._state.phase == "awaiting_readback", "repeated plan tap discarded a received receipt")
 	studio._close_requested()
@@ -217,10 +245,36 @@ func verify() -> void:
 	studio._plan()
 	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	fake.start_ok = false
+	fake.on_refuse = func(): signal_api.failed.emit("worldApply", "REQUEST_NOT_STARTED", SESSION, generation)
 	studio._request_confirmation()
 	studio._confirm.confirmed.emit()
 	require(studio._state.phase == "ready" and Journal.new(journal_path).read().is_empty(), "unstarted request retained an ambiguous apply")
+	require(studio._info.text.contains("nicht gestartet") and studio._info.text.contains("REQUEST_NOT_STARTED"), "world apply lost its native not-started diagnostic")
+	fake.on_refuse = Callable()
 	fake.start_ok = true
+	studio._plan()
+	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
+	studio._apply()
+	signal_api.failed.emit("worldApply", "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0", SESSION, generation)
+	studio._send("questTemplates", {"limit":20})
+	studio.open_studio()
+	require(studio._info.text.contains("TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"), "quest request erased unresolved world diagnostic")
+	fake.start_ok = false
+	fake.on_refuse = func(): signal_api.failed.emit("worldReceipt", "REQUEST_NOT_STARTED", SESSION, generation)
+	studio._recover_receipt()
+	require(studio._info.text.contains("REQUEST_NOT_STARTED") and studio._state.phase == "unknown" and not Journal.new(journal_path).read().is_empty(), "world receipt refusal lost diagnostic or uncertainty")
+	fake.start_ok = true
+	fake.on_refuse = Callable()
+	studio._recover_receipt()
+	require(not studio._info.text.contains("REQUEST_NOT_STARTED"), "world receipt retry retained stale diagnostic")
+	# Synthetic known matching recovery; never a live server claim.
+	var recovery_plan: Dictionary = studio._state._applying.plan
+	var recovery_response := receipt_response()
+	recovery_response.status = "found"
+	recovery_response.plan = recovery_plan
+	studio._completed("worldReceipt", recovery_response, SESSION, generation)
+	studio._completed("readback", design(), SESSION, generation)
+	require(Journal.new(journal_path).read().is_empty(), "synthetic world recovery did not clear matching journal")
 	studio._plan()
 	studio._completed("worldPlan", verified_plan(original, fake.sent.back().payload.operationId), SESSION, generation)
 	fake.start_ok = false
@@ -259,7 +313,7 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(studio.has_method("quest_editor"), "existing WorldStudio lacks the native canonical quest editor")
 	if not studio.has_method("quest_editor"): return
 	studio.configure(scene._auth_start, "http://127.0.0.1:3000", SESSION, true)
-	studio._api.queue_free()
+	var signal_api: Node = studio._api # Production API signals, synthetic responses.
 	var transport := FakeAuthoringApi.new()
 	studio.add_child(transport)
 	studio._api = transport
@@ -288,6 +342,7 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
 	require(editor.copy_template(0), "native quest editor could not copy the confirmed template")
 	require(transport.sent.back().kind == "questTemplate" and transport.sent.back().payload.version == 1, "quest copy did not request the selected canonical version")
+	require(editor._status.text.contains("läuft") and not editor._json.editable, "template copy lost its running status or allowed draft editing")
 	studio._completed("questTemplate", {"templates":[template], "nextVersion":8}, SESSION, generation)
 	var inactive: Dictionary = editor.current_draft()
 	require(inactive.version == 8 and inactive.active == false and inactive.quarantined == true, "quest copy ignored the server version or became active without review")
@@ -305,6 +360,42 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	studio._completed("questPlan", plan_value, SESSION, generation + 1)
 	require(editor._state.phase == "planning", "another auth generation supplied a quest plan")
 	studio._completed("questPlan", plan_value, SESSION, generation)
+	# Read-only Fadenwerk failures must preserve an unrelated validated quest plan.
+	editor._faden_source.text = "{}"
+	for faden_kind in ["questFadenInspect", "questFadenDraft"]:
+		for failure_mode in ["async", "sync", "refused"]:
+			transport.start_ok = failure_mode == "async"
+			transport.on_refuse = func(): signal_api.failed.emit(faden_kind, "REQUEST_NOT_STARTED", SESSION, generation)
+			if failure_mode == "refused": transport.on_refuse = Callable()
+			var started: bool = editor._request_fadenwerk(faden_kind, {"sourceJson":"{}"})
+			require(started == (failure_mode == "async"), "Fadenwerk failure fixture did not reach expected boundary")
+			if started: signal_api.failed.emit(faden_kind, "HTTP_400", SESSION, generation)
+			require(editor._state.phase == "planned" and editor.State.same_json(editor._state.planned_summary(), plan_value), "read-only Fadenwerk failure discarded existing quest plan")
+			require(editor.State.same_json(editor.current_draft(), draft_value) and editor._faden_pending.is_empty() and editor._json.editable, "read-only Fadenwerk failure altered draft or stranded edit lock")
+	transport.start_ok = true
+	transport.on_refuse = Callable()
+	# Synthetic synchronous refusal through the real configure() signal connection.
+	var before_refused_publish := transport.attempts
+	transport.start_ok = false
+	transport.on_refuse = func(): signal_api.failed.emit("questPublish", "REQUEST_NOT_STARTED", SESSION, generation)
+	editor._publish()
+	require(editor._state.phase == "ready" and editor._journal.read().is_empty(), "synchronous unstarted quest publish retained uncertainty or journal")
+	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "synchronous publish failure diagnostic overwritten")
+	require(transport.attempts == before_refused_publish + 1, "refused publication attempted more than once")
+	transport.on_refuse = Callable()
+	transport.start_ok = true
+	editor.request_plan()
+	studio._completed("questPropose", proposal, SESSION, generation)
+	studio._completed("questPlan", plan_value, SESSION, generation)
+	# A refusal without any callback still performs the same safe journal cleanup.
+	transport.start_ok = false
+	editor._publish()
+	require(editor._state.phase == "ready" and editor._journal.read().is_empty(), "callback-free refusal lost not-started cleanup")
+	require(not editor._status.text.contains("REQUEST_NOT_STARTED"), "new request retained stale diagnostic")
+	transport.start_ok = true
+	editor.request_plan()
+	studio._completed("questPropose", proposal, SESSION, generation)
+	studio._completed("questPlan", plan_value, SESSION, generation)
 	require(transport.sent.back().kind == "questPlan" and editor._state.phase == "planned", "receiving a plan auto-published the quest")
 	editor.request_confirmation()
 	require(editor._confirm.visible, "native quest publish lacked the review dialog")
@@ -319,6 +410,29 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 		"previousHash":null, "resultHash":plan_value.templateHash, "receiptHash":"f".repeat(64), "humanConfirmed":true}
 	studio._completed("questPublish", {"receipt":receipt,"template":draft_value,"templateSetHash":"d".repeat(64)}, SESSION, generation)
 	require(transport.sent.back().kind == "questReadback" and transport.sent.back().payload == {"templateId":draft_value.templateId,"version":8} and editor._state.phase == "awaiting_readback", "publish response stood in for exact-version independent readback")
+	var before_failed_readback := transport.sent.size()
+	var quest_failure := "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"
+	signal_api.failed.emit("questReadback", quest_failure, SESSION, generation)
+	require(editor._status.text.contains(quest_failure), "quest editor discarded native transport diagnostics")
+	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "transport diagnostics cleared an unconfirmed quest publication")
+	require(transport.sent.size() == before_failed_readback, "quest transport failure automatically retried")
+	var before_refused_readback := transport.attempts
+	transport.start_ok = false
+	transport.on_refuse = func(): signal_api.failed.emit("questReadback", "REQUEST_NOT_STARTED", SESSION, generation)
+	editor.load_templates()
+	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "synchronous readback failure diagnostic overwritten")
+	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "unstarted readback discarded publication journal")
+	require(transport.sent.size() == before_failed_readback, "synchronous failure retried a request")
+	require(transport.attempts == before_refused_readback + 1, "readback refusal attempted more than once")
+	transport.on_refuse = Callable()
+	editor.load_templates()
+	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "callback-free readback refusal lost pending receipt")
+	require(not editor._status.text.contains("REQUEST_NOT_STARTED"), "callback-free readback retained stale diagnostic")
+	require(transport.attempts == before_refused_readback + 2, "callback-free readback refusal attempted more than once")
+	transport.start_ok = true
+	signal_api.failed.emit("questReadback", quest_failure, SESSION, generation)
+	editor.load_templates()
+	require(not editor._status.text.contains(quest_failure) and editor._status.text.contains("läuft"), "started readback retained a stale failure label")
 	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
 	require(not editor._journal.read().is_empty(), "a catalog page stood in for independent publication readback")
 	studio._completed("questReadback", {"templates":[]}, SESSION, generation)
@@ -329,4 +443,102 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(transport.sent.back().kind == "questReadback", "pending publication fell back to unbounded history readback")
 	studio._completed("questReadback", {"templates":[draft_value], "durable":true}, SESSION, generation)
 	require(editor._state.phase == "confirmed" and editor._journal.read().is_empty(), "matching independent quest readback did not confirm/clear publication")
+	# A different publication must never reserve the previous confirmed identity.
+	var second_draft := draft_value.duplicate(true)
+	second_draft.version = 9
+	second_draft.title = "Second synthetic quest version"
+	editor._json.text = JSON.stringify(second_draft)
+	var second_proposal := proposal.duplicate(true)
+	second_proposal.id = "prop_native_scene_distinct"
+	second_proposal.templateVersion = 9
+	second_proposal.proposedDataJson = JSON.stringify(second_draft)
+	second_proposal.receiptHash = "1".repeat(64)
+	var second_plan := plan_value.duplicate(true)
+	second_plan.proposalId = second_proposal.id
+	second_plan.proposalReceiptHash = second_proposal.receiptHash
+	second_plan.template = second_draft
+	second_plan.templateHash = "2".repeat(64)
+	second_plan.planHash = "3".repeat(64)
+	var second_receipt := receipt.duplicate(true)
+	second_receipt.targetId = second_proposal.id
+	second_receipt.planHash = second_plan.planHash
+	second_receipt.resultHash = second_plan.templateHash
+	second_receipt.receiptHash = "4".repeat(64)
+	second_receipt.receiptId = "authoring:quest:" + "4".repeat(24)
+	editor.request_plan()
+	studio._completed("questPropose", second_proposal, SESSION, generation)
+	studio._completed("questPlan", second_plan, SESSION, generation)
+	editor._publish()
+	var second_pending: Dictionary = editor._journal.read()
+	require(second_pending.get("proposalId") == second_proposal.id and second_pending.get("planHash") == second_plan.planHash and second_pending.get("version") == 9 and second_pending.get("templateHash") == second_plan.templateHash, "second publication reserved the previous confirmed identity")
+	var before_uncertain := transport.sent.size()
+	signal_api.failed.emit("questPublish", quest_failure, SESSION, generation)
+	require(editor._state.phase == "unknown" and not editor._journal.read().is_empty(), "started publication failure discarded uncertainty or journal")
+	require(editor._status.text.contains(quest_failure), "asynchronous publish failure lost its diagnostic")
+	require(not editor.inspect_fadenwerk() and not editor.rename_quest("Forbidden"), "Fadenwerk edits bypassed uncertain publication lock")
+	editor._publish()
+	require(transport.sent.size() == before_uncertain, "uncertain publication automatically retried")
+	editor.recover_receipt()
+	require(transport.sent.back().kind == "questReceipt" and transport.sent.back().payload.proposalId == second_proposal.id, "uncertain publication recovered the wrong receipt identity")
+	studio._completed("questReceipt", {"status":"found", "plan":plan_value, "receipt":receipt}, SESSION, generation)
+	require(editor._state.phase == "unknown" and editor._journal.read() == second_pending, "previous confirmed receipt resolved the second uncertain publication")
+	studio._completed("questReceipt", {"status":"found", "plan":second_plan, "receipt":second_receipt}, SESSION, generation)
+	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "recovered receipt bypassed independent readback")
+	require(transport.sent.back().kind == "questReadback" and transport.sent.back().payload.version == 9, "recovery requested the previous template version")
+	studio._completed("questReadback", {"templates":[draft_value], "durable":true}, SESSION, generation)
+	require(editor._state.phase == "awaiting_readback" and editor._journal.read() == second_pending, "previous template readback cleared the second publication")
+	studio._completed("questReadback", {"templates":[second_draft], "durable":true}, SESSION, generation)
+	require(editor._state.phase == "confirmed" and editor._journal.read().is_empty(), "recovered publication failed matching independent readback")
+	# Shared Fadenwerk conversion is read-only; these responses are synthetic.
+	var before_faden: Dictionary = editor.current_draft()
+	var faden_source := JSON.stringify({"version":1,"questlines":[{"id":"safe","title":"Faden fixture","entryNode":"start","graph":{"start":{"id":"start","title":"Start","choices":[{"id":"go","label":"Weiter","nextNode":"end"}]},"end":{"id":"end","title":"End","choices":[]}}}]})
+	editor._faden_source.text = faden_source
+	var faden_hash := faden_source.sha256_text()
+	require(editor.inspect_fadenwerk(), "native Fadenwerk inspection did not start")
+	require(transport.sent.back().kind == "questFadenInspect" and not editor._json.editable, "Fadenwerk inspection bypassed canonical transport or edit lock")
+	studio._completed("questFadenInspect", {"previewOnly":true,"sourceHash":faden_hash,"questlines":[{"id":"safe","title":"Faden fixture","issues":[]},{"id":"blocked","title":"Blocked fixture","issues":[{"code":"UNMAPPED_REWARD","path":"questlines[1]","severity":"blocker"}]}]}, SESSION, generation)
+	require(editor.current_draft() == before_faden and editor._faden_lines.size() == 2, "inspection silently replaced the quest draft")
+	editor._faden_choice.select(1)
+	var attempts_before_blocked := transport.attempts
+	require(not editor.import_fadenwerk() and transport.attempts == attempts_before_blocked, "blocked Fadenwerk semantics reached conversion")
+	editor._faden_choice.select(0)
+	require(editor.import_fadenwerk(), "safe Fadenwerk conversion did not start")
+	var converted := template.duplicate(true)
+	converted.templateId = "fadenwerk_safe"
+	converted.active = false
+	converted.quarantined = true
+	studio._completed("questFadenDraft", {"previewOnly":true,"sourceHash":faden_hash,"questlineId":"safe","template":converted}, SESSION, generation)
+	require(editor.State.same_json(editor.current_draft(), converted) and not editor._activation.button_pressed and editor._status.text.contains("PREVIEW_ONLY"), "Fadenwerk conversion acquired publication authority")
+	require(transport.sent.back().kind == "questFadenDraft" and editor._journal.read().is_empty(), "Fadenwerk import auto-proposed or published")
+	require(editor.rename_quest("Edited Faden") and editor.rename_node("start","Edited Start"), "Fadenwerk title editing is unavailable")
+	require(editor.current_draft().title == "Edited Faden" and editor.current_draft().nodes[0].title == "Edited Start", "title editing did not update canonical draft")
+	require(not editor.rename_node("missing","No invented node"), "title editing invented an unknown node")
+	var edited_faden: Dictionary = editor.current_draft()
+	require(editor.import_fadenwerk(), "second Fadenwerk conversion did not start")
+	editor._faden_source.text += " "
+	editor._faden_source_changed()
+	studio._completed("questFadenDraft", {"previewOnly":true,"sourceHash":faden_hash,"questlineId":"safe","template":converted}, SESSION, generation)
+	require(editor.current_draft() == edited_faden and editor._faden_pending.is_empty(), "late Fadenwerk response replaced a changed source")
+	transport.start_ok = false
+	transport.on_refuse = func(): signal_api.failed.emit("questFadenInspect", "REQUEST_NOT_STARTED", SESSION, generation)
+	require(not editor.inspect_fadenwerk() and editor._faden_pending.is_empty() and editor._json.editable, "Fadenwerk start refusal stranded edit lock")
+	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "Fadenwerk refusal lost diagnostics")
+	# Canonical persistence bytes are independent from whitespace in the editor.
+	var dense := converted.duplicate(true)
+	dense.nodes = []
+	dense.edges = []
+	for index in range(50):
+		dense.nodes.append({"id":"n%d" % index,"title":"Node %d" % index,"type":"start" if index == 0 else ("end" if index == 49 else "branch")})
+		if index < 49:
+			for choice in range(8):
+				dense.edges.append({"id":"edge_%d_%d" % [index,choice],"fromNodeId":"n%d" % index,"toNodeId":"n%d" % (index+1),"choiceLabel":"Weiter","priority":0})
+	require(JSON.stringify(dense).to_utf8_buffer().size() < 64000, "dense fixture exceeds canonical import budget")
+	editor._json.text = JSON.stringify(dense, " ".repeat(20))
+	require(editor._json.text.to_utf8_buffer().size() > 120000, "dense fixture did not exercise presentation overhead")
+	require(editor.State.same_json(editor.current_draft(),dense), "presentation whitespace invalidated a persistable draft")
+	dense.description = "x".repeat(65536)
+	editor._json.text = JSON.stringify(dense)
+	require(editor.current_draft().is_empty(), "oversized canonical draft bypassed persistence budget")
+	transport.start_ok = true
+	transport.on_refuse = Callable()
 	studio._close_requested()

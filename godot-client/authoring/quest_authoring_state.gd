@@ -79,6 +79,9 @@ func close() -> void:
 
 func begin_proposal(draft: Variant) -> Dictionary:
 	if phase not in ["ready", "planned", "confirmed"] or not draft_valid(draft): return {}
+	# A new editable proposal supersedes only a completed/not-started publication.
+	# Unknown and awaiting-readback phases are rejected above; retain their identity.
+	_publishing.clear()
 	_draft = draft.duplicate(true)
 	_proposal.clear()
 	_plan.clear()
