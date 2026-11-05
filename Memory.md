@@ -5689,3 +5689,14 @@ Evidence: 3230d446aaa9bcf65b6b8bad12a14b100a59b76f: 19 Workflows success; Run419
 Learned: Präsentationshüllen beweisen keine Passierbarkeit. Geänderter Vorgänger verhindert wiederholten Apply; ein Receipt bleibt gespeichert. Ledgerfehler dürfen keine zweite Inferenz auslösen; verspätete Antworten dürfen keinen gewechselten Tab oder bearbeiteten Entwurf überschreiben.
 Open: Finale Exact-Head-CI, echte Provider-/OpenCode-Verifikation und bestätigter Marktplan mit konkreter Eigentümerfreigabe vor produktivem Apply; Anleitung docs/godot-migration/ai-world-designer.md.
 Next safe step: Neue Regression prüfen, grünen Head integrieren und unabhängig zurücklesen; Live-Konfiguration und bestätigten Marktversuch getrennt nachweisen.
+
+
+### 2026-11-05 — Recovery schema fingerprint under live row inserts
+Status: PARTIAL
+Task: Diagnose AI Designer release 41926028646 blocked by RECOVERY_PROOF_MISMATCH after successful isolated restore.
+Decisions: Exclude only MariaDB dump table-level next-ID counters from schema identity; keep column AUTO_INCREMENT, quoted text, routines/triggers, engine, collation and constraints; all four source/recovery paths use the same manifest-bound helper and versioned fingerprint receipt. No production runner patched.
+Touched surfaces: Existing schema-apply core/artifact and isolated CI; SQL-aware fingerprint helper and regressions.
+Evidence: Source a7a765fea3e19a2e68575d62bc4a4f1f3d5af2dd; child 41935851491/126944400080 restore exit 0, apply not reached. Backup SHA256 540b15fa9f4d37456219b38df10155fb5d1f375b870f4abed588aa3fda7dc4f6. Readback 446c72457adf4abc9bb8d489c88c9c3d: 185 backup/current table definitions, one counter-only difference, no other table-definition change. PR #1319 initial head cf3d4fca984500550af76a7ec58959ebcb2ca118 job 126981064442 passes source contracts and real isolated MariaDB dump/insert/restore/ALTER test; original raw dump comparison differs under DML. Final-head full CI/review still pending.
+Learned: A byte hash of a no-data dump includes mutable row-counter state; this does not establish a structural schema change. The removed recovery container prevents a retrospective full comparison with its dump.
+Open: Final CI/review, merge and authorized release with independent runtime readback; current production remains f0c6b369e08294028180ce58b47c0394b349fb64 at 10 Hz. Godot model fix #1318 separately pending; world rendering and AI market acceptance remain unverified.
+Next safe step: Finish exact-head isolated recovery and artifact checks before canonical delivery; never bypass the production gate.

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { fingerprint, schemaDefinition } from "../deploy/aurion-schema-fingerprint.mjs";
 
 const table = counter => `CREATE TABLE \`sample\` (\n  \`id\` bigint NOT NULL AUTO_INCREMENT,\n  \`note\` text DEFAULT ' AUTO_INCREMENT=10',\n  PRIMARY KEY (\`id\`)\n) ENGINE=InnoDB${counter ? ` AUTO_INCREMENT=${counter}` : ""} DEFAULT CHARSET=utf8mb4;\n`;
@@ -31,6 +32,13 @@ test("malformed quotes/comments fail closed and unfamiliar option spelling is re
   assert.throws(() => fingerprint("/* broken"));
   const odd = table(10).replace(" AUTO_INCREMENT=10 DEFAULT", " AUTO_INCREMENT /*version*/ =10 DEFAULT");
   assert.equal(schemaDefinition(odd), odd);
+});
+test("CLI preserves UTF-8 bytes including BOM and never hashes invalid or empty input", () => {
+  const cli = fileURLToPath(new URL("../deploy/aurion-schema-fingerprint.mjs", import.meta.url));
+  const sql = "\uFEFF" + table(5);
+  assert.equal(execFileSync(process.execPath, [cli], { input: sql, encoding: "utf8" }).trim(), fingerprint(sql));
+  assert.equal(execFileSync(process.execPath, [cli], { input: "", encoding: "utf8" }), "");
+  assert.throws(() => execFileSync(process.execPath, [cli], { input: Buffer.from([0xff]), stdio: ["pipe", "pipe", "pipe"] }));
 });
 
 // Runs only in the explicitly configured, isolated CI MariaDB container.

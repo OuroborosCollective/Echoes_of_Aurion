@@ -82,7 +82,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     // No hash on empty input: the caller rejects it, while pipefail retains
     // an upstream dump timeout rather than masking it with our own exit code.
-    if (bytes) process.stdout.write(fingerprint(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks))) + "\n");
+    if (bytes) process.stdout.write(fingerprint(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks))) + "\n");
   } catch {
     process.stderr.write("schema fingerprint unavailable\n"); process.exitCode = 70;
   }
