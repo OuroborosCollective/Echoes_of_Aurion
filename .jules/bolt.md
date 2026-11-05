@@ -40,3 +40,7 @@
 ## 2026-10-22 - Optimize Array Allocation and Matrix Lookups in Wolfram CAG Probes
 **Learning:** High-frequency data reduction or matrix stringification functions (like building Wolfram CAG probes for terrain texturization and continuity) suffer from garbage collection spikes when using `Map` lookups with string-concatenated keys or chained array methods like `.map().join()`. Using `Map` for grid coordinates forces O(N) string allocations and hash lookups.
 **Action:** Replace `Map` lookups and `Array.from()` with pre-allocated 2D arrays accessed via integer indices. Replace chained `.map().join()` operations with pre-allocated arrays populated via direct `for` loops or direct array instantiation for tuples.
+
+## 2024-05-24 - Optimize bounding box computation and array spread
+**Learning:** Found O(N) intermediate array allocations caused by calling `Math.min(...arr.map(v => v.x))` inside a high-frequency collision path (`WorldNatureCollision.obstaclesForChunk`). Spreading `extents` and using `.map` creates large GC pressure.
+**Action:** Replaced `.map()` combined with spread operators with a direct `for` loop that computes min and max in a single pass without allocating arrays. Also replaced spread operators for fixed-size arrays (e.g. `Math.max(...extents)`) with explicit multi-argument calls (e.g. `Math.max(extents[0], extents[1], extents[2])`) to completely avoid spreading overhead.

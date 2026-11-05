@@ -144,20 +144,22 @@ export class WorldNatureCollision {
             Object.freeze(rotate({ x: x!, z: z! }, p.rotation))
           )
         );
+        let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+        for (let i = 0; i < hull.length; i++) {
+          const v = hull[i]!;
+          if (v.x < minX) minX = v.x;
+          if (v.x > maxX) maxX = v.x;
+          if (v.z < minZ) minZ = v.z;
+          if (v.z > maxZ) maxZ = v.z;
+        }
         return [
           Object.freeze({
             id: p.id,
             assetId: p.assetId,
             origin: Object.freeze({ x: p.xMm, z: p.zMm }),
             hull,
-            min: Object.freeze({
-              x: Math.min(...hull.map(v => v.x)),
-              z: Math.min(...hull.map(v => v.z)),
-            }),
-            max: Object.freeze({
-              x: Math.max(...hull.map(v => v.x)),
-              z: Math.max(...hull.map(v => v.z)),
-            }),
+            min: Object.freeze({ x: minX, z: minZ }),
+            max: Object.freeze({ x: maxX, z: maxZ }),
           }),
         ];
       }

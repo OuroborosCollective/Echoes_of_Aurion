@@ -67,10 +67,11 @@ function profileFor(classification: GlbAssetClassification, purpose: GlbImportPu
 }
 
 function assertSourceEnvelope(extents: readonly number[], profile: Profile): void {
-  if (extents.some(value => !Number.isSafeInteger(value) || value < 0) || Math.max(...extents) < profile.minimumLargestExtentMm) throw new Error("GLB_SOURCE_GEOMETRY_DEGENERATE");
-  if (Math.max(...extents) > profile.maximumSourceExtentMm) throw new Error("GLB_SOURCE_UNIT_ENVELOPE");
+  const maxExtent = Math.max(extents[0]!, extents[1]!, extents[2]!);
+  if (extents.some(value => !Number.isSafeInteger(value) || value < 0) || maxExtent < profile.minimumLargestExtentMm) throw new Error("GLB_SOURCE_GEOMETRY_DEGENERATE");
+  if (maxExtent > profile.maximumSourceExtentMm) throw new Error("GLB_SOURCE_UNIT_ENVELOPE");
   if (profile.minimumHeightMm !== undefined && extents[1]! < profile.minimumHeightMm) throw new Error("GLB_SOURCE_HEIGHT_ENVELOPE");
-  if (profile.minimumHeightRatioE6 !== undefined && extents[1]! * 1_000_000 < Math.max(...extents) * profile.minimumHeightRatioE6) throw new Error("GLB_SOURCE_AXIS_ENVELOPE");
+  if (profile.minimumHeightRatioE6 !== undefined && extents[1]! * 1_000_000 < maxExtent * profile.minimumHeightRatioE6) throw new Error("GLB_SOURCE_AXIS_ENVELOPE");
 }
 
 function transformedCoordinate(valueMm: number, scaleE8: number, translationMm: number): number {
@@ -104,7 +105,7 @@ export async function buildGlbNormalizationManifest(
   assertSourceEnvelope(sourceExtents, profile);
 
   const scaleNumerators = profile.targetEnvelopeMm.map((target, axis) =>
-    BigInt(target) * BigInt(GLB_NORMALIZATION_SCALE_E8) / BigInt(Math.max(1, sourceExtents[axis]!))
+    BigInt(target) * BigInt(GLB_NORMALIZATION_SCALE_E8) / BigInt(sourceExtents[axis]! < 1 ? 1 : sourceExtents[axis]!)
   );
   const scaleE8 = Number(scaleNumerators.reduce((scale, candidate) => candidate < scale ? candidate : scale, BigInt(GLB_NORMALIZATION_SCALE_E8)));
   if (!Number.isSafeInteger(scaleE8) || scaleE8 < 1 || scaleE8 > GLB_NORMALIZATION_SCALE_E8) throw new Error("GLB_NORMALIZATION_SCALE_INVALID");
@@ -123,7 +124,7 @@ export async function buildGlbNormalizationManifest(
   const normalizedBoundsMm = { min: normalizedMin, max: normalizedMax } as const;
   const normalizedExtents = normalizedMax.map((maximum, axis) => maximum - normalizedMin[axis]!);
   if (normalizedExtents.some((extent, axis) => extent > profile.targetEnvelopeMm[axis]!)) throw new Error("GLB_NORMALIZED_ENVELOPE_EXCEEDED");
-  const maximumNormalizedExtent = Math.max(...normalizedExtents);
+  const maximumNormalizedExtent = Math.max(normalizedExtents[0]!, normalizedExtents[1]!, normalizedExtents[2]!);
   const aspectRatioE6 = normalizedExtents.map(extent => maximumNormalizedExtent === 0 ? 0 : roundHalfAwayFromZero(extent * 1_000_000, maximumNormalizedExtent));
   const clearanceEnvelopeMm = profile.targetEnvelopeMm.map((extent, axis) => extent - normalizedExtents[axis]!);
 
