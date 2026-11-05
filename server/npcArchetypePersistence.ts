@@ -8,7 +8,7 @@ import {
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import type { NpcTransaction } from "./wasdNpcEvolutionPersistence";
-import { npcHash } from "./wasdNpcCapsule";
+import { npcHash, stableCatalogStringify } from "./wasdNpcCapsule";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { npcCapsulePin } from "./aurion/npc/authority";
 import { CANONICAL_NPC_FALLBACK, NPC_CONTROLLER_ARCHETYPES, controllerArchetypeForNpc, verifyArchetypeCandidate } from "./aiFabric/npcArchetypeRegistry";
@@ -42,7 +42,8 @@ async function approvedPolicy(tx: NpcTransaction, mutationReceiptId: string) {
     mutationRule: { version: receipt.mutationRuleVersion }, envelopeHash: receipt.envelopeHash,
     rollbackTargetVersion: receipt.rollbackTargetVersion, sourceRevision: receipt.sourceRevision, sourceSha256: receipt.sourceSha256,
   };
-  if (npcHash(original) !== receipt.receiptHash) throw Error("NPC_CONTROLLER_APPROVAL_HASH_MISMATCH");
+  // Preserve the existing custody receipt's exact (double-serialized) hash contract.
+  if (npcHash(stableCatalogStringify({ ...original, payload: undefined })) !== receipt.receiptHash) throw Error("NPC_CONTROLLER_APPROVAL_HASH_MISMATCH");
   return { policy, receipt, candidate };
 }
 
@@ -57,7 +58,7 @@ export async function promoteNpcArchetype(tx: NpcTransaction, raw: z.infer<typeo
   // INSERT IGNORE does not run an UPDATE against the append-only artifact table.
   const artifact = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1))[0];
   if (!artifact) await tx.insert(artifacts).ignore().values({ artifactHash: approved.candidate.artifactHash, artifactJson: JSON.stringify(approved.candidate.artifact) });
-  const stored = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1))[0];
+  const stored = (await tx.select().from(artifacts).where(eq(artifacts.artifactHash, approved.candidate.artifactHash)).limit(1).for("update"))[0];
   if (!stored || canonicalSha256(JSON.parse(stored.artifactJson)) !== approved.candidate.artifactHash) throw Error("NPC_CONTROLLER_ARTIFACT_HASH_MISMATCH");
   await tx.insert(pointers).values({ archetypeId: input.archetypeId, revision: 0, releaseHash: null }).onDuplicateKeyUpdate({ set: { archetypeId: input.archetypeId } });
   const current = (await tx.select().from(pointers).where(eq(pointers.archetypeId, input.archetypeId)).for("update"))[0];

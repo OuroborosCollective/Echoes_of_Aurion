@@ -40,7 +40,7 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
       sourceRevision: pin.sourceRevision, sourceSha256: pin.sourceSha256, payload,
     }));
     await db.transaction(tx => promoteNpcArchetype(tx, { archetypeId: payload.archetypeId, expectedRevision: 0, mutationReceiptId: "registry-test-approval-1", sourceRevision: payload.regression.sourceRevision }));
-    for (const hub of ["observatory_threshold", "windhollow"] as const) await resolveAndRecordNpc(merchantGenesisRequest(hub));
+    for (const hub of ["observatory_threshold", "windhollow"] as const) await resolveAndRecordNpc(merchantGenesisRequest(hub), undefined, { bindControllerAtGenesis: true });
     const first = await readNpcControllerBinding(merchantIds[0]);
     const second = await readNpcControllerBinding(merchantIds[1]);
     expect(first).toMatchObject({ npcId: merchantIds[0], registryRevision: 1, artifactHash: payload.artifactHash, status: "BOUND_SHADOW" });

@@ -173,7 +173,7 @@ export async function readConfirmedNpcState(npcId: string): Promise<NpcSnapshot 
 }
 
 /** Applies bounded needs and stores exactly one versioned life decision per NPC and resolution. */
-export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: EnvironmentalReactionField): Promise<AurionNpcReadModel> {
+export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: EnvironmentalReactionField, genesisOptions?: Readonly<{ bindControllerAtGenesis: true }>): Promise<AurionNpcReadModel> {
   const enriched = environmentalField
     ? (() => {
         if (environmentalField.regionId !== raw.regionId || environmentalField.resolutionIndex !== raw.resolutionIndex) {
@@ -237,7 +237,7 @@ export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: 
     const row = (await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.id, id)).limit(1))[0];
     if (!row) throw new Error("NPC decision readback failed");
     const readback = decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash: v3RequestHash });
-    if (current.lastResolutionIndex < 0) await bindNpcControllerAtGenesis(tx, input.npcId, id);
+    if (current.lastResolutionIndex < 0 && genesisOptions?.bindControllerAtGenesis) await bindNpcControllerAtGenesis(tx, input.npcId, id);
     const confirmedMemory = await appendNpcMultiMemory(tx,row,previousMultiMemory);
     await appendNpcSemanticGraphV2(tx,confirmedMemory);
 
