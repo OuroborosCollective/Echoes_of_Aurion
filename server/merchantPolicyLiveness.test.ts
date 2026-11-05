@@ -15,6 +15,7 @@ import {
   npcRequestHash,
   parseNpcMemory,
   planMerchantAction,
+  validateMerchantAction,
   resolveNpcNeeds,
   verifyConfirmedNpcDecision,
   type HubId,
@@ -120,6 +121,23 @@ describe("merchant policy liveness (no permanent re-plan block)", () => {
     expect(blocked).toEqual([]);
     // The generator exercises the decision space, including consumption and travel.
     expect([...seen].sort()).toEqual(expect.arrayContaining(["caravan", "consume", "produce", "rest", "trade"]));
+  });
+
+  it("binds the planned region world slot: validating with another slot rejects the intent", () => {
+    const random = rng(11);
+    let checked = 0;
+    for (let i = 0; i < 400 && checked < 20; i++) {
+      const ctx = { ...policyContext(random, 1 + i), worldResolutionIndex: 7 } as MerchantGatewayContext;
+      const plan = planMerchantAction(ctx);
+      if (plan.status !== "ready") continue;
+      expect(plan.intent.worldResolutionIndex).toBe(7);
+      const lease = { ...plan.proposedLease, state: "active" as const };
+      expect(validateMerchantAction({ context: ctx, intent: plan.intent, lease }).status).toBe("validated");
+      const moved = validateMerchantAction({ context: { ...ctx, worldResolutionIndex: 8 } as MerchantGatewayContext, intent: plan.intent, lease });
+      expect(moved.status).not.toBe("validated");
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(5);
   });
 
   it("saturates wealth and treasury at the validated ceiling instead of invalidating the next context", () => {

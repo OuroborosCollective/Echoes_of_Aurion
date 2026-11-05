@@ -93,6 +93,7 @@ export type MerchantGatewayContext = Readonly<{
   targets: readonly MerchantActionTargetEvidence[];
 }>;
 export type MerchantActionIntent = Readonly<{
+  worldResolutionIndex?: number;
   storagePolicyVersion?: MerchantStoragePolicy;
   travelPolicyVersion?: MerchantTravelPolicy;
   version: typeof NPC_ACTION_GATEWAY_VERSION;
@@ -129,6 +130,7 @@ export type MerchantActionLease = Readonly<{
   state: "active" | "revoked" | "consumed";
 }>;
 export type MerchantActionReceipt = Readonly<{
+  worldResolutionIndex?: number;
   storagePolicyVersion?: MerchantStoragePolicy;
   travelPolicyVersion?: MerchantTravelPolicy;
   version: typeof NPC_ACTION_RECEIPT_VERSION;
@@ -349,7 +351,7 @@ function normalizeContext(input: MerchantGatewayContext): NormalizedContext {
   return Object.freeze({ ...(input.worldResolutionIndex !== undefined ? { worldResolutionIndex: input.worldResolutionIndex } : {}), travelMarkets, ...storagePolicyFields(input), worldSeed: input.worldSeed, homeHubId: input.homeHubId, logicalIndex: input.logicalIndex, confirmedDecision: input.confirmedDecision, sourceDecision: source.sourceDecision, sourcePlanIsPlanned: source.planIsPlanned, epoch, npc, market, marketEvidence, marketValid, polity, polityValid, inventory, inventoryStateValid, targets: Object.freeze(targets), targetsValid }) as NormalizedContext;
 }
 function resolutionFor(context: NormalizedContext): LivingWorldResolution {
-  return resolveLivingWorldTick({ worldSeed: context.worldSeed, resolutionIndex: context.logicalIndex, market: context.market, npc: context.npc, polityStability: context.polity.stability, preferredGoal: context.sourceDecision.goal, ...storagePolicyFields(context), travelMarkets:context.travelMarkets });
+  return resolveLivingWorldTick({ worldSeed: context.worldSeed, resolutionIndex: context.logicalIndex, market: context.market, npc: context.npc, polityStability: context.polity.stability, preferredGoal: context.sourceDecision.goal, ...(context.storagePolicyVersion ? { storagePolicyVersion: context.storagePolicyVersion } : {}), ...(context.travelPolicyVersion ? { travelPolicyVersion: context.travelPolicyVersion } : {}), travelMarkets:context.travelMarkets });
 }
 function targetIdFor(resolution: LivingWorldResolution): string {
   return `market:${resolution.action === "caravan" && resolution.caravan.destination ? resolution.caravan.destination : resolution.market.hubId}`;
@@ -369,9 +371,12 @@ function inventoryAvailable(context: NormalizedContext, resolution: LivingWorldR
   if (resolution.action === "trade" || resolution.action === "caravan") return entry.quantity >= resolution.quantity;
   return true;
 }
-function storagePolicyFields(value: { storagePolicyVersion?: MerchantStoragePolicy; travelPolicyVersion?: MerchantTravelPolicy }) {
+function storagePolicyFields(value: { storagePolicyVersion?: MerchantStoragePolicy; travelPolicyVersion?: MerchantTravelPolicy; worldResolutionIndex?: number }) {
   return { ...(value.storagePolicyVersion ? { storagePolicyVersion: value.storagePolicyVersion } : {}),
-    ...(value.travelPolicyVersion ? { travelPolicyVersion: value.travelPolicyVersion } : {}) };
+    ...(value.travelPolicyVersion ? { travelPolicyVersion: value.travelPolicyVersion } : {}),
+    // The region world slot is part of what was planned: validation with another slot
+    // must not accept the original intent. Absent for historical contexts.
+    ...(value.worldResolutionIndex !== undefined ? { worldResolutionIndex: value.worldResolutionIndex } : {}) };
 }
 function blocked(context: NormalizedContext, resolution: LivingWorldResolution, code: string): MerchantActionBlocked {
   return Object.freeze({ status: "blocked", code, npcId: context.npc.npcId, resolutionIndex: resolution.resolutionIndex, action: resolution.action, replanHash: canonicalHash({ version: NPC_ACTION_GATEWAY_VERSION, ...storagePolicyFields(context), code, npcId: context.npc.npcId, sourceDecision: context.sourceDecision, resolutionIndex: resolution.resolutionIndex, action: resolution.action, epoch: context.epoch, marketHash: context.marketEvidence.stateHash, polityHash: context.polity.stateHash, inventoryHash: context.inventory.stateHash }) }) as MerchantActionBlocked;
@@ -384,7 +389,7 @@ function intended(context: NormalizedContext, resolution: LivingWorldResolution,
 }
 function parseIntent(value: any): MerchantActionIntent | null {
   try {
-    if ((value.travelPolicyVersion !== undefined && value.travelPolicyVersion !== MERCHANT_TRAVEL_POLICY) || (value.storagePolicyVersion !== undefined && value.storagePolicyVersion !== MERCHANT_STORAGE_POLICY) || value.version !== NPC_ACTION_GATEWAY_VERSION || !id.safeParse(value.id).success || !hash64.safeParse(value.intentHash).success || !id.safeParse(value.npcId).success || !index.safeParse(value.resolutionIndex).success || !hash64.safeParse(value.worldSeedSha256).success || !hash64.safeParse(value.expectedNpcHash).success || !hash64.safeParse(value.expectedMarketHash).success || !hash64.safeParse(value.expectedPolityHash).success || !hash64.safeParse(value.expectedInventoryHash).success || !actionValues.includes(value.action) || !hubSchema.safeParse(value.originHubId).success || !commoditySchema.safeParse(value.commodity).success || !Number.isSafeInteger(value.quantity) || value.quantity < 1 || !Number.isSafeInteger(value.unitPriceCopper) || value.unitPriceCopper < 1 || !hash64.safeParse(value.resolutionHash).success) return null;
+    if ((value.worldResolutionIndex !== undefined && (!Number.isSafeInteger(value.worldResolutionIndex) || value.worldResolutionIndex < 0 || value.worldResolutionIndex > 2147483647)) || (value.travelPolicyVersion !== undefined && value.travelPolicyVersion !== MERCHANT_TRAVEL_POLICY) || (value.storagePolicyVersion !== undefined && value.storagePolicyVersion !== MERCHANT_STORAGE_POLICY) || value.version !== NPC_ACTION_GATEWAY_VERSION || !id.safeParse(value.id).success || !hash64.safeParse(value.intentHash).success || !id.safeParse(value.npcId).success || !index.safeParse(value.resolutionIndex).success || !hash64.safeParse(value.worldSeedSha256).success || !hash64.safeParse(value.expectedNpcHash).success || !hash64.safeParse(value.expectedMarketHash).success || !hash64.safeParse(value.expectedPolityHash).success || !hash64.safeParse(value.expectedInventoryHash).success || !actionValues.includes(value.action) || !hubSchema.safeParse(value.originHubId).success || !commoditySchema.safeParse(value.commodity).success || !Number.isSafeInteger(value.quantity) || value.quantity < 1 || !Number.isSafeInteger(value.unitPriceCopper) || value.unitPriceCopper < 1 || !hash64.safeParse(value.resolutionHash).success) return null;
     const target = targetSchema.parse(value.target);
     if (target.id !== `market:${target.hubId}`) return null;
     return Object.freeze({ ...value, authority: authority(value.authority), sourceDecision: freezeSourceDecision(value.sourceDecision), expectedEpoch: freezeEpoch(value.expectedEpoch), target: Object.freeze({ id: target.id, kind: target.kind, hubId: target.hubId, version: target.version, stateHash: target.stateHash, active: target.active }) }) as MerchantActionIntent;
