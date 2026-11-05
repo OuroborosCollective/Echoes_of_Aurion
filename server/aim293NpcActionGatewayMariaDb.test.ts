@@ -5,7 +5,7 @@ import { executeConfirmedMerchantAction, persistPolity, readConfirmedMerchantAct
 import { eq } from "drizzle-orm";
 import { aurionPolityStates } from "../drizzle/schema";
 import { getDb } from "./db";
-import { resolveAndRecordNpc } from "./wasdAurionRuntime";
+import { readConfirmedNpcState, resolveAndRecordNpc } from "./wasdAurionRuntime";
 import {
   merchantBootstrapMarkets,
   AURION_WASD_CONTENT_VERSION,
@@ -141,6 +141,38 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
       expect(readback.reactionHash).toBe(current.reactionHash);
       expect(readback.stateJson).toBe(stableCatalogStringify(current));
     }, {isolationLevel: "repeatable read"});
+  });
+
+  it("records actual route experience only after committed travel and independently rereads NPC memory",async()=>{
+    for(const hubId of hubs){
+      const market={...merchantBootstrapMarkets[hubId],stock:{...merchantBootstrapMarkets[hubId].stock,grain:hubId==="cinder_vault"?0:1000}};
+      const ownerId=`market:${hubId}`;
+      const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
+      const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};
+      await pool.query("UPDATE aurionNpcActionEpochStates SET marketJson=?,marketHash=?,inventoryJson=?,inventoryHash=? WHERE hubId=?",
+        [JSON.stringify(market),merchantMarketStateHash(market),JSON.stringify(inventory),inventory.stateHash,hubId]);
+    }
+    const request=sourceRequest(0);
+    await resolveAndRecordNpc({...request,economy:{...request.economy,currentHubId:"windhollow",wealthCopper:100},
+      needEvents:(["safety","resources","belonging","status","wealth","power"] as const).map(need=>({id:`journey:${need}`,need,delta:need==="wealth"?-1:1,sourceReceiptId:"journey-source",resolutionIndex:0}))});
+    const source=(await readConfirmedMerchantActionSource(npcId))!;
+    const input={worldSeed:"journey-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    await expect(executeConfirmedMerchantAction({...input,failureInjection:"before_memory_commit"})).rejects.toThrow();
+    expect((await readConfirmedNpcState(npcId))!.memory.some(m=>m.startsWith("journey:v1:"))).toBe(false);
+    const result=await executeConfirmedMerchantAction(input);
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed") throw Error("JOURNEY_ACTION_NOT_COMMITTED");
+    expect(result.resolution.action).toBe("caravan");
+    const record=`journey:v1:windhollow:${result.resolution.caravan.destination}:1:${result.resolution.caravan.ambushed?"ambushed":"passed"}`;
+    expect(result.npc.memory).toContain(record);
+    expect((await readConfirmedNpcState(npcId))!.memory).toContain(record);
+    const [links]=await pool.query<RowDataPacket[]>("SELECT npcId,resolutionIndex FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId]);
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({npcId,resolutionIndex:1});
+    const retry=await executeConfirmedMerchantAction(input);
+    expect(retry.status).toBe("persisted");
+    if(retry.status==="persisted") expect(retry.npc.memory).toEqual(result.npc.memory);
+    expect((await readConfirmedNpcState(npcId))!.memory.filter(m=>m===record)).toHaveLength(1);
   });
 
   it("persists unlimited storage above the old cap with rollback, receipt binding and exact retry",async()=>{

@@ -153,20 +153,36 @@ export function caravanSecurityIndex(
   );
 }
 
+/** Route experience is carried by the existing confirmed NPC memory/receipt
+ * chain. A passed trip is not a declaration that the area is monster-free.
+ * Logical age is measured in this NPC's resolution indices, never wall time.
+ */
+export function readMerchantRouteExperience(memory: readonly string[], from: HubId, to: HubId, resolutionIndex: number) {
+  const observations = memory.slice(-24).flatMap(text=>{
+    const match=/^journey:v1:([a-z_]+):([a-z_]+):(\d+):(passed|ambushed)$/.exec(text);
+    if(!match || !((match[1]===from&&match[2]===to)||(match[1]===to&&match[2]===from))) return [];
+    const observedIndex=Number(match[3]),age=resolutionIndex-observedIndex;
+    if(!Number.isSafeInteger(observedIndex)||age<0||age>=3500) return [];
+    return [{from:match[1],to:match[2],observedIndex,outcome:match[4],confidenceBps:Math.floor((3500-age)*10000/3500)}];
+  }).sort((a,b)=>b.observedIndex-a.observedIndex||(a.outcome<b.outcome?-1:a.outcome>b.outcome?1:0));
+  const legacyThreat=memory.some(text=>text.startsWith("danger:"))?60:10;
+  const rememberedThreat=Math.max(legacyThreat,...observations.filter(o=>o.outcome==="ambushed").map(o=>10+Math.floor(50*o.confidenceBps/10000)));
+  return {rememberedThreat,observations};
+}
+
 /** Bounded planning on the existing four-hub route graph. It proposes one
  * existing route edge; it does not implement a second navigation simulation.
  * Copper scores are integers and include cargo/wealth exposure and path cost.
  */
 export function planMerchantJourney(input: Readonly<{
   origin: MarketState; npc: NpcEconomyState; commodity: CommodityId; quantity: number;
-  unitPriceCopper: number; markets: readonly MerchantTravelMarket[];
+  unitPriceCopper: number; markets: readonly MerchantTravelMarket[]; resolutionIndex:number;
 }>) {
   const hubs: HubId[] = ["observatory_threshold", "windhollow", "emberfall", "cinder_vault"];
   const markets = [...input.markets].sort((a,b)=>hubs.indexOf(a.market.hubId)-hubs.indexOf(b.market.hubId));
   if (markets.length > 4 || new Set(markets.map(m=>m.market.hubId)).size !== markets.length
     || markets.some(m=>!hubs.includes(m.market.hubId) || !Number.isInteger(m.polityStability) || m.polityStability<0 || m.polityStability>100)) throw new Error("NPC_TRAVEL_OBSERVATION_INVALID");
   const available = new Map(markets.map(m=>[m.market.hubId,m]));
-  const rememberedThreat = input.npc.memory.some(entry=>entry.startsWith("danger:")) ? 60 : 10;
   const quantity = Math.min(input.quantity,input.origin.stock[input.commodity]);
   const cargoValue = input.unitPriceCopper * quantity;
   const wealthExposure = Math.floor(input.npc.wealthCopper / 100);
@@ -184,7 +200,7 @@ export function planMerchantJourney(input: Readonly<{
     const destinationPrice=marketPriceCopper({commodity:input.commodity,stock:Math.min(target.market.stock[input.commodity],1e6),demandBps:10000,taxRateBasisPoints:target.market.taxRateBasisPoints});
     for(const path of paths){
       let securityBps=10000;
-      for(let i=1;i<path.length;i++) securityBps=Math.floor(securityBps*caravanSecurityIndex(path[i-1]!,path[i]!,available.get(path[i]!)!.polityStability,rememberedThreat)/100);
+      for(let i=1;i<path.length;i++) securityBps=Math.floor(securityBps*caravanSecurityIndex(path[i-1]!,path[i]!,available.get(path[i]!)!.polityStability,readMerchantRouteExperience(input.npc.memory,path[i-1]!,path[i]!,input.resolutionIndex).rememberedThreat)/100);
       const opportunityCopper=Math.max(0,destinationPrice-input.unitPriceCopper)*quantity;
       const riskCostCopper=Math.floor((cargoValue+wealthExposure)*(10000-securityBps)/10000);
       const journeyCostCopper=(path.length-1)*Math.max(1,quantity)*2;
@@ -196,7 +212,8 @@ export function planMerchantJourney(input: Readonly<{
   return Object.freeze({version:MERCHANT_TRAVEL_POLICY,decision:selected?"TRAVEL" as const:"LOCAL" as const,
     reason:quantity===0?"REPLENISH_LOCAL_STOCK":selected?"BENEFIT_EXCEEDS_ROUTE_RISK":evaluations.length?"LOCAL_ACTION_HAS_BETTER_VALUE":"NO_REACHABLE_MARKET",
     destinationHubId:selected?.targetHubId??null,nextHopHubId:selected?.path[1]??null,path:selected?.path??[input.origin.hubId],
-    observationHash:hash(stableCatalogStringify({origin:input.origin,npc:input.npc,markets})),evaluations,
+    observationHash:hash(stableCatalogStringify({origin:input.origin,npc:input.npc,markets,resolutionIndex:input.resolutionIndex})),evaluations,
+    routeExperience:selected ? selected.path.slice(1).map((to,i)=>({from:selected.path[i]!,to,...readMerchantRouteExperience(input.npc.memory,selected.path[i]!,to,input.resolutionIndex)})) : [],
     unobservedRiskSources:["live_monster_positions","warfront"] as const});
 }
 
@@ -311,11 +328,11 @@ export function resolveLivingWorldTick(input: Readonly<{
   let travelPlan: ReturnType<typeof planMerchantJourney> | undefined;
   if (action === "trade" && input.travelPolicyVersion === MERCHANT_TRAVEL_POLICY) {
     if(!input.travelMarkets) throw new Error("NPC_TRAVEL_OBSERVATION_REQUIRED");
-    travelPlan=planMerchantJourney({origin:input.market,npc:input.npc,commodity,quantity:requestedQuantity,unitPriceCopper,markets:input.travelMarkets});
+    travelPlan=planMerchantJourney({origin:input.market,npc:input.npc,commodity,quantity:requestedQuantity,unitPriceCopper,markets:input.travelMarkets,resolutionIndex:input.resolutionIndex});
     if(travelPlan.reason==="REPLENISH_LOCAL_STOCK") action="produce";
     else if(travelPlan.nextHopHubId){
       action="caravan";destination=travelPlan.nextHopHubId;
-      securityIndex=caravanSecurityIndex(input.market.hubId,destination,input.travelMarkets.find(m=>m.market.hubId===destination)!.polityStability,input.npc.memory.some(entry=>entry.startsWith("danger:"))?60:10);
+      securityIndex=caravanSecurityIndex(input.market.hubId,destination,input.travelMarkets.find(m=>m.market.hubId===destination)!.polityStability,readMerchantRouteExperience(input.npc.memory,input.market.hubId,destination,input.resolutionIndex).rememberedThreat);
       ambushed=roll()<(100-securityIndex)/300;
     }
   } else if (action === "trade" && roll() > caravanThreshold) {
@@ -345,7 +362,9 @@ export function resolveLivingWorldTick(input: Readonly<{
         ? `social:${input.market.hubId}`
         : `${action}:${input.market.hubId}:${commodity}:${unitPriceCopper}`;
 
-  const nextMemory = Object.freeze([...input.npc.memory, memoryEntry].slice(-24));
+  const journeyExperience = input.travelPolicyVersion && action === "caravan" && destination
+    ? `journey:v1:${input.market.hubId}:${destination}:${input.resolutionIndex}:${ambushed ? "ambushed" : "passed"}` : null;
+  const nextMemory = Object.freeze([...input.npc.memory, memoryEntry, ...(journeyExperience ? [journeyExperience] : [])].slice(-24));
   const stabilityDelta =
     ambushed ? -2 : action === "patrol" ? 1 : action === "socialize" ? 1 : taxCopper > 0 ? 1 : 0;
   const stockDelta =

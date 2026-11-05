@@ -16,6 +16,7 @@ import {
   parseNpcMemory,
   planMerchantAction,
   hasLivingWorldRoute,
+  readMerchantRouteExperience,
   resolveNpcNeeds,
   validateMerchantAction,
   verifyConfirmedNpcDecision,
@@ -95,6 +96,17 @@ function context(tick=0, scarceStock?:number, gatherResources=false):MerchantGat
 }
 
 describe("Wave 2 Step 26 WASD AIM-293 action gateway contract",()=>{
+  it("retains scoped journey experience with logical aging and no omniscient monster claim",()=>{
+    const memory=["journey:v1:windhollow:emberfall:100:ambushed","journey:v1:windhollow:emberfall:101:passed"];
+    const recent=readMerchantRouteExperience(memory,"windhollow","emberfall",101);
+    expect(recent.rememberedThreat).toBeGreaterThan(10);
+    expect(recent.observations).toHaveLength(2);
+    expect(readMerchantRouteExperience(memory,"observatory_threshold","cinder_vault",101).observations).toEqual([]);
+    expect(readMerchantRouteExperience(memory,"windhollow","emberfall",99).observations).toEqual([]);
+    expect(readMerchantRouteExperience(memory,"windhollow","emberfall",3601)).toEqual({rememberedThreat:10,observations:[]});
+    expect(readMerchantRouteExperience(memory,"emberfall","windhollow",101)).toEqual(recent);
+  });
+
   it("plans reachable route edges, compares risk with value, and keeps unreachable travel as a local decision",()=>{
     const make=(wealthCopper:number, intermediates=true)=>{
       const s=source(19506,true,{currentHubId:"windhollow",wealthCopper,hungerBps:2000,fatigueBps:1500,tradeProwessBps:10500,harvestYieldBps:10000});
@@ -117,7 +129,13 @@ describe("Wave 2 Step 26 WASD AIM-293 action gateway contract",()=>{
     expect(ready.resolution.travelPlan).toMatchObject({destinationHubId:"cinder_vault",reason:"BENEFIT_EXCEEDS_ROUTE_RISK"});
     expect(ready.resolution.travelPlan!.path.length).toBeGreaterThan(2);
     expect(hasLivingWorldRoute("windhollow",ready.resolution.caravan.destination!)).toBe(true);
-    expect(validateMerchantAction({context:travel,intent:ready.intent,lease:ready.proposedLease}).status).toBe("validated");
+    const accepted=validateMerchantAction({context:travel,intent:ready.intent,lease:ready.proposedLease});
+    expect(accepted.status).toBe("validated");
+    if(accepted.status==="validated"){
+      expect(accepted.requests.npcRequest.memory).toHaveLength(2);
+      expect(accepted.requests.npcRequest.memory[1]).toMatch(/^journey:v1:windhollow:[a-z_]+:19507:(passed|ambushed)$/);
+      expect(accepted.resolution.travelPlan!.unobservedRiskSources).toContain("live_monster_positions");
+    }
     expect(planMerchantAction(travel)).toEqual(ready);
     for(const ctx of [make(1_000_000_000),make(100,false)]){
       const local=planMerchantAction(ctx);
