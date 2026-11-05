@@ -66,8 +66,14 @@ func reject_asset(sha: String) -> void:
 static func _normalization_valid(value: Variant, sha: String) -> bool:
 	if typeof(value) != TYPE_DICTIONARY or value.get("revision") != "aurion.glb-normalization.v1" or value.get("sourceSha256") != sha or value.get("unitConvention") != "gltf-rh-y-up-meter" or value.get("unitToMm") != 1000 or value.get("axisConvention") != "aurion-rh-y-up-forward-z":
 		return false
-	if value.get("axisTransform3x3") != [1,0,0,0,1,0,0,0,1] or not Inspector._whole(value.get("scaleE8"), 1, 100000000):
+	var axes: Variant = value.get("axisTransform3x3")
+	if typeof(axes) != TYPE_ARRAY or axes.size() != 9 or not Inspector._whole(value.get("scaleE8"), 1, 100000000):
 		return false
+	# JSON numbers arrive as floats. Array equality also compares element types,
+	# so validate the exact identity matrix numerically without relaxing it.
+	for index in range(9):
+		if not Inspector._whole(axes[index], 0, 1) or int(axes[index]) != (1 if index % 4 == 0 else 0):
+			return false
 	var translation: Variant = value.get("translationMm")
 	if typeof(translation) != TYPE_ARRAY or translation.size() != 3:
 		return false

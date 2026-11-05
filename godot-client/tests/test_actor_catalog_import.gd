@@ -87,6 +87,14 @@ func verify_cache(source: Dictionary, bytes: PackedByteArray) -> bool:
 		"axisTransform3x3":[1,0,0,0,1,0,0,0,1],"scaleE8":100000000,"translationMm":[0,0,0],"manifestSha256":"b".repeat(64)}
 	var entry := {"assetId":source.assetId,"sha256":sha,"storageUrl":"/api/assets/glb/" + sha + ".glb",
 		"assetType":"character" if source.role == "character" else "enemy","normalization":normalization,"bytes":bytes.size()}
+	# Exercise the actual HTTP JSON representation, whose numbers Godot decodes
+	# as floats; hand-built integer dictionaries masked live catalog rejection.
+	entry = JSON.parse_string(JSON.stringify(entry))
+	require(not Cache.physical(entry).is_empty(), "HTTP JSON normalization rejected a valid catalog actor")
+	for invalid_axis in [[1,0,0,0,1,0,0,0,0], [1,0.5,0,0,1,0,0,0,1], ["1",0,0,0,1,0,0,0,1], [true,0,0,0,1,0,0,0,1], [1,0,0], null]:
+		var invalid := entry.duplicate(true)
+		invalid.normalization.axisTransform3x3 = invalid_axis
+		require(Cache.physical(invalid).is_empty(), "malformed or non-identity actor axes admitted")
 	cache.set_owners(connection, ["player:1"])
 	require(cache.request(entry,"absent").get("reason") == "actor_capacity", "unconfirmed cache owner admitted")
 	require(cache.request(entry,"player:1").status == "pending", "missing bytes appeared as a loaded model")
