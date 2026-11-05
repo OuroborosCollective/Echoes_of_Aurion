@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 import { behaviorTemplate } from "./behaviorForge";
-import { verifyArchetypeCandidate } from "./npcArchetypeRegistry";
+import { verifyArchetypeCandidate, controllerArchetypeForNpc } from "./npcArchetypeRegistry";
 
 // Explicit synthetic authoring fixture; never a production approval.
 export function candidate(version = 1) {
@@ -22,5 +22,15 @@ describe("NPC archetype candidate boundary (offline)", () => {
     expect(verifyArchetypeCandidate(candidate()).artifact.version).toBe(1);
     expect(() => verifyArchetypeCandidate({ ...candidate(), artifactHash: "sha256:" + "0".repeat(64) })).toThrow("ARTIFACT_HASH");
     expect(() => verifyArchetypeCandidate({ ...candidate(), archetypeId: "aurion.resident.social.v1" })).toThrow("ACTION_NOT_ALLOWED");
+  });
+  it("does not confuse professions, monster species or combat archetypes with technical controller identities", () => {
+    for (const value of ["merchant", "blacksmith", "monster_blob_dog", "corrupted_golem", "lyra", "orun"])
+      expect(controllerArchetypeForNpc(value)).toBeNull();
+    expect(() => verifyArchetypeCandidate({ ...candidate(), archetypeId: "monster_blob_dog" })).toThrow("ARCHETYPE_UNKNOWN");
+    expect(() => verifyArchetypeCandidate({ ...candidate(), execution: "live" })).toThrow();
+    expect(() => verifyArchetypeCandidate({ ...candidate(), observationSchema: "unknown" })).toThrow();
+    expect(() => verifyArchetypeCandidate({ ...candidate(), regression: { ...candidate().regression, verdict: "failed" } })).toThrow();
+    const artifact = behaviorTemplate("blacksmith", "micro-shadow");
+    expect(() => verifyArchetypeCandidate({ ...candidate(), artifact, artifactHash: canonicalSha256(artifact) })).toThrow("NEURAL_REGISTRY_ADMISSION_BLOCKED");
   });
 });

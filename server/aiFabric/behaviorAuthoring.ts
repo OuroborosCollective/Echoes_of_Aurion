@@ -5,6 +5,7 @@ import { decodeOwnedNpcPacket } from "../../shared/npcSnapshotProtocol";
 import { buildPlannerContext } from "../../shared/npcUtilityPlannerDebug";
 import { readConfirmedNpcPacket } from "../wasdAurionRuntime";
 import { activeProvenance } from "../aurionProvenance";
+import { readNpcControllerBinding } from "../npcArchetypePersistence";
 import { BehaviorArtifact, BehaviorMode, BehaviorRole, behaviorTemplate, evaluateBehavior, weightSpaceExperiment } from "./behaviorForge";
 
 export const BehaviorDraftInput = z.object({role:BehaviorRole,mode:BehaviorMode,brief:z.string().trim().min(12).max(4000)}).strict();
@@ -17,9 +18,9 @@ export async function readBehaviorActors(userId:number) {
   const {npcs} = decodeOwnedNpcPacket(packet,userId);
   return {schemaVersion:"aurion.behavior-actors.v1",sourceRevision:activeProvenance.sourceRevision,
     mutationAuthority:"none",activation:"BLOCKED",blockers:ACTIVATION_BLOCKERS,
-    actors:npcs.map(npc=>({npcId:npc.npcId,regionId:npc.regionId,resolutionIndex:npc.resolutionIndex,
+    actors:await Promise.all(npcs.map(async npc=>({npcId:npc.npcId,regionId:npc.regionId,resolutionIndex:npc.resolutionIndex,
       decisionHash:npc.decisionHash,observationHash:canonicalSha256({sourceRevision:activeProvenance.sourceRevision,npc}),
-      activeController:null,controllerStatus:"UNVERIFIED",visualStatus:"UNVERIFIED"}))};
+      activeController:null,controllerBinding:await readNpcControllerBinding(npc.npcId),controllerStatus:"NO_AUTHORITATIVE_FORGE_CONTROLLER",visualStatus:"UNVERIFIED"})))};
 }
 
 /** Template selection is explicit. The brief is data, not a keyword-based pseudo-LLM. */

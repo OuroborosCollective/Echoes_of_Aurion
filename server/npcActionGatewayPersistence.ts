@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { appendNpcControllerShadowReceipt } from "./npcControllerShadowPersistence";
 import { isKnownNpcCapsulePin, npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import {
   aurionNpcActionConsentReceipts,
@@ -514,6 +515,8 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     await appendNpcSemanticGraphV2(tx,multiMemory);
 
     await tx.update(aurionNpcActionLeases).set({state:"consumed"}).where(eq(aurionNpcActionLeases.id,lease.id));
+
+    await appendNpcControllerShadowReceipt(tx, confirmed, validated.receipt);
 
     return Object.freeze({ status:"committed" as const, actionReceiptId:validated.receipt.id, effectReadbackId:readback.id, effectReadbackHash:readback.readbackHash, resolution:validated.resolution, npc:Object.freeze({ ...npcEffect.snapshot, multiMemory:multiMemory.memory }), world:worldEffect.reaction, polity:polityEffect });
   });

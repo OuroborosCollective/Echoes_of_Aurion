@@ -134,8 +134,12 @@ func completed(kind: String, data: Dictionary) -> void:
 		for actor in data.actors:
 			if typeof(actor) != TYPE_DICTIONARY or typeof(actor.get("npcId")) != TYPE_STRING or typeof(actor.get("observationHash")) != TYPE_STRING: continue
 			_actors.append(actor.duplicate(true))
-			_choice.add_item(actor.npcId)
-		_status.text = "Bestätigte NPC-Beobachtungen: %d. Controller und 3D-Sichtbarkeit UNVERIFIED; kein Apply." % _actors.size()
+			var label: String = actor.npcId
+			var binding: Variant = actor.get("controllerBinding")
+			if typeof(binding) == TYPE_DICTIONARY:
+				label += " · %s · Registry %s" % [str(binding.get("status", "UNVERIFIED")), str(binding.get("registryRevision", "?"))]
+			_choice.add_item(label)
+		_status.text = "Bestätigte NPC-Beobachtungen: %d. Shadow-Bindungen separat; keine aktive Forge-Ausführung. 3D UNVERIFIED." % _actors.size()
 	elif kind == "behaviorDraft":
 		if _edit_version != _pending_edit: return
 		if _brief.text != _pending_draft or data.get("status") != "DRAFT" or typeof(data.get("artifact")) != TYPE_DICTIONARY: return

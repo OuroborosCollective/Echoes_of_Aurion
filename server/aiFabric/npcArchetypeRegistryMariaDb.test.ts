@@ -45,6 +45,14 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
       mutationRule: { version: "npc-archetype-registry.v1" }, envelopeHash: npcHash(payload), rollbackTargetVersion: null,
       sourceRevision: pin.sourceRevision, sourceSha256: pin.sourceSha256, payload,
     }));
+    await db.transaction(tx => commitNpcPolicyMutation(tx, {
+      mutationReceiptId: "registry-test-individual", npcId: merchantIds[1], previousVersion: null, previousPolicyHash: null,
+      nextVersion: 7, nextPolicyHash: npcHash(payload), rejectedCandidateHash: null, verdict: "accepted", reason: "Approved isolated individual policy",
+      provenanceDigest: canonicalSha256(payload), evidenceWindow: { startIndex: 0, endIndex: 0 },
+      fitnessContract: { version: payload.regression.suite, resultDigest: payload.regression.resultDigest.slice(7) },
+      mutationRule: { version: "npc-archetype-registry.v1" }, envelopeHash: npcHash(payload), rollbackTargetVersion: null,
+      sourceRevision: pin.sourceRevision, sourceSha256: pin.sourceSha256, payload,
+    }));
     await db.transaction(tx => promoteNpcArchetype(tx, { archetypeId: payload.archetypeId, expectedRevision: 0, mutationReceiptId: "registry-test-approval-1", sourceRevision: payload.regression.sourceRevision }));
     for (const hub of ["observatory_threshold", "windhollow"] as const) await resolveAndRecordNpc(merchantGenesisRequest(hub), undefined, { bindControllerAtGenesis: true });
     const first = await readNpcControllerBinding(merchantIds[0]);
@@ -53,6 +61,7 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
     expect(first).toMatchObject({ npcId: merchantIds[0], registryRevision: 1, artifactHash: payload.artifactHash, status: "BOUND_SHADOW" });
     expect(second).toMatchObject({ npcId: merchantIds[1], registryRevision: 1, artifactHash: payload.artifactHash, status: "BOUND_SHADOW" });
     expect(first!.bindingHash).not.toBe(second!.bindingHash);
+    expect(second!.individualMutationReceiptId).toBe("registry-test-individual");
     const [rows] = await pool.query("SELECT artifactHash FROM aurionNpcControllerArtifacts");
     expect(rows).toHaveLength(1);
     expect((await resolveAndRecordNpc(merchantGenesisRequest("observatory_threshold"))).source).toBe("persisted");
@@ -125,6 +134,29 @@ suite("Archetype binding through actual isolated MariaDB and canonical merchant 
     expect(await readNpcControllerShadowReceipt(result.actionReceiptId)).toEqual(shadow);
     const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionNpcControllerShadowReceipts WHERE actionReceiptId=?", [result.actionReceiptId]);
     expect(Number(rows[0].n)).toBe(1);
+  });
+
+  it("rejects unapproved releases and corrupt artifacts, continuing only through the canonical fallback", async () => {
+    const db = (await getDb())!;
+    await expect(db.transaction(tx => promoteNpcArchetype(tx, { archetypeId: "aurion.merchant.economy.v1", expectedRevision: 3, mutationReceiptId: "not-approved", sourceRevision: originalPayload.regression.sourceRevision }))).rejects.toThrow("APPROVAL_REQUIRED");
+    await expect(pool.query("UPDATE aurionNpcControllerArtifacts SET artifactJson='{}' WHERE artifactHash=?", [originalPayload.artifactHash])).rejects.toThrow("APPEND_ONLY");
+    // Corruption fault injection in the explicitly isolated database. Restore the
+    // original guard and exact bytes even when an assertion fails.
+    const [[trigger]] = await pool.query<RowDataPacket[]>("SHOW CREATE TRIGGER aurionNpcControllerArtifacts_no_update") as unknown as [RowDataPacket[]];
+    const ddl = String(trigger["SQL Original Statement"]);
+    await pool.query("DROP TRIGGER aurionNpcControllerArtifacts_no_update");
+    try {
+      await pool.query("UPDATE aurionNpcControllerArtifacts SET artifactJson='{}' WHERE artifactHash=?", [originalPayload.artifactHash]);
+      await expect(db.transaction(tx => readBoundController(tx, merchantIds[0]))).rejects.toThrow("ARTIFACT_HASH_MISMATCH");
+      const source = (await readConfirmedMerchantActionSource(merchantIds[0]))!;
+      const result = await executeConfirmedMerchantAction({ worldSeed: "registry-isolated-world", homeHubId: "observatory_threshold", sourceDecisionReceiptId: source.receiptId });
+      expect(result.status).toBe("committed");
+      if (result.status !== "committed") throw Error("FALLBACK_DID_NOT_CONTINUE");
+      expect(await readNpcControllerShadowReceipt(result.actionReceiptId)).toMatchObject({ proposal: null, proposalDisposition: "CANONICAL_FALLBACK", reason: "CONTROLLER_VERIFICATION_FAILED" });
+    } finally {
+      await pool.query("UPDATE aurionNpcControllerArtifacts SET artifactJson=? WHERE artifactHash=?", [JSON.stringify(originalPayload.artifact), originalPayload.artifactHash]);
+      await pool.query(ddl);
+    }
   });
 
 });

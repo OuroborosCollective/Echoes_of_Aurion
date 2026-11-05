@@ -33,7 +33,7 @@ suite("NPC genesis and recorded source authority (real MariaDB)", () => {
   async function cleanup() {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     authorityState.unknown = false;
-    for (const table of [
+    for (const table of ["aurionNpcControllerShadowReceipts", "aurionNpcControllerBindings", 
       "aurionSemanticGraphIndexV2", "aurionSemanticGraphProvenanceV2", "aurionSemanticGraphEdgesV2", "aurionSemanticGraphNodesV2", "aurionSemanticGraphReceiptsV2",
       "aurionNpcGuildReceipts", "aurionNpcGuildMemberships", "aurionNpcGuildStates",
       "aurionNpcActionMemoryLinks", "aurionNpcActionEffectReadbacks", "aurionNpcActionReceipts", "aurionNpcActionEpochSourceReceipts", "aurionNpcActionConsentReceipts", "aurionNpcActionLeases",
