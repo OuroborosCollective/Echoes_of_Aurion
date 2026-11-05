@@ -15,6 +15,7 @@ import {
   npcRequestHash,
   parseNpcMemory,
   planMerchantAction,
+  hasLivingWorldRoute,
   resolveNpcNeeds,
   validateMerchantAction,
   verifyConfirmedNpcDecision,
@@ -94,6 +95,42 @@ function context(tick=0, scarceStock?:number, gatherResources=false):MerchantGat
 }
 
 describe("Wave 2 Step 26 WASD AIM-293 action gateway contract",()=>{
+  it("plans reachable route edges, compares risk with value, and keeps unreachable travel as a local decision",()=>{
+    const make=(wealthCopper:number, intermediates=true)=>{
+      const s=source(19506,true,{currentHubId:"windhollow",wealthCopper,hungerBps:2000,fatigueBps:1500,tradeProwessBps:10500,harvestYieldBps:10000});
+      const base=context(19506);
+      const markets=Object.values(merchantBootstrapMarkets).map(m=>({...m,stock:{...m.stock,grain:m.hubId==="cinder_vault"?0:1000}}));
+      const market=markets.find(m=>m.hubId==="windhollow")!;
+      const ownerId="market:windhollow";
+      const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
+      return {...base,travelPolicyVersion:"aurion.merchant-travel.v1" as const,confirmedDecision:s.confirmed,npc:confirmedNpcEconomy(s.hub,s.confirmed.snapshot),market,
+        marketEvidence:{...base.marketEvidence,stateHash:merchantMarketStateHash(market)},
+        inventory:{ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})},
+        polity:{...base.polity,polityId:"polity:windhollow",stateHash:merchantPolityStateHash({polityId:"polity:windhollow",version:base.polity.version,stability:72})},
+        targets:markets.filter(m=>intermediates||m.hubId==="windhollow"||m.hubId==="cinder_vault").map(m=>({id:`market:${m.hubId}`,kind:"market" as const,market:m,version:base.epoch.marketVersion,active:true,polityStability:72}))};
+    };
+    const travel=make(100);
+    const ready=planMerchantAction(travel);
+    expect(ready.status).toBe("ready");
+    if(ready.status!=="ready") throw Error("TRAVEL_PLAN_NOT_READY");
+    expect(ready.resolution.action).toBe("caravan");
+    expect(ready.resolution.travelPlan).toMatchObject({destinationHubId:"cinder_vault",reason:"BENEFIT_EXCEEDS_ROUTE_RISK"});
+    expect(ready.resolution.travelPlan!.path.length).toBeGreaterThan(2);
+    expect(hasLivingWorldRoute("windhollow",ready.resolution.caravan.destination!)).toBe(true);
+    expect(validateMerchantAction({context:travel,intent:ready.intent,lease:ready.proposedLease}).status).toBe("validated");
+    expect(planMerchantAction(travel)).toEqual(ready);
+    for(const ctx of [make(1_000_000_000),make(100,false)]){
+      const local=planMerchantAction(ctx);
+      expect(local.status).toBe("ready");
+      if(local.status!=="ready") throw Error("LOCAL_REPLAN_NOT_READY");
+      expect(local.resolution.action).toBe("trade");
+      expect(local.resolution.travelPlan!.decision).toBe("LOCAL");
+      expect(local.resolution.caravan.destination).toBeNull();
+      expect(validateMerchantAction({context:ctx,intent:local.intent,lease:local.proposedLease}).status).toBe("validated");
+    }
+    expect(()=>planMerchantAction({...travel,targets:travel.targets.map(({polityStability,...target})=>target)})).toThrow("NPC_TRAVEL_OBSERVATION_REQUIRED");
+  });
+
   it("removes merchant storage capacity only under the receipt-bound policy, preserving legacy replay",()=>{
     const original=context(0,undefined,true);
     const entries=original.inventory.entries.map(entry=>({...entry,capacity:entry.quantity}));

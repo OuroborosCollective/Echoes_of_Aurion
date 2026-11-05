@@ -143,6 +143,38 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     }, {isolationLevel: "repeatable read"});
   });
 
+  it("persists unlimited storage above the old cap with rollback, receipt binding and exact retry",async()=>{
+    const market={...merchantBootstrapMarkets[homeHub],stock:{grain:1_000_001,sandstone:1_000_001,bronze:1_000_001,aether:1_000_001,salve:1_000_001,rune_core:1_000_001}};
+    const ownerId=`market:${homeHub}`;
+    const entries=Object.entries(market.stock).map(([itemId,quantity])=>({itemId,quantity,capacity:1_000_000}));
+    const inventory={ownerId,entries,stateHash:merchantInventoryStateHash({ownerId,market,entries})};
+    await pool.query("UPDATE aurionNpcActionEpochStates SET marketJson=?,marketHash=?,inventoryJson=?,inventoryHash=? WHERE hubId=?",
+      [JSON.stringify(market),merchantMarketStateHash(market),JSON.stringify(inventory),inventory.stateHash,homeHub]);
+    await resolveAndRecordNpc({...sourceRequest(0),needEvents:(["safety","resources","belonging","status","wealth","power"] as const).map(need=>({
+      id:`storage:${need}`,need,delta:need==="resources"?-1:1,sourceReceiptId:"storage-source",resolutionIndex:0,
+    }))});
+    const source=(await readConfirmedMerchantActionSource(npcId))!;
+    const input={worldSeed:"storage-isolated-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId};
+    await expect(executeConfirmedMerchantAction({...input,failureInjection:"after_epoch_effect"})).rejects.toThrow();
+    const [rolledBack]=await pool.query<RowDataPacket[]>("SELECT marketHash,inventoryHash FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
+    expect(rolledBack[0]).toMatchObject({marketHash:merchantMarketStateHash(market),inventoryHash:inventory.stateHash});
+    const result=await executeConfirmedMerchantAction(input);
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed") throw Error("STORAGE_ACTION_NOT_COMMITTED");
+    expect(result.resolution.action).toBe("produce");
+    const [rows]=await pool.query<RowDataPacket[]>("SELECT receiptJson,receiptHash FROM aurionNpcActionReceipts WHERE id=?",[result.actionReceiptId]);
+    expect(JSON.parse(rows[0].receiptJson).storagePolicyVersion).toBe("aurion.merchant-storage.unbounded.v1");
+    const [epochs]=await pool.query<RowDataPacket[]>("SELECT inventoryJson FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
+    const entry=JSON.parse(epochs[0].inventoryJson).entries.find((e:{itemId:string})=>e.itemId===result.resolution.commodity);
+    expect(entry.quantity).toBe(1_000_001+result.resolution.quantity);
+    expect(entry.capacity).toBe(1_000_000); // Historical field does not define the new policy.
+    const before=await counts();
+    expect((await executeConfirmedMerchantAction(input)).status).toBe("persisted");
+    expect(await counts()).toEqual(before);
+    const [retry]=await pool.query<RowDataPacket[]>("SELECT receiptJson,receiptHash FROM aurionNpcActionReceipts WHERE id=?",[result.actionReceiptId]);
+    expect(retry).toEqual(rows);
+  });
+
   it("commits the scarce three-unit trade with matching DB inventory, receipt and idempotent readback",async()=>{
     // Disposable, guarded test DB only; no production seeding or inventory repair.
     await resetEpochs(3);

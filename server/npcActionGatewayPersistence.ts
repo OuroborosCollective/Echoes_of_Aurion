@@ -1,3 +1,4 @@
+import { MERCHANT_STORAGE_POLICY, MERCHANT_TRAVEL_POLICY } from "./aurion/npc/ax1LivingWorldProtocol";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { appendNpcControllerShadowReceipt } from "./npcControllerShadowPersistence";
@@ -219,6 +220,7 @@ async function lockedContext(tx: NpcTransaction, homeHubId: HubId, confirmed: Co
     id: `market:${row.hubId}`,
     kind: "market" as const,
     market: verified.get(row.hubId)!.market,
+    polityStability: row.polityStability,
     version: row.marketVersion,
     active: true,
   }));
@@ -418,7 +420,9 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
 
     await ensureEpochSourceBound(tx);
     const locked = await lockedContext(tx,input.homeHubId,confirmed);
-    const context = withWorldSeed(locked.context,input.worldSeed);
+    // New actions use the owner-defined storage rule. Existing receipts return
+    // above before this selection, preserving their exact historical identity.
+    const context = { ...withWorldSeed(locked.context,input.worldSeed), storagePolicyVersion: MERCHANT_STORAGE_POLICY, travelPolicyVersion: MERCHANT_TRAVEL_POLICY };
     const planned = planMerchantAction(context);
     if (planned.status === "blocked") return Object.freeze({status:"blocked" as const,code:planned.code,replanHash:planned.replanHash});
 
