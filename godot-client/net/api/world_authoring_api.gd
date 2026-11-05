@@ -6,7 +6,7 @@ signal completed(kind: String, data: Dictionary, connection_id: String, generati
 signal failed(kind: String, reason: String, connection_id: String, generation: int)
 
 const ROOT := "/api/trpc/aurionAuthoring."
-const QUEST_ROUTES := {"questTemplates":"authoringTemplates", "questTemplate":"authoringTemplate", "questReadback":"authoringTemplate", "questPropose":"proposeDraft", "questPlan":"publishPlan", "questPublish":"publish", "questReceipt":"publishReceipt"}
+const QUEST_ROUTES := {"questFadenInspect":"fadenwerkInspect", "questFadenDraft":"fadenwerkDraft", "questTemplates":"authoringTemplates", "questTemplate":"authoringTemplate", "questReadback":"authoringTemplate", "questPropose":"proposeDraft", "questPlan":"publishPlan", "questPublish":"publish", "questReceipt":"publishReceipt"}
 const MAX_SMALL := 1024 * 1024
 const MAX_WORLD := 8 * 1024 * 1024
 var _auth: Node
@@ -77,7 +77,9 @@ func _on_completed(result: int, code: int, headers: PackedStringArray, body: Pac
 		_finish_failure("REDIRECT_REJECTED")
 		return
 	if result != HTTPRequest.RESULT_SUCCESS:
-		_finish_failure("TRANSPORT_UNCERTAIN")
+		# Numeric engine/status codes only: never expose headers, URLs or response bodies.
+		# A transport failure still says nothing about whether an apply committed.
+		_finish_failure("TRANSPORT_UNCERTAIN_RESULT_%d_HTTP_%d" % [result, code])
 		return
 	if code != 200:
 		_finish_failure("HTTP_%d" % code)

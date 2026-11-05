@@ -5690,11 +5690,57 @@ Learned: Präsentationshüllen beweisen keine Passierbarkeit. Geänderter Vorgä
 Open: Finale Exact-Head-CI, echte Provider-/OpenCode-Verifikation und bestätigter Marktplan mit konkreter Eigentümerfreigabe vor produktivem Apply; Anleitung docs/godot-migration/ai-world-designer.md.
 Next safe step: Neue Regression prüfen, grünen Head integrieren und unabhängig zurücklesen; Live-Konfiguration und bestätigten Marktversuch getrennt nachweisen.
 
-### 2026-11-05 — VPS disk: promoter release retention after a capacity-blocked release
-Status: PARTIAL; local tests green; CI, review, merge pending.
-Task: Release run 41908873137 (#1313, f0c6b369) failed `RECOVERY_CAPACITY_INSUFFICIENT`: the schema apply needs DB bytes x 3 + 512 MiB free (DB 20.7 GB -> 58.3 GiB), the VPS had 54.9 GiB. A fresh run 41915725827 passed after freeing space (re-runs of the parent are refused by `SCHEMA_DISPATCH_PARENT_RETRY_FORBIDDEN`; the alignment controller dispatches a fresh run, at most 3 per revision).
-Findings (owner-approved cleanup 2026-11-05, 57 GB -> 260 GB free): `/opt/aurion-traefik-runtime/releases` held 300 never-pruned release directories (121 GB, 0.24-1.4 GB each); `/opt/sovereign-chatgpt-tools/workspaces` 1109 Sovereign-Studio job clones (70 GB; 1087 clean ones older than 14 days removed, one with uncommitted/unpushed work kept); `/var/lib/sovereign-release-reconciler/operator-source-checkouts` 312 git worktrees (19 GB; removed via `git worktree remove`, newest 3 kept); legacy `/opt/rpgjs-game`, `/opt/arelorian`, `/root/arelorian-redirect-fix-*`, `/root/opt/areloria` removed after archiving their uncommitted diffs/untracked files to `/var/backups/legacy-projects-20261105/`. Kept: `/root/opt/areloria/wasd-client-{2d,3d}-dist-<sha>.tgz` (WASD provenance lineage incl. ddce5911/002e7c35/28ecb7ae), live image d35b6e2c, the 5 newest Aurion releases.
-Decision: the promoter prunes release directories after promotion and readbacks (`# release-retention-start`): keeps the active release plus the newest 5 real release directories (`<40-hex>-<run>`, no symlinks); other entries never count or get removed. Report-only (`aurion.release-retention` {keep, pruned}); never fails a promoted release.
-Evidence: `server/aurionReleaseRetention.test.ts` executes the block in a temp tree (rollback case keeps an old active release; non-release entries untouched; first draft let a notes dir displace a release, caught by the test). Promoter-related tests 8 files / 74 green.
-Open: Sovereign-Studio job workspaces and reconciler worktrees have no retention either (other repository); the DB still grows, so the x3 capacity gate will tighten again over time.
-Next safe step: CI on the PR.
+### 2026-11-05 — Godot actor normalization across the actual JSON boundary
+Status: PARTIAL
+Task: Repair valid authenticated catalog actors rejected after native login.
+Decisions: Validate each identity-matrix component as an exact finite integer-valued number; retain identity, bounds, hashes, session ownership and render budgets.
+Touched surfaces: Godot catalog_model_cache and existing actual-GLB actor import regression.
+Evidence: Base a7a765fea3e19a2e68575d62bc4a4f1f3d5af2dd live client authenticated/connected, non-stale tick 2003009, zero actors; absent prepared assets separately restored from exact-head CI artifact 13370115167 (ZIP SHA256 343262c1b9bdd94e95e218d09e6f091a737682f55351deeadfc8d0f9c315dea3), yielding eight fallback monsters but no selected player. Native Godot 4.7.2 isolated JSON-roundtrip regression RED on original code, GREEN with fix; actor projection, world-design projection and AI preview regressions also exit 0. Malformed/nonidentity/string/boolean axes remain rejected. These isolated tests are not live deployment proof.
+Learned: Godot Array equality distinguishes JSON floats from literal integers; hand-built fixture dictionaries hid the HTTP failure.
+Open: Exact-head CI/review and verified editor delivery; full world/model parity and AI market acceptance remain unverified.
+Next safe step: Review and integrate the tested fix, then independently confirm the existing session renders its server-selected model.
+
+CI-Nachtrag zum selben Integrationsblock: Head cee17220c1c275171bafb3adac26529eaff3729d hat alle ausgeführten Code-Checks bestanden, darunter echter Godot-Import/Render (126958850453), native Viewport-Projektion (126958849687), Repository-Regression (126958849609), Android/JNI (126958849568) und Browser-E2E (126958850048). Vier bedingte Jobs skipped, nicht als bestanden gezählt; Devin/CodeRabbit ohne offene Review-Threads. GitBook-Vorschau m21D80HLwtyeajGnaah5 enthält exakt diesen Head, GitHub meldet dennoch pending. Merge durch automatische Freigabeprüfung abgelehnt; keine Umgehung oder Live-Codeänderung. Nach dieser Dokumentationsfortschreibung ist der neue Head erneut zu prüfen; Live-Darstellung bleibt unbelegt.
+
+
+### 2026-11-05 — Native WorldStudio transport diagnostics
+Status: PARTIAL
+Task: Preserve actionable native HTTP failures while investigating unresolved authenticated WorldStudio requests.
+Decisions: Include only numeric Godot result and HTTP status; retain uncertainty, session binding, response limits and one-shot apply semantics.
+Touched surfaces: Godot authoring API, existing studio error label, HTTP fixture and scene regressions.
+Evidence: Base `161e5694dc6df37890b62623944762e4348026a9`; native Godot 4.7.2 loopback body-limit test RED before / GREEN after (`RESULT_7_HTTP_200`), two explicitly requested HTTP calls; native authoring-state and imported main-scene tests PASS. Fixtures are not live evidence. Separate anonymous native HTTPS probes reached production health/auth endpoints in 90/110 ms.
+Learned: Generic TRANSPORT_UNCERTAIN hid the native failure; anonymous connectivity does not prove authenticated authoring health.
+Open: Exact failed live request cause, authenticated replay, full CI and owner-confirmed AI authoring remain unverified.
+Next safe step: Complete CI/review, deploy the diagnostic change with revision readback, then diagnose an authenticated studio request before requesting any world mutation.
+
+Review follow-up (same integration block): identity/catalog failures now appear in the top access label; pending, rejected and cleared sessions reset that label. Native main-scene regression passes with the entire identity error label inside the initial 360×640 viewport and a subsequent catalog failure visible there. This is headless layout evidence, not a physical tablet or authenticated live proof.
+
+Additional review follow-up (same block): the shared WorldStudio transport also forwards its safe diagnostic to the quest editor. Native scene regression passes for a failed quest readback while preserving its receipt-awaiting state and durable pending journal, with no automatic retry.
+
+Synchronous-failure review follow-up (same block): defer quest failure state transitions until the transport start result is known; preserve diagnostics through caller status updates. Real Godot scene regression is RED on the prior editor / GREEN with the correction; callback-free refusal, readback journal retention and configure()-connected production failure signals are covered. Wolfram enumerated eight abstract publish cases and reproduced the old false-unknown counterexample with no violation in the revised model; this is analysis, not runtime evidence. CI/review and live delivery remain pending.
+
+Codejaeger adjacent rerun (same block): isolated original-code quest-readback reproduction also fails solely on the overwritten diagnostic. Expanded native scene regression passes for synchronous World Apply refusal with its actionable not-started message, plus asynchronous Quest Publish uncertainty, retained journal, no duplicate publish and receipt recovery followed by independent readback. No additional state/persistence defect verified on the four inspected neighbor directions.
+
+Final review follow-up (same block): successful quest request starts now refresh the visible label immediately; native stale-readback-label regression RED before / GREEN after. Synthetic transport counts every request attempt, including refused starts, with exact one-attempt assertions. No gameplay or receipt contract changes.
+
+Review identity/status correction (same block): a distinct second quest publication reproduced a stale pending identity at head 7a7ea2974d5edf4dffbc470482034cc1d630e331. Beginning a new editable proposal now discards only the completed publication identity; unknown/readback-pending phases remain locked. Native RED/GREEN tests reject the previous receipt/template for the second operation and confirm only its matching independent readback. World request-start diagnostics and template-copy running status are also retained; all four world actions and quest copy are covered. Native synthetic scene GREEN; production delivery and final CI remain pending.
+
+Cross-editor follow-up (same block): starting a quest read no longer clears an unresolved world transport reason. Native scene RED on 54c3567b6a84d96cfa99bc28d4bdec8a707d1a5c / GREEN after request-family isolation; no state or receipt change.
+
+### 2026-11-05 — Fadenwerk inside the native quest editor
+Status: PARTIAL
+Task: Connect the existing Fadenwerk capabilities directly to Godot's canonical quest editor.
+Decisions: Browser and server reuse one shared structure adapter; authenticated read-only inspection/conversion returns inactive quarantined QuestTemplateVersion previews. Existing proposal/plan/owner-confirmation/publish/receipt/readback remains authoritative.
+Touched surfaces: Shared Fadenwerk adapter, Aurion quest authoring routes, native WorldStudio quest controls, HTTP/scene and isolated MariaDB regressions.
+Evidence: Native Godot 4.7.2 scene passes with synthetic Fadenwerk responses, actual scene loading and 360×640 layout; source-change rejection, blocked semantics, inactive staging, title editing, uncertainty locks and synchronous failures checked. TypeScript, real HTTP routing and MariaDB integration run in CI; not yet claimed passed.
+Learned: Fadenwerk already contains usable graph authoring; a shared adapter avoids a second importer or quest runtime.
+Open: Exact-head CI/review, server/client deployment and authenticated live use.
+Next safe step: Verify CI, merge only with no open review findings, deploy exact revisions and independently read back the authenticated native workflow.
+
+Review follow-up (same Fadenwerk block): single-node strands now report a distinct-end blocker; converted templates reserve plan-envelope capacity and native draft validation measures compact canonical bytes separately from bounded presentation text. Read-only failures preserve an existing validated plan for asynchronous, synchronous and callback-free refusals. Native Godot RED `2c4d9cd6c2363a7797ed606ef5e5f818838bee97f91211b2688810aeb830a604` / GREEN `6c56378c91c06be058380aba98b668070ca04b960ae5d5ba1491a3eb2ef8f3f2`. The MariaDB recovery test now creates its proposal through the same canonical route registry as plan/publish; template-set guards and all assertions remain intact. Server/dense-graph regression results await exact-head CI.
+
+Adjacent import review (same block): inspection now blocks non-empty itemsSource catalogs, generated edge-ID collisions and entry nodes without exactly one transition, matching QuestRuntime.acceptQuest. No source choices, catalogs or identifiers are silently reinterpreted; canonical runtime remains unchanged. Regression includes all three safe failures and a dense graph with a valid single start transition.
+
+Runtime-bound neighbor check (same block): generated edge IDs also obey the existing 96-character player-choice route. Added actual QuestRuntimeEngine compile/accept/branch regression with fixed operational clock and repeat-equal receipts; no engine behavior changed. Prior head af312a9447460f7512aa90df206cef72b0aca528 passed isolated MariaDB and authenticated browser checks; native source hashes independently matched that head. Wolfram enumerated 64 topologically ordered four-node DAGs: 21 reachable, 18 rejected by the single-start-edge constraint, three accepted with zero constraint violations; identifier concatenation collision independently reproduced. Mathematical/test evidence is not live activation.
+
+Choice-boundary refinement (same block): the 96-character ID bound applies only to branch edges submitted through the player-choice route. Long automatic start transitions remain importable and are exercised through the real engine; the long branch-edge rejection stays covered.

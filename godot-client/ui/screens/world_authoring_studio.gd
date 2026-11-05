@@ -43,6 +43,7 @@ var _new_design_version: SpinBox
 var _quest_editor: VBoxContainer
 var _ai_panel: VBoxContainer
 var _ai_pending_draft := ""
+var _failure_reason := ""
 
 func _ready() -> void:
 	visible = false
@@ -361,9 +362,10 @@ func open_studio() -> bool:
 		return false
 	visible = true
 	if _state.session_matches(_connection, _generation):
-		_info.text = _state.message
+		_set_info(_state.message)
 		return true
 	_info.text = "Admin-Sitzung wird bei Aurion geprüft."
+	_catalog_info.text = _info.text
 	_send("identity")
 	return true
 
@@ -384,6 +386,7 @@ func close_session() -> void:
 	if is_instance_valid(_quest_editor): _quest_editor.close_context()
 	_catalog_revision = ""
 	_catalog_assets.clear()
+	if is_instance_valid(_catalog_info): _catalog_info.text = "Admin-Zugang und Katalog noch nicht geprüft."
 	if is_instance_valid(_asset_choice): _asset_choice.clear()
 	if is_instance_valid(_draft_import): _draft_import.text = ""
 	_inspection.clear()
@@ -394,6 +397,7 @@ func close_session() -> void:
 	if is_instance_valid(_inspection_filter):
 		_inspection_filter.text = ""
 	_render_inspector()
+	_failure_reason = ""
 	_connection = ""
 	_server = ""
 	_generation = -1
@@ -426,11 +430,14 @@ func _on_refresh_succeeded() -> void:
 		_info.text = "Sitzung erneuert. Bitte die gewünschte Aktion erneut auswählen."
 
 func _send(kind: String, payload: Dictionary = {}) -> bool:
+	if not kind.begins_with("quest"):
+		_failure_reason = ""
 	if not _ensure_access() or _api == null or _api.busy():
 		return false
 	return _api.request(kind, _server, _connection, payload, _allow_local)
 
 func _on_draft_changed() -> void:
+	_failure_reason = ""
 	_state.draft_changed()
 	if _state.phase in ["ready", "confirmed"] and is_instance_valid(_info):
 		_info.text = "PREVIEW_ONLY · Entwurf geändert; neuer Aurion-Plan erforderlich."
@@ -470,7 +477,7 @@ func _plan() -> void:
 		return
 	if not _journal.read().is_empty():
 		_state.mark_unresolved()
-		_info.text = _state.message
+		_set_info(_state.message)
 		return
 	var draft: Variant = _current_draft()
 	var operation_id := Crypto.new().generate_random_bytes(16).hex_encode()
@@ -479,7 +486,7 @@ func _plan() -> void:
 		return
 	if not _send("worldPlan", {"draft":draft, "operationId":operation_id}):
 		_state.failed("worldPlan")
-	_info.text = _state.message
+	_set_info(_state.message)
 
 func _request_confirmation() -> void:
 	var plan: Dictionary = _state.planned_summary()
@@ -501,7 +508,7 @@ func _apply() -> void:
 		return
 	if not _journal.read().is_empty():
 		_state.mark_unresolved()
-		_info.text = _state.message
+		_set_info(_state.message)
 		return
 	var reserved_actor: int = _state.actor_id
 	var operation_id: String = plan.plan.operationId
@@ -521,14 +528,16 @@ func _apply() -> void:
 			_state.not_submitted()
 		else:
 			_state.mark_unresolved()
-	_info.text = _state.message
+	_set_info(_state.message)
 
 func _readback() -> void:
 	if _state.phase == "confirmed":
 		_state.refresh_readback({}, _current_draft())
-		_info.text = _state.message
+		_set_info(_state.message)
 	if not _send("readback"):
-		_info.text = "Weltstand konnte nicht angefordert werden."
+		_set_info("Weltstand konnte nicht angefordert werden.")
+	else:
+		_set_info("Weltstand wird gelesen; Bestätigung steht aus.")
 
 func _recover_receipt() -> void:
 	var pending: Dictionary = _journal.read()
@@ -538,7 +547,7 @@ func _recover_receipt() -> void:
 	if _send("worldReceipt", {"designKey":pending.designKey, "version":pending.version, "planHash":pending.planHash, "operationId":pending.operationId}):
 		_info.text = "Aurion sucht das Receipt; es wird kein Apply wiederholt."
 	else:
-		_info.text = "Receipt-Suche konnte nicht gestartet werden."
+		_set_info("Receipt-Suche konnte nicht gestartet werden.")
 
 func _completed(kind: String, data: Dictionary, connection: String, generation: int) -> void:
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
@@ -546,14 +555,16 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 	if kind.begins_with("quest"):
 		_quest_editor.completed(kind, data)
 		return
+	_failure_reason = ""
 	match kind:
 		"identity":
 			if data.get("role") != "admin" or not _state.open(connection, generation, data.get("id")):
 				_info.text = "Für das Weltstudio ist eine bestätigte Aurion-Adminrolle erforderlich."
+				_catalog_info.text = _info.text
 				return
 			if not _journal.read().is_empty():
 				_state.mark_unresolved()
-				_info.text = _state.message
+				_set_info(_state.message)
 			_catalog_info.text = "Adminrolle bestätigt; Katalog wird geladen."
 			_quest_editor.open_context(connection, generation, data.get("id"), _send)
 			_send("catalog")
@@ -581,7 +592,7 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_ai_panel.set_world(data.world)
 				if _state.phase == "confirmed":
 					_state.refresh_readback(data.world, _current_draft())
-					_info.text = _state.message
+					_set_info(_state.message)
 		"aiPropose":
 			_ai_panel.proposal(data)
 			var proposal_draft: Variant = JSON.parse_string(str(data.get("draftJson", "")))
@@ -606,16 +617,16 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_state.failed("worldPlan")
 				_info.text = "Plan passt nicht mehr zum aktuellen Entwurf."
 			else:
-				_info.text = _state.message
+				_set_info(_state.message)
 		"worldApply":
 			if not _state.accept_apply(data):
 				_state.failed("worldApply")
-				_info.text = _state.message
+				_set_info(_state.message)
 			elif not _send("readback"):
 				_state.failed("readback")
-				_info.text = _state.message
+				_set_info(_state.message)
 			else:
-				_info.text = _state.message
+				_set_info(_state.message)
 		"worldReceipt":
 			if data.get("status") == "unresolved":
 				_info.text = "Kein Receipt gefunden; das Ergebnis bleibt ungeklärt."
@@ -623,9 +634,9 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 				_info.text = "Receipt und Weltstand konnten nicht sicher zugeordnet werden."
 			elif not _send("readback"):
 				_state.failed("readback")
-				_info.text = _state.message
+				_set_info(_state.message)
 			else:
-				_info.text = _state.message
+				_set_info(_state.message)
 		"readback":
 			if _state.phase == "awaiting_readback":
 				if not _state.accept_readback(data):
@@ -637,28 +648,34 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 					_state.mark_unresolved()
 					_info.text = "Receipt und Weltstand stimmen; die lokale Vormerkung konnte nicht entfernt werden."
 				else:
-					_info.text = _state.message
+					_set_info(_state.message)
 			elif _state.phase == "confirmed":
 				_state.refresh_readback(data, _current_draft())
-				_info.text = _state.message
+				_set_info(_state.message)
 			else:
 				_info.text = "Weltstand gelesen; ein vorheriges unbekanntes Apply wird dadurch nicht bewiesen."
 			if data.get("schemaVersion") == "aurion.world-design.v1" and WorldProjection._hex(data.get("revision"), 64) and typeof(data.get("designs")) == TYPE_ARRAY:
 				_ai_panel.set_world(data)
 				confirmed_world.emit(data, connection, generation)
 
+func _set_info(value: String) -> void:
+	_info.text = value + (" · " + _failure_reason if not _failure_reason.is_empty() else "")
+
 func _failed(kind: String, _reason: String, connection: String, generation: int) -> void:
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
 		return
 	if kind.begins_with("quest"):
-		_quest_editor.failed(kind)
+		_quest_editor.failed(kind, _reason)
 		return
+	_failure_reason = _reason
 	_state.failed(kind)
 	if kind in ["aiStatus", "aiPropose"]:
 		_ai_panel.status.text = "UNRESOLVED · " + _reason
 		_info.text = "KI-Anfrage nicht bestätigt; bestehender Entwurf bleibt erhalten."
 		return
-	_info.text = _state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden."
+	_set_info(_state.message if not _state.message.is_empty() else "Aurion-Anfrage konnte nicht bestätigt werden.")
+	if kind in ["identity", "catalog"]:
+		_catalog_info.text = ("Zugangsprüfung fehlgeschlagen" if kind == "identity" else "Katalogabfrage fehlgeschlagen") + " · " + _reason
 
 func _close_requested() -> void:
 	# A hidden response is deliberately ignored, so do not hide while any

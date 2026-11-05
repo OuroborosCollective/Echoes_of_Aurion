@@ -11,6 +11,7 @@ on:
       - "server/routes/aurionQuestRouter.ts"
       - "server/questCompiler/**"
       - "shared/aurionQuestContract.ts"
+      - "shared/fadenwerkLegacyAdapter.ts"
       - ".github/workflows/fadenwerk-browser-mariadb-e2e.yml"
   push:
     branches: [main]
@@ -23,6 +24,7 @@ on:
       - "server/routes/aurionQuestRouter.ts"
       - "server/questCompiler/**"
       - "shared/aurionQuestContract.ts"
+      - "shared/fadenwerkLegacyAdapter.ts"
       - ".github/workflows/fadenwerk-browser-mariadb-e2e.yml"
   workflow_dispatch:
 
