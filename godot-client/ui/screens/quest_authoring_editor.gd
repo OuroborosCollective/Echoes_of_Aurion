@@ -327,10 +327,11 @@ func completed(kind: String, data: Dictionary) -> void:
 				_state.message = "Kein passendes Receipt bestätigt; Ergebnis bleibt ungeklärt. Publish wird nicht wiederholt."
 	_show_status()
 
-func failed(kind: String) -> void:
+func failed(kind: String, reason: String = "") -> void:
 	if kind == "questTemplate": _copying.clear()
 	_state.failed(kind)
 	_show_status()
+	if not reason.is_empty(): _status.text += " · " + reason
 
 func _set_message(value: String) -> void:
 	_status.text = value

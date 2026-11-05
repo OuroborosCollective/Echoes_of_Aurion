@@ -654,7 +654,7 @@ func _failed(kind: String, _reason: String, connection: String, generation: int)
 	if not visible or not _session_valid() or connection != _connection or generation != _generation:
 		return
 	if kind.begins_with("quest"):
-		_quest_editor.failed(kind)
+		_quest_editor.failed(kind, _reason)
 		return
 	_state.failed(kind)
 	if kind in ["aiStatus", "aiPropose"]:

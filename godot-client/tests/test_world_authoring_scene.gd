@@ -332,6 +332,12 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 		"previousHash":null, "resultHash":plan_value.templateHash, "receiptHash":"f".repeat(64), "humanConfirmed":true}
 	studio._completed("questPublish", {"receipt":receipt,"template":draft_value,"templateSetHash":"d".repeat(64)}, SESSION, generation)
 	require(transport.sent.back().kind == "questReadback" and transport.sent.back().payload == {"templateId":draft_value.templateId,"version":8} and editor._state.phase == "awaiting_readback", "publish response stood in for exact-version independent readback")
+	var before_failed_readback := transport.sent.size()
+	var quest_failure := "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"
+	studio._failed("questReadback", quest_failure, SESSION, generation)
+	require(editor._status.text.contains(quest_failure), "quest editor discarded native transport diagnostics")
+	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "transport diagnostics cleared an unconfirmed quest publication")
+	require(transport.sent.size() == before_failed_readback, "quest transport failure automatically retried")
 	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
 	require(not editor._journal.read().is_empty(), "a catalog page stood in for independent publication readback")
 	studio._completed("questReadback", {"templates":[]}, SESSION, generation)
