@@ -5,6 +5,8 @@ import { executeConfirmedMerchantAction, persistPolity, readConfirmedMerchantAct
 import { eq } from "drizzle-orm";
 import { aurionPolityStates } from "../drizzle/schema";
 import { getDb } from "./db";
+import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
+import type { TrpcContext } from "./_core/context";
 import { readConfirmedNpcState, resolveAndRecordNpc } from "./wasdAurionRuntime";
 import {
   merchantBootstrapMarkets,
@@ -225,6 +227,14 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     expect(readback.entries[0].worldSeedSha256).toMatch(/^[a-f0-9]{64}$/);
     expect((await readConfirmedMerchantJourneyMemory(npcId,0)).entries).toEqual([]);
     expect(await readConfirmedMerchantJourneyMemory(npcId,1)).toEqual(readback);
+    const beforeReadCounts=await counts();
+    const caller=aurionAuthoringRouter.createCaller({user:{id:42,role:"admin"}} as TrpcContext);
+    const actor=(await caller.behaviorActors()).actors.find(actor=>actor.npcId===npcId)!;
+    expect(actor).toBeDefined();
+    expect(await caller.behaviorJourneyMemory({npcId,expectedObservationHash:actor.observationHash})).toMatchObject({status:"READBACK",observationHash:actor.observationHash,memory:readback});
+    await expect(caller.behaviorJourneyMemory({npcId,expectedObservationHash:"sha256:"+"0".repeat(64)})).rejects.toThrow("BEHAVIOR_OBSERVATION_CHANGED");
+    await expect(caller.behaviorJourneyMemory({npcId:"invented",expectedObservationHash:actor.observationHash})).rejects.toThrow("BEHAVIOR_NPC_NOT_CONFIRMED");
+    expect(await counts()).toEqual(beforeReadCounts);
     await expect(readConfirmedMerchantJourneyMemory(npcId,2)).rejects.toThrow("JOURNEY_DECISION_REQUIRED");
     await expect(readConfirmedMerchantJourneyMemory("lyra",1)).rejects.toThrow("JOURNEY_ACTOR_UNSUPPORTED");
     await pool.query("DELETE FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId]);

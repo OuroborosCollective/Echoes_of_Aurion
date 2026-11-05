@@ -87,6 +87,16 @@ Historische Aktions-Readbacks rekonstruieren den damaligen Polity-Nachfolger aus
 
 Der Registry-Restarttest startet zwei unabhängige Node-Prozesse mit je 30 Sekunden Obergrenze. Sein Gesamtbudget beträgt explizit 75 Sekunden; sämtliche Inhalts-, Versions- und Hashprüfungen bleiben erhalten. Der vorherige Vitest-Standard von fünf Sekunden reichte in einem CI-Lauf nicht für beide Prozessstarts.
 
+## Belegte Reiseerinnerungen im Editor
+
+Der adminpflichtige `behaviorJourneyMemory`-Abruf liest ausschließlich für die vier kanonischen Händler ein begrenztes historisches Fenster: höchstens 25 Aktionszeilen, davon 24 ausgewertet; `hasOlderActions` kennzeichnet abgeschnittene Historie. Er prüft Aktionshash, damaligen Effekt-Readback und Memory-Verknüpfung. Eine beliebige Zeichenfolge im NPC-Gedächtnis reicht nicht als Reisebeleg. Ausgang/Ziel, `passed`/`ambushed`, logisches Alter, heutige Gedächtnisbindung und zugehörige Hashes werden ohne zusätzliche Tabellen oder Schreiboperationen zurückgegeben. Der Abruf bindet den bestätigten NPC-Beobachtungshash vor und nach dem Lesen; Godot prüft außerdem NPC-ID, Entscheidungsindex und Entscheidungshash.
+
+Die native Schaltfläche „Belegte Reiseerinnerungen lesen“ zeigt diese Daten und den begrenzten Reisegraphen. `READBACK` bezeichnet ausschließlich diesen Lesevorgang. `spatialPerception: UNAVAILABLE` und die fehlenden Beobachterpositionen, Sichtlinien, Monster-Entity-Belege, Weltrevisionen und Chunk-Identitäten bleiben ausdrücklich sichtbar. Weder dieser Abruf noch die Anzeige erzeugt eine Controller-Freigabe oder neue Monsterkenntnis.
+
+TDD für diesen Abruf: Tests-only `0eac0a3ad5ddd7e2cc61a38342079dc7bfddc57a`, AIM-293 `42075151088`, reproduzierte den fehlenden Readback; World Authoring `42075150804` reproduzierte die fehlende geschützte Route. Die Ergänzung prüft echten Commit/Rollback, Wiederholung, historischen Index, unveränderte Datenbankzählstände, falsche Beobachtung und fehlende Memory-Verknüpfung. Godot-Fixtures prüfen fremde/veraltete Antworten und die Entscheidungsbindung; sie sind kein Live-Serverbeweis.
+
+Vorheriger Head `cb7c2ba63202ef93bb09847cdebb299ede78d492`: AIM-293 `42068522593` (59 Tests), World Authoring `42068522980` (76 Tests plus TypeScript) und Godot 4.7.2 `42068523224` erfolgreich. AIM-259 `42068522888` scheiterte dagegen an einer gestorbenen Testfigur beim gehaltenen Baumkontakt. Die Lebensprüfung bleibt bestehen; der Befund ist kein belegter Kollisionsnachweis und verhindert einen grünen Gesamtabschluss. Neue Änderungen benötigen ihre eigenen Exact-Head-Gates.
+
 ## Klassifikation der geänderten Flächen
 
 | Datei | Klasse |

@@ -32,7 +32,7 @@ static func unwrap_trpc(value: Variant) -> Dictionary:
 func request(kind: String, base_url: String, connection: String, payload: Dictionary = {}, allow_local: bool = false) -> bool:
 	if _active or not is_inside_tree() or connection.is_empty() or not _auth.protected_response_allowed():
 		return false
-	if kind not in ["identity", "catalog", "behaviorActors", "behaviorDraft", "behaviorTest", "aiStatus", "aiPropose", "propose", "worldPlan", "worldApply", "worldReceipt", "readback"] and not QUEST_ROUTES.has(kind):
+	if kind not in ["identity", "catalog", "behaviorActors", "behaviorDraft", "behaviorTest", "behaviorJourneyMemory", "aiStatus", "aiPropose", "propose", "worldPlan", "worldApply", "worldReceipt", "readback"] and not QUEST_ROUTES.has(kind):
 		return false
 	var server: String = RuntimeConfig.validated_server_url(base_url, allow_local)
 	var token: String = _auth.access_token()

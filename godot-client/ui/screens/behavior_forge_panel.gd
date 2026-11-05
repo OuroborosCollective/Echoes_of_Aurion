@@ -30,6 +30,7 @@ func _ready() -> void:
 	_choice.item_selected.connect(func(_i: int): _invalidate())
 	add_child(_choice)
 	_button("Bestätigte NPCs erneut lesen", func(): _request("behaviorActors"))
+	_button("Belegte Reiseerinnerungen lesen", _journey_memory)
 	_role = OptionButton.new()
 	for value in ["blacksmith", "questgiver", "guard", "animal"]: _role.add_item(value)
 	_role.item_selected.connect(func(_i: int): _invalidate())
@@ -123,6 +124,13 @@ func _test() -> void:
 	_pending_observation = str(actor.observationHash)
 	_request("behaviorTest", {"npcId":actor.npcId, "expectedObservationHash":actor.observationHash, "artifact":artifact})
 
+func _journey_memory() -> void:
+	if not _pending.is_empty() or _choice.selected < 0 or _choice.selected >= _actors.size(): return
+	var actor: Dictionary = _actors[_choice.selected]
+	_pending_actor = str(actor.npcId)
+	_pending_observation = str(actor.observationHash)
+	_request("behaviorJourneyMemory", {"npcId":actor.npcId,"expectedObservationHash":actor.observationHash})
+
 func completed(kind: String, data: Dictionary) -> void:
 	if kind != _pending: return
 	_pending = ""
@@ -140,6 +148,29 @@ func completed(kind: String, data: Dictionary) -> void:
 				label += " · %s · Registry %s" % [str(binding.get("status", "UNVERIFIED")), str(binding.get("registryRevision", "?"))]
 			_choice.add_item(label)
 		_status.text = "Bestätigte NPC-Beobachtungen: %d. Shadow-Bindungen separat; keine aktive Forge-Ausführung. 3D UNVERIFIED." % _actors.size()
+	elif kind == "behaviorJourneyMemory":
+		if _edit_version != _pending_edit or _choice.selected < 0 or _choice.selected >= _actors.size(): return
+		var actor: Dictionary = _actors[_choice.selected]
+		if actor.npcId != _pending_actor or actor.observationHash != _pending_observation or data.get("observationHash") != _pending_observation or data.get("status") != "READBACK": return
+		var memory: Variant = data.get("memory")
+		if typeof(memory) != TYPE_DICTIONARY or memory.get("schemaVersion") != "aurion.npc-journey-memory.v1" or memory.get("npcId") != _pending_actor: return
+		if not actor.has("resolutionIndex") or not actor.has("decisionHash"): return
+		if memory.get("asOfResolutionIndex") != actor.resolutionIndex or memory.get("decisionHash") != actor.decisionHash: return
+		if memory.get("scope") != "CONFIRMED_ABSTRACT_JOURNEYS" or memory.get("mutationAuthority") != "none" or memory.get("spatialPerception") != "UNAVAILABLE": return
+		if not _hash_valid("sha256:" + str(memory.get("readbackHash", ""))) or typeof(memory.get("entries")) != TYPE_ARRAY or memory.entries.size() > 24: return
+		for entry in memory.entries:
+			if typeof(entry) != TYPE_DICTIONARY or entry.get("outcome") not in ["passed", "ambushed"]: return
+			for field in ["actionReceiptHash", "effectsHash", "effectReadbackHash", "worldSeedSha256"]:
+				if not _hash_valid("sha256:" + str(entry.get(field, ""))): return
+		_result.text = JSON.stringify(data, "\t")
+		_graph.clear()
+		var root := _graph.create_item()
+		root.set_text(0, "Bestätigte abstrakte Reisen · keine Monster-Sichtungen")
+		for entry in memory.entries:
+			var item := _graph.create_item(root)
+			item.set_text(0, "%s → %s · %s · Alter %s · im Gedächtnis: %s" % [str(entry.get("fromHubId", "?")), str(entry.get("toHubId", "?")), str(entry.outcome), str(entry.get("ageInResolutions", "?")), str(entry.get("retainedInMemory", false))])
+		_status.text = "READBACK · %d belegte Reisen aus bis zu 24 Aktionen. Räumliche Wahrnehmung UNAVAILABLE; keine Live-Aktivierung." % memory.entries.size()
+		if memory.get("hasOlderActions", false): _status.text += " Ältere Aktionen außerhalb dieses Fensters."
 	elif kind == "behaviorDraft":
 		if _edit_version != _pending_edit: return
 		if _brief.text != _pending_draft or data.get("status") != "DRAFT" or typeof(data.get("artifact")) != TYPE_DICTIONARY: return

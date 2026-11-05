@@ -1,7 +1,8 @@
 import { MERCHANT_STORAGE_POLICY, MERCHANT_TRAVEL_POLICY } from "./aurion/npc/ax1LivingWorldProtocol";
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
 import { appendNpcControllerShadowReceipt } from "./npcControllerShadowPersistence";
+import { controllerArchetypeForNpc } from "./aiFabric/npcArchetypeRegistry";
 import { isKnownNpcCapsulePin, npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import {
   aurionNpcActionConsentReceipts,
@@ -590,3 +591,52 @@ export async function readConfirmedNpcActionPacket(userId:number) {
   });
 }
 
+
+/** Bounded read-only view of real journey receipts. It never interprets an
+ * arbitrary memory string as a sighting or reconstructs a physical position.
+ */
+export async function readConfirmedMerchantJourneyMemory(npcId: string, asOfResolutionIndex: number) {
+  if (controllerArchetypeForNpc(npcId) !== "aurion.merchant.economy.v1") throw new Error("NPC_JOURNEY_ACTOR_UNSUPPORTED");
+  if (!Number.isSafeInteger(asOfResolutionIndex) || asOfResolutionIndex < 0 || asOfResolutionIndex > 2147483647) throw new Error("NPC_JOURNEY_INDEX_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const decision = (await tx.select().from(aurionNpcDecisionReceipts)
+      .where(and(eq(aurionNpcDecisionReceipts.npcId,npcId),eq(aurionNpcDecisionReceipts.resolutionIndex,asOfResolutionIndex))).limit(1))[0];
+    if (!decision) throw new Error("NPC_JOURNEY_DECISION_REQUIRED");
+    const snapshot = decodeNpcReceipt(decision.observationIdsJson,decision);
+    const rows = await tx.select().from(aurionNpcActionReceipts)
+      .where(and(eq(aurionNpcActionReceipts.npcId,npcId),lte(aurionNpcActionReceipts.resolutionIndex,asOfResolutionIndex)))
+      .orderBy(desc(aurionNpcActionReceipts.resolutionIndex),desc(aurionNpcActionReceipts.id)).limit(25);
+    const entries = [];
+    for (const row of rows.slice(0,24)) {
+      const receipt = parsed<MerchantActionReceipt>(row.receiptJson,"NPC_ACTION_RECEIPT_JSON_INVALID");
+      const {receiptHash,...unsigned} = receipt;
+      if (receipt.id !== row.id || receipt.npcId !== npcId || receipt.resolutionIndex !== row.resolutionIndex
+          || receiptHash !== row.receiptHash || merchantActionReceiptHash(unsigned) !== receiptHash) throw new Error("NPC_JOURNEY_RECEIPT_MISMATCH");
+      if (receipt.travelPolicyVersion !== MERCHANT_TRAVEL_POLICY || receipt.action !== "caravan") continue;
+      const confirmed = await readPersistedAction(tx,row);
+      if (confirmed.status !== "persisted") throw new Error("NPC_JOURNEY_READBACK_REQUIRED");
+      const resolution = confirmed.resolution;
+      const fromHubId = receipt.originHubId, toHubId = resolution.caravan.destination;
+      if (!toHubId || resolution.action !== "caravan" || resolution.npc.npcId !== npcId
+          || resolution.market.hubId !== fromHubId || receipt.target.hubId !== toHubId
+          || resolution.resolutionIndex !== row.resolutionIndex) throw new Error("NPC_JOURNEY_EFFECT_MISMATCH");
+      const outcome = resolution.caravan.ambushed ? "ambushed" as const : "passed" as const;
+      const record = `journey:v1:${fromHubId}:${toHubId}:${row.resolutionIndex}:${outcome}`;
+      if (!confirmed.npc.memory.includes(record)) throw new Error("NPC_JOURNEY_MEMORY_LINK_MISMATCH");
+      const retainedInMemory = snapshot.memory.includes(record);
+      const ageInResolutions = asOfResolutionIndex-row.resolutionIndex;
+      const confidenceBps = retainedInMemory && ageInResolutions < 3500 ? Math.floor((3500-ageInResolutions)*10000/3500) : 0;
+      entries.push(Object.freeze({fromHubId,toHubId,outcome,observedResolutionIndex:row.resolutionIndex,
+        ageInResolutions,retainedInMemory,confidenceBps,actionReceiptId:row.id,actionReceiptHash:row.receiptHash,
+        effectsHash:row.effectsHash,effectReadbackId:confirmed.effectReadbackId,effectReadbackHash:confirmed.effectReadbackHash,
+        worldSeedSha256:receipt.worldSeedSha256,sourceRevision:row.sourceRevision,travelPolicyVersion:receipt.travelPolicyVersion}));
+    }
+    const payload = {schemaVersion:"aurion.npc-journey-memory.v1" as const,npcId,asOfResolutionIndex,
+      decisionHash:decision.decisionHash,scope:"CONFIRMED_ABSTRACT_JOURNEYS" as const,mutationAuthority:"none" as const,
+      spatialPerception:"UNAVAILABLE" as const,missingSpatialEvidence:["observer_position","sight_line","monster_entity_observation","world_revision","chunk_identity"] as const,
+      examinedActionCount:Math.min(rows.length,24),hasOlderActions:rows.length>24,entries:Object.freeze(entries)};
+    return Object.freeze({...payload,readbackHash:npcHash(payload)});
+  });
+}

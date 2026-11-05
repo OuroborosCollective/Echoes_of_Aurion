@@ -5,11 +5,13 @@ import { decodeOwnedNpcPacket } from "../../shared/npcSnapshotProtocol";
 import { buildPlannerContext } from "../../shared/npcUtilityPlannerDebug";
 import { readConfirmedNpcPacket } from "../wasdAurionRuntime";
 import { activeProvenance } from "../aurionProvenance";
+import { readConfirmedMerchantJourneyMemory } from "../npcActionGatewayPersistence";
 import { readNpcControllerBinding } from "../npcArchetypePersistence";
 import { BehaviorArtifact, BehaviorMode, BehaviorRole, behaviorTemplate, evaluateBehavior, weightSpaceExperiment } from "./behaviorForge";
 
 export const BehaviorDraftInput = z.object({role:BehaviorRole,mode:BehaviorMode,brief:z.string().trim().min(12).max(4000)}).strict();
 export const BehaviorTestInput = z.object({npcId:z.string().min(1).max(96),expectedObservationHash:z.string().regex(/^sha256:[a-f0-9]{64}$/),artifact:BehaviorArtifact}).strict();
+export const BehaviorJourneyInput = BehaviorTestInput.omit({artifact:true});
 export const ACTIVATION_BLOCKERS = ["CONTROLLER_NOT_BOUND_TO_CANONICAL_ACTION_RECEIPT", "TICK_SEED_CHUNK_BINDING_UNAVAILABLE", "LIVE_3D_READBACK_REQUIRED"] as const;
 
 /** Real receipt-backed NPC projection; no guessed IDs, positions or active controller. */
@@ -50,4 +52,19 @@ export async function testBehavior(userId:number,raw:z.infer<typeof BehaviorTest
     artifact:input.artifact,decisionHash:npc.decisionHash,plannerContextProvenance:"DERIVED_NOT_A_RECEIPT_ID",
     sourceRevision:activeProvenance.sourceRevision,comparison,activation:"BLOCKED",blockers:ACTIVATION_BLOCKERS,
     warning:"Planner candidates are derived from confirmed needs; this comparison does not validate navigation, inventory, targets or live execution."};
+}
+
+/** Admin inspection of the selected confirmed NPC; no additional persistence. */
+export async function readBehaviorJourneyMemory(userId:number,raw:z.infer<typeof BehaviorJourneyInput>) {
+  const input=BehaviorJourneyInput.parse(raw);
+  const findNpc=async()=>decodeOwnedNpcPacket(await readConfirmedNpcPacket(userId),userId).npcs.find(n=>n.npcId===input.npcId);
+  const npc=await findNpc();
+  if(!npc) throw new TRPCError({code:"NOT_FOUND",message:"BEHAVIOR_NPC_NOT_CONFIRMED"});
+  const observationHash=canonicalSha256({sourceRevision:activeProvenance.sourceRevision,npc});
+  if(observationHash!==input.expectedObservationHash) throw new TRPCError({code:"CONFLICT",message:"BEHAVIOR_OBSERVATION_CHANGED"});
+  const memory=await readConfirmedMerchantJourneyMemory(npc.npcId,npc.resolutionIndex);
+  const current=await findNpc();
+  if(memory.decisionHash!==npc.decisionHash || !current || canonicalSha256({sourceRevision:activeProvenance.sourceRevision,npc:current})!==observationHash)
+    throw new TRPCError({code:"CONFLICT",message:"BEHAVIOR_OBSERVATION_CHANGED"});
+  return {status:"READBACK",observationHash,memory};
 }
