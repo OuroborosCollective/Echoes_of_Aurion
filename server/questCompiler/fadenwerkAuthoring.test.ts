@@ -4,6 +4,10 @@ import type { TrpcContext } from "../_core/context";
 import { inspectFadenwerk, toQuarantinedQuestTemplate } from "../../shared/fadenwerkLegacyAdapter";
 import { QuestTemplateVersionSchema } from "../../shared/aurionQuestContract";
 import { QuestValidator } from "./validator";
+import { QuestRuntimeEngine } from "./runtime";
+import { WorldFactEngine } from "./worldFacts";
+import { QuestTemplateRegistry } from "./templateRegistry";
+import { fixedOperationalClock } from "../../shared/operationalClock";
 
 const source = () => ({version:1,questlines:[{id:"native",title:"Native Faden",entryNode:"start",
   graph:{start:{id:"start",title:"Start",choices:[{id:"go",label:"Weiter",nextNode:"end"}]},
@@ -84,6 +88,39 @@ describe("shared Fadenwerk native authoring boundary", () => {
       expect(inspected.questlines[0]!.issues).toContainEqual(expect.objectContaining({code,severity:"blocker"}));
       await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toMatchObject({code:"BAD_REQUEST",message:"FADENWERK_UNMAPPED"});
     }
+  });
+
+  it("runs an imported branching quest through the real deterministic quest engine", async () => {
+    const sourceJson = JSON.stringify({version:1,questlines:[{id:"branching",title:"Branching",entryNode:"start",graph:{
+      start:{id:"start",title:"Start",choices:[{id:"go",label:"Begin",nextNode:"branch"}]},
+      branch:{id:"branch",title:"Choose",choices:[{id:"left",label:"Left",nextNode:"endLeft"},{id:"right",label:"Right",nextNode:"endRight"}]},
+      endLeft:{id:"endLeft",title:"Left end",choices:[]},endRight:{id:"endRight",title:"Right end",choices:[]},
+    }}]});
+    const converted = await caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1});
+    // Explicit isolated fixture activation, never production approval.
+    const template = {...converted.template,active:true,quarantined:false};
+    const run = () => {
+      const engine = new QuestRuntimeEngine(new WorldFactEngine(),new QuestTemplateRegistry([template]),fixedOperationalClock(0));
+      const offered = engine.compileAndOfferQuest({worldId:"isolated-fadenwerk",playerUserId:42,triggerEventId:"isolated-import",requestedTemplateId:template.templateId});
+      const accepted = engine.acceptQuest(offered.instance,offered.plan);
+      expect(accepted.updatedInstance).toMatchObject({state:"active",currentNodeId:"branch"});
+      const chosen = engine.chooseBranch(accepted.updatedInstance,offered.plan,"edge_branch_right",{eventSequence:2});
+      expect(chosen.updatedInstance.currentNodeId).toBe("endRight");
+      expect(chosen.receipt.previousStateHash).toBe(accepted.receipt.resultStateHash);
+      return {offered,accepted,chosen};
+    };
+    expect(run()).toEqual(run());
+  });
+  it("rejects edge identifiers that cannot pass the player choice route", async () => {
+    const nodeId = "n".repeat(48), choiceId = "c".repeat(48);
+    const sourceJson = JSON.stringify({version:1,questlines:[{id:"long",title:"Long",entryNode:"start",graph:{
+      start:{id:"start",title:"Start",choices:[{id:"go",label:"Begin",nextNode:nodeId}]},
+      [nodeId]:{id:nodeId,title:"Branch",choices:[{id:choiceId,label:"End",nextNode:"end"}]},
+      end:{id:"end",title:"End",choices:[]},
+    }}]});
+    expect((await caller().fadenwerkInspect({sourceJson})).questlines[0]!.issues)
+      .toContainEqual(expect.objectContaining({code:"EDGE_ID_TOO_LONG",severity:"blocker"}));
+    await expect(caller().fadenwerkDraft({sourceJson,questlineIndex:0,version:1})).rejects.toThrow("FADENWERK_UNMAPPED");
   });
 
 });
