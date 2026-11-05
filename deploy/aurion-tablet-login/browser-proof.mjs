@@ -149,7 +149,10 @@ async function realNovncAndBasic(browser, render, guard) {
       const rel=u.pathname.slice('/godot-live/'.length);
       assert.ok(!rel.includes('..'));
       const isGenerated=['aurion.html','app/aurion-login-ui.js','app/aurion-login-core.js','app/aurion-novnc-ui.js'].includes(rel);
-      const body=await readFile(path.join(isGenerated?generated:upstream,rel));
+      let body=await readFile(path.join(isGenerated?generated:upstream,rel));
+      // Disposable HTTP loopback transport fixture only. Production output
+      // stays untouched; its HTTPS CSP is tested in the canonical fixture.
+      if(rel==='aurion.html') body=Buffer.from(body.toString().replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/,''));
       res.writeHead(200,{'Content-Type':rel.endsWith('.js')?'text/javascript':rel.endsWith('.html')?'text/html':rel.endsWith('.css')?'text/css':'application/octet-stream'}).end(body);
     } catch (_) {res.writeHead(404).end();}
   });
@@ -233,13 +236,6 @@ async function realNovncAndBasic(browser, render, guard) {
           if(e.request.url===callback) {callbacks++;return await fulfill(200,cors,'<p>Synthetic callback</p>');}
           await cdp.send('Fetch.failRequest',{requestId:e.requestId,errorReason:'BlockedByClient'});
         } catch (_) {error='fixture interception failed';}
-      });
-      // Keep production CSP unchanged on disk. A loopback fixture response
-      // uses the same generated modules but cannot adopt the production TLS
-      // origin. Strip only the CSP meta in this disposable response.
-      await p.route(origin+'/godot-live/aurion.html*',async route=>{
-        const html=(await readFile(path.join(generated,'aurion.html'),'utf8')).replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/,'');
-        await route.fulfill({contentType:'text/html',body:html});
       });
       await p.goto(origin+'/godot-live/auth.html');
       await p.goto(origin+'/godot-live/aurion.html?autoconnect=1&encrypt=0&host=127.0.0.1&port='+server.address().port+'&path=godot-live%2Fwebsockify');
