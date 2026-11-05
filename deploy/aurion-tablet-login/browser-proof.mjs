@@ -55,8 +55,11 @@ try {
     c.receive(${JSON.stringify(login)});`;
   for (const foreignRedirect of [false,true]) {
     const isolated=await browser.newContext();
+    await isolated.setOffline(true);
     await isolated.addCookies([{name:'qa_web_session',value:'synthetic-only',domain:'arelogic.space',path:'/',httpOnly:true,secure:true,sameSite:'Lax'}]);
     let posts=0, acceptedOrigin=false, cookiePresent=false, foreignRequests=0, callbackRequests=0;
+    const requestAudit=[];
+    isolated.on('request', req=>{const u=new URL(req.url());requestAudit.push({method:req.method(),origin:u.origin,path:u.pathname,redirect:!!req.redirectedFrom()});});
     await isolated.route('**/*', async route=>{
       const req=route.request(), u=new URL(req.url());
       if(u.origin!=='https://arelogic.space') {foreignRequests++;return route.abort();}
@@ -86,6 +89,7 @@ try {
     await p.locator('#confirm').click();
     await p.waitForFunction(()=>['delivered','failed'].includes(document.querySelector('#phase').textContent));
     const observed=await p.evaluate(()=>({phase:document.querySelector('#phase').textContent,deliveryCount:window.deliveryCount,callbackMatches:window.callbackMatches,localKeys:localStorage.length,sessionKeys:sessionStorage.length,queryInPage:document.body.textContent.includes('code=')}));
+    console.log(JSON.stringify({fixtureOnly:true,foreignRedirect,posts,acceptedOrigin,cookiePresent,foreignRequests,callbackRequests,observed,requestAudit}));
     assert.equal(posts,1);assert.ok(acceptedOrigin&&cookiePresent);assert.equal(foreignRequests,0);
     assert.equal(observed.phase,foreignRedirect?'failed':'delivered');
     assert.equal(observed.deliveryCount,foreignRedirect?0:1);assert.equal(callbackRequests,foreignRedirect?0:1);
