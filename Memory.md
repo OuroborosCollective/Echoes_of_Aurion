@@ -5726,3 +5726,13 @@ Final review follow-up (same block): successful quest request starts now refresh
 Review identity/status correction (same block): a distinct second quest publication reproduced a stale pending identity at head 7a7ea2974d5edf4dffbc470482034cc1d630e331. Beginning a new editable proposal now discards only the completed publication identity; unknown/readback-pending phases remain locked. Native RED/GREEN tests reject the previous receipt/template for the second operation and confirm only its matching independent readback. World request-start diagnostics and template-copy running status are also retained; all four world actions and quest copy are covered. Native synthetic scene GREEN; production delivery and final CI remain pending.
 
 Cross-editor follow-up (same block): starting a quest read no longer clears an unresolved world transport reason. Native scene RED on 54c3567b6a84d96cfa99bc28d4bdec8a707d1a5c / GREEN after request-family isolation; no state or receipt change.
+
+### 2026-11-05 — Fadenwerk inside the native quest editor
+Status: PARTIAL
+Task: Connect the existing Fadenwerk capabilities directly to Godot's canonical quest editor.
+Decisions: Browser and server reuse one shared structure adapter; authenticated read-only inspection/conversion returns inactive quarantined QuestTemplateVersion previews. Existing proposal/plan/owner-confirmation/publish/receipt/readback remains authoritative.
+Touched surfaces: Shared Fadenwerk adapter, Aurion quest authoring routes, native WorldStudio quest controls, HTTP/scene and isolated MariaDB regressions.
+Evidence: Native Godot 4.7.2 scene passes with synthetic Fadenwerk responses, actual scene loading and 360×640 layout; source-change rejection, blocked semantics, inactive staging, title editing, uncertainty locks and synchronous failures checked. TypeScript, real HTTP routing and MariaDB integration run in CI; not yet claimed passed.
+Learned: Fadenwerk already contains usable graph authoring; a shared adapter avoids a second importer or quest runtime.
+Open: Exact-head CI/review, server/client deployment and authenticated live use.
+Next safe step: Verify CI, merge only with no open review findings, deploy exact revisions and independently read back the authenticated native workflow.

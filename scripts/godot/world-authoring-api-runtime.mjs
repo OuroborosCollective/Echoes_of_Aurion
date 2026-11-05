@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 
 const [godot, project] = process.argv.slice(2);
 assert.ok(godot && project, 'Godot and project required');
-let identity = 0, aiStatuses = 0, applies = 0, questPublishes = 0, templatePages = 0, templateReads = 0, redirects = 0, failures;
+let identity = 0, aiStatuses = 0, applies = 0, questPublishes = 0, templatePages = 0, templateReads = 0, fadenInspects = 0, fadenDrafts = 0, redirects = 0, failures;
 const response = (res, value) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(value));
 const envelope = json => ({ result: { data: { json } } });
 const server = createServer(async (req, res) => {
@@ -52,6 +52,14 @@ const server = createServer(async (req, res) => {
       templatePages++;
       assert.deepEqual(data, templatePages === 1 ? {} : { after: { templateId: 'quest.http-fixture', version: 1 } });
       response(res, envelope({ schemaVersion: 'aurion.quest-template-page.v1', items: [{ templateId: 'quest.http-fixture', version: 1, title: 'Fixture', active: true, quarantined: false }], nextCursor: templatePages === 1 ? { templateId: 'quest.http-fixture', version: 1 } : null }));
+    } else if (req.url === '/api/trpc/aurionQuest.fadenwerkInspect') {
+      fadenInspects++;
+      assert.deepEqual(data, { sourceJson: '{"fixture":"fadenwerk"}' });
+      response(res, envelope({ previewOnly: true, sourceHash: 'c'.repeat(64), questlines: [] }));
+    } else if (req.url === '/api/trpc/aurionQuest.fadenwerkDraft') {
+      fadenDrafts++;
+      assert.deepEqual(data, { sourceJson: '{"fixture":"fadenwerk"}', questlineIndex: 0, version: 7 });
+      response(res, envelope({ previewOnly: true, sourceHash: 'c'.repeat(64), questlineId: 'wire', template: { active: false, quarantined: true } }));
     } else if (req.url === '/api/trpc/aurionQuest.authoringTemplate') {
       templateReads++;
       assert.deepEqual(data, { templateId: 'quest.http-fixture', version: templateReads === 1 ? 1 : 300 });
@@ -89,5 +97,7 @@ assert.equal(applies, 1, 'an apply was automatically repeated');
 assert.equal(questPublishes, 1, 'a quest publication was automatically repeated');
 assert.equal(templatePages, 2, 'template selection did not follow bounded pages');
 assert.equal(templateReads, 2, 'copy and readback did not target exact versions');
+assert.equal(fadenInspects, 1);
+assert.equal(fadenDrafts, 1);
 assert.equal(redirects, 0, 'redirect was followed');
 assert.match(output, /GODOT_WORLD_AUTHORING_HTTP_PASS/);

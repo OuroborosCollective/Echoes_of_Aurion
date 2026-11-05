@@ -89,7 +89,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     await pool.execute("DELETE FROM glbAssets WHERE createdByUserId = ?", [otherAdmin]);
     await pool.execute("DELETE FROM aurionAuthoringReceipts WHERE actorUserId IN (?, ?)", [admin, otherAdmin]);
     await pool.execute("DELETE FROM aurionQuestAdminProposals WHERE authorUserId IN (?, ?)", [admin, otherAdmin]);
-    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId = ?", ["inspector-native-quest"]);
+    await pool.execute("DELETE FROM aurionQuestTemplateVersions WHERE templateId IN (?, ?)", ["inspector-native-quest", "fadenwerk_native_integration"]);
     await pool.execute("DELETE FROM aurionWorldDesignVersions WHERE createdByUserId IN (?, ?)", [admin, otherAdmin]);
     await pool.execute("UPDATE users SET role = 'admin' WHERE id = ?", [admin]);
     await pool.execute("UPDATE users SET role = 'admin' WHERE id = ?", [otherAdmin]);
@@ -139,6 +139,33 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const readback = await readActiveWorldDesign();
     expect(readback.designs.find(d => d.designKey === candidate.designKey)?.designHash).toBe(applied.receipt.resultHash);
     expect((await recoverWorldAuthoringReceipt(admin, { operationId, planHash: plan.planHash, designKey: candidate.designKey, version: candidate.version })).status).toBe("found");
+  });
+
+  it("converts Fadenwerk without writes, then uses canonical plan, publish, receipt and durable readback", async () => {
+    const caller = aurionQuestRouter.createCaller({ user: { id: admin, role: "admin" } } as TrpcContext);
+    const sourceJson = JSON.stringify({version:1,questlines:[{id:"native_integration",title:"Native Fadenwerk integration",entryNode:"start",
+      graph:{start:{id:"start",title:"Start",choices:[{id:"go",label:"Weiter",nextNode:"end"}]},end:{id:"end",title:"Ende",choices:[]}}}]});
+    const inspected = await caller.fadenwerkInspect({sourceJson});
+    const converted = await caller.fadenwerkDraft({sourceJson,questlineIndex:0,version:1});
+    expect(converted.sourceHash).toBe(inspected.sourceHash);
+    expect(converted.template).toMatchObject({active:false,quarantined:true});
+    for (const table of ["aurionQuestAdminProposals","aurionQuestTemplateVersions","aurionAuthoringReceipts"]) {
+      const filter = table === "aurionAuthoringReceipts" ? {sql:"actorUserId=?",value:admin} : {sql:"templateId=?",value:"fadenwerk_native_integration"};
+      const [rows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM ${table} WHERE ${filter.sql}`, [filter.value]);
+      expect(Number(rows[0]!.n)).toBe(0);
+    }
+    // Explicit isolated test activation; no production authorization is implied.
+    const template = {...converted.template,active:true,quarantined:false};
+    const proposal = await caller.proposeDraft({templateId:template.templateId,templateVersion:template.version,proposedDataJson:JSON.stringify(template)});
+    const plan = await caller.publishPlan({proposalId:proposal.id});
+    await expect(caller.publish({proposalId:proposal.id,expectedPlanHash:plan.planHash,confirmation:""} as never)).rejects.toThrow();
+    const published = await caller.publish({proposalId:proposal.id,expectedPlanHash:plan.planHash,confirmation:"PUBLISH_QUEST_TEMPLATE"});
+    expect(await caller.publishReceipt({proposalId:proposal.id,planHash:plan.planHash})).toMatchObject({status:"found",receipt:published.receipt});
+    const readback = await caller.authoringTemplate({templateId:template.templateId,version:1});
+    expect(readback.durable).toBe(true);
+    expect(readback.templates).toEqual([QuestTemplateVersionSchema.parse(template)]);
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionAuthoringReceipts WHERE actorUserId=? AND planHash=?", [admin,plan.planHash]);
+    expect(Number(rows[0]!.n)).toBe(1);
   });
 
   it("recovers only the current admin's exact committed quest publication and rejects corrupt evidence", async () => {

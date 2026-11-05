@@ -4,6 +4,8 @@ import { AdminQuestStudioService } from '../questCompiler/adminService';
 import { GameDevelopmentStudioQuestSupport } from '../gameDevelopmentStudioQuestSupport';
 import { recoverQuestAuthoringReceipt } from '../aurionAuthoringPersistence';
 
+import { fadenwerkInspection, fadenwerkDraft } from "../questCompiler/fadenwerkAuthoring";
+
 export const adminQuestService = new AdminQuestStudioService();
 
 export const aurionQuestRouter = router({
@@ -26,6 +28,14 @@ export const aurionQuestRouter = router({
   authoringTemplate: adminProcedure
     .input(z.object({ templateId: z.string().min(1).max(96), version: z.number().int().positive() }).strict())
     .mutation(({ input }) => adminQuestService.getAuthoringTemplateVersion(input)),
+  // Reuse the existing Fadenwerk adapter; POST is read-only, like authoringTemplate.
+  fadenwerkInspect: adminProcedure
+    .input(z.object({ sourceJson: z.string().min(2).max(120_000) }).strict())
+    .mutation(({ input }) => fadenwerkInspection(input.sourceJson)),
+  fadenwerkDraft: adminProcedure
+    .input(z.object({ sourceJson: z.string().min(2).max(120_000),
+      questlineIndex: z.number().int().min(0).max(99), version: z.number().int().min(1).max(1_000_000) }).strict())
+    .mutation(({ input }) => fadenwerkDraft(input.sourceJson, input.questlineIndex, input.version)),
   instances: protectedProcedure.query(async () => {
     return adminQuestService.listInstances();
   }),

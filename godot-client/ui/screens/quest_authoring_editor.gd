@@ -20,6 +20,15 @@ var _status: Label
 var _activation: CheckBox
 var _confirm: ConfirmationDialog
 var _plan_view: TextEdit
+var _faden_source: TextEdit
+var _faden_choice: OptionButton
+var _faden_version: SpinBox
+var _faden_status: Label
+var _faden_lines: Array = []
+var _faden_source_hash := ""
+var _faden_pending: Dictionary = {}
+var _quest_title: LineEdit
+var _node_title: LineEdit
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 8)
@@ -35,6 +44,7 @@ func _ready() -> void:
 	_choice.custom_minimum_size.y = 48
 	add_child(_choice)
 	_button("Vorlage als neue, inaktive Version kopieren", func(): copy_template(_choice.selected))
+	_build_fadenwerk()
 	_json = TextEdit.new()
 	_json.placeholder_text = "Kanonischer Questgraph: Rollen, Knoten, Kanten, Bedingungen und Ergebnisse"
 	_json.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
@@ -49,6 +59,23 @@ func _ready() -> void:
 	_graph.column_titles_visible = true
 	_graph.custom_minimum_size.y = 180
 	add_child(_graph)
+	_quest_title = LineEdit.new()
+	_quest_title.placeholder_text = "Questtitel"
+	_quest_title.custom_minimum_size.y = 48
+	add_child(_quest_title)
+	_button("Questtitel im Entwurf ändern", func(): rename_quest(_quest_title.text))
+	_node_title = LineEdit.new()
+	_node_title.placeholder_text = "Knoten im Graph auswählen, dann Titel ändern"
+	_node_title.custom_minimum_size.y = 48
+	add_child(_node_title)
+	_graph.item_selected.connect(func():
+		var item := _graph.get_selected()
+		if item != null and typeof(item.get_metadata(0)) == TYPE_STRING:
+			for node in current_draft().get("nodes", []):
+				if node.id == item.get_metadata(0): _node_title.text = node.title)
+	_button("Gewählten Knotentitel ändern", func():
+		var item := _graph.get_selected()
+		if item != null and typeof(item.get_metadata(0)) == TYPE_STRING: rename_node(item.get_metadata(0), _node_title.text))
 	_button("Graph aus Entwurf anzeigen", _render_graph)
 	_button("Lokalen Questentwurf als JSON kopieren", _copy_json)
 	_activation = CheckBox.new()
@@ -109,6 +136,14 @@ func close_context() -> void:
 	_next_cursor.clear()
 	_requested_cursor.clear()
 	_copying.clear()
+	_faden_pending.clear()
+	_faden_lines.clear()
+	_faden_source_hash = ""
+	if is_instance_valid(_faden_source): _faden_source.text = ""
+	if is_instance_valid(_faden_choice): _faden_choice.clear()
+	if is_instance_valid(_faden_status): _faden_status.text = ""
+	if is_instance_valid(_quest_title): _quest_title.text = ""
+	if is_instance_valid(_node_title): _node_title.text = ""
 	if is_instance_valid(_choice): _choice.clear()
 	if is_instance_valid(_json): _json.text = ""
 	if is_instance_valid(_graph): _graph.clear()
@@ -132,7 +167,7 @@ func _request(kind: String, payload: Dictionary = {}) -> bool:
 	return started
 
 func _can_edit() -> bool:
-	return _state.phase in ["ready", "planned", "confirmed"] and _journal.read().is_empty() and _copying.is_empty()
+	return _state.phase in ["ready", "planned", "confirmed"] and _journal.read().is_empty() and _copying.is_empty() and _faden_pending.is_empty()
 
 func current_draft() -> Dictionary:
 	if not is_instance_valid(_json) or _json.text.to_utf8_buffer().size() > 120000: return {}
@@ -228,9 +263,12 @@ func _render_graph() -> void:
 	if value.is_empty():
 		_set_message("Entwurf ungültig. Vorheriger Serverplan kann nicht verwendet werden.")
 		return
+	_quest_title.text = value.title
+	_node_title.text = ""
 	var root := _graph.create_item()
 	for node in value.nodes:
 		var item := _graph.create_item(root)
+		item.set_metadata(0, str(node.id))
 		item.set_text(0, str(node.id) + " · " + str(node.title))
 		item.set_text(1, str(node.type))
 		if typeof(node.get("objective")) == TYPE_DICTIONARY:
@@ -258,6 +296,7 @@ func request_plan() -> void:
 	_show_status()
 
 func request_confirmation() -> void:
+	if not _faden_pending.is_empty(): return
 	var plan: Dictionary = _state.planned_summary()
 	var draft := current_draft()
 	if plan.is_empty() or not State.same_json(plan.template, draft) or not _journal.read().is_empty():
@@ -271,6 +310,7 @@ func request_confirmation() -> void:
 	_confirm.get_cancel_button().text = "Abbrechen"
 
 func _publish() -> void:
+	if not _faden_pending.is_empty(): return
 	var plan: Dictionary = _state.planned_summary()
 	if plan.is_empty() or not State.same_json(plan.template, current_draft()): return
 	var pending: Dictionary = _state.pending_identity()
@@ -299,6 +339,9 @@ func recover_receipt() -> void:
 func completed(kind: String, data: Dictionary) -> void:
 	if _state.phase == "closed": return
 	_failure_reason = ""
+	if kind in ["questFadenInspect", "questFadenDraft"]:
+		_accept_fadenwerk(kind, data)
+		return
 	match kind:
 		"questTemplates":
 			if data.get("schemaVersion") != "aurion.quest-template-page.v1" or typeof(data.get("items")) != TYPE_ARRAY or data.items.size() > 20 or not data.has("nextCursor"):
@@ -355,6 +398,7 @@ func failed(kind: String, reason: String = "") -> void:
 	_request_failure_notified = true
 	_failure_reason = reason
 	if kind == "questTemplate": _copying.clear()
+	if kind in ["questFadenInspect", "questFadenDraft"]: _faden_pending.clear()
 	if _request_in_progress: return
 	_state.failed(kind)
 	_show_status()
@@ -366,3 +410,140 @@ func _show_status() -> void:
 	if is_instance_valid(_status):
 		_set_message(_state.message if not _state.message.is_empty() else "Admin-Sitzung und Questvorlagen noch nicht geprüft.")
 	if is_instance_valid(_json): _json.editable = _can_edit()
+
+func _build_fadenwerk() -> void:
+	var heading := Label.new()
+	heading.text = "Fadenwerk · Stränge prüfen und als lokalen Questentwurf übernehmen"
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(heading)
+	_faden_source = TextEdit.new()
+	_faden_source.placeholder_text = "Fadenwerk-v1-JSON"
+	_faden_source.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_faden_source.custom_minimum_size.y = 120
+	_faden_source.text_changed.connect(_faden_source_changed)
+	add_child(_faden_source)
+	_button("Fadenwerk bei Aurion prüfen", inspect_fadenwerk)
+	_faden_choice = OptionButton.new()
+	_faden_choice.fit_to_longest_item = false
+	_faden_choice.clip_text = true
+	_faden_choice.custom_minimum_size.y = 48
+	_faden_choice.item_selected.connect(func(_index: int): _show_faden_issues())
+	add_child(_faden_choice)
+	var version_label := Label.new()
+	version_label.text = "Entwurfsversion (Aurion prüft Konflikte im Plan)"
+	version_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(version_label)
+	_faden_version = SpinBox.new()
+	_faden_version.min_value = 1
+	_faden_version.max_value = 1000000
+	_faden_version.step = 1
+	_faden_version.value = 1
+	_faden_version.custom_minimum_size.y = 48
+	add_child(_faden_version)
+	_faden_status = Label.new()
+	_faden_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(_faden_status)
+	_button("Gewählten Fadenwerk-Strang als inaktiven Entwurf übernehmen", import_fadenwerk)
+
+func _faden_source_changed() -> void:
+	_faden_lines.clear()
+	_faden_source_hash = ""
+	_faden_choice.clear()
+	_faden_status.text = "Quelle geändert; erneut prüfen."
+
+func _show_faden_issues() -> void:
+	var index := _faden_choice.selected
+	if index < 0 or index >= _faden_lines.size(): return
+	var lines: Array[String] = []
+	for issue in _faden_lines[index].issues:
+		lines.append(str(issue.code) + " · " + str(issue.path))
+	_faden_status.text = "\n".join(lines) if not lines.is_empty() else "Struktur geprüft. Übernahme bleibt inaktiv und quarantänisiert."
+
+func inspect_fadenwerk() -> bool:
+	if not _can_edit(): return false
+	var source := _faden_source.text
+	if source.to_utf8_buffer().size() < 2 or source.to_utf8_buffer().size() > 120000:
+		_set_message("Fadenwerk-JSON muss zwischen 2 und 120000 UTF-8-Bytes enthalten.")
+		return false
+	_faden_source_changed()
+	return _request_fadenwerk("questFadenInspect", {"sourceJson":source})
+
+func import_fadenwerk() -> bool:
+	if not _can_edit() or _faden_source_hash != _faden_source.text.sha256_text(): return false
+	var index := _faden_choice.selected
+	if index < 0 or index >= _faden_lines.size(): return false
+	for issue in _faden_lines[index].issues:
+		if issue.severity == "blocker":
+			_set_message("Fadenwerk enthält nicht zugeordnete Semantik; keine Übernahme.")
+			return false
+	return _request_fadenwerk("questFadenDraft", {"sourceJson":_faden_source.text, "questlineIndex":index, "version":int(_faden_version.value)})
+
+func _request_fadenwerk(kind: String, payload: Dictionary) -> bool:
+	_faden_pending = {"kind":kind, "sourceHash":str(payload.sourceJson).sha256_text(), "draft":_json.text,
+		"index":_faden_choice.selected, "version":int(_faden_version.value)}
+	if not _request(kind, payload):
+		_faden_pending.clear()
+		_show_status()
+		return false
+	return true
+
+func _accept_fadenwerk(kind: String, data: Dictionary) -> void:
+	var pending := _faden_pending.duplicate(true)
+	_faden_pending.clear()
+	_show_status()
+	if pending.is_empty() or pending.kind != kind or not _can_edit() or pending.draft != _json.text or pending.sourceHash != _faden_source.text.sha256_text() or data.get("sourceHash") != pending.sourceHash or data.get("previewOnly") != true:
+		_set_message("Fadenwerk-Antwort passt nicht mehr zur Quelle oder zum Entwurf; erneut prüfen.")
+		return
+	_set_message("Fadenwerk-Antwort ungültig; keine Übernahme.")
+	if kind == "questFadenInspect":
+		var lines: Variant = data.get("questlines")
+		if typeof(lines) != TYPE_ARRAY or lines.is_empty() or lines.size() > 100: return
+		var ids := {}
+		for line in lines:
+			if typeof(line) != TYPE_DICTIONARY or not State._text(line.get("id"), 1, 48) or not State._text(line.get("title"), 1, 160) or typeof(line.get("issues")) != TYPE_ARRAY or line.issues.size() > 4096 or ids.has(line.id): return
+			ids[line.id] = true
+			for issue in line.issues:
+				if typeof(issue) != TYPE_DICTIONARY or issue.get("severity") not in ["blocker", "note"] or not State._text(issue.get("code"), 1, 128) or not State._text(issue.get("path"), 1, 1024): return
+		_faden_lines = lines.duplicate(true)
+		_faden_source_hash = pending.sourceHash
+		_faden_choice.clear()
+		for line in _faden_lines: _faden_choice.add_item(str(line.title) + " · " + str(line.id))
+		_faden_choice.select(0)
+		_show_faden_issues()
+		_set_message("Fadenwerk geprüft; gewünschten Strang zur lokalen Übernahme auswählen.")
+	else:
+		var index: int = pending.index
+		var value: Variant = data.get("template")
+		if index < 0 or index >= _faden_lines.size() or index != _faden_choice.selected or pending.version != int(_faden_version.value) or data.get("questlineId") != _faden_lines[index].id or not State.draft_valid(value) or value.templateId != "fadenwerk_" + str(_faden_lines[index].id) or value.version != pending.version or value.active or not value.quarantined:
+			_set_message("Fadenwerk-Entwurf ungültig oder Auswahl geändert; keine Übernahme.")
+			return
+		_json.text = JSON.stringify(value, "\t")
+		_draft_changed()
+		_render_graph()
+		_set_message("PREVIEW_ONLY · Fadenwerk-Struktur übernommen; inaktiv und quarantänisiert. Kein Plan, keine Veröffentlichung.")
+
+func rename_quest(title: String) -> bool:
+	return _rename_title("", title)
+
+func rename_node(node_id: String, title: String) -> bool:
+	if node_id.is_empty(): return false
+	return _rename_title(node_id, title)
+
+func _rename_title(node_id: String, title: String) -> bool:
+	if not _can_edit() or title.strip_edges().is_empty() or title.length() > 255: return false
+	var value := current_draft()
+	if value.is_empty(): return false
+	if node_id.is_empty():
+		value.title = title
+	else:
+		var matches := 0
+		for node in value.nodes:
+			if node.id == node_id:
+				node.title = title
+				matches += 1
+		if matches != 1: return false
+	_json.text = JSON.stringify(value, "\t")
+	_draft_changed()
+	_render_graph()
+	return true
+
