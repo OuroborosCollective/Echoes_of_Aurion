@@ -59,7 +59,7 @@ func verify() -> void:
 	var journal_path := "user://aurion-test-scene-%d.json" % Time.get_ticks_usec()
 	studio._journal = Journal.new(journal_path)
 	studio.configure(scene._auth_start, "http://127.0.0.1:3000", SESSION, true)
-	studio._api.queue_free()
+	var signal_api: Node = studio._api # Keep configure() signal wiring under test.
 	var fake := FakeAuthoringApi.new()
 	studio.add_child(fake)
 	studio._api = fake
@@ -71,7 +71,7 @@ func verify() -> void:
 	root.size = Vector2i(360, 640)
 	await process_frame
 	var transport_reason := "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"
-	studio._failed("identity", transport_reason, SESSION, generation)
+	signal_api.failed.emit("identity", transport_reason, SESSION, generation)
 	await process_frame
 	await process_frame
 	require(studio._info.text.contains(transport_reason), "identity transport diagnostics were hidden")
@@ -105,7 +105,7 @@ func verify() -> void:
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, generation)
 	require(fake.sent.back().kind == "catalog", "admin identity did not request catalog")
 	require(not studio._catalog_info.text.contains(transport_reason), "confirmed identity retained a stale access failure")
-	studio._failed("catalog", "HTTP_403", SESSION, generation)
+	signal_api.failed.emit("catalog", "HTTP_403", SESSION, generation)
 	require(studio._catalog_info.text.contains("HTTP_403"), "catalog failure missing from access status")
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, generation)
 	require(studio.has_method("stage_catalog_placement") and studio.has_method("import_world_draft"), "WorldStudio lacks catalog-bound draft staging/import")
@@ -272,7 +272,7 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(studio.has_method("quest_editor"), "existing WorldStudio lacks the native canonical quest editor")
 	if not studio.has_method("quest_editor"): return
 	studio.configure(scene._auth_start, "http://127.0.0.1:3000", SESSION, true)
-	studio._api.queue_free()
+	var signal_api: Node = studio._api # Production API signals, synthetic responses.
 	var transport := FakeAuthoringApi.new()
 	studio.add_child(transport)
 	studio._api = transport
@@ -318,6 +318,26 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	studio._completed("questPlan", plan_value, SESSION, generation + 1)
 	require(editor._state.phase == "planning", "another auth generation supplied a quest plan")
 	studio._completed("questPlan", plan_value, SESSION, generation)
+	# Synthetic synchronous refusal through the real configure() signal connection.
+	transport.start_ok = false
+	transport.on_refuse = func(): signal_api.failed.emit("questPublish", "REQUEST_NOT_STARTED", SESSION, generation)
+	editor._publish()
+	require(editor._state.phase == "ready" and editor._journal.read().is_empty(), "synchronous unstarted quest publish retained uncertainty or journal")
+	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "synchronous publish failure diagnostic overwritten")
+	transport.on_refuse = Callable()
+	transport.start_ok = true
+	editor.request_plan()
+	studio._completed("questPropose", proposal, SESSION, generation)
+	studio._completed("questPlan", plan_value, SESSION, generation)
+	# A refusal without any callback still performs the same safe journal cleanup.
+	transport.start_ok = false
+	editor._publish()
+	require(editor._state.phase == "ready" and editor._journal.read().is_empty(), "callback-free refusal lost not-started cleanup")
+	require(not editor._status.text.contains("REQUEST_NOT_STARTED"), "new request retained stale diagnostic")
+	transport.start_ok = true
+	editor.request_plan()
+	studio._completed("questPropose", proposal, SESSION, generation)
+	studio._completed("questPlan", plan_value, SESSION, generation)
 	require(transport.sent.back().kind == "questPlan" and editor._state.phase == "planned", "receiving a plan auto-published the quest")
 	editor.request_confirmation()
 	require(editor._confirm.visible, "native quest publish lacked the review dialog")
@@ -334,10 +354,21 @@ func verify_native_quest_editor(scene: Control, studio: Control, generation: int
 	require(transport.sent.back().kind == "questReadback" and transport.sent.back().payload == {"templateId":draft_value.templateId,"version":8} and editor._state.phase == "awaiting_readback", "publish response stood in for exact-version independent readback")
 	var before_failed_readback := transport.sent.size()
 	var quest_failure := "TRANSPORT_UNCERTAIN_RESULT_13_HTTP_0"
-	studio._failed("questReadback", quest_failure, SESSION, generation)
+	signal_api.failed.emit("questReadback", quest_failure, SESSION, generation)
 	require(editor._status.text.contains(quest_failure), "quest editor discarded native transport diagnostics")
 	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "transport diagnostics cleared an unconfirmed quest publication")
 	require(transport.sent.size() == before_failed_readback, "quest transport failure automatically retried")
+	transport.start_ok = false
+	transport.on_refuse = func(): signal_api.failed.emit("questReadback", "REQUEST_NOT_STARTED", SESSION, generation)
+	editor.load_templates()
+	require(editor._status.text.contains("REQUEST_NOT_STARTED"), "synchronous readback failure diagnostic overwritten")
+	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "unstarted readback discarded publication journal")
+	require(transport.sent.size() == before_failed_readback, "synchronous failure retried a request")
+	transport.on_refuse = Callable()
+	editor.load_templates()
+	require(editor._state.phase == "awaiting_readback" and not editor._journal.read().is_empty(), "callback-free readback refusal lost pending receipt")
+	require(not editor._status.text.contains("REQUEST_NOT_STARTED"), "callback-free readback retained stale diagnostic")
+	transport.start_ok = true
 	studio._completed("questTemplates", {"schemaVersion":"aurion.quest-template-page.v1", "items":[summary], "nextCursor":null}, SESSION, generation)
 	require(not editor._journal.read().is_empty(), "a catalog page stood in for independent publication readback")
 	studio._completed("questReadback", {"templates":[]}, SESSION, generation)

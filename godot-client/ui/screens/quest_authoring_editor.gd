@@ -6,6 +6,9 @@ const Journal = preload("res://authoring/quest_authoring_journal.gd")
 var _state := State.new()
 var _journal := Journal.new()
 var _send: Callable
+var _request_in_progress := false
+var _request_failure_notified := false
+var _failure_reason := ""
 var _templates: Array = []
 var _next_cursor: Dictionary = {}
 var _requested_cursor: Dictionary = {}
@@ -100,6 +103,7 @@ func open_context(connection: String, generation: int, actor: Variant, sender: C
 
 func close_context() -> void:
 	_state.close()
+	_failure_reason = ""
 	_send = Callable()
 	_templates.clear()
 	_next_cursor.clear()
@@ -113,7 +117,17 @@ func close_context() -> void:
 	_show_status()
 
 func _request(kind: String, payload: Dictionary = {}) -> bool:
-	return _state.phase != "closed" and _send.is_valid() and bool(_send.call(kind, payload))
+	_request_failure_notified = false
+	_failure_reason = ""
+	_request_in_progress = true
+	var started := _state.phase != "closed" and _send.is_valid() and bool(_send.call(kind, payload))
+	_request_in_progress = false
+	# Native request-start errors emit failed before returning false. Wait for
+	# that return before deciding whether publication could have been sent.
+	if _request_failure_notified and (started or kind != "questPublish"):
+		_state.failed(kind)
+		_show_status()
+	return started
 
 func _can_edit() -> bool:
 	return _state.phase in ["ready", "planned", "confirmed"] and _journal.read().is_empty() and _copying.is_empty()
@@ -180,7 +194,8 @@ func _readback() -> void:
 	var pending: Dictionary = _state.pending_identity()
 	if _state.phase != "awaiting_readback" or not State.pending_valid(pending): return
 	if not _request("questReadback", {"templateId":pending.templateId, "version":int(pending.version)}):
-		_state.failed("questReadback")
+		if not _request_failure_notified:
+			_state.failed("questReadback")
 		_show_status()
 
 func set_activation(enabled: bool) -> void:
@@ -196,6 +211,7 @@ func set_activation(enabled: bool) -> void:
 	_draft_changed()
 
 func _draft_changed() -> void:
+	_failure_reason = ""
 	_state.draft_changed()
 	if is_instance_valid(_confirm): _confirm.hide()
 	var value := current_draft()
@@ -234,7 +250,7 @@ func request_plan() -> void:
 	if payload.is_empty():
 		_set_message("Vollständigen kanonischen Questentwurf angeben.")
 		return
-	if not _request("questPropose", payload): _state.failed("questPropose")
+	if not _request("questPropose", payload) and not _request_failure_notified: _state.failed("questPropose")
 	_show_status()
 
 func request_confirmation() -> void:
@@ -278,6 +294,7 @@ func recover_receipt() -> void:
 
 func completed(kind: String, data: Dictionary) -> void:
 	if _state.phase == "closed": return
+	_failure_reason = ""
 	match kind:
 		"questTemplates":
 			if data.get("schemaVersion") != "aurion.quest-template-page.v1" or typeof(data.get("items")) != TYPE_ARRAY or data.items.size() > 20 or not data.has("nextCursor"):
@@ -312,7 +329,10 @@ func completed(kind: String, data: Dictionary) -> void:
 				failed(kind)
 				return
 			var payload: Dictionary = _state.begin_plan()
-			if payload.is_empty() or not _request("questPlan", payload): _state.failed("questPlan")
+			if payload.is_empty():
+				_state.failed("questPlan")
+			elif not _request("questPlan", payload) and not _request_failure_notified:
+				_state.failed("questPlan")
 		"questPlan":
 			if not _state.accept_plan(data, current_draft()): _state.failed(kind)
 		"questPublish":
@@ -328,15 +348,17 @@ func completed(kind: String, data: Dictionary) -> void:
 	_show_status()
 
 func failed(kind: String, reason: String = "") -> void:
+	_request_failure_notified = true
+	_failure_reason = reason
 	if kind == "questTemplate": _copying.clear()
+	if _request_in_progress: return
 	_state.failed(kind)
 	_show_status()
-	if not reason.is_empty(): _status.text += " · " + reason
 
 func _set_message(value: String) -> void:
-	_status.text = value
+	_status.text = value + (" · " + _failure_reason if not _failure_reason.is_empty() else "")
 
 func _show_status() -> void:
 	if is_instance_valid(_status):
-		_status.text = _state.message if not _state.message.is_empty() else "Admin-Sitzung und Questvorlagen noch nicht geprüft."
+		_set_message(_state.message if not _state.message.is_empty() else "Admin-Sitzung und Questvorlagen noch nicht geprüft.")
 	if is_instance_valid(_json): _json.editable = _can_edit()
