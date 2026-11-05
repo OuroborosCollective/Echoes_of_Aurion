@@ -1,4 +1,4 @@
-import { createLoginController } from './aurion-login-core.js';
+import { createLoginController, createVncTransport } from './aurion-login-core.js';
 const login = 'https://arelogic.space/api/native-auth/browser/' + 'T'.repeat(43);
 const callback = 'https://arelogic.space/app/auth/callback?code=' + 'C'.repeat(43) + '&state=' + 'S'.repeat(43);
 const form = `<form method="post" action="${login}/confirm"><input type="hidden" name="csrf" value="${'X'.repeat(43)}"><button>Confirm</button></form>`;
@@ -58,5 +58,22 @@ try {
     check(!await second&&s.sent.length===1&&s.calls.filter(x=>x.init.method==='POST').length===1,'double tap creates exactly one POST and delivery');
     s=setup(); await s.c.receive(login); const cancelled=s.c.confirm(); s.c.cancel();
     check(!await cancelled&&s.sent.length===0&&s.c.phase()==='cancelled','late confirmation response after cancellation cannot deliver');
+    // Pinned noVNC transport guards. Real RFB wire tests run separately.
+    let sends=0, cancels=0, receives=0;
+    const rfb={viewOnly:false,_rfb_connection_state:'connected',_sock:{_websocket:{readyState:1},_sQlen:0},clipboardPasteFrom:()=>sends++};
+    const ui={connected:true,rfb};
+    const transport=createVncTransport(ui,{receive:()=>receives++,cancel:()=>cancels++});
+    const event={detail:{text:login}};
+    transport.receive({},event);check(receives===0,'foreign RFB clipboard ignored');
+    transport.receive(rfb,event);transport.send(callback);check(sends===1,'bound writable open RFB queues once');
+    for(const mode of ['viewOnly','disconnect','closed','replaced']) {
+        rfb.viewOnly=mode==='viewOnly';rfb._rfb_connection_state=mode==='disconnect'?'disconnecting':'connected';
+        rfb._sock._websocket.readyState=mode==='closed'?3:1;ui.rfb=mode==='replaced'?{}:rfb;
+        let rejected=false;try{transport.send(callback);}catch(_){rejected=true;}
+        check(rejected&&sends===1,'RFB fails closed for '+mode);
+    }
+    ui.rfb=rfb;rfb.viewOnly=false;rfb._rfb_connection_state='connected';rfb._sock._websocket.readyState=1;
+    transport.connectionChanged();let rejected=false;try{transport.send(callback);}catch(_){rejected=true;}
+    check(rejected&&cancels===1,'connection change invalidates transaction binding');
     document.getElementById('result').textContent = `${count}/${count} passed\n`+results.join('\n');
 } catch(e) { document.getElementById('result').textContent='FAILED '+e.message+'\n'+results.join('\n'); }

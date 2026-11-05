@@ -1,5 +1,6 @@
 """Build a separate optional noVNC page; never modify a live file or service."""
 import argparse
+import hashlib
 from pathlib import Path
 import re
 import shutil
@@ -18,9 +19,23 @@ LEGACY_INLINE = {
     });'''.split()),
 }
 
+def deferred_ui(source):
+    ui = (source / 'app/ui.js').read_text()
+    if hashlib.sha256(ui.encode()).hexdigest() != '49dd68cd630ba75cca74602b8950ed84d14da39458819387c0ef76880d4c9172':
+        raise ValueError('UNVERIFIED_NOVNC_UI')
+    if hashlib.sha256((source / 'core/rfb.js').read_bytes()).hexdigest() != '708f8abd828b5b45c0cfdf101c51c39506a4210e2c5af5dd605493e67ac7c9cd':
+        raise ValueError('UNVERIFIED_NOVNC_RFB')
+    marker = '// Set up translations\n'
+    if ui.count(marker) != 1 or ui.count('export default UI;') != 1:
+        raise ValueError('UNEXPECTED_NOVNC_BOOTSTRAP')
+    body, boot = ui.split(marker)
+    boot = boot.removesuffix('export default UI;\n')
+    return body + 'export function startUI() {\n' + boot + '\n}\nexport default UI;\n'
+
 def build(source, output, code):
     if output.exists():
         raise ValueError("OUTPUT_MUST_BE_ABSENT")
+    ui = deferred_ui(source)
     html = (source / "vnc.html").read_text()
     scripts = list(re.finditer(r"<script\b[^>]*>.*?</script>", html, re.S | re.I))
     targets = [match for match in scripts if "app/ui.js" in match.group()]
@@ -48,6 +63,7 @@ def build(source, output, code):
     output.mkdir(parents=True)
     (output / 'aurion.html').write_text(html)
     (output / 'app').mkdir()
+    (output / 'app/aurion-novnc-ui.js').write_text(ui)
     for name in ('aurion-login-ui.js', 'aurion-login-core.js'):
         shutil.copyfile(code / name, output / 'app' / name)
 
@@ -56,6 +72,11 @@ def self_test():
         root = Path(directory)
         source = root / 'novnc'
         source.mkdir()
+        # Bootstrap semantics are separately tested against pinned upstream
+        # noVNC in Chromium. Unit fixtures substitute only this file reader.
+        global deferred_ui
+        original_deferred = deferred_ui
+        deferred_ui = lambda _: 'export default {};'
         source.joinpath('vnc.html').write_text('<head><script src="app/ui.js" type="module"></script></head>')
         build(source, root / 'modern', Path(__file__).parent)
         result = (root / 'modern/aurion.html').read_text()
@@ -74,6 +95,7 @@ def self_test():
             raise AssertionError('unknown inline script accepted')
         except ValueError as error:
             assert str(error) == 'UNEXPECTED_INLINE_SCRIPT'
+        deferred_ui = original_deferred
     print('PASS page generator: modern, known legacy, no overwrite, unknown inline rejected')
 
 if __name__ == '__main__':

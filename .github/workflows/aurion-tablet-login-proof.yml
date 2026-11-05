@@ -29,8 +29,17 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Install official Chromium test runtime
         run: pnpm exec playwright install --with-deps chromium
+      - name: Fetch pinned official noVNC test source
+        run: |
+          git clone --no-checkout https://github.com/novnc/noVNC.git "$RUNNER_TEMP/aurion-novnc"
+          git -C "$RUNNER_TEMP/aurion-novnc" checkout --detach e91a095ad6751fdb9a7bd642ad9bc75afbdaac87
+          test "$(git -C "$RUNNER_TEMP/aurion-novnc" rev-parse HEAD)" = e91a095ad6751fdb9a7bd642ad9bc75afbdaac87
+          python3 deploy/aurion-tablet-login/build_page.py --novnc-source "$RUNNER_TEMP/aurion-novnc" --output "$RUNNER_TEMP/aurion-novnc-generated"
       - name: Browser-only positive and negative fixtures
         run: node deploy/aurion-tablet-login/browser-proof.mjs
+        env:
+          AURION_NOVNC_SOURCE: ${{ runner.temp }}/aurion-novnc
+          AURION_NOVNC_GENERATED: ${{ runner.temp }}/aurion-novnc-generated
       - name: Canonical browser consent Origin regression
         run: node --test scripts/native-auth-browser-origin.test.mjs
       - name: Python helper syntax

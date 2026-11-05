@@ -4,6 +4,8 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { stripTypeScriptTypes } from 'node:module';
+import { createServer } from 'node:http';
+import { WebSocketServer } from 'ws';
 const root = process.env.AURION_TABLET_QA_ROOT || 'deploy/aurion-tablet-login';
 const evidence = process.env.AURION_TABLET_QA_EVIDENCE || '.aurion-tablet-login-proof';
 await mkdir(evidence, {recursive:true});
@@ -118,4 +120,148 @@ try {
     await isolated.close();
     console.log('PASS actual Chromium '+(foreignRedirect?'foreign redirect blocked before dispatch':'canonical Origin, cookies, CSRF POST and callback delivery')+' (synthetic HTTP only)');
   }
+  await realNovncAndBasic(browser, render, guard);
 } finally { await browser.close(); }
+
+async function realNovncAndBasic(browser, render, guard) {
+  const upstream=process.env.AURION_NOVNC_SOURCE, generated=process.env.AURION_NOVNC_GENERATED;
+  assert.ok(upstream&&generated,'pinned noVNC sources are mandatory');
+  const basic='Basic '+Buffer.from('fixture:synthetic-only').toString('base64');
+  const login='https://arelogic.space/api/native-auth/browser/'+'T'.repeat(43);
+  const callback='https://arelogic.space/app/auth/callback?code='+'C'.repeat(43)+'&state='+'S'.repeat(43);
+  const csrf='X'.repeat(43);
+  let probeAuthorization=false, cutCount=0, cutMatches=false;
+  const sockets=[];
+  const server=createServer(async (req,res)=>{
+    try {
+      const u=new URL(req.url,'http://fixture.invalid');
+      if(u.pathname==='/api/native-auth/probe') {
+        probeAuthorization=!!req.headers.authorization;
+        res.writeHead(200,{'Content-Type':'application/json'}).end('{}');return;
+      }
+      if(req.headers.authorization!==basic) {
+        res.writeHead(401,{'WWW-Authenticate':'Basic realm="aurion-fixture"'}).end();return;
+      }
+      if(u.pathname==='/auth.html'||u.pathname==='/godot-live/auth.html') {
+        res.writeHead(200,{'Content-Type':'text/html'}).end('<!doctype html><p>Synthetic Basic authentication</p>');return;
+      }
+      assert.ok(u.pathname.startsWith('/godot-live/'));
+      const rel=u.pathname.slice('/godot-live/'.length);
+      assert.ok(!rel.includes('..'));
+      const isGenerated=['aurion.html','app/aurion-login-ui.js','app/aurion-login-core.js','app/aurion-novnc-ui.js'].includes(rel);
+      const body=await readFile(path.join(isGenerated?generated:upstream,rel));
+      res.writeHead(200,{'Content-Type':rel.endsWith('.js')?'text/javascript':rel.endsWith('.html')?'text/html':rel.endsWith('.css')?'text/css':'application/octet-stream'}).end(body);
+    } catch (_) {res.writeHead(404).end();}
+  });
+  const wss=new WebSocketServer({noServer:true});
+  server.on('upgrade',(req,socket,head)=>{
+    if(req.url!=='/godot-live/websockify'||req.headers.authorization!==basic) {socket.destroy();return;}
+    wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws));
+  });
+  function serverCut(text) { const b=Buffer.from(text), h=Buffer.alloc(8);h[0]=3;h.writeUInt32BE(b.length,4);return Buffer.concat([h,b]); }
+  wss.on('connection',ws=>{
+    sockets.push(ws);
+    let phase=0, pending=Buffer.alloc(0);
+    ws.send(Buffer.from('RFB 003.008\n'));
+    ws.on('message',input=>{
+      pending=Buffer.concat([pending,Buffer.from(input)]);
+      if(phase===0&&pending.length>=12) {pending=pending.subarray(12);phase=1;ws.send(Buffer.from([1,1]));}
+      if(phase===1&&pending.length>=1) {pending=pending.subarray(1);phase=2;ws.send(Buffer.alloc(4));}
+      if(phase===2&&pending.length>=1) {
+        pending=pending.subarray(1);phase=3;
+        const name=Buffer.from('Synthetic noVNC fixture'),init=Buffer.alloc(24+name.length);
+        init.writeUInt16BE(32,0);init.writeUInt16BE(32,2);Buffer.from([32,24,0,1]).copy(init,4);
+        for(const offset of [8,10,12]) init.writeUInt16BE(255,offset);
+        init[14]=16;init[15]=8;init.writeUInt32BE(name.length,20);name.copy(init,24);
+        // Same message as ServerInit: exercise the earliest clipboard callback.
+        ws.send(Buffer.concat([init,serverCut(callback),serverCut(login)]));
+      }
+      while(phase===3&&pending.length) {
+        const type=pending[0];let length={0:20,3:10,4:8,5:6}[type];
+        if(type===2) {if(pending.length<4)return;length=4+pending.readUInt16BE(2)*4;}
+        if(type===6) {if(pending.length<8)return;length=8+pending.readUInt32BE(4);}
+        if(!length||pending.length<length)return;
+        if(type===6) {cutCount++;cutMatches=pending.subarray(8,length).toString()===callback;}
+        pending=pending.subarray(length);
+      }
+    });
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const origin='http://127.0.0.1:'+server.address().port;
+  try {
+    // Real HTTP challenge/cache behavior, never real user credentials.
+    for(const scope of ['path','root']) {
+      const c=await browser.newContext({httpCredentials:{username:'fixture',password:'synthetic-only',origin}});
+      const p=await c.newPage();
+      await p.goto(origin+(scope==='path'?'/godot-live/auth.html':'/auth.html'));
+      probeAuthorization=false;
+      await p.evaluate(()=>fetch('/api/native-auth/probe',{credentials:'same-origin'}));
+      const canonicalAccepts=guard({headers:{origin:'https://arelogic.space',...(probeAuthorization?{authorization:'Basic synthetic'}:{})}});
+      console.log(JSON.stringify({fixtureOnly:true,httpBasicScope:scope,apiAuthorizationPresent:probeAuthorization,canonicalAccepts}));
+      assert.equal(canonicalAccepts,!probeAuthorization,'Authorization remains rejected by canonical guard');
+      if(scope==='path') assert.equal(probeAuthorization,false,'viewer Basic credentials must not escape /godot-live/');
+      await c.close();
+    }
+    for(const mode of ['writable','view-only','disconnect','replace']) {
+      cutCount=0;cutMatches=false;
+      const c=await browser.newContext({httpCredentials:{username:'fixture',password:'synthetic-only',origin}});
+      await c.addInitScript(()=>{
+        window.clipboardRendered=false;
+        const d=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value');
+        Object.defineProperty(HTMLTextAreaElement.prototype,'value',{...d,set(value){
+          if(this.id==='noVNC_clipboard_text'&&value) window.clipboardRendered=true;
+          return d.set.call(this,value);
+        }});
+      });
+      const p=await c.newPage(), cdp=await c.newCDPSession(p);
+      let leaks=false, callbacks=0, error=null;
+      p.on('console',m=>{if(m.text().includes('code=')||m.text().includes('T'.repeat(43)))leaks=true;});
+      p.on('pageerror',e=>{error=e.message;});
+      await cdp.send('Fetch.enable',{patterns:[{urlPattern:'https://*',requestStage:'Request'}]});
+      cdp.on('Fetch.requestPaused',async e=>{
+        const fulfill=(status,headers,body='')=>cdp.send('Fetch.fulfillRequest',{requestId:e.requestId,responseCode:status,responseHeaders:Object.entries(headers).map(([name,value])=>({name,value})),body:Buffer.from(body).toString('base64')});
+        try {
+          // This real noVNC page is loopback HTTP, so synthesize CORS solely
+          // in the fixture. Production remains strictly HTTPS same-origin.
+          const cors={'Access-Control-Allow-Origin':origin,'Content-Type':'text/html'};
+          if(e.request.url===login) return await fulfill(200,cors,render('T'.repeat(43),csrf));
+          if(e.request.url===login+'/confirm') return await fulfill(303,{...cors,Location:callback});
+          if(e.request.url===callback) {callbacks++;return await fulfill(200,cors,'<p>Synthetic callback</p>');}
+          await cdp.send('Fetch.failRequest',{requestId:e.requestId,errorReason:'BlockedByClient'});
+        } catch (_) {error='fixture interception failed';}
+      });
+      // Keep production CSP unchanged on disk. A loopback fixture response
+      // uses the same generated modules but cannot adopt the production TLS
+      // origin. Strip only the CSP meta in this disposable response.
+      await p.route(origin+'/godot-live/aurion.html*',async route=>{
+        const html=(await readFile(path.join(generated,'aurion.html'),'utf8')).replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/,'');
+        await route.fulfill({contentType:'text/html',body:html});
+      });
+      await p.goto(origin+'/godot-live/auth.html');
+      await p.goto(origin+'/godot-live/aurion.html?autoconnect=1&encrypt=0&host=127.0.0.1&port='+server.address().port+'&path=godot-live%2Fwebsockify');
+      await p.waitForFunction(()=>document.querySelector('#aurion-login button')?.hidden===false);
+      assert.equal(await p.evaluate(()=>window.clipboardRendered),false,'clipboard must never render even at initial handshake');
+      await p.evaluate(async mode=>{
+        const {default:UI}=await import('./app/aurion-novnc-ui.js');
+        if(mode==='view-only') UI.rfb.viewOnly=true;
+        if(mode==='disconnect') UI.rfb.disconnect();
+        if(mode==='replace') UI.rfb={};
+        document.querySelector('#aurion-login button').click();
+      },mode);
+      await p.waitForFunction(()=>/VNC-Kanal|konnte nicht|abgebrochen/.test(document.querySelector('#aurion-login [role=status]').textContent));
+      if(mode==='writable') await new Promise((resolve,reject)=>{
+        const until=Date.now()+3000;const poll=()=>cutCount?resolve():Date.now()>until?reject(new Error('no RFB clientCutText received')):setTimeout(poll,10);poll();
+      });
+      assert.equal(cutCount,mode==='writable'?1:0);
+      if(mode==='writable') assert.ok(cutMatches);
+      assert.equal(await p.evaluate(()=>window.clipboardRendered),false);
+      assert.equal(leaks,false);assert.equal(error,null);
+      console.log(JSON.stringify({fixtureOnly:true,realNovnc:'1.0.0',mode,rfbCutTextCount:cutCount,callbackRequests:callbacks,clipboardRendered:false,consoleLeak:false}));
+      await c.close();
+    }
+  } finally {
+    for(const ws of sockets) ws.terminate();
+    await new Promise(resolve=>wss.close(resolve));
+    await new Promise(resolve=>server.close(resolve));
+  }
+}

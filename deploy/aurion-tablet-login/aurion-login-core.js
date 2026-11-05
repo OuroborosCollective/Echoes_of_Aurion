@@ -1,5 +1,6 @@
 // Aurion's existing web confirmation remains the sole login authority.
-// This adapter keeps the one-time return URL in browser memory only.
+// No callback is rendered or persisted by this adapter. The followed redirect
+// is an HTTP request: proxy/APM query redaction is a separate activation gate.
 const ORIGIN = 'https://arelogic.space';
 const LOGIN = /^https:\/\/arelogic\.space\/api\/native-auth\/browser\/[A-Za-z0-9_-]{32,128}$/;
 const CALLBACK = /^https:\/\/arelogic\.space\/app\/auth\/callback\?(?:code=[A-Za-z0-9_-]{43,256}&state=[A-Za-z0-9_-]{43,128}|state=[A-Za-z0-9_-]{43,128}&code=[A-Za-z0-9_-]{43,256})$/;
@@ -118,5 +119,32 @@ export function createLoginController({ fetcher, sendReturn, status, now = Date.
         confirm,
         cancel: () => { abort?.abort(); clear(); announce('cancelled'); },
         phase: () => phase,
+    };
+}
+
+// Supported noVNC 1.0 transport only, pinned by the page builder. RFB has no
+// clipboard acknowledgement: success below means queued to an open socket,
+// never that Godot received it or authenticated. Native readback is mandatory.
+export function createVncTransport(UI, controller) {
+    let transactionRfb = null;
+    function writable(rfb) {
+        return rfb && UI.connected && rfb === UI.rfb && !rfb.viewOnly &&
+            rfb._rfb_connection_state === 'connected' &&
+            rfb._sock?._websocket?.readyState === 1;
+    }
+    return {
+        receive(sender, event) {
+            if (sender !== UI.rfb || !writable(UI.rfb)) return;
+            if (!LOGIN.test(event.detail.text)) return;
+            if (transactionRfb && transactionRfb !== UI.rfb) { controller.cancel(); return; }
+            transactionRfb = UI.rfb;
+            controller.receive(event.detail.text);
+        },
+        send(value) {
+            if (!transactionRfb || !writable(transactionRfb)) throw new Error('transport_unavailable');
+            transactionRfb.clipboardPasteFrom(value);
+            if (!writable(transactionRfb) || transactionRfb._sock._sQlen !== 0) throw new Error('transport_not_flushed');
+        },
+        connectionChanged() { transactionRfb = null; controller.cancel(); },
     };
 }
