@@ -143,9 +143,23 @@ function hash32(...parts: readonly string[]): number {
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (Array.isArray(value)) {
+    let result = "[";
+    for (let i = 0; i < value.length; i++) {
+      if (i > 0) result += ",";
+      result += stableStringify(value[i]);
+    }
+    return result + "]";
+  }
   const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
+  const keys = Object.keys(record).sort();
+  let result = "{";
+  for (let i = 0; i < keys.length; i++) {
+    if (i > 0) result += ",";
+    const key = keys[i]!;
+    result += JSON.stringify(key) + ":" + stableStringify(record[key]);
+  }
+  return result + "}";
 }
 
 function hashDigest(value: unknown): string {
@@ -180,12 +194,17 @@ function yieldFor(kind: ChunkResourceKind): BaseChunkResource["yieldKey"] {
 }
 
 function buildTiles(terrain: ReturnType<typeof generateDeterministicTerrainChunk>): readonly BaseChunkTile[] {
-  return terrain.tiles.map(tile => ({
-    x: tile.x,
-    z: tile.z,
-    heightMm: tile.heightMm,
-    surface: tile.material === "water" ? "riverbank" : tile.material,
-  }));
+  const result = new Array(terrain.tiles.length);
+  for (let i = 0; i < terrain.tiles.length; i++) {
+    const tile = terrain.tiles[i]!;
+    result[i] = {
+      x: tile.x,
+      z: tile.z,
+      heightMm: tile.heightMm,
+      surface: tile.material === "water" ? "riverbank" : tile.material,
+    };
+  }
+  return result;
 }
 
 function buildResources(worldSeed: string, coordinate: WorldChunkCoordinate, biome: ChunkBiome): readonly BaseChunkResource[] {
