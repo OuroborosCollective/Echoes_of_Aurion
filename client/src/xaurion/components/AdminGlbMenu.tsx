@@ -386,7 +386,7 @@ export const AdminGlbMenu: React.FC = () => {
                             >
                               <FileCode size={14} /> {currentTarget.placementRef ? "Hier austauschen" : "Integrate GLB Here"}
                             </button>
-                            {currentTarget.placementRef && (overridesQuery.data?.revisions?.[currentTarget.placementRef] ?? 0) > 0 && (
+                            {currentTarget.placementRef && overridesQuery.data?.overrides?.some((entry) => entry.placementRef === currentTarget.placementRef) && (
                               <button
                                 type="button"
                                 disabled={worldVisualMutation.isPending}
