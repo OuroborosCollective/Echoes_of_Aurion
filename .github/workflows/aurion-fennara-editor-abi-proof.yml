@@ -10,7 +10,7 @@ permissions:
 jobs:
   fennara-linux-editor:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout Aurion
         uses: actions/checkout@v4
@@ -133,6 +133,60 @@ jobs:
           fi
           echo "FENNARA_NATIVE_EDITOR_IMPORT_PASS; fennara_status still unverified"
           sha256sum "$RUNNER_TEMP/aurion-fennara-project/addons/fennara/bin/"*.so > "$RUNNER_TEMP/fennara-rebuilt-sha256.txt"
+      - name: Set up Rust for pinned local components
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rebuild Rust Fennara CLI daemon MCP on host ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          cargo build --release --locked --manifest-path fennara/local/Cargo.toml \
+            -p fennara-cli -p fennara-daemon -p fennara-mcp
+          cargo test --locked --manifest-path fennara/local/Cargo.toml \
+            -p fennara-cli -p fennara-daemon -p fennara-mcp
+          for name in fennara fennara-daemon fennara-mcp; do
+            test -x "fennara/local/target/release/$name"
+          done
+      - name: Verify stock Fennara CLI daemon ABI regression and rebuilt Rust ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 \
+            https://github.com/fennaraOfficial/fennara-godot-ai/releases/download/v0.4.3/fennara-release-local-linux-x86_64-v0.4.3.zip \
+            -o "$RUNNER_TEMP/fennara-local-v0.4.3.zip"
+          printf '%s  %s\n' \
+            133b884bbf6618f7b5e6027b28489db25d9339b15c83ba931302aa05bcc6c907 \
+            "$RUNNER_TEMP/fennara-local-v0.4.3.zip" | sha256sum -c -
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, subprocess, tempfile, zipfile
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          archive=root/"fennara-local-v0.4.3.zip"
+          built=pathlib.Path("fennara/local/target/release")
+          def abi(binary):
+              result=subprocess.run(["readelf","-V",str(binary)],check=True,text=True,capture_output=True)
+              versions={(int(a),int(b)) for a,b in re.findall(r"GLIBC_(\d+)\.(\d+)",result.stdout)}
+              assert versions,"readelf did not report any actual GLIBC symbol"
+              return max(versions)
+          with tempfile.TemporaryDirectory(dir=root) as d:
+              temp=pathlib.Path(d)
+              with zipfile.ZipFile(archive) as z:
+                  assert len(z.infolist())==6
+                  assert z.read("VERSION").decode().strip()=="0.4.3"
+                  for name in ("fennara","fennara-daemon-runtime"):
+                      data=z.read("bin/"+name)
+                      path=temp/name
+                      path.write_bytes(data)
+                      old=abi(path)
+                      assert old>(2,35),f"stock incompatible ABI not reproduced for {name}: {old}"
+                      print("FENNARA_STOCK_CLI_DAEMON_ABI_RED_CONFIRMED",name,old)
+          for name in ("fennara","fennara-daemon","fennara-mcp"):
+              path=built/name
+              assert path.is_file()
+              req=abi(path)
+              assert req<=(2,35),f"rebuilt Rust component {name} needs {req}"
+              print("FENNARA_RUST_ABI_PASS",name,req,hashlib.sha256(path.read_bytes()).hexdigest())
+          PY
       - name: Preserve real build and import evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -143,5 +197,8 @@ jobs:
             ${{ runner.temp }}/fennara-rebuilt-sha256.txt
             ${{ runner.temp }}/aurion-fennara-project/addons/fennara/bin/libfennara.linux.editor.x86_64.so
             ${{ runner.temp }}/aurion-fennara-project/addons/fennara/bin/libfennara_linux_cef_bridge.so
+            ${{ github.workspace }}/fennara/local/target/release/fennara
+            ${{ github.workspace }}/fennara/local/target/release/fennara-daemon
+            ${{ github.workspace }}/fennara/local/target/release/fennara-mcp
           if-no-files-found: warn
           retention-days: 7
