@@ -391,8 +391,10 @@ export function normalizeModelBounds(bounds: ModelBounds, targetMaxExtent: numbe
     bounds.max[1]! - bounds.min[1]!,
     bounds.max[2]! - bounds.min[2]!
   ];
-  extents.forEach((value, index) => finitePositive(value, `extent${index}`));
-  const sourceMaxExtent = Math.max(...extents);
+  for (let index = 0; index < extents.length; index++) {
+    finitePositive(extents[index], `extent${index}`);
+  }
+  const sourceMaxExtent = Math.max(extents[0], extents[1], extents[2]);
   const scaleE8 = Math.round((targetMaxExtent / sourceMaxExtent) * SCALE_E8);
   if (!Number.isSafeInteger(scaleE8) || scaleE8 <= 0) throw new Error("normalized model scale is outside the safe integer envelope");
   const scale = scaleE8 / SCALE_E8;
