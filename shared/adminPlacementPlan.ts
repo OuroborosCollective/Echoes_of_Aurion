@@ -36,14 +36,17 @@ export function isPlaceableWorldAsset(entry: Readonly<{ assetType: string; targe
     && (entry.purpose === "world-environment" || entry.purpose === "world-nature");
 }
 
+/** Rounds millimeter coordinates onto the 250 mm placement grid. */
 export function snapToPlacementGrid(valueMm: number): number {
   return Math.round(valueMm / ADMIN_PLACEMENT_GRID_MM) * ADMIN_PLACEMENT_GRID_MM;
 }
 
+/** Recognizes only reserved admin placement design keys. */
 export function isAdminPlacementDesign(designKey: string): boolean {
   return ADMIN_PLACEMENT_DESIGN.test(designKey);
 }
 
+/** Selects and sorts current admin design groups from confirmed readback. */
 function adminDesigns(readback: WorldDesignReadback | null): Design[] {
   return (readback?.designs ?? []).filter(design => isAdminPlacementDesign(design.designKey))
     .sort((left, right) => (left.designKey < right.designKey ? -1 : left.designKey > right.designKey ? 1 : 0));
@@ -56,6 +59,7 @@ export function cryptoUnitRandom(): number {
   return value[0]! / 2 ** 32;
 }
 
+/** Builds an opaque client request key; never affects simulated world authority. */
 function randomHex(length: number, random: () => number): string {
   let suffix = "";
   for (let index = 0; index < length; index += 1) suffix += Math.min(15, Math.floor(random() * 16)).toString(16);

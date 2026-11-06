@@ -15,6 +15,7 @@ const K = new Uint32Array([
 
 const rotr = (value: number, bits: number) => (value >>> bits) | (value << (32 - bits));
 
+/** Computes synchronous standard SHA-256 for stable presentation reference keys. */
 export function sha256Text(text: string): string {
   const message = new TextEncoder().encode(text);
   const bitLength = message.length * 8;

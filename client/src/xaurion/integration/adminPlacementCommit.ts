@@ -33,6 +33,7 @@ export const ADMIN_PLACEMENT_MESSAGES: Readonly<Record<string, string>> = Object
   FORBIDDEN: "Nur der Admin-Account darf platzieren.",
 });
 
+/** Maps stable authoring rejection codes to localized admin feedback. */
 export function adminPlacementMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const code = Object.keys(ADMIN_PLACEMENT_MESSAGES).find(key => message.includes(key));
@@ -42,17 +43,20 @@ export function adminPlacementMessage(error: unknown): string {
   return /^[A-Z][A-Z0-9_]{2,95}$/.test(message) ? `Speichern fehlgeschlagen (${message}).` : "Speichern fehlgeschlagen. Bitte später erneut versuchen.";
 }
 
+/** Generates an opaque request identifier outside deterministic gameplay authority. */
 function operationId(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
   return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** Recognizes authoring conflicts that require a new authoritative readback. */
 function isStale(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return STALE.some(key => message.includes(key));
 }
 
+/** Rejects catalog assets that are not approved as free world objects. */
 function requirePlaceable(catalog: PlacementCatalog, assetId: string) {
   const asset = catalog.assets.find(entry => entry.assetId === assetId);
   if (!asset || !isPlaceableWorldAsset(asset)) throw new Error("ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE");
@@ -86,6 +90,7 @@ async function withOneRebuild<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Notifies projections to read confirmed authoring changes from the server. */
 function announce(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(WORLD_VISUALS_CHANGED_EVENT));
 }

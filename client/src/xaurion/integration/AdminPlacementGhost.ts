@@ -37,6 +37,7 @@ export class AdminPlacementGhost {
   private generation = 0;
   private disposed = false;
 
+  /** Attaches a non-authoritative, non-colliding preview root to the renderer. */
   constructor(private readonly engine: EngineLike) {
     this.root.name = "aurion-admin-placement-ghost";
     this.root.visible = false;
@@ -47,6 +48,7 @@ export class AdminPlacementGhost {
   get scale(): number { return this.scalePermille; }
   get ready(): boolean { return this.model !== null; }
 
+  /** Loads the selected GLB and discards stale asynchronous model completions. */
   async setAsset(asset: GlbCatalogEntry | null): Promise<void> {
     const generation = ++this.generation;
     this.clearModel();
@@ -75,8 +77,10 @@ export class AdminPlacementGhost {
     this.update();
   }
 
+  /** Advances exactly one quarter turn and updates the preview. */
   rotate(): void { this.rotationQuarterTurns = ((this.rotationQuarterTurns + 1) % 4) as 0 | 1 | 2 | 3; this.update(); }
 
+  /** Clamps the preview scale to the authoring contract's permitted range. */
   setScalePermille(scalePermille: number): void {
     this.scalePermille = Math.min(4_000, Math.max(250, Math.round(scalePermille)));
     this.layout();
@@ -97,6 +101,7 @@ export class AdminPlacementGhost {
   /** Mouse position over the viewport (client pixels), or null for view-direction aiming. */
   setPointer(pointer: { x: number; y: number } | null): void { this.pointer = pointer; }
 
+  /** Applies the horizontal player reach bound to candidate positions. */
   private withinReach(point: { x: number; z: number }): boolean {
     const player = this.engine.player.position;
     return Math.hypot(point.x - player.x, point.z - player.z) <= ADMIN_PLACEMENT_MAX_DISTANCE_M;
@@ -143,6 +148,7 @@ export class AdminPlacementGhost {
     return { x: this.engine.player.position.x + flat.x, z: this.engine.player.position.z + flat.z };
   }
 
+  /** Recomputes the snapped ground target; an invalid target hides the preview. */
   update(): void {
     if (this.disposed || !this.model) { this.root.visible = false; return; }
     const aim = this.aimPoint();
@@ -171,6 +177,7 @@ export class AdminPlacementGhost {
     };
   }
 
+  /** Releases the old GLB lease, cloned materials, and preview target. */
   private clearModel(): void {
     if (this.model) {
       this.model.removeFromParent();
@@ -182,6 +189,7 @@ export class AdminPlacementGhost {
     this.root.visible = false;
   }
 
+  /** Invalidates pending loads and removes all preview-owned render resources. */
   dispose(): void {
     this.disposed = true;
     this.generation += 1;

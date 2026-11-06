@@ -134,8 +134,10 @@ export function AdminPlacementController(props: Props) {
   return <PlacementSession {...props} />;
 }
 
+/** Prevents placement shortcuts from intercepting text-field input. */
 const typingTarget = () => ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase());
 
+/** Owns the local placement preview and input handlers, never server world authority. */
 function PlacementSession({ engineRef, containerRef }: Props) {
   const asset = useAdminStore(state => state.placementAsset);
   const setPlacementAsset = useAdminStore(state => state.setPlacementAsset);

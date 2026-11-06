@@ -20,6 +20,7 @@ import {
 export const MAX_WORLD_VISUAL_PLACEMENTS = 20_000;
 const READBACK_SLACK = 64;
 
+/** Hashes an immutable server acknowledgement for revision-bound auditing. */
 function receiptHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }

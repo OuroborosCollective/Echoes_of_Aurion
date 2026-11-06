@@ -91,6 +91,7 @@ export class NpcFallbackProjection {
     if (typeof window !== "undefined") window.addEventListener(WORLD_VISUALS_CHANGED_EVENT, this.onWorldVisualsChanged);
   }
 
+  /** Coalesces admin change events during a pending read into one follow-up refresh. */
   private readonly onWorldVisualsChanged = () => {
     if (this.disposed) return;
     // A read already in flight may contain the state before this admin write.
@@ -99,6 +100,7 @@ export class NpcFallbackProjection {
     void this.refreshCatalog();
   };
 
+  /** Refreshes confirmed catalog, world design and visual overrides without writing world state. */
   private async refreshCatalog(): Promise<void> {
     if (this.refreshBusy || this.disposed) return;
     this.refreshBusy = true;

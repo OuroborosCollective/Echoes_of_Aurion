@@ -36,6 +36,7 @@ const MAX_RENDERED = 18;
  */
 export const MAX_AUTHORED_RENDERED = 48;
 
+/** Selects the presentation-only normalization size for a GLB subcategory. */
 export function targetSizeMeters(subcategory: string | null): number {
   if (subcategory === "building") return 9;
   if (subcategory === "structure") return 5;
@@ -48,6 +49,7 @@ export function targetSizeMeters(subcategory: string | null): number {
   return 2.5;
 }
 
+/** Rejects skeletal or skinned GLBs from the static world-visual path. */
 function staticRenderable(scene: THREE.Group): boolean {
   let valid = true;
   scene.traverse(node => {
@@ -101,6 +103,7 @@ export class UploadedWorldCatalogProjection {
     engine.scene.add(this.root);
   }
 
+  /** Invalidates the projected selection when the confirmed GLB catalog changes. */
   setCatalog(catalog: GlbRuntimeCatalog | null): void {
     if (this.disposed) return;
     if (this.catalog?.revision === catalog?.revision) return;
@@ -108,6 +111,7 @@ export class UploadedWorldCatalogProjection {
     this.signature = "";
   }
 
+  /** Applies a confirmed world-design manifest without creating client authority. */
   setWorldDesign(worldDesign: WorldDesignReadback | null): void {
     if (this.disposed) return;
     if (this.worldDesign?.revision === worldDesign?.revision) return;
@@ -125,6 +129,7 @@ export class UploadedWorldCatalogProjection {
     this.signature = "";
   }
 
+  /** Resolves an authorized asset override for one stable world placement. */
   private withOverride(placement: UploadedWorldVisualPlacement, placementRef: string): ProjectedPlacement {
     const replacementId = this.overrides.get(placementRef);
     // Same rule as the server write: only approved world models (world purpose) replace world visuals.
@@ -132,6 +137,7 @@ export class UploadedWorldCatalogProjection {
     return Object.freeze({ ...placement, ...(replacement ? { asset: replacement } : {}), placementRef });
   }
 
+  /** Builds the deterministic nearby placement selection from confirmed inputs. */
   private desired(position: { x: number; z: number }): { center: WorldChunkCoordinate; placements: ProjectedPlacement[] } {
     if (!this.catalog) return { center: { x: 0, z: 0 }, placements: [] };
     const center = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;

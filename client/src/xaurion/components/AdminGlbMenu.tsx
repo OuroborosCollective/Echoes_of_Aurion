@@ -30,6 +30,7 @@ const WORLD_VISUAL_MESSAGES: Readonly<Record<string, string>> = {
   WORLD_VISUAL_UNCHANGED: "Dieses Modell steht dort bereits.",
   WORLD_VISUAL_PLACEMENT_INVALID: "Dieses Objekt kann nicht adressiert werden.",
 };
+/** Maps stable server error codes to safe, actionable admin messages. */
 function worldVisualMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const code = Object.keys(WORLD_VISUAL_MESSAGES).find(key => message.includes(key));

@@ -28,11 +28,13 @@ const PREFIX_KIND: Readonly<Record<string, WorldVisualTargetKind>> = Object.free
  */
 export const WORLD_VISUAL_PLACEMENT_REF = /^(uploaded|authored|shipped|surface):[A-Za-z0-9._:-]{1,150}$/;
 
+/** Classifies stable world-visual placement references before writes. */
 export function worldVisualTargetKind(placementRef: string): WorldVisualTargetKind | null {
   if (typeof placementRef !== "string" || placementRef.length > 160 || !WORLD_VISUAL_PLACEMENT_REF.test(placementRef)) return null;
   return PREFIX_KIND[placementRef.slice(0, placementRef.indexOf(":"))] ?? null;
 }
 
+/** Builds the stable reference for a catalog anchor in one world chunk. */
 export function uploadedAnchorRef(chunkX: number, chunkZ: number, anchorIndex: number): string {
   if (![chunkX, chunkZ, anchorIndex].every(Number.isSafeInteger) || anchorIndex < 0) throw new Error("WORLD_VISUAL_ANCHOR_INVALID");
   return `uploaded:${chunkX}:${chunkZ}:${anchorIndex}`;
