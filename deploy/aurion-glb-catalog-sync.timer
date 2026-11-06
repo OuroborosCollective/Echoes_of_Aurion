@@ -1,0 +1,12 @@
+[Unit]
+Description=Synchronize Aurion approved GLB catalog into Godot automatically
+
+[Timer]
+OnBootSec=2min
+OnActiveSec=45s
+OnUnitInactiveSec=1min
+AccuracySec=1s
+Unit=aurion-glb-catalog-sync.service
+
+[Install]
+WantedBy=timers.target
