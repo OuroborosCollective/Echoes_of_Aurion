@@ -8,6 +8,7 @@ import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { writeSync } from "node:fs";
 import { createServer } from "http";
+import { configureHttpTimeouts } from "./httpTimeouts";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -75,7 +76,7 @@ async function startServer(){
   // gameplay mutation, persistence decisions or response generation.
   app.use(createOtelHttpMiddleware());
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-  if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);
+  if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=configureHttpTimeouts(createServer(app));
   defensiveGatewayObserver.start();
   app.use(defensiveGatewayObserver.httpMiddleware);
   app.use(createCorsMiddleware(defensiveGatewayObserver, process.env.AURION_ALLOWED_ORIGINS));
