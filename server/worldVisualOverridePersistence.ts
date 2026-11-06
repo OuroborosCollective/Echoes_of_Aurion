@@ -41,13 +41,23 @@ export async function readWorldVisualOverrides(worldId = GLOBAL_WORLD_ID): Promi
     .where(eq(table.worldId, worldId))
     .limit(MAX_WORLD_VISUAL_PLACEMENTS + READBACK_SLACK + 1);
   if (joined.length > MAX_WORLD_VISUAL_PLACEMENTS + READBACK_SLACK) throw new Error("WORLD_VISUAL_READBACK_OVERFLOW");
-  const latest = new Map(joined.map(({ row }) => [row.placementRef, row] as const));
-  const overrides: WorldVisualOverride[] = [...latest.values()]
+  return buildWorldVisualOverrideReadback(worldId, joined.map(({ row }) => row));
+}
+
+type OverrideHead = Readonly<{ placementRef: string; targetKind: WorldVisualOverride["targetKind"]; assetId: string | null; revision: number }>;
+const byPlacementRef = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+
+/**
+ * Canonical readback of the placement heads. Independent of the database row order:
+ * clients compare `readbackHash` to skip unchanged refreshes, so equal data must hash equally.
+ */
+export function buildWorldVisualOverrideReadback(worldId: string, heads: readonly OverrideHead[]): WorldVisualOverrideReadback {
+  const ordered = [...heads].sort((left, right) => byPlacementRef(left.placementRef, right.placementRef));
+  const overrides: WorldVisualOverride[] = ordered
     .filter(row => row.assetId !== null)
-    .map(row => Object.freeze({ placementRef: row.placementRef, targetKind: row.targetKind, assetId: row.assetId!, revision: row.revision }))
-    .sort((left, right) => (left.placementRef < right.placementRef ? -1 : left.placementRef > right.placementRef ? 1 : 0));
+    .map(row => Object.freeze({ placementRef: row.placementRef, targetKind: row.targetKind, assetId: row.assetId!, revision: row.revision }));
   // Revisions are needed for optimistic writes even where the latest revision restored the original.
-  const revisions = Object.fromEntries([...latest.values()].map(row => [row.placementRef, row.revision]));
+  const revisions = Object.fromEntries(ordered.map(row => [row.placementRef, row.revision] as const));
   const readback = { schemaVersion: WORLD_VISUAL_OVERRIDE_SCHEMA, worldId, overrides, revisions };
   return Object.freeze({ ...readback, readbackHash: receiptHash(readback) });
 }
