@@ -76,7 +76,7 @@
       },
       {
         "path": "shared/worldChunkProtocol.ts",
-        "sha256": "92c7a2da46770e8c4a4746e05bbfc905d3cd669713e5b4718b8d65b474054616"
+        "sha256": "19a77ca1f29b18bac84f45dc692dfe093aa420f4eb8bb27aea345ced10808fd4"
       },
       {
         "path": "shared/worldChunkCoordinates.ts",
