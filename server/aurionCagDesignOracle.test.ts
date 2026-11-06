@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildModelScaleCagProbe,
+  buildVisualGeometryCagProbe,
   buildProgressionCagProbe,
   buildWorldAssetScaleCagProbe,
   buildWorldChunkTerrainCagProbe,
@@ -144,6 +145,28 @@ describe("Aurion CAG deterministic design oracle", () => {
     const asset = worldAssetCatalog.assets[0]!;
     expect(buildWorldAssetScaleCagProbe(asset.category, asset.bounds as ModelBounds).expectedExact)
       .toBe(String(Math.round(asset.scale * 100_000_000)));
+  });
+
+  it("makes a bounded, non-authoritative visual-geometry CAG contract for imported Godot meshes", async () => {
+    const candidate = { minMm: [-398, 0, -283], maxMm: [397, 2020, 277] } as const;
+    const original = structuredClone(candidate);
+    const probe = buildVisualGeometryCagProbe(candidate);
+    expect(probe.kind).toBe("visual_geometry");
+    expect(probe.expectedExact).toBe("{-398,0,-283,397,2020,277,795,2020,560}");
+    expect(probe.code).toContain("Join[mn,mx,mx-mn]");
+    expect(candidate).toEqual(original);
+    expect((await verifyAurionCagDesignProbe(probe, fakeClient("Out[1]= {-398, 0, -283, 397, 2020, 277, 795, 2020, 560}"))).verdict).toBe("SUPPORTED");
+    expect((await verifyAurionCagDesignProbe(probe, fakeClient("{-398,0,-283,398,2020,277,796,2020,560}"))).verdict).toBe("CONTRADICTED");
+    for (const invalid of [
+      { minMm: [0, 0], maxMm: [1, 1, 1] },
+      { minMm: [0, 0, 0], maxMm: [0, 0, 0] },
+      { minMm: [0, 0, 0], maxMm: [-1, 2, 3] },
+      { minMm: [0, 0, 0], maxMm: [Infinity, 1, 1] },
+      { minMm: [0, 0, 0], maxMm: [1, 1, 0.1] },
+      { minMm: [0, 0, 0], maxMm: [1000000001, 1, 1] },
+    ]) {
+      expect(() => buildVisualGeometryCagProbe(invalid as never)).toThrow();
+    }
   });
 
   it("normalizes bounded Wolfram output without accepting multiline envelopes", () => {
