@@ -67,6 +67,7 @@ export class NpcFallbackProjection {
   private readonly proxyMatrix = new THREE.Matrix4();
   private disposed = false;
   private refreshBusy = false;
+  private refreshQueued = false;
   private lastRefreshTick = -150;
   private lodCounts: ActorLodCounts = emptyActorLodCounts();
   private mixerUpdatesLastFrame = 0;
@@ -90,7 +91,13 @@ export class NpcFallbackProjection {
     if (typeof window !== "undefined") window.addEventListener(WORLD_VISUALS_CHANGED_EVENT, this.onWorldVisualsChanged);
   }
 
-  private readonly onWorldVisualsChanged = () => { void this.refreshCatalog(); };
+  private readonly onWorldVisualsChanged = () => {
+    if (this.disposed) return;
+    // A read already in flight may contain the state before this admin write.
+    // Coalesce concurrent change events into one follow-up authoritative read.
+    if (this.refreshBusy) { this.refreshQueued = true; return; }
+    void this.refreshCatalog();
+  };
 
   private async refreshCatalog(): Promise<void> {
     if (this.refreshBusy || this.disposed) return;
@@ -128,6 +135,10 @@ export class NpcFallbackProjection {
       // A later confirmed catalog can still revoke/reselect a visual.
     } finally {
       this.refreshBusy = false;
+      if (this.refreshQueued && !this.disposed) {
+        this.refreshQueued = false;
+        void this.refreshCatalog();
+      }
     }
   }
 
