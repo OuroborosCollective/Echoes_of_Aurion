@@ -158,13 +158,14 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
         if (closing) { alwaysOnStatus = "stopped"; return readbackAlwaysOn(); }
         // Uses the same checked persisted-head recovery as a real ticket join.
         // A concurrent authorized join shares the in-flight recovery.
-        await registry.getOrRecover(zoneId, recoverZone);
+        await registry.getOrRecover(zoneId, recoverZone, () => !closing);
       }
       if (closing) { alwaysOnStatus = "stopped"; return readbackAlwaysOn(); }
       alwaysOnStatus = "active";
       console.info(`[Aurion Zone] ALWAYS_ON_ACTIVATED ${JSON.stringify({ zoneIds })}`);
       return readbackAlwaysOn();
     }).catch(error => {
+      if (closing) { alwaysOnStatus = "stopped"; return readbackAlwaysOn(); }
       alwaysOnStatus = "failed";
       alwaysOnCode = zoneFailureCode(error);
       console.error(`[Aurion Zone] ALWAYS_ON_ACTIVATION_FAILED ${JSON.stringify({ code: alwaysOnCode })}`);
