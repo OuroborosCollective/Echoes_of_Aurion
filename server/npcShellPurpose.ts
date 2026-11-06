@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { aurionAuthoringReceipts, users } from "../drizzle/schema";
 import { getDb } from "./db";
@@ -26,8 +26,8 @@ import { activeProvenance } from "./aurionProvenance";
 import type { z } from "zod";
 
 export const NPC_PURPOSE_PROMPT_VERSION = "aurion-npc-purpose-1";
-/** Bounded readback: purposes are hand-confirmed by an administrator. */
-const MAX_PURPOSE_ROWS = 4_000;
+/** Active shells per readback query (IN-list chunk). */
+const SHELL_QUERY_CHUNK = 500;
 /** Surroundings the LLM may consider for the NPC's place (metres). */
 const CONTEXT_RADIUS_M = 60;
 
@@ -79,16 +79,30 @@ function latestByShell(rows: readonly ReceiptRow[]) {
 export async function readNpcPurposes(): Promise<NpcPurposeReadback> {
   const db = await getDb();
   if (!db) throw new Error("NPC_PURPOSE_DATABASE_REQUIRED");
-  const [rows, world] = await Promise.all([
-    db.select().from(aurionAuthoringReceipts).where(and(eq(aurionAuthoringReceipts.kind, "npc"), eq(aurionAuthoringReceipts.action, "purpose"))).limit(MAX_PURPOSE_ROWS + 1),
-    readActiveWorldDesign(),
-  ]);
-  if (rows.length > MAX_PURPOSE_ROWS) throw new Error("NPC_PURPOSE_READBACK_OVERFLOW");
+  const world = await readActiveWorldDesign();
+  const shellRefs = activeShellRefs(world);
+  // Only the latest revision of each standing shell is read: history (revisions,
+  // removed shells) never grows the readback or makes it fail.
+  const rows: ReceiptRow[] = [];
+  for (let index = 0; index < shellRefs.length; index += SHELL_QUERY_CHUNK) {
+    const chunk = shellRefs.slice(index, index + SHELL_QUERY_CHUNK);
+    const [result] = await db.execute(sql`
+      SELECT id, kind, action, targetId, actorUserId, planHash, previousHash, resultHash, payloadJson, receiptHash, createdAt FROM (
+        SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.targetId ORDER BY CAST(JSON_VALUE(r.payloadJson, '$.revision') AS UNSIGNED) DESC, r.createdAt DESC, r.id DESC) AS headRank
+        FROM aurionAuthoringReceipts r
+        WHERE r.kind = 'npc' AND r.action = 'purpose' AND r.targetId IN (${sql.join(chunk.map(ref => sql`${ref}`), sql`, `)})
+      ) heads WHERE heads.headRank = 1`) as unknown as [ReceiptRow[]];
+    rows.push(...result);
+  }
   const purposes: ConfirmedNpcPurpose[] = [...latestByShell(rows).values()]
-    .filter(stored => findShell(world, stored.draft.shellRef) !== null)
     .map(stored => Object.freeze({ shellRef: stored.draft.shellRef, purposeHash: stored.row.resultHash, receiptId: stored.row.id, purpose: stored.draft }))
     .sort((left, right) => (left.shellRef < right.shellRef ? -1 : left.shellRef > right.shellRef ? 1 : 0));
   return Object.freeze({ schemaVersion: NPC_PURPOSE_SCHEMA, revision: authoringHash(purposes.map(item => [item.shellRef, item.purposeHash])), purposes: Object.freeze(purposes) });
+}
+
+function activeShellRefs(world: WorldDesignReadback): string[] {
+  return world.designs.filter(design => isNpcShellDesign(design.designKey))
+    .flatMap(design => design.placements.map(placement => `authored:${design.designKey}:${placement.placementKey}`)).sort();
 }
 
 /** Validates an LLM output against the shell it was asked for (beyond the schema). */
@@ -113,10 +127,9 @@ export function buildNpcPurposePrompt(input: z.infer<typeof NpcPurposeDraftInput
   ].join("\n");
 }
 
-async function shellContext(shell: ShellPlace, world: WorldDesignReadback) {
+async function shellContext(shell: ShellPlace, world: WorldDesignReadback, purposes: NpcPurposeReadback) {
   const catalog = await glbImportStore().catalog();
   const names = new Map(catalog.entries.map(entry => [entry.assetId, entry.displayName] as const));
-  const purposes = await readNpcPurposes();
   const near = (xMm: number, zMm: number) => Math.round(Math.hypot(xMm - shell.xMm, zMm - shell.zMm) / 100) / 10;
   const nearbyShells: { displayName: string; role: string; distanceM: number }[] = [];
   const nearbyObjects: { name: string; distanceM: number }[] = [];
@@ -150,13 +163,17 @@ export async function draftNpcPurpose(raw: z.infer<typeof NpcPurposeDraftInput>,
   const world = await readActiveWorldDesign();
   const shell = findShell(world, input.shellRef);
   if (!shell) throw new Error("NPC_SHELL_NOT_FOUND");
-  const prompt = buildNpcPurposePrompt(input, shell, await shellContext(shell, world));
+  const purposes = await readNpcPurposes();
+  // The purpose this draft revises (null for a first purpose). Confirming the draft later
+  // must name exactly this predecessor, so a concurrent confirmation is never overwritten.
+  const basePurposeHash = purposes.purposes.find(item => item.shellRef === shell.shellRef)?.purposeHash ?? null;
+  const prompt = buildNpcPurposePrompt(input, shell, await shellContext(shell, world, purposes));
   if (Buffer.byteLength(prompt) > 24_000) throw new Error("NPC_PURPOSE_CONTEXT_TOO_LARGE");
   const outcome = await runFabricDraft(fabric, { prompt, mode: input.mode, modelId: input.modelId, sourceRevision: activeProvenance.sourceRevision,
     promptVersion: NPC_PURPOSE_PROMPT_VERSION, validate: value => validateNpcPurposeDraft(value, shell.shellRef) });
   const budget = await fabric.ledger.status(premiumLimit(fabric.config));
   if (outcome.status === "UNRESOLVED") return { status: "UNRESOLVED" as const, failures: outcome.failures, budget, requiresHumanReview: true as const };
-  return { status: "AI_DRAFT" as const, draft: outcome.value, draftHash: authoringHash(outcome.value), model: outcome.model, audit: outcome.audit,
+  return { status: "AI_DRAFT" as const, draft: outcome.value, draftHash: authoringHash(outcome.value), basePurposeHash, model: outcome.model, audit: outcome.audit,
     failures: outcome.failures, budget, requiresHumanReview: true as const };
 }
 

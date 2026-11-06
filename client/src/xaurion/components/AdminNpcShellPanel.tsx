@@ -43,6 +43,13 @@ export function AdminNpcShellPanel({ engineRef }: Readonly<{ engineRef: React.Re
   const placing = useAdminStore(state => state.placementAsset !== null);
   const setShellTarget = useAdminStore(state => state.setShellTarget);
   const [nearby, setNearby] = useState<NpcShellTarget | null>(null);
+  // Result of a removal: outlives the panel, which closes because the shell is gone.
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     if (!isAdmin) { setNearby(null); return; }
@@ -68,13 +75,14 @@ export function AdminNpcShellPanel({ engineRef }: Readonly<{ engineRef: React.Re
   }, [shell, setShellTarget]);
 
   if (!isAdmin || placing) return null;
+  const noticeLine = notice ? <p role="status" data-testid="admin-npc-shell-notice" className="aurion-ui-feedback">{notice}</p> : null;
   if (!shell) {
-    if (!nearby) return null;
-    return (
+    if (!nearby) return noticeLine;
+    return (<>{noticeLine}
       <button type="button" data-testid="admin-npc-shell-prompt" className="ax1-npc-prompt" aria-label="NPC-Hülle bearbeiten" style={{ bottom: 208 }}
         onClick={() => { soundSynth.playUiOpen(); openNearestNpcShell(engineRef.current); }}>
         NPC-Hülle bearbeiten <kbd>E</kbd>
-      </button>
+      </button></>
     );
   }
   return (
@@ -104,7 +112,7 @@ export function AdminNpcShellPanel({ engineRef }: Readonly<{ engineRef: React.Re
         </p>
       )}
       <PurposeEditor shell={shell} />
-      <RemovePlacedObjectButton placementRef={shell.shellRef} onRemoved={() => setShellTarget(null)} />
+      <RemovePlacedObjectButton placementRef={shell.shellRef} onRemoved={message => { setNotice(message); setShellTarget(null); }} />
     </section>
   );
 }
@@ -117,6 +125,7 @@ const PURPOSE_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
   FREE_RATE_LIMIT: "Das Tageslimit für kostenlose Anfragen ist erreicht. Bitte später erneut versuchen.",
   CREDIT_LIMIT: "Das OpenRouter-Guthaben ist aufgebraucht.",
   TIMEOUT: "Das LLM hat nicht rechtzeitig geantwortet. Bitte erneut versuchen.",
+  CIRCUIT_OPEN: "Das Modell hatte gerade einen Fehler und pausiert eine Minute. Bitte gleich noch einmal versuchen.",
   INVALID_DRAFT: "Das LLM hat keinen gültigen Entwurf geliefert. Bitte erneut versuchen oder den Auftrag präzisieren.",
   DRAFT_FOR_OTHER_SHELL: "Der Entwurf passte nicht zu dieser Hülle und wurde verworfen.",
   PREMIUM_NOT_APPROVED: "Premium-Modelle sind nicht freigegeben.",
@@ -135,14 +144,14 @@ function errorText(error: unknown): string {
   return purposeMessage(Object.keys(PURPOSE_MESSAGES).find(code => message.includes(code)) ?? message);
 }
 
-type Draft = Readonly<{ draft: NpcPurposeDraft; draftHash: string; model: string }>;
+/** A previewed draft and the confirmed purpose it revises (fixed at draft time). */
+type Draft = Readonly<{ draft: NpcPurposeDraft; draftHash: string; basePurposeHash: string | null; model: string }>;
 
 /**
  * Brief → LLM draft (preview only) → one-tap confirmation. The LLM proposes; Aurion
  * persists only what the admin confirmed, with a receipt.
  */
 function PurposeEditor({ shell }: Readonly<{ shell: NpcShellTarget }>) {
-  const utils = trpc.useUtils();
   const draftMutation = trpc.aurionAuthoring.npcPurposeDraft.useMutation();
   const confirmMutation = trpc.aurionAuthoring.npcPurposeConfirm.useMutation();
   const [brief, setBrief] = useState("");
@@ -162,7 +171,7 @@ function PurposeEditor({ shell }: Readonly<{ shell: NpcShellTarget }>) {
         setStatus({ tone: "error", text: reasons.join(" ") || "Kein Entwurf erhalten." });
         return;
       }
-      setDraft({ draft: result.draft, draftHash: result.draftHash, model: result.model });
+      setDraft({ draft: result.draft, draftHash: result.draftHash, basePurposeHash: result.basePurposeHash, model: result.model });
       setStatus({ tone: "info", text: "Entwurf bereit. Prüfen und mit einem Tipp bestätigen." });
     } catch (error) { setStatus({ tone: "error", text: errorText(error) }); }
   };
@@ -170,9 +179,9 @@ function PurposeEditor({ shell }: Readonly<{ shell: NpcShellTarget }>) {
   const confirm = async () => {
     if (!draft || busy) return;
     try {
-      const current = await utils.aurionAuthoring.npcPurposes.fetch(undefined, { staleTime: 0 });
-      const previous = current.purposes.find(item => item.shellRef === shell.shellRef)?.purposeHash ?? null;
-      await confirmMutation.mutateAsync({ draft: draft.draft, expectedDraftHash: draft.draftHash, expectedPreviousPurposeHash: previous, confirmation: "CONFIRM_NPC_PURPOSE" });
+      // The predecessor is the purpose the draft was written against, never a newer one:
+      // if another admin confirmed meanwhile, the server refuses this stale draft.
+      await confirmMutation.mutateAsync({ draft: draft.draft, expectedDraftHash: draft.draftHash, expectedPreviousPurposeHash: draft.basePurposeHash, confirmation: "CONFIRM_NPC_PURPOSE" });
       soundSynth.playUiSuccess();
       setDraft(null);
       setBrief("");

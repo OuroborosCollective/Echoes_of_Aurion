@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPool, type Pool, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -80,8 +80,18 @@ describe.skipIf(!enabled)("NPC shell purpose against isolated MariaDB", () => {
     shellDesign = { designKey: group.designKey, designHash: group.designHash };
   }
 
+  // Every test starts with a fresh cost ledger: a deliberately invalid draft puts its model
+  // into the ledger's 60 s cool-down (CIRCUIT_OPEN), which must not leak into the next test.
+  let ledgerIndex = 0;
+  beforeEach(() => {
+    const ledgerPath = path.join(root, `ledger-${ledgerIndex += 1}.json`);
+    fabric.config = FabricConfigSchema.parse({ ...fabric.config, ledgerPath });
+    fabric.ledger = new FabricLedger(ledgerPath);
+  });
+
   afterEach(async () => {
     await pool.execute("DELETE FROM aurionAuthoringReceipts WHERE actorUserId IN (?, ?)", [admin, player]);
+    await pool.execute("DELETE FROM aurionAuthoringReceipts WHERE id LIKE 'authoring:npc:hist%'");
     await pool.execute("DELETE FROM aurionWorldDesignVersions WHERE createdByUserId = ?", [admin]);
     await pool.execute("UPDATE users SET role = 'admin' WHERE id = ?", [admin]);
   });
@@ -156,6 +166,40 @@ describe.skipIf(!enabled)("NPC shell purpose against isolated MariaDB", () => {
     expect((await readNpcPurposes()).purposes).toEqual([]);
     const later = purpose({ role: "Geist" });
     await expect(confirmNpcPurpose(admin, { draft: later, expectedDraftHash: authoringHash(later), expectedPreviousPurposeHash: authoringHash(draft), confirmation: "CONFIRM_NPC_PURPOSE" })).rejects.toThrow("NPC_SHELL_NOT_FOUND");
+  }, 30_000);
+
+  // Review (Devin, #1329): 4,001 historical purpose receipts made every readback fail.
+  it("reads only the latest revision of standing shells, however long the history is", async () => {
+    await placeShell();
+    let previous: string | null = null;
+    for (const role of ["Händlerin", "Heilerin", "Alchemistin"]) {
+      const draft = purpose({ role });
+      await confirmNpcPurpose(admin, { draft, expectedDraftHash: authoringHash(draft), expectedPreviousPurposeHash: previous, confirmation: "CONFIRM_NPC_PURPOSE" });
+      previous = authoringHash(draft);
+    }
+    // History of long-removed shells (Sequence engine of MariaDB).
+    await pool.query(`INSERT INTO aurionAuthoringReceipts (id, kind, action, targetId, actorUserId, planHash, previousHash, resultHash, payloadJson, receiptHash)
+      SELECT CONCAT('authoring:npc:hist', seq), 'npc', 'purpose', CONCAT('authored:npc.shells.gone0000:p.', LPAD(seq, 12, '0')), ?, SHA2(seq, 256), NULL, SHA2(CONCAT('r', seq), 256), '{}', SHA2(CONCAT('h', seq), 256)
+      FROM seq_1_to_4500`, [admin]);
+    const readback = await readNpcPurposes();
+    expect(readback.purposes.map(item => [item.shellRef, item.purpose.role])).toEqual([[shellRef, "Alchemistin"]]);
+    expect(readback.purposes[0]!.purposeHash).toBe(previous);
+  }, 60_000);
+
+  it("names the purpose a draft revises, so a concurrent confirmation is never overwritten", async () => {
+    await placeShell();
+    fabric.openRouter.content = JSON.stringify(purpose({ role: "Entwurf von Admin A" }));
+    const draftA = await draftNpcPurpose({ shellRef, brief: "Eine Händlerin für seltene Kräuter am Weg.", mode: "auto" }, fabric as never);
+    if (draftA.status !== "AI_DRAFT") throw new Error(`expected draft: ${JSON.stringify(draftA.failures)}`);
+    expect(draftA.basePurposeHash).toBeNull();
+    const other = purpose({ role: "Bestätigt von Admin B" });
+    await confirmNpcPurpose(admin, { draft: other, expectedDraftHash: authoringHash(other), expectedPreviousPurposeHash: null, confirmation: "CONFIRM_NPC_PURPOSE" });
+    await expect(confirmNpcPurpose(admin, { draft: draftA.draft, expectedDraftHash: draftA.draftHash, expectedPreviousPurposeHash: draftA.basePurposeHash, confirmation: "CONFIRM_NPC_PURPOSE" }))
+      .rejects.toThrow("NPC_PURPOSE_PREDECESSOR_CHANGED");
+    expect((await readNpcPurposes()).purposes[0]!.purpose.role).toBe("Bestätigt von Admin B");
+    const revision = await draftNpcPurpose({ shellRef, brief: "Eine Händlerin für seltene Kräuter am Weg.", mode: "auto" }, fabric as never);
+    if (revision.status !== "AI_DRAFT") throw new Error("expected draft");
+    expect(revision.basePurposeHash).toBe(authoringHash(other));
   }, 30_000);
 
   it("serves drafting and confirmation only to admins through the real tRPC route", async () => {

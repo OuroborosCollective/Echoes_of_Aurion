@@ -28,6 +28,9 @@ export function uploadedPlacementRef(placementId: string): string {
 }
 
 type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
+/** Back-off before re-rendering a placement whose terrain was not ready / whose model failed. */
+export const WORLD_VISUAL_TERRAIN_RETRY_MS = 2_000;
+export const WORLD_VISUAL_LOAD_RETRY_MS = 10_000;
 /** Automatic catalog anchors and dedicated village visuals around the player. */
 const MAX_RENDERED = 18;
 /**
@@ -94,6 +97,10 @@ export class UploadedWorldCatalogProjection {
   private readonly rendered = new Map<string, Rendered>();
   private readonly pending = new Set<string>();
   private signature = "";
+  /** Wanted placement id -> asset hash of the current world state (checked when a load finishes). */
+  private wanted = new Map<string, string>();
+  /** Earliest retry time per placement after a failed render (terrain not ready, load error). */
+  private readonly retryAt = new Map<string, number>();
   private disposed = false;
 
   constructor(private readonly engine: MMOEngine) {
@@ -208,7 +215,8 @@ export class UploadedWorldCatalogProjection {
       unowned = loaded.scene;
       if (this.disposed || !staticRenderable(loaded.scene)) return;
       const stillAllowed = this.catalog?.entries.some(entry => entry.assetId === placement.asset.assetId && entry.sha256 === placement.asset.sha256 && entry.purpose === placement.asset.purpose);
-      if (!stillAllowed) return;
+      // Removed or replaced while loading: never draw a placement the world no longer wants.
+      if (!stillAllowed || this.wanted.get(placement.id) !== placement.asset.sha256) return;
 
       const fit = fitWorldVisual(loaded.scene, placement.asset, placement.scalePermille ?? 1_000);
       if (!fit) return;
@@ -216,7 +224,7 @@ export class UploadedWorldCatalogProjection {
       const worldX = placement.xMm / 1000;
       const worldZ = placement.zMm / 1000;
       const terrainY = this.engine.landscape.chunkManager.getElevationAt(worldX, worldZ);
-      if (!Number.isFinite(terrainY)) return;
+      if (!Number.isFinite(terrainY)) { this.retryAt.set(placement.id, performance.now() + WORLD_VISUAL_TERRAIN_RETRY_MS); return; }
 
       const holder = new THREE.Group();
       holder.name = `uploaded-world:${placement.id}`;
@@ -238,9 +246,11 @@ export class UploadedWorldCatalogProjection {
       this.remove(placement.id);
       this.root.add(holder);
       this.rendered.set(placement.id, Object.freeze({ sha256: placement.asset.sha256, root: holder, lodLevels: loaded.lodLevels }));
+      this.retryAt.delete(placement.id);
       unowned = undefined;
     } catch {
-      // Existing world visuals remain authoritative when an uploaded render fails.
+      // Existing world visuals remain authoritative when an uploaded render fails; retry with a back-off.
+      this.retryAt.set(placement.id, performance.now() + WORLD_VISUAL_LOAD_RETRY_MS);
     } finally {
       if (unowned) releaseGlbTree(unowned);
       this.pending.delete(placement.id);
@@ -253,8 +263,20 @@ export class UploadedWorldCatalogProjection {
     const originX = center.x * 64;
     const originZ = center.z * 64;
     const nextSignature = `${this.catalog?.revision ?? "none"}:${this.worldDesign?.revision ?? "none"}:${this.overridesHash}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${value.scalePermille ?? 1000}:${(value.asset.lods ?? []).map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
-    if (nextSignature === this.signature) return;
+    if (nextSignature === this.signature) {
+      // Retry placements whose last render failed once their back-off has passed.
+      if (this.retryAt.size) {
+        const now = performance.now();
+        for (const placement of placements) {
+          const at = this.retryAt.get(placement.id);
+          if (at !== undefined && at <= now && !this.rendered.has(placement.id)) { this.retryAt.delete(placement.id); void this.project(placement, originX, originZ); }
+        }
+      }
+      return;
+    }
     this.signature = nextSignature;
+    this.wanted = new Map(placements.map(placement => [placement.id, placement.asset.sha256] as const));
+    for (const id of [...this.retryAt.keys()]) if (!this.wanted.has(id)) this.retryAt.delete(id);
     this.root.position.set(originX, 0, originZ);
     const ids = new Set(placements.map(placement => placement.id));
     for (const id of [...this.rendered.keys()]) if (!ids.has(id)) this.remove(id);

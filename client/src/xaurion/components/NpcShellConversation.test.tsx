@@ -46,4 +46,13 @@ describe("talking to a confirmed NPC", () => {
     await act(async () => { vi.advanceTimersByTime(500); });
     expect(screen.queryByTestId("npc-shell-conversation")).toBeNull();
   });
+
+  // Review (Devin, #1329): a nearer unconfirmed shell hid the conversation with a confirmed NPC.
+  it("offers the nearest confirmed NPC even when an unconfirmed shell stands closer", () => {
+    const scene = new THREE.Scene();
+    const near = new THREE.Group(); near.userData.npcShell = { ...base, shellRef: "authored:npc.shells.1a2b3c4d:p.000000000009", position: { x: 1.2, y: 0, z: 1 } }; scene.add(near);
+    const talker = new THREE.Group(); talker.userData.npcShell = confirmed; scene.add(talker);
+    render(<NpcShellConversation engineRef={{ current: { scene, player: { position: new THREE.Vector3(1, 0, 1) } } as never }} />);
+    expect(screen.getByTestId("npc-shell-talk-prompt").textContent).toContain("Mira Kräuterhand");
+  });
 });

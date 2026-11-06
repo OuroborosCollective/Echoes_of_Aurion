@@ -149,6 +149,45 @@ describe("NPC shell projection", () => {
     projection.dispose();
   });
 
+  // Review (Devin, #1328): a shell removed while its model loaded was drawn anyway.
+  it("never draws a shell that was removed while its model was still loading", async () => {
+    let finish: (value: ReturnType<typeof character>) => void = () => undefined;
+    vi.spyOn(glbManager, "loadModel").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const projection = new NpcShellProjection(engine());
+    projection.setCatalog(catalog([ranger]));
+    projection.setWorldDesign(design([{ designKey: "npc.shells.1a2b3c4d", placements: [placement("p.000000000001", "glb_ranger")] }]));
+    projection.update(0.016);
+    projection.setWorldDesign(design([], "d"));
+    projection.update(0.016);
+    finish(character());
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
+    expect(projection.evidence().rendered).toBe(0);
+    projection.dispose();
+  });
+
+  // Review (Devin, CodeRabbit, #1328): a failed render (terrain not ready, load error) stayed invisible for good.
+  it("retries a shell whose terrain was not ready or whose model failed, with a back-off", async () => {
+    let now = 1_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const load = vi.spyOn(glbManager, "loadModel").mockRejectedValueOnce(new Error("NETWORK")).mockImplementation(async () => character());
+    let terrainReady = false;
+    const world = { scene: new THREE.Scene(), player: { position: new THREE.Vector3() }, landscape: { chunkManager: { getElevationAt: () => (terrainReady ? 0 : Number.NaN) } } };
+    const projection = new NpcShellProjection(world);
+    projection.setCatalog(catalog([ranger]));
+    projection.setWorldDesign(design([{ designKey: "npc.shells.1a2b3c4d", placements: [placement("p.000000000001", "glb_ranger")] }]));
+    projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0)); // load error
+    now += 5_000; projection.update(0.016);
+    expect(load).toHaveBeenCalledTimes(1); // back-off not yet passed
+    now += 6_000; projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0)); // terrain not ready
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(projection.evidence().rendered).toBe(0);
+    terrainReady = true;
+    now += 2_500; projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().rendered).toBe(1));
+  });
+
   it("shows the confirmed purpose (name, role, dialogue) on its shell and follows changes", async () => {
     vi.spyOn(glbManager, "loadModel").mockImplementation(async () => character());
     const projection = new NpcShellProjection(engine());
@@ -166,6 +205,32 @@ describe("NPC shell projection", () => {
     expect(shells(projection)[0]!.purpose?.role).toBe("Heilerin");
     projection.setPurposes(null);
     expect(shells(projection)[0]!.purpose).toBeUndefined();
+    projection.dispose();
+  });
+
+  // Review (Devin, #1329): every purpose revision replaced name labels without freeing their textures.
+  it("frees the old name label texture and material when a purpose changes", async () => {
+    vi.spyOn(glbManager, "loadModel").mockImplementation(async () => character());
+    const context = { fillRect: vi.fn(), fillText: vi.fn(), set fillStyle(_value: string) {}, set font(_value: string) {}, set textAlign(_value: string) {} };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as never);
+    const projection = new NpcShellProjection(engine());
+    projection.setCatalog(catalog([ranger]));
+    projection.setWorldDesign(design([{ designKey: "npc.shells.1a2b3c4d", placements: [placement("p.000000000001", "glb_ranger")] }]));
+    projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().rendered).toBe(1));
+    const purpose = (role: string) => ({ schemaVersion: "aurion.npc-purpose.v1" as const, shellRef: "authored:npc.shells.1a2b3c4d:p.000000000001", displayName: "Mira", role,
+      persona: "Ruhig und neugierig.", greeting: "Willkommen.", topics: [{ topic: "Kräuter", line: "Silberblatt." }], routine: [{ label: "Beet", offsetXMm: 0, offsetZMm: 0, dwellSeconds: 60 }], questIdeas: [] });
+    projection.setPurposes({ schemaVersion: "aurion.npc-purpose.v1", revision: "1".repeat(64), purposes: [{ shellRef: purpose("a").shellRef, purposeHash: "a".repeat(64), receiptId: "r1", purpose: purpose("Händlerin") }] });
+    const first = projection.root.getObjectByName("aurion-npc-shell-label") as THREE.Sprite;
+    expect(first).toBeTruthy();
+    const textureDispose = vi.spyOn(first.material.map!, "dispose");
+    const materialDispose = vi.spyOn(first.material, "dispose");
+    projection.setPurposes({ schemaVersion: "aurion.npc-purpose.v1", revision: "2".repeat(64), purposes: [{ shellRef: purpose("a").shellRef, purposeHash: "b".repeat(64), receiptId: "r2", purpose: purpose("Heilerin") }] });
+    expect(textureDispose).toHaveBeenCalled();
+    expect(materialDispose).toHaveBeenCalled();
+    const labels: THREE.Object3D[] = [];
+    projection.root.traverse(node => { if (node.name === "aurion-npc-shell-label") labels.push(node); });
+    expect(labels).toHaveLength(1);
     projection.dispose();
   });
 });

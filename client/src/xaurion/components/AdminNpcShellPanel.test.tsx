@@ -98,6 +98,30 @@ describe("admin NPC shell window", () => {
     expect(openNearestNpcShell({ scene: undefined, player: undefined } as never)).toBeNull();
   });
 
+  // Review (Devin, #1328): the panel closed before the count of co-removed invisible placements showed.
+  it("keeps the removal result visible after the panel closes", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    fixture.catalog.mockResolvedValue({ glbCatalogRevision: "a".repeat(64), assets: [], world: { schemaVersion: "aurion.world-design.v1", revision: "b".repeat(64), designs: [
+      { designKey: shell.designKey, version: 1, title: "NPC-Hüllen", designHash: "d".repeat(64), expectedCatalogRevision: "a".repeat(64),
+        placements: [{ placementKey: shell.placementKey, assetId: "glb_ranger", chunkX: 0, chunkZ: 0, xMm: 34_000, zMm: 33_000, rotationQuarterTurns: 0, scalePermille: 1000 },
+          { placementKey: "p.000000000009", assetId: "glb_withdrawn", chunkX: 0, chunkZ: 0, xMm: 30_000, zMm: 33_000, rotationQuarterTurns: 0, scalePermille: 1000 }] },
+    ] } });
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    fireEvent.click(screen.getByTestId("admin-glb-remove-placement"));
+    fireEvent.click(screen.getByTestId("admin-glb-remove-placement"));
+    await waitFor(() => expect(screen.queryByTestId("admin-npc-shell-panel")).toBeNull());
+    expect(screen.getByTestId("admin-npc-shell-notice").textContent).toContain("1 unsichtbare Platzierung");
+  });
+
+  // Review (CodeRabbit, #1328): starting a placement left the shell selected; it reopened by itself after "Fertig".
+  it("forgets the open shell when a placement starts", () => {
+    useAdminStore.setState({ shellTarget: shell });
+    useAdminStore.getState().setPlacementAsset({ assetId: "glb_ranger" } as never);
+    useAdminStore.getState().setPlacementAsset(null);
+    expect(useAdminStore.getState().shellTarget).toBeNull();
+  });
+
   // Stage C: brief → LLM draft (preview) → one-tap confirmation with receipt.
   const draft = { schemaVersion: "aurion.npc-purpose.v1", shellRef: shell.shellRef, displayName: "Mira Kräuterhand", role: "Kräuterhändlerin",
     persona: "Ruhig und neugierig, kennt jede Pflanze.", greeting: "Willkommen, Wanderer.",
@@ -106,8 +130,7 @@ describe("admin NPC shell window", () => {
 
   it("turns a typed brief into a previewed LLM draft and confirms exactly that draft with one tap", async () => {
     const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
-    fixture.draft.mockResolvedValue({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), model: "unit/free:free", failures: [] });
-    fixture.purposes.mockResolvedValue({ purposes: [] });
+    fixture.draft.mockResolvedValue({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), basePurposeHash: null, model: "unit/free:free", failures: [] });
     fixture.confirm.mockResolvedValue({ receipt: { receiptId: "authoring:npc:1" } });
     const changed = vi.fn(); window.addEventListener("aurion:world-visuals-changed", changed);
     render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
@@ -144,8 +167,10 @@ describe("admin NPC shell window", () => {
     const confirmedShell = { ...shell, purpose: { purposeHash: "f".repeat(64), displayName: "Mira", role: "Händlerin", greeting: "Hallo!", topics: [] } };
     const scene = new THREE.Scene(); const holder = new THREE.Group(); holder.userData.npcShell = confirmedShell; scene.add(holder);
     const engine = { scene, player: { position: new THREE.Vector3(1, 0, 1) } };
-    fixture.draft.mockResolvedValue({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), model: "unit/free:free", failures: [] });
-    fixture.purposes.mockResolvedValue({ purposes: [{ shellRef: shell.shellRef, purposeHash: "f".repeat(64) }] });
+    fixture.draft.mockResolvedValue({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), basePurposeHash: "f".repeat(64), model: "unit/free:free", failures: [] });
+    // Review (Devin, #1329): another admin confirmed meanwhile; the stale draft must still name the
+    // purpose it was written against, so the server refuses it instead of overwriting.
+    fixture.purposes.mockResolvedValue({ purposes: [{ shellRef: shell.shellRef, purposeHash: "9".repeat(64) }] });
     fixture.confirm.mockResolvedValue({ receipt: { receiptId: "authoring:npc:2" } });
     render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
     act(() => { openNearestNpcShell(engine as never); });

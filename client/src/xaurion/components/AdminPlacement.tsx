@@ -88,7 +88,8 @@ export function PlaceSelectedModelButton({ assetId, onStarted }: { assetId: stri
 }
 
 /** Inspection action for objects the admin placed: remove (two-step, receipted). */
-export function RemovePlacedObjectButton({ placementRef, onRemoved }: { placementRef: string | undefined; onRemoved?: () => void }) {
+/** `onRemoved` receives the result message, so a closing panel can keep showing it. */
+export function RemovePlacedObjectButton({ placementRef, onRemoved }: { placementRef: string | undefined; onRemoved?: (message: string) => void }) {
   const api = useAdminPlacementApi();
   const placed = adminPlacementFromRef(placementRef);
   const [armed, setArmed] = useState(false);
@@ -104,10 +105,11 @@ export function RemovePlacedObjectButton({ placementRef, onRemoved }: { placemen
     try {
       const result = await commitAdminRemoval(api, placed.designKey, placed.placementKey);
       soundSynth.playUiSuccess();
-      setStatus({ tone: "ok", text: result.droppedUnavailable
+      const message = result.droppedUnavailable
         ? `Entfernt und gespeichert. ${result.droppedUnavailable} unsichtbare Platzierung(en) ohne verfügbares Modell wurden mit entfernt.`
-        : "Entfernt und gespeichert." });
-      onRemoved?.();
+        : "Entfernt und gespeichert.";
+      setStatus({ tone: "ok", text: message });
+      onRemoved?.(message);
     } catch (error) {
       setStatus({ tone: "error", text: adminPlacementMessage(error) });
     } finally {

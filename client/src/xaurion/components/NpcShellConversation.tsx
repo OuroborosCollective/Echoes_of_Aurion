@@ -8,8 +8,8 @@ const POLL_MS = 400;
 function nearestWithPurpose(engine: Pick<MMOEngine, "scene" | "player"> | null | undefined): NpcShellTarget | null {
   const position = engine?.player?.position;
   if (!engine?.scene || !position) return null;
-  const shell = findNearestNpcShell(engine.scene, { x: position.x, z: position.z });
-  return shell?.purpose ? shell : null;
+  // The nearest NPC with a confirmed purpose: an unconfirmed shell nearby never hides it.
+  return findNearestNpcShell(engine.scene, { x: position.x, z: position.z }, undefined, shell => Boolean(shell.purpose));
 }
 
 /**

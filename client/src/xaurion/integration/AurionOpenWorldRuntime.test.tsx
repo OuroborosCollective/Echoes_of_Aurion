@@ -348,6 +348,29 @@ describe("open world session ownership", () => {
     }
   });
 
+  // Review (Devin, #1328): a running tap-to-move walk continued after the admin started placing.
+  it("ends a running tap-to-move walk when the admin starts placing", async () => {
+    render(<AurionOpenWorldRuntime />);
+    await enter();
+    const engine = fixture.engines[fixture.engines.length - 1] as any;
+    engine.projectTouchDestination = vi.fn(() => ({ x: 30, y: 0, z: 40 }));
+    engine.player.position = { x: 0, y: 0, z: 0 };
+    act(() => fixture.tickets[0].onSuccess({ ticket: "walk-fixture" }));
+    act(() => fixture.statuses[0]("connected"));
+    try {
+      act(() => useAdminStore.setState({ isAdmin: true }));
+      act(() => hud.touchMove?.(100, 100));
+      const client = fixture.connections[fixture.connections.length - 1];
+      client.sendMovement.mockClear();
+      act(() => useAdminStore.getState().setPlacementAsset({ assetId: "glb_tower" } as never));
+      expect(client.sendMovement).toHaveBeenCalled();
+      const stop = client.sendMovement.mock.calls.at(-1)![0];
+      expect(Math.abs(stop.x ?? stop.intent?.x ?? 0) + Math.abs(stop.z ?? stop.intent?.z ?? 0)).toBe(0);
+    } finally {
+      useAdminStore.setState({ isAdmin: false, placementAsset: null });
+    }
+  });
+
   it("opens the nearest NPC shell with E for the admin only", async () => {
     render(<AurionOpenWorldRuntime />);
     await enter();
