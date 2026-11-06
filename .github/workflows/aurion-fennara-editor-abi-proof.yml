@@ -1,0 +1,206 @@
+name: Aurion Fennara editor ABI proof
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-fennara-editor-abi-proof.yml"
+      - "docs/godot/FENNARA_AI_MCP.md"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fennara-linux-editor:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Aurion
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: aurion
+      - name: Checkout pinned Fennara including godot-cpp
+        uses: actions/checkout@v4
+        with:
+          repository: fennaraOfficial/fennara-godot-ai
+          ref: 0abbac3b3a1cb46bbce4f90e8cebc6a3e5d61ec6
+          submodules: recursive
+          path: fennara
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate source pins and install CI build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C fennara rev-parse HEAD)" = 0abbac3b3a1cb46bbce4f90e8cebc6a3e5d61ec6
+          test "$(git -C fennara/fennara-cpp/godot-cpp rev-parse HEAD)" = e83fd0904c13356ed1d4c3d09f8bb9132bdc6b77
+          sudo apt-get update
+          sudo apt-get install -y build-essential bzip2 pkg-config binutils
+          python3 -m pip install scons
+          scons --version
+      - name: Prepare pinned upstream CEF SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cef="$(node fennara/scripts/prepare-linux-cef-sdk.mjs | tail -n 1)"
+          test -d "$cef/libcef_dll"
+          echo "FENNARA_CEF_ROOT=$cef" >> "$GITHUB_ENV"
+      - name: Build native extension for host glibc 2.35
+        shell: bash
+        working-directory: fennara/fennara-cpp
+        run: |
+          set -euo pipefail
+          scons platform=linux target=editor -j2
+      - name: Download SHA-pinned Fennara addon v0.4.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 \
+            https://github.com/fennaraOfficial/fennara-godot-ai/releases/download/v0.4.3/fennara-release-addon-v0.4.3.zip \
+            -o "$RUNNER_TEMP/fennara.zip"
+          printf '%s  %s\n' 1ba63233e74020f017af8f668d92d030425e74bb28da3514b111fb3fb30bdc04 "$RUNNER_TEMP/fennara.zip" | sha256sum -c -
+      - name: Prove stock incompatibility and stage rebuilt editor addon
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aurion-fennara-project"
+          cp -a aurion/godot-client/. "$RUNNER_TEMP/aurion-fennara-project/"
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, shutil, stat, subprocess, tempfile, zipfile
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          project=root/"aurion-fennara-project"
+          archive=root/"fennara.zip"
+          native=pathlib.Path("fennara/godot_demo/addons/fennara/bin")
+          libs=("libfennara.linux.editor.x86_64.so","libfennara_linux_cef_bridge.so")
+          assert (project/"project.godot").is_file()
+          assert not (project/"addons/fennara").exists()
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()=="1ba63233e74020f017af8f668d92d030425e74bb28da3514b111fb3fb30bdc04"
+          def max_glibc(f):
+              p=subprocess.run(["readelf","-V",str(f)],capture_output=True,text=True,check=True)
+              vs={(int(a),int(b)) for a,b in re.findall(r"GLIBC_(\d+)\.(\d+)",p.stdout)}
+              assert vs, "missing real readelf evidence"
+              return max(vs)
+          with tempfile.TemporaryDirectory(dir=root) as td:
+              td=pathlib.Path(td)
+              with zipfile.ZipFile(archive) as z:
+                  info=z.infolist()
+                  assert 0<len(info)<=300 and sum(v.file_size for v in info)<100_000_000
+                  seen=set()
+                  for item in info:
+                      parts=pathlib.PurePosixPath(item.filename).parts
+                      assert len(parts)>=2 and parts[:2]==("addons","fennara") and ".." not in parts and not item.filename.startswith("/")
+                      assert item.filename not in seen
+                      assert not stat.S_ISLNK(item.external_attr >> 16)
+                      seen.add(item.filename)
+                  z.extractall(td)
+              stage=td/"addons/fennara"
+              assert (stage/"VERSION").read_text().strip()=="0.4.3"
+              assert (stage/"LICENSE.md").is_file()
+              assert max_glibc(stage/"bin"/libs[0])>(2,35), "stock ABI regression not reproduced"
+              print("FENNARA_STOCK_GLIBC_RED_CONFIRMED")
+              for name in libs:
+                  built=native/name
+                  assert built.is_file()
+                  shutil.copy2(built,stage/"bin"/name)
+                  requirement=max_glibc(stage/"bin"/name)
+                  assert requirement<=(2,35), f"GLIBC incompatible: {name} -> {requirement}"
+                  print("FENNARA_REBUILT_GLIBC_PASS",name,requirement,hashlib.sha256(built.read_bytes()).hexdigest())
+              (project/"addons").mkdir(exist_ok=True)
+              stage.rename(project/"addons/fennara")
+          print("FENNARA_STAGE_PASS editor-only; Godot runtime evidence follows")
+          PY
+      - name: Install pinned Godot 4.7.2 in CI
+        working-directory: aurion
+        run: node scripts/godot/bootstrap.mjs
+      - name: Execute real Godot editor headless import
+        shell: bash
+        env:
+          FENNARA_DISABLE_TELEMETRY: "true"
+          DO_NOT_TRACK: "1"
+        run: |
+          set -euo pipefail
+          exe="aurion/.aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64"
+          test -x "$exe"
+          timeout 180 "$exe" --headless --verbose --path "$RUNNER_TEMP/aurion-fennara-project" --editor --import > "$RUNNER_TEMP/fennara-import.log" 2>&1 || {
+            tail -n 80 "$RUNNER_TEMP/fennara-import.log"
+            exit 1
+          }
+          if grep -Ei "Can't open (GDExtension|dynamic library)|libfennara.*GLIBC_|GDExtension dynamic library" "$RUNNER_TEMP/fennara-import.log"; then
+            echo "FENNARA_NATIVE_LOAD_FAIL"
+            exit 1
+          fi
+          echo "FENNARA_NATIVE_EDITOR_IMPORT_PASS; fennara_status still unverified"
+          sha256sum "$RUNNER_TEMP/aurion-fennara-project/addons/fennara/bin/"*.so > "$RUNNER_TEMP/fennara-rebuilt-sha256.txt"
+      - name: Set up Rust for pinned local components
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rebuild Rust Fennara CLI daemon MCP on host ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          cargo build --release --locked --manifest-path fennara/local/Cargo.toml \
+            -p fennara-cli -p fennara-daemon -p fennara-mcp
+          cargo test --locked --manifest-path fennara/local/Cargo.toml \
+            -p fennara-cli -p fennara-daemon -p fennara-mcp
+          for name in fennara fennara-daemon fennara-mcp fennara-daemon-runtime fennara-mcp-runtime; do
+            test -x "fennara/local/target/release/$name"
+          done
+      - name: Verify stock Fennara CLI daemon ABI regression and rebuilt Rust ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 \
+            https://github.com/fennaraOfficial/fennara-godot-ai/releases/download/v0.4.3/fennara-release-local-linux-x86_64-v0.4.3.zip \
+            -o "$RUNNER_TEMP/fennara-local-v0.4.3.zip"
+          printf '%s  %s\n' \
+            133b884bbf6618f7b5e6027b28489db25d9339b15c83ba931302aa05bcc6c907 \
+            "$RUNNER_TEMP/fennara-local-v0.4.3.zip" | sha256sum -c -
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, subprocess, tempfile, zipfile
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          archive=root/"fennara-local-v0.4.3.zip"
+          built=pathlib.Path("fennara/local/target/release")
+          def abi(binary):
+              result=subprocess.run(["readelf","-V",str(binary)],check=True,text=True,capture_output=True)
+              versions={(int(a),int(b)) for a,b in re.findall(r"GLIBC_(\d+)\.(\d+)",result.stdout)}
+              assert versions,"readelf did not report any actual GLIBC symbol"
+              return max(versions)
+          with tempfile.TemporaryDirectory(dir=root) as d:
+              temp=pathlib.Path(d)
+              with zipfile.ZipFile(archive) as z:
+                  assert len(z.infolist())==6
+                  assert z.read("VERSION").decode().strip()=="0.4.3"
+                  for name in ("fennara","fennara-daemon-runtime"):
+                      data=z.read("bin/"+name)
+                      path=temp/name
+                      path.write_bytes(data)
+                      old=abi(path)
+                      assert old>(2,35),f"stock incompatible ABI not reproduced for {name}: {old}"
+                      print("FENNARA_STOCK_CLI_DAEMON_ABI_RED_CONFIRMED",name,old)
+          for name in ("fennara","fennara-daemon","fennara-mcp","fennara-daemon-runtime","fennara-mcp-runtime"):
+              path=built/name
+              assert path.is_file()
+              req=abi(path)
+              assert req<=(2,35),f"rebuilt Rust component {name} needs {req}"
+              print("FENNARA_RUST_ABI_PASS",name,req,hashlib.sha256(path.read_bytes()).hexdigest())
+          PY
+      - name: Preserve real build and import evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fennara-ubuntu2204-proof
+          path: |
+            ${{ runner.temp }}/fennara-import.log
+            ${{ runner.temp }}/fennara-rebuilt-sha256.txt
+            ${{ runner.temp }}/aurion-fennara-project/addons/fennara/bin/libfennara.linux.editor.x86_64.so
+            ${{ runner.temp }}/aurion-fennara-project/addons/fennara/bin/libfennara_linux_cef_bridge.so
+            ${{ github.workspace }}/fennara/local/target/release/fennara
+            ${{ github.workspace }}/fennara/local/target/release/fennara-daemon
+            ${{ github.workspace }}/fennara/local/target/release/fennara-mcp
+            ${{ github.workspace }}/fennara/local/target/release/fennara-daemon-runtime
+            ${{ github.workspace }}/fennara/local/target/release/fennara-mcp-runtime
+          if-no-files-found: warn
+          retention-days: 7
