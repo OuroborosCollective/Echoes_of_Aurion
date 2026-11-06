@@ -110,7 +110,10 @@ export class AdminPlacementGhost {
   aimPoint(): { x: number; z: number } | null {
     if (this.pointer && this.engine.projectTouchDestination) {
       const hit = this.engine.projectTouchDestination(this.pointer.x, this.pointer.y);
-      if (hit && Number.isFinite(hit.x) && Number.isFinite(hit.z)) return this.withinReach(hit) ? { x: hit.x, z: hit.z } : null;
+      // An active mouse cursor must never silently select a different location
+      // through camera aiming. Touch has no pointer and uses the camera below.
+      if (!hit || !Number.isFinite(hit.x) || !Number.isFinite(hit.z)) return null;
+      return this.withinReach(hit) ? { x: hit.x, z: hit.z } : null;
     }
     const origin = new THREE.Vector3();
     const direction = new THREE.Vector3();
@@ -146,6 +149,8 @@ export class AdminPlacementGhost {
     if (!aim) { this.root.visible = false; this.target = null; return; }
     const x = snapToPlacementGrid(Math.round(aim.x * 1000)) / 1000;
     const z = snapToPlacementGrid(Math.round(aim.z * 1000)) / 1000;
+    // Enforce the reach bound on the persisted snapped location, not only the raw hit.
+    if (!this.withinReach({ x, z })) { this.root.visible = false; this.target = null; return; }
     const y = this.engine.landscape.chunkManager.getElevationAt(x, z);
     if (!Number.isFinite(y)) { this.root.visible = false; this.target = null; return; }
     this.target = { x, z };
