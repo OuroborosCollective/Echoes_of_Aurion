@@ -6,6 +6,10 @@ import { readConfirmedNpcMultiMemory, readConfirmedNpcMultiMemoryPacket } from "
 import { advanceNpcMemory, createNpcLifeSnapshot, encodeNpcLifeReceipt, npcAuthority, npcHash, npcMemoryReceiptIds,
   NPC_LIFE_RECEIPT_VERSION, NPC_MULTI_MEMORY_LIMITS, normalizeNpcRequest, npcRequestHash, parseNpcMemory, resolveNpcNeeds } from "./wasdNpcCapsule";
 import { decodeOwnedNpcMultiMemory } from "../shared/npcMultiMemoryReadmodel";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite=process.env.AURION_NPC_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 const npcId="aim292:memory-npc";

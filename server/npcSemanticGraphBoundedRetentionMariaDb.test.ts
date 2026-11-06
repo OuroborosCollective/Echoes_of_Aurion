@@ -13,6 +13,10 @@ import {
   verifyNpcSemanticGraphChainV2,
 } from "./wasdSemanticGraphV2Persistence";
 import { merchantBootstrapMarkets, merchantInventoryStateHash, merchantMarketStateHash, merchantPolityStateHash, npcIdentity } from "./wasdNpcCapsule";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const GENERATIONS = GRAPH_BODY_CHECKPOINT_INTERVAL + 4;
 const npcIds = LIVING_HISTORY_HUBS.map(hub => npcIdentity(hub));

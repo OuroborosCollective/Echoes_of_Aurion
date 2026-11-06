@@ -81,9 +81,9 @@ export function validateDungeonDesignTopology(draft: DungeonDesignDraft): void {
   }
 }
 
-function receiptIdentity(input: {
-  kind: "world" | "quest" | "dungeon";
-  action: "apply" | "publish" | "retire";
+export function receiptIdentity(input: {
+  kind: "world" | "quest" | "dungeon" | "npc";
+  action: "apply" | "publish" | "retire" | "purpose";
   targetId: string;
   actorUserId: number;
   planHash: string;

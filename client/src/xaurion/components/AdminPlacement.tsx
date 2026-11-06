@@ -94,12 +94,15 @@ export function RemovePlacedObjectButton({ placementRef, onRemoved }: { placemen
   const placed = adminPlacementFromRef(placementRef);
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Defensive guard against rapid taps (local `busy` already commits between discrete taps).
+  const removing = useRef(false);
   const [status, setStatus] = useState<Status>(null);
   useEffect(() => { setArmed(false); setStatus(null); }, [placementRef]);
   if (!placed) return null;
   const remove = async () => {
-    if (busy) return;
+    if (busy || removing.current) return;
     if (!armed) { setArmed(true); return; }
+    removing.current = true;
     setBusy(true);
     setStatus({ tone: "info", text: "Wird serverseitig entfernt…" });
     try {
@@ -113,6 +116,7 @@ export function RemovePlacedObjectButton({ placementRef, onRemoved }: { placemen
     } catch (error) {
       setStatus({ tone: "error", text: adminPlacementMessage(error) });
     } finally {
+      removing.current = false;
       setBusy(false);
       setArmed(false);
     }

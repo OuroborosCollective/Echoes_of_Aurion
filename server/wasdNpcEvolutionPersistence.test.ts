@@ -16,6 +16,10 @@ import {
 } from "./wasdNpcEvolutionPersistence";
 import { npcHash } from "./wasdNpcCapsule";
 import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite = process.env.AURION_NPC_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const npcId = "aim295:test-npc";

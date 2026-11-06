@@ -9,6 +9,10 @@ on:
       - "server/aurionWorldAuthoringMariaDb.test.ts"
       - "server/worldVisualOverride*"
       - "shared/worldVisualOverrideContract.ts"
+      - "server/npcShellPurpose*"
+      - "shared/npcPurposeContract.ts"
+      - "shared/adminPlacementPlan.ts"
+      - "server/testSupport/**"
       - "server/routes/aurionAuthoringRouter.ts"
       - "server/routes/aurionQuestRouter.ts"
       - "server/questCompiler/**"
@@ -65,6 +69,6 @@ jobs:
       - name: Migrate isolated MariaDB
         run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
       - name: Run world authoring transaction and compatibility tests
-        run: pnpm exec vitest run server/questCompiler/fadenwerkAuthoring.test.ts server/aiFabric server/aurionWorldAuthoringMariaDb.test.ts server/worldVisualOverrideMariaDb.test.ts server/databaseSmoke.test.ts
+        run: pnpm exec vitest run server/questCompiler/fadenwerkAuthoring.test.ts server/aiFabric server/aurionWorldAuthoringMariaDb.test.ts server/worldVisualOverrideMariaDb.test.ts server/npcShellPurposeMariaDb.test.ts server/databaseSmoke.test.ts
       - name: TypeScript check
         run: pnpm check

@@ -13,6 +13,10 @@ import { resolveAndRecordNpc } from "../wasdAurionRuntime";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 import { behaviorTemplate } from "./behaviorForge";
 import { promoteNpcArchetype, readNpcControllerBinding, bindNpcControllerAtGenesis, readBoundController } from "../npcArchetypePersistence";
+import { useNpcSharedTableLock } from "../testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite = process.env.AURION_WORLD_AUTHORING_DB_TEST === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 suite("Archetype binding through actual isolated MariaDB and canonical merchant genesis", () => {

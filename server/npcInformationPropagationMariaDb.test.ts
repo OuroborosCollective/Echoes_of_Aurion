@@ -10,6 +10,10 @@ import {
   recordNpcInformationCommunication,
   recordNpcInformationTransition,
 } from "./npcInformationPropagation";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite = process.env.AURION_NPC_INFORMATION_ECOLOGY_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 

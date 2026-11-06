@@ -20,6 +20,10 @@ import { testAnimatedPlayerGlb } from "./glbImportFixtures";
 import { glbManager } from "../client/src/xaurion/core/GLBModelManager";
 import { releaseGlbTree } from "../client/src/xaurion/core/GlbModelLease";
 import * as THREE from "three";
+import { useGlbCatalogLock } from "./testSupport/npcSharedTableLock";
+
+// Changes or binds the shared GLB runtime catalog revision; never overlap with other such files.
+useGlbCatalogLock();
 
 const enabled = process.env.AURION_GLB_DB_TEST === "1";
 const ADMIN_OPEN_ID = "issue-9-glb-governance-admin";

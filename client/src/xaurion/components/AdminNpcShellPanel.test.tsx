@@ -5,13 +5,15 @@ import { useAdminStore } from "../core/AdminService";
 import type { NpcShellTarget } from "../integration/NpcShellProjection";
 import { AdminNpcShellPanel, openNearestNpcShell } from "./AdminNpcShellPanel";
 
-const fixture = vi.hoisted(() => ({ catalog: vi.fn(), plan: vi.fn(), apply: vi.fn(), retire: vi.fn() }));
+const fixture = vi.hoisted(() => ({ catalog: vi.fn(), plan: vi.fn(), apply: vi.fn(), retire: vi.fn(), draft: vi.fn(), confirm: vi.fn(), purposes: vi.fn() }));
 vi.mock("../../lib/trpc", () => ({ trpc: {
-  useUtils: () => ({ aurionAuthoring: { catalog: { fetch: fixture.catalog } } }),
+  useUtils: () => ({ aurionAuthoring: { catalog: { fetch: fixture.catalog }, npcPurposes: { fetch: fixture.purposes } } }),
   aurionAuthoring: {
     worldPlan: { useMutation: () => ({ mutateAsync: fixture.plan }) },
     worldApply: { useMutation: () => ({ mutateAsync: fixture.apply }) },
     worldRetireAdminPlacements: { useMutation: () => ({ mutateAsync: fixture.retire }) },
+    npcPurposeDraft: { useMutation: () => ({ mutateAsync: fixture.draft, isPending: false }) },
+    npcPurposeConfirm: { useMutation: () => ({ mutateAsync: fixture.confirm, isPending: false }) },
   },
 } }));
 vi.mock("../audio/SoundSynthesizer", () => ({ soundSynth: { playUiOpen: vi.fn(), playUiClick: vi.fn(), playUiSuccess: vi.fn() } }));
@@ -118,5 +120,99 @@ describe("admin NPC shell window", () => {
     useAdminStore.getState().setPlacementAsset({ assetId: "glb_ranger" } as never);
     useAdminStore.getState().setPlacementAsset(null);
     expect(useAdminStore.getState().shellTarget).toBeNull();
+  });
+
+  // Stage C: brief → LLM draft (preview) → one-tap confirmation with receipt.
+  const draft = { schemaVersion: "aurion.npc-purpose.v1", shellRef: shell.shellRef, displayName: "Mira Kräuterhand", role: "Kräuterhändlerin",
+    persona: "Ruhig und neugierig, kennt jede Pflanze.", greeting: "Willkommen, Wanderer.",
+    topics: [{ topic: "Kräuter", line: "Silberblatt wächst im Nebel." }], routine: [{ label: "Beet", offsetXMm: 2000, offsetZMm: 0, dwellSeconds: 120 }],
+    questIdeas: [{ title: "Silberblatt", summary: "Drei Silberblätter für einen Trank.", objective: "Sammle drei Silberblätter." }] };
+
+  it("turns a typed brief into a previewed LLM draft and confirms exactly that draft with one tap", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    fixture.draft.mockResolvedValue({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), basePurposeHash: null, model: "unit/free:free", failures: [] });
+    fixture.confirm.mockResolvedValue({ receipt: { receiptId: "authoring:npc:1" } });
+    const changed = vi.fn(); window.addEventListener("aurion:world-visuals-changed", changed);
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    const button = screen.getByTestId("npc-purpose-draft") as HTMLButtonElement;
+    fireEvent.change(screen.getByTestId("npc-purpose-brief"), { target: { value: "kurz" } });
+    expect(button.disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("npc-purpose-brief"), { target: { value: "Eine Kräuterhändlerin, die Reisenden Heilkräuter verkauft." } });
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByTestId("npc-purpose-preview").textContent).toContain("Mira Kräuterhand"));
+    expect(fixture.draft).toHaveBeenCalledWith({ shellRef: shell.shellRef, brief: "Eine Kräuterhändlerin, die Reisenden Heilkräuter verkauft.", mode: "auto" });
+    expect(screen.getByTestId("npc-purpose-preview").textContent).toContain("noch nicht gespeichert");
+    expect(fixture.confirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("npc-purpose-confirm"));
+    await waitFor(() => expect(screen.getByTestId("npc-purpose-status").textContent).toContain("Bestätigt und mit Beleg gespeichert"));
+    expect(fixture.confirm).toHaveBeenCalledWith({ draft, expectedDraftHash: "e".repeat(64), expectedPreviousPurposeHash: null, confirmation: "CONFIRM_NPC_PURPOSE" });
+    expect(changed).toHaveBeenCalled();
+    window.removeEventListener("aurion:world-visuals-changed", changed);
+  });
+
+  it("explains why no draft came back instead of failing silently, and never confirms", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    fixture.draft.mockResolvedValue({ status: "UNRESOLVED", failures: [{ route: "local", code: "OFFLINE" }, { route: "free", code: "FREE_RATE_LIMIT" }] });
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    fireEvent.change(screen.getByTestId("npc-purpose-brief"), { target: { value: "Ein alter Wächter, der den Pass bewacht." } });
+    fireEvent.click(screen.getByTestId("npc-purpose-draft"));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Tageslimit");
+    expect(screen.queryByTestId("npc-purpose-confirm")).toBeNull();
+  });
+
+  it("passes the current confirmed purpose as predecessor when revising, and shows it", async () => {
+    const confirmedShell = { ...shell, purpose: { purposeHash: "f".repeat(64), displayName: "Mira", role: "Händlerin", greeting: "Hallo!", topics: [] } };
+    const scene = new THREE.Scene(); const holder = new THREE.Group(); holder.userData.npcShell = confirmedShell; scene.add(holder);
+    const engine = { scene, player: { position: new THREE.Vector3(1, 0, 1) } };
+    fixture.draft.mockResolvedValue({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), basePurposeHash: "f".repeat(64), model: "unit/free:free", failures: [] });
+    // Review (Devin, #1329): another admin confirmed meanwhile; the stale draft must still name the
+    // purpose it was written against, so the server refuses it instead of overwriting.
+    fixture.purposes.mockResolvedValue({ purposes: [{ shellRef: shell.shellRef, purposeHash: "9".repeat(64) }] });
+    fixture.confirm.mockResolvedValue({ receipt: { receiptId: "authoring:npc:2" } });
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    expect(screen.getByTestId("admin-npc-shell-purpose").textContent).toContain("Mira");
+    fireEvent.change(screen.getByTestId("npc-purpose-brief"), { target: { value: "Sie soll jetzt auch Tränke brauen." } });
+    fireEvent.click(screen.getByTestId("npc-purpose-draft"));
+    await waitFor(() => expect(screen.getByTestId("npc-purpose-confirm")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("npc-purpose-confirm"));
+    await waitFor(() => expect(fixture.confirm).toHaveBeenCalledWith(expect.objectContaining({ expectedPreviousPurposeHash: "f".repeat(64) })));
+  });
+
+  // Review (CodeRabbit, #1329): a double tap sent two booked LLM requests / two confirmations.
+  it("sends one LLM request and one confirmation for a double tap", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    let finishDraft: (value: unknown) => void = () => undefined;
+    fixture.draft.mockReset(); fixture.confirm.mockReset();
+    fixture.draft.mockImplementation(() => new Promise(resolve => { finishDraft = resolve; }));
+    fixture.confirm.mockResolvedValue({ receipt: { receiptId: "authoring:npc:3" } });
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    fireEvent.change(screen.getByTestId("npc-purpose-brief"), { target: { value: "Ein Fährmann, der Reisende über den See bringt." } });
+    const draftButton = screen.getByTestId("npc-purpose-draft");
+    fireEvent.click(draftButton); fireEvent.click(draftButton);
+    expect(fixture.draft).toHaveBeenCalledTimes(1);
+    await act(async () => { finishDraft({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), basePurposeHash: null, model: "unit/free:free", failures: [] }); });
+    const confirmButton = await screen.findByTestId("npc-purpose-confirm");
+    fireEvent.click(confirmButton); fireEvent.click(confirmButton);
+    await waitFor(() => expect(screen.getByTestId("npc-purpose-status").textContent).toContain("Bestätigt"));
+    expect(fixture.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes once for rapid taps on Entfernen", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    fixture.retire.mockReset();
+    let finish: (value: unknown) => void = () => undefined;
+    fixture.retire.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    const button = screen.getByTestId("admin-glb-remove-placement");
+    fireEvent.click(button); fireEvent.click(button); fireEvent.click(button); fireEvent.click(button);
+    await waitFor(() => expect(fixture.retire).toHaveBeenCalledTimes(1));
+    await act(async () => { finish({ receipt: { receiptId: "authoring:world:z" } }); });
+    expect(fixture.retire).toHaveBeenCalledTimes(1);
   });
 });

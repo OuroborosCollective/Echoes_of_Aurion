@@ -4,6 +4,7 @@ import type { WorldDesignReadback } from "@shared/aurionAuthoringContract";
 import { isNpcShellAsset, isNpcShellDesign } from "@shared/adminPlacementPlan";
 import { authoredPlacementRef } from "@shared/worldVisualOverrideContract";
 import { joinWorldChunkPositionMm, splitWorldChunkPositionMm } from "@shared/worldChunkProtocol";
+import type { ConfirmedNpcPurpose, NpcPurposeReadback } from "@shared/npcPurposeContract";
 import { glbManager } from "../core/GLBModelManager";
 import { releaseGlbTree } from "../core/GlbModelLease";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -28,6 +29,8 @@ export type NpcShellTarget = Readonly<{
   assetId: string;
   displayName: string;
   position: Readonly<{ x: number; y: number; z: number }>;
+  /** The confirmed purpose (name, role, dialogue), once the admin confirmed one. */
+  purpose?: Readonly<{ purposeHash: string; displayName: string; role: string; greeting: string; topics: readonly Readonly<{ topic: string; line: string }>[] }>;
 }>;
 
 type ShellAsset = Pick<GlbCatalogEntry, "assetId" | "storageUrl" | "normalization">;
@@ -69,6 +72,8 @@ export class NpcShellProjection {
   readonly root = new THREE.Group();
   private catalog: GlbRuntimeCatalog | null = null;
   private design: WorldDesignReadback | null = null;
+  private purposes = new Map<string, ConfirmedNpcPurpose>();
+  private purposesRevision = "none";
   private readonly rendered = new Map<string, Rendered>();
   private readonly pending = new Set<string>();
   /** Placements the current world state wants rendered (a load finishing later checks it). */
@@ -93,6 +98,31 @@ export class NpcShellProjection {
     if (this.disposed || this.design?.revision === design?.revision) return;
     this.design = design;
     this.signature = "";
+  }
+
+  /** Confirmed purposes (public readback); only confirmed data is ever shown to players. */
+  setPurposes(readback: NpcPurposeReadback | null): void {
+    if (this.disposed) return;
+    const revision = readback?.revision ?? "none";
+    if (revision === this.purposesRevision) return;
+    this.purposesRevision = revision;
+    this.purposes = new Map((readback?.purposes ?? []).map(item => [item.shellRef, item] as const));
+    for (const rendered of this.rendered.values()) this.applyPurpose(rendered.holder);
+  }
+
+  private applyPurpose(holder: THREE.Group): void {
+    const current = holder.userData.npcShell as NpcShellTarget | undefined;
+    if (!current) return;
+    const confirmed = this.purposes.get(current.shellRef);
+    const purpose = confirmed ? Object.freeze({ purposeHash: confirmed.purposeHash, displayName: confirmed.purpose.displayName, role: confirmed.purpose.role,
+      greeting: confirmed.purpose.greeting, topics: Object.freeze(confirmed.purpose.topics.map(topic => Object.freeze({ ...topic }))) }) : undefined;
+    const { purpose: _previous, ...base } = current;
+    holder.userData.npcShell = Object.freeze(purpose ? { ...base, purpose } : base);
+    disposeLabel(holder);
+    if (purpose) {
+      const label = nameLabel(purpose.displayName, purpose.role);
+      if (label) holder.add(label);
+    }
   }
 
   private desired(position: { x: number; z: number }): Placement[] {
@@ -121,6 +151,7 @@ export class NpcShellProjection {
     const current = this.rendered.get(id);
     if (!current) return;
     current.actor.dispose();
+    disposeLabel(current.holder);
     current.holder.removeFromParent();
     this.rendered.delete(id);
   }
@@ -144,6 +175,7 @@ export class NpcShellProjection {
       holder.scale.setScalar(npcShellScale(placement.scalePermille));
       holder.userData.npcShell = Object.freeze({ ...placement.target, position: Object.freeze({ x: placement.x, y, z: placement.z }) } satisfies NpcShellTarget);
       holder.add(actor.group);
+      this.applyPurpose(holder);
       this.remove(placement.id);
       this.root.add(holder);
       this.rendered.set(placement.id, { sha256: placement.asset.sha256, holder, actor });
@@ -199,13 +231,50 @@ export class NpcShellProjection {
   }
 }
 
+/** Removes a shell's name label and frees its texture and material. */
+function disposeLabel(holder: THREE.Object3D): void {
+  const label = holder.getObjectByName("aurion-npc-shell-label") as THREE.Sprite | undefined;
+  if (!label) return;
+  label.removeFromParent();
+  label.material.map?.dispose();
+  label.material.dispose();
+}
+
+/**
+ * Floating name and role above a shell with a confirmed purpose (canvas sprite).
+ * Returns null where no 2D canvas exists (tests, headless capture).
+ */
+function nameLabel(name: string, role: string): THREE.Sprite | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 512; canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.fillStyle = "rgba(0,0,0,0.55)";
+  context.fillRect(0, 8, 512, 112);
+  context.textAlign = "center";
+  context.fillStyle = "#fbbf24";
+  context.font = "bold 44px Georgia, serif";
+  context.fillText(name.slice(0, 40), 256, 58);
+  context.fillStyle = "#e5e7eb";
+  context.font = "28px system-ui, sans-serif";
+  context.fillText(role.slice(0, 60), 256, 100);
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+  sprite.name = "aurion-npc-shell-label";
+  sprite.scale.set(2, 0.5, 1);
+  sprite.position.set(0, NPC_SHELL_BASE_HEIGHT_M + 0.45, 0);
+  sprite.raycast = () => undefined;
+  return sprite;
+}
+
 /** The nearest rendered NPC shell within range of a world position (admin E interaction). */
-export function findNearestNpcShell(scene: THREE.Object3D, position: { x: number; z: number }, rangeMeters = NPC_SHELL_INTERACTION_RANGE_M): NpcShellTarget | null {
+export function findNearestNpcShell(scene: THREE.Object3D, position: { x: number; z: number }, rangeMeters = NPC_SHELL_INTERACTION_RANGE_M, accept: (shell: NpcShellTarget) => boolean = () => true): NpcShellTarget | null {
   let best: NpcShellTarget | null = null;
   let bestDistance = rangeMeters;
   scene.traverse(node => {
     const shell = node.userData.npcShell as NpcShellTarget | undefined;
-    if (!shell) return;
+    if (!shell || !accept(shell)) return;
     const distance = Math.hypot(shell.position.x - position.x, shell.position.z - position.z);
     if (distance <= bestDistance) { best = shell; bestDistance = distance; }
   });

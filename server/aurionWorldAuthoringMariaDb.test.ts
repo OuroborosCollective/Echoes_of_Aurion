@@ -23,6 +23,10 @@ import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
 import { DesignerInput, validateProposal } from "./aiFabric/worldDesigner";
 import { aurionQuestRouter } from "./routes/aurionQuestRouter";
+import { useGlbCatalogLock } from "./testSupport/npcSharedTableLock";
+
+// Changes or binds the shared GLB runtime catalog revision; never overlap with other such files.
+useGlbCatalogLock();
 
 vi.mock("./storage", async importOriginal => ({
   ...await importOriginal<typeof import("./storage")>(),
@@ -571,7 +575,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
       retireAdminPlacementDesign(admin, head.designKey, head.designHash),
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(String((results.find(result => result.status === "rejected") as PromiseRejectedResult).reason)).toMatch(/AUTHORING_WORLD_(PREDECESSOR|PLAN)_CHANGED/);
+    expect(String((results.find(result => result.status === "rejected") as PromiseRejectedResult).reason)).toMatch(/AUTHORING_WORLD_(PREDECESSOR_CHANGED|PLAN_CHANGED|ADMIN_GROUP_RETIRED)/); // retire first: the addition may not revive the group
     const [rows] = await pool.execute<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionWorldDesignVersions WHERE active = 1 AND designKey = ?", [head.designKey]);
     expect(Number(rows[0]?.count)).toBeLessThanOrEqual(1);
   }, 30_000);

@@ -8,7 +8,8 @@ import { stableCatalogStringify } from "../aurionAx1ContentCatalog";
 import { worldAssetAllowed } from "../aurionAuthoringPersistence";
 import { FabricError, RouteMode, errorCode, premiumLimit, routing, type FabricConfig } from "./policy";
 import { FabricLedger, type TaskRecord } from "./ledger";
-import { OpenCodeProvider, OpenRouterProvider, freeModel, reservationMicros, suitable, type Generation } from "./providers";
+import { OpenCodeProvider, OpenRouterProvider, freeModel } from "./providers";
+import { runFabricDraft } from "./fabricRunner";
 
 export const PROMPT_VERSION = "aurion-world-designer-1";
 export const DesignerInput = z.object({
@@ -91,67 +92,17 @@ export class WorldDesigner {
   async propose(raw: DesignerRequest, context: DesignerContext) {
     const input = DesignerInput.parse(raw);
     glbRuntimeCatalogSchema.parse(context.catalog);
-    const prompt = buildPrompt(context, input), bytes = Buffer.byteLength(prompt);
-    const failures: { route: string; code: string; audit?: TaskRecord }[] = [];
-    for (const route of routing(input.mode, this.config)) {
-      let lastAudit: TaskRecord | undefined;
-      let settling = false;
-      let modelId = this.config.openCodeModel;
-      let reserve = 0;
-      let freeDailyLimit = this.config.freeDailyLimit;
-      let generate: () => Promise<Generation>;
-      try {
-        if (route === "local") {
-          await this.local.inspect(bytes);
-          if (input.modelId && input.modelId !== modelId) throw new FabricError("MODEL_UNAVAILABLE");
-          generate = () => this.local.generate(prompt);
-        } else {
-          if (!this.config.openRouterKey) throw new FabricError("AUTH_FAILED");
-          const account = await this.openRouter.account();
-          if (account.limitRemainingUsd !== null && account.limitRemainingUsd < 0) throw new FabricError("CREDIT_LIMIT");
-          freeDailyLimit = Math.min(freeDailyLimit, account.purchasedCreditsVerified ? 1000 : 50);
-          const models = await this.openRouter.models();
-          const model = models.filter(m => this.config.whitelist.includes(m.id) && (!input.modelId || input.modelId === m.id) && suitable(m, bytes)
-            && (route === "free" ? freeModel(m) : !freeModel(m)))
-            .sort((a, b) => this.config.whitelist.indexOf(a.id) - this.config.whitelist.indexOf(b.id))[0];
-          if (!model) throw new FabricError("MODEL_UNAVAILABLE");
-          modelId = model.id;
-          reserve = route === "free" ? 0 : reservationMicros(model, bytes);
-          generate = () => this.openRouter.generate(model, prompt);
-        }
-        const taskId = randomBytes(16).toString("hex"); // Host I/O task, never a simulation identity.
-        const record = await this.ledger.reserve({ taskId, route, model: modelId, reservedMicros: reserve, inputHash: hash(prompt), sourceRevision: context.sourceRevision, promptVersion: PROMPT_VERSION }, premiumLimit(this.config), freeDailyLimit);
-        let result: Generation | undefined;
-        let outputHash: string | null = null;
-        let parsed: ReturnType<typeof validateProposal> | undefined;
-        let failure: string | undefined;
-        try {
-          result = await generate();
-          outputHash = hash(result.content);
-          if (result.policyViolation) throw new FabricError("OPENCODE_POLICY_VIOLATION");
-          if (result.model !== modelId) throw new FabricError("MODEL_ID_MISMATCH");
-          if (route !== "premium" && result.costMicros !== 0) throw new FabricError("ZERO_COST_NOT_CONFIRMED");
-          try { parsed = validateProposal(JSON.parse(result.content), context, input); }
-          catch (error) { throw error instanceof FabricError ? error : new FabricError("INVALID_DRAFT"); }
-        } catch (error) { failure = errorCode(error); }
-        // Settle cost even for invalid JSON/schema. A failed task is not a free task.
-        settling = true;
-        const audit = await this.ledger.finish(taskId, { actualMicros: result?.costMicros ?? null, actualModel: result?.model ?? null, outputHash, provider: result?.provider ?? null,
-          tokens: result?.tokens ?? null, validation: failure ?? "SCHEMA_VALID_PREVIEW_ONLY" }, !!failure);
-        lastAudit = audit;
-        if (failure || !parsed) { settling = false; throw new FabricError(failure ?? "INVALID_DRAFT"); }
-        return { kind: "world" as const, title: parsed.draft.title, draftJson: JSON.stringify(parsed.draft), requiresHumanReview: true as const,
-          status: "AI_DRAFT", reviewNotes: parsed.reviewNotes, audit: { ...audit, atMs: record.atMs, actualModel: result!.model },
-          worldRevision: context.world.revision, catalogRevision: context.catalog.revision, surfaceEvidence: context.surface ? { worldRoot: context.surface.worldRoot, sourceRevision: context.surface.sourceRevision, geometryHash: context.surface.geometryHash, observedAtTick: context.surface.observedAtTick } : null,
-          budget: await this.ledger.status(premiumLimit(this.config)), failures };
-      } catch (error) {
-        if (settling || errorCode(error).startsWith("LEDGER_")) throw error;
-        failures.push({ route, code: errorCode(error), ...(lastAudit ? { audit: lastAudit } : {}) });
-        // Never retry an ambiguous paid call; local->free is the only default fallback.
-        if (route === "premium" || input.mode !== "auto") break;
-      }
+    const prompt = buildPrompt(context, input);
+    const outcome = await runFabricDraft(this, { prompt, mode: input.mode, modelId: input.modelId, sourceRevision: context.sourceRevision, promptVersion: PROMPT_VERSION,
+      validate: raw => validateProposal(raw, context, input) });
+    if (outcome.status === "UNRESOLVED") {
+      return { kind: "world" as const, status: "UNRESOLVED", requiresHumanReview: true as const, draftJson: "", failures: outcome.failures,
+        budget: await this.ledger.status(premiumLimit(this.config)) };
     }
-    return { kind: "world" as const, status: "UNRESOLVED", requiresHumanReview: true as const, draftJson: "", failures,
-      budget: await this.ledger.status(premiumLimit(this.config)) };
+    const parsed = outcome.value;
+    return { kind: "world" as const, title: parsed.draft.title, draftJson: JSON.stringify(parsed.draft), requiresHumanReview: true as const,
+      status: "AI_DRAFT", reviewNotes: parsed.reviewNotes, audit: outcome.audit,
+      worldRevision: context.world.revision, catalogRevision: context.catalog.revision, surfaceEvidence: context.surface ? { worldRoot: context.surface.worldRoot, sourceRevision: context.surface.sourceRevision, geometryHash: context.surface.geometryHash, observedAtTick: context.surface.observedAtTick } : null,
+      budget: await this.ledger.status(premiumLimit(this.config)), failures: outcome.failures };
   }
 }

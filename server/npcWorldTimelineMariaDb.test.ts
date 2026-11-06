@@ -7,6 +7,10 @@ import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource } fro
 import { resolveAndRecordNpc } from "./wasdAurionRuntime";
 import { merchantBootstrapMarkets, merchantInventoryStateHash, merchantMarketStateHash, merchantPolityStateHash, npcIdentity } from "./wasdNpcCapsule";
 import { merchantGenesisRequest } from "./aurion/npc/merchantRules";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 // Production 2026-11-05: aurionWorldResolutions holds one row per region and index,
 // but merchant actions reused their own per-NPC resolution index as the world index.

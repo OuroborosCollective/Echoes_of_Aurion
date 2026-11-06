@@ -3,6 +3,10 @@ import {afterAll,beforeAll,describe,it,expect} from "vitest";
 import {resolveAndRecordNpc} from "../wasdAurionRuntime";
 import {aurionAuthoringRouter} from "../routes/aurionAuthoringRouter";
 import type {TrpcContext} from "../_core/context";
+import { useNpcSharedTableLock } from "../testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 const suite=process.env.AURION_WORLD_AUTHORING_DB_TEST==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 suite("Behavior Forge with real isolated MariaDB receipts",()=>{
   let pool:Pool;

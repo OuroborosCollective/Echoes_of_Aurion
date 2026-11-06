@@ -1,3 +1,4 @@
+import { readNpcPurposes } from "./npcShellPurpose";
 import { readWorldVisualOverrides } from "./worldVisualOverridePersistence";
 import { issueGlbAgentSession, verifyGlbAgentSession } from "./glbAgentSession";
 import type { Express, Request, Response } from "express";
@@ -369,6 +370,11 @@ export function registerGlbSmartUpload(app: Express): void {
     catch { response.status(503).json({ error: "AUTHORING_WORLD_DESIGN_UNAVAILABLE" }); }
   });
   // Persisted admin replacements of world visuals: every client projects the same world.
+  // Confirmed NPC shell purposes (names, dialogue) for every client; never drafts.
+  app.get("/api/game/npc-purposes", async (_request, response) => {
+    try { response.setHeader("Cache-Control", "no-store"); response.json(await readNpcPurposes()); }
+    catch { response.status(503).json({ error: "NPC_PURPOSES_UNAVAILABLE" }); }
+  });
   app.get("/api/game/world-visual-overrides", async (_request, response) => {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await readWorldVisualOverrides()); }
     catch { response.status(503).json({ error: "WORLD_VISUAL_OVERRIDES_UNAVAILABLE" }); }
