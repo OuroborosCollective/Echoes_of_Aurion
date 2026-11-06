@@ -162,6 +162,7 @@ export class AuthoritativeMovementZone {
   // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
   private sortedPresences: ZonePresence[] = [];
   private mobTargetPresences: ZonePresence[] = [];
+  private readonly frozenEntityIds = new Set<string>();
   private sortedPeersDirty = false;
   private readonly actionSequenceWatermarks = new Map<number, number>();
   private pendingIntents: AurionZoneIntent[] = [];
@@ -821,7 +822,20 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    this.frozenEntityIds.clear();
+    for (let i = 0; i < this.tactics.windups.length; i++) {
+      this.frozenEntityIds.add(this.tactics.windups[i].mobId);
+    }
+    if (this.tickNumber % 2 === 0) {
+      for (const id in this.tactics.effects) {
+        if (Object.prototype.hasOwnProperty.call(this.tactics.effects, id)) {
+          if ((this.tactics.effects[id]!.slowUntil ?? 0) > this.tickNumber) {
+            this.frozenEntityIds.add(id);
+          }
+        }
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, this.frozenEntityIds);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
