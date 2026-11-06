@@ -92,7 +92,7 @@ static func inspect(model: Node3D, approved_sha: String) -> Dictionary:
             var channels := _channels(material)
             if not channels.is_empty():
                 textured_surfaces += 1
-                var has_uv0 := (mesh.mesh.surface_get_format(surface_index) & Mesh.ARRAY_FORMAT_TEX_UV) != 0
+                var has_uv0: bool = (mesh.mesh.surface_get_format(surface_index) & Mesh.ARRAY_FORMAT_TEX_UV) != 0
                 if not has_uv0:
                     missing_uv_surfaces += 1
                 for channel in channels:
