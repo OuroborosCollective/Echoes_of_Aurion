@@ -35,6 +35,23 @@ describe("admin free placement drafts", () => {
     expect(draft).toMatchObject({ designKey: "admin.placements.11111111", version: 1 });
     expect(draft.placements).toHaveLength(1);
   });
+  // A broken or repeated entropy source must never hang the renderer while creating IDs.
+  it("fails closed when every generated design key collides with a full existing group", () => {
+    const current = readback([{ key: "admin.placements.00000000", version: 5, count: ADMIN_PLACEMENTS_PER_DESIGN }]);
+    let calls = 0;
+    const repeated = () => { if (++calls > 256) throw new Error("RNG_UNBOUNDED_LOOP"); return 0; };
+    expect(() => buildPlacementDraft(current, rev, input, repeated)).toThrow("ADMIN_PLACEMENT_ID_EXHAUSTED");
+    expect(calls).toBeLessThanOrEqual(256);
+  });
+
+  it("fails closed when every generated placement key collides within an existing group", () => {
+    const current = readback([{ key: "admin.placements.1", version: 2, count: 1 }]);
+    let calls = 0;
+    const repeated = () => { if (++calls > 256) throw new Error("RNG_UNBOUNDED_LOOP"); return 0; };
+    expect(() => buildPlacementDraft(current, rev, input, repeated)).toThrow("ADMIN_PLACEMENT_ID_EXHAUSTED");
+    expect(calls).toBeLessThanOrEqual(256);
+  });
+
   it("keeps a full group with the longest asset ids and distinct hashes below the 64 KiB plan limit", () => {
     const longId = (i: number) => `glb_${"x".repeat(80)}${String(i).padStart(6, "0")}`;
     const draft = { schemaVersion: "aurion.world-design.v1" as const, designKey: "admin.placements.ffffffffffffffff", version: 1_000_000, title: "Admin-Platzierungen", expectedCatalogRevision: rev,
