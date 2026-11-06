@@ -62,6 +62,36 @@ describe("floating admin placement preview", () => {
     ghost.dispose();
   });
 
+  // Mouse and touch are distinct contracts: mouse only follows its actual hit;
+  // touch has no mouse cursor and intentionally uses the camera aim.
+  it("hides on a missing mouse hit but keeps third-person camera placement for touch", async () => {
+    vi.spyOn(glbManager, "loadStaticLodFamily").mockImplementation(async () => box());
+    const world = engine({ pointerHit: null });
+    const ghost = new AdminPlacementGhost(world);
+    await ghost.setAsset(tower);
+    ghost.setPointer({ x: 200, y: 200 }); // active mouse cursor, no ground hit
+    ghost.update();
+    expect(ghost.root.visible).toBe(false);
+    expect(ghost.placementInput()).toBeNull();
+    ghost.setPointer(null); // actual touch path from AdminPlacement.tsx
+    ghost.update();
+    expect(ghost.root.visible).toBe(true);
+    expect(ghost.placementInput()!.worldZMm).toBeLessThan(-1_000);
+    ghost.dispose();
+  });
+
+  it("rejects a grid-snapped point beyond the 40 m placement limit", async () => {
+    vi.spyOn(glbManager, "loadStaticLodFamily").mockImplementation(async () => box());
+    const world = engine({ player: new THREE.Vector3(-0.1, 0, 0), pointerHit: { x: 39.89, y: 0, z: 0 } });
+    const ghost = new AdminPlacementGhost(world);
+    await ghost.setAsset(tower);
+    ghost.setPointer({ x: 200, y: 200 });
+    ghost.update();
+    expect(ghost.root.visible).toBe(false);
+    expect(ghost.placementInput()).toBeNull();
+    ghost.dispose();
+  });
+
   it("aims past the character with a third-person camera, never at its feet", async () => {
     vi.spyOn(glbManager, "loadStaticLodFamily").mockImplementation(async () => box());
     const ghost = new AdminPlacementGhost(engine());
