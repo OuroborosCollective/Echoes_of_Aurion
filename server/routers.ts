@@ -5,6 +5,7 @@ import { readConfirmedNpcProjectionProvenancePacket, readConfirmedNpcSemanticGra
 import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from "../shared/worldAssetProtocol";
 import { WorldVisualOverrideSetInput } from "../shared/worldVisualOverrideContract";
 import { readWorldVisualOverrides, setWorldVisualOverride } from "./worldVisualOverridePersistence";
+import { withDomainErrors } from "./domainErrorBoundary";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
@@ -113,7 +114,7 @@ export const appRouter = router({
     region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => legacyWorldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
     regionV2: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => worldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
     // Persisted admin replacements of world visuals; every player sees the same world.
-    visualOverrides: protectedProcedure.query(() => readWorldVisualOverrides()),
+    visualOverrides: protectedProcedure.query(() => withDomainErrors("WORLD_VISUAL_READBACK", ["WORLD_VISUAL_"], () => readWorldVisualOverrides())),
   }),
   groups: router({
     read: protectedProcedure.query(({ ctx }) => readGroupForUser(ctx.user.id)),
@@ -643,7 +644,7 @@ export const appRouter = router({
       setReview: adminProcedure.input(z.object({ assetId: z.string().min(8).max(64), status: z.enum(["approved", "rejected", "archived"]) })).mutation(({ ctx, input }) => db.setGlbAssetReview({ ...input, reviewedByUserId: ctx.user.id })),
       listAssignments: adminProcedure.query(() => db.listGlbAssignments()),
       // Replace (assetId) or restore (null) the visual of one world placement; admin only.
-      setWorldVisual: adminProcedure.input(WorldVisualOverrideSetInput).mutation(({ ctx, input }) => setWorldVisualOverride(ctx.user.id, input)),
+      setWorldVisual: adminProcedure.input(WorldVisualOverrideSetInput).mutation(({ ctx, input }) => withDomainErrors("WORLD_VISUAL_WRITE", ["WORLD_VISUAL_"], () => setWorldVisualOverride(ctx.user.id, input))),
       assign: adminProcedure.input(z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().trim().min(2).max(120).regex(/^[A-Za-z0-9_-]+$/), expectedActiveAssetId: z.string().min(8).max(64).nullable() })).mutation(({ ctx, input }) => db.assignApprovedGlbAsset({ ...input, assignedByUserId: ctx.user.id })),
       pendingSubmissions: adminProcedure.query(() => db.listPendingGlbSubmissions()),
       reviewSubmission: adminProcedure.input(z.object({ submissionId: z.string().min(8).max(64), decision: z.enum(["approved", "rejected"]), reviewNote: z.string().trim().max(500).regex(/^[^<>]*$/).optional() })).mutation(({ ctx, input }) => db.reviewPlayerGlbSubmission({ ...input, reviewedByUserId: ctx.user.id })),

@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { aurionWorldVisualOverrides } from "../drizzle/schema";
 import { getDb } from "./db";
 import { glbImportStore } from "./glbImportStore";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
+import { isPlaceableWorldAsset } from "../shared/adminPlacementPlan";
 import {
   WORLD_VISUAL_OVERRIDE_SCHEMA,
   worldVisualTargetKind,
@@ -11,8 +12,13 @@ import {
   type WorldVisualOverrideReadback,
 } from "../shared/worldVisualOverrideContract";
 
-/** Bounded readback: overrides are hand-authored by an administrator. */
-const MAX_OVERRIDE_ROWS = 20_000;
+/**
+ * Bound on distinct addressed placements (hand-authored by an administrator). Writes
+ * refuse a new placement at the bound; the readback fails explicitly instead of ever
+ * returning an incomplete world (the slack absorbs concurrent first writes).
+ */
+export const MAX_WORLD_VISUAL_PLACEMENTS = 20_000;
+const READBACK_SLACK = 64;
 
 function receiptHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -25,11 +31,17 @@ function receiptHash(value: unknown): string {
 export async function readWorldVisualOverrides(worldId = GLOBAL_WORLD_ID): Promise<WorldVisualOverrideReadback> {
   const db = await getDb();
   if (!db) throw new Error("WORLD_VISUAL_DATABASE_REQUIRED");
-  const rows = await db.select().from(aurionWorldVisualOverrides)
-    .where(eq(aurionWorldVisualOverrides.worldId, worldId))
-    .orderBy(desc(aurionWorldVisualOverrides.revision)).limit(MAX_OVERRIDE_ROWS);
-  const latest = new Map<string, typeof rows[number]>();
-  for (const row of rows) if (!latest.has(row.placementRef)) latest.set(row.placementRef, row);
+  // Latest revision per placement first (unique (worldId, placementRef, revision) index),
+  // so a long history of one placement can never hide another placement's head.
+  const table = aurionWorldVisualOverrides;
+  const heads = db.select({ placementRef: table.placementRef, headRevision: sql<number>`MAX(${table.revision})`.as("headRevision") })
+    .from(table).where(eq(table.worldId, worldId)).groupBy(table.placementRef).as("heads");
+  const joined = await db.select({ row: table }).from(table)
+    .innerJoin(heads, and(eq(table.placementRef, heads.placementRef), eq(table.revision, heads.headRevision)))
+    .where(eq(table.worldId, worldId))
+    .limit(MAX_WORLD_VISUAL_PLACEMENTS + READBACK_SLACK + 1);
+  if (joined.length > MAX_WORLD_VISUAL_PLACEMENTS + READBACK_SLACK) throw new Error("WORLD_VISUAL_READBACK_OVERFLOW");
+  const latest = new Map(joined.map(({ row }) => [row.placementRef, row] as const));
   const overrides: WorldVisualOverride[] = [...latest.values()]
     .filter(row => row.assetId !== null)
     .map(row => Object.freeze({ placementRef: row.placementRef, targetKind: row.targetKind, assetId: row.assetId!, revision: row.revision }))
@@ -54,7 +66,8 @@ export async function setWorldVisualOverride(actorUserId: number, input: Readonl
     const catalog = await glbImportStore().catalog();
     const asset = catalog.entries.find(entry => entry.assetId === input.assetId);
     if (!asset) throw new Error("WORLD_VISUAL_ASSET_NOT_IN_RUNTIME_CATALOG");
-    if (asset.assetType !== "arena" || asset.targetKey !== null) throw new Error("WORLD_VISUAL_ASSET_NOT_A_WORLD_ASSET");
+    // The single free-standing world model rule (also used by World Designs and the projection).
+    if (!isPlaceableWorldAsset(asset)) throw new Error("WORLD_VISUAL_ASSET_NOT_A_WORLD_ASSET");
   }
   const db = await getDb();
   if (!db) throw new Error("WORLD_VISUAL_DATABASE_REQUIRED");
@@ -65,6 +78,11 @@ export async function setWorldVisualOverride(actorUserId: number, input: Readonl
       .orderBy(desc(aurionWorldVisualOverrides.revision)).limit(1).for("update"))[0];
     const currentRevision = head?.revision ?? 0;
     if (currentRevision !== input.expectedRevision) throw new Error("WORLD_VISUAL_REVISION_CONFLICT");
+    if (!head) {
+      const [count] = await tx.select({ placements: sql<number>`COUNT(DISTINCT ${aurionWorldVisualOverrides.placementRef})` })
+        .from(aurionWorldVisualOverrides).where(eq(aurionWorldVisualOverrides.worldId, worldId));
+      if (Number(count?.placements ?? 0) >= MAX_WORLD_VISUAL_PLACEMENTS) throw new Error("WORLD_VISUAL_PLACEMENT_LIMIT");
+    }
     const previousAssetId = head?.assetId ?? null;
     if (previousAssetId === input.assetId) throw new Error("WORLD_VISUAL_UNCHANGED");
     const revision = currentRevision + 1;

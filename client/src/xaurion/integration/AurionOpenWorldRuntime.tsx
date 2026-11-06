@@ -27,6 +27,7 @@ import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import { AurionAuthorityHud } from "./AurionAuthorityHud";
 import { ServiceNpcProjection } from "./ServiceNpcProjection";
 import { AdminGlbMenu } from "../components/AdminGlbMenu";
+import { ADMIN_PLACEMENT_KEYS, AdminPlacementController } from "../components/AdminPlacement";
 import { useAdminStore } from "../core/AdminService";
 import { soundSynth } from "../audio/SoundSynthesizer";
 import { AurionSurfaceAudioOrchestrator, resolveAudioSurfaceAtPosition, type SurfaceAudioTerrain } from "../audio/AurionSurfaceAudioResolver";
@@ -786,6 +787,8 @@ export default function AurionOpenWorldRuntime() {
     const down = (event: KeyboardEvent) => {
       if (event.repeat || typing()) return;
       const key = event.key.toLowerCase();
+      // While the admin places an object, its keys (R rotates) belong to the placement session.
+      if (useAdminStore.getState().placementAsset && ADMIN_PLACEMENT_KEYS.has(key)) return;
       const engine = engineRef.current;
       if (!engine) return;
 
@@ -952,6 +955,7 @@ export default function AurionOpenWorldRuntime() {
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onTouchMoveDestination={handleTouchMoveDestination} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
       <AdminGlbMenu />
+      <AdminPlacementController engineRef={engineRef} containerRef={containerRef} />
     </section>
   );
 }

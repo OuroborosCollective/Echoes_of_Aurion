@@ -7,6 +7,7 @@ import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
 import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, villageStreetLampVisualPlacements, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
 import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
+import { isPlaceableWorldAsset } from "@shared/adminPlacementPlan";
 import { authoredPlacementRef, uploadedAnchorRef, worldVisualTargetKind, type WorldVisualOverrideReadback, type WorldVisualTargetData } from "@shared/worldVisualOverrideContract";
 
 /** A placement plus the stable world reference the admin cursor and overrides address. */
@@ -27,9 +28,15 @@ export function uploadedPlacementRef(placementId: string): string {
 }
 
 type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
+/** Automatic catalog anchors and dedicated village visuals around the player. */
 const MAX_RENDERED = 18;
+/**
+ * Intentionally authored placements (World Designs, admin placements) have their own
+ * budget: an object the admin just placed must never be displaced by automatic anchors.
+ */
+export const MAX_AUTHORED_RENDERED = 48;
 
-function targetSizeMeters(subcategory: string | null): number {
+export function targetSizeMeters(subcategory: string | null): number {
   if (subcategory === "building") return 9;
   if (subcategory === "structure") return 5;
   if (subcategory === "teleporter") return 3.2;
@@ -58,6 +65,26 @@ function staticRenderable(scene: THREE.Group): boolean {
  * The exact owner-selected return-stone GLB has one dedicated visual placement
  * at the live zone origin. Its presence still grants no gameplay authority.
  */
+/**
+ * Scale and anchor of a world visual, shared by the projection and the admin placement
+ * preview so a placed object appears exactly as previewed.
+ */
+export function fitWorldVisual(scene: THREE.Object3D, asset: Pick<GlbRuntimeCatalog["entries"][number], "sha256" | "subcategory">, scalePermille: number) {
+  scene.updateMatrixWorld(true);
+  // Bounds include every LOD level. Family members are expected to share the
+  // same authored origin/scale; we normalize the logical root exactly once.
+  const bounds = new THREE.Box3().setFromObject(scene, true);
+  if (bounds.isEmpty()) return null;
+  const size = bounds.getSize(new THREE.Vector3());
+  const maxDimension = Math.max(size.x, size.y, size.z);
+  if (!Number.isFinite(maxDimension) || maxDimension <= 0.0001) return null;
+  // These pinned wall bytes are authored in metres and already normalized
+  // by the server manifest. Fitting a city perimeter to a 5 m prop destroys it.
+  const assetScale = isStarterCityWallSource(asset.sha256) ? 1 : targetSizeMeters(asset.subcategory) / maxDimension;
+  const scale = THREE.MathUtils.clamp(assetScale * (scalePermille / 1_000), 0.05, 12);
+  return { scale, center: bounds.getCenter(new THREE.Vector3()), bounds };
+}
+
 export class UploadedWorldCatalogProjection {
   readonly root = new THREE.Group();
   private catalog: GlbRuntimeCatalog | null = null;
@@ -100,7 +127,8 @@ export class UploadedWorldCatalogProjection {
 
   private withOverride(placement: UploadedWorldVisualPlacement, placementRef: string): ProjectedPlacement {
     const replacementId = this.overrides.get(placementRef);
-    const replacement = replacementId ? this.catalog?.entries.find(entry => entry.assetId === replacementId && entry.assetType === "arena" && entry.targetKey === null) : undefined;
+    // Same rule as the server write: only approved world models (world purpose) replace world visuals.
+    const replacement = replacementId ? this.catalog?.entries.find(entry => entry.assetId === replacementId && isPlaceableWorldAsset(entry)) : undefined;
     return Object.freeze({ ...placement, ...(replacement ? { asset: replacement } : {}), placementRef });
   }
 
@@ -124,12 +152,7 @@ export class UploadedWorldCatalogProjection {
     for (const design of this.worldDesign?.designs ?? []) {
       for (const placement of design.placements) {
         if (Math.abs(placement.chunkX - center.x) > 1 || Math.abs(placement.chunkZ - center.z) > 1) continue;
-        const asset = this.catalog.entries.find(entry =>
-          entry.assetId === placement.assetId
-          && entry.targetKey === null
-          && entry.assetType === "arena"
-          && (entry.purpose === "world-environment" || entry.purpose === "world-nature")
-        );
+        const asset = this.catalog.entries.find(entry => entry.assetId === placement.assetId && isPlaceableWorldAsset(entry));
         if (!asset) continue;
         const worldPosition = joinWorldChunkPositionMm({
           coordinate: { x: placement.chunkX, z: placement.chunkZ },
@@ -145,13 +168,15 @@ export class UploadedWorldCatalogProjection {
         }), authoredPlacementRef(design.designKey, placement.placementKey)));
       }
     }
+    // Dedicated village visuals first, then intentionally authored placements (World
+    // Design, admin placements), then automatic catalog anchors; nearest first within each.
     const dedicatedPriority = (placement: ProjectedPlacement) =>
       placement.id.startsWith("aurion.return-stone")
       || placement.id.startsWith("aurion.village-fountain")
       || placement.id.startsWith("aurion.village-street-lamp")
       || isStarterCityWallSource(placement.asset.sha256)
         ? 0
-        : 1;
+        : placement.id.startsWith("authored:") ? 1 : 2;
     placements.sort((left, right) => {
       const priority = dedicatedPriority(left) - dedicatedPriority(right);
       if (priority) return priority;
@@ -159,7 +184,9 @@ export class UploadedWorldCatalogProjection {
       const rd = Math.hypot(right.xMm / 1000 - position.x, right.zMm / 1000 - position.z);
       return ld - rd || left.id.localeCompare(right.id);
     });
-    return { center, placements: placements.slice(0, MAX_RENDERED) };
+    const authored = placements.filter(placement => dedicatedPriority(placement) === 1).slice(0, MAX_AUTHORED_RENDERED);
+    const automatic = placements.filter(placement => dedicatedPriority(placement) !== 1).slice(0, MAX_RENDERED);
+    return { center, placements: [...automatic, ...authored] };
   }
 
   private remove(id: string): void {
@@ -183,19 +210,9 @@ export class UploadedWorldCatalogProjection {
       const stillAllowed = this.catalog?.entries.some(entry => entry.assetId === placement.asset.assetId && entry.sha256 === placement.asset.sha256 && entry.purpose === placement.asset.purpose);
       if (!stillAllowed) return;
 
-      loaded.scene.updateMatrixWorld(true);
-      // Bounds include every LOD level. Family members are expected to share the
-      // same authored origin/scale; we normalize the logical root exactly once.
-      const bounds = new THREE.Box3().setFromObject(loaded.scene, true);
-      if (bounds.isEmpty()) return;
-      const size = bounds.getSize(new THREE.Vector3());
-      const maxDimension = Math.max(size.x, size.y, size.z);
-      if (!Number.isFinite(maxDimension) || maxDimension <= 0.0001) return;
-      // These pinned wall bytes are authored in metres and already normalized
-      // by the server manifest. Fitting a city perimeter to a 5 m prop destroys it.
-      const assetScale = isStarterCityWallSource(placement.asset.sha256) ? 1 : targetSizeMeters(placement.asset.subcategory) / maxDimension;
-      const scale = THREE.MathUtils.clamp(assetScale * ((placement.scalePermille ?? 1_000) / 1_000), 0.05, 12);
-      const center = bounds.getCenter(new THREE.Vector3());
+      const fit = fitWorldVisual(loaded.scene, placement.asset, placement.scalePermille ?? 1_000);
+      if (!fit) return;
+      const { scale, center, bounds } = fit;
       const worldX = placement.xMm / 1000;
       const worldZ = placement.zMm / 1000;
       const terrainY = this.engine.landscape.chunkManager.getElevationAt(worldX, worldZ);
@@ -245,7 +262,7 @@ export class UploadedWorldCatalogProjection {
   }
 
   evidence() {
-    return Object.freeze({ catalogRevision: this.catalog?.revision ?? null, worldDesignRevision: this.worldDesign?.revision ?? null, rendered: this.rendered.size, pending: this.pending.size, maxRendered: MAX_RENDERED,
+    return Object.freeze({ catalogRevision: this.catalog?.revision ?? null, worldDesignRevision: this.worldDesign?.revision ?? null, rendered: this.rendered.size, pending: this.pending.size, maxRendered: MAX_RENDERED, maxAuthoredRendered: MAX_AUTHORED_RENDERED,
       assets: Object.freeze([...this.rendered.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([id, value]) => Object.freeze({ id, sha256: value.sha256, lodLevels: value.lodLevels }))) });
   }
 

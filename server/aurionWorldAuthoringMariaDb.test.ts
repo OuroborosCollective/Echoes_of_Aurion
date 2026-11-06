@@ -8,7 +8,8 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { WorldDesignDraftSchema, WorldDesignPlanSchema, type WorldDesignDraft } from "../shared/aurionAuthoringContract";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
-import { applyWorldDesign, authoringHash, planWorldDesign, readActiveWorldDesign, recoverWorldAuthoringReceipt } from "./aurionAuthoringPersistence";
+import { applyWorldDesign, authoringHash, planWorldDesign, readActiveWorldDesign, recoverWorldAuthoringReceipt, retireAdminPlacementDesign } from "./aurionAuthoringPersistence";
+import { buildPlacementDraft, buildRemovalPlan } from "../shared/adminPlacementPlan";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { testGlb } from "./glbImportFixtures";
 import { glbImportStore } from "./glbImportStore";
@@ -435,6 +436,103 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     expect((await readActiveWorldDesign()).designs).toHaveLength(64);
     await expect(planWorldDesign(draft("fixture-slot-three"))).rejects.toThrow("AUTHORING_WORLD_ACTIVE_LIMIT");
     expect((await planWorldDesign(draft("fixture-seed-00", 2))).expectedPreviousHash).toMatch(/^[a-f0-9]{64}$/);
+  }, 30_000);
+
+  // Placement stage A: free admin placement, removal and group retirement through the
+  // real planner, fence and receipts.
+  it("places, removes and retires admin placements, and never revives a retired group", async () => {
+    const random = (() => { let n = 0; return () => ((n++ * 7) % 16) / 16; })();
+    const place = async (x: number) => {
+      const readback = await readActiveWorldDesign();
+      const draft = buildPlacementDraft(readback, catalogRevision, { assetId, worldXMm: x, worldZMm: -2_000, rotationQuarterTurns: 2, scalePermille: 1_250 }, random);
+      const plan = await planWorldDesign(draft, undefined, String(x).padStart(32, "0"));
+      return { draft, applied: await applyWorldDesign(admin, draft, plan.planHash, plan.operationId) };
+    };
+    const first = await place(1_000);
+    const second = await place(3_000);
+    expect(second.draft.designKey).toBe(first.draft.designKey);
+    const group = second.applied.readback.designs.find(design => design.designKey === first.draft.designKey)!;
+    expect(group).toMatchObject({ version: 2 });
+    expect(group.placements).toHaveLength(2);
+
+    const removal = buildRemovalPlan(await readActiveWorldDesign(), catalogRevision, group.designKey, group.placements[0]!.placementKey);
+    if (removal.kind !== "draft") throw new Error("expected a version without the object");
+    const removalPlan = await planWorldDesign(removal.draft);
+    const removed = await applyWorldDesign(admin, removal.draft, removalPlan.planHash);
+    const remaining = removed.readback.designs.find(design => design.designKey === group.designKey)!;
+    expect(remaining.placements.map(p => p.placementKey)).toEqual([group.placements[1]!.placementKey]);
+
+    const last = buildRemovalPlan(removed.readback, catalogRevision, group.designKey, remaining.placements[0]!.placementKey);
+    expect(last).toEqual({ kind: "retire", designKey: group.designKey, expectedDesignHash: remaining.designHash });
+    if (last.kind !== "retire") throw new Error("expected retirement");
+    await expect(retireAdminPlacementDesign(admin, last.designKey, "f".repeat(64))).rejects.toThrow("AUTHORING_WORLD_PREDECESSOR_CHANGED");
+    const retired = await retireAdminPlacementDesign(admin, last.designKey, last.expectedDesignHash);
+    expect(retired.readback.designs.some(design => design.designKey === group.designKey)).toBe(false);
+    expect(retired.receipt).toMatchObject({ kind: "world", action: "retire", previousHash: remaining.designHash, actorUserId: admin });
+    const [receipts] = await pool.execute<RowDataPacket[]>("SELECT action, targetId FROM aurionAuthoringReceipts WHERE id = ?", [retired.receipt.receiptId]);
+    expect(receipts).toEqual([expect.objectContaining({ action: "retire", targetId: `${group.designKey}:v${remaining.version}` })]);
+    // History stays; nothing is active any more.
+    const [history] = await pool.execute<RowDataPacket[]>("SELECT COUNT(*) AS total, SUM(active) AS active FROM aurionWorldDesignVersions WHERE designKey = ?", [group.designKey]);
+    expect(Number(history[0]?.total)).toBe(3); // v1, v2 (placed), v3 (removed); retirement adds no version
+    expect(Number(history[0]?.active ?? 0)).toBe(0);
+
+    // A stale tab still showing the group tries to add to it: the server refuses to revive it.
+    const stale = buildPlacementDraft(removed.readback, catalogRevision, { assetId, worldXMm: 5_000, worldZMm: 0, rotationQuarterTurns: 0, scalePermille: 1_000 }, random);
+    expect(stale.designKey).toBe(group.designKey);
+    await expect(planWorldDesign(stale)).rejects.toThrow("AUTHORING_WORLD_ADMIN_GROUP_RETIRED");
+    // A fresh placement opens a new group.
+    const fresh = await place(7_000);
+    expect(fresh.draft.designKey).not.toBe(group.designKey);
+    expect(fresh.draft.version).toBe(1);
+    await expect(retireAdminPlacementDesign(admin, "fixture-not-admin", "a".repeat(64))).rejects.toThrow("AUTHORING_WORLD_RETIRE_NOT_ADMIN_PLACEMENTS");
+    await pool.execute("UPDATE users SET role = 'user' WHERE id = ?", [admin]);
+    const freshHead = (await readActiveWorldDesign()).designs.find(design => design.designKey === fresh.draft.designKey)!;
+    await expect(retireAdminPlacementDesign(admin, freshHead.designKey, freshHead.designHash)).rejects.toThrow("AUTHORING_ADMIN_REQUIRED");
+    expect((await readActiveWorldDesign()).designs.some(design => design.designKey === fresh.draft.designKey)).toBe(true);
+  }, 30_000);
+
+  it("serializes a retirement with a concurrent addition to the same group", async () => {
+    const draft1 = buildPlacementDraft(null, catalogRevision, { assetId, worldXMm: 0, worldZMm: 0, rotationQuarterTurns: 0, scalePermille: 1_000 }, () => 0.3);
+    const plan1 = await planWorldDesign(draft1);
+    const head = (await applyWorldDesign(admin, draft1, plan1.planHash)).readback.designs.find(design => design.designKey === draft1.designKey)!;
+    const addition = buildPlacementDraft({ schemaVersion: "aurion.world-design.v1", revision: "0".repeat(64), designs: [head] }, catalogRevision,
+      { assetId, worldXMm: 2_000, worldZMm: 0, rotationQuarterTurns: 0, scalePermille: 1_000 }, () => 0.6);
+    const additionPlan = await planWorldDesign(addition);
+    const results = await Promise.allSettled([
+      applyWorldDesign(otherAdmin, addition, additionPlan.planHash),
+      retireAdminPlacementDesign(admin, head.designKey, head.designHash),
+    ]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(String((results.find(result => result.status === "rejected") as PromiseRejectedResult).reason)).toMatch(/AUTHORING_WORLD_(PREDECESSOR|PLAN)_CHANGED/);
+    const [rows] = await pool.execute<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionWorldDesignVersions WHERE active = 1 AND designKey = ?", [head.designKey]);
+    expect(Number(rows[0]?.count)).toBeLessThanOrEqual(1);
+  }, 30_000);
+
+  it("serves the group retirement only to admins and only with explicit confirmation", async () => {
+    const app = express();
+    app.use("/api/trpc", createExpressMiddleware({
+      router: router({ aurionAuthoring: aurionAuthoringRouter }),
+      createContext: ({ req, res }) => ({ req, res, user: req.header("authorization") === "Bearer isolated-admin" ? { id: admin, role: "admin" } : null } as TrpcContext),
+    }));
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise<void>(resolve => server.once("listening", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("ISOLATED_HTTP_ADDRESS_REQUIRED");
+      const post = (json: unknown, authorized = true) => fetch(`http://127.0.0.1:${address.port}/api/trpc/aurionAuthoring.worldRetireAdminPlacements`, {
+        method: "POST", headers: { "content-type": "application/json", ...(authorized ? { authorization: "Bearer isolated-admin" } : {}) }, body: JSON.stringify({ json }) });
+      const draft1 = buildPlacementDraft(null, catalogRevision, { assetId, worldXMm: 0, worldZMm: 0, rotationQuarterTurns: 0, scalePermille: 1_000 }, () => 0.9);
+      const head = (await applyWorldDesign(admin, draft1, (await planWorldDesign(draft1)).planHash)).readback.designs.find(design => design.designKey === draft1.designKey)!;
+      const input = { designKey: head.designKey, expectedDesignHash: head.designHash, confirmation: "RETIRE_ADMIN_PLACEMENTS" };
+      expect((await post(input, false)).status).toBe(403);
+      expect((await post({ ...input, confirmation: "YES" })).status).toBe(400);
+      expect((await post({ ...input, designKey: "fixture-world" })).status).toBe(400);
+      const response = await post(input);
+      expect(response.status).toBe(200);
+      expect((await response.json() as any).result.data.json.receipt).toMatchObject({ action: "retire", actorUserId: admin });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
   }, 30_000);
 
   it("rejects plans that exceed the persisted TEXT byte limit before confirmation", async () => {

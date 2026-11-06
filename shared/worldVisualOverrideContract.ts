@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sha256Text } from "./sha256Text";
 
 export const WORLD_VISUAL_OVERRIDE_SCHEMA = "aurion.world-visual-overrides.v1" as const;
 /** Browser event: an admin changed a world visual; projections reload immediately. */
@@ -18,7 +19,10 @@ const PREFIX_KIND: Readonly<Record<string, WorldVisualTargetKind>> = Object.free
  * shown there:
  * - `uploaded:<chunkX>:<chunkZ>:<anchor>` — an uploaded-catalog anchor in a chunk; the
  *   automatic asset choice there may change with the catalog, the override stays.
- * - `authored:<designKey>:<placementKey>` — a World Design placement.
+ * - `authored:<designKey>:<placementKey>` — a World Design placement; when the direct
+ *   form would be ambiguous (a key contains ':') or too long (two valid 96-character
+ *   keys), `authored:sha256.<40 hex>` of both keys. The digest form contains exactly
+ *   one ':' and the direct form at least two, so the two forms never collide.
  * - `shipped:<placementId>` — a procedural placement of the shipped world catalog.
  * - `surface:<surfaceKey>` — a terrain or surface material.
  */
@@ -34,10 +38,14 @@ export function uploadedAnchorRef(chunkX: number, chunkZ: number, anchorIndex: n
   return `uploaded:${chunkX}:${chunkZ}:${anchorIndex}`;
 }
 
+/**
+ * Never throws: every valid World Design placement stays renderable and addressable,
+ * whatever the length or characters of its keys.
+ */
 export function authoredPlacementRef(designKey: string, placementKey: string): string {
-  const ref = `authored:${designKey}:${placementKey}`;
-  if (worldVisualTargetKind(ref) !== "authored_placement") throw new Error("WORLD_VISUAL_AUTHORED_REF_INVALID");
-  return ref;
+  const direct = `authored:${designKey}:${placementKey}`;
+  if (!designKey.includes(":") && !placementKey.includes(":") && worldVisualTargetKind(direct) === "authored_placement") return direct;
+  return `authored:sha256.${sha256Text(JSON.stringify([designKey, placementKey])).slice(0, 40)}`;
 }
 
 export type WorldVisualOverride = Readonly<{ placementRef: string; targetKind: WorldVisualTargetKind; assetId: string; revision: number }>;

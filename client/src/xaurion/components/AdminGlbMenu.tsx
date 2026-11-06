@@ -19,11 +19,13 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
+import { PlaceSelectedModelButton, RemovePlacedObjectButton } from "./AdminPlacement";
 
 /** Server codes of the world visual replacement, shown to the admin instead of failing silently. */
 const WORLD_VISUAL_MESSAGES: Readonly<Record<string, string>> = {
   WORLD_VISUAL_ASSET_NOT_IN_RUNTIME_CATALOG: "Dieses Modell ist nicht im freigegebenen Spiel-Katalog. Erst freigeben, dann austauschen.",
-  WORLD_VISUAL_ASSET_NOT_A_WORLD_ASSET: "Nur Welt-Modelle (Arena/Architektur, nicht zugewiesen) können Welt-Objekte ersetzen.",
+  WORLD_VISUAL_ASSET_NOT_A_WORLD_ASSET: "Nur Welt-Modelle (Arena/Architektur mit Welt-Zweck, nicht zugewiesen) können Welt-Objekte ersetzen.",
+  WORLD_VISUAL_PLACEMENT_LIMIT: "Die Höchstzahl ausgetauschter Welt-Objekte ist erreicht.",
   WORLD_VISUAL_REVISION_CONFLICT: "Das Objekt wurde inzwischen geändert. Bitte erneut anvisieren und noch einmal speichern.",
   WORLD_VISUAL_UNCHANGED: "Dieses Modell steht dort bereits.",
   WORLD_VISUAL_PLACEMENT_INVALID: "Dieses Objekt kann nicht adressiert werden.",
@@ -31,7 +33,9 @@ const WORLD_VISUAL_MESSAGES: Readonly<Record<string, string>> = {
 function worldVisualMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const code = Object.keys(WORLD_VISUAL_MESSAGES).find(key => message.includes(key));
-  return code ? WORLD_VISUAL_MESSAGES[code]! : `Speichern fehlgeschlagen: ${message.slice(0, 160)}`;
+  if (code) return WORLD_VISUAL_MESSAGES[code]!;
+  // Only a stable server code is shown, never raw error text (it may carry SQL or internals).
+  return /^[A-Z][A-Z0-9_]{2,95}$/.test(message) ? `Speichern fehlgeschlagen (${message}).` : "Speichern fehlgeschlagen. Bitte später erneut versuchen.";
 }
 
 export const AdminGlbMenu: React.FC = () => {
@@ -213,6 +217,9 @@ export const AdminGlbMenu: React.FC = () => {
                     />
                   </div>
 
+                  {/* Free placement: the menu closes and the model floats in the world until placed. */}
+                  <PlaceSelectedModelButton assetId={activeModelId} onStarted={() => setIsOpen(false)} />
+
                   <div className="space-y-2">
                     {catalogQuery.isError ? (
                       <div role="alert" className="space-y-3 py-8 text-center text-sm text-amber-300">
@@ -389,6 +396,7 @@ export const AdminGlbMenu: React.FC = () => {
                                 Original wiederherstellen
                               </button>
                             )}
+                            <RemovePlacedObjectButton placementRef={currentTarget.placementRef} />
                             {!activeModelId && <p className="text-[8px] text-amber-500/80 text-center italic">Wähle zuerst ein Modell im Katalog aus!</p>}
                             {integrationStatus && (
                               <p role={integrationStatus.tone === "error" ? "alert" : "status"} data-testid="admin-glb-integration-status"

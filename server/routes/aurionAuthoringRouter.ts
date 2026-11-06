@@ -25,7 +25,10 @@ import {
   readActiveDungeonDesigns,
   readActiveWorldDesign,
   recoverWorldAuthoringReceipt,
+  retireAdminPlacementDesign,
 } from "../aurionAuthoringPersistence";
+import { ADMIN_PLACEMENT_DESIGN } from "../../shared/adminPlacementPlan";
+import { withDomainErrors } from "../domainErrorBoundary";
 
 async function proposeWorldForSession(actorUserId: number, input: DesignerRequest) {
     const zone = globalZoneRegistry.find(zoneIdSchema.parse(input.zoneId));
@@ -143,6 +146,14 @@ export const aurionAuthoringRouter = router({
       confirmation: z.literal("APPLY_WORLD_DESIGN"),
     }).strict())
     .mutation(({ ctx, input }) => applyWorldDesign(ctx.user.id, input.draft, input.expectedPlanHash, input.operationId)),
+  // Removing the last admin-placed object retires its group (designs cannot be empty).
+  worldRetireAdminPlacements: adminProcedure
+    .input(z.object({
+      designKey: z.string().regex(ADMIN_PLACEMENT_DESIGN),
+      expectedDesignHash: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal("RETIRE_ADMIN_PLACEMENTS"),
+    }).strict())
+    .mutation(({ ctx, input }) => withDomainErrors("AUTHORING_WORLD_RETIRE", ["AUTHORING_"], () => retireAdminPlacementDesign(ctx.user.id, input.designKey, input.expectedDesignHash))),
   // Read-only lookup; a missing row never proves that an in-flight apply failed.
   worldReceipt: adminProcedure
     .input(z.object({

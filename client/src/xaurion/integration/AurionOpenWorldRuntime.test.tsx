@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AurionOpenWorldRuntime from "./AurionOpenWorldRuntime";
+import { useAdminStore } from "../core/AdminService";
 import type { ZonePresenceSnapshot } from "@/lib/zoneMovement";
 
 const confirmedResources = {
@@ -69,6 +70,8 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
     acceptQuest: { useMutation: () => ({}) },
   },
 } }));
+// The placement session itself is covered in AdminPlacement.test.tsx; here only its key ownership.
+vi.mock("../components/AdminPlacement", async importOriginal => ({ ...(await importOriginal<typeof import("../components/AdminPlacement")>()), AdminPlacementController: () => null }));
 vi.mock("../components/PublicCharacterPicker", () => ({ PublicCharacterPicker: ({ onSelected }: { onSelected?: (selection: { assetId: string; displayName: string; storageUrl: string; visibility: "public" }) => void }) => <button type="button" onClick={() => onSelected?.({ assetId: "glb_standard_female", displayName: "Aurion Standard Female", storageUrl: fixture.selectedUrl, visibility: "public" })}>Standardfigur wählen</button> }));
 vi.mock("../core/RendererFactory", () => ({ createRuntimeRenderer: vi.fn((requested: string, signal: AbortSignal) => {
   fixture.requestedRenderers.push(requested);
@@ -308,6 +311,25 @@ describe("open world session ownership", () => {
     expect(fixture.engines[2].stop).toHaveBeenCalled();
     expect(screen.queryByText("World controls")).toBeNull();
     expect(screen.getByRole("alert")).toBeTruthy();
+  });
+
+  it("leaves R to the admin placement session instead of firing a gameplay action", async () => {
+    const outcomes: unknown[] = [];
+    const listener = (event: Event) => outcomes.push((event as CustomEvent).detail);
+    window.addEventListener("aurion:combat-feedback", listener);
+    try {
+      render(<AurionOpenWorldRuntime />);
+      await enter();
+      act(() => useAdminStore.setState({ isAdmin: true, placementAsset: { assetId: "glb_tower" } as never }));
+      fireEvent.keyDown(window, { key: "r", code: "KeyR" });
+      expect(outcomes).toEqual([]);
+      act(() => useAdminStore.setState({ placementAsset: null }));
+      fireEvent.keyDown(window, { key: "r", code: "KeyR" });
+      expect(outcomes).toHaveLength(1);
+    } finally {
+      window.removeEventListener("aurion:combat-feedback", listener);
+      useAdminStore.setState({ isAdmin: false, placementAsset: null });
+    }
   });
 
   it("publishes a disconnected keyboard action guard through the combat feedback lane", async () => {

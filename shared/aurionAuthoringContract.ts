@@ -158,7 +158,8 @@ export const AuthoringReceiptSchema = z.object({
   schemaVersion: z.literal(AURION_AUTHORING_RECEIPT_SCHEMA),
   receiptId: z.string().min(8).max(128),
   kind: z.enum(["world", "quest", "dungeon"]),
-  action: z.enum(["apply", "publish"]),
+  // "retire" deactivates an admin placement group (World Designs cannot become empty).
+  action: z.enum(["apply", "publish", "retire"]),
   targetId: z.string().min(3).max(128),
   actorUserId: z.number().int().positive(),
   planHash: digest,
