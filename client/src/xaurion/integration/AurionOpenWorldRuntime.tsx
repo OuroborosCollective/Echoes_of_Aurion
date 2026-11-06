@@ -28,6 +28,7 @@ import { AurionAuthorityHud } from "./AurionAuthorityHud";
 import { ServiceNpcProjection } from "./ServiceNpcProjection";
 import { AdminGlbMenu } from "../components/AdminGlbMenu";
 import { ADMIN_PLACEMENT_KEYS, AdminPlacementController } from "../components/AdminPlacement";
+import { AdminNpcShellPanel, openNearestNpcShell } from "../components/AdminNpcShellPanel";
 import { useAdminStore } from "../core/AdminService";
 import { soundSynth } from "../audio/SoundSynthesizer";
 import { AurionSurfaceAudioOrchestrator, resolveAudioSurfaceAtPosition, type SurfaceAudioTerrain } from "../audio/AurionSurfaceAudioResolver";
@@ -823,6 +824,11 @@ export default function AurionOpenWorldRuntime() {
         requestWorldInteraction();
         return;
       }
+      // Admin only: E opens the nearest NPC shell (players have no E action).
+      if (key === "e" && useAdminStore.getState().isAdmin && !useAdminStore.getState().placementAsset) {
+        if (openNearestNpcShell(engine)) { event.preventDefault(); event.stopImmediatePropagation(); }
+        return;
+      }
       if (key === "r" || key === "t") {
         event.preventDefault(); event.stopImmediatePropagation();
         if (key === "r") void requestAuthoritativeAction("F");
@@ -880,6 +886,9 @@ export default function AurionOpenWorldRuntime() {
   const handleTouchMoveDestination = useCallback((screenX: number, screenY: number) => {
     const engine = engineRef.current;
     if (!engine || !zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return;
+    // While the admin places or inspects, a tap targets the world tool, never a walk.
+    const admin = useAdminStore.getState();
+    if (admin.placementAsset || admin.inspectionMode) return;
     const point = engine.projectTouchDestination(screenX, screenY);
     if (!point) return;
     touchDestinationRef.current = { x: point.x, z: point.z };
@@ -956,6 +965,7 @@ export default function AurionOpenWorldRuntime() {
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onTouchMoveDestination={handleTouchMoveDestination} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
       <AdminGlbMenu />
       <AdminPlacementController engineRef={engineRef} containerRef={containerRef} />
+      <AdminNpcShellPanel engineRef={engineRef} />
     </section>
   );
 }

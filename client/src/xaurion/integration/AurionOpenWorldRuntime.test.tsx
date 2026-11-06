@@ -57,6 +57,11 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
     setWorldVisual: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
   } },
   worldAssets: { visualOverrides: { useQuery: () => ({ data: undefined, refetch: vi.fn() }) } },
+  aurionAuthoring: {
+    worldPlan: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+    worldApply: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+    worldRetireAdminPlacements: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+  },
   useUtils: () => ({ gameplay: { openWorld: { fetch: vi.fn(async () => {
     fixture.worldFetches++;
     return { globalWorld: { worldSeed: "refreshed-world", epoch: 7 } };
@@ -92,12 +97,13 @@ vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn((options: {
   fixture.rejects.push(options.onReject);
   const client = { connect: vi.fn(), close: vi.fn(), sendMovement: vi.fn() }; fixture.connections.push(client); return client;
 }) }));
-vi.mock("./aurionAuthorityAdapter", () => ({ bindAurionAuthorityProjection: vi.fn() }));
+vi.mock("./aurionAuthorityAdapter", () => ({ bindAurionAuthorityProjection: vi.fn(), ax1MovementToAurionIntent: vi.fn(() => ({ x: 0, z: 0 })) }));
 vi.mock("./ConfirmedPlayerMotion", () => ({ ConfirmedPlayerMotion: vi.fn(() => ({ project: vi.fn(), stop: vi.fn() })) }));
 vi.mock("./WorldAssetProjection", () => ({ WorldAssetProjection: vi.fn(() => ({ dispose: vi.fn(), update: vi.fn() })) }));
 vi.mock("./RemotePresenceProjection", () => ({ RemotePresenceProjection: vi.fn(() => ({ dispose: vi.fn(), clear: vi.fn(), apply: vi.fn(), presences: [] })) }));
 vi.mock("../components/GameHUD", () => ({ GameHUD: () => <p>World controls</p> }));
-vi.mock("./AurionAuthorityHud", () => ({ AurionAuthorityHud: () => <p>World controls</p> }));
+const hud = vi.hoisted(() => ({ touchMove: null as null | ((x: number, y: number) => void) }));
+vi.mock("./AurionAuthorityHud", () => ({ AurionAuthorityHud: (props: { onTouchMoveDestination: (x: number, y: number) => void }) => { hud.touchMove = props.onTouchMoveDestination; return <p>World controls</p>; } }));
 vi.mock("../components/InventoryModal", () => ({ InventoryModal: () => null }));
 vi.mock("../components/CharacterModal", () => ({ CharacterModal: () => null }));
 vi.mock("../components/ClassSelectModal", () => ({ ClassSelectModal: () => null }));
@@ -311,6 +317,54 @@ describe("open world session ownership", () => {
     expect(fixture.engines[2].stop).toHaveBeenCalled();
     expect(screen.queryByText("World controls")).toBeNull();
     expect(screen.getByRole("alert")).toBeTruthy();
+  });
+
+  // Tablet: while the admin places or inspects, a tap targets the tool, never a walk.
+  it("does not walk on a tap while the admin places or inspects", async () => {
+    const intents: unknown[] = [];
+    const listener = (event: Event) => intents.push((event as CustomEvent).detail);
+    window.addEventListener("aurion:touch-move-intent", listener);
+    try {
+      render(<AurionOpenWorldRuntime />);
+      await enter();
+      const engine = fixture.engines[fixture.engines.length - 1] as any;
+      engine.projectTouchDestination = vi.fn(() => ({ x: 3, y: 0, z: 4 }));
+      engine.player.position = { x: 0, y: 0, z: 0 };
+      act(() => fixture.tickets[0].onSuccess({ ticket: "touch-fixture" }));
+      act(() => fixture.statuses[0]("connected"));
+      act(() => useAdminStore.setState({ isAdmin: true, placementAsset: { assetId: "glb_tower" } as never }));
+      act(() => hud.touchMove?.(100, 100));
+      act(() => useAdminStore.setState({ placementAsset: null, inspectionMode: true }));
+      act(() => hud.touchMove?.(100, 100));
+      expect(intents).toEqual([]);
+      act(() => useAdminStore.setState({ inspectionMode: false }));
+      act(() => hud.touchMove?.(100, 100));
+      expect(intents).toHaveLength(1);
+    } finally {
+      window.removeEventListener("aurion:touch-move-intent", listener);
+      useAdminStore.setState({ isAdmin: false, placementAsset: null, inspectionMode: false });
+    }
+  });
+
+  it("opens the nearest NPC shell with E for the admin only", async () => {
+    render(<AurionOpenWorldRuntime />);
+    await enter();
+    const engine = fixture.engines[fixture.engines.length - 1] as any;
+    const { Scene, Group, Vector3 } = await import("three");
+    engine.scene = new Scene();
+    const holder = new Group();
+    holder.userData.npcShell = { shellRef: "authored:npc.shells.1a2b3c4d:p.000000000001", designKey: "npc.shells.1a2b3c4d", placementKey: "p.000000000001", assetId: "glb_ranger", displayName: "Waldläuferin", position: { x: 1, y: 0, z: 0 } };
+    engine.scene.add(holder);
+    engine.player.position = new Vector3(0, 0, 0);
+    try {
+      fireEvent.keyDown(window, { key: "e", code: "KeyE" });
+      expect(useAdminStore.getState().shellTarget).toBeNull();
+      act(() => useAdminStore.setState({ isAdmin: true }));
+      fireEvent.keyDown(window, { key: "e", code: "KeyE" });
+      expect(useAdminStore.getState().shellTarget?.displayName).toBe("Waldläuferin");
+    } finally {
+      useAdminStore.setState({ isAdmin: false, shellTarget: null });
+    }
   });
 
   it("leaves R to the admin placement session instead of firing a gameplay action", async () => {

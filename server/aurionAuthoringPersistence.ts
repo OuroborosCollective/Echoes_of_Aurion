@@ -33,7 +33,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
-import { isAdminPlacementDesign, isPlaceableWorldAsset } from "../shared/adminPlacementPlan";
+import { isPlaceableAssetFor, isPlaceableWorldAsset, placementKindOfDesign } from "../shared/adminPlacementPlan";
 import { groupDungeonIds } from "../shared/groupInstanceProtocol";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -154,9 +154,12 @@ export async function planWorldDesign(raw: WorldDesignDraft, catalogConnection?:
   const catalog = await glbImportStore().catalog(catalogConnection);
   if (catalog.revision !== draft.expectedCatalogRevision) throw new Error("AUTHORING_GLB_CATALOG_CHANGED");
   const referenced = new Set<string>();
+  const isNpcShellGroup = placementKindOfDesign(draft.designKey) === "npc-shell";
   for (const placement of draft.placements) {
     const entry = catalog.entries.find(candidate => candidate.assetId === placement.assetId);
-    if (!entry || !worldAssetAllowed(entry)) throw new Error("AUTHORING_WORLD_ASSET_NOT_APPROVED");
+    // NPC shell groups hold unassigned NPC character models; every other design holds world models.
+    const allowed = entry && (isNpcShellGroup ? isPlaceableAssetFor("npc-shell", entry) : worldAssetAllowed(entry));
+    if (!entry || !allowed) throw new Error("AUTHORING_WORLD_ASSET_NOT_APPROVED");
     referenced.add(entry.sha256);
   }
   const referencedAssetHashes = [...referenced].sort();
@@ -164,7 +167,7 @@ export async function planWorldDesign(raw: WorldDesignDraft, catalogConnection?:
     .where(eq(aurionWorldDesignVersions.active, true));
   const previous = active.filter(row => row.designKey === draft.designKey);
   if (previous.length > 1) throw new Error("AUTHORING_WORLD_ACTIVE_VERSION_CORRUPT");
-  if (isAdminPlacementDesign(draft.designKey) && !previous.length) {
+  if (placementKindOfDesign(draft.designKey) && !previous.length) {
     // A retired admin placement group stays retired: a stale client must never revive
     // the objects the admin removed. New placements open a fresh group instead.
     const history = await db.select({ id: aurionWorldDesignVersions.id }).from(aurionWorldDesignVersions)
@@ -267,7 +270,7 @@ export async function retireAdminPlacementDesign(
   designKey: string,
   expectedDesignHash: string,
 ): Promise<{ receipt: AuthoringReceipt; readback: WorldDesignReadback }> {
-  if (!isAdminPlacementDesign(designKey)) throw new Error("AUTHORING_WORLD_RETIRE_NOT_ADMIN_PLACEMENTS");
+  if (!placementKindOfDesign(designKey)) throw new Error("AUTHORING_WORLD_RETIRE_NOT_ADMIN_PLACEMENTS");
   if (!/^[a-f0-9]{64}$/.test(expectedDesignHash)) throw new Error("AUTHORING_WORLD_RETIRE_HASH_INVALID");
   const receipt = await glbImportStore().withCatalogFence(async connection => {
     // Same fence and connection as applies: retirement serializes with every world apply.

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
+import type { NpcShellTarget } from "../integration/NpcShellProjection";
 
 export type AdminInspectionTarget = {
   type: "model" | "terrain" | "entity";
@@ -23,12 +24,15 @@ interface AdminState {
   currentTarget: AdminInspectionTarget | null;
   /** Catalog model the admin is currently placing (floating preview), or null. */
   placementAsset: GlbCatalogEntry | null;
+  /** NPC shell the admin opened with E, or null. */
+  shellTarget: NpcShellTarget | null;
   setIsAdmin: (isAdmin: boolean) => void;
   setInspectionMode: (mode: boolean) => void;
   setBvhDebugMode: (mode: boolean) => void;
   setActiveModelId: (id: string | null) => void;
   setCurrentTarget: (target: AdminInspectionTarget | null) => void;
   setPlacementAsset: (asset: GlbCatalogEntry | null) => void;
+  setShellTarget: (shell: NpcShellTarget | null) => void;
 }
 
 export const useAdminStore = create<AdminState>((set) => ({
@@ -38,12 +42,14 @@ export const useAdminStore = create<AdminState>((set) => ({
   activeModelId: null,
   currentTarget: null,
   placementAsset: null,
+  shellTarget: null,
   // Losing admin rights ends a running placement immediately.
-  setIsAdmin: (isAdmin) => set(isAdmin ? { isAdmin } : { isAdmin, placementAsset: null, inspectionMode: false, currentTarget: null }),
+  setIsAdmin: (isAdmin) => set(isAdmin ? { isAdmin } : { isAdmin, placementAsset: null, inspectionMode: false, currentTarget: null, shellTarget: null }),
   // Inspection and placement both own the world click; only one is active at a time.
   setInspectionMode: (inspectionMode) => set(inspectionMode ? { inspectionMode, currentTarget: null, placementAsset: null } : { inspectionMode, currentTarget: null }),
   setBvhDebugMode: (bvhDebugMode) => set({ bvhDebugMode }),
   setActiveModelId: (activeModelId) => set({ activeModelId }),
   setCurrentTarget: (currentTarget) => set({ currentTarget }),
   setPlacementAsset: (placementAsset) => set(placementAsset ? { placementAsset, inspectionMode: false, currentTarget: null } : { placementAsset: null }),
+  setShellTarget: (shellTarget) => set(shellTarget ? { shellTarget, placementAsset: null } : { shellTarget: null }),
 }));

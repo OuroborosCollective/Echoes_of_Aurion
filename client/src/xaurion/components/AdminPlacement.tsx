@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { trpc } from "../../lib/trpc";
 import { useAdminStore } from "../core/AdminService";
 import { soundSynth } from "../audio/SoundSynthesizer";
-import { ADMIN_PLACEMENT_SCALES_PERMILLE, adminPlacementFromRef } from "@shared/adminPlacementPlan";
+import { ADMIN_PLACEMENT_SCALES_PERMILLE, adminPlacementFromRef, placementKindOfAsset } from "@shared/adminPlacementPlan";
 import { AdminPlacementGhost } from "../integration/AdminPlacementGhost";
 import {
   adminPlacementMessage,
@@ -21,6 +21,10 @@ import type { MMOEngine } from "../core/MMOEngine";
 export const ADMIN_PLACEMENT_KEYS: ReadonlySet<string> = new Set(["r", "+", "=", "-", "_", "enter", "escape"]);
 
 type Status = Readonly<{ tone: "ok" | "error" | "info"; text: string }> | null;
+
+/** Same tap thresholds as touch-to-move: a longer or wider gesture is a camera drag. */
+const TOUCH_TAP_MAX_DISTANCE_PX = 14;
+const TOUCH_TAP_MAX_DURATION_MS = 550;
 
 /** Next size step (25 % … 400 %); a value between steps moves to the neighbouring step. */
 export function nextPlacementScale(current: number, direction: 1 | -1): number {
@@ -98,9 +102,11 @@ export function RemovePlacedObjectButton({ placementRef, onRemoved }: { placemen
     setBusy(true);
     setStatus({ tone: "info", text: "Wird serverseitig entfernt…" });
     try {
-      await commitAdminRemoval(api, placed.designKey, placed.placementKey);
+      const result = await commitAdminRemoval(api, placed.designKey, placed.placementKey);
       soundSynth.playUiSuccess();
-      setStatus({ tone: "ok", text: "Entfernt und gespeichert." });
+      setStatus({ tone: "ok", text: result.droppedUnavailable
+        ? `Entfernt und gespeichert. ${result.droppedUnavailable} unsichtbare Platzierung(en) ohne verfügbares Modell wurden mit entfernt.`
+        : "Entfernt und gespeichert." });
       onRemoved?.();
     } catch (error) {
       setStatus({ tone: "error", text: adminPlacementMessage(error) });
@@ -112,7 +118,7 @@ export function RemovePlacedObjectButton({ placementRef, onRemoved }: { placemen
   return (
     <div className="space-y-1">
       <button type="button" data-testid="admin-glb-remove-placement" disabled={busy} onClick={() => void remove()}
-        className={`w-full py-2 rounded-lg text-[10px] uppercase tracking-widest border ${armed ? "border-red-400 bg-red-500/20 text-red-200" : "border-white/20 text-gray-200 hover:border-red-400"}`}>
+        className={`w-full min-h-11 py-2 rounded-lg text-[10px] uppercase tracking-widest border ${armed ? "border-red-400 bg-red-500/20 text-red-200" : "border-white/20 text-gray-200 hover:border-red-400"}`}>
         {busy ? "Entferne…" : armed ? "Wirklich entfernen?" : "Platziertes Objekt entfernen"}
       </button>
       {status && <p role={status.tone === "error" ? "alert" : "status"} data-testid="admin-glb-remove-status"
@@ -138,6 +144,8 @@ const typingTarget = () => ["INPUT", "TEXTAREA", "SELECT"].includes((document.ac
 
 function PlacementSession({ engineRef, containerRef }: Props) {
   const asset = useAdminStore(state => state.placementAsset);
+  // World model -> object placement; free NPC character -> NPC shell.
+  const kind = asset ? placementKindOfAsset(asset) ?? "object" : "object";
   const setPlacementAsset = useAdminStore(state => state.setPlacementAsset);
   const api = useAdminPlacementApi();
   const ghostRef = useRef<{ engine: MMOEngine; ghost: AdminPlacementGhost } | null>(null);
@@ -148,7 +156,7 @@ function PlacementSession({ engineRef, containerRef }: Props) {
   const rotationRef = useRef<0 | 1 | 2 | 3>(0);
   const scaleRef = useRef(1_000);
   const [placed, setPlaced] = useState(0);
-  const [status, setStatus] = useState<Status>({ tone: "info", text: "Bewege die Vorschau und platziere mit Klick oder Enter." });
+  const [status, setStatus] = useState<Status>({ tone: "info", text: "Tippe auf den Boden, wo es hin soll. Drehen und Größe mit den Knöpfen, dann „Setzen“." });
 
   // One ghost per engine; a renderer recovery creates a new engine and a new ghost.
   const ensureGhost = useCallback(() => {
@@ -200,7 +208,7 @@ function PlacementSession({ engineRef, containerRef }: Props) {
     setBusy(true);
     setStatus({ tone: "info", text: "Wird serverseitig gespeichert…" });
     try {
-      await commitAdminPlacement(api, input);
+      await commitAdminPlacement(api, input, undefined, kind);
       soundSynth.playUiSuccess();
       setPlaced(count => count + 1);
       setStatus({ tone: "ok", text: "Platziert und gespeichert. Bleibt auch nach Neustart erhalten." });
@@ -210,7 +218,7 @@ function PlacementSession({ engineRef, containerRef }: Props) {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [api, ensureGhost]);
+  }, [api, ensureGhost, kind]);
 
   // Keyboard: R rotate, +/- size, Enter place, Esc end. Movement keys stay with the game.
   useEffect(() => {
@@ -231,42 +239,59 @@ function PlacementSession({ engineRef, containerRef }: Props) {
     return () => window.removeEventListener("keydown", down, true);
   }, [rotate, stepScale, place, cancel]);
 
-  // Mouse: the preview follows the pointer; a click without dragging places.
-  // Touch keeps tap-to-move and places via the button, so a tap never places by accident.
+  // Touch (primary, tablets): a tap on the ground puts the preview there; "Setzen" places.
+  // Mouse (extra): the preview follows the pointer; a click without dragging places.
+  // Camera drags never move or place anything.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    let down: { x: number; y: number; mouse: boolean } | null = null;
+    let down: { x: number; y: number; type: string; button: number; time: number } | null = null;
     const move = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse") { ensureGhost()?.setPointer(null); return; }
+      if (event.pointerType !== "mouse") return;
       ensureGhost()?.setPointer({ x: event.clientX, y: event.clientY });
     };
-    const leave = () => ensureGhost()?.setPointer(null);
-    const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY, mouse: event.pointerType === "mouse" && event.button === 0 }; };
+    const leave = (event: PointerEvent) => { if (event.pointerType === "mouse") ensureGhost()?.setPointer(null); };
+    const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY, type: event.pointerType, button: event.button, time: performance.now() }; };
+    const pointerUp = (event: PointerEvent) => {
+      const start = down;
+      if (!start || start.type === "mouse") return;
+      down = null;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TOUCH_TAP_MAX_DISTANCE_PX || performance.now() - start.time > TOUCH_TAP_MAX_DURATION_MS) return;
+      const engine = engineRef.current;
+      const ghost = ensureGhost();
+      const point = engine?.projectTouchDestination?.(event.clientX, event.clientY);
+      if (!ghost || !point) return;
+      ghost.setPointer(null);
+      if (ghost.pinTo({ x: point.x, z: point.z })) setStatus({ tone: "info", text: "Vorschau steht hier. Drehen oder Größe ändern, dann „Setzen“ tippen." });
+      else setStatus({ tone: "error", text: "Zu weit weg. Tippe auf den Boden in deiner Nähe (max. 40 m)." });
+    };
     const click = (event: MouseEvent) => {
       const start = down;
+      if (!start || start.type !== "mouse") return;
       down = null;
-      if (!start?.mouse || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) return;
+      if (start.button !== 0 || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) return;
       void place();
     };
     container.addEventListener("pointermove", move);
     container.addEventListener("pointerleave", leave);
     container.addEventListener("pointerdown", pointerDown);
+    container.addEventListener("pointerup", pointerUp);
     container.addEventListener("click", click);
     return () => {
       container.removeEventListener("pointermove", move);
       container.removeEventListener("pointerleave", leave);
       container.removeEventListener("pointerdown", pointerDown);
+      container.removeEventListener("pointerup", pointerUp);
       container.removeEventListener("click", click);
     };
-  }, [containerRef, ensureGhost, place]);
+  }, [containerRef, engineRef, ensureGhost, place]);
 
   if (!asset) return null;
   return (
     <div data-testid="admin-placement-hud" role="toolbar" aria-label="Objekt platzieren"
-      className="fixed bottom-24 left-1/2 z-[1002] w-[min(92vw,30rem)] -translate-x-1/2 rounded-xl border border-emerald-500/40 bg-black/85 p-3 text-xs text-emerald-50 shadow-2xl backdrop-blur">
+      className="fixed bottom-[168px] left-1/2 z-[1002] w-[min(92vw,30rem)] -translate-x-1/2 rounded-xl border border-emerald-500/40 bg-black/85 p-3 text-xs text-emerald-50 shadow-2xl backdrop-blur">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="truncate font-bold">Platzieren: {asset.displayName}</span>
+        <span className="truncate font-bold">{kind === "npc-shell" ? "NPC-Hülle platzieren" : "Platzieren"}: {asset.displayName}</span>
         <span className="font-mono text-[10px] text-emerald-300" data-testid="admin-placement-transform">{rotation * 90}° · {Math.round(scale / 10)} %{placed ? ` · ${placed} gesetzt` : ""}</span>
       </div>
       <div className="grid grid-cols-5 gap-1.5">

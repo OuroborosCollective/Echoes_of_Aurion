@@ -157,4 +157,49 @@ describe("block-game style admin placement session", () => {
     expect(nextPlacementScale(1_100, 1)).toBe(1_250);
     expect(nextPlacementScale(1_100, -1)).toBe(1_000);
   });
+
+  // Owner plays only on a touchscreen tablet: tap on the ground, adjust with buttons, "Setzen".
+  it("puts the preview where the admin taps on a tablet and places it there with the Setzen button", async () => {
+    useAdminStore.setState({ placementAsset: tower });
+    const { container, engine } = mount(fakeEngine({ x: 6.6, z: -3.1 }));
+    await ghostReady();
+    fireEvent.pointerDown(container, { clientX: 200, clientY: 300, pointerType: "touch" });
+    fireEvent.pointerUp(container, { clientX: 203, clientY: 302, pointerType: "touch" });
+    expect(engine.projectTouchDestination).toHaveBeenLastCalledWith(203, 302);
+    expect(screen.getByTestId("admin-placement-status").textContent).toContain("Vorschau steht hier");
+    expect(fixture.plan).not.toHaveBeenCalled(); // a tap never places by itself
+    fireEvent.click(screen.getByRole("button", { name: /Drehen/ }));
+    fireEvent.click(screen.getByTestId("admin-placement-confirm"));
+    await waitFor(() => expect(fixture.apply).toHaveBeenCalledTimes(1));
+    const draft = WorldDesignDraftSchema.parse(fixture.plan.mock.calls[0]![0].draft);
+    const [p] = draft.placements;
+    const { joinWorldChunkPositionMm } = await import("@shared/worldChunkProtocol");
+    expect(joinWorldChunkPositionMm({ coordinate: { x: p!.chunkX, z: p!.chunkZ }, localPositionMm: { x: p!.xMm, z: p!.zMm } })).toEqual({ x: 6_500, z: -3_000 });
+    expect(p!.rotationQuarterTurns).toBe(1);
+  });
+
+  it("treats a touch drag as camera movement and refuses a tap beyond reach", async () => {
+    useAdminStore.setState({ placementAsset: tower });
+    const { container, engine } = mount(fakeEngine({ x: 90, z: 0 }));
+    await ghostReady();
+    engine.projectTouchDestination.mockClear();
+    fireEvent.pointerDown(container, { clientX: 100, clientY: 100, pointerType: "touch" });
+    fireEvent.pointerUp(container, { clientX: 160, clientY: 100, pointerType: "touch" });
+    expect(engine.projectTouchDestination).not.toHaveBeenCalled();
+    fireEvent.pointerDown(container, { clientX: 100, clientY: 100, pointerType: "touch" });
+    fireEvent.pointerUp(container, { clientX: 100, clientY: 100, pointerType: "touch" });
+    expect(screen.getByRole("alert").textContent).toContain("Zu weit weg");
+  });
+
+  it("keeps every control reachable by touch: buttons for rotate, size, place and finish, at least 44 px", async () => {
+    useAdminStore.setState({ placementAsset: tower });
+    mount();
+    await ghostReady();
+    const toolbar = screen.getByTestId("admin-placement-hud");
+    const buttons = [...toolbar.querySelectorAll("button")];
+    expect(buttons.map(button => button.getAttribute("aria-label"))).toEqual(["Drehen (R)", "Kleiner (−)", "Größer (+)", "Hier platzieren (Enter)", "Platzieren beenden (Esc)"]);
+    expect(buttons.every(button => button.className.includes("min-h-11"))).toBe(true);
+    // Above the touch movement pad and action buttons (the game's prompt lane).
+    expect(toolbar.className).toContain("bottom-[168px]");
+  });
 });

@@ -1,6 +1,6 @@
 import { glbCatalogEntrySchema, type GlbCatalogEntry } from "@shared/glbImportContract";
 import type { AuthoringReceipt, WorldDesignDraft, WorldDesignReadback } from "@shared/aurionAuthoringContract";
-import { buildPlacementDraft, buildRemovalPlan, isPlaceableWorldAsset, type AdminPlacementInput } from "@shared/adminPlacementPlan";
+import { buildPlacementDraft, buildRemovalPlan, isPlaceableAssetFor, placementKindOfAsset, type AdminPlacementInput, type AdminPlacementKind } from "@shared/adminPlacementPlan";
 import { WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
 
 /** The authoring catalog readback (`trpc.aurionAuthoring.catalog`) fields placement needs. */
@@ -22,7 +22,7 @@ export type AdminPlacementApi = Readonly<{
 const STALE = ["AUTHORING_GLB_CATALOG_CHANGED", "AUTHORING_WORLD_PREDECESSOR_CHANGED", "AUTHORING_WORLD_PLAN_CHANGED", "AUTHORING_WORLD_VERSION_CONFLICT", "AUTHORING_WORLD_ADMIN_GROUP_RETIRED"];
 
 export const ADMIN_PLACEMENT_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
-  ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE: "Dieses Modell ist kein freigegebenes Welt-Modell (Arena/Architektur mit Welt-Zweck, nicht zugewiesen) und kann nicht frei platziert werden.",
+  ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE: "Dieses Modell kann nicht frei platziert werden. Erlaubt sind freigegebene Welt-Modelle (Arena/Architektur mit Welt-Zweck) und freie NPC-Figuren (NPC-Fallback, nicht zugewiesen).",
   ADMIN_PLACEMENT_ASSET_MANIFEST_INVALID: "Die Modell-Daten im Katalog sind unvollständig. Bitte das Modell neu importieren.",
   ADMIN_PLACEMENT_NOT_ADMIN_PLACED: "Nur selbst platzierte Objekte können entfernt werden. Andere Welt-Objekte kannst du austauschen.",
   ADMIN_PLACEMENT_NOT_FOUND: "Dieses Objekt existiert nicht mehr. Bitte erneut anvisieren.",
@@ -53,15 +53,22 @@ function isStale(error: unknown): boolean {
   return STALE.some(key => message.includes(key));
 }
 
-function requirePlaceable(catalog: PlacementCatalog, assetId: string) {
+/** Whether a placed asset is still in the catalog with a free-placement purpose (either kind). */
+function availability(catalog: PlacementCatalog): (assetId: string) => boolean {
+  return assetId => catalog.assets.some(entry => entry.assetId === assetId && placementKindOfAsset(entry) !== null);
+}
+
+function requirePlaceable(catalog: PlacementCatalog, assetId: string, kind?: AdminPlacementKind) {
   const asset = catalog.assets.find(entry => entry.assetId === assetId);
-  if (!asset || !isPlaceableWorldAsset(asset)) throw new Error("ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE");
+  const allowed = asset && (kind ? isPlaceableAssetFor(kind, asset) : placementKindOfAsset(asset) !== null);
+  if (!asset || !allowed) throw new Error("ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE");
   return asset;
 }
 
 /** The runtime catalog entry of a placeable model, validated like every rendered catalog entry. */
 export function placeableEntry(catalog: PlacementCatalog, assetId: string): GlbCatalogEntry {
   const parsed = glbCatalogEntrySchema.safeParse({ ...requirePlaceable(catalog, assetId), equipmentSlot: null });
+  // The placement kind follows from the asset: world model -> object, NPC character -> NPC shell.
   if (!parsed.success) throw new Error("ADMIN_PLACEMENT_ASSET_MANIFEST_INVALID");
   return parsed.data;
 }
@@ -95,11 +102,11 @@ function announce(): void {
  * then apply with the plan hash (human confirmed by the explicit place action).
  * Every client then reloads the authored world.
  */
-export async function commitAdminPlacement(api: AdminPlacementApi, input: AdminPlacementInput, random?: () => number) {
+export async function commitAdminPlacement(api: AdminPlacementApi, input: AdminPlacementInput, random?: () => number, kind: AdminPlacementKind = "object") {
   const result = await withOneRebuild(async () => {
     const catalog = await api.catalog();
-    requirePlaceable(catalog, input.assetId);
-    const draft = buildPlacementDraft(catalog.world, catalog.glbCatalogRevision, input, random);
+    requirePlaceable(catalog, input.assetId, kind);
+    const draft = buildPlacementDraft(catalog.world, catalog.glbCatalogRevision, input, random, kind, availability(catalog));
     const applied = await applyDraft(api, catalog, draft);
     return { receipt: applied.receipt, designKey: draft.designKey, placementKey: draft.placements[draft.placements.length - 1]!.placementKey };
   });
@@ -111,13 +118,13 @@ export async function commitAdminPlacement(api: AdminPlacementApi, input: AdminP
 export async function commitAdminRemoval(api: AdminPlacementApi, designKey: string, placementKey: string) {
   const result = await withOneRebuild(async () => {
     const catalog = await api.catalog();
-    const removal = buildRemovalPlan(catalog.world, catalog.glbCatalogRevision, designKey, placementKey);
+    const removal = buildRemovalPlan(catalog.world, catalog.glbCatalogRevision, designKey, placementKey, availability(catalog));
     if (removal.kind === "retire") {
       const retired = await api.retire({ designKey: removal.designKey, expectedDesignHash: removal.expectedDesignHash, confirmation: "RETIRE_ADMIN_PLACEMENTS" });
-      return { receipt: retired.receipt, retiredGroup: true };
+      return { receipt: retired.receipt, retiredGroup: true, droppedUnavailable: removal.droppedUnavailable };
     }
     const applied = await applyDraft(api, catalog, removal.draft);
-    return { receipt: applied.receipt, retiredGroup: false };
+    return { receipt: applied.receipt, retiredGroup: false, droppedUnavailable: removal.droppedUnavailable };
   });
   announce();
   return result;

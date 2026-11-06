@@ -182,7 +182,7 @@ describe("free placement and removal from the admin menu", () => {
     useAdminStore.setState({ activeModelId: "glb_sword" });
     open();
     fireEvent.click(screen.getByTestId("admin-glb-place"));
-    expect((await screen.findByTestId("admin-glb-place-status")).textContent).toContain("kein freigegebenes Welt-Modell");
+    expect((await screen.findByTestId("admin-glb-place-status")).textContent).toContain("kann nicht frei platziert werden");
     expect(useAdminStore.getState().placementAsset).toBeNull();
   });
 
