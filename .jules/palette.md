@@ -28,3 +28,6 @@
 ## 2024-10-17 - Checkpoint Button Keyboard Focus and Screen Reader Context
 **Learning:** List items mapped as buttons (like the checkpoint replay list in `CausalStudioDashboard`) often inherit basic layout classes but forget to define explicit focus states or aria labels, leaving keyboard users unaware of their focus position and screen readers without clear contextual action descriptions.
 **Action:** When adding interactive lists built with buttons, always ensure `focus-visible:ring-2`, `focus-visible:outline-none`, and an `aria-label` are present to make the action fully accessible to all users.
+## 2024-11-06 - [aria-busy and title for loading indicators]
+**Learning:** Adding dynamic loading states to refresh buttons (such as in dashboards or panels) significantly improves UX and accessibility.
+**Action:** When working on buttons with asynchronous operations (e.g., refreshing data), ensure they include `aria-busy={isFetching}` and a contextual `title` attribute (e.g., `title={isFetching ? "Ladevorgang läuft..." : undefined}`) alongside `disabled` states to properly inform both screen reader users and sighted users.
