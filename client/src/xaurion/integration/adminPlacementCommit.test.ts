@@ -12,6 +12,8 @@ const tower = { assetId: "glb_tower", sha256: sha, displayName: "Turm", purpose:
   subcategory: "building", normalization, storageUrl: `/api/assets/glb/${sha}.glb` };
 const sword = { ...tower, assetId: "glb_sword", assetType: "weapon" as const, purpose: "auto" };
 const assigned = { ...tower, assetId: "glb_house_assigned", targetKey: "village.house" };
+const ranger = { ...tower, assetId: "glb_ranger", assetType: "character" as never, purpose: "npc-fallback", subcategory: null };
+const hero = { ...ranger, assetId: "glb_hero", purpose: "player-public" };
 
 function world(designs: WorldDesignReadback["designs"] = []): WorldDesignReadback {
   return { schemaVersion: "aurion.world-design.v1", revision: "b".repeat(64), designs };
@@ -34,7 +36,7 @@ function fakeApi(catalogs: PlacementCatalog[], failures: Error[] = [], serverHea
   return { api, calls };
 }
 const catalog = (designs: WorldDesignReadback["designs"] = [], revision = "a".repeat(64)): PlacementCatalog =>
-  ({ glbCatalogRevision: revision, assets: [tower, sword, assigned], world: world(designs) });
+  ({ glbCatalogRevision: revision, assets: [tower, sword, assigned, ranger, hero], world: world(designs) });
 const input = { assetId: "glb_tower", worldXMm: 12_250, worldZMm: -3_500, rotationQuarterTurns: 1 as const, scalePermille: 2_000 };
 
 afterEach(() => vi.restoreAllMocks());
@@ -121,7 +123,7 @@ describe("admin placement persistence flow", () => {
   });
 
   it("gives the admin readable messages instead of raw server codes", () => {
-    expect(adminPlacementMessage(new Error("ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE"))).toContain("kein freigegebenes Welt-Modell");
+    expect(adminPlacementMessage(new Error("ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE"))).toContain("kann nicht frei platziert werden");
     expect(adminPlacementMessage(new Error("AUTHORING_WORLD_PREDECESSOR_CHANGED"))).toContain("gleichzeitig geändert");
     expect(adminPlacementMessage(new Error("AUTHORING_WORLD_ACTIVE_LIMIT"))).toContain("64");
     expect(adminPlacementMessage(new Error("Failed query: select * from `users` where id = ? params: 1"))).toBe("Speichern fehlgeschlagen. Bitte später erneut versuchen.");
@@ -134,5 +136,19 @@ describe("admin placement persistence flow", () => {
     expect(entry).toMatchObject({ assetId: "glb_tower", equipmentSlot: null, purpose: "world-environment" });
     expect(() => placeableEntry(catalog(), "glb_tower")).toThrow("ADMIN_PLACEMENT_ASSET_MANIFEST_INVALID");
     expect(() => placeableEntry(catalog(), "glb_sword")).toThrow("ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE");
+  });
+
+  // Stage B: NPC shells reuse the same plan -> confirmed apply -> receipt path.
+  it("places an NPC shell into an npc.shells group and keeps both kinds apart", async () => {
+    const { api, calls } = fakeApi([catalog()]);
+    const result = await commitAdminPlacement(api, { ...input, assetId: "glb_ranger" }, () => 0.75, "npc-shell");
+    expect(calls).toEqual(["catalog", "plan", "apply"]);
+    expect(result.designKey).toMatch(/^npc\.shells\.[a-f0-9]{8}$/);
+    expect(WorldDesignDraftSchema.parse(api.plan.mock.calls[0]![0].draft)).toMatchObject({ title: "NPC-Hüllen", placements: [{ assetId: "glb_ranger" }] });
+    for (const [assetId, kind] of [["glb_ranger", "object"], ["glb_tower", "npc-shell"], ["glb_hero", "npc-shell"]] as const) {
+      const refused = fakeApi([catalog()]);
+      await expect(commitAdminPlacement(refused.api, { ...input, assetId }, undefined, kind)).rejects.toThrow("ADMIN_PLACEMENT_ASSET_NOT_PLACEABLE");
+      expect(refused.calls).toEqual(["catalog"]);
+    }
   });
 });

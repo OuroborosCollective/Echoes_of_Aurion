@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
-import { snapToPlacementGrid, type AdminPlacementInput } from "@shared/adminPlacementPlan";
+import { isNpcShellAsset, snapToPlacementGrid, type AdminPlacementInput } from "@shared/adminPlacementPlan";
 import { glbManager } from "../core/GLBModelManager";
 import { releaseGlbTree } from "../core/GlbModelLease";
 import { fitWorldVisual } from "./UploadedWorldCatalogProjection";
+import { loadNpcShellActor, npcShellScale } from "./NpcShellProjection";
+import type { AnimatedGlbActor } from "../core/AnimatedGlbActor";
 
 /** Farthest placement from the player (the authored projection renders around the player). */
 export const ADMIN_PLACEMENT_MAX_DISTANCE_M = 40;
@@ -29,11 +31,15 @@ export class AdminPlacementGhost {
   readonly root = new THREE.Group();
   private asset: GlbCatalogEntry | null = null;
   private model: THREE.Object3D | null = null;
+  /** Set when the previewed model is an NPC shell (animated character, idle pose). */
+  private actor: AnimatedGlbActor | null = null;
   private readonly ghostMaterials: THREE.Material[] = [];
   private rotationQuarterTurns: 0 | 1 | 2 | 3 = 0;
   private scalePermille = 1_000;
   private target: { x: number; z: number } | null = null;
   private pointer: { x: number; y: number } | null = null;
+  /** Ground point the admin tapped (touch): the preview stays there until the next tap. */
+  private pinned: { x: number; z: number } | null = null;
   private generation = 0;
   private disposed = false;
 
@@ -52,8 +58,20 @@ export class AdminPlacementGhost {
     this.clearModel();
     this.asset = asset;
     if (!asset || this.disposed) return;
-    const loaded = await glbManager.loadStaticLodFamily(asset);
-    if (this.disposed || generation !== this.generation) { releaseGlbTree(loaded.scene); return; }
+    let actor: AnimatedGlbActor | null = null;
+    let scene: THREE.Group;
+    if (isNpcShellAsset(asset)) {
+      // NPC shells: the same idle character actor as the shell projection.
+      actor = await loadNpcShellActor(asset);
+      if (this.disposed || generation !== this.generation) { actor.dispose(); return; }
+      scene = new THREE.Group();
+      scene.add(actor.group);
+    } else {
+      const loaded = await glbManager.loadStaticLodFamily(asset);
+      if (this.disposed || generation !== this.generation) { releaseGlbTree(loaded.scene); return; }
+      scene = loaded.scene;
+    }
+    const loaded = { scene };
     loaded.scene.traverse(node => {
       const mesh = node as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -70,6 +88,7 @@ export class AdminPlacementGhost {
       mesh.raycast = () => undefined; // never a raycast target, including for the admin cursor
     });
     this.model = loaded.scene;
+    this.actor = actor;
     this.root.add(loaded.scene);
     this.layout();
     this.update();
@@ -88,11 +107,25 @@ export class AdminPlacementGhost {
     if (!this.model || !this.asset) return;
     this.model.scale.setScalar(1);
     this.model.position.set(0, 0, 0);
+    if (this.actor) { this.model.scale.setScalar(npcShellScale(this.scalePermille)); return; }
     const fit = fitWorldVisual(this.model, this.asset, this.scalePermille);
     if (!fit) return;
     this.model.scale.setScalar(fit.scale);
     this.model.position.set(-fit.center.x * fit.scale, -fit.bounds.min.y * fit.scale, -fit.center.z * fit.scale);
   }
+
+  /**
+   * Touch placement: pin the preview to a tapped ground point (world metres). Returns
+   * false (and keeps the previous pin) when the point is beyond reach.
+   */
+  pinTo(point: { x: number; z: number } | null): boolean {
+    if (point && (!Number.isFinite(point.x) || !Number.isFinite(point.z) || !this.withinReach(point))) return false;
+    this.pinned = point ? { x: point.x, z: point.z } : null;
+    this.update();
+    return true;
+  }
+
+  get isPinned(): boolean { return this.pinned !== null; }
 
   /** Mouse position over the viewport (client pixels), or null for view-direction aiming. */
   setPointer(pointer: { x: number; y: number } | null): void { this.pointer = pointer; }
@@ -108,6 +141,7 @@ export class AdminPlacementGhost {
    * otherwise a point in front of the player.
    */
   aimPoint(): { x: number; z: number } | null {
+    if (this.pinned && !this.pointer) return this.withinReach(this.pinned) ? this.pinned : null;
     if (this.pointer && this.engine.projectTouchDestination) {
       const hit = this.engine.projectTouchDestination(this.pointer.x, this.pointer.y);
       // An active mouse cursor must never silently select a different location
@@ -174,8 +208,9 @@ export class AdminPlacementGhost {
   private clearModel(): void {
     if (this.model) {
       this.model.removeFromParent();
-      releaseGlbTree(this.model);
+      if (this.actor) this.actor.dispose(); else releaseGlbTree(this.model);
       this.model = null;
+      this.actor = null;
     }
     for (const material of this.ghostMaterials.splice(0)) material.dispose();
     this.target = null;

@@ -9,9 +9,9 @@ import { WorldDesignDraftSchema, WorldDesignPlanSchema, type WorldDesignDraft } 
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
 import { applyWorldDesign, authoringHash, planWorldDesign, readActiveWorldDesign, recoverWorldAuthoringReceipt, retireAdminPlacementDesign } from "./aurionAuthoringPersistence";
-import { buildPlacementDraft, buildRemovalPlan } from "../shared/adminPlacementPlan";
+import { buildPlacementDraft, buildRemovalPlan, placementKindOfAsset } from "../shared/adminPlacementPlan";
 import { buildGlbImportPlan } from "./glbImportPlan";
-import { testGlb } from "./glbImportFixtures";
+import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
 import { glbImportStore } from "./glbImportStore";
 import { reviewPlayerGlbSubmission } from "./db";
 import * as storage from "./storage";
@@ -36,6 +36,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
   let otherAdmin = 0;
   let assetId = "";
   let assetHash = "";
+  let shellAssetId = "";
   let catalogRevision = "";
   let root = "";
   let store: ReturnType<typeof glbImportStore>;
@@ -81,6 +82,12 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
       purpose: "world-environment", expectedPlanSha256: upload.planSha256 });
     assetId = asset.assetId;
     assetHash = asset.sha256;
+    // A free NPC figure for NPC shells (stage B).
+    const shellBase64 = testAnimatedPlayerGlb("Shell_Character_Ranger").toString("base64");
+    const shellPlan = await buildGlbImportPlan(shellBase64, "npc-fallback", "Shell_Character_Ranger.glb");
+    const shellAsset = await store.ingest(admin, { displayName: "Isolated shell ranger", fileName: "Shell_Character_Ranger.glb", contentBase64: shellBase64,
+      purpose: "npc-fallback", expectedPlanSha256: shellPlan.planSha256 });
+    shellAssetId = shellAsset.assetId;
     catalogRevision = (await store.catalog()).revision;
   }, 45_000);
 
@@ -463,7 +470,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     expect(remaining.placements.map(p => p.placementKey)).toEqual([group.placements[1]!.placementKey]);
 
     const last = buildRemovalPlan(removed.readback, catalogRevision, group.designKey, remaining.placements[0]!.placementKey);
-    expect(last).toEqual({ kind: "retire", designKey: group.designKey, expectedDesignHash: remaining.designHash });
+    expect(last).toEqual({ kind: "retire", designKey: group.designKey, expectedDesignHash: remaining.designHash, droppedUnavailable: 0 });
     if (last.kind !== "retire") throw new Error("expected retirement");
     await expect(retireAdminPlacementDesign(admin, last.designKey, "f".repeat(64))).rejects.toThrow("AUTHORING_WORLD_PREDECESSOR_CHANGED");
     const retired = await retireAdminPlacementDesign(admin, last.designKey, last.expectedDesignHash);
@@ -489,6 +496,67 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
     const freshHead = (await readActiveWorldDesign()).designs.find(design => design.designKey === fresh.draft.designKey)!;
     await expect(retireAdminPlacementDesign(admin, freshHead.designKey, freshHead.designHash)).rejects.toThrow("AUTHORING_ADMIN_REQUIRED");
     expect((await readActiveWorldDesign()).designs.some(design => design.designKey === fresh.draft.designKey)).toBe(true);
+  }, 30_000);
+
+  // Stage B: NPC shells are World Designs `npc.shells.*` holding only free NPC figures.
+  it("stores NPC shells only in shell groups, only with free NPC figures, and retires them like objects", async () => {
+    const shellInput = { assetId: shellAssetId, worldXMm: 4_000, worldZMm: -1_000, rotationQuarterTurns: 1 as const, scalePermille: 1_000 };
+    const shellDraft = buildPlacementDraft(null, catalogRevision, shellInput, () => 0.4, "npc-shell");
+    expect(shellDraft.designKey).toMatch(/^npc\.shells\./);
+    const applied = await applyWorldDesign(admin, shellDraft, (await planWorldDesign(shellDraft)).planHash);
+    const group = applied.readback.designs.find(design => design.designKey === shellDraft.designKey)!;
+    expect(group.placements).toEqual([expect.objectContaining({ assetId: shellAssetId, rotationQuarterTurns: 1 })]);
+    // A prop in a shell group, a figure in an object group or in a regular World Design: refused.
+    await expect(planWorldDesign(buildPlacementDraft(null, catalogRevision, { ...shellInput, assetId }, () => 0.6, "npc-shell"))).rejects.toThrow("AUTHORING_WORLD_ASSET_NOT_APPROVED");
+    await expect(planWorldDesign(buildPlacementDraft(null, catalogRevision, shellInput, () => 0.7, "object"))).rejects.toThrow("AUTHORING_WORLD_ASSET_NOT_APPROVED");
+    const regular = draft("fixture-figure");
+    regular.placements = [{ ...regular.placements[0]!, assetId: shellAssetId }];
+    await expect(planWorldDesign(regular)).rejects.toThrow("AUTHORING_WORLD_ASSET_NOT_APPROVED");
+    // Retire the shell group; a stale tab cannot revive it.
+    const retired = await retireAdminPlacementDesign(admin, group.designKey, group.designHash);
+    expect(retired.readback.designs.some(design => design.designKey === group.designKey)).toBe(false);
+    const stale = buildPlacementDraft(applied.readback, catalogRevision, { ...shellInput, worldXMm: 6_000 }, () => 0.8, "npc-shell");
+    expect(stale.designKey).toBe(group.designKey);
+    await expect(planWorldDesign(stale)).rejects.toThrow("AUTHORING_WORLD_ADMIN_GROUP_RETIRED");
+  }, 30_000);
+
+  // Derived (stage B review): a model withdrawn from the catalog made the server reject
+  // every new version of its group, and placing always targeted that group.
+  it("keeps placing and removing possible after a placed model is withdrawn from the catalog", async () => {
+    const crateBase64 = testGlb("Aurion_Crate_Prop").toString("base64");
+    const cratePlan = await buildGlbImportPlan(crateBase64, "world-environment", "Aurion_Crate_Prop.glb");
+    const crate = await store.ingest(admin, { displayName: "Isolated crate", fileName: "Aurion_Crate_Prop.glb", contentBase64: crateBase64, purpose: "world-environment", expectedPlanSha256: cratePlan.planSha256 });
+    try {
+      catalogRevision = (await store.catalog()).revision;
+      const place = async (readback: Awaited<ReturnType<typeof readActiveWorldDesign>> | null, asset: string, x: number, available?: (id: string) => boolean) => {
+        const next = buildPlacementDraft(readback, catalogRevision, { assetId: asset, worldXMm: x, worldZMm: 0, rotationQuarterTurns: 0, scalePermille: 1_000 }, undefined, "object", available);
+        return { next, applied: await applyWorldDesign(admin, next, (await planWorldDesign(next)).planHash) };
+      };
+      const first = await place(null, assetId, 1_000);
+      const second = await place(first.applied.readback, crate.assetId, 2_000);
+      expect(second.next.designKey).toBe(first.next.designKey);
+      await store.review(admin, { assetId: crate.assetId, status: "archived" });
+      const catalog = await store.catalog();
+      catalogRevision = catalog.revision;
+      const available = (id: string) => catalog.entries.some(entry => entry.assetId === id && placementKindOfAsset(entry) !== null);
+      const readback = await readActiveWorldDesign();
+      // Without availability the draft targets the blocked group, and the server refuses it.
+      const blocked = buildPlacementDraft(readback, catalogRevision, { assetId, worldXMm: 3_000, worldZMm: 0, rotationQuarterTurns: 0, scalePermille: 1_000 });
+      expect(blocked.designKey).toBe(first.next.designKey);
+      await expect(planWorldDesign(blocked)).rejects.toThrow("AUTHORING_WORLD_ASSET_NOT_APPROVED");
+      // With availability it opens a fresh group and succeeds.
+      const third = await place(readback, assetId, 3_000, available);
+      expect(third.next.designKey).not.toBe(first.next.designKey);
+      // Removing the barrel from the blocked group also clears the invisible crate: the group retires.
+      const removal = buildRemovalPlan(third.applied.readback, catalogRevision, first.next.designKey, first.next.placements[0]!.placementKey, available);
+      expect(removal).toMatchObject({ kind: "retire", droppedUnavailable: 1 });
+      if (removal.kind !== "retire") throw new Error("expected retirement");
+      const retired = await retireAdminPlacementDesign(admin, removal.designKey, removal.expectedDesignHash);
+      expect(retired.readback.designs.map(design => design.designKey)).toEqual([third.next.designKey]);
+    } finally {
+      await store.review(admin, { assetId: crate.assetId, status: "approved" }).catch(() => undefined);
+      catalogRevision = (await store.catalog()).revision;
+    }
   }, 30_000);
 
   it("serializes a retirement with a concurrent addition to the same group", async () => {

@@ -661,6 +661,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/components/AdminNpcShellPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/components/AdminPlacement.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
@@ -1216,6 +1222,12 @@
     },
     {
       "path": "client/src/xaurion/integration/NpcFallbackProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcShellProjection.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
       "role": "SUPPORT"

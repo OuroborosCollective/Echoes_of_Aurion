@@ -10,6 +10,7 @@ import { actorLodBand, actorUsesSkinnedVisual, emptyActorLodCounts, shouldUpdate
 import { glbManager } from "../core/GLBModelManager";
 import { assetTier, type AssetTier } from "@shared/glbPresentationBudget";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
+import { NpcShellProjection } from "./NpcShellProjection";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
 import { EquipmentCatalogProjection } from "./EquipmentCatalogProjection";
@@ -56,6 +57,7 @@ export class NpcFallbackProjection {
   private readonly pending = new Set<string>();
   private readonly failures = new Map<string, Readonly<{ reason: string; tier: AssetTier; attempts: number }>>();
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
+  private readonly npcShells: NpcShellProjection;
   private readonly remotePublic: RemotePublicAppearanceProjection;
   private readonly equipment: EquipmentCatalogProjection;
   private readonly trees: TreeCatalogReplacement;
@@ -77,6 +79,7 @@ export class NpcFallbackProjection {
 
   constructor(private readonly engine: MMOEngine) {
     this.uploadedWorld = new UploadedWorldCatalogProjection(engine);
+    this.npcShells = new NpcShellProjection(engine);
     this.remotePublic = new RemotePublicAppearanceProjection(engine);
     this.equipment = new EquipmentCatalogProjection(engine);
     this.trees = new TreeCatalogReplacement(engine);
@@ -110,13 +113,18 @@ export class NpcFallbackProjection {
         this.catalog = catalog;
         this.failures.clear();
         this.uploadedWorld.setCatalog(catalog);
+        this.npcShells.setCatalog(catalog);
         this.remotePublic.setCatalog(catalog);
         this.equipment.setCatalog(catalog);
         this.trees.setCatalog(catalog);
         this.mobs.setCatalog(catalog);
         try {
           const worldResponse = await fetch("/api/game/world-design", { credentials: "same-origin" });
-          if (worldResponse.ok) this.uploadedWorld.setWorldDesign(WorldDesignReadbackSchema.parse(await worldResponse.json()));
+          if (worldResponse.ok) {
+            const worldDesign = WorldDesignReadbackSchema.parse(await worldResponse.json());
+            this.uploadedWorld.setWorldDesign(worldDesign);
+            this.npcShells.setWorldDesign(worldDesign);
+          }
         } catch {
           // Retain the last confirmed world-design manifest through transient failures.
         }
@@ -307,6 +315,7 @@ export class NpcFallbackProjection {
     this.mixerUpdatesLastFrame = mixerUpdates;
     this.mixerUpdatesTotal += mixerUpdates;
     this.uploadedWorld.update();
+    this.npcShells.update(frameDelta);
     this.trees.update(delta);
     this.mobs.update(delta);
     this.remotePublic.update(delta, logicalTick);
@@ -358,7 +367,7 @@ export class NpcFallbackProjection {
     });
   }
 
-  uploadedWorldEvidence() { return { ...this.uploadedWorld.evidence(), treeReplacements: this.trees.evidence(), mobReplacements: this.mobs.evidence() }; }
+  uploadedWorldEvidence() { return { ...this.uploadedWorld.evidence(), treeReplacements: this.trees.evidence(), mobReplacements: this.mobs.evidence(), npcShells: this.npcShells.evidence() }; }
   remotePublicEvidence() { return this.remotePublic.evidence(); }
   equipmentEvidence() { return this.equipment.evidence(); }
 
@@ -369,6 +378,7 @@ export class NpcFallbackProjection {
     this.equipment.dispose();
     this.remotePublic.dispose();
     this.uploadedWorld.dispose();
+    this.npcShells.dispose();
     this.trees.dispose();
     this.mobs.dispose();
     for (const npcId of [...this.projected.keys()]) this.restoreNpc(npcId);

@@ -27,7 +27,7 @@ import {
   recoverWorldAuthoringReceipt,
   retireAdminPlacementDesign,
 } from "../aurionAuthoringPersistence";
-import { ADMIN_PLACEMENT_DESIGN } from "../../shared/adminPlacementPlan";
+import { placementKindOfDesign } from "../../shared/adminPlacementPlan";
 import { withDomainErrors } from "../domainErrorBoundary";
 
 async function proposeWorldForSession(actorUserId: number, input: DesignerRequest) {
@@ -149,7 +149,7 @@ export const aurionAuthoringRouter = router({
   // Removing the last admin-placed object retires its group (designs cannot be empty).
   worldRetireAdminPlacements: adminProcedure
     .input(z.object({
-      designKey: z.string().regex(ADMIN_PLACEMENT_DESIGN),
+      designKey: z.string().max(40).refine(value => placementKindOfDesign(value) !== null, "ADMIN_PLACEMENT_GROUP_REQUIRED"),
       expectedDesignHash: z.string().regex(/^[a-f0-9]{64}$/),
       confirmation: z.literal("RETIRE_ADMIN_PLACEMENTS"),
     }).strict())
