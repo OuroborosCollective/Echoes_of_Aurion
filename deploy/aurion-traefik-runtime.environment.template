@@ -9,4 +9,6 @@ TRAEFIK_CERTRESOLVER=letsencrypt
 # Enable only after provisioning the protected feed/editor files. The release
 # retains OIDC, schema, image and receipt gates. No gameplay writer is enabled.
 AURION_GODOT_FEED_ENABLED=0
+# Server-owned cold-start activation, not an extra tick source.
+AURION_ALWAYS_ON_WORLD_ENABLED=1
 

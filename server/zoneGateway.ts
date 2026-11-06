@@ -128,7 +128,54 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=glob
     bootSettlement=settlement;
     return settlement;
   };
-  return{registry,releaseOrphanedLeasesAtBoot,settleZonesAtBoot,close:async()=>{closing=true;clearInterval(tickTimer);
+  // Only the canonical server may activate a recovered zone; no dummy player or
+  // spectator commands ever enter the authoritative intent queue.
+  type AlwaysOnStatus = "not_run" | "pending" | "active" | "failed" | "stopped";
+  let alwaysOnStatus: AlwaysOnStatus = "not_run";
+  let alwaysOnCode: string | null = null;
+  let alwaysOnZoneIds: readonly ZoneId[] = [];
+  const readbackAlwaysOn = () => Object.freeze({
+    schema: "aurion.always-on-zone.v1" as const,
+    status: alwaysOnStatus,
+    code: alwaysOnCode,
+    zoneIds: Object.freeze([...alwaysOnZoneIds]),
+    activatedZoneCount: alwaysOnZoneIds.filter(id => registry.find(id) !== undefined).length,
+    // Operational bootstrap state only. Durable receipts remain separate proof.
+    worldProjectionEvidence: false,
+  });
+  const activatePersistentZonesAtBoot = (zoneIds: readonly ZoneId[]) => {
+    if (closing || alwaysOnStatus !== "not_run") throw new Error("ZONE_ALWAYS_ON_REENTRANT");
+    alwaysOnStatus = "pending";
+    alwaysOnZoneIds = [...zoneIds];
+    const settled = settleZonesAtBoot(zoneIds);
+    const activated = settled.then(async health => {
+      if (health.bootSettlement !== "settled") {
+        alwaysOnStatus = "failed";
+        alwaysOnCode = health.bootSettlementCode ?? "ZONE_BOOT_SETTLEMENT_FAILED";
+        return readbackAlwaysOn();
+      }
+      for (const zoneId of zoneIds) {
+        if (closing) { alwaysOnStatus = "stopped"; return readbackAlwaysOn(); }
+        // Uses the same checked persisted-head recovery as a real ticket join.
+        // A concurrent authorized join shares the in-flight recovery.
+        await registry.getOrRecover(zoneId, recoverZone, () => !closing);
+      }
+      if (closing) { alwaysOnStatus = "stopped"; return readbackAlwaysOn(); }
+      alwaysOnStatus = "active";
+      console.info(`[Aurion Zone] ALWAYS_ON_ACTIVATED ${JSON.stringify({ zoneIds })}`);
+      return readbackAlwaysOn();
+    }).catch(error => {
+      if (closing) { alwaysOnStatus = "stopped"; return readbackAlwaysOn(); }
+      alwaysOnStatus = "failed";
+      alwaysOnCode = zoneFailureCode(error);
+      console.error(`[Aurion Zone] ALWAYS_ON_ACTIVATION_FAILED ${JSON.stringify({ code: alwaysOnCode })}`);
+      return readbackAlwaysOn();
+    });
+    // Shutdown waits on the entire recovery/activation, not just the settlement.
+    bootSettlement = activated;
+    return activated;
+  };
+  return{registry,releaseOrphanedLeasesAtBoot,settleZonesAtBoot,activatePersistentZonesAtBoot,readbackAlwaysOn,close:async()=>{closing=true;clearInterval(tickTimer);
     // A boot settlement still committing its recovery tick must finish (it flushes that tick
     // itself) before the final tick and the drain's flush; bounded.
     if(bootSettlement){let wait:ReturnType<typeof setTimeout>|undefined;const settled=await Promise.race([bootSettlement.then(()=>true,()=>true),new Promise<boolean>(resolve=>{wait=setTimeout(()=>resolve(false),shutdownSettlementWaitMs);})]);clearTimeout(wait);if(!settled)console.warn(`[Aurion Zone] shutdown continued after ${shutdownSettlementWaitMs} ms while the boot settlement is still running`);}

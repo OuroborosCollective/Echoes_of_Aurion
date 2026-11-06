@@ -104,6 +104,7 @@ async function startServer(){
     wolframCag,
     npcLife: autonomousNpcLife.readback(),
     zoneJoin: globalZoneJoinHealth.readback(),
+    alwaysOnWorld: zoneGateway.readbackAlwaysOn(),
     causalAssurance: globalAssuranceService.latest()
   });
   registerProductionProbeRoutes(app, healthPayload);
@@ -164,11 +165,15 @@ async function startServer(){
   // The shutdown guard above makes repeated signals idempotent.
   process.on("SIGTERM",()=>{void shutdown("SIGTERM");});
   process.on("SIGINT",()=>{void shutdown("SIGINT");});
-  // Release leases the previous process left before admitting any client (bounded, fast),
-  // then settle its zone heads in the background: never activates a zone and never delays
-  // listen beyond the promoter's health budget. Admissions wait for the settlement, bounded.
+  // Boot lease release precedes admission; settlement never blocks listen.
+  // Production can subsequently activate the verified head with zero players.
+  // The existing 100 ms authoritative zone timer then produces real receipts.
   await zoneGateway.releaseOrphanedLeasesAtBoot();
-  void zoneGateway.settleZonesAtBoot(["observatory_threshold"]);
+  if (databaseConnected && process.env.NODE_ENV === "production" && process.env.AURION_ALWAYS_ON_WORLD_ENABLED === "1") {
+    void zoneGateway.activatePersistentZonesAtBoot(["observatory_threshold"]);
+  } else {
+    void zoneGateway.settleZonesAtBoot(["observatory_threshold"]);
+  }
   server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
 }
 startServer().catch(error=>{console.error(error);process.exit(1);});
