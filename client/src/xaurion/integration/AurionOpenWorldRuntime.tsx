@@ -156,6 +156,18 @@ export default function AurionOpenWorldRuntime() {
       const result = engineRef.current.performAdminRaycast(e.clientX, e.clientY);
       if (result) {
         const { entityData, point } = result;
+        if (entityData?.worldVisualTarget) {
+          setCurrentTarget({
+            type: "model",
+            id: entityData.placementRef,
+            name: entityData.displayName || "Welt-Objekt",
+            assetId: entityData.assetId ?? undefined,
+            placementRef: entityData.placementRef,
+            worldTargetKind: entityData.targetKind,
+            position: point,
+          });
+          return;
+        }
         setCurrentTarget({
           type: entityData?.assetType === "arena" ? "model" : entityData?.entityId ? "entity" : "terrain",
           id: entityData?.entityId || entityData?.placementId || "unknown",

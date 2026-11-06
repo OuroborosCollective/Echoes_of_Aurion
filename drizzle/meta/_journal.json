@@ -540,6 +540,13 @@
       "when": 1793872800000,
       "tag": "0077_aurion_npc_archetype_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1794430800000,
+      "tag": "0078_aurion_world_visual_overrides",
+      "breakpoints": true
     }
   ]
 }

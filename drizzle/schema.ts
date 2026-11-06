@@ -1845,6 +1845,29 @@ export const aurionInvestigationDeductionReceipts = mysqlTable("aurionInvestigat
   index("aurionInvestigationDeductionReceipts_actor_idx").on(table.actorId, table.createdAt),
 ]);
 
+/**
+ * Admin-authored visual replacements of world objects (houses, props, nature, surface
+ * textures). Append-only: every change is a new revision of its placement; the latest
+ * revision is current. A null assetId restores the original. Visual only: collision and
+ * gameplay authority keep the original placement.
+ */
+export const aurionWorldVisualOverrides = mysqlTable("aurionWorldVisualOverrides", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 128 }).notNull(),
+  targetKind: mysqlEnum("targetKind", ["uploaded_anchor", "authored_placement", "shipped_placement", "surface_texture"]).notNull(),
+  placementRef: varchar("placementRef", { length: 160 }).notNull(),
+  revision: int("revision").notNull(),
+  assetId: varchar("assetId", { length: 96 }),
+  previousAssetId: varchar("previousAssetId", { length: 96 }),
+  actorUserId: int("actorUserId").notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldVisualOverrides_ref_revision_uq").on(table.worldId, table.placementRef, table.revision),
+  uniqueIndex("aurionWorldVisualOverrides_hash_uq").on(table.receiptHash),
+  index("aurionWorldVisualOverrides_world_created_idx").on(table.worldId, table.createdAt),
+]);
+
 export const aurionSemanticGraphIndexV2 = mysqlTable("aurionSemanticGraphIndexV2", {
   id: varchar("id", { length: 64 }).primaryKey(),
   graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),

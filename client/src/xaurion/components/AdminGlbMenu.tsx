@@ -18,6 +18,21 @@ import {
   FileCode
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
+
+/** Server codes of the world visual replacement, shown to the admin instead of failing silently. */
+const WORLD_VISUAL_MESSAGES: Readonly<Record<string, string>> = {
+  WORLD_VISUAL_ASSET_NOT_IN_RUNTIME_CATALOG: "Dieses Modell ist nicht im freigegebenen Spiel-Katalog. Erst freigeben, dann austauschen.",
+  WORLD_VISUAL_ASSET_NOT_A_WORLD_ASSET: "Nur Welt-Modelle (Arena/Architektur, nicht zugewiesen) können Welt-Objekte ersetzen.",
+  WORLD_VISUAL_REVISION_CONFLICT: "Das Objekt wurde inzwischen geändert. Bitte erneut anvisieren und noch einmal speichern.",
+  WORLD_VISUAL_UNCHANGED: "Dieses Modell steht dort bereits.",
+  WORLD_VISUAL_PLACEMENT_INVALID: "Dieses Objekt kann nicht adressiert werden.",
+};
+function worldVisualMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = Object.keys(WORLD_VISUAL_MESSAGES).find(key => message.includes(key));
+  return code ? WORLD_VISUAL_MESSAGES[code]! : `Speichern fehlgeschlagen: ${message.slice(0, 160)}`;
+}
 
 export const AdminGlbMenu: React.FC = () => {
   const { 
@@ -41,6 +56,11 @@ export const AdminGlbMenu: React.FC = () => {
 
   const catalogQuery = trpc.admin.assets.list.useQuery(undefined, { enabled: isAdmin && isOpen });
   const assignMutation = trpc.admin.assets.assign.useMutation();
+  const worldVisualMutation = trpc.admin.assets.setWorldVisual.useMutation();
+  const overridesQuery = trpc.worldAssets.visualOverrides.useQuery(undefined, { enabled: isAdmin && isOpen });
+  const [integrationStatus, setIntegrationStatus] = useState<{ tone: "ok" | "error" | "info"; text: string } | null>(null);
+  // A new target starts without the previous target's result.
+  React.useEffect(() => { setIntegrationStatus(null); }, [currentTarget?.id]);
   const uploadMutation = trpc.admin.assets.upload.useMutation();
 
   if (!isAdmin) return null;
@@ -75,8 +95,33 @@ export const AdminGlbMenu: React.FC = () => {
     reader.readAsDataURL(uploadFile);
   };
 
+  /** Replace (assetId) or restore (null) the targeted world visual; persisted server-side. */
+  const saveWorldVisual = async (assetId: string | null) => {
+    const placementRef = currentTarget?.placementRef;
+    if (!placementRef) return;
+    setIntegrationStatus({ tone: "info", text: "Wird serverseitig gespeichert…" });
+    try {
+      const latest = await overridesQuery.refetch();
+      const expectedRevision = latest.data?.revisions?.[placementRef] ?? 0;
+      const receipt = await worldVisualMutation.mutateAsync({ placementRef, assetId, expectedRevision });
+      soundSynth.playUiSuccess();
+      setIntegrationStatus({ tone: "ok", text: assetId ? `Gespeichert (Revision ${receipt.revision}). Bleibt auch nach Neustart erhalten.` : `Original wiederhergestellt (Revision ${receipt.revision}).` });
+      void overridesQuery.refetch();
+      window.dispatchEvent(new Event(WORLD_VISUALS_CHANGED_EVENT));
+    } catch (err) {
+      setIntegrationStatus({ tone: "error", text: worldVisualMessage(err) });
+    }
+  };
+
   const handleIntegrate = async () => {
-    if (!activeModelId || !currentTarget?.targetKey || !currentTarget?.targetType) return;
+    if (!activeModelId) { setIntegrationStatus({ tone: "error", text: "Wähle zuerst ein Modell im Katalog aus." }); return; }
+    if (currentTarget?.placementRef) { await saveWorldVisual(activeModelId); return; }
+    if (!currentTarget?.targetKey || !currentTarget?.targetType) {
+      setIntegrationStatus({ tone: "error", text: currentTarget?.type === "terrain"
+        ? "Boden und Gelände-Texturen sind noch nicht austauschbar. Visiere ein Gebäude oder Objekt an."
+        : "Dieses Objekt ist noch nicht austauschbar (z. B. Bäume und Felsen folgen in einem nächsten Schritt)." });
+      return;
+    }
 
     try {
       await assignMutation.mutateAsync({
@@ -328,13 +373,29 @@ export const AdminGlbMenu: React.FC = () => {
                           <div className="space-y-2">
                             <div className="text-[10px] text-gray-400 italic">Integration ausgewähltes Modell:</div>
                             <button 
-                              disabled={!activeModelId}
+                              disabled={!activeModelId || worldVisualMutation.isPending}
                               onClick={handleIntegrate}
                               className="w-full bg-white text-black hover:bg-sky-400 hover:text-white disabled:bg-gray-800 disabled:text-gray-600 font-bold py-2.5 rounded-lg text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             >
-                              <FileCode size={14} /> Integrate GLB Here
+                              <FileCode size={14} /> {currentTarget.placementRef ? "Hier austauschen" : "Integrate GLB Here"}
                             </button>
+                            {currentTarget.placementRef && (overridesQuery.data?.revisions?.[currentTarget.placementRef] ?? 0) > 0 && (
+                              <button
+                                type="button"
+                                disabled={worldVisualMutation.isPending}
+                                onClick={() => void saveWorldVisual(null)}
+                                className="w-full border border-white/20 text-gray-200 hover:border-sky-400 disabled:text-gray-600 py-2 rounded-lg text-[10px] uppercase tracking-widest"
+                              >
+                                Original wiederherstellen
+                              </button>
+                            )}
                             {!activeModelId && <p className="text-[8px] text-amber-500/80 text-center italic">Wähle zuerst ein Modell im Katalog aus!</p>}
+                            {integrationStatus && (
+                              <p role={integrationStatus.tone === "error" ? "alert" : "status"} data-testid="admin-glb-integration-status"
+                                className={`text-[10px] text-center ${integrationStatus.tone === "error" ? "text-red-300" : integrationStatus.tone === "ok" ? "text-emerald-300" : "text-sky-300"}`}>
+                                {integrationStatus.text}
+                              </p>
+                            )}
                           </div>
                         </div>
                       ) : (

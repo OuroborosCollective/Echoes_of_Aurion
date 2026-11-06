@@ -53,7 +53,9 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
     list: { useQuery: () => ({ data: undefined, isLoading: false, isError: false, isSuccess: false, refetch: vi.fn() }) },
     assign: { useMutation: () => ({ mutateAsync: vi.fn() }) },
     upload: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+    setWorldVisual: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
   } },
+  worldAssets: { visualOverrides: { useQuery: () => ({ data: undefined, refetch: vi.fn() }) } },
   useUtils: () => ({ gameplay: { openWorld: { fetch: vi.fn(async () => {
     fixture.worldFetches++;
     return { globalWorld: { worldSeed: "refreshed-world", epoch: 7 } };

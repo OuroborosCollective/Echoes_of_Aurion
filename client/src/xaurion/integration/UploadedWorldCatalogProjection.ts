@@ -7,6 +7,24 @@ import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
 import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, villageStreetLampVisualPlacements, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
 import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
+import { authoredPlacementRef, uploadedAnchorRef, worldVisualTargetKind, type WorldVisualOverrideReadback, type WorldVisualTargetData } from "@shared/worldVisualOverrideContract";
+
+/** A placement plus the stable world reference the admin cursor and overrides address. */
+type ProjectedPlacement = UploadedWorldVisualPlacement & Readonly<{ placementRef: string }>;
+
+/**
+ * Stable reference of a projected placement. Uploaded-catalog anchors drop the catalog
+ * revision and the automatically chosen asset, so a replacement stays at its location
+ * when new models change the automatic choice.
+ */
+export function uploadedPlacementRef(placementId: string): string {
+  const uploaded = /^uploaded:[^:]+:(-?\d+):(-?\d+):(\d+):/.exec(placementId);
+  if (uploaded) return uploadedAnchorRef(Number(uploaded[1]), Number(uploaded[2]), Number(uploaded[3]));
+  // Dedicated village visuals: contract version plus placement key, without revision or asset.
+  const dedicated = /^(aurion\.[a-z-]+\.v\d+):[^:]+:(?:([A-Za-z0-9._-]+):)?glb_/.exec(placementId);
+  if (dedicated) return `uploaded:fixed.${dedicated[1]}${dedicated[2] ? `.${dedicated[2]}` : ""}`;
+  return `uploaded:other.${placementId.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 120)}`;
+}
 
 type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
 const MAX_RENDERED = 18;
@@ -44,6 +62,8 @@ export class UploadedWorldCatalogProjection {
   readonly root = new THREE.Group();
   private catalog: GlbRuntimeCatalog | null = null;
   private worldDesign: WorldDesignReadback | null = null;
+  private overrides = new Map<string, string>();
+  private overridesHash = "none";
   private readonly rendered = new Map<string, Rendered>();
   private readonly pending = new Set<string>();
   private signature = "";
@@ -68,20 +88,38 @@ export class UploadedWorldCatalogProjection {
     this.signature = "";
   }
 
-  private desired(position: { x: number; z: number }): { center: WorldChunkCoordinate; placements: UploadedWorldVisualPlacement[] } {
+  /** Persisted admin replacements (placement reference -> catalog asset). */
+  setVisualOverrides(readback: WorldVisualOverrideReadback | null): void {
+    if (this.disposed) return;
+    const hash = readback?.readbackHash ?? "none";
+    if (hash === this.overridesHash) return;
+    this.overridesHash = hash;
+    this.overrides = new Map((readback?.overrides ?? []).map(entry => [entry.placementRef, entry.assetId] as const));
+    this.signature = "";
+  }
+
+  private withOverride(placement: UploadedWorldVisualPlacement, placementRef: string): ProjectedPlacement {
+    const replacementId = this.overrides.get(placementRef);
+    const replacement = replacementId ? this.catalog?.entries.find(entry => entry.assetId === replacementId && entry.assetType === "arena" && entry.targetKey === null) : undefined;
+    return Object.freeze({ ...placement, ...(replacement ? { asset: replacement } : {}), placementRef });
+  }
+
+  private desired(position: { x: number; z: number }): { center: WorldChunkCoordinate; placements: ProjectedPlacement[] } {
     if (!this.catalog) return { center: { x: 0, z: 0 }, placements: [] };
     const center = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;
-    const placements: UploadedWorldVisualPlacement[] = [];
+    const placements: ProjectedPlacement[] = [];
+    const generated: UploadedWorldVisualPlacement[] = [];
     for (let z = center.z - 1; z <= center.z + 1; z += 1) for (let x = center.x - 1; x <= center.x + 1; x += 1) {
-      placements.push(...uploadedWorldVisualsForChunk(this.catalog, { x, z }));
+      generated.push(...uploadedWorldVisualsForChunk(this.catalog, { x, z }));
     }
     const returnStone = returnStoneVisualPlacement(this.catalog);
-    if (returnStone && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(returnStone);
+    if (returnStone && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) generated.push(returnStone);
     const fountain = villageFountainVisualPlacement(this.catalog);
-    if (fountain && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(fountain);
+    if (fountain && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) generated.push(fountain);
     if (Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) {
-      placements.push(...villageStreetLampVisualPlacements(this.catalog));
+      generated.push(...villageStreetLampVisualPlacements(this.catalog));
     }
+    for (const placement of generated) placements.push(this.withOverride(placement, uploadedPlacementRef(placement.id)));
 
     for (const design of this.worldDesign?.designs ?? []) {
       for (const placement of design.placements) {
@@ -97,17 +135,17 @@ export class UploadedWorldCatalogProjection {
           coordinate: { x: placement.chunkX, z: placement.chunkZ },
           localPositionMm: { x: placement.xMm, z: placement.zMm },
         });
-        placements.push(Object.freeze({
+        placements.push(this.withOverride(Object.freeze({
           id: `authored:${design.designHash.slice(0, 12)}:${placement.placementKey}`,
           asset,
           xMm: worldPosition.x,
           zMm: worldPosition.z,
           rotationQuarterTurns: placement.rotationQuarterTurns,
           scalePermille: placement.scalePermille,
-        }));
+        }), authoredPlacementRef(design.designKey, placement.placementKey)));
       }
     }
-    const dedicatedPriority = (placement: UploadedWorldVisualPlacement) =>
+    const dedicatedPriority = (placement: ProjectedPlacement) =>
       placement.id.startsWith("aurion.return-stone")
       || placement.id.startsWith("aurion.village-fountain")
       || placement.id.startsWith("aurion.village-street-lamp")
@@ -132,7 +170,7 @@ export class UploadedWorldCatalogProjection {
     this.rendered.delete(id);
   }
 
-  private async project(placement: UploadedWorldVisualPlacement, originX: number, originZ: number): Promise<void> {
+  private async project(placement: ProjectedPlacement, originX: number, originZ: number): Promise<void> {
     if (this.disposed || this.pending.has(placement.id)) return;
     const current = this.rendered.get(placement.id);
     if (current?.sha256 === placement.asset.sha256) return;
@@ -166,6 +204,9 @@ export class UploadedWorldCatalogProjection {
       const holder = new THREE.Group();
       holder.name = `uploaded-world:${placement.id}`;
       holder.userData.uploadedWorldCatalog = Object.freeze({ assetId: placement.asset.assetId, sha256: placement.asset.sha256, purpose: placement.asset.purpose, lodLevels: loaded.lodLevels });
+      // Addressable by the admin cursor; visual only, no collider or gameplay object.
+      const targetKind = worldVisualTargetKind(placement.placementRef);
+      if (targetKind) holder.userData.worldVisualTarget = Object.freeze({ placementRef: placement.placementRef, targetKind, assetId: placement.asset.assetId, displayName: placement.asset.displayName } satisfies WorldVisualTargetData);
       holder.position.set(worldX - originX, terrainY, worldZ - originZ);
       holder.rotation.y = placement.rotationQuarterTurns * Math.PI / 2;
       loaded.scene.scale.setScalar(scale);
@@ -194,7 +235,7 @@ export class UploadedWorldCatalogProjection {
     const { center, placements } = this.desired(position);
     const originX = center.x * 64;
     const originZ = center.z * 64;
-    const nextSignature = `${this.catalog?.revision ?? "none"}:${this.worldDesign?.revision ?? "none"}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${value.scalePermille ?? 1000}:${(value.asset.lods ?? []).map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
+    const nextSignature = `${this.catalog?.revision ?? "none"}:${this.worldDesign?.revision ?? "none"}:${this.overridesHash}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${value.scalePermille ?? 1000}:${(value.asset.lods ?? []).map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
     if (nextSignature === this.signature) return;
     this.signature = nextSignature;
     this.root.position.set(originX, 0, originZ);

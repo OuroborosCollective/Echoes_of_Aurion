@@ -9,6 +9,9 @@ export type AdminInspectionTarget = {
   position: { x: number; y: number; z: number };
   targetKey?: string;
   targetType?: string;
+  /** Stable world placement reference of a replaceable world visual (houses, props, ...). */
+  placementRef?: string;
+  worldTargetKind?: "uploaded_anchor" | "authored_placement" | "shipped_placement" | "surface_texture";
 };
 
 interface AdminState {

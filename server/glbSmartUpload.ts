@@ -1,3 +1,4 @@
+import { readWorldVisualOverrides } from "./worldVisualOverridePersistence";
 import { issueGlbAgentSession, verifyGlbAgentSession } from "./glbAgentSession";
 import type { Express, Request, Response } from "express";
 import { sdk } from "./_core/sdk";
@@ -366,5 +367,10 @@ export function registerGlbSmartUpload(app: Express): void {
   app.get("/api/game/world-design", async (_request, response) => {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await readActiveWorldDesign()); }
     catch { response.status(503).json({ error: "AUTHORING_WORLD_DESIGN_UNAVAILABLE" }); }
+  });
+  // Persisted admin replacements of world visuals: every client projects the same world.
+  app.get("/api/game/world-visual-overrides", async (_request, response) => {
+    try { response.setHeader("Cache-Control", "no-store"); response.json(await readWorldVisualOverrides()); }
+    catch { response.status(503).json({ error: "WORLD_VISUAL_OVERRIDES_UNAVAILABLE" }); }
   });
 }
