@@ -571,7 +571,7 @@ describe.skipIf(!enabled)("world authoring against isolated MariaDB", () => {
       retireAdminPlacementDesign(admin, head.designKey, head.designHash),
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(String((results.find(result => result.status === "rejected") as PromiseRejectedResult).reason)).toMatch(/AUTHORING_WORLD_(PREDECESSOR|PLAN)_CHANGED/);
+    expect(String((results.find(result => result.status === "rejected") as PromiseRejectedResult).reason)).toMatch(/AUTHORING_WORLD_(PREDECESSOR_CHANGED|PLAN_CHANGED|ADMIN_GROUP_RETIRED)/); // retire first: the addition may not revive the group
     const [rows] = await pool.execute<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionWorldDesignVersions WHERE active = 1 AND designKey = ?", [head.designKey]);
     expect(Number(rows[0]?.count)).toBeLessThanOrEqual(1);
   }, 30_000);

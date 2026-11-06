@@ -1,6 +1,10 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { resolveAndRecordNpc } from "./wasdAurionRuntime";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite = process.env.AURION_NPC_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const npcId = "aim263:test-npc";

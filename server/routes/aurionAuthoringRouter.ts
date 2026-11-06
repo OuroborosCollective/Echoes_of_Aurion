@@ -29,6 +29,8 @@ import {
 } from "../aurionAuthoringPersistence";
 import { placementKindOfDesign } from "../../shared/adminPlacementPlan";
 import { withDomainErrors } from "../domainErrorBoundary";
+import { confirmNpcPurpose, draftNpcPurpose, readNpcPurposes } from "../npcShellPurpose";
+import { NpcPurposeConfirmInput, NpcPurposeDraftInput } from "../../shared/npcPurposeContract";
 
 async function proposeWorldForSession(actorUserId: number, input: DesignerRequest) {
     const zone = globalZoneRegistry.find(zoneIdSchema.parse(input.zoneId));
@@ -154,6 +156,12 @@ export const aurionAuthoringRouter = router({
       confirmation: z.literal("RETIRE_ADMIN_PLACEMENTS"),
     }).strict())
     .mutation(({ ctx, input }) => withDomainErrors("AUTHORING_WORLD_RETIRE", ["AUTHORING_"], () => retireAdminPlacementDesign(ctx.user.id, input.designKey, input.expectedDesignHash))),
+  // NPC shell purpose: LLMs draft (preview only), the admin confirms with one tap, Aurion persists with a receipt.
+  npcPurposeDraft: adminProcedure.input(NpcPurposeDraftInput)
+    .mutation(({ input }) => withDomainErrors("NPC_PURPOSE_DRAFT", ["NPC_", "AUTHORING_", "LEDGER_", "PREMIUM_"], () => draftNpcPurpose(input))),
+  npcPurposeConfirm: adminProcedure.input(NpcPurposeConfirmInput)
+    .mutation(({ ctx, input }) => withDomainErrors("NPC_PURPOSE_CONFIRM", ["NPC_", "AUTHORING_"], () => confirmNpcPurpose(ctx.user.id, input))),
+  npcPurposes: adminProcedure.query(() => withDomainErrors("NPC_PURPOSE_READBACK", ["NPC_"], () => readNpcPurposes())),
   // Read-only lookup; a missing row never proves that an in-flight apply failed.
   worldReceipt: adminProcedure
     .input(z.object({

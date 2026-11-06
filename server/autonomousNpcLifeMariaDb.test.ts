@@ -5,6 +5,10 @@ import { resolveAndRecordNpc, resolveAndRecordWorld } from "./wasdAurionRuntime"
 import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import { merchantBootstrapMarkets, merchantInventoryStateHash, merchantMarketStateHash, merchantPolityStateHash, type HubId } from "./wasdNpcCapsule";
 import type { WorldSignal } from "./wasdAurionProtocol";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite = process.env.AURION_NPC_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const hubs = ["observatory_threshold","windhollow","emberfall","cinder_vault"] as const;

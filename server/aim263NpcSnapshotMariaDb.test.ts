@@ -2,6 +2,10 @@ import {createPool,type Pool,type RowDataPacket} from "mysql2/promise";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {readConfirmedNpcPacket,resolveAndRecordNpc} from "./wasdAurionRuntime";
 import {decodeOwnedNpcPacket} from "@shared/npcSnapshotProtocol";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 const suite=process.env.AURION_NPC_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 suite("AIM-263 NPC packet from actual receipt storage",()=>{
  let pool:Pool,isolated=false;

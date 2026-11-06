@@ -21,6 +21,10 @@ import {
   stableCatalogStringify,
   type HubId,
 } from "./wasdNpcCapsule";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite=process.env.AURION_NPC_ACTION_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 const homeHub:HubId="observatory_threshold";

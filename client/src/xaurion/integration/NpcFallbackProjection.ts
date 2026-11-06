@@ -11,6 +11,7 @@ import { glbManager } from "../core/GLBModelManager";
 import { assetTier, type AssetTier } from "@shared/glbPresentationBudget";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
 import { NpcShellProjection } from "./NpcShellProjection";
+import { NPC_PURPOSE_SCHEMA, NpcPurposeDraftSchema, type NpcPurposeReadback } from "@shared/npcPurposeContract";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
 import { EquipmentCatalogProjection } from "./EquipmentCatalogProjection";
@@ -124,6 +125,14 @@ export class NpcFallbackProjection {
             const worldDesign = WorldDesignReadbackSchema.parse(await worldResponse.json());
             this.uploadedWorld.setWorldDesign(worldDesign);
             this.npcShells.setWorldDesign(worldDesign);
+          }
+          const purposeResponse = await fetch("/api/game/npc-purposes", { credentials: "same-origin" });
+          if (purposeResponse.ok) {
+            const readback = await purposeResponse.json() as NpcPurposeReadback;
+            // Only well-formed confirmed purposes are shown (same contract as the server write).
+            if (readback?.schemaVersion === NPC_PURPOSE_SCHEMA && Array.isArray(readback.purposes)) {
+              this.npcShells.setPurposes({ ...readback, purposes: readback.purposes.filter(item => NpcPurposeDraftSchema.safeParse(item?.purpose).success && item.purpose.shellRef === item.shellRef) });
+            }
           }
         } catch {
           // Retain the last confirmed world-design manifest through transient failures.

@@ -5,6 +5,10 @@ import { appRouter } from "./routers";
 import { readPersistedInvestigationDeductionReceipt } from "./investigationJournalPersistence";
 import { AURION_WORLD_CHECKPOINT_WORLD_ID } from "./worldCheckpointProtocol";
 import type { TrpcContext } from "./_core/context";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 const suite = process.env.AURION_INVESTIGATION_JOURNAL_E2E === "1" && process.env.DATABASE_URL
   ? describe

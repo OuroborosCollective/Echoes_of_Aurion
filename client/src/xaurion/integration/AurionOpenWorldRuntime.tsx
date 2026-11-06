@@ -29,6 +29,7 @@ import { ServiceNpcProjection } from "./ServiceNpcProjection";
 import { AdminGlbMenu } from "../components/AdminGlbMenu";
 import { ADMIN_PLACEMENT_KEYS, AdminPlacementController } from "../components/AdminPlacement";
 import { AdminNpcShellPanel, openNearestNpcShell } from "../components/AdminNpcShellPanel";
+import { NpcShellConversation } from "../components/NpcShellConversation";
 import { useAdminStore } from "../core/AdminService";
 import { soundSynth } from "../audio/SoundSynthesizer";
 import { AurionSurfaceAudioOrchestrator, resolveAudioSurfaceAtPosition, type SurfaceAudioTerrain } from "../audio/AurionSurfaceAudioResolver";
@@ -966,6 +967,7 @@ export default function AurionOpenWorldRuntime() {
       <AdminGlbMenu />
       <AdminPlacementController engineRef={engineRef} containerRef={containerRef} />
       <AdminNpcShellPanel engineRef={engineRef} />
+      <NpcShellConversation engineRef={engineRef} />
     </section>
   );
 }

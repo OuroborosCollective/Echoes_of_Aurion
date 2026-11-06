@@ -148,4 +148,24 @@ describe("NPC shell projection", () => {
     expect(update).toHaveBeenCalledTimes(1);
     projection.dispose();
   });
+
+  it("shows the confirmed purpose (name, role, dialogue) on its shell and follows changes", async () => {
+    vi.spyOn(glbManager, "loadModel").mockImplementation(async () => character());
+    const projection = new NpcShellProjection(engine());
+    projection.setCatalog(catalog([ranger]));
+    projection.setWorldDesign(design([{ designKey: "npc.shells.1a2b3c4d", placements: [placement("p.000000000001", "glb_ranger"), placement("p.000000000002", "glb_ranger", 34_000)] }]));
+    projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().rendered).toBe(2));
+    const purpose = (role: string) => ({ schemaVersion: "aurion.npc-purpose.v1" as const, shellRef: "authored:npc.shells.1a2b3c4d:p.000000000001", displayName: "Mira", role,
+      persona: "Ruhig und neugierig.", greeting: "Willkommen.", topics: [{ topic: "Kräuter", line: "Silberblatt." }], routine: [{ label: "Beet", offsetXMm: 0, offsetZMm: 0, dwellSeconds: 60 }], questIdeas: [] });
+    projection.setPurposes({ schemaVersion: "aurion.npc-purpose.v1", revision: "1".repeat(64), purposes: [{ shellRef: "authored:npc.shells.1a2b3c4d:p.000000000001", purposeHash: "a".repeat(64), receiptId: "authoring:npc:1", purpose: purpose("Händlerin") }] });
+    const [first, second] = shells(projection);
+    expect(first!.purpose).toMatchObject({ displayName: "Mira", role: "Händlerin", greeting: "Willkommen.", purposeHash: "a".repeat(64) });
+    expect(second!.purpose).toBeUndefined();
+    projection.setPurposes({ schemaVersion: "aurion.npc-purpose.v1", revision: "2".repeat(64), purposes: [{ shellRef: "authored:npc.shells.1a2b3c4d:p.000000000001", purposeHash: "b".repeat(64), receiptId: "authoring:npc:2", purpose: purpose("Heilerin") }] });
+    expect(shells(projection)[0]!.purpose?.role).toBe("Heilerin");
+    projection.setPurposes(null);
+    expect(shells(projection)[0]!.purpose).toBeUndefined();
+    projection.dispose();
+  });
 });

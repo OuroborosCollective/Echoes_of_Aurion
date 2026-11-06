@@ -867,6 +867,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/components/NpcShellConversation.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/components/PartyModal.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",

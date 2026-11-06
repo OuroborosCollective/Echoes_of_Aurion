@@ -61,6 +61,8 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
     worldPlan: { useMutation: () => ({ mutateAsync: vi.fn() }) },
     worldApply: { useMutation: () => ({ mutateAsync: vi.fn() }) },
     worldRetireAdminPlacements: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+    npcPurposeDraft: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    npcPurposeConfirm: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
   },
   useUtils: () => ({ gameplay: { openWorld: { fetch: vi.fn(async () => {
     fixture.worldFetches++;

@@ -1,5 +1,9 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { useNpcSharedTableLock } from "./testSupport/npcSharedTableLock";
+
+// Shares the append-only NPC memory/semantic-graph tables with other DB test files.
+useNpcSharedTableLock();
 
 // Production regression (2026-11-03): the merchant's memory was recorded under the
 // earlier NPC capsule pin 002e7c35. After the pin moved to the current revision, the
