@@ -181,4 +181,38 @@ describe("admin NPC shell window", () => {
     fireEvent.click(screen.getByTestId("npc-purpose-confirm"));
     await waitFor(() => expect(fixture.confirm).toHaveBeenCalledWith(expect.objectContaining({ expectedPreviousPurposeHash: "f".repeat(64) })));
   });
+
+  // Review (CodeRabbit, #1329): a double tap sent two booked LLM requests / two confirmations.
+  it("sends one LLM request and one confirmation for a double tap", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    let finishDraft: (value: unknown) => void = () => undefined;
+    fixture.draft.mockReset(); fixture.confirm.mockReset();
+    fixture.draft.mockImplementation(() => new Promise(resolve => { finishDraft = resolve; }));
+    fixture.confirm.mockResolvedValue({ receipt: { receiptId: "authoring:npc:3" } });
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    fireEvent.change(screen.getByTestId("npc-purpose-brief"), { target: { value: "Ein Fährmann, der Reisende über den See bringt." } });
+    const draftButton = screen.getByTestId("npc-purpose-draft");
+    fireEvent.click(draftButton); fireEvent.click(draftButton);
+    expect(fixture.draft).toHaveBeenCalledTimes(1);
+    await act(async () => { finishDraft({ status: "AI_DRAFT", draft, draftHash: "e".repeat(64), basePurposeHash: null, model: "unit/free:free", failures: [] }); });
+    const confirmButton = await screen.findByTestId("npc-purpose-confirm");
+    fireEvent.click(confirmButton); fireEvent.click(confirmButton);
+    await waitFor(() => expect(screen.getByTestId("npc-purpose-status").textContent).toContain("Bestätigt"));
+    expect(fixture.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes once for rapid taps on Entfernen", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    fixture.retire.mockReset();
+    let finish: (value: unknown) => void = () => undefined;
+    fixture.retire.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    const button = screen.getByTestId("admin-glb-remove-placement");
+    fireEvent.click(button); fireEvent.click(button); fireEvent.click(button); fireEvent.click(button);
+    await waitFor(() => expect(fixture.retire).toHaveBeenCalledTimes(1));
+    await act(async () => { finish({ receipt: { receiptId: "authoring:world:z" } }); });
+    expect(fixture.retire).toHaveBeenCalledTimes(1);
+  });
 });

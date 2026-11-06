@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { trpc } from "../../lib/trpc";
 import { NPC_PURPOSE_BRIEF_MAX, type NpcPurposeDraft } from "@shared/npcPurposeContract";
 import { WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
@@ -159,9 +159,13 @@ function PurposeEditor({ shell }: Readonly<{ shell: NpcShellTarget }>) {
   const [status, setStatus] = useState<Readonly<{ tone: "info" | "ok" | "error"; text: string }> | null>(null);
   useEffect(() => { setDraft(null); setStatus(null); setBrief(""); }, [shell.shellRef]);
   const busy = draftMutation.isPending || confirmMutation.isPending;
+  // Synchronous guard: a double tap fires twice before React re-renders `busy`/`disabled`;
+  // each draft call is a booked LLM request, a second confirm would report a false error.
+  const inFlight = useRef(false);
 
   const requestDraft = async () => {
-    if (busy || brief.trim().length < 12) return;
+    if (inFlight.current || busy || brief.trim().length < 12) return;
+    inFlight.current = true;
     setDraft(null);
     setStatus({ tone: "info", text: "Das LLM schreibt den Entwurf … das kann bis zu 30 Sekunden dauern." });
     try {
@@ -174,10 +178,12 @@ function PurposeEditor({ shell }: Readonly<{ shell: NpcShellTarget }>) {
       setDraft({ draft: result.draft, draftHash: result.draftHash, basePurposeHash: result.basePurposeHash, model: result.model });
       setStatus({ tone: "info", text: "Entwurf bereit. Prüfen und mit einem Tipp bestätigen." });
     } catch (error) { setStatus({ tone: "error", text: errorText(error) }); }
+    finally { inFlight.current = false; }
   };
 
   const confirm = async () => {
-    if (!draft || busy) return;
+    if (!draft || inFlight.current || busy) return;
+    inFlight.current = true;
     try {
       // The predecessor is the purpose the draft was written against, never a newer one:
       // if another admin confirmed meanwhile, the server refuses this stale draft.
@@ -188,6 +194,7 @@ function PurposeEditor({ shell }: Readonly<{ shell: NpcShellTarget }>) {
       setStatus({ tone: "ok", text: `Bestätigt und mit Beleg gespeichert: ${draft.draft.displayName} lebt ab jetzt an diesem Platz.` });
       window.dispatchEvent(new Event(WORLD_VISUALS_CHANGED_EVENT));
     } catch (error) { setStatus({ tone: "error", text: errorText(error) }); }
+    finally { inFlight.current = false; }
   };
 
   return (
