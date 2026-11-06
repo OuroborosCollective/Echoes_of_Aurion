@@ -184,3 +184,47 @@ describe("admin cursor on a rendered house", () => {
     projection.dispose();
   });
 });
+
+describe("authored placement render robustness", () => {
+  const crate = { assetId: "glb_crate", sha256: "9".repeat(64), displayName: "Kiste", purpose: "world-environment", assetType: "arena",
+    targetKey: null, subcategory: "street-prop", equipmentSlot: null, storageUrl: `/api/assets/glb/${"9".repeat(64)}.glb` } as GlbCatalogEntry;
+  const box = () => { const scene = new THREE.Group(); scene.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial())); return { scene, animations: [], lodLevels: [0] }; };
+  const worldDesign = (revision: string, placements: number) => ({ schemaVersion: "aurion.world-design.v1" as const, revision: revision.repeat(64), designs: placements ? [{
+    designKey: "admin.placements.1a2b3c4d", version: 1, title: "Admin-Platzierungen", designHash: "c".repeat(64), expectedCatalogRevision: "a".repeat(64),
+    placements: [{ placementKey: "p.000000000001", assetId: crate.assetId, chunkX: 0, chunkZ: 0, xMm: 33_000, zMm: 32_000, rotationQuarterTurns: 0 as const, scalePermille: 1000 }] }] : [] });
+  const authored = (projection: UploadedWorldCatalogProjection) => projection.evidence().assets.filter(asset => asset.id.startsWith("authored:")).length;
+
+  // Derived from the #1328 review: same families as the NPC shell projection.
+  it("never draws an object that was removed while its model was still loading", async () => {
+    const waiting: Array<(value: ReturnType<typeof box>) => void> = [];
+    vi.spyOn(glbManager, "loadStaticLodFamily").mockImplementation(() => new Promise(resolve => { waiting.push(resolve); }));
+    const projection = new UploadedWorldCatalogProjection({ scene: new THREE.Scene(), player: { position: new THREE.Vector3() }, landscape: { chunkManager: { getElevationAt: () => 0 } } } as never);
+    projection.setCatalog({ version: "aurion.glb-import.v1", revision: "a".repeat(64), entries: [crate] });
+    projection.setWorldDesign(worldDesign("b", 1));
+    projection.update();
+    projection.setWorldDesign(worldDesign("d", 0));
+    projection.update();
+    for (const resolve of waiting.splice(0)) resolve(box());
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
+    expect(authored(projection)).toBe(0);
+    projection.dispose();
+  });
+
+  it("retries an object whose terrain was not ready yet", async () => {
+    let now = 1_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    vi.spyOn(glbManager, "loadStaticLodFamily").mockImplementation(async () => box());
+    let terrainReady = false;
+    const projection = new UploadedWorldCatalogProjection({ scene: new THREE.Scene(), player: { position: new THREE.Vector3() }, landscape: { chunkManager: { getElevationAt: () => (terrainReady ? 0 : Number.NaN) } } } as never);
+    projection.setCatalog({ version: "aurion.glb-import.v1", revision: "a".repeat(64), entries: [crate] });
+    projection.setWorldDesign(worldDesign("b", 1));
+    projection.update();
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
+    expect(authored(projection)).toBe(0);
+    terrainReady = true;
+    now += 2_500;
+    projection.update();
+    await vi.waitFor(() => expect(authored(projection)).toBe(1));
+    projection.dispose();
+  });
+});

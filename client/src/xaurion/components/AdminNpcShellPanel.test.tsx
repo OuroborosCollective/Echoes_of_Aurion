@@ -95,4 +95,28 @@ describe("admin NPC shell window", () => {
     expect(screen.queryByTestId("admin-npc-shell-prompt")).toBeNull();
     expect(openNearestNpcShell({ scene: undefined, player: undefined } as never)).toBeNull();
   });
+
+  // Review (Devin, #1328): the panel closed before the count of co-removed invisible placements showed.
+  it("keeps the removal result visible after the panel closes", async () => {
+    const engine = engineWithShell(new THREE.Vector3(1, 0, 1));
+    fixture.catalog.mockResolvedValue({ glbCatalogRevision: "a".repeat(64), assets: [], world: { schemaVersion: "aurion.world-design.v1", revision: "b".repeat(64), designs: [
+      { designKey: shell.designKey, version: 1, title: "NPC-Hüllen", designHash: "d".repeat(64), expectedCatalogRevision: "a".repeat(64),
+        placements: [{ placementKey: shell.placementKey, assetId: "glb_ranger", chunkX: 0, chunkZ: 0, xMm: 34_000, zMm: 33_000, rotationQuarterTurns: 0, scalePermille: 1000 },
+          { placementKey: "p.000000000009", assetId: "glb_withdrawn", chunkX: 0, chunkZ: 0, xMm: 30_000, zMm: 33_000, rotationQuarterTurns: 0, scalePermille: 1000 }] },
+    ] } });
+    render(<AdminNpcShellPanel engineRef={{ current: engine as never }} />);
+    act(() => { openNearestNpcShell(engine as never); });
+    fireEvent.click(screen.getByTestId("admin-glb-remove-placement"));
+    fireEvent.click(screen.getByTestId("admin-glb-remove-placement"));
+    await waitFor(() => expect(screen.queryByTestId("admin-npc-shell-panel")).toBeNull());
+    expect(screen.getByTestId("admin-npc-shell-notice").textContent).toContain("1 unsichtbare Platzierung");
+  });
+
+  // Review (CodeRabbit, #1328): starting a placement left the shell selected; it reopened by itself after "Fertig".
+  it("forgets the open shell when a placement starts", () => {
+    useAdminStore.setState({ shellTarget: shell });
+    useAdminStore.getState().setPlacementAsset({ assetId: "glb_ranger" } as never);
+    useAdminStore.getState().setPlacementAsset(null);
+    expect(useAdminStore.getState().shellTarget).toBeNull();
+  });
 });

@@ -14,6 +14,9 @@ export const NPC_SHELL_BASE_HEIGHT_M = 2;
 export const MAX_RENDERED_NPC_SHELLS = 24;
 /** Shells farther away stand still (no animation mixer update) to save frame time. */
 export const NPC_SHELL_ANIMATION_RANGE_M = 35;
+/** Back-off before re-rendering a shell whose terrain was not ready / whose model failed. */
+export const NPC_SHELL_TERRAIN_RETRY_MS = 2_000;
+export const NPC_SHELL_LOAD_RETRY_MS = 10_000;
 /** Admins open a shell with E within this distance. */
 export const NPC_SHELL_INTERACTION_RANGE_M = 4;
 
@@ -68,6 +71,10 @@ export class NpcShellProjection {
   private design: WorldDesignReadback | null = null;
   private readonly rendered = new Map<string, Rendered>();
   private readonly pending = new Set<string>();
+  /** Placements the current world state wants rendered (a load finishing later checks it). */
+  private wanted = new Map<string, Placement>();
+  /** Earliest retry time per placement after a failed render (terrain not ready, load error). */
+  private readonly retryAt = new Map<string, number>();
   private signature = "";
   private disposed = false;
 
@@ -124,10 +131,12 @@ export class NpcShellProjection {
     let actor: AnimatedGlbActor | null = null;
     try {
       actor = await loadNpcShellActor(placement.asset);
-      const stillWanted = this.catalog?.entries.some(entry => entry.assetId === placement.asset.assetId && entry.sha256 === placement.asset.sha256);
+      // The shell may have been removed or changed while its model was loading.
+      const wanted = this.wanted.get(placement.id);
+      const stillWanted = wanted?.asset.sha256 === placement.asset.sha256 && wanted.scalePermille === placement.scalePermille && wanted.rotationQuarterTurns === placement.rotationQuarterTurns;
       if (this.disposed || !stillWanted) return;
       const y = this.engine.landscape.chunkManager.getElevationAt(placement.x, placement.z);
-      if (!Number.isFinite(y)) return;
+      if (!Number.isFinite(y)) { this.retryAt.set(placement.id, performance.now() + NPC_SHELL_TERRAIN_RETRY_MS); return; }
       const holder = new THREE.Group();
       holder.name = `aurion-npc-shell:${placement.id}`;
       holder.position.set(placement.x, y, placement.z);
@@ -138,9 +147,11 @@ export class NpcShellProjection {
       this.remove(placement.id);
       this.root.add(holder);
       this.rendered.set(placement.id, { sha256: placement.asset.sha256, holder, actor });
+      this.retryAt.delete(placement.id);
       actor = null;
     } catch {
-      // A shell whose model cannot load stays invisible; confirmed state is unchanged.
+      // Confirmed state is unchanged; retry later with a back-off (never every frame).
+      this.retryAt.set(placement.id, performance.now() + NPC_SHELL_LOAD_RETRY_MS);
     } finally {
       actor?.dispose();
       this.pending.delete(placement.id);
@@ -153,12 +164,21 @@ export class NpcShellProjection {
     const signature = `${this.catalog?.revision ?? "none"}:${this.design?.revision ?? "none"}:${placements.map(placement => `${placement.id}:${placement.asset.sha256}:${placement.scalePermille}:${placement.rotationQuarterTurns}`).join("|")}`;
     if (signature !== this.signature) {
       this.signature = signature;
-      const wanted = new Set(placements.map(placement => placement.id));
+      this.wanted = new Map(placements.map(placement => [placement.id, placement] as const));
+      for (const id of [...this.retryAt.keys()]) if (!this.wanted.has(id)) this.retryAt.delete(id);
+      const wanted = this.wanted;
       for (const id of [...this.rendered.keys()]) if (!wanted.has(id)) this.remove(id);
       for (const placement of placements) {
         const current = this.rendered.get(placement.id);
         const transformChanged = current && (current.holder.scale.x !== npcShellScale(placement.scalePermille) || current.holder.rotation.y !== placement.rotationQuarterTurns * Math.PI / 2);
         if (!current || current.sha256 !== placement.asset.sha256 || transformChanged) void this.project(placement);
+      }
+    } else if (this.retryAt.size) {
+      // Retry shells whose last render failed once their back-off has passed.
+      const now = performance.now();
+      for (const [id, at] of this.retryAt) {
+        const placement = this.wanted.get(id);
+        if (placement && at <= now && !this.rendered.has(id) && !this.pending.has(id)) { this.retryAt.delete(id); void this.project(placement); }
       }
     }
     const frame = Number.isFinite(delta) && delta > 0 ? Math.min(delta, 0.25) : 0;

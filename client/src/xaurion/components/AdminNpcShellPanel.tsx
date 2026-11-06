@@ -40,6 +40,13 @@ export function AdminNpcShellPanel({ engineRef }: Readonly<{ engineRef: React.Re
   const placing = useAdminStore(state => state.placementAsset !== null);
   const setShellTarget = useAdminStore(state => state.setShellTarget);
   const [nearby, setNearby] = useState<NpcShellTarget | null>(null);
+  // Result of a removal: outlives the panel, which closes because the shell is gone.
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     if (!isAdmin) { setNearby(null); return; }
@@ -65,13 +72,14 @@ export function AdminNpcShellPanel({ engineRef }: Readonly<{ engineRef: React.Re
   }, [shell, setShellTarget]);
 
   if (!isAdmin || placing) return null;
+  const noticeLine = notice ? <p role="status" data-testid="admin-npc-shell-notice" className="aurion-ui-feedback">{notice}</p> : null;
   if (!shell) {
-    if (!nearby) return null;
-    return (
+    if (!nearby) return noticeLine;
+    return (<>{noticeLine}
       <button type="button" data-testid="admin-npc-shell-prompt" className="ax1-npc-prompt" aria-label="NPC-Hülle bearbeiten"
         onClick={() => { soundSynth.playUiOpen(); openNearestNpcShell(engineRef.current); }}>
         NPC-Hülle bearbeiten <kbd>E</kbd>
-      </button>
+      </button></>
     );
   }
   return (
@@ -92,7 +100,7 @@ export function AdminNpcShellPanel({ engineRef }: Readonly<{ engineRef: React.Re
       <p className="text-[10px] leading-relaxed text-gray-300" data-testid="admin-npc-shell-purpose">
         Noch kein Zweck bestätigt. Die Hülle steht im Ruhezustand an ihrem Platz und ist für alle Spieler sichtbar.
       </p>
-      <RemovePlacedObjectButton placementRef={shell.shellRef} onRemoved={() => setShellTarget(null)} />
+      <RemovePlacedObjectButton placementRef={shell.shellRef} onRemoved={message => { setNotice(message); setShellTarget(null); }} />
     </section>
   );
 }

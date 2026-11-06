@@ -50,6 +50,6 @@ export const useAdminStore = create<AdminState>((set) => ({
   setBvhDebugMode: (bvhDebugMode) => set({ bvhDebugMode }),
   setActiveModelId: (activeModelId) => set({ activeModelId }),
   setCurrentTarget: (currentTarget) => set({ currentTarget }),
-  setPlacementAsset: (placementAsset) => set(placementAsset ? { placementAsset, inspectionMode: false, currentTarget: null } : { placementAsset: null }),
+  setPlacementAsset: (placementAsset) => set(placementAsset ? { placementAsset, inspectionMode: false, currentTarget: null, shellTarget: null } : { placementAsset: null }),
   setShellTarget: (shellTarget) => set(shellTarget ? { shellTarget, placementAsset: null } : { shellTarget: null }),
 }));

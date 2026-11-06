@@ -878,6 +878,16 @@ export default function AurionOpenWorldRuntime() {
     };
   }, [activation, sendAuthoritativeMovement, syncAx1HumanMovement, requestWorldInteraction]);
 
+  // Starting placement or inspection ends a tap-to-move walk: the admin positions the tool,
+  // the character must not keep walking to an earlier tap destination.
+  useEffect(() => useAdminStore.subscribe((state, previous) => {
+    const toolStarted = (state.placementAsset && !previous.placementAsset) || (state.inspectionMode && !previous.inspectionMode);
+    if (!toolStarted || !touchDestinationRef.current) return;
+    touchDestinationRef.current = null;
+    engineRef.current?.setVirtualMovement(0, 0);
+    sendAuthoritativeMovement({ x: 0, z: 0 });
+  }), [sendAuthoritativeMovement]);
+
   const handleVirtualMove = useCallback((forward: number, right: number) => {
     virtualInputRef.current = { forward, right };
     syncAx1HumanMovement();

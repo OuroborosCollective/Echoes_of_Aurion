@@ -148,4 +148,44 @@ describe("NPC shell projection", () => {
     expect(update).toHaveBeenCalledTimes(1);
     projection.dispose();
   });
+
+  // Review (Devin, #1328): a shell removed while its model loaded was drawn anyway.
+  it("never draws a shell that was removed while its model was still loading", async () => {
+    let finish: (value: ReturnType<typeof character>) => void = () => undefined;
+    vi.spyOn(glbManager, "loadModel").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const projection = new NpcShellProjection(engine());
+    projection.setCatalog(catalog([ranger]));
+    projection.setWorldDesign(design([{ designKey: "npc.shells.1a2b3c4d", placements: [placement("p.000000000001", "glb_ranger")] }]));
+    projection.update(0.016);
+    projection.setWorldDesign(design([], "d"));
+    projection.update(0.016);
+    finish(character());
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
+    expect(projection.evidence().rendered).toBe(0);
+    projection.dispose();
+  });
+
+  // Review (Devin, CodeRabbit, #1328): a failed render (terrain not ready, load error) stayed invisible for good.
+  it("retries a shell whose terrain was not ready or whose model failed, with a back-off", async () => {
+    let now = 1_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const load = vi.spyOn(glbManager, "loadModel").mockRejectedValueOnce(new Error("NETWORK")).mockImplementation(async () => character());
+    let terrainReady = false;
+    const world = { scene: new THREE.Scene(), player: { position: new THREE.Vector3() }, landscape: { chunkManager: { getElevationAt: () => (terrainReady ? 0 : Number.NaN) } } };
+    const projection = new NpcShellProjection(world);
+    projection.setCatalog(catalog([ranger]));
+    projection.setWorldDesign(design([{ designKey: "npc.shells.1a2b3c4d", placements: [placement("p.000000000001", "glb_ranger")] }]));
+    projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0)); // load error
+    now += 5_000; projection.update(0.016);
+    expect(load).toHaveBeenCalledTimes(1); // back-off not yet passed
+    now += 6_000; projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0)); // terrain not ready
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(projection.evidence().rendered).toBe(0);
+    terrainReady = true;
+    now += 2_500; projection.update(0.016);
+    await vi.waitFor(() => expect(projection.evidence().rendered).toBe(1));
+    projection.dispose();
+  });
 });
