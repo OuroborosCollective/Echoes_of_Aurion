@@ -1,3 +1,4 @@
+import { WORLD_VISUAL_OVERRIDE_SCHEMA, WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
 import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import { glbRuntimeCatalogSchema, type GlbRuntimeCatalog } from "@shared/glbImportContract";
@@ -66,6 +67,7 @@ export class NpcFallbackProjection {
   private readonly proxyMatrix = new THREE.Matrix4();
   private disposed = false;
   private refreshBusy = false;
+  private refreshQueued = false;
   private lastRefreshTick = -150;
   private lodCounts: ActorLodCounts = emptyActorLodCounts();
   private mixerUpdatesLastFrame = 0;
@@ -85,7 +87,17 @@ export class NpcFallbackProjection {
     this.farProxyMesh.frustumCulled = false;
     engine.scene.add(this.farProxyMesh);
     void this.refreshCatalog();
+    // An admin replacement is visible immediately instead of after the next periodic refresh.
+    if (typeof window !== "undefined") window.addEventListener(WORLD_VISUALS_CHANGED_EVENT, this.onWorldVisualsChanged);
   }
+
+  private readonly onWorldVisualsChanged = () => {
+    if (this.disposed) return;
+    // A read already in flight may contain the state before this admin write.
+    // Coalesce concurrent change events into one follow-up authoritative read.
+    if (this.refreshBusy) { this.refreshQueued = true; return; }
+    void this.refreshCatalog();
+  };
 
   private async refreshCatalog(): Promise<void> {
     if (this.refreshBusy || this.disposed) return;
@@ -108,12 +120,25 @@ export class NpcFallbackProjection {
         } catch {
           // Retain the last confirmed world-design manifest through transient failures.
         }
+        try {
+          const overrideResponse = await fetch("/api/game/world-visual-overrides", { credentials: "same-origin" });
+          if (overrideResponse.ok) {
+            const readback = await overrideResponse.json();
+            if (readback?.schemaVersion === WORLD_VISUAL_OVERRIDE_SCHEMA && Array.isArray(readback.overrides)) this.uploadedWorld.setVisualOverrides(readback);
+          }
+        } catch {
+          // Retain the last confirmed overrides through transient failures.
+        }
       }
     } catch {
       // Keep the last confirmed catalog through transient transport failures.
       // A later confirmed catalog can still revoke/reselect a visual.
     } finally {
       this.refreshBusy = false;
+      if (this.refreshQueued && !this.disposed) {
+        this.refreshQueued = false;
+        void this.refreshCatalog();
+      }
     }
   }
 
@@ -338,6 +363,7 @@ export class NpcFallbackProjection {
   equipmentEvidence() { return this.equipment.evidence(); }
 
   dispose(): void {
+    if (typeof window !== "undefined") window.removeEventListener(WORLD_VISUALS_CHANGED_EVENT, this.onWorldVisualsChanged);
     if (this.disposed) return;
     this.disposed = true;
     this.equipment.dispose();

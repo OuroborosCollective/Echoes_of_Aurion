@@ -33,6 +33,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
+import { isAdminPlacementDesign, isPlaceableWorldAsset } from "../shared/adminPlacementPlan";
 import { groupDungeonIds } from "../shared/groupInstanceProtocol";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -47,9 +48,7 @@ export function authoringHash(value: unknown): string {
 }
 
 export function worldAssetAllowed(entry: Awaited<ReturnType<ReturnType<typeof glbImportStore>["catalog"]>>["entries"][number]): boolean {
-  return entry.assetType === "arena"
-    && entry.targetKey === null
-    && (entry.purpose === "world-environment" || entry.purpose === "world-nature");
+  return isPlaceableWorldAsset(entry);
 }
 
 function dungeonAssetAllowed(
@@ -84,7 +83,7 @@ export function validateDungeonDesignTopology(draft: DungeonDesignDraft): void {
 
 function receiptIdentity(input: {
   kind: "world" | "quest" | "dungeon";
-  action: "apply" | "publish";
+  action: "apply" | "publish" | "retire";
   targetId: string;
   actorUserId: number;
   planHash: string;
@@ -165,6 +164,13 @@ export async function planWorldDesign(raw: WorldDesignDraft, catalogConnection?:
     .where(eq(aurionWorldDesignVersions.active, true));
   const previous = active.filter(row => row.designKey === draft.designKey);
   if (previous.length > 1) throw new Error("AUTHORING_WORLD_ACTIVE_VERSION_CORRUPT");
+  if (isAdminPlacementDesign(draft.designKey) && !previous.length) {
+    // A retired admin placement group stays retired: a stale client must never revive
+    // the objects the admin removed. New placements open a fresh group instead.
+    const history = await db.select({ id: aurionWorldDesignVersions.id }).from(aurionWorldDesignVersions)
+      .where(eq(aurionWorldDesignVersions.designKey, draft.designKey)).limit(1);
+    if (history.length) throw new Error("AUTHORING_WORLD_ADMIN_GROUP_RETIRED");
+  }
   if (active.length > MAX_ACTIVE_WORLD_DESIGNS || (active.length === MAX_ACTIVE_WORLD_DESIGNS && !previous.length)) {
     throw new Error("AUTHORING_WORLD_ACTIVE_LIMIT");
   }
@@ -244,6 +250,51 @@ export async function applyWorldDesign(
         resultHash: designHash,
       });
       await persistAuthoringReceipt(tx, result, plan);
+      return result;
+    });
+  });
+  return { receipt, readback: await readActiveWorldDesign() };
+}
+
+/**
+ * Retires an admin placement group whose last placement the administrator removed
+ * (a World Design version can never be empty). Only `admin.placements.*` groups;
+ * the stored versions stay as history, the group simply stops being active.
+ * Optimistic: the active version must still have the hash the admin saw.
+ */
+export async function retireAdminPlacementDesign(
+  actorUserId: number,
+  designKey: string,
+  expectedDesignHash: string,
+): Promise<{ receipt: AuthoringReceipt; readback: WorldDesignReadback }> {
+  if (!isAdminPlacementDesign(designKey)) throw new Error("AUTHORING_WORLD_RETIRE_NOT_ADMIN_PLACEMENTS");
+  if (!/^[a-f0-9]{64}$/.test(expectedDesignHash)) throw new Error("AUTHORING_WORLD_RETIRE_HASH_INVALID");
+  const receipt = await glbImportStore().withCatalogFence(async connection => {
+    // Same fence and connection as applies: retirement serializes with every world apply.
+    const db = drizzle(connection);
+    return db.transaction(async tx => {
+      const actor = (await tx.select({ role: users.role }).from(users)
+        .where(eq(users.id, actorUserId)).for("update"))[0];
+      if (actor?.role !== "admin") throw new Error("AUTHORING_ADMIN_REQUIRED");
+      const active = (await tx.select().from(aurionWorldDesignVersions)
+        .where(eq(aurionWorldDesignVersions.active, true)).for("update"))
+        .filter(row => row.designKey === designKey);
+      if (active.length > 1) throw new Error("AUTHORING_WORLD_ACTIVE_VERSION_CORRUPT");
+      const head = active[0];
+      if (!head) throw new Error("AUTHORING_WORLD_DESIGN_NOT_ACTIVE");
+      if (head.designHash !== expectedDesignHash) throw new Error("AUTHORING_WORLD_PREDECESSOR_CHANGED");
+      await tx.update(aurionWorldDesignVersions).set({ active: false }).where(eq(aurionWorldDesignVersions.id, head.id));
+      const intent = { schemaVersion: AURION_WORLD_DESIGN_SCHEMA, action: "retire" as const, designKey, version: head.version, expectedDesignHash };
+      const result = receiptIdentity({
+        kind: "world",
+        action: "retire",
+        targetId: head.id,
+        actorUserId,
+        planHash: authoringHash(intent),
+        previousHash: head.designHash,
+        resultHash: authoringHash({ ...intent, active: false }),
+      });
+      await persistAuthoringReceipt(tx, result, intent);
       return result;
     });
   });

@@ -661,6 +661,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/components/AdminPlacement.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/components/Ax1CharacterModal.tsx",
       "donor": "AX1",
       "capabilityId": "progression.armor-mastery-content",
@@ -1126,6 +1132,18 @@
     },
     {
       "path": "client/src/xaurion/hooks/usePerformanceObserver.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/adminPlacementCommit.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/AdminPlacementGhost.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
       "role": "SUPPORT"

@@ -54,7 +54,7 @@ describe("Aurion production schema reconciliation", () => {
 
   it("covers every journaled migration through the canonical wave manifest", async () => {
     const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8"));
-    const manifest = JSON.parse(await readFile("config/aurion-migration-wave-0021-0077-manifest.json", "utf8"));
+    const manifest = JSON.parse(await readFile("config/aurion-migration-wave-0021-0078-manifest.json", "utf8"));
     const tags = journal.entries.filter((entry: { idx: number }) => entry.idx >= 21).map((entry: { tag: string }) => entry.tag);
     expect([...lateAurionMigrationTags]).toEqual(tags);
     expect(manifest.migrations.map((migration: { tag: string }) => migration.tag)).toEqual(tags);

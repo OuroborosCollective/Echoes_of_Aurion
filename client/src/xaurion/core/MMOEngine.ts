@@ -874,6 +874,11 @@ export class MMOEngine {
       let entityData: any = null;
       
       while (object) {
+        // Replaceable world visuals (uploaded catalog anchors, World Design placements).
+        if (object.userData?.worldVisualTarget) {
+          entityData = { ...object.userData.worldVisualTarget, worldVisualTarget: true };
+          break;
+        }
         if (object.userData && (object.userData.entityId || object.userData.placementId || object.userData.assetId)) {
           entityData = { ...object.userData };
           break;

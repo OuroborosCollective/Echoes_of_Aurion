@@ -1,0 +1,135 @@
+import type { WorldDesignDraft, WorldDesignReadback } from "./aurionAuthoringContract";
+import { splitWorldChunkPositionMm } from "./worldChunkProtocol";
+
+/**
+ * Admin free placements live in World Designs `admin.placements.<group>` (persisted,
+ * versioned, receipted). A new group gets a random key, so a retired group's key and
+ * version history are never reused.
+ */
+export const ADMIN_PLACEMENT_DESIGN = /^admin\.placements\.([a-z0-9]{1,16})$/;
+/**
+ * Placements per group. Below the schema maximum (256) so a full group with long asset
+ * ids and distinct asset hashes stays under the 64 KiB World Design plan limit.
+ */
+export const ADMIN_PLACEMENTS_PER_DESIGN = 192;
+/** Placement grid, like a block game: positions snap to 25 cm. */
+export const ADMIN_PLACEMENT_GRID_MM = 250;
+export const ADMIN_PLACEMENT_SCALES_PERMILLE = [250, 500, 750, 1_000, 1_250, 1_500, 2_000, 3_000, 4_000] as const;
+
+export type AdminPlacementInput = Readonly<{
+  assetId: string;
+  worldXMm: number;
+  worldZMm: number;
+  rotationQuarterTurns: 0 | 1 | 2 | 3;
+  scalePermille: number;
+}>;
+
+type Design = WorldDesignReadback["designs"][number];
+
+/**
+ * The single rule for models that may stand freely in the world (World Designs and
+ * admin placements): unassigned arena/architecture models with a world purpose.
+ */
+export function isPlaceableWorldAsset(entry: Readonly<{ assetType: string; targetKey: string | null; purpose: string }>): boolean {
+  return entry.assetType === "arena"
+    && entry.targetKey === null
+    && (entry.purpose === "world-environment" || entry.purpose === "world-nature");
+}
+
+export function snapToPlacementGrid(valueMm: number): number {
+  return Math.round(valueMm / ADMIN_PLACEMENT_GRID_MM) * ADMIN_PLACEMENT_GRID_MM;
+}
+
+export function isAdminPlacementDesign(designKey: string): boolean {
+  return ADMIN_PLACEMENT_DESIGN.test(designKey);
+}
+
+function adminDesigns(readback: WorldDesignReadback | null): Design[] {
+  return (readback?.designs ?? []).filter(design => isAdminPlacementDesign(design.designKey))
+    .sort((left, right) => (left.designKey < right.designKey ? -1 : left.designKey > right.designKey ? 1 : 0));
+}
+
+/** Uniform [0, 1) from the platform CSPRNG (browser and Node); keys must not repeat across tabs. */
+export function cryptoUnitRandom(): number {
+  const value = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(value);
+  return value[0]! / 2 ** 32;
+}
+
+function randomHex(length: number, random: () => number): string {
+  let suffix = "";
+  for (let index = 0; index < length; index += 1) suffix += Math.min(15, Math.floor(random() * 16)).toString(16);
+  return suffix;
+}
+
+/** Next World Design version that adds one placement to the first admin group with room. */
+export function buildPlacementDraft(readback: WorldDesignReadback | null, catalogRevision: string, input: AdminPlacementInput, random: () => number = cryptoUnitRandom): WorldDesignDraft {
+  if (!Number.isSafeInteger(input.worldXMm) || !Number.isSafeInteger(input.worldZMm)) throw new Error("ADMIN_PLACEMENT_POSITION_INVALID");
+  if (![0, 1, 2, 3].includes(input.rotationQuarterTurns)) throw new Error("ADMIN_PLACEMENT_ROTATION_INVALID");
+  if (!Number.isInteger(input.scalePermille) || input.scalePermille < 250 || input.scalePermille > 4_000) throw new Error("ADMIN_PLACEMENT_SCALE_INVALID");
+  const { coordinate, localPositionMm } = splitWorldChunkPositionMm({ x: input.worldXMm, z: input.worldZMm });
+  const designs = adminDesigns(readback);
+  const target = designs.find(design => design.placements.length < ADMIN_PLACEMENTS_PER_DESIGN);
+  // A stuck entropy provider or repeated values must never hang the world editor.
+  // Collisions fail closed and can be retried with fresh entropy on a later action.
+  const MAX_ID_ATTEMPTS = 16;
+  let designKey = target?.designKey ?? "";
+  if (!target) {
+    for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
+      const candidate = `admin.placements.${randomHex(8, random)}`;
+      if (!designs.some(design => design.designKey === candidate)) { designKey = candidate; break; }
+    }
+    if (!designKey) throw new Error("ADMIN_PLACEMENT_ID_EXHAUSTED");
+  }
+  const existing = target?.placements ?? [];
+  let placementKey = "";
+  for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
+    const candidate = `p.${randomHex(12, random)}`;
+    if (!existing.some(placement => placement.placementKey === candidate)) { placementKey = candidate; break; }
+  }
+  if (!placementKey) throw new Error("ADMIN_PLACEMENT_ID_EXHAUSTED");
+  return {
+    schemaVersion: "aurion.world-design.v1",
+    designKey,
+    version: (target?.version ?? 0) + 1,
+    title: target?.title ?? "Admin-Platzierungen",
+    expectedCatalogRevision: catalogRevision,
+    placements: [...existing, {
+      placementKey,
+      assetId: input.assetId,
+      chunkX: coordinate.x,
+      chunkZ: coordinate.z,
+      xMm: localPositionMm.x,
+      zMm: localPositionMm.z,
+      rotationQuarterTurns: input.rotationQuarterTurns,
+      scalePermille: input.scalePermille,
+    }],
+  };
+}
+
+export type AdminPlacementRemoval =
+  | Readonly<{ kind: "draft"; draft: WorldDesignDraft }>
+  /** The last placement of a group: the whole group is retired (a design cannot be empty). */
+  | Readonly<{ kind: "retire"; designKey: string; expectedDesignHash: string }>;
+
+/** Next World Design version without one admin placement, or the group's retirement. */
+export function buildRemovalPlan(readback: WorldDesignReadback | null, catalogRevision: string, designKey: string, placementKey: string): AdminPlacementRemoval {
+  if (!isAdminPlacementDesign(designKey)) throw new Error("ADMIN_PLACEMENT_NOT_ADMIN_PLACED");
+  const design = adminDesigns(readback).find(candidate => candidate.designKey === designKey);
+  if (!design || !design.placements.some(placement => placement.placementKey === placementKey)) throw new Error("ADMIN_PLACEMENT_NOT_FOUND");
+  if (design.placements.length === 1) return Object.freeze({ kind: "retire" as const, designKey, expectedDesignHash: design.designHash });
+  return Object.freeze({ kind: "draft" as const, draft: {
+    schemaVersion: "aurion.world-design.v1" as const,
+    designKey,
+    version: design.version + 1,
+    title: design.title,
+    expectedCatalogRevision: catalogRevision,
+    placements: design.placements.filter(placement => placement.placementKey !== placementKey),
+  } });
+}
+
+/** Splits an `authored:<designKey>:<placementKey>` reference of an admin placement. */
+export function adminPlacementFromRef(placementRef: string | undefined | null): Readonly<{ designKey: string; placementKey: string }> | null {
+  const match = /^authored:(admin\.placements\.[a-z0-9]{1,16}):([a-z][a-z0-9._:-]{2,95})$/.exec(placementRef ?? "");
+  return match ? Object.freeze({ designKey: match[1]!, placementKey: match[2]! }) : null;
+}
