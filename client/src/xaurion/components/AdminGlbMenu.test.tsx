@@ -6,7 +6,7 @@ import { useAdminStore } from "../core/AdminService";
 const fixture = vi.hoisted(() => ({
   query: { data: undefined as undefined | { id: string; displayName: string; assetType: string; bytes: number }[], isLoading: false, isError: false, isSuccess: false, refetch: vi.fn() },
   adminQuery: vi.fn(), publicQuery: vi.fn(),
-  setWorldVisual: vi.fn(), revisions: {} as Record<string, number>,
+  setWorldVisual: vi.fn(), revisions: {} as Record<string, number>, overrides: [] as { placementRef: string; assetId: string }[],
   authoringCatalog: vi.fn(), plan: vi.fn(), apply: vi.fn(), retire: vi.fn(),
 }));
 vi.mock("../../lib/trpc", () => ({ trpc: {
@@ -16,7 +16,7 @@ vi.mock("../../lib/trpc", () => ({ trpc: {
     setWorldVisual: { useMutation: () => ({ mutateAsync: fixture.setWorldVisual, isPending: false }) },
     upload: { useMutation: () => ({ mutateAsync: vi.fn() }) },
   } },
-  worldAssets: { visualOverrides: { useQuery: () => ({ data: { revisions: fixture.revisions }, refetch: async () => ({ data: { revisions: fixture.revisions } }) }) } },
+  worldAssets: { visualOverrides: { useQuery: () => ({ data: { revisions: fixture.revisions, overrides: fixture.overrides }, refetch: async () => ({ data: { revisions: fixture.revisions, overrides: fixture.overrides } }) }) } },
   assetSubmissions: { publicCatalog: { useQuery: () => { fixture.publicQuery(); return { data: [] }; } } },
   useUtils: () => ({ aurionAuthoring: { catalog: { fetch: fixture.authoringCatalog } } }),
   aurionAuthoring: {
@@ -37,6 +37,7 @@ beforeEach(() => {
   useAdminStore.setState({ isAdmin: true, inspectionMode: false, activeModelId: null, currentTarget: null });
   Object.assign(fixture.query, { data: undefined, isLoading: false, isError: false, isSuccess: false });
   fixture.revisions = {};
+  fixture.overrides = [];
 });
 
 // Production 2026-11-06: the inspection cursor never targeted houses and "Integrate GLB
@@ -61,12 +62,20 @@ describe("world visual replacement through the inspection cursor", () => {
   });
   it("restores the original visual of an overridden placement", async () => {
     fixture.revisions = { "uploaded:0:0:2": 1 };
+    fixture.overrides = [{ placementRef: "uploaded:0:0:2", assetId: "glb_new_house" }];
     fixture.setWorldVisual.mockResolvedValue({ revision: 2 });
     useAdminStore.setState({ inspectionMode: true, activeModelId: "glb_new_house", currentTarget: house });
     openInspection();
     fireEvent.click(screen.getByRole("button", { name: "Original wiederherstellen" }));
     await screen.findByText(/Original wiederhergestellt/);
     expect(fixture.setWorldVisual).toHaveBeenCalledWith({ placementRef: "uploaded:0:0:2", assetId: null, expectedRevision: 1 });
+  });
+  it("does not offer a second restore when the latest revision already restored the original", () => {
+    fixture.revisions = { "uploaded:0:0:2": 2 };
+    fixture.overrides = []; // A restored placement retains a revision head but has no active override.
+    useAdminStore.setState({ inspectionMode: true, activeModelId: "glb_new_house", currentTarget: house });
+    openInspection();
+    expect(screen.queryByRole("button", { name: "Original wiederherstellen" })).toBeNull();
   });
   it("shows the server reason instead of failing silently", async () => {
     fixture.setWorldVisual.mockRejectedValue(new Error("WORLD_VISUAL_ASSET_NOT_A_WORLD_ASSET"));
