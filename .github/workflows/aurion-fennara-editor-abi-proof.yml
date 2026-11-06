@@ -145,7 +145,7 @@ jobs:
             -p fennara-cli -p fennara-daemon -p fennara-mcp
           cargo test --locked --manifest-path fennara/local/Cargo.toml \
             -p fennara-cli -p fennara-daemon -p fennara-mcp
-          for name in fennara fennara-daemon fennara-mcp; do
+          for name in fennara fennara-daemon fennara-mcp fennara-daemon-runtime fennara-mcp-runtime; do
             test -x "fennara/local/target/release/$name"
           done
       - name: Verify stock Fennara CLI daemon ABI regression and rebuilt Rust ABI
@@ -180,7 +180,7 @@ jobs:
                       old=abi(path)
                       assert old>(2,35),f"stock incompatible ABI not reproduced for {name}: {old}"
                       print("FENNARA_STOCK_CLI_DAEMON_ABI_RED_CONFIRMED",name,old)
-          for name in ("fennara","fennara-daemon","fennara-mcp"):
+          for name in ("fennara","fennara-daemon","fennara-mcp","fennara-daemon-runtime","fennara-mcp-runtime"):
               path=built/name
               assert path.is_file()
               req=abi(path)
@@ -200,5 +200,7 @@ jobs:
             ${{ github.workspace }}/fennara/local/target/release/fennara
             ${{ github.workspace }}/fennara/local/target/release/fennara-daemon
             ${{ github.workspace }}/fennara/local/target/release/fennara-mcp
+            ${{ github.workspace }}/fennara/local/target/release/fennara-daemon-runtime
+            ${{ github.workspace }}/fennara/local/target/release/fennara-mcp-runtime
           if-no-files-found: warn
           retention-days: 7
