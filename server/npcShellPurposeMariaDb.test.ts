@@ -19,6 +19,10 @@ import { OpenCodeProvider, OpenRouterProvider, type Model } from "./aiFabric/pro
 import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
 import { router } from "./_core/trpc";
 import type { TrpcContext } from "./_core/context";
+import { useGlbCatalogLock } from "./testSupport/npcSharedTableLock";
+
+// Changes or binds the shared GLB runtime catalog revision; never overlap with other such files.
+useGlbCatalogLock();
 
 // Explicit test doubles of provider inference, NOT provider or live-world evidence.
 class UnitOpenRouter extends OpenRouterProvider {

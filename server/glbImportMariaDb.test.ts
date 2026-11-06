@@ -15,6 +15,10 @@ import {
   testAnimatedPlayerGlb,
   testGlb,
 } from "./glbImportFixtures";
+import { useGlbCatalogLock } from "./testSupport/npcSharedTableLock";
+
+// Changes or binds the shared GLB runtime catalog revision; never overlap with other such files.
+useGlbCatalogLock();
 
 const enabled = process.env.AURION_GLB_DB_TEST === "1";
 describe.skipIf(!enabled)(

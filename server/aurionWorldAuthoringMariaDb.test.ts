@@ -23,6 +23,10 @@ import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
 import { DesignerInput, validateProposal } from "./aiFabric/worldDesigner";
 import { aurionQuestRouter } from "./routes/aurionQuestRouter";
+import { useGlbCatalogLock } from "./testSupport/npcSharedTableLock";
+
+// Changes or binds the shared GLB runtime catalog revision; never overlap with other such files.
+useGlbCatalogLock();
 
 vi.mock("./storage", async importOriginal => ({
   ...await importOriginal<typeof import("./storage")>(),
