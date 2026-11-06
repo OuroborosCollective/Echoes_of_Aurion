@@ -5795,3 +5795,13 @@ Evidence: Original PR-Head 6bfbdf9b9404b3d43da6242ecb1a6f842a5f4a58 (48/48 GitHu
 Learned: Cursor- und Touch-Kamerapfade müssen getrennte Zielbedingungen haben; Snap kann gültige Rohposition außerhalb der Reichweite verschieben; Schlüsselgenerierung benötigt begrenzten Kollisionsversuch.
 Open: Exakte CI-Regression mit tatsächlichen Job-/Logbelegen prüfen; danach Review/Merge-Gates und Release-Run getrennt lesen. Keine Produktionsfreigabe vorwegnehmen.
 Next safe step: Exact-Head-CI an dem finalen PR-Commit prüfen, bei grün expected-head mergen und Produktions-Preflight-Link nur mit neuer Main-SHA/Release-Run-ID/Attempt ausgeben.
+
+### 2026-11-06 — Nachregression GLB-Refresh-Event während laufendem Readback
+Status: PARTIAL (Exact-Head CI ausstehend)
+Task: PR #1327, persistierte GLB-Overrides nach Admin-Schreibereignis auch bei konkurrierendem Katalog-Refresh sofort anzeigen.
+Decisions: Während eines aktiven Refreshs eintreffende WORLD_VISUALS_CHANGED_EVENTs zu einem nachfolgenden Server-Readback zusammenfassen; keine zweite World-/Client-Authority, keine Änderung an Touch-Kamera, Gameplay oder 100-ms-Tick.
+Touched surfaces: client/src/xaurion/integration/NpcFallbackProjection.ts und NpcFallbackProjection.test.ts.
+Evidence: CodeRabbit-Review 2026-11-06T02:19:23Z (https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1327), Regressionstest-Commit 1fa344531fcabd6be1a602f328b44084f03d839e, Fix-Commit 2b6eb0e00b6a0ae751486368ca7236b9e1ea9148. Quell-Readback und GitHub-Head geprüft. RED/GREEN-Testausführung und Exact-Head-CI sowie Live-Übernahme bislang nicht belegt.
+Learned: Der alte refreshBusy-Guard verwirft Events im Flug und kann bestätigte Weltmodelländerungen bis zum nächsten periodischen Refresh unsichtbar lassen; serialisierter Nachladeimpuls bewahrt den neuesten Serverstand.
+Open: CI-HUD/PR-Runtime/World-Authoring am finalen Head inklusive gezielter Testlogs bestätigen; Review und Merge danach; Produktionsrelease mit neuem Run/Attempt nur aus Readback. Sonstige historische Live-World-Blocker bleiben getrennt offen.
+Next safe step: Exact-Head-CI lesen und negative Befunde beheben; nur bei bestandenen Gates expected-head mergen; danach vorausgefüllten Owner-Preflight aus Main-Release-SHA, Run-ID und Attempt erzeugen.
