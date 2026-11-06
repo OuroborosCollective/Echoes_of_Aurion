@@ -70,11 +70,24 @@ export function buildPlacementDraft(readback: WorldDesignReadback | null, catalo
   const { coordinate, localPositionMm } = splitWorldChunkPositionMm({ x: input.worldXMm, z: input.worldZMm });
   const designs = adminDesigns(readback);
   const target = designs.find(design => design.placements.length < ADMIN_PLACEMENTS_PER_DESIGN);
-  let designKey = target?.designKey ?? `admin.placements.${randomHex(8, random)}`;
-  while (!target && designs.some(design => design.designKey === designKey)) designKey = `admin.placements.${randomHex(8, random)}`;
+  // A stuck entropy provider or repeated values must never hang the world editor.
+  // Collisions fail closed and can be retried with fresh entropy on a later action.
+  const MAX_ID_ATTEMPTS = 16;
+  let designKey = target?.designKey ?? "";
+  if (!target) {
+    for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
+      const candidate = `admin.placements.${randomHex(8, random)}`;
+      if (!designs.some(design => design.designKey === candidate)) { designKey = candidate; break; }
+    }
+    if (!designKey) throw new Error("ADMIN_PLACEMENT_ID_EXHAUSTED");
+  }
   const existing = target?.placements ?? [];
-  let placementKey = `p.${randomHex(12, random)}`;
-  while (existing.some(placement => placement.placementKey === placementKey)) placementKey = `p.${randomHex(12, random)}`;
+  let placementKey = "";
+  for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
+    const candidate = `p.${randomHex(12, random)}`;
+    if (!existing.some(placement => placement.placementKey === candidate)) { placementKey = candidate; break; }
+  }
+  if (!placementKey) throw new Error("ADMIN_PLACEMENT_ID_EXHAUSTED");
   return {
     schemaVersion: "aurion.world-design.v1",
     designKey,
