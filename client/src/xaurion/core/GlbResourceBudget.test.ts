@@ -9,6 +9,7 @@ import { buildGlbImportPlan } from "../../../../server/glbImportPlan";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
 import { AURION_STARTER_CITY_WALL_LODS } from "@shared/aurionStarterCityWallContract";
 import {
+  assetBudgets,
   GlbResourcePool,
   glbResourcePool,
   fetchVerifiedGlb,
@@ -439,7 +440,7 @@ describe("bounded, verified GLB ownership", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("uses a permitted lower LOD on phones without downloading the wall's oversized variants", async () => {
+  it("loads the full-detail pinned city wall once under the doubled phone byte ceiling", async () => {
     vi.stubGlobal("crypto", webcrypto);
     // Real Three.js decoder and budget pool, with small static fixture GLBs.
     // Catalog sizes reproduce all three actual approved wall file sizes.
@@ -454,12 +455,12 @@ describe("bounded, verified GLB ownership", () => {
     const fetch = vi.fn(async (url: string) => new Response(physical.find(lod => lod.storageUrl === url)!.fixture));
     vi.stubGlobal("fetch", fetch);
     const loaded = await glbManager.loadStaticLodFamily(entry);
-    expect(loaded.lodLevels).toEqual([2]);
+    expect(loaded.lodLevels).toEqual([0]);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(physical[2]!.storageUrl, expect.anything());
+    expect(fetch).toHaveBeenCalledWith(physical[0]!.storageUrl, expect.anything());
     expect(new THREE.Box3().setFromObject(loaded.scene).isEmpty()).toBe(false);
     releaseGlbTree(loaded.scene);
-    await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.slice(0, 2) })).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
+    await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.map(lod => ({ ...lod, bytes: assetBudgets.phone.assetBytes + 1 })) })).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -486,16 +487,49 @@ describe("real pinned city wall mobile LOD admission", () => {
       targetKey: null, normalization: { lod: { level: lod.level } } })),
   } as unknown as GlbCatalogEntry;
 
-  it("selects one verified lowest-cost wall LOD on phones and tablets without relaxing resource ceilings", () => {
-    expect(selectStaticWorldLodVariants(wall, "phone").map(lod => lod.level)).toEqual([2]);
-    expect(selectStaticWorldLodVariants(wall, "tablet").map(lod => lod.level)).toEqual([2]);
+  it("allows full-detail wall rendering on phone and the measured three-LOD wall texture load on tablet", () => {
+    expect(selectStaticWorldLodVariants(wall, "phone").map(lod => lod.level)).toEqual([0]);
+    expect(selectStaticWorldLodVariants(wall, "tablet").map(lod => lod.level)).toEqual([0, 1, 2]);
     expect(selectStaticWorldLodVariants(wall, "desktop").map(lod => lod.level)).toEqual([0, 1, 2]);
   });
 
   it("does not reduce unrelated world models or admit missing oversized wall variants", () => {
     const unrelated = { ...wall, sha256: "f".repeat(64) } as GlbCatalogEntry;
     expect(selectStaticWorldLodVariants(unrelated, "tablet").map(lod => lod.level)).toEqual([0, 1, 2]);
-    const missingPhoneFallback = { ...wall, lods: wall.lods!.slice(0, 2) } as GlbCatalogEntry;
-    expect(selectStaticWorldLodVariants(missingPhoneFallback, "phone")).toEqual([]);
+    const oversize = { ...wall, lods: wall.lods!.map(lod => ({ ...lod, bytes: assetBudgets.phone.assetBytes + 1 })) } as GlbCatalogEntry;
+    expect(selectStaticWorldLodVariants(oversize, "phone")).toEqual([]);
+    const mixed = { ...wall, lods: wall.lods!.map((lod, index) => index === 1 ? { ...lod, sha256: "f".repeat(64) } : lod) } as GlbCatalogEntry;
+    expect(selectStaticWorldLodVariants(mixed, "tablet")).toEqual([]);
+  });
+});
+
+
+describe("owner-approved doubled mobile runtime budgets and measured wall textures", () => {
+  it("doubles mobile admission counts and byte limits while keeping the desktop profile unchanged", () => {
+    expect(assetBudgets.phone).toEqual({
+      worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16,
+      decoderJobs: 4, ktxWorkers: 2, cacheModels: 80,
+      textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024,
+      assetWorkingSetBytes: 192*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024,
+    });
+    expect(assetBudgets.tablet).toEqual({
+      worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24,
+      decoderJobs: 4, ktxWorkers: 2, cacheModels: 112,
+      textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024,
+      assetWorkingSetBytes: 384*1024*1024, assetBytes: 24*1024*1024, networkBytes: 48*1024*1024,
+    });
+    expect(assetBudgets.desktop).toEqual({
+      worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20,
+      decoderJobs: 2, ktxWorkers: 2, cacheModels: 80,
+      textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024,
+      assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024,
+    });
+    // Measured immutable LOD0+1+2 wall PNG allocations: 88,080,336 bytes (~88 MB).
+    // This is actual consumption, not a target cap: reserve headroom for neighboring assets.
+    expect(assetBudgets.tablet.textureBytes).toBeGreaterThan(88_080_336);
+    for (const lod of AURION_STARTER_CITY_WALL_LODS) {
+      expect(lod.bytes).toBeLessThanOrEqual(assetBudgets.phone.assetBytes);
+      expect(lod.bytes).toBeLessThanOrEqual(assetBudgets.tablet.assetBytes);
+    }
   });
 });
