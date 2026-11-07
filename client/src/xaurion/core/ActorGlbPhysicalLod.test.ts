@@ -38,7 +38,7 @@ describe("physical actor LOD source identity", () => {
     expect(glbCatalogEntrySchema.parse(selected?.entry).normalization.sourceSha256).toBe(physical.sha256);
     expect(source.entries[0]!.normalization.lod.level).toBe(0);
   });
-}
+
   it("admits a 15 MB high-detail physical model within the doubled phone limit", () => {
     const source = catalog("character", false);
     const entry = source.entries[0]!;
