@@ -7,6 +7,7 @@ import { selectEnemyGlb } from "../core/EnemyGlbFallback";
 import { acceptConfirmedZoneCombat, projectConfirmedZoneSnapshot } from "./zoneCombatBridge";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
 import { glbResourcePool } from "../core/GlbResourceBudget";
+import { assetBudgets } from "@shared/glbPresentationBudget";
 
 const catalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "b".repeat(64), entries: [{ assetId: `glb_${sha.slice(0,48)}`, sha256: sha, displayName: "Enemy Fallback · Clockwork Stalker", purpose: "enemy-fallback", assetType: "enemy", subcategory: null, targetKey: null, equipmentSlot: null, storageUrl: `/api/assets/glb/${sha}.glb` }] };
 const lod1Sha = "1".repeat(64), lod2Sha = "2".repeat(64);
@@ -162,8 +163,8 @@ describe("approved confirmed mob GLB presentation", () => {
     const oversized = {
       ...catalog.entries[0]!,
       lods: [
-        { level: 0 as const, assetId: "glb_oversized0", sha256: "a".repeat(64), bytes: 8 * 1024 * 1024 + 1, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, targetKey: null },
-        { level: 1 as const, assetId: "glb_oversized1", sha256: "b".repeat(64), bytes: 8 * 1024 * 1024 + 2, storageUrl: `/api/assets/glb/${"b".repeat(64)}.glb`, targetKey: null },
+        { level: 0 as const, assetId: "glb_oversized0", sha256: "a".repeat(64), bytes: assetBudgets.phone.assetBytes + 1, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, targetKey: null },
+        { level: 1 as const, assetId: "glb_oversized1", sha256: "b".repeat(64), bytes: assetBudgets.phone.assetBytes + 2, storageUrl: `/api/assets/glb/${"b".repeat(64)}.glb`, targetKey: null },
       ],
     };
     const s = setup();

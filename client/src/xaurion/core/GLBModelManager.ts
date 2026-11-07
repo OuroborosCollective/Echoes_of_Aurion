@@ -7,15 +7,18 @@ import {
   type GlbImportPurpose,
 } from "@shared/glbImportContract";
 import type { GlbNormalizationManifest } from "@shared/glbNormalizationContract";
+import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { RPGItem, WeaponType, ItemRarity } from "../types";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import {
+  assetBudgets,
   fetchVerifiedGlb,
   glbResourcePool,
   inspectGlbAllocation,
+  type AssetTier,
 } from "./GlbResourceBudget";
 import {
   disposeGlbSource,
@@ -119,6 +122,31 @@ function runtimeCategory(
 }
 
 const CATALOG_LOD_HYSTERESIS = 0.1;
+
+/**
+ * Admit physical LODs under the unchanged device byte ceiling.
+ * The SHA-pinned textured city wall is a single world object: retaining its
+ * full three-level family exhausts tablet texture/decoded memory before any
+ * other scenery can be projected. Mobile clients therefore request only its
+ * cheapest approved physical LOD. Desktop retains the full distance LOD set.
+ * Unknown or mismatched hashes never receive the wall exception.
+ */
+export function selectStaticWorldLodVariants(
+  entry: GlbCatalogEntry,
+  tier: AssetTier = glbResourcePool.tier,
+): readonly GlbCatalogLodVariant[] {
+  const variants = glbCatalogLods(entry)
+    .filter(variant => variant.bytes === null || variant.bytes <= assetBudgets[tier].assetBytes)
+    .slice()
+    .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256));
+  if (!isStarterCityWallSource(entry.sha256) || tier === "desktop") return variants;
+  // Never claim unknown bytes as the SHA-pinned city wall family.
+  if (variants.some(variant => !isStarterCityWallSource(variant.sha256))) return [];
+  // Preserve all LODs where the doubled tablet budget admits the measured 88 MB
+  // texture family; on phones, display the high-detail wall without loading
+  // three redundant resident texture sets at once.
+  return tier === "tablet" ? variants : variants.slice(0, 1);
+}
 
 type CachedModel = {
   scene: THREE.Group;
@@ -399,15 +427,7 @@ export class GLBModelManager {
     animations: THREE.AnimationClip[];
     lodLevels: readonly number[];
   }> {
-    const variants = glbCatalogLods(entry)
-      // A logical model must remain usable when its highest-detail physical
-      // files exceed this device's budget. Never request known oversized LODs.
-      .filter(variant => variant.bytes === null || variant.bytes <= glbResourcePool.limits.assetBytes)
-      .slice()
-      .sort(
-        (left, right) =>
-          left.level - right.level || left.sha256.localeCompare(right.sha256)
-      );
+    const variants = selectStaticWorldLodVariants(entry);
     if (variants.length === 0) throw Error("GLB_NO_SUPPORTED_LOD");
     for (const variant of variants) {
       if (variant.normalization.lod.level !== variant.level || variant.normalization.sourceSha256 !== variant.sha256)

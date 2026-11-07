@@ -3,6 +3,9 @@ extends SceneTree
 const WallProjection = preload("res://world/world_design_projection.gd")
 
 func _init() -> void:
+	assert(WallProjection.MAX_VISUALS == 36)
+	assert(WallProjection.MAX_TOTAL_TEXTURE_PIXELS == 32 * 1024 * 1024)
+	assert(WallProjection.MAX_TOTAL_MODEL_VERTICES == 1500000)
 	for sha in WallProjection.STARTER_CITY_WALL_HASHES:
 		assert(is_equal_approx(WallProjection._visual_scale(sha, "structure", 101.5, 1000), 1.0))
 		assert(is_equal_approx(WallProjection._visual_scale(sha, "structure", 101.5, 500), 0.5))
@@ -42,15 +45,15 @@ func _test_selection() -> void:
 	projection._center = Vector2i.ZERO
 	projection._has_center = true
 	projection._chunks = {Vector2i.ZERO: [], Vector2i(1, 0): []}
-	for index in range(18):
+	for index in range(36):
 		projection._placements.append({"designKey":"props", "placementKey":"prop-%02d" % index,
 			"chunk":Vector2i.ZERO, "sha256":"f".repeat(64), "xMm":32000, "zMm":32000, "scale":1000, "rotation":0})
 	var wall := {"designKey":"wall", "placementKey":"perimeter", "chunk":Vector2i(1, 0),
 		"sha256":WallProjection.STARTER_CITY_WALL_HASHES[0], "xMm":32000, "zMm":32000, "scale":1000, "rotation":0}
 	projection._placements.append(wall)
 	var selected := projection._desired()
-	assert(selected.size() == 18 and selected[0].designKey == "wall")
-	assert(selected[1].placementKey == "prop-00" and selected[-1].placementKey == "prop-16")
+	assert(selected.size() == 36 and selected[0].designKey == "wall")
+	assert(selected[1].placementKey == "prop-00" and selected[-1].placementKey == "prop-34")
 	wall.scale = 250
 	projection._desired_dirty = true
 	assert(projection._desired()[0].designKey == "props")
