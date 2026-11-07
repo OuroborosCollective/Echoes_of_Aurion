@@ -283,18 +283,18 @@ describe("textures shared by content across models and LOD levels", () => {
       expect(createImageBitmap).toHaveBeenCalledTimes(3);
       expect(maps[0]!.source).toBe(maps[1]!.source);
       expect(glbResourcePool.evidence().reservedTextureBytes - before.reservedTextureBytes).toBe(3 * mipBytes(512));
-      expect(glbSharedTextures.evidence()).toMatchObject({ images: 3, references: 6 });
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 3, images: 3, references: 6 });
     } finally {
       releaseGlbTree(a.scene);
     }
     // The first model leaves; the second keeps the images alive.
     glbManager.trimIdle();
     expect(bitmaps.some(bitmap => bitmap.close.mock.calls.length)).toBe(false);
-    expect(glbSharedTextures.evidence()).toMatchObject({ images: 3, references: 3 });
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 3, images: 3, references: 3 });
     releaseGlbTree(b.scene);
     glbManager.trimIdle();
     expect(bitmaps.every(bitmap => bitmap.close.mock.calls.length === 1)).toBe(true);
-    expect(glbSharedTextures.evidence()).toMatchObject({ images: 0, references: 0 });
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 0, images: 0, references: 0 });
     expect(glbResourcePool.evidence().reservedTextureBytes).toBe(before.reservedTextureBytes);
     expect(glbResourcePool.evidence().reservedDecodedBytes).toBe(before.reservedDecodedBytes);
   });
@@ -320,16 +320,71 @@ describe("textures shared by content across models and LOD levels", () => {
   // GLTFLoader decodes each image index; a duplicate inside one GLB is decoded
   // transiently, then closed — only one copy stays resident and budgeted.
   it("keeps and budgets an image used twice inside one GLB once", async () => {
-    const bytes = texturedGlb(512, 3, "image/png", [9_201, 9_201, 9_202], "Twice");
+    // Images 1 and 2 carry the same bytes and both feed linear slots (same upload configuration).
+    const bytes = texturedGlb(512, 3, "image/png", [9_202, 9_201, 9_201], "Twice");
     const { bitmaps, url, normalization } = await stubBrowser(bytes);
     const before = glbResourcePool.evidence().reservedTextureBytes;
     const loaded = await glbManager.loadModel(url, normalization);
     try {
-      expect(glbSharedTextures.evidence()).toMatchObject({ images: 2, references: 2 });
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 2, images: 2, references: 2 });
       expect(bitmaps.filter(bitmap => bitmap.close.mock.calls.length === 1)).toHaveLength(bitmaps.length - 2);
       expect(glbResourcePool.evidence().reservedTextureBytes - before).toBe(2 * mipBytes(512));
     } finally {
       releaseGlbTree(loaded.scene);
+    }
+  });
+
+  // Review (Devin on #1342): Three.js uploads the same image once per sampler/colour
+  // space, so each configuration must be budgeted although the decoded image is shared.
+  it("budgets one GPU upload per configuration while decoding the image once", async () => {
+    const colour = texturedGlb(512, 1, "image/png", [9_401], "ColourUse");
+    const linear = rewriteGlbJson(texturedGlb(512, 1, "image/png", [9_401], "NormalUse"), json => {
+      json.materials = [{ normalTexture: { index: 0 } }];
+    });
+    const { createImageBitmap, target } = await stubBrowser(colour, true, [linear]);
+    const before = glbResourcePool.evidence().reservedTextureBytes;
+    const a = await glbManager.loadModel(target(colour).url, target(colour).normalization);
+    const b = await glbManager.loadModel(target(linear).url, target(linear).normalization);
+    try {
+      expect(createImageBitmap).toHaveBeenCalledTimes(1);
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 2, images: 1 });
+      expect(glbResourcePool.evidence().reservedTextureBytes - before).toBe(2 * mipBytes(512));
+    } finally {
+      releaseGlbTree(a.scene);
+      releaseGlbTree(b.scene);
+    }
+    glbManager.trimIdle();
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 0, images: 0 });
+    expect(glbResourcePool.evidence().reservedTextureBytes).toBe(before);
+  });
+
+  // Review (Devin on #1342): two models starting together must not both reserve the
+  // same image; the second waits for the first and reuses its upload.
+  it("admits concurrent models sharing an image although only one copy fits", async () => {
+    const first = texturedGlb(1024, 1, "image/png", [9_501], "TogetherA");
+    const second = texturedGlb(1024, 1, "image/png", [9_501], "TogetherB");
+    const { target } = await stubBrowser(first, true, [second]);
+    // Slow decode: the second model reaches admission while the first is still decoding.
+    const createImageBitmap = vi.fn(async (blob: Blob) => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const header = Buffer.from(await blob.arrayBuffer());
+      return { width: header.readUInt32BE(16), height: header.readUInt32BE(20), close: vi.fn() };
+    });
+    vi.stubGlobal("createImageBitmap", createImageBitmap);
+    const limits = glbResourcePool.limits;
+    const geometrySlack = 1024 * 1024;
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - mipBytes(1024) - geometrySlack, animations: 0 });
+    const reducedBefore = glbResourcePool.evidence().reducedTextureModels;
+    let scenes: THREE.Group[] = [];
+    try {
+      scenes = (await Promise.all([first, second].map(glb => glbManager.loadModel(target(glb).url, target(glb).normalization)))).map(loaded => loaded.scene);
+      expect(createImageBitmap).toHaveBeenCalledTimes(1);
+      expect(glbResourcePool.evidence().reducedTextureModels).toBe(reducedBefore);
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 1, references: 2 });
+    } finally {
+      scenes.forEach(scene => releaseGlbTree(scene));
+      glbManager.trimIdle();
+      filler!();
     }
   });
 

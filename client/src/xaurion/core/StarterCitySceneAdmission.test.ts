@@ -57,11 +57,12 @@ function inspect(model: SceneModel, edge: number) {
 
 /** Same composition as GLBModelManager.decode: resident shared images cost nothing. */
 function admitShared(pool: GlbResourcePool, model: SceneModel, resident: Map<string, number>, headroomKey?: string) {
-  const hashes = model.images.map(image => image[2]);
-  const reused = new Set(hashes.filter(hash => resident.has(hash)));
+  // Production assets use one sampler/colour role per image: one upload per image hash.
+  const uploads = model.images.map((image, index) => ({ key: image[2], image: index }));
+  const reused = new Set(uploads.map(upload => upload.key).filter(key => resident.has(key)));
   const result = admitGlbAllocation(pool, edge => {
     const base = inspect(model, edge);
-    return { ...base, ...sharedGlbAllocation(base, hashes, reused) };
+    return { ...base, ...sharedGlbAllocation(base, uploads, reused) };
   }, { resizable: true, headroomKey });
   if (!result) return null;
   result.inspected.fresh.forEach(hash => resident.set(hash, result.textureDimension));
