@@ -125,9 +125,13 @@ export function summarizeWorldChunkTerrain(chunk: BaseWorldChunk): AurionTerrain
       }
     }
   }
+  let roadTileCount = 0;
+  for (let i = 0; i < chunk.tiles.length; i++) {
+    if (isBaseChunkRoadTile(chunk.tiles[i]!)) roadTileCount++;
+  }
   return Object.freeze({
     tileCount: chunk.tiles.length,
-    roadTileCount: chunk.tiles.filter(isBaseChunkRoadTile).length,
+    roadTileCount,
     minHeightMm,
     maxHeightMm,
     maxAdjacentDeltaMm,
@@ -392,7 +396,7 @@ export function normalizeModelBounds(bounds: ModelBounds, targetMaxExtent: numbe
     bounds.max[2]! - bounds.min[2]!
   ];
   extents.forEach((value, index) => finitePositive(value, `extent${index}`));
-  const sourceMaxExtent = Math.max(...extents);
+  const sourceMaxExtent = Math.max(extents[0], extents[1], extents[2]);
   const scaleE8 = Math.round((targetMaxExtent / sourceMaxExtent) * SCALE_E8);
   if (!Number.isSafeInteger(scaleE8) || scaleE8 <= 0) throw new Error("normalized model scale is outside the safe integer envelope");
   const scale = scaleE8 / SCALE_E8;
