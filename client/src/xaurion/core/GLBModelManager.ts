@@ -19,6 +19,7 @@ import {
   glbResourcePool,
   inspectGlbAllocation,
   type AssetTier,
+  type GlbResourcePool,
 } from "./GlbResourceBudget";
 import {
   disposeGlbSource,
@@ -26,6 +27,8 @@ import {
   releaseGlbTree,
 } from "./GlbModelLease";
 import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
+import { canDownsampleGlbTextures, decodedTextureEdges, GlbTextureDownsamplePlugin } from "./GlbTextureDownsample";
+import { MIN_TEXTURE_DIMENSION, type GlbAllocation, type GlbImageSize } from "@shared/glbPresentationBudget";
 
 export interface GLBModelEntry {
   id: string;
@@ -139,7 +142,10 @@ export function selectStaticWorldLodVariants(
     .filter(variant => variant.bytes === null || variant.bytes <= assetBudgets[tier].assetBytes)
     .slice()
     .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256));
-  if (!isStarterCityWallSource(entry.sha256) || tier === "desktop") return variants;
+  // Phones keep one physical LOD per family: each LOD carries its own full
+  // texture set, so a family would multiply texture memory for a 360 px screen.
+  if (!isStarterCityWallSource(entry.sha256)) return tier === "phone" ? variants.slice(0, 1) : variants;
+  if (tier === "desktop") return variants;
   // Never claim unknown bytes as the SHA-pinned city wall family.
   if (variants.some(variant => !isStarterCityWallSource(variant.sha256))) return [];
   // Preserve all LODs where the doubled tablet budget admits the measured 88 MB
@@ -168,6 +174,43 @@ export function starterCityWallHeadroom(
     textureBytes += allocation.textureBytes;
   }
   return { decodedBytes, textureBytes };
+}
+
+/**
+ * Admit one GLB into the device pool. Textures are decoded at most at the tier's
+ * edge; while the budget is still exhausted (after evicting idle models) the edge
+ * is halved down to MIN_TEXTURE_DIMENSION, so the model appears with less texture
+ * detail instead of not at all. No byte ceiling is raised. Null if even the
+ * minimum edge does not fit.
+ */
+export function admitGlbAllocation<T extends { allocation: GlbAllocation; images: readonly (GlbImageSize | null)[] }>(
+  pool: GlbResourcePool,
+  inspect: (maxTextureDimension: number) => T,
+  options: { headroomKey?: string; resizable: boolean; trimIdle?: () => void },
+): { inspected: T; release: () => void; textureDimension: number } | null {
+  let textureDimension: number = options.resizable ? pool.limits.textureDimension : 4096;
+  let inspected = inspect(textureDimension);
+  // Fair share: no single model may claim more than its share of the texture
+  // budget, whatever order downloads finish in. The headroom owner is exempt.
+  const share = pool.limits.textureShareModels > 0 && !options.headroomKey ? pool.limits.textureBytes / pool.limits.textureShareModels : Infinity;
+  while (options.resizable && inspected.allocation.textureBytes > share && textureDimension > MIN_TEXTURE_DIMENSION
+    && inspected.images.some(size => size && Math.max(size.decodedWidth, size.decodedHeight) > MIN_TEXTURE_DIMENSION)) {
+    textureDimension = Math.max(MIN_TEXTURE_DIMENSION, textureDimension / 2);
+    inspected = inspect(textureDimension);
+  }
+  let release = pool.reserve(inspected.allocation, options.headroomKey);
+  if (!release && options.trimIdle) {
+    options.trimIdle();
+    release = pool.reserve(inspected.allocation, options.headroomKey);
+  }
+  while (!release && options.resizable && textureDimension > MIN_TEXTURE_DIMENSION
+    && inspected.images.some(size => size && Math.max(size.decodedWidth, size.decodedHeight) > MIN_TEXTURE_DIMENSION)) {
+    textureDimension = Math.max(MIN_TEXTURE_DIMENSION, textureDimension / 2);
+    inspected = inspect(textureDimension);
+    release = pool.reserve(inspected.allocation, options.headroomKey);
+    if (release) pool.reducedTextures();
+  }
+  return release ? { inspected, release, textureDimension } : null;
 }
 
 type CachedModel = {
@@ -292,24 +335,31 @@ export class GLBModelManager {
     }
   }
 
+  /** Reserve decoded memory for one GLB (see `admitGlbAllocation`). */
+  private admitDecodedModel(bytes: ArrayBuffer, sha256: string) {
+    // The pinned wall draws on the headroom its projection holds for it.
+    const headroomKey = isStarterCityWallSource(sha256) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined;
+    const admitted = admitGlbAllocation(glbResourcePool, edge => inspectGlbAllocation(bytes, edge),
+      { headroomKey, resizable: canDownsampleGlbTextures(), trimIdle: () => this.trimIdle() });
+    if (!admitted) throw Error("GLB_DECODED_BUDGET");
+    return admitted;
+  }
+
   private async decode(url: string, sha256: string): Promise<CachedModel> {
     return glbResourcePool.job(glbResourcePool.limits.assetBytes, async () => {
       const signal = AbortSignal.timeout(20_000);
       const bytes = await fetchVerifiedGlb({ url, sha256 }, signal);
-      const { allocation, json } = inspectGlbAllocation(bytes);
-      // The pinned wall draws on the headroom its projection holds for it.
-      const headroomKey = isStarterCityWallSource(sha256) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined;
-      let release = glbResourcePool.reserve(allocation, headroomKey);
-      if (!release) {
-        this.trimIdle();
-        release = glbResourcePool.reserve(allocation, headroomKey);
-      }
-      if (!release) throw Error("GLB_DECODED_BUDGET");
+      const { inspected, release, textureDimension } = this.admitDecodedModel(bytes, sha256);
+      const { json } = inspected;
       const started = performance.now();
       let retired = false,
         abort: (() => void) | undefined,
         decoded: THREE.Group | undefined;
-      const parse = this.loader.parseAsync(bytes, "").then(gltf => {
+      const downsampled = inspected.images.some(size => size && (size.decodedWidth !== size.width || size.decodedHeight !== size.height));
+      const loader = downsampled
+        ? new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register(parser => new GlbTextureDownsamplePlugin(parser, inspected.images))
+        : this.loader;
+      const parse = loader.parseAsync(bytes, "").then(gltf => {
         if (retired || signal.aborted) {
           disposeGlbSource(gltf.scene);
           throw Error("GLB_DECODE_RETIRED");
@@ -327,6 +377,12 @@ export class GLBModelManager {
         ]);
         decoded = gltf.scene;
         requireDecodedMaterialTextures(gltf, json);
+        // Fail closed if the browser produced larger textures than were budgeted.
+        for (const [source, edge] of decodedTextureEdges(gltf)) {
+          const size = inspected.images[source];
+          if (size && edge > Math.max(size.decodedWidth, size.decodedHeight)) throw Error("GLB_TEXTURE_DOWNSAMPLE_UNAVAILABLE");
+        }
+        gltf.scene.userData.aurionTextureDimension = textureDimension;
         let hasRig = false;
         gltf.scene.traverse(node => {
           if ((node as THREE.Bone).isBone || (node as THREE.SkinnedMesh).isSkinnedMesh) hasRig = true;
@@ -455,13 +511,14 @@ export class GLBModelManager {
   /** Builds one presentation-only Three.js LOD node from one logical catalog model.
    * Physical variants stay hash-verified and share the normal decoded-model cache. */
   public async loadStaticLodFamily(
-    entry: GlbCatalogEntry
+    entry: GlbCatalogEntry,
+    tier: AssetTier = glbResourcePool.tier
   ): Promise<{
     scene: THREE.Group;
     animations: THREE.AnimationClip[];
     lodLevels: readonly number[];
   }> {
-    const variants = selectStaticWorldLodVariants(entry);
+    const variants = selectStaticWorldLodVariants(entry, tier);
     if (variants.length === 0) throw Error("GLB_NO_SUPPORTED_LOD");
     for (const variant of variants) {
       if (variant.normalization.lod.level !== variant.level || variant.normalization.sourceSha256 !== variant.sha256)

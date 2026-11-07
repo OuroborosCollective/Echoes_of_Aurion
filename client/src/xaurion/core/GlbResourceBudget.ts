@@ -7,6 +7,17 @@ import {
 } from "@shared/glbPresentationBudget";
 
 export { assetBudgets, assetTier, inspectGlbAllocation };
+
+/** Android, iOS and iPadOS (which reports itself as a Mac with touch points). */
+export function isTouchMobileOs(nav: Pick<Navigator, "userAgent" | "maxTouchPoints"> | undefined = typeof navigator === "undefined" ? undefined : navigator): boolean {
+  if (!nav) return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent) || (/Macintosh/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1);
+}
+
+/** Presentation tier of this device (viewport width plus touch-tablet detection). */
+export function deviceAssetTier(width = typeof window === "undefined" ? 412 : window.innerWidth): AssetTier {
+  return assetTier(width, isTouchMobileOs());
+}
 export type { AssetTier, GlbAllocation };
 
 const integer = (value: number, maximum = 1_073_741_824) => {
@@ -27,11 +38,11 @@ export class GlbResourcePool {
   private peakWorkingSet=0;
   private peakDecoded=0; private peakNetwork=0; private peakJobs=0;
   private fetchedBytes=0; private decodedCount=0; private decodeMs=0; private maximumDecodeMs=0;
-  private rejected=0;
+  private rejected=0; private reducedTextureModels=0;
   private readonly holds=new Map<string,{decodedBytes:number;textureBytes:number}>();
   // Stable accounting profile for the loaded application. A resize must not
   // retroactively lower the ceiling underneath resources already reserved.
-  constructor(readonly tier:AssetTier=assetTier(typeof window === "undefined" ? 412 : window.innerWidth)) {}
+  constructor(readonly tier:AssetTier=deviceAssetTier()) {}
   get limits() {return assetBudgets[this.tier];}
   /** Reserve a decoder slot and its estimated network bytes atomically. */
   private canAdmitJob(bytes:number):boolean {
@@ -144,12 +155,14 @@ export class GlbResourcePool {
     let released = false;
     return () => { if (released) return; released = true; this.animations -= count; };
   }
+  /** A model admitted only after its textures were decoded below the tier's edge. */
+  reducedTextures(){this.reducedTextureModels++;}
   fetched(bytes:number){this.fetchedBytes+=integer(bytes);}
   decodedModel(milliseconds:number){this.decodedCount++;this.decodeMs+=milliseconds;this.maximumDecodeMs=Math.max(this.maximumDecodeMs,milliseconds);}
   evidence(){return{tier:this.tier,limits:this.limits,models:this.models,actors:this.actors,staticInstances:this.staticInstances,animations:this.animations,decoderJobs:this.activeJobs,pending:this.pending.length,
     assetWorkingSetCeilingBytes:this.decoded+2*this.network,peakAssetWorkingSetCeilingBytes:this.peakWorkingSet,
     reservedDecodedBytes:this.decoded,reservedTextureBytes:this.textures,heldHeadroom:Object.fromEntries([...this.holds].map(([key,hold])=>[key,{...hold}])),networkInFlightBytes:this.network,peakReservedDecodedBytes:this.peakDecoded,peakNetworkInFlightBytes:this.peakNetwork,
-    peakDecoderJobs:this.peakJobs,fetchedBytes:this.fetchedBytes,decodedCount:this.decodedCount,totalDecodeMs:this.decodeMs,maxDecodeMs:this.maximumDecodeMs,rejected:this.rejected};}
+    peakDecoderJobs:this.peakJobs,fetchedBytes:this.fetchedBytes,decodedCount:this.decodedCount,totalDecodeMs:this.decodeMs,maxDecodeMs:this.maximumDecodeMs,rejected:this.rejected,reducedTextureModels:this.reducedTextureModels};}
 }
 export const glbResourcePool = new GlbResourcePool();
 

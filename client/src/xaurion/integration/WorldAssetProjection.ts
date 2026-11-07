@@ -3,7 +3,7 @@ import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import shipping from "@shared/worldAssetShipping.json";
-import { assetBudgets, assetTier, fetchVerifiedGlb, glbResourcePool, inspectGlbAllocation } from "../core/GlbResourceBudget";
+import { assetBudgets, assetTier, fetchVerifiedGlb, glbResourcePool, inspectGlbAllocation, isTouchMobileOs } from "../core/GlbResourceBudget";
 import type { RuntimeRenderer } from "../core/RendererFactory";
 import { requireDecodedMaterialTextures } from "../core/GlbTextureEvidence";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
@@ -68,7 +68,7 @@ export class WorldAssetProjection {
   this.select(position,viewportWidth);
  }
  private select(position:{x:number;z:number},width:number){
-  if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width)],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
+  if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width,isTouchMobileOs())],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
   // Selection is presentation-only. Under a tight asset budget, use the same
   // anchored footprint as rebuild() and prioritize actually visible placements
   // instead of nearby models behind/outside the camera.
@@ -177,6 +177,6 @@ export class WorldAssetProjection {
   }
   return {compressedTextures,transcodedMipPayloadBytes,rasterRgbaCeilingBytes,interpretation:"decoded texture upload payload and raster upper bound; not driver VRAM"};
  }
- evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{drawnKtxModels:[...this.cache.values()].filter(c=>c.drawn&&c.format==="ktx2").length,drawnFallbackModels:[...this.cache.values()].filter(c=>c.drawn&&c.format!=="ktx2"&&c.format!=="legacy").length,textures:this.textureEvidence(),manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth),resources:glbResourcePool.evidence()}};}
+ evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{drawnKtxModels:[...this.cache.values()].filter(c=>c.drawn&&c.format==="ktx2").length,drawnFallbackModels:[...this.cache.values()].filter(c=>c.drawn&&c.format!=="ktx2"&&c.format!=="legacy").length,textures:this.textureEvidence(),manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth,isTouchMobileOs()),resources:glbResourcePool.evidence()}};}
  dispose(){if(this.disposed)return;this.disposed=true;if(typeof window!=="undefined")window.removeEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);this.readGeneration++;for(const request of this.requests)request.abort();this.ktx.dispose();this.clearInstances();this.root.removeFromParent();for(const entry of this.cache.values())this.release(entry);this.cache.clear();this.previousLod.clear();}
 }

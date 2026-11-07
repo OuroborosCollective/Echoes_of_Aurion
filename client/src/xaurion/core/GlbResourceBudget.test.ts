@@ -470,7 +470,11 @@ describe("bounded, verified GLB ownership", () => {
         normalization: variant.plan.normalization,
       })),
     };
-    const loaded = await glbManager.loadStaticLodFamily(entry);
+    // Phones keep one physical LOD per family (each LOD carries its own textures).
+    const phone = await glbManager.loadStaticLodFamily(entry, "phone");
+    expect(phone.lodLevels).toEqual([0]);
+    releaseGlbTree(phone.scene);
+    const loaded = await glbManager.loadStaticLodFamily(entry, "tablet");
     const runtimeLod = loaded.scene.children.find(
       node => (node as THREE.LOD).isLOD
     ) as THREE.LOD;
@@ -510,15 +514,15 @@ describe("bounded, verified GLB ownership", () => {
       subcategory: "structure", equipmentSlot: null, lods: physical } as GlbCatalogEntry;
     const fetch = vi.fn(async (url: string) => new Response(physical.find(lod => lod.storageUrl === url)!.fixture));
     vi.stubGlobal("fetch", fetch);
-    const loaded = await glbManager.loadStaticLodFamily(entry);
+    const loaded = await glbManager.loadStaticLodFamily(entry, "tablet");
     // Synthetic fixture GLBs have different SHA256 identities: this is not the pinned live wall.
-    // Generic physical families retain their full admitted LOD set.
+    // Generic physical families retain their full admitted LOD set on tablet/desktop.
     expect(loaded.lodLevels).toEqual([0, 1, 2]);
     expect(fetch).toHaveBeenCalledTimes(3);
     for (const variant of physical) expect(fetch).toHaveBeenCalledWith(variant.storageUrl, expect.anything());
     expect(new THREE.Box3().setFromObject(loaded.scene).isEmpty()).toBe(false);
     releaseGlbTree(loaded.scene);
-    await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.map(lod => ({ ...lod, bytes: assetBudgets.phone.assetBytes + 1 })) })).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
+    await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.map(lod => ({ ...lod, bytes: assetBudgets.phone.assetBytes + 1 })) }, "phone")).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -565,19 +569,19 @@ describe("real pinned city wall mobile LOD admission", () => {
 describe("owner-approved doubled mobile runtime budgets and measured wall textures", () => {
   it("doubles mobile admission counts and byte limits while keeping the desktop profile unchanged", () => {
     expect(assetBudgets.phone).toEqual({
-      worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16,
+      textureShareModels: 16, textureDimension: 1024, worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16,
       decoderJobs: 4, ktxWorkers: 2, cacheModels: 80,
       textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024,
       assetWorkingSetBytes: 192*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024,
     });
     expect(assetBudgets.tablet).toEqual({
-      worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24,
+      textureShareModels: 32, textureDimension: 2048, worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24,
       decoderJobs: 4, ktxWorkers: 2, cacheModels: 112,
       textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024,
       assetWorkingSetBytes: 384*1024*1024, assetBytes: 24*1024*1024, networkBytes: 48*1024*1024,
     });
     expect(assetBudgets.desktop).toEqual({
-      worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20,
+      textureShareModels: 0, textureDimension: 4096, worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20,
       decoderJobs: 2, ktxWorkers: 2, cacheModels: 80,
       textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024,
       assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024,
