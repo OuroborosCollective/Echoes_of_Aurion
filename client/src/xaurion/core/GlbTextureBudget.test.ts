@@ -455,6 +455,37 @@ describe("textures shared by content across models and LOD levels", () => {
     }
   });
 
+  // Review (CodeRabbit on c07187ff): a model admitted at 512 px must not adopt a
+  // resident 1024 px decode of the same bytes under its 512 px reservation.
+  it("never adopts a resident image larger than the model's own reservation", async () => {
+    const colour = texturedGlb(2048, 1, "image/png", [9_951], "LiveColour");
+    const normal = rewriteGlbJson(texturedGlb(2048, 1, "image/png", [9_951], "SmallNormal"), json => {
+      json.materials = [{ normalTexture: { index: 0 } }];
+    });
+    const { target, createImageBitmap } = await stubBrowser(colour, true, [normal]);
+    const a = await glbManager.loadModel(target(colour).url, target(colour).normalization); // live: 1024 px colour upload
+    const limits = glbResourcePool.limits, now = glbResourcePool.evidence();
+    // Room for the normal upload at 512 px, not at 1024 px.
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - now.reservedTextureBytes - mipBytes(512) - 64 * 1024, animations: 0 });
+    expect(filler).not.toBeNull();
+    let b: THREE.Group | undefined;
+    try {
+      b = (await glbManager.loadModel(target(normal).url, target(normal).normalization)).scene;
+      let map: THREE.Texture | undefined;
+      b.traverse(node => { map ??= ((node as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined)?.normalMap ?? undefined; });
+      expect((map!.image as { width: number }).width).toBe(512);
+      expect(createImageBitmap).toHaveBeenCalledTimes(2);
+      // Every resident upload is covered by a reservation.
+      expect(glbSharedTextures.evidence().textureBytes).toBeLessThanOrEqual(glbResourcePool.evidence().reservedTextureBytes - (limits.textureBytes - now.reservedTextureBytes - mipBytes(512) - 64 * 1024));
+      expect(glbResourcePool.evidence().reservedTextureBytes).toBeLessThanOrEqual(limits.textureBytes);
+    } finally {
+      if (b) releaseGlbTree(b);
+      releaseGlbTree(a.scene);
+      glbManager.trimIdle();
+      filler!();
+    }
+  });
+
   // Review (Devin on #1342): identical bytes under different upload settings share one bitmap.
   it("keeps one decoded bitmap for identical bytes used with different settings in one GLB", async () => {
     const bytes = rewriteGlbJson(texturedGlb(512, 2, "image/png", [9_701, 9_701], "TwoSettings"), json => {

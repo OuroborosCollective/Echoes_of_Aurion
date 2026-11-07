@@ -458,15 +458,26 @@ export class GLBModelManager {
       // already decoded for another upload configuration, held until this decode
       // is done. Borrowing saves a decode, not budget; borrowing before admission
       // would pin idle uploads that eviction must be able to free (review: Devin).
+      // A larger resident image is borrowed only for images this model already
+      // holds a resident upload of (budgeted by that upload's owner); otherwise
+      // only if it fits what was admitted for this model (review: CodeRabbit).
+      const admittedBytes = new Map<string, number>();
+      admitted.inspected.images.forEach((size, index) => {
+        if (size && hashes[index] !== undefined) admittedBytes.set(hashes[index]!, Math.max(admittedBytes.get(hashes[index]!) ?? 0, mipChainBytes(size.decodedWidth, size.decodedHeight)));
+      });
+      const ownedHashes = new Set([...owned].map(sharedTextureHash));
       const borrowedImages = new Map<string, { data: unknown; release: () => void }>();
       for (const hash of new Set(hashes)) {
+        const data = glbSharedTextures.imageData(hash) as { width?: number; height?: number } | undefined;
+        if (data === undefined) continue;
+        if (!ownedHashes.has(hash) && !(data.width && data.height && mipChainBytes(data.width, data.height) <= (admittedBytes.get(hash) ?? 0))) continue;
         const borrowed = glbSharedTextures.borrowImage(hash);
         if (borrowed) borrowedImages.set(hash, borrowed);
       }
       const releaseBorrowed = () => { for (const borrowed of borrowedImages.values()) borrowed.release(); borrowedImages.clear(); };
       const { inspected, partReleases, textureDimension } = admitted;
       const release = partReleases[0]!;
-      const freshParts = new Map(inspected.fresh.map((key, index) => [key, partReleases[index + 1]!] as const));
+      const freshParts = new Map(inspected.fresh.map((key, index) => [key, { release: partReleases[index + 1]!, bytes: inspected.parts[index + 1]!.textureBytes }] as const));
       const endInflight = glbSharedTextures.markInflight(inspected.fresh.map(sharedTextureHash));
       const { json } = inspected;
       const started = performance.now();
@@ -527,31 +538,38 @@ export class GLBModelManager {
             const hash = sharedTextureHash(key);
             let part = freshParts.get(key);
             freshParts.delete(key);
-            const image = textures[0]!.image as { width: number; height: number };
-            const bytes = mipChainBytes(image.width, image.height);
             if (!part) {
               // Configuration differs from the prediction: reuse an unused part reserved
               // for the same image bytes before reserving more.
               const spare = [...freshParts.keys()].find(candidate => sharedTextureHash(candidate) === hash && !byUpload.has(candidate));
               if (spare !== undefined) { part = freshParts.get(spare); freshParts.delete(spare); }
             }
-            if (!part) {
-              // Upload configuration not predicted from the glTF: reserve it now or fail closed.
-              const extra = glbResourcePool.reserveParts([{ decodedBytes: bytes, textureBytes: bytes, animations: 0 }]);
-              if (!extra) throw Error("GLB_DECODED_BUDGET");
-              part = extra.release;
-              extraParts.push(part);
-            }
-            // One Source per upload entry; the decoded image of these bytes is shared
-            // with every other entry (a second decode of the same bytes is closed below).
+            // One Source per upload entry. The decoded image of these bytes is shared
+            // with other entries only if it fits this upload's reservation; a second
+            // decode of the same bytes is closed below.
             const own = textures[0]!.source as THREE.Source<unknown>;
-            const existingData = glbSharedTextures.imageData(hash);
-            const candidate = existingData !== undefined && existingData !== own.data
-              ? new THREE.Source(existingData)
-              : usedSources.has(own) ? new THREE.Source(own.data) : own;
-            const result = glbSharedTextures.adopt(key, candidate, bytes, part);
-            const extraIndex = extraParts.indexOf(part);
-            if (extraIndex >= 0) extraParts.splice(extraIndex, 1);
+            const existingData = glbSharedTextures.imageData(hash) as { width?: number; height?: number } | undefined;
+            const reusable = existingData !== undefined && existingData !== own.data && part !== undefined
+              && !!existingData.width && !!existingData.height && mipChainBytes(existingData.width, existingData.height) <= part.bytes;
+            const candidate = reusable ? new THREE.Source(existingData) : usedSources.has(own) ? new THREE.Source(own.data) : own;
+            const image = candidate.data as { width: number; height: number };
+            const bytes = mipChainBytes(image.width, image.height);
+            // The adopted image must be covered by reservations: reserve what the
+            // budgeted part does not cover (or the whole upload if unpredicted), or fail closed.
+            const missing = bytes - (part?.bytes ?? 0);
+            let release = part?.release;
+            if (missing > 0) {
+              const extra = glbResourcePool.reserveParts([{ decodedBytes: missing, textureBytes: missing, animations: 0 }]);
+              if (!extra) {
+                part?.release();
+                throw Error("GLB_DECODED_BUDGET");
+              }
+              const partRelease = part?.release;
+              release = () => { partRelease?.(); extra.release(); };
+            }
+            extraParts.push(release!);
+            const result = glbSharedTextures.adopt(key, candidate, bytes, release!);
+            extraParts.splice(extraParts.indexOf(release!), 1);
             owned.add(key);
             shared = result.source;
           }
@@ -564,7 +582,7 @@ export class GLBModelManager {
         // Decoded images no upload entry kept (another decode won) are closed now.
         for (const data of decodedData) if (!glbSharedTextures.owns(data)) closeImage(data);
         releaseBorrowed();
-        for (const part of freshParts.values()) part();
+        for (const part of freshParts.values()) part.release();
         freshParts.clear();
         gltf.scene.userData.aurionTextureDimension = textureDimension;
         let hasRig = false;
@@ -590,7 +608,7 @@ export class GLBModelManager {
       } catch (error) {
         if (decoded) disposeGlbSource(decoded);
         release();
-        for (const part of freshParts.values()) part();
+        for (const part of freshParts.values()) part.release();
         for (const part of extraParts) part();
         for (const key of owned) glbSharedTextures.releaseRef(key);
         releaseBorrowed();
