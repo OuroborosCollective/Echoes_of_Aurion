@@ -10,7 +10,7 @@ import type { GlbNormalizationManifest } from "@shared/glbNormalizationContract"
 import { AURION_STARTER_CITY_WALL_HEADROOM_KEY, isStarterCityWallSource, starterCityWallAllocation } from "@shared/aurionStarterCityWallContract";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { RPGItem, WeaponType, ItemRarity } from "../types";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import {
@@ -27,8 +27,9 @@ import {
   releaseGlbTree,
 } from "./GlbModelLease";
 import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
-import { canDownsampleGlbTextures, decodedTextureEdges, GlbTextureDownsamplePlugin } from "./GlbTextureDownsample";
-import { MIN_TEXTURE_DIMENSION, type GlbAllocation, type GlbImageSize } from "@shared/glbPresentationBudget";
+import { canDownsampleGlbTextures, GlbTextureDownsamplePlugin, texturesByImage } from "./GlbTextureDownsample";
+import { embeddedImageHashes, glbSharedTextures } from "./GlbSharedTextures";
+import { MIN_TEXTURE_DIMENSION, mipChainBytes, type GlbAllocation, type GlbImageSize } from "@shared/glbPresentationBudget";
 
 export interface GLBModelEntry {
   id: string;
@@ -183,36 +184,76 @@ export function starterCityWallHeadroom(
  * detail instead of not at all. No byte ceiling is raised. Null if even the
  * minimum edge does not fit.
  */
-export function admitGlbAllocation<T extends { allocation: GlbAllocation; images: readonly (GlbImageSize | null)[] }>(
+export function admitGlbAllocation<T extends { allocation: GlbAllocation; images: readonly (GlbImageSize | null)[]; parts?: readonly (GlbAllocation & { countsModel?: boolean })[] }>(
   pool: GlbResourcePool,
   inspect: (maxTextureDimension: number) => T,
   options: { headroomKey?: string; resizable: boolean; trimIdle?: () => void },
-): { inspected: T; release: () => void; textureDimension: number } | null {
+): { inspected: T; release: () => void; partReleases: (() => void)[]; textureDimension: number } | null {
   const initialDimension: number = options.resizable ? pool.limits.textureDimension : 4096;
   let textureDimension = initialDimension;
   let inspected = inspect(textureDimension);
   // Fair share: no single model may claim more than its share of the texture
-  // budget, whatever order downloads finish in. The headroom owner is exempt.
+  // budget, whatever order downloads finish in. Already resident shared images
+  // cost nothing here. The headroom owner is exempt.
   const share = pool.limits.textureShareModels > 0 && !options.headroomKey ? pool.limits.textureBytes / pool.limits.textureShareModels : Infinity;
-  while (options.resizable && inspected.allocation.textureBytes > share && textureDimension > MIN_TEXTURE_DIMENSION
-    && inspected.images.some(size => size && Math.max(size.decodedWidth, size.decodedHeight) > MIN_TEXTURE_DIMENSION)) {
+  const canHalve = () => options.resizable && textureDimension > MIN_TEXTURE_DIMENSION
+    && inspected.images.some(size => size && Math.max(size.decodedWidth, size.decodedHeight) > MIN_TEXTURE_DIMENSION);
+  while (inspected.allocation.textureBytes > share && canHalve()) {
     textureDimension = Math.max(MIN_TEXTURE_DIMENSION, textureDimension / 2);
     inspected = inspect(textureDimension);
   }
-  let release = pool.reserve(inspected.allocation, options.headroomKey);
-  if (!release && options.trimIdle) {
+  const reserve = () => pool.reserveParts(inspected.parts ?? [{ ...inspected.allocation, countsModel: true }], options.headroomKey);
+  let reserved = reserve();
+  if (!reserved && options.trimIdle) {
     options.trimIdle();
-    release = pool.reserve(inspected.allocation, options.headroomKey);
+    reserved = reserve();
   }
-  while (!release && options.resizable && textureDimension > MIN_TEXTURE_DIMENSION
-    && inspected.images.some(size => size && Math.max(size.decodedWidth, size.decodedHeight) > MIN_TEXTURE_DIMENSION)) {
+  while (!reserved && canHalve()) {
     textureDimension = Math.max(MIN_TEXTURE_DIMENSION, textureDimension / 2);
     inspected = inspect(textureDimension);
-    release = pool.reserve(inspected.allocation, options.headroomKey);
+    reserved = reserve();
   }
   // Count every admission below the tier edge, whether fair share or pressure reduced it.
-  if (release && textureDimension < initialDimension) pool.reducedTextures();
-  return release ? { inspected, release, textureDimension } : null;
+  if (reserved && textureDimension < initialDimension) pool.reducedTextures();
+  return reserved ? { inspected, release: reserved.release, partReleases: reserved.parts, textureDimension } : null;
+}
+
+/**
+ * Allocation of one GLB given the images that are already resident in the shared
+ * texture cache: those cost nothing; every other distinct image is its own part
+ * (handed to the cache after decoding); geometry is the model's own part.
+ */
+export function sharedGlbAllocation(
+  inspected: { allocation: GlbAllocation; images: readonly (GlbImageSize | null)[] },
+  hashes: readonly string[],
+  resident: ReadonlySet<string>,
+) {
+  const geometryBytes = inspected.allocation.decodedBytes - inspected.allocation.textureBytes;
+  const parts: (GlbAllocation & { countsModel?: boolean })[] = [{ decodedBytes: geometryBytes, textureBytes: 0, animations: inspected.allocation.animations, countsModel: true }];
+  const fresh: string[] = [];
+  let textureBytes = 0;
+  inspected.images.forEach((size, index) => {
+    const hash = hashes[index];
+    if (!size || hash === undefined || resident.has(hash) || fresh.includes(hash)) return;
+    const bytes = mipChainBytes(size.decodedWidth, size.decodedHeight);
+    parts.push({ decodedBytes: bytes, textureBytes: bytes, animations: 0 });
+    fresh.push(hash);
+    textureBytes += bytes;
+  });
+  return { allocation: { decodedBytes: geometryBytes + textureBytes, textureBytes, animations: inspected.allocation.animations }, parts, fresh };
+}
+
+function closeImage(data: unknown): void {
+  const image = data as { close?: () => void } | null;
+  if (typeof image?.close === "function") image.close();
+}
+
+/** Textures built from a resident shared image must never close that image on dispose. */
+function markResidentTextures(gltf: GLTF, hashes: readonly string[], resident: ReadonlySet<string>): void {
+  for (const [source, textures] of texturesByImage(gltf)) {
+    const hash = hashes[source];
+    if (hash !== undefined && resident.has(hash)) for (const texture of textures) texture.userData.aurionSharedImage = hash;
+  }
 }
 
 type CachedModel = {
@@ -222,6 +263,8 @@ type CachedModel = {
   users: number;
   access: number;
   release: () => void;
+  /** Shared images this decoded model holds one reference on. */
+  sharedHashes: readonly string[];
 };
 
 export class GLBModelManager {
@@ -334,15 +377,18 @@ export class GLBModelManager {
       this.cache.delete(url);
       disposeGlbSource(entry.scene);
       entry.release();
+      for (const hash of entry.sharedHashes) glbSharedTextures.releaseRef(hash);
     }
   }
 
-  /** Reserve decoded memory for one GLB (see `admitGlbAllocation`). */
-  private admitDecodedModel(bytes: ArrayBuffer, sha256: string) {
+  /** Reserve decoded memory for one GLB (see `admitGlbAllocation` and `sharedGlbAllocation`). */
+  private admitDecodedModel(bytes: ArrayBuffer, sha256: string, hashes: readonly string[], resident: ReadonlySet<string>) {
     // The pinned wall draws on the headroom its projection holds for it.
     const headroomKey = isStarterCityWallSource(sha256) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined;
-    const admitted = admitGlbAllocation(glbResourcePool, edge => inspectGlbAllocation(bytes, edge),
-      { headroomKey, resizable: canDownsampleGlbTextures(), trimIdle: () => this.trimIdle() });
+    const admitted = admitGlbAllocation(glbResourcePool, edge => {
+      const inspected = inspectGlbAllocation(bytes, edge);
+      return { ...inspected, ...sharedGlbAllocation(inspected, hashes, resident) };
+    }, { headroomKey, resizable: canDownsampleGlbTextures(), trimIdle: () => this.trimIdle() });
     if (!admitted) throw Error("GLB_DECODED_BUDGET");
     return admitted;
   }
@@ -351,18 +397,36 @@ export class GLBModelManager {
     return glbResourcePool.job(glbResourcePool.limits.assetBytes, async () => {
       const signal = AbortSignal.timeout(20_000);
       const bytes = await fetchVerifiedGlb({ url, sha256 }, signal);
-      const { inspected, release, textureDimension } = this.admitDecodedModel(bytes, sha256);
+      const hashes = await embeddedImageHashes(bytes, inspectGlbAllocation(bytes).json);
+      // Images already decoded for another model are reused; hold them so that
+      // evicting idle models during admission cannot free them underneath us.
+      const owned = new Set<string>();
+      for (const hash of new Set(hashes)) if (glbSharedTextures.acquire(hash)) owned.add(hash);
+      const resident = new Set(owned);
+      let admitted: ReturnType<GLBModelManager["admitDecodedModel"]>;
+      try {
+        admitted = this.admitDecodedModel(bytes, sha256, hashes, resident);
+      } catch (error) {
+        for (const hash of owned) glbSharedTextures.releaseRef(hash);
+        throw error;
+      }
+      const { inspected, partReleases, textureDimension } = admitted;
+      const release = partReleases[0]!;
+      const freshParts = new Map(inspected.fresh.map((hash, index) => [hash, partReleases[index + 1]!] as const));
       const { json } = inspected;
       const started = performance.now();
       let retired = false,
         abort: (() => void) | undefined,
         decoded: THREE.Group | undefined;
+      const residentData = new Map<number, unknown>();
+      hashes.forEach((hash, index) => { if (resident.has(hash)) residentData.set(index, glbSharedTextures.peek(hash)!.source.data); });
       const downsampled = inspected.images.some(size => size && (size.decodedWidth !== size.width || size.decodedHeight !== size.height));
-      const loader = downsampled
-        ? new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register(parser => new GlbTextureDownsamplePlugin(parser, inspected.images))
+      const loader = downsampled || residentData.size
+        ? new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register(parser => new GlbTextureDownsamplePlugin(parser, inspected.images, residentData))
         : this.loader;
       const parse = loader.parseAsync(bytes, "").then(gltf => {
         if (retired || signal.aborted) {
+          markResidentTextures(gltf, hashes, resident);
           disposeGlbSource(gltf.scene);
           throw Error("GLB_DECODE_RETIRED");
         }
@@ -378,12 +442,39 @@ export class GLBModelManager {
           }),
         ]);
         decoded = gltf.scene;
+        markResidentTextures(gltf, hashes, resident);
         requireDecodedMaterialTextures(gltf, json);
+        const byImage = texturesByImage(gltf);
         // Fail closed if the browser produced larger textures than were budgeted.
-        for (const [source, edge] of decodedTextureEdges(gltf)) {
-          const size = inspected.images[source];
-          if (size && edge > Math.max(size.decodedWidth, size.decodedHeight)) throw Error("GLB_TEXTURE_DOWNSAMPLE_UNAVAILABLE");
+        for (const [source, textures] of byImage) {
+          if (resident.has(hashes[source]!)) continue;
+          const size = inspected.images[source], image = textures[0]!.image as { width?: number; height?: number } | undefined;
+          if (size && Math.max(image?.width ?? 0, image?.height ?? 0) > Math.max(size.decodedWidth, size.decodedHeight)) throw Error("GLB_TEXTURE_DOWNSAMPLE_UNAVAILABLE");
         }
+        // Hand every freshly decoded image to the shared cache (or reuse a copy
+        // another decode registered meanwhile); all textures point at one source.
+        for (const [source, textures] of byImage) {
+          const hash = hashes[source]!;
+          let shared = glbSharedTextures.peek(hash)?.source;
+          if (!owned.has(hash)) {
+            const part = freshParts.get(hash);
+            if (!part) throw Error("GLB_SHARED_TEXTURE_UNBUDGETED");
+            const image = textures[0]!.image as { width: number; height: number };
+            const result = glbSharedTextures.adopt(hash, textures[0]!.source as THREE.Source<unknown>, { width: image.width, height: image.height }, mipChainBytes(image.width, image.height), part);
+            freshParts.delete(hash);
+            owned.add(hash);
+            if (!result.adopted) closeImage(textures[0]!.source.data);
+            shared = result.source;
+          } else if (shared !== textures[0]!.source) {
+            if (!resident.has(hash)) closeImage(textures[0]!.source.data);
+          }
+          for (const texture of textures) {
+            texture.source = shared! as typeof texture.source;
+            texture.userData.aurionSharedImage = hash;
+          }
+        }
+        for (const part of freshParts.values()) part();
+        freshParts.clear();
         gltf.scene.userData.aurionTextureDimension = textureDimension;
         let hasRig = false;
         gltf.scene.traverse(node => {
@@ -401,12 +492,15 @@ export class GLBModelManager {
           users: 0,
           access: ++this.access,
           release,
+          sharedHashes: Object.freeze([...owned]),
         };
         this.cache.set(url, entry);
         return entry;
       } catch (error) {
         if (decoded) disposeGlbSource(decoded);
         release();
+        for (const part of freshParts.values()) part();
+        for (const hash of owned) glbSharedTextures.releaseRef(hash);
         throw error;
       } finally {
         retired = true;

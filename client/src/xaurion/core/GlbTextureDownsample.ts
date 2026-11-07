@@ -22,23 +22,58 @@ export function canDownsampleGlbTextures(
 }
 
 /**
- * GLTFLoader plugin: decodes every embedded image that exceeds the admitted edge
- * directly at the reduced size (`createImageBitmap` resize options), so the full
- * size never reaches the GPU. Stored GLB bytes, hashes and materials are unchanged.
+ * GLTFLoader plugin for embedded images:
+ * - an image whose bytes are already decoded (shared texture cache) is handed
+ *   over without decoding it again;
+ * - an image larger than the admitted edge is decoded directly at the reduced
+ *   size (`createImageBitmap` resize options), so the full size never reaches
+ *   the GPU. Stored GLB bytes, hashes and materials are unchanged.
  */
 export class GlbTextureDownsamplePlugin implements GLTFLoaderPlugin {
   readonly name = "AURION_texture_downsample";
-  constructor(private readonly parser: GLTFParser, private readonly sizes: readonly (GlbImageSize | null)[]) {}
+  constructor(
+    private readonly parser: GLTFParser,
+    private readonly sizes: readonly (GlbImageSize | null)[],
+    private readonly resident: ReadonlyMap<number, unknown> = new Map(),
+  ) {}
 
   loadTexture(textureIndex: number): Promise<THREE.Texture> | null {
     const sourceIndex = this.parser.json.textures?.[textureIndex]?.source;
-    const size = Number.isSafeInteger(sourceIndex) ? this.sizes[sourceIndex] : undefined;
+    if (!Number.isSafeInteger(sourceIndex)) return null;
+    const load = (loader: unknown) => (this.parser as unknown as { loadTextureImage(t: number, s: number, l: unknown): Promise<THREE.Texture | null> })
+      .loadTextureImage(textureIndex, sourceIndex, loader) as Promise<THREE.Texture>;
+    if (this.resident.has(sourceIndex)) {
+      const data = this.resident.get(sourceIndex);
+      // Same contract GLTFParser uses for ImageBitmapLoader results.
+      return load({ isImageBitmapLoader: true, load: (_url: string, onLoad: (value: unknown) => void) => onLoad(data) });
+    }
+    const size = this.sizes[sourceIndex];
     if (!size || (size.decodedWidth === size.width && size.decodedHeight === size.height)) return null;
     const loader = new THREE.ImageBitmapLoader();
     loader.setOptions({ premultiplyAlpha: "none", resizeWidth: size.decodedWidth, resizeHeight: size.decodedHeight, resizeQuality: "high" } as ImageBitmapOptions);
-    return (this.parser as unknown as { loadTextureImage(t: number, s: number, l: THREE.Loader): Promise<THREE.Texture | null> })
-      .loadTextureImage(textureIndex, sourceIndex, loader) as Promise<THREE.Texture>;
+    return load(loader);
   }
+}
+
+/** Every texture GLTFLoader produced, grouped by glTF image index. */
+export function texturesByImage(gltf: GLTF): Map<number, THREE.Texture[]> {
+  const result = new Map<number, THREE.Texture[]>();
+  const seen = new Set<THREE.Texture>();
+  gltf.scene.traverse(node => {
+    if (!(node as THREE.Mesh).isMesh) return;
+    const mesh = node as THREE.Mesh;
+    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      for (const value of Object.values(material)) {
+        if (!(value instanceof THREE.Texture) || seen.has(value)) continue;
+        seen.add(value);
+        const textureIndex = gltf.parser.associations.get(value)?.textures;
+        const source = textureIndex === undefined ? undefined : gltf.parser.json.textures?.[textureIndex]?.source;
+        if (source === undefined) continue;
+        result.set(source, [...(result.get(source) ?? []), value]);
+      }
+    }
+  });
+  return result;
 }
 
 /** Largest decoded edge per glTF image index, read from the textures GLTFLoader produced. */

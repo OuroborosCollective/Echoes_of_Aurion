@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { AURION_STARTER_CITY_WALL_HEADROOM_KEY, AURION_STARTER_CITY_WALL_LODS } from "@shared/aurionStarterCityWallContract";
-import { assetBudgets, cappedTextureSize, MIN_TEXTURE_DIMENSION, type AssetTier, type GlbImageSize } from "@shared/glbPresentationBudget";
+import { assetBudgets, cappedTextureSize, MIN_TEXTURE_DIMENSION, mipChainBytes, type AssetTier, type GlbImageSize } from "@shared/glbPresentationBudget";
 import { GlbResourcePool } from "./GlbResourceBudget";
-import { admitGlbAllocation } from "./GLBModelManager";
+import { admitGlbAllocation, sharedGlbAllocation } from "./GLBModelManager";
 
 /**
  * The scene a player sees at the starter city, read back from production on
@@ -12,51 +12,60 @@ import { admitGlbAllocation } from "./GLBModelManager";
  * largest NPC fallback models (per tier file-size limit). Values are the exact
  * stored bytes' geometry allocation and embedded image sizes.
  */
-type SceneModel = Readonly<{ name: string; family: string; level: number; fileBytes: number; geometryBytes: number; images: readonly (readonly [number, number])[] }>;
+/** images: [width, height, first 12 hex of the image bytes' SHA-256] — identical bytes are shared. */
+type SceneModel = Readonly<{ name: string; family: string; level: number; fileBytes: number; geometryBytes: number; images: readonly (readonly [number, number, string])[] }>;
 const ORIGIN_SCENE: readonly SceneModel[] = Object.freeze([
-  { name: "plant L0", family: "plant", level: 0, fileBytes: 401200, geometryBytes: 18480, images: [[512, 512]] },
-  { name: "tree L0", family: "tree", level: 0, fileBytes: 1116224, geometryBytes: 413616, images: [[512, 512], [512, 512], [512, 512]] },
-  { name: "rock L0", family: "rock", level: 0, fileBytes: 314892, geometryBytes: 33840, images: [[512, 512]] },
-  { name: "building L0", family: "building", level: 0, fileBytes: 12978996, geometryBytes: 4472784, images: [[2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "building L1", family: "building", level: 1, fileBytes: 4234780, geometryBytes: 1293600, images: [[1024, 1024], [1024, 1024], [1024, 1024]] },
-  { name: "building-2 L0", family: "building-2", level: 0, fileBytes: 1044832, geometryBytes: 341712, images: [[512, 512], [512, 512], [512, 512]] },
-  { name: "fountain L0", family: "fountain", level: 0, fileBytes: 1229500, geometryBytes: 164736, images: [[512, 512], [512, 512]] },
-  { name: "street-prop L0", family: "street-prop", level: 0, fileBytes: 4317280, geometryBytes: 4265184, images: [[1024, 1024], [1024, 1024], [1024, 1024]] },
-  { name: "street-prop L1", family: "street-prop", level: 1, fileBytes: 3200012, geometryBytes: 643776, images: [[1024, 1024], [1024, 1024], [1024, 1024]] },
-  { name: "teleporter L0", family: "teleporter", level: 0, fileBytes: 7954128, geometryBytes: 224784, images: [[2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "structure L0", family: "structure", level: 0, fileBytes: 9299064, geometryBytes: 8669472, images: [[512, 512], [512, 512], [512, 512], [1024, 1024], [1024, 1024], [1024, 1024], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512]] },
-  { name: "structure L1", family: "structure", level: 1, fileBytes: 8421884, geometryBytes: 6005520, images: [[512, 512], [512, 512], [512, 512], [1024, 1024], [1024, 1024], [1024, 1024], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512]] },
-  { name: "structure L2", family: "structure", level: 2, fileBytes: 7921780, geometryBytes: 4485216, images: [[512, 512], [512, 512], [512, 512], [1024, 1024], [1024, 1024], [1024, 1024], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512]] },
-  { name: "npc-1 L0", family: "npc-1", level: 0, fileBytes: 21649816, geometryBytes: 473776, images: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-2 L0", family: "npc-2", level: 0, fileBytes: 21416396, geometryBytes: 531440, images: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-3 L0", family: "npc-3", level: 0, fileBytes: 21416232, geometryBytes: 531096, images: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-4 L0", family: "npc-4", level: 0, fileBytes: 21414512, geometryBytes: 525288, images: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-5 L0", family: "npc-5", level: 0, fileBytes: 21407352, geometryBytes: 490768, images: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-6 L0", family: "npc-6", level: 0, fileBytes: 21369760, geometryBytes: 367168, images: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-7 L0", family: "npc-7", level: 0, fileBytes: 21365572, geometryBytes: 364552, images: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-8 L0", family: "npc-8", level: 0, fileBytes: 19532076, geometryBytes: 463272, images: [[2048, 2048], [2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-1 L0", family: "npc-phone-1", level: 0, fileBytes: 15524708, geometryBytes: 541648, images: [[2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-2 L0", family: "npc-phone-2", level: 0, fileBytes: 15521380, geometryBytes: 533848, images: [[2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-3 L0", family: "npc-phone-3", level: 0, fileBytes: 15520624, geometryBytes: 532216, images: [[2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-4 L0", family: "npc-phone-4", level: 0, fileBytes: 15474780, geometryBytes: 382664, images: [[2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-5 L0", family: "npc-phone-5", level: 0, fileBytes: 15469756, geometryBytes: 360880, images: [[2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-6 L0", family: "npc-phone-6", level: 0, fileBytes: 15209536, geometryBytes: 469160, images: [[2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-7 L0", family: "npc-phone-7", level: 0, fileBytes: 15163136, geometryBytes: 313272, images: [[2048, 2048], [2048, 2048], [256, 256], [256, 256], [2048, 2048], [2048, 2048], [2048, 2048]] },
-  { name: "npc-phone-8 L0", family: "npc-phone-8", level: 0, fileBytes: 7292672, geometryBytes: 6418704, images: [[512, 512], [512, 512], [256, 256], [256, 256], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512], [512, 512]] },
+  { name: "plant L0", family: "plant", level: 0, fileBytes: 401200, geometryBytes: 18480, images: [[512, 512, "e08971bd21c5"]] },
+  { name: "tree L0", family: "tree", level: 0, fileBytes: 1116224, geometryBytes: 413616, images: [[512, 512, "cbf649489dfc"], [512, 512, "23f81e61cbab"], [512, 512, "5f2bca8ed6ce"]] },
+  { name: "rock L0", family: "rock", level: 0, fileBytes: 314892, geometryBytes: 33840, images: [[512, 512, "7ce434235def"]] },
+  { name: "building L0", family: "building", level: 0, fileBytes: 12978996, geometryBytes: 4472784, images: [[2048, 2048, "035f4eb18f3a"], [2048, 2048, "21eafa8e80e9"], [2048, 2048, "eb51e8e845d2"]] },
+  { name: "building L1", family: "building", level: 1, fileBytes: 4234780, geometryBytes: 1293600, images: [[1024, 1024, "bee3b4c0ee21"], [1024, 1024, "602013727d37"], [1024, 1024, "51809bffa280"]] },
+  { name: "building-2 L0", family: "building-2", level: 0, fileBytes: 1044832, geometryBytes: 341712, images: [[512, 512, "ee82b8f60940"], [512, 512, "b24dc757905d"], [512, 512, "ac4f727e9392"]] },
+  { name: "fountain L0", family: "fountain", level: 0, fileBytes: 1229500, geometryBytes: 164736, images: [[512, 512, "341b68fe8e71"], [512, 512, "4ecc7b2ae07b"]] },
+  { name: "street-prop L0", family: "street-prop", level: 0, fileBytes: 4317280, geometryBytes: 4265184, images: [[1024, 1024, "cd5365500cff"], [1024, 1024, "ca2899882e4f"], [1024, 1024, "97921afdadb8"]] },
+  { name: "street-prop L1", family: "street-prop", level: 1, fileBytes: 3200012, geometryBytes: 643776, images: [[1024, 1024, "cd5365500cff"], [1024, 1024, "ca2899882e4f"], [1024, 1024, "97921afdadb8"]] },
+  { name: "teleporter L0", family: "teleporter", level: 0, fileBytes: 7954128, geometryBytes: 224784, images: [[2048, 2048, "a1ed35b28e42"], [2048, 2048, "6df44d55f45e"], [2048, 2048, "a7b067f01222"]] },
+  { name: "structure L0", family: "structure", level: 0, fileBytes: 9299064, geometryBytes: 8669472, images: [[512, 512, "4a16e1cc08c7"], [512, 512, "b7f30b5f28c1"], [512, 512, "94c40ad4ac79"], [1024, 1024, "233b1065bea8"], [1024, 1024, "10b46d104711"], [1024, 1024, "99904deca66e"], [512, 512, "4ed24eab218b"], [512, 512, "2f72cc4482ac"], [512, 512, "a4e6011fa80b"], [512, 512, "c840835583e5"], [512, 512, "272c7d8158c1"], [512, 512, "64f81f1a394f"]] },
+  { name: "structure L1", family: "structure", level: 1, fileBytes: 8421884, geometryBytes: 6005520, images: [[512, 512, "4a16e1cc08c7"], [512, 512, "b7f30b5f28c1"], [512, 512, "94c40ad4ac79"], [1024, 1024, "233b1065bea8"], [1024, 1024, "10b46d104711"], [1024, 1024, "99904deca66e"], [512, 512, "4ed24eab218b"], [512, 512, "2f72cc4482ac"], [512, 512, "a4e6011fa80b"], [512, 512, "c840835583e5"], [512, 512, "272c7d8158c1"], [512, 512, "64f81f1a394f"]] },
+  { name: "structure L2", family: "structure", level: 2, fileBytes: 7921780, geometryBytes: 4485216, images: [[512, 512, "4a16e1cc08c7"], [512, 512, "b7f30b5f28c1"], [512, 512, "94c40ad4ac79"], [1024, 1024, "233b1065bea8"], [1024, 1024, "10b46d104711"], [1024, 1024, "99904deca66e"], [512, 512, "4ed24eab218b"], [512, 512, "2f72cc4482ac"], [512, 512, "a4e6011fa80b"], [512, 512, "c840835583e5"], [512, 512, "272c7d8158c1"], [512, 512, "64f81f1a394f"]] },
+  { name: "npc-1 L0", family: "npc-1", level: 0, fileBytes: 21649816, geometryBytes: 473776, images: [[2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "9b25cf920021"], [2048, 2048, "df680cbc1967"], [2048, 2048, "c70dabf48574"]] },
+  { name: "npc-2 L0", family: "npc-2", level: 0, fileBytes: 21416396, geometryBytes: 531440, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-3 L0", family: "npc-3", level: 0, fileBytes: 21416232, geometryBytes: 531096, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-4 L0", family: "npc-4", level: 0, fileBytes: 21414512, geometryBytes: 525288, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-5 L0", family: "npc-5", level: 0, fileBytes: 21407352, geometryBytes: 490768, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-6 L0", family: "npc-6", level: 0, fileBytes: 21369760, geometryBytes: 367168, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-7 L0", family: "npc-7", level: 0, fileBytes: 21365572, geometryBytes: 364552, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-8 L0", family: "npc-8", level: 0, fileBytes: 19532076, geometryBytes: 463272, images: [[2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [2048, 2048, "57fd0ad8c96a"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "9b25cf920021"], [2048, 2048, "df680cbc1967"], [2048, 2048, "c70dabf48574"]] },
+  { name: "npc-phone-1 L0", family: "npc-phone-1", level: 0, fileBytes: 15524708, geometryBytes: 541648, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-phone-2 L0", family: "npc-phone-2", level: 0, fileBytes: 15521380, geometryBytes: 533848, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-phone-3 L0", family: "npc-phone-3", level: 0, fileBytes: 15520624, geometryBytes: 532216, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-phone-4 L0", family: "npc-phone-4", level: 0, fileBytes: 15474780, geometryBytes: 382664, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-phone-5 L0", family: "npc-phone-5", level: 0, fileBytes: 15469756, geometryBytes: 360880, images: [[2048, 2048, "172f230aae0d"], [2048, 2048, "f9f4f2fb3eee"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "cf922460b43c"], [2048, 2048, "d366843ee7d9"], [2048, 2048, "d2beabf2bd03"]] },
+  { name: "npc-phone-6 L0", family: "npc-phone-6", level: 0, fileBytes: 15209536, geometryBytes: 469160, images: [[2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "9b25cf920021"], [2048, 2048, "df680cbc1967"], [2048, 2048, "c70dabf48574"]] },
+  { name: "npc-phone-7 L0", family: "npc-phone-7", level: 0, fileBytes: 15163136, geometryBytes: 313272, images: [[2048, 2048, "57fd0ad8c96a"], [2048, 2048, "bc7aa863bd22"], [256, 256, "9ed61f7726a5"], [256, 256, "d08e3356a832"], [2048, 2048, "9b25cf920021"], [2048, 2048, "df680cbc1967"], [2048, 2048, "c70dabf48574"]] },
+  { name: "npc-phone-8 L0", family: "npc-phone-8", level: 0, fileBytes: 7292672, geometryBytes: 6418704, images: [[512, 512, "a17e4472aa9c"], [512, 512, "342c90fe307f"], [256, 256, "41afe615f77a"], [256, 256, "fc4348fb8587"], [512, 512, "7bddbd8c4f2c"], [512, 512, "69dba4f3facc"], [512, 512, "bef608001845"], [512, 512, "a17e4472aa9c"], [512, 512, "342c90fe307f"], [512, 512, "1cbe6999eeeb"], [512, 512, "d73dcdc6ef0e"], [512, 512, "32fe4aa04ffe"], [512, 512, "1cbe6999eeeb"], [512, 512, "d73dcdc6ef0e"], [512, 512, "32fe4aa04ffe"], [512, 512, "1cbe6999eeeb"], [512, 512, "d73dcdc6ef0e"], [512, 512, "32fe4aa04ffe"], [512, 512, "1cbe6999eeeb"], [512, 512, "d73dcdc6ef0e"], [512, 512, "32fe4aa04ffe"]] },
 ]);
 
-const mipBytes = (width: number, height: number) => {
-  let sum = 0;
-  for (let w = width, h = height; ; w = Math.max(1, Math.floor(w / 2)), h = Math.max(1, Math.floor(h / 2))) { sum += w * h * 4; if (w === 1 && h === 1) break; }
-  return sum;
-};
 function inspect(model: SceneModel, edge: number) {
   const images: GlbImageSize[] = model.images.map(([width, height]) => {
     const decoded = cappedTextureSize(width, height, edge);
     return { width, height, decodedWidth: decoded.width, decodedHeight: decoded.height };
   });
-  const textureBytes = images.reduce((sum, image) => sum + mipBytes(image.decodedWidth, image.decodedHeight), 0);
+  const textureBytes = images.reduce((sum, image) => sum + mipChainBytes(image.decodedWidth, image.decodedHeight), 0);
   return { images, allocation: { decodedBytes: model.geometryBytes + textureBytes, textureBytes, animations: 0 } };
+}
+
+/** Same composition as GLBModelManager.decode: resident shared images cost nothing. */
+function admitShared(pool: GlbResourcePool, model: SceneModel, resident: Map<string, number>, headroomKey?: string) {
+  const hashes = model.images.map(image => image[2]);
+  const reused = new Set(hashes.filter(hash => resident.has(hash)));
+  const result = admitGlbAllocation(pool, edge => {
+    const base = inspect(model, edge);
+    return { ...base, ...sharedGlbAllocation(base, hashes, reused) };
+  }, { resizable: true, headroomKey });
+  if (!result) return null;
+  result.inspected.fresh.forEach(hash => resident.set(hash, result.textureDimension));
+  return result;
 }
 
 /** What the browser requests on this tier: file-size limit, one LOD per family on phones. */
@@ -91,20 +100,23 @@ describe("everything at the starter city is shown on the owner's phone and table
       return { decodedBytes: sum.decodedBytes + full.decodedBytes, textureBytes: sum.textureBytes + full.textureBytes };
     }, { decodedBytes: 0, textureBytes: 0 });
     const orders = [scene, [...scene].reverse(), ...Array.from({ length: 30 }, (_, seed) => shuffled(scene, seed + 1))];
+    const edges: number[] = [];
     for (const order of orders) {
       const pool = new GlbResourcePool(tier);
       const releaseHold = pool.holdHeadroom(AURION_STARTER_CITY_WALL_HEADROOM_KEY, wallHeadroom);
-      const admitted = new Map<string, number>();
+      const admitted = new Map<string, number>(), resident = new Map<string, number>();
       for (const model of order) {
-        const result = admitGlbAllocation(pool, edge => inspect(model, edge),
-          { resizable: true, headroomKey: isWall(model) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined });
+        const result = admitShared(pool, model, resident, isWall(model) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined);
         if (result) admitted.set(model.name, result.textureDimension);
       }
+      edges.push(...admitted.values());
       releaseHold();
       // Nothing is missing: every requested model is admitted (possibly with smaller textures).
       expect([...admitted.keys()].sort()).toEqual(scene.map(model => model.name).sort());
       // The wall always keeps the full detail of its tier.
       for (const model of scene.filter(isWall)) expect(admitted.get(model.name)).toBe(assetBudgets[tier].textureDimension);
+      // The wall's three LODs carry identical images: decoded once.
+      expect(scene.filter(isWall).flatMap(model => model.images.map(image => image[2])).filter(hash => resident.has(hash)).length).toBeGreaterThan(0);
       for (const edge of admitted.values()) expect(edge).toBeGreaterThanOrEqual(MIN_TEXTURE_DIMENSION);
       // And no byte ceiling was exceeded to get there.
       const evidence = pool.evidence();
@@ -122,8 +134,8 @@ describe("everything at the starter city is shown on the owner's phone and table
         const full = inspect(model, 4096).allocation;
         return { decodedBytes: sum.decodedBytes + full.decodedBytes, textureBytes: sum.textureBytes + full.textureBytes };
       }, { decodedBytes: 0, textureBytes: 0 }));
-      const walls = order.filter(model => admitGlbAllocation(pool, edge => inspect(model, edge),
-        { resizable: true, headroomKey: isWall(model) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined }) && isWall(model));
+      const resident = new Map<string, number>();
+      const walls = order.filter(model => admitShared(pool, model, resident, isWall(model) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined) && isWall(model));
       release();
       expect(walls).toHaveLength(3);
     }

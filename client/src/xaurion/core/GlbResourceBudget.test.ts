@@ -569,13 +569,13 @@ describe("real pinned city wall mobile LOD admission", () => {
 describe("owner-approved doubled mobile runtime budgets and measured wall textures", () => {
   it("doubles mobile admission counts and byte limits while keeping the desktop profile unchanged", () => {
     expect(assetBudgets.phone).toEqual({
-      textureShareModels: 16, textureDimension: 1024, worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16,
+      textureShareModels: 8, textureDimension: 1024, worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16,
       decoderJobs: 4, ktxWorkers: 2, cacheModels: 80,
       textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024,
       assetWorkingSetBytes: 192*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024,
     });
     expect(assetBudgets.tablet).toEqual({
-      textureShareModels: 32, textureDimension: 2048, worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24,
+      textureShareModels: 16, textureDimension: 2048, worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24,
       decoderJobs: 4, ktxWorkers: 2, cacheModels: 112,
       textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024,
       assetWorkingSetBytes: 384*1024*1024, assetBytes: 24*1024*1024, networkBytes: 48*1024*1024,

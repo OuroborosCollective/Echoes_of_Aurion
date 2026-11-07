@@ -2,8 +2,8 @@
  * This contract is consumed by both server-side admission and the renderer.
  * It never grants gameplay, simulation, inventory, collision or world authority. */
 export const assetBudgets = {
-  phone: { textureShareModels: 16, textureDimension: 1024, worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16, decoderJobs: 4, ktxWorkers: 2, cacheModels: 80, textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024, assetWorkingSetBytes: 192*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
-  tablet: { textureShareModels: 32, textureDimension: 2048, worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24, decoderJobs: 4, ktxWorkers: 2, cacheModels: 112, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 24*1024*1024, networkBytes: 48*1024*1024 },
+  phone: { textureShareModels: 8, textureDimension: 1024, worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16, decoderJobs: 4, ktxWorkers: 2, cacheModels: 80, textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024, assetWorkingSetBytes: 192*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
+  tablet: { textureShareModels: 16, textureDimension: 2048, worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24, decoderJobs: 4, ktxWorkers: 2, cacheModels: 112, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 24*1024*1024, networkBytes: 48*1024*1024 },
   desktop: { textureShareModels: 0, textureDimension: 4096, worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20, decoderJobs: 2, ktxWorkers: 2, cacheModels: 80, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
 } as const;
 
@@ -16,10 +16,12 @@ export type AssetTier = keyof typeof assetBudgets;
  * Under memory pressure a model is decoded at half that edge again, never
  * below MIN_TEXTURE_DIMENSION, instead of being dropped.
  *
- * `textureShareModels` (phones and touch tablets): no single model's textures
- * may exceed textureBytes / textureShareModels (6 MiB on both), independent of
- * download order. Sized from the production starter-city scene (world visuals
- * plus the largest NPC models) so every model is admitted; 0 = no share (desktop).
+ * `textureShareModels` (phones and touch tablets): no single model's newly
+ * decoded textures may exceed textureBytes / textureShareModels (12 MiB on both),
+ * independent of download order; images already resident in the shared texture
+ * cache cost nothing. Sized from the production starter-city scene (world visuals
+ * plus the largest NPC models, with their real image sharing) as the largest share
+ * at which every model is still admitted; 0 = no share (desktop).
  */
 export const MIN_TEXTURE_DIMENSION = 256;
 /** Edge of an image decoded under a dimension cap (aspect ratio preserved). */
@@ -33,6 +35,12 @@ export function cappedTextureSize(width: number, height: number, maxDimension: n
  */
 export const assetTier = (width: number, touchTablet = false): AssetTier =>
   width < 768 ? "phone" : width < 1200 || touchTablet ? "tablet" : "desktop";
+/** RGBA bytes of an image including its full mip chain. */
+export function mipChainBytes(width: number, height: number): number {
+  let bytes = 0;
+  for (let w = width, h = height; ; w = Math.max(1, Math.floor(w / 2)), h = Math.max(1, Math.floor(h / 2))) { bytes += w * h * 4; if (w === 1 && h === 1) break; }
+  return bytes;
+}
 export type GlbAllocation = { decodedBytes: number; textureBytes: number; animations: number };
 export type GlbImageSize = Readonly<{ width: number; height: number; decodedWidth: number; decodedHeight: number }>;
 
@@ -80,7 +88,7 @@ export function inspectGlbAllocation(bytes: ArrayBuffer, maxTextureDimension = 4
     // Compressed KTX2 stays at its stored size (no browser-side downsampling).
     const decoded = image.mimeType === "image/ktx2" ? { width, height } : cappedTextureSize(width, height, maxTextureDimension);
     sizes.push(Object.freeze({ width, height, decodedWidth: decoded.width, decodedHeight: decoded.height }));
-    for(let w=decoded.width,h=decoded.height;;w=Math.max(1,Math.floor(w/2)),h=Math.max(1,Math.floor(h/2))) {textureBytes+=w*h*4;if(w===1&&h===1)break;}
+    textureBytes += mipChainBytes(decoded.width, decoded.height);
   }
   const components:Record<string,number>={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MAT3:9,MAT4:16};
   const accessorBytes=(json.accessors??[]).reduce((sum:number,a:any)=>{

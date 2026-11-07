@@ -122,21 +122,35 @@ export class GlbResourcePool {
     return {decodedBytes,textureBytes};
   }
   reserve(allocation:GlbAllocation, headroomKey?:string):(()=>void)|null {
-    integer(allocation.decodedBytes);integer(allocation.textureBytes);
+    return this.reserveParts([{...allocation,countsModel:true}],headroomKey)?.release??null;
+  }
+  /**
+   * Reserve several parts atomically (all or nothing), each with its own release.
+   * A model's geometry counts as a cached model; a shared texture part does not,
+   * and is later handed to the shared texture cache that outlives the model.
+   */
+  reserveParts(parts:readonly (GlbAllocation&{countsModel?:boolean})[], headroomKey?:string):{release:()=>void;parts:(()=>void)[]}|null {
+    let decodedBytes=0,textureBytes=0,models=0;
+    for(const part of parts){integer(part.decodedBytes);integer(part.textureBytes);decodedBytes+=part.decodedBytes;textureBytes+=part.textureBytes;if(part.countsModel)models++;}
+    integer(decodedBytes);integer(textureBytes);
     const l=this.limits;
     const other=this.heldExcept(headroomKey), own=headroomKey?this.holds.get(headroomKey):undefined;
     // The owner's remaining hold stays counted; this reservation is drawn from it first.
-    const decodedNeed=Math.max(allocation.decodedBytes,own?.decodedBytes??0), textureNeed=Math.max(allocation.textureBytes,own?.textureBytes??0);
-    if(this.models>=l.cacheModels||this.decoded+other.decodedBytes+decodedNeed>l.decodedBytes||this.textures+other.textureBytes+textureNeed>l.textureBytes||this.decoded+other.decodedBytes+decodedNeed+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
-    // Remember what was drawn from the hold: if this reservation is released while
-    // the same hold is still active (e.g. a failed wall decode before its retry),
-    // the bytes return to the hold instead of becoming free for other models.
-    const drawn={decodedBytes:Math.min(own?.decodedBytes??0,allocation.decodedBytes),textureBytes:Math.min(own?.textureBytes??0,allocation.textureBytes)};
-    if(own){own.decodedBytes-=drawn.decodedBytes;own.textureBytes-=drawn.textureBytes;}
-    this.models++;this.decoded+=allocation.decodedBytes;this.textures+=allocation.textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
-    let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;
-      if(own&&headroomKey&&this.holds.get(headroomKey)===own){own.decodedBytes+=drawn.decodedBytes;own.textureBytes+=drawn.textureBytes;}
-      this.drainJobs();};
+    const decodedNeed=Math.max(decodedBytes,own?.decodedBytes??0), textureNeed=Math.max(textureBytes,own?.textureBytes??0);
+    if(this.models+models>l.cacheModels||this.decoded+other.decodedBytes+decodedNeed>l.decodedBytes||this.textures+other.textureBytes+textureNeed>l.textureBytes||this.decoded+other.decodedBytes+decodedNeed+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
+    this.models+=models;this.decoded+=decodedBytes;this.textures+=textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
+    // Remember what each part drew from the hold: if a part is released while the
+    // same hold is still active (e.g. a failed wall decode before its retry), its
+    // bytes return to the hold instead of becoming free for other models.
+    const releases=parts.map(part=>{
+      const drawn={decodedBytes:Math.min(own?.decodedBytes??0,part.decodedBytes),textureBytes:Math.min(own?.textureBytes??0,part.textureBytes)};
+      if(own){own.decodedBytes-=drawn.decodedBytes;own.textureBytes-=drawn.textureBytes;}
+      let released=false;
+      return()=>{if(released)return;released=true;if(part.countsModel)this.models--;this.decoded-=part.decodedBytes;this.textures-=part.textureBytes;
+        if(own&&headroomKey&&this.holds.get(headroomKey)===own){own.decodedBytes+=drawn.decodedBytes;own.textureBytes+=drawn.textureBytes;}
+        this.drainJobs();};
+    });
+    return {release:()=>releases.forEach(release=>release()),parts:releases};
   }
   actor(animationActions:number):(()=>void)|null {
     integer(animationActions, 2);
