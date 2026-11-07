@@ -59,6 +59,20 @@ function texturedGlb(edge: number, count = 3, mimeType = "image/png"): Buffer {
   return Buffer.concat([header, jsonHeader, jsonChunk, binHeader, bin]);
 }
 
+/** Re-encode a GLB after editing its JSON chunk (binary chunk unchanged). */
+function rewriteGlbJson(glb: Buffer, edit: (json: any) => void): Buffer {
+  const length = glb.readUInt32LE(12);
+  const json = JSON.parse(glb.subarray(20, 20 + length).toString());
+  edit(json);
+  const bin = glb.subarray(20 + length);
+  const text = Buffer.from(JSON.stringify(json));
+  const jsonChunk = Buffer.concat([text, Buffer.alloc((4 - text.length % 4) % 4, 0x20)]);
+  const header = Buffer.alloc(12); header.writeUInt32LE(0x46546c67, 0); header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(12 + 8 + jsonChunk.length + bin.length, 8);
+  const jsonHeader = Buffer.alloc(8); jsonHeader.writeUInt32LE(jsonChunk.length, 0); jsonHeader.writeUInt32LE(0x4e4f534a, 4);
+  return Buffer.concat([header, jsonHeader, jsonChunk, bin]);
+}
+
 function ktx2Header(width: number, height: number): Buffer {
   const ktx = Buffer.alloc(80);
   ktx.writeUInt32LE(0x58544bab, 0); ktx.writeUInt32LE(width, 20); ktx.writeUInt32LE(height, 24);
@@ -105,6 +119,19 @@ describe("tier texture edge", () => {
     expect(cappedTextureSize(300, 200, 1024)).toEqual({ width: 300, height: 200 });
     const ktx = inspectGlbAllocation(arrayBuffer(texturedGlb(2048, 1, "image/ktx2")), 1024);
     expect(ktx.images[0]).toMatchObject({ decodedWidth: 2048, decodedHeight: 2048 });
+  });
+
+  // Review (CodeRabbit on 554e6e6a): GLTFLoader decodes EXT_texture_webp images with
+  // its built-in handler at stored size, so they (and their core fallback) are not capped.
+  it("budgets images behind an image extension at stored size", () => {
+    const glb = rewriteGlbJson(texturedGlb(2048, 2), json => {
+      json.textures = [{ source: 0, extensions: { EXT_texture_webp: { source: 1 } } }];
+      json.materials = [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }];
+      json.extensionsUsed = ["EXT_texture_webp"];
+    });
+    const phone = inspectGlbAllocation(arrayBuffer(glb), 1024);
+    expect(phone.images.map(size => size!.decodedWidth)).toEqual([2048, 2048]);
+    expect(phone.allocation.textureBytes).toBe(2 * mipBytes(2048));
   });
 
   // Production readback 2026-11-07: three 2048 px textures make one return stone

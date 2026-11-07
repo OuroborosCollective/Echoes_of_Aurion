@@ -41,6 +41,12 @@ export class GlbTextureDownsamplePlugin implements GLTFLoaderPlugin {
   }
 }
 
+/** Image a texture actually decodes: an extension source (e.g. EXT_texture_webp) wins over the core fallback. */
+export function textureImageSource(textureDef: { source?: number; extensions?: Record<string, { source?: number }> } | undefined): number | undefined {
+  for (const extension of Object.values(textureDef?.extensions ?? {})) if (Number.isSafeInteger(extension?.source)) return extension!.source;
+  return Number.isSafeInteger(textureDef?.source) ? textureDef!.source : undefined;
+}
+
 /** Largest decoded edge per glTF image index, read from the textures GLTFLoader produced. */
 export function decodedTextureEdges(gltf: GLTF): Map<number, number> {
   const edges = new Map<number, number>();
@@ -51,7 +57,7 @@ export function decodedTextureEdges(gltf: GLTF): Map<number, number> {
       for (const value of Object.values(material)) {
         if (!(value instanceof THREE.Texture)) continue;
         const textureIndex = gltf.parser.associations.get(value)?.textures;
-        const source = textureIndex === undefined ? undefined : gltf.parser.json.textures?.[textureIndex]?.source;
+        const source = textureIndex === undefined ? undefined : textureImageSource(gltf.parser.json.textures?.[textureIndex]);
         const image = value.image as { width?: number; height?: number } | undefined;
         if (source === undefined || !image?.width || !image?.height) continue;
         edges.set(source, Math.max(edges.get(source) ?? 0, image.width, image.height));
