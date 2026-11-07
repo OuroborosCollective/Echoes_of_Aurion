@@ -28,6 +28,7 @@ export class GlbResourcePool {
   private peakDecoded=0; private peakNetwork=0; private peakJobs=0;
   private fetchedBytes=0; private decodedCount=0; private decodeMs=0; private maximumDecodeMs=0;
   private rejected=0;
+  private readonly holds=new Map<string,{decodedBytes:number;textureBytes:number}>();
   // Stable accounting profile for the loaded application. A resize must not
   // retroactively lower the ceiling underneath resources already reserved.
   constructor(readonly tier:AssetTier=assetTier(typeof window === "undefined" ? 412 : window.innerWidth)) {}
@@ -90,10 +91,33 @@ export class GlbResourcePool {
       this.drainJobs();
     }
   }
-  reserve(allocation:GlbAllocation):(()=>void)|null {
+  /**
+   * Keep decoded/texture capacity free for one owner-designated visual (key).
+   * Admission is otherwise first come, first served: without a hold, many small
+   * models that finish downloading first permanently occupy the budget and a
+   * large priority model (the pinned city wall on phones) can never be admitted.
+   * Only `reserve(..., key)` may consume a hold; it changes no byte ceiling.
+   */
+  holdHeadroom(key:string, allocation:Pick<GlbAllocation,"decodedBytes"|"textureBytes">):()=>void {
+    integer(allocation.decodedBytes);integer(allocation.textureBytes);
+    if(!key||this.holds.has(key))throw Error("GLB_HEADROOM_HOLD_DUPLICATE");
+    const hold={decodedBytes:allocation.decodedBytes,textureBytes:allocation.textureBytes};
+    this.holds.set(key,hold);
+    let released=false;return()=>{if(released)return;released=true;if(this.holds.get(key)===hold)this.holds.delete(key);this.drainJobs();};
+  }
+  private heldExcept(key:string|undefined) {
+    let decodedBytes=0,textureBytes=0;
+    for(const [holder,hold] of this.holds) if(holder!==key){decodedBytes+=hold.decodedBytes;textureBytes+=hold.textureBytes;}
+    return {decodedBytes,textureBytes};
+  }
+  reserve(allocation:GlbAllocation, headroomKey?:string):(()=>void)|null {
     integer(allocation.decodedBytes);integer(allocation.textureBytes);
     const l=this.limits;
-    if(this.models>=l.cacheModels||this.decoded+allocation.decodedBytes>l.decodedBytes||this.textures+allocation.textureBytes>l.textureBytes||this.decoded+allocation.decodedBytes+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
+    const other=this.heldExcept(headroomKey), own=headroomKey?this.holds.get(headroomKey):undefined;
+    // The owner's remaining hold stays counted; this reservation is drawn from it first.
+    const decodedNeed=Math.max(allocation.decodedBytes,own?.decodedBytes??0), textureNeed=Math.max(allocation.textureBytes,own?.textureBytes??0);
+    if(this.models>=l.cacheModels||this.decoded+other.decodedBytes+decodedNeed>l.decodedBytes||this.textures+other.textureBytes+textureNeed>l.textureBytes||this.decoded+other.decodedBytes+decodedNeed+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
+    if(own){own.decodedBytes=Math.max(0,own.decodedBytes-allocation.decodedBytes);own.textureBytes=Math.max(0,own.textureBytes-allocation.textureBytes);}
     this.models++;this.decoded+=allocation.decodedBytes;this.textures+=allocation.textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
     let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;this.drainJobs();};
   }
@@ -124,7 +148,7 @@ export class GlbResourcePool {
   decodedModel(milliseconds:number){this.decodedCount++;this.decodeMs+=milliseconds;this.maximumDecodeMs=Math.max(this.maximumDecodeMs,milliseconds);}
   evidence(){return{tier:this.tier,limits:this.limits,models:this.models,actors:this.actors,staticInstances:this.staticInstances,animations:this.animations,decoderJobs:this.activeJobs,pending:this.pending.length,
     assetWorkingSetCeilingBytes:this.decoded+2*this.network,peakAssetWorkingSetCeilingBytes:this.peakWorkingSet,
-    reservedDecodedBytes:this.decoded,reservedTextureBytes:this.textures,networkInFlightBytes:this.network,peakReservedDecodedBytes:this.peakDecoded,peakNetworkInFlightBytes:this.peakNetwork,
+    reservedDecodedBytes:this.decoded,reservedTextureBytes:this.textures,heldHeadroom:Object.fromEntries([...this.holds].map(([key,hold])=>[key,{...hold}])),networkInFlightBytes:this.network,peakReservedDecodedBytes:this.peakDecoded,peakNetworkInFlightBytes:this.peakNetwork,
     peakDecoderJobs:this.peakJobs,fetchedBytes:this.fetchedBytes,decodedCount:this.decodedCount,totalDecodeMs:this.decodeMs,maxDecodeMs:this.maximumDecodeMs,rejected:this.rejected};}
 }
 export const glbResourcePool = new GlbResourcePool();

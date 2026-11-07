@@ -7,7 +7,7 @@ import {
   type GlbImportPurpose,
 } from "@shared/glbImportContract";
 import type { GlbNormalizationManifest } from "@shared/glbNormalizationContract";
-import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
+import { AURION_STARTER_CITY_WALL_HEADROOM_KEY, isStarterCityWallSource, starterCityWallAllocation } from "@shared/aurionStarterCityWallContract";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -148,6 +148,28 @@ export function selectStaticWorldLodVariants(
   return tier === "tablet" ? variants : variants.slice(0, 1);
 }
 
+/**
+ * Decoded/texture headroom the pinned city wall needs on this device tier: the
+ * pinned allocation of exactly the LODs `selectStaticWorldLodVariants` admits.
+ * Null for every other model and for a family that cannot be the pinned wall.
+ */
+export function starterCityWallHeadroom(
+  entry: GlbCatalogEntry,
+  tier: AssetTier = glbResourcePool.tier,
+): { decodedBytes: number; textureBytes: number } | null {
+  if (!isStarterCityWallSource(entry.sha256)) return null;
+  const variants = selectStaticWorldLodVariants(entry, tier);
+  if (variants.length === 0) return null;
+  let decodedBytes = 0, textureBytes = 0;
+  for (const variant of variants) {
+    const allocation = starterCityWallAllocation(variant.sha256);
+    if (!allocation) return null;
+    decodedBytes += allocation.decodedBytes;
+    textureBytes += allocation.textureBytes;
+  }
+  return { decodedBytes, textureBytes };
+}
+
 type CachedModel = {
   scene: THREE.Group;
   animations: THREE.AnimationClip[];
@@ -275,10 +297,12 @@ export class GLBModelManager {
       const signal = AbortSignal.timeout(20_000);
       const bytes = await fetchVerifiedGlb({ url, sha256 }, signal);
       const { allocation, json } = inspectGlbAllocation(bytes);
-      let release = glbResourcePool.reserve(allocation);
+      // The pinned wall draws on the headroom its projection holds for it.
+      const headroomKey = isStarterCityWallSource(sha256) ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined;
+      let release = glbResourcePool.reserve(allocation, headroomKey);
       if (!release) {
         this.trimIdle();
-        release = glbResourcePool.reserve(allocation);
+        release = glbResourcePool.reserve(allocation, headroomKey);
       }
       if (!release) throw Error("GLB_DECODED_BUDGET");
       const started = performance.now();
@@ -416,6 +440,16 @@ export class GLBModelManager {
       borrowed.users--;
     });
     return { scene, animations: entry.animations };
+  }
+
+  /**
+   * Hold decoded/texture headroom for the pinned city wall until it is rendered,
+   * so models that finish downloading earlier cannot exhaust the device budget
+   * first. Returns null for every other model (no hold is taken).
+   */
+  public holdStaticWorldHeadroom(entry: GlbCatalogEntry): (() => void) | null {
+    const headroom = starterCityWallHeadroom(entry);
+    return headroom ? glbResourcePool.holdHeadroom(AURION_STARTER_CITY_WALL_HEADROOM_KEY, headroom) : null;
   }
 
   /** Builds one presentation-only Three.js LOD node from one logical catalog model.
