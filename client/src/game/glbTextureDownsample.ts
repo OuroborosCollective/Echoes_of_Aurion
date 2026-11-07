@@ -55,9 +55,19 @@ export class GlbTextureDownsamplePlugin implements GLTFLoaderPlugin {
   }
 }
 
-/** Image a texture actually decodes: an extension source (e.g. EXT_texture_webp) wins over the core fallback. */
+/**
+ * Extensions whose image GLTFLoader (three r186) always decodes: no fallback.
+ * KHR_texture_basisu is absent on purpose: without a KTX2 loader (none is
+ * registered here) GLTFLoader decodes the core `source` instead.
+ */
+const ALWAYS_DECODED_IMAGE_EXTENSIONS = ["EXT_texture_webp", "EXT_texture_avif"] as const;
+
+/** Image a texture actually decodes, mirroring GLTFLoader's extension handling. */
 export function textureImageSource(textureDef: { source?: number; extensions?: Record<string, { source?: number }> } | undefined): number | undefined {
-  for (const extension of Object.values(textureDef?.extensions ?? {})) if (Number.isSafeInteger(extension?.source)) return extension!.source;
+  for (const name of ALWAYS_DECODED_IMAGE_EXTENSIONS) {
+    const source = textureDef?.extensions?.[name]?.source;
+    if (Number.isSafeInteger(source)) return source;
+  }
   return Number.isSafeInteger(textureDef?.source) ? textureDef!.source : undefined;
 }
 
