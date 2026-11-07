@@ -27,7 +27,7 @@ import {
   releaseGlbTree,
 } from "./GlbModelLease";
 import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
-import { canDownsampleGlbTextures, decodedTextureEdges, GlbTextureDownsamplePlugin } from "./GlbTextureDownsample";
+import { canDownsampleGlbTextures, decodedTextureEdges, GlbTextureDownsamplePlugin } from "../../game/glbTextureDownsample";
 import { MIN_TEXTURE_DIMENSION, type GlbAllocation, type GlbImageSize } from "@shared/glbPresentationBudget";
 
 export interface GLBModelEntry {
