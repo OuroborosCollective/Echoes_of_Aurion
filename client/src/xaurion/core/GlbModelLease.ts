@@ -28,7 +28,8 @@ export function disposeGlbSource(root: THREE.Object3D): void {
   });
   for (const material of materials) for (const value of Object.values(material)) if (value instanceof THREE.Texture) textures.add(value);
   const images = new Set<any>();
-  for (const texture of textures) { images.add(texture.image); texture.dispose(); }
+  // Shared images belong to the shared texture cache, which closes them itself.
+  for (const texture of textures) { if (!texture.userData.aurionSharedImage) images.add(texture.image); texture.dispose(); }
   for (const image of images) if (typeof image?.close === "function") image.close();
   for (const material of materials) material.dispose();
   for (const geometry of geometries) geometry.dispose();

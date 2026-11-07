@@ -7,8 +7,9 @@ import { testGlb } from "../../../../server/glbImportFixtures";
 import { buildGlbImportPlan } from "../../../../server/glbImportPlan";
 import { assetBudgets, assetTier, cappedTextureSize, inspectGlbAllocation, MIN_TEXTURE_DIMENSION } from "@shared/glbPresentationBudget";
 import { glbResourcePool, isTouchMobileOs } from "./GlbResourceBudget";
-import { canDownsampleGlbTextures } from "../../game/glbTextureDownsample";
+import { canDownsampleGlbTextures, textureImageSource } from "../../game/glbTextureDownsample";
 import { glbManager } from "./GLBModelManager";
+import { glbSharedTextures } from "../../game/glbSharedTextures";
 import { releaseGlbTree } from "./GlbModelLease";
 
 afterEach(() => {
@@ -19,8 +20,11 @@ afterEach(() => {
 });
 
 /** PNG signature + IHDR: enough for the allocation inspector; pixels come from the stubbed decoder. */
-function pngHeader(width: number, height: number): Buffer {
+let imageSalt = 0;
+/** `salt` makes image bytes distinct (identical bytes are deliberately shared). */
+function pngHeader(width: number, height: number, salt = ++imageSalt): Buffer {
   const png = Buffer.alloc(33);
+  png.writeUInt32BE(salt >>> 0, 29);
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0);
   png.writeUInt32BE(13, 8); png.write("IHDR", 12, "ascii");
   png.writeUInt32BE(width, 16); png.writeUInt32BE(height, 20); png[24] = 8; png[25] = 6;
@@ -28,21 +32,21 @@ function pngHeader(width: number, height: number): Buffer {
 }
 
 /** One triangle with `count` embedded base-colour PNG textures of the given size. */
-function texturedGlb(edge: number, count = 3, mimeType = "image/png"): Buffer {
+function texturedGlb(edge: number, count = 3, mimeType = "image/png", salts?: readonly number[], name = "Textured"): Buffer {
   const positions = Buffer.alloc(36);
   [0, 0, 0, 1, 0, 0, 0, 1, 0].forEach((value, index) => positions.writeFloatLE(value, index * 4));
   const parts: Buffer[] = [positions];
   const bufferViews: { buffer: number; byteOffset: number; byteLength: number }[] = [{ buffer: 0, byteOffset: 0, byteLength: 36 }];
   let offset = 36;
   for (let index = 0; index < count; index++) {
-    const image = mimeType === "image/ktx2" ? ktx2Header(edge, edge) : pngHeader(edge, edge);
+    const image = mimeType === "image/ktx2" ? ktx2Header(edge, edge) : pngHeader(edge, edge, salts?.[index]);
     const padded = Buffer.concat([image, Buffer.alloc((4 - image.length % 4) % 4)]);
     bufferViews.push({ buffer: 0, byteOffset: offset, byteLength: image.length });
     parts.push(padded); offset += padded.length;
   }
   const bin = Buffer.concat(parts);
   const json = {
-    asset: { version: "2.0" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ name: "Textured", mesh: 0 }],
+    asset: { version: "2.0" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ name, mesh: 0 }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0 }, material: 0 }] }],
     materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 }, metallicRoughnessTexture: count > 1 ? { index: 1 } : undefined }, normalTexture: count > 2 ? { index: 2 } : undefined }],
     textures: Array.from({ length: count }, (_, index) => ({ source: index })),
@@ -82,27 +86,36 @@ function ktx2Header(width: number, height: number): Buffer {
 const mipBytes = (edge: number) => { let sum = 0; for (let w = edge; ; w = Math.max(1, Math.floor(w / 2))) { sum += w * w * 4; if (w === 1) break; } return sum; };
 const arrayBuffer = (bytes: Buffer) => Uint8Array.from(bytes).buffer;
 
-/** Serve the GLB and the loader's blob: image URLs; decode images as sized stubs. */
-async function stubBrowser(bytes: Buffer, honourResize = true) {
+/** Serve the GLBs and the loader's blob: image URLs; decode images as sized stubs. */
+async function stubBrowser(bytes: Buffer, honourResize = true, extra: readonly Buffer[] = []) {
   vi.stubGlobal("crypto", webcrypto);
-  const url = `/api/assets/glb/${createHash("sha256").update(bytes).digest("hex")}.glb`;
+  const urlOf = (glb: Buffer) => `/api/assets/glb/${createHash("sha256").update(glb).digest("hex")}.glb`;
+  const url = urlOf(bytes);
+  const served = new Map([bytes, ...extra].map(glb => [urlOf(glb), glb] as const));
   vi.stubGlobal("fetch", vi.fn(async (target: string) => {
-    if (target === url) return new Response(bytes);
+    if (served.has(target)) return new Response(served.get(target)!);
     const blob = resolveObjectURL(target);
     return blob ? new Response(blob as unknown as Blob) : new Response(null, { status: 404 });
   }));
   const decoded: { width: number; height: number }[] = [];
-  const createImageBitmap = vi.fn(async (_blob: Blob, options: ImageBitmapOptions = {}) => {
-    const size = { width: honourResize ? options.resizeWidth ?? 2048 : 2048, height: honourResize ? options.resizeHeight ?? 2048 : 2048 };
+  const bitmaps: { width: number; height: number; close: ReturnType<typeof vi.fn> }[] = [];
+  const createImageBitmap = vi.fn(async (blob: Blob, options: ImageBitmapOptions = {}) => {
+    // Natural size from the PNG header, as a real decoder would produce it.
+    const header = Buffer.from(await blob.arrayBuffer());
+    const natural = { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+    const size = honourResize ? { width: options.resizeWidth ?? natural.width, height: options.resizeHeight ?? natural.height } : natural;
     decoded.push(size);
-    return { ...size, close: vi.fn() };
+    const bitmap = { ...size, close: vi.fn() };
+    bitmaps.push(bitmap);
+    return bitmap;
   });
   vi.stubGlobal("createImageBitmap", createImageBitmap);
   // GLTFLoader builds image blob URLs through self.URL, as in a browser.
   vi.stubGlobal("self", globalThis);
   const plan = await buildGlbImportPlan(testGlb("Aurion_Wall_LOD0").toString("base64"), "world-environment", "Aurion_Wall_LOD0.glb");
   const normalization = { ...plan.normalization, sourceSha256: url.slice(16, 80) };
-  return { url, normalization, decoded, createImageBitmap };
+  const target = (glb: Buffer) => ({ url: urlOf(glb), normalization: { ...plan.normalization, sourceSha256: urlOf(glb).slice(16, 80) } });
+  return { url, normalization, decoded, createImageBitmap, bitmaps, target };
 }
 
 describe("tier texture edge", () => {
@@ -132,6 +145,16 @@ describe("tier texture edge", () => {
     const phone = inspectGlbAllocation(arrayBuffer(glb), 1024);
     expect(phone.images.map(size => size!.decodedWidth)).toEqual([2048, 2048]);
     expect(phone.allocation.textureBytes).toBe(2 * mipBytes(2048));
+  });
+
+  // Review (Devin on #1342): resolve the image GLTFLoader r186 really decodes.
+  it("resolves the decoded image like GLTFLoader: WebP/AVIF extension image, BasisU core fallback", () => {
+    expect(textureImageSource({ source: 0, extensions: { EXT_texture_webp: { source: 1 } } })).toBe(1);
+    expect(textureImageSource({ source: 0, extensions: { EXT_texture_avif: { source: 2 } } })).toBe(2);
+    // No KTX2 loader is registered, so GLTFLoader falls back to the core source.
+    expect(textureImageSource({ source: 0, extensions: { KHR_texture_basisu: { source: 3 } } })).toBe(0);
+    expect(textureImageSource({ extensions: { KHR_texture_basisu: { source: 3 } } })).toBeUndefined();
+    expect(textureImageSource({ source: 4 })).toBe(4);
   });
 
   // Production readback 2026-11-07: three 2048 px textures make one return stone
@@ -191,7 +214,7 @@ describe("decoding under the phone texture edge", () => {
   });
 
   // Fair share: a production-like 3 × 2048 px model may not claim more than
-  // textureBytes / textureShareModels (6 MiB on phones), even with free memory.
+  // textureBytes / textureShareModels (12 MiB on phones), even with free memory.
   it("keeps every model within its fair texture share regardless of free memory", async () => {
     const bytes = texturedGlb(2048, 3);
     const { url, normalization, decoded } = await stubBrowser(bytes);
@@ -250,5 +273,271 @@ describe("decoding under the phone texture edge", () => {
     const before = glbResourcePool.evidence().reservedTextureBytes;
     await expect(glbManager.loadModel(url, normalization)).rejects.toThrow("GLB_TEXTURE_DOWNSAMPLE_UNAVAILABLE");
     expect(glbResourcePool.evidence().reservedTextureBytes).toBe(before);
+  });
+});
+
+describe("textures shared by content across models and LOD levels", () => {
+  // Production 2026-11-07: 623 embedded images, 172 distinct; NPC fallbacks reuse
+  // the same 2048 px textures in up to 28 models.
+  it("decodes, uploads and budgets identical image bytes once for every model using them", async () => {
+    const salts = [9_001, 9_002, 9_003];
+    // 3 × 512 px stays within the phone's fair share, so the stored size is decoded.
+    const first = texturedGlb(512, 3, "image/png", salts, "NpcA");
+    const second = texturedGlb(512, 3, "image/png", salts, "NpcB");
+    const { createImageBitmap, bitmaps, target } = await stubBrowser(first, true, [second]);
+    const before = glbResourcePool.evidence();
+    const a = await glbManager.loadModel(target(first).url, target(first).normalization);
+    const b = await glbManager.loadModel(target(second).url, target(second).normalization);
+    const maps = [a.scene, b.scene].map(scene => { let map: THREE.Texture | undefined; scene.traverse(node => { map ??= ((node as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined)?.map ?? undefined; }); return map!; });
+    try {
+      expect(createImageBitmap).toHaveBeenCalledTimes(3);
+      expect(maps[0]!.source).toBe(maps[1]!.source);
+      expect(glbResourcePool.evidence().reservedTextureBytes - before.reservedTextureBytes).toBe(3 * mipBytes(512));
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 3, images: 3, references: 6 });
+    } finally {
+      releaseGlbTree(a.scene);
+    }
+    // The first model leaves; the second keeps the images alive.
+    glbManager.trimIdle();
+    expect(bitmaps.some(bitmap => bitmap.close.mock.calls.length)).toBe(false);
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 3, images: 3, references: 3 });
+    releaseGlbTree(b.scene);
+    glbManager.trimIdle();
+    expect(bitmaps.every(bitmap => bitmap.close.mock.calls.length === 1)).toBe(true);
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 0, images: 0, references: 0 });
+    expect(glbResourcePool.evidence().reservedTextureBytes).toBe(before.reservedTextureBytes);
+    expect(glbResourcePool.evidence().reservedDecodedBytes).toBe(before.reservedDecodedBytes);
+  });
+
+  it("charges a model's fair share only for images that are not resident yet", async () => {
+    const shared = 9_101;
+    // First model: one 2048 px image, decoded at the phone edge (1024 px, 5.6 MB < 12 MiB share).
+    const first = texturedGlb(2048, 1, "image/png", [shared], "HouseA");
+    // Second model: the same image plus two new ones. All three at 1024 px (16.8 MB)
+    // would exceed the share; the two new ones (11.2 MB) do not.
+    const second = texturedGlb(2048, 3, "image/png", [shared, 9_102, 9_103], "HouseB");
+    const { decoded, target } = await stubBrowser(first, true, [second]);
+    const a = await glbManager.loadModel(target(first).url, target(first).normalization);
+    const b = await glbManager.loadModel(target(second).url, target(second).normalization);
+    try {
+      expect(decoded).toEqual(Array.from({ length: 3 }, () => ({ width: 1024, height: 1024 })));
+    } finally {
+      releaseGlbTree(a.scene);
+      releaseGlbTree(b.scene);
+    }
+  });
+
+  // GLTFLoader decodes each image index; a duplicate inside one GLB is decoded
+  // transiently, then closed — only one copy stays resident and budgeted.
+  it("keeps and budgets an image used twice inside one GLB once", async () => {
+    // Images 1 and 2 carry the same bytes and both feed linear slots (same upload configuration).
+    const bytes = texturedGlb(512, 3, "image/png", [9_202, 9_201, 9_201], "Twice");
+    const { bitmaps, url, normalization } = await stubBrowser(bytes);
+    const before = glbResourcePool.evidence().reservedTextureBytes;
+    const loaded = await glbManager.loadModel(url, normalization);
+    try {
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 2, images: 2, references: 2 });
+      expect(bitmaps.filter(bitmap => bitmap.close.mock.calls.length === 1)).toHaveLength(bitmaps.length - 2);
+      expect(glbResourcePool.evidence().reservedTextureBytes - before).toBe(2 * mipBytes(512));
+    } finally {
+      releaseGlbTree(loaded.scene);
+    }
+  });
+
+  // Review (Devin on #1342): Three.js uploads the same image once per sampler/colour
+  // space, so each configuration must be budgeted although the decoded image is shared.
+  it("budgets one GPU upload per configuration while decoding the image once", async () => {
+    const colour = texturedGlb(512, 1, "image/png", [9_401], "ColourUse");
+    const linear = rewriteGlbJson(texturedGlb(512, 1, "image/png", [9_401], "NormalUse"), json => {
+      json.materials = [{ normalTexture: { index: 0 } }];
+    });
+    const { createImageBitmap, target } = await stubBrowser(colour, true, [linear]);
+    const before = glbResourcePool.evidence().reservedTextureBytes;
+    const a = await glbManager.loadModel(target(colour).url, target(colour).normalization);
+    const b = await glbManager.loadModel(target(linear).url, target(linear).normalization);
+    try {
+      expect(createImageBitmap).toHaveBeenCalledTimes(1);
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 2, images: 1 });
+      expect(glbResourcePool.evidence().reservedTextureBytes - before).toBe(2 * mipBytes(512));
+    } finally {
+      releaseGlbTree(a.scene);
+      releaseGlbTree(b.scene);
+    }
+    glbManager.trimIdle();
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 0, images: 0 });
+    expect(glbResourcePool.evidence().reservedTextureBytes).toBe(before);
+  });
+
+  // Review (Devin on #1342): two models starting together must not both reserve the
+  // same image; the second waits for the first and reuses its upload.
+  it("admits concurrent models sharing an image although only one copy fits", async () => {
+    const first = texturedGlb(1024, 1, "image/png", [9_501], "TogetherA");
+    const second = texturedGlb(1024, 1, "image/png", [9_501], "TogetherB");
+    const { target } = await stubBrowser(first, true, [second]);
+    // Slow decode: the second model reaches admission while the first is still decoding.
+    const createImageBitmap = vi.fn(async (blob: Blob) => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const header = Buffer.from(await blob.arrayBuffer());
+      return { width: header.readUInt32BE(16), height: header.readUInt32BE(20), close: vi.fn() };
+    });
+    vi.stubGlobal("createImageBitmap", createImageBitmap);
+    const limits = glbResourcePool.limits;
+    const geometrySlack = 1024 * 1024;
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - mipBytes(1024) - geometrySlack, animations: 0 });
+    const reducedBefore = glbResourcePool.evidence().reducedTextureModels;
+    let scenes: THREE.Group[] = [];
+    try {
+      scenes = (await Promise.all([first, second].map(glb => glbManager.loadModel(target(glb).url, target(glb).normalization)))).map(loaded => loaded.scene);
+      expect(createImageBitmap).toHaveBeenCalledTimes(1);
+      expect(glbResourcePool.evidence().reducedTextureModels).toBe(reducedBefore);
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 1, references: 2 });
+    } finally {
+      scenes.forEach(scene => releaseGlbTree(scene));
+      glbManager.trimIdle();
+      filler!();
+    }
+  });
+
+  // Review (Devin on #1342): an image borrowed from another upload configuration
+  // must stay open even if that upload is evicted while this model is decoding.
+  it("keeps a borrowed image open when its lending upload is evicted mid-decode", async () => {
+    const lender = texturedGlb(512, 1, "image/png", [9_601], "Lender");
+    const borrower = rewriteGlbJson(texturedGlb(512, 2, "image/png", [9_601, 9_602], "Borrower"), json => {
+      json.materials = [{ normalTexture: { index: 0 }, pbrMetallicRoughness: { metallicRoughnessTexture: { index: 1 } } }];
+    });
+    const { target, bitmaps } = await stubBrowser(lender, true, [borrower]);
+    const a = await glbManager.loadModel(target(lender).url, target(lender).normalization);
+    releaseGlbTree(a.scene); // idle: evictable
+    const lent = bitmaps[0]!;
+    // Decoding the borrower's fresh image evicts idle models first (pressure).
+    vi.stubGlobal("createImageBitmap", vi.fn(async (blob: Blob) => {
+      glbManager.trimIdle();
+      const header = Buffer.from(await blob.arrayBuffer());
+      return { width: header.readUInt32BE(16), height: header.readUInt32BE(20), close: vi.fn() };
+    }));
+    const b = await glbManager.loadModel(target(borrower).url, target(borrower).normalization);
+    try {
+      expect(lent.close).not.toHaveBeenCalled();
+      let normal: THREE.Texture | undefined;
+      b.scene.traverse(node => { normal ??= ((node as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined)?.normalMap ?? undefined; });
+      expect(normal!.image).toBe(lent);
+    } finally {
+      releaseGlbTree(b.scene);
+    }
+    glbManager.trimIdle();
+    expect(lent.close).toHaveBeenCalledTimes(1);
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 0, images: 0 });
+  });
+
+  // Review (Devin on #1342): borrowing must not pin an idle upload that admission
+  // has to evict to make room for a different configuration of the same bytes.
+  it("evicts an idle upload of the same bytes when a different configuration needs its room", async () => {
+    const colour = texturedGlb(512, 1, "image/png", [9_901], "IdleColour");
+    const normal = rewriteGlbJson(texturedGlb(512, 1, "image/png", [9_901], "NeedsNormal"), json => {
+      json.materials = [{ normalTexture: { index: 0 } }];
+    });
+    const { target, createImageBitmap } = await stubBrowser(colour, true, [normal]);
+    const a = await glbManager.loadModel(target(colour).url, target(colour).normalization);
+    releaseGlbTree(a.scene); // idle colour upload stays cached
+    // Everything else is full: the normal upload only fits once the idle colour upload is evicted.
+    const limits = glbResourcePool.limits, now = glbResourcePool.evidence();
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - now.reservedTextureBytes - mipBytes(MIN_TEXTURE_DIMENSION) + 1, animations: 0 });
+    expect(filler).not.toBeNull();
+    let scene: THREE.Group | undefined;
+    try {
+      scene = (await glbManager.loadModel(target(normal).url, target(normal).normalization)).scene;
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 1 });
+      expect(createImageBitmap).toHaveBeenCalledTimes(2); // evicted, so decoded fresh
+    } finally {
+      if (scene) releaseGlbTree(scene);
+      glbManager.trimIdle();
+      filler!();
+    }
+  });
+
+  // Review (CodeRabbit on c07187ff): a model admitted at 512 px must not adopt a
+  // resident 1024 px decode of the same bytes under its 512 px reservation.
+  it("never adopts a resident image larger than the model's own reservation", async () => {
+    const colour = texturedGlb(2048, 1, "image/png", [9_951], "LiveColour");
+    const normal = rewriteGlbJson(texturedGlb(2048, 1, "image/png", [9_951], "SmallNormal"), json => {
+      json.materials = [{ normalTexture: { index: 0 } }];
+    });
+    const { target, createImageBitmap } = await stubBrowser(colour, true, [normal]);
+    const a = await glbManager.loadModel(target(colour).url, target(colour).normalization); // live: 1024 px colour upload
+    const limits = glbResourcePool.limits, now = glbResourcePool.evidence();
+    // Room for the normal upload at 512 px, not at 1024 px.
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - now.reservedTextureBytes - mipBytes(512) - 64 * 1024, animations: 0 });
+    expect(filler).not.toBeNull();
+    let b: THREE.Group | undefined;
+    try {
+      b = (await glbManager.loadModel(target(normal).url, target(normal).normalization)).scene;
+      let map: THREE.Texture | undefined;
+      b.traverse(node => { map ??= ((node as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined)?.normalMap ?? undefined; });
+      expect((map!.image as { width: number }).width).toBe(512);
+      expect(createImageBitmap).toHaveBeenCalledTimes(2);
+      // Every resident upload is covered by a reservation.
+      expect(glbSharedTextures.evidence().textureBytes).toBeLessThanOrEqual(glbResourcePool.evidence().reservedTextureBytes - (limits.textureBytes - now.reservedTextureBytes - mipBytes(512) - 64 * 1024));
+      expect(glbResourcePool.evidence().reservedTextureBytes).toBeLessThanOrEqual(limits.textureBytes);
+    } finally {
+      if (b) releaseGlbTree(b);
+      releaseGlbTree(a.scene);
+      glbManager.trimIdle();
+      filler!();
+    }
+  });
+
+  // Review (Devin on #1342): identical bytes under different upload settings share one bitmap.
+  it("keeps one decoded bitmap for identical bytes used with different settings in one GLB", async () => {
+    const bytes = rewriteGlbJson(texturedGlb(512, 2, "image/png", [9_701, 9_701], "TwoSettings"), json => {
+      json.materials = [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } }, normalTexture: { index: 1 } }];
+    });
+    const { url, normalization, bitmaps } = await stubBrowser(bytes);
+    const before = glbResourcePool.evidence().reservedTextureBytes;
+    const loaded = await glbManager.loadModel(url, normalization);
+    try {
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 2, images: 1 });
+      expect(bitmaps.filter(bitmap => bitmap.close.mock.calls.length === 1)).toHaveLength(bitmaps.length - 1);
+      expect(glbResourcePool.evidence().reservedTextureBytes - before).toBe(2 * mipBytes(512));
+    } finally {
+      releaseGlbTree(loaded.scene);
+    }
+  });
+
+  // A texture used in a colour and a linear slot stays sRGB in GLTFLoader; the
+  // prediction must match so a model that fits is not charged twice near the limit.
+  it("predicts the colour space of a texture shared by colour and linear slots", async () => {
+    const bytes = rewriteGlbJson(texturedGlb(512, 1, "image/png", [9_801], "MixedSlots"), json => {
+      json.materials = [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } }, normalTexture: { index: 0 } }];
+    });
+    const { url, normalization } = await stubBrowser(bytes);
+    const limits = glbResourcePool.limits;
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - mipBytes(512) - 1024 * 1024, animations: 0 });
+    let scene: THREE.Group | undefined;
+    try {
+      scene = (await glbManager.loadModel(url, normalization)).scene;
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 1 });
+    } finally {
+      if (scene) releaseGlbTree(scene);
+      glbManager.trimIdle();
+      filler!();
+    }
+  });
+
+  it("returns shared references and reservations when a model reusing them fails", async () => {
+    const first = texturedGlb(1024, 1, "image/png", [9_301], "Good");
+    const failing = texturedGlb(2048, 2, "image/png", [9_301, 9_302], "Bad");
+    const { target } = await stubBrowser(first, true, [failing]);
+    const a = await glbManager.loadModel(target(first).url, target(first).normalization);
+    const after = { pool: glbResourcePool.evidence(), shared: glbSharedTextures.evidence() };
+    // The browser now ignores downsampling: the new 2048 px image must fail closed.
+    vi.stubGlobal("createImageBitmap", vi.fn(async (blob: Blob) => { const header = Buffer.from(await blob.arrayBuffer()); return { width: header.readUInt32BE(16), height: header.readUInt32BE(20), close: vi.fn() }; }));
+    try {
+      await expect(glbManager.loadModel(target(failing).url, target(failing).normalization)).rejects.toThrow("GLB_TEXTURE_DOWNSAMPLE_UNAVAILABLE");
+      expect(glbSharedTextures.evidence()).toEqual(after.shared);
+      expect(glbResourcePool.evidence().reservedTextureBytes).toBe(after.pool.reservedTextureBytes);
+      expect(glbResourcePool.evidence().reservedDecodedBytes).toBe(after.pool.reservedDecodedBytes);
+    } finally {
+      releaseGlbTree(a.scene);
+    }
   });
 });
