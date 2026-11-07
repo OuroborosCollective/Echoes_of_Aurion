@@ -258,7 +258,13 @@ export function predictedTextureUploads(json: any, hashes: readonly string[]): {
   const visit = (value: unknown, slot = "") => {
     if (!value || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
-    if (/Texture$/.test(slot) && Number.isSafeInteger(record.index)) colour.set(record.index as number, SRGB_SLOTS.has(slot) ? THREE.SRGBColorSpace : THREE.NoColorSpace);
+    // GLTFLoader only ever sets sRGB (colour slots) and never resets a texture to
+    // linear, so one colour-slot use makes the shared texture sRGB.
+    if (/Texture$/.test(slot) && Number.isSafeInteger(record.index)) {
+      const index = record.index as number;
+      if (SRGB_SLOTS.has(slot)) colour.set(index, THREE.SRGBColorSpace);
+      else if (!colour.has(index)) colour.set(index, THREE.NoColorSpace);
+    }
     for (const [name, child] of Object.entries(record)) if (name !== "extras") visit(child, name);
   };
   for (const material of json.materials ?? []) visit(material);
@@ -441,10 +447,19 @@ export class GLBModelManager {
       const owned = new Set<string>();
       for (const { key } of uploads) if (!owned.has(key) && glbSharedTextures.acquire(key)) owned.add(key);
       const resident = new Set(owned);
+      // Images already decoded (possibly for another upload configuration) are
+      // borrowed with a held reference until this decode is done with them.
+      const borrowedImages = new Map<string, { data: unknown; release: () => void }>();
+      for (const hash of new Set(hashes)) {
+        const borrowed = glbSharedTextures.borrowImage(hash);
+        if (borrowed) borrowedImages.set(hash, borrowed);
+      }
+      const releaseBorrowed = () => { for (const borrowed of borrowedImages.values()) borrowed.release(); borrowedImages.clear(); };
       let admitted: ReturnType<GLBModelManager["admitDecodedModel"]>;
       try {
         admitted = this.admitDecodedModel(bytes, sha256, uploads, resident);
       } catch (error) {
+        releaseBorrowed();
         for (const key of owned) glbSharedTextures.releaseRef(key);
         throw error;
       }
@@ -459,7 +474,7 @@ export class GLBModelManager {
         decoded: THREE.Group | undefined;
       // Images whose bytes are already decoded are handed to GLTFLoader, not decoded again.
       const residentData = new Map<number, unknown>();
-      hashes.forEach((hash, index) => { const data = glbSharedTextures.imageData(hash); if (data !== undefined) residentData.set(index, data); });
+      hashes.forEach((hash, index) => { const borrowed = borrowedImages.get(hash); if (borrowed) residentData.set(index, borrowed.data); });
       const downsampled = inspected.images.some(size => size && (size.decodedWidth !== size.width || size.decodedHeight !== size.height));
       const loader = downsampled || residentData.size
         ? new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).register(parser => new GlbTextureDownsamplePlugin(parser, inspected.images, residentData))
@@ -508,10 +523,17 @@ export class GLBModelManager {
           if (owned.has(key)) {
             shared = glbSharedTextures.peek(key)!.source;
           } else {
+            const hash = sharedTextureHash(key);
             let part = freshParts.get(key);
             freshParts.delete(key);
             const image = textures[0]!.image as { width: number; height: number };
             const bytes = mipChainBytes(image.width, image.height);
+            if (!part) {
+              // Configuration differs from the prediction: reuse an unused part reserved
+              // for the same image bytes before reserving more.
+              const spare = [...freshParts.keys()].find(candidate => sharedTextureHash(candidate) === hash && !byUpload.has(candidate));
+              if (spare !== undefined) { part = freshParts.get(spare); freshParts.delete(spare); }
+            }
             if (!part) {
               // Upload configuration not predicted from the glTF: reserve it now or fail closed.
               const extra = glbResourcePool.reserveParts([{ decodedBytes: bytes, textureBytes: bytes, animations: 0 }]);
@@ -519,9 +541,13 @@ export class GLBModelManager {
               part = extra.release;
               extraParts.push(part);
             }
-            // One Source per upload entry; a Source already used by another entry is not reused.
+            // One Source per upload entry; the decoded image of these bytes is shared
+            // with every other entry (a second decode of the same bytes is closed below).
             const own = textures[0]!.source as THREE.Source<unknown>;
-            const candidate = usedSources.has(own) ? new THREE.Source(own.data) : own;
+            const existingData = glbSharedTextures.imageData(hash);
+            const candidate = existingData !== undefined && existingData !== own.data
+              ? new THREE.Source(existingData)
+              : usedSources.has(own) ? new THREE.Source(own.data) : own;
             const result = glbSharedTextures.adopt(key, candidate, bytes, part);
             const extraIndex = extraParts.indexOf(part);
             if (extraIndex >= 0) extraParts.splice(extraIndex, 1);
@@ -536,6 +562,7 @@ export class GLBModelManager {
         }
         // Decoded images no upload entry kept (another decode won) are closed now.
         for (const data of decodedData) if (!glbSharedTextures.owns(data)) closeImage(data);
+        releaseBorrowed();
         for (const part of freshParts.values()) part();
         freshParts.clear();
         gltf.scene.userData.aurionTextureDimension = textureDimension;
@@ -565,6 +592,7 @@ export class GLBModelManager {
         for (const part of freshParts.values()) part();
         for (const part of extraParts) part();
         for (const key of owned) glbSharedTextures.releaseRef(key);
+        releaseBorrowed();
         throw error;
       } finally {
         endInflight();

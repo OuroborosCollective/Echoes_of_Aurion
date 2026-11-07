@@ -398,6 +398,74 @@ describe("textures shared by content across models and LOD levels", () => {
     }
   });
 
+  // Review (Devin on #1342): an image borrowed from another upload configuration
+  // must stay open even if that upload is evicted while this model is decoding.
+  it("keeps a borrowed image open when its lending upload is evicted mid-decode", async () => {
+    const lender = texturedGlb(512, 1, "image/png", [9_601], "Lender");
+    const borrower = rewriteGlbJson(texturedGlb(512, 2, "image/png", [9_601, 9_602], "Borrower"), json => {
+      json.materials = [{ normalTexture: { index: 0 }, pbrMetallicRoughness: { metallicRoughnessTexture: { index: 1 } } }];
+    });
+    const { target, bitmaps } = await stubBrowser(lender, true, [borrower]);
+    const a = await glbManager.loadModel(target(lender).url, target(lender).normalization);
+    releaseGlbTree(a.scene); // idle: evictable
+    const lent = bitmaps[0]!;
+    // Decoding the borrower's fresh image evicts idle models first (pressure).
+    vi.stubGlobal("createImageBitmap", vi.fn(async (blob: Blob) => {
+      glbManager.trimIdle();
+      const header = Buffer.from(await blob.arrayBuffer());
+      return { width: header.readUInt32BE(16), height: header.readUInt32BE(20), close: vi.fn() };
+    }));
+    const b = await glbManager.loadModel(target(borrower).url, target(borrower).normalization);
+    try {
+      expect(lent.close).not.toHaveBeenCalled();
+      let normal: THREE.Texture | undefined;
+      b.scene.traverse(node => { normal ??= ((node as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined)?.normalMap ?? undefined; });
+      expect(normal!.image).toBe(lent);
+    } finally {
+      releaseGlbTree(b.scene);
+    }
+    glbManager.trimIdle();
+    expect(lent.close).toHaveBeenCalledTimes(1);
+    expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 0, images: 0 });
+  });
+
+  // Review (Devin on #1342): identical bytes under different upload settings share one bitmap.
+  it("keeps one decoded bitmap for identical bytes used with different settings in one GLB", async () => {
+    const bytes = rewriteGlbJson(texturedGlb(512, 2, "image/png", [9_701, 9_701], "TwoSettings"), json => {
+      json.materials = [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } }, normalTexture: { index: 1 } }];
+    });
+    const { url, normalization, bitmaps } = await stubBrowser(bytes);
+    const before = glbResourcePool.evidence().reservedTextureBytes;
+    const loaded = await glbManager.loadModel(url, normalization);
+    try {
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 2, images: 1 });
+      expect(bitmaps.filter(bitmap => bitmap.close.mock.calls.length === 1)).toHaveLength(bitmaps.length - 1);
+      expect(glbResourcePool.evidence().reservedTextureBytes - before).toBe(2 * mipBytes(512));
+    } finally {
+      releaseGlbTree(loaded.scene);
+    }
+  });
+
+  // A texture used in a colour and a linear slot stays sRGB in GLTFLoader; the
+  // prediction must match so a model that fits is not charged twice near the limit.
+  it("predicts the colour space of a texture shared by colour and linear slots", async () => {
+    const bytes = rewriteGlbJson(texturedGlb(512, 1, "image/png", [9_801], "MixedSlots"), json => {
+      json.materials = [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } }, normalTexture: { index: 0 } }];
+    });
+    const { url, normalization } = await stubBrowser(bytes);
+    const limits = glbResourcePool.limits;
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - mipBytes(512) - 1024 * 1024, animations: 0 });
+    let scene: THREE.Group | undefined;
+    try {
+      scene = (await glbManager.loadModel(url, normalization)).scene;
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 1 });
+    } finally {
+      if (scene) releaseGlbTree(scene);
+      glbManager.trimIdle();
+      filler!();
+    }
+  });
+
   it("returns shared references and reservations when a model reusing them fails", async () => {
     const first = texturedGlb(1024, 1, "image/png", [9_301], "Good");
     const failing = texturedGlb(2048, 2, "image/png", [9_301, 9_302], "Bad");

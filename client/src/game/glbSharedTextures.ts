@@ -51,6 +51,21 @@ export class GlbSharedTextureCache {
     return undefined;
   }
 
+  /**
+   * Borrow the decoded image of these bytes from a resident upload, holding a
+   * reference on that upload until `release`, so the image cannot be closed
+   * while another model's decode is still using it.
+   */
+  borrowImage(hash: string): { data: unknown; release: () => void } | undefined {
+    for (const entry of this.entries.values()) {
+      if (entry.hash !== hash) continue;
+      entry.refs++;
+      let released = false;
+      return { data: entry.source.data, release: () => { if (released) return; released = true; this.releaseRef(entry.key); } };
+    }
+    return undefined;
+  }
+
   /** Whether this decoded image object belongs to the cache (never closed by a model). */
   owns(data: unknown): boolean {
     return this.dataUsers.has(data);
