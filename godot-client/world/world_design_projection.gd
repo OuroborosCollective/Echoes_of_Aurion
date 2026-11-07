@@ -3,20 +3,20 @@ extends Node3D
 ## the response and chunk readbacks to the active authenticated zone session.
 ## This node creates no collisions, actions, scripts, or authoritative state.
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
-const MAX_VISUALS := 18
-const MAX_ASSET_BYTES := 24 * 1024 * 1024
+const MAX_VISUALS := 36
+const MAX_ASSET_BYTES := 48 * 1024 * 1024
 const MAX_JSON_BYTES := 4 * 1024 * 1024
 const MAX_MODELS := MAX_VISUALS
 const MAX_MODEL_MESH_INSTANCES := 256
 const MAX_MODEL_MATERIALS := 256
 const MAX_MODEL_RESOURCE_DESCRIPTORS := 256
-const MAX_TOTAL_MODEL_MATERIALS := 1024
-const MAX_TOTAL_TEXTURE_PIXELS := 16 * 1024 * 1024
-const MAX_TOTAL_MODEL_VERTICES := 750000
-const MAX_TOTAL_SOURCE_BYTES := 48 * 1024 * 1024
-const MAX_RENDERED_TRIANGLES := 1000000
-const MAX_RENDERED_MESH_INSTANCES := 512
-const MAX_RENDERED_SURFACES := 512
+const MAX_TOTAL_MODEL_MATERIALS := 2048
+const MAX_TOTAL_TEXTURE_PIXELS := 32 * 1024 * 1024
+const MAX_TOTAL_MODEL_VERTICES := 1500000
+const MAX_TOTAL_SOURCE_BYTES := 96 * 1024 * 1024
+const MAX_RENDERED_TRIANGLES := 2000000
+const MAX_RENDERED_MESH_INSTANCES := 1024
+const MAX_RENDERED_SURFACES := 1024
 const CHUNK_MM := 64000
 const HALF_CHUNK_MM := 32000
 ## Exact embedded-texture wall bytes; keep in parity with the shared contract.

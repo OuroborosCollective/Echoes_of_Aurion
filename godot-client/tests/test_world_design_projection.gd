@@ -204,20 +204,20 @@ func verify() -> void:
 	var dense := small_glb(14, 256)
 	var dense_catalog := catalog_for_bytes(dense, "glb_test_barrel")
 	var dense_design := design()
-	for i in range(2):
+	for i in range(4):
 		var more: Dictionary = dense_design.designs[0].placements[0].duplicate(true)
 		more.placementKey = "dense-%d" % i
 		dense_design.designs[0].placements.append(more)
 	require(projection.bind_confirmed(dense_design, dense_catalog, SESSION), "dense model test design rejected")
 	require(projection.accept_surface(chunk, SESSION, Vector2i.ZERO), "dense model test surface rejected")
 	require(projection.supply_asset(digest(dense), dense, SESSION), "bounded dense model rejected")
-	require(projection.get_child_count() == 2 and projection.find_children("*", "MeshInstance3D", true, false).size() == 512, "aggregate mesh-instance budget was bypassed")
+	require(projection.get_child_count() == 4 and projection.find_children("*", "MeshInstance3D", true, false).size() == 1024, "aggregate mesh-instance budget was bypassed")
 	var many_surfaces := small_glb(15, 1, false, 0, 256)
 	var surface_catalog := catalog_for_bytes(many_surfaces, "glb_test_barrel")
 	require(projection.bind_confirmed(dense_design, surface_catalog, SESSION), "many-surface model test design rejected")
 	require(projection.accept_surface(chunk, SESSION, Vector2i.ZERO), "many-surface model test surface rejected")
 	require(projection.supply_asset(digest(many_surfaces), many_surfaces, SESSION), "bounded many-surface model rejected")
-	require(projection.get_child_count() == 2, "aggregate primitive/surface budget was bypassed")
+	require(projection.get_child_count() == 4, "aggregate primitive/surface budget was bypassed")
 	var many_design := design()
 	many_design.designs[0].placements.clear()
 	var many_catalog := catalog()

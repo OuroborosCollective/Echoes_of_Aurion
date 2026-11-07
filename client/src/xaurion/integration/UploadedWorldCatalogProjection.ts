@@ -102,6 +102,8 @@ export class UploadedWorldCatalogProjection {
   /** Earliest retry time per placement after a failed render (terrain not ready, load error). */
   private readonly retryAt = new Map<string, number>();
   private disposed = false;
+  /** Headroom held for the pinned city wall while it is wanted but not yet rendered. */
+  private wallHeadroom: { sha256: string; release: () => void } | null = null;
 
   constructor(private readonly engine: MMOEngine) {
     this.root.name = "aurion-uploaded-world-catalog-visuals";
@@ -196,6 +198,26 @@ export class UploadedWorldCatalogProjection {
     return { center, placements: [...automatic, ...authored] };
   }
 
+  /**
+   * The wall is the owner-designated perimeter of the starter city. Hold its device
+   * headroom before any other load starts, so faster downloads cannot fill the
+   * budget first (on phones the origin's visuals exceed the budget about twice).
+   */
+  private syncWallHeadroom(placements: readonly ProjectedPlacement[]): void {
+    const wall = placements.find(placement => isStarterCityWallSource(placement.asset.sha256));
+    const needed = wall && this.rendered.get(wall.id)?.sha256 !== wall.asset.sha256 ? wall : undefined;
+    if (this.wallHeadroom && this.wallHeadroom.sha256 !== needed?.asset.sha256) this.releaseWallHeadroom();
+    if (!needed || this.wallHeadroom) return;
+    const release = glbManager.holdStaticWorldHeadroom(needed.asset);
+    if (release) this.wallHeadroom = { sha256: needed.asset.sha256, release };
+  }
+
+  private releaseWallHeadroom(): void {
+    const held = this.wallHeadroom;
+    this.wallHeadroom = null;
+    held?.release();
+  }
+
   private remove(id: string): void {
     const current = this.rendered.get(id);
     if (!current) return;
@@ -246,6 +268,8 @@ export class UploadedWorldCatalogProjection {
       this.remove(placement.id);
       this.root.add(holder);
       this.rendered.set(placement.id, Object.freeze({ sha256: placement.asset.sha256, root: holder, lodLevels: loaded.lodLevels }));
+      // Its decoded models now own real reservations; the hold is no longer needed.
+      if (this.wallHeadroom?.sha256 === placement.asset.sha256) this.releaseWallHeadroom();
       this.retryAt.delete(placement.id);
       unowned = undefined;
     } catch {
@@ -275,6 +299,7 @@ export class UploadedWorldCatalogProjection {
       return;
     }
     this.signature = nextSignature;
+    this.syncWallHeadroom(placements);
     this.wanted = new Map(placements.map(placement => [placement.id, placement.asset.sha256] as const));
     for (const id of [...this.retryAt.keys()]) if (!this.wanted.has(id)) this.retryAt.delete(id);
     this.root.position.set(originX, 0, originZ);
@@ -284,13 +309,14 @@ export class UploadedWorldCatalogProjection {
   }
 
   evidence() {
-    return Object.freeze({ catalogRevision: this.catalog?.revision ?? null, worldDesignRevision: this.worldDesign?.revision ?? null, rendered: this.rendered.size, pending: this.pending.size, maxRendered: MAX_RENDERED, maxAuthoredRendered: MAX_AUTHORED_RENDERED,
+    return Object.freeze({ catalogRevision: this.catalog?.revision ?? null, worldDesignRevision: this.worldDesign?.revision ?? null, rendered: this.rendered.size, pending: this.pending.size, maxRendered: MAX_RENDERED, maxAuthoredRendered: MAX_AUTHORED_RENDERED, wallHeadroomHeld: this.wallHeadroom !== null,
       assets: Object.freeze([...this.rendered.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([id, value]) => Object.freeze({ id, sha256: value.sha256, lodLevels: value.lodLevels }))) });
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.releaseWallHeadroom();
     this.pending.clear();
     for (const id of [...this.rendered.keys()]) this.remove(id);
     this.root.removeFromParent();
