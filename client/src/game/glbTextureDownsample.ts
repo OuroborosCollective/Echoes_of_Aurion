@@ -55,7 +55,13 @@ export class GlbTextureDownsamplePlugin implements GLTFLoaderPlugin {
   }
 }
 
-/** Every texture GLTFLoader produced, grouped by glTF image index. */
+/** Image a texture actually decodes: an extension source (e.g. EXT_texture_webp) wins over the core fallback. */
+export function textureImageSource(textureDef: { source?: number; extensions?: Record<string, { source?: number }> } | undefined): number | undefined {
+  for (const extension of Object.values(textureDef?.extensions ?? {})) if (Number.isSafeInteger(extension?.source)) return extension!.source;
+  return Number.isSafeInteger(textureDef?.source) ? textureDef!.source : undefined;
+}
+
+/** Every texture GLTFLoader produced, grouped by the glTF image it decodes. */
 export function texturesByImage(gltf: GLTF): Map<number, THREE.Texture[]> {
   const result = new Map<number, THREE.Texture[]>();
   const seen = new Set<THREE.Texture>();
@@ -67,7 +73,7 @@ export function texturesByImage(gltf: GLTF): Map<number, THREE.Texture[]> {
         if (!(value instanceof THREE.Texture) || seen.has(value)) continue;
         seen.add(value);
         const textureIndex = gltf.parser.associations.get(value)?.textures;
-        const source = textureIndex === undefined ? undefined : gltf.parser.json.textures?.[textureIndex]?.source;
+        const source = textureIndex === undefined ? undefined : textureImageSource(gltf.parser.json.textures?.[textureIndex]);
         if (source === undefined) continue;
         result.set(source, [...(result.get(source) ?? []), value]);
       }

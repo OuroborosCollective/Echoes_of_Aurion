@@ -60,7 +60,15 @@ export function inspectGlbAllocation(bytes: ArrayBuffer, maxTextureDimension = 4
   if (json.asset?.version !== "2.0" || json.buffers?.some((b: any) => b.uri)) throw Error("GLB_EMBEDDED_V2_REQUIRED");
   const images = new Set<number>(); let textureBytes = 0;
   const sizes: (GlbImageSize | null)[] = [];
-  for (const image of json.images ?? []) {
+  // Textures loaded through an image extension (EXT_texture_webp, KHR_texture_basisu, …)
+  // are decoded by GLTFLoader's built-in handlers at stored size, including the core
+  // fallback source; budget those images uncapped.
+  const uncapped = new Set<number>();
+  for (const texture of json.textures ?? []) {
+    const extensionSources = Object.values(texture?.extensions ?? {}).map((extension: any) => extension?.source).filter(Number.isSafeInteger);
+    if (extensionSources.length) for (const source of [...extensionSources, texture.source]) if (Number.isSafeInteger(source)) uncapped.add(source);
+  }
+  for (const [imageIndex, image] of (json.images ?? []).entries()) {
     if (image.uri || !Number.isSafeInteger(image.bufferView)) throw Error("GLB_EMBEDDED_IMAGE_REQUIRED");
     const v = json.bufferViews?.[image.bufferView];
     if (!v) throw Error("GLB_IMAGE_VIEW");
@@ -86,7 +94,7 @@ export function inspectGlbAllocation(bytes: ArrayBuffer, maxTextureDimension = 4
     }
     if (!width || !height || width>4096 || height>4096) throw Error("GLB_TEXTURE_DIMENSIONS");
     // Compressed KTX2 stays at its stored size (no browser-side downsampling).
-    const decoded = image.mimeType === "image/ktx2" ? { width, height } : cappedTextureSize(width, height, maxTextureDimension);
+    const decoded = image.mimeType === "image/ktx2" || uncapped.has(imageIndex) ? { width, height } : cappedTextureSize(width, height, maxTextureDimension);
     sizes.push(Object.freeze({ width, height, decodedWidth: decoded.width, decodedHeight: decoded.height }));
     textureBytes += mipChainBytes(decoded.width, decoded.height);
   }
