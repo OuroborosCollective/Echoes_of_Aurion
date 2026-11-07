@@ -821,7 +821,15 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    const mobSlows = new Set<string>();
+    for (const w of this.tactics.windups) mobSlows.add(w.mobId);
+    for (const id in this.tactics.effects) {
+      if (!this.tactics.effects.hasOwnProperty(id)) continue;
+      if ((this.tactics.effects[id]?.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0) {
+        mobSlows.add(id);
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, mobSlows);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -834,10 +842,27 @@ export class AuthoritativeMovementZone {
       for (const [id, until] of peer.skillCooldownUntilTick) if (until <= this.tickNumber) { peer.skillCooldownUntilTick.delete(id); changed = true; }
     }
     if (this.tacticalCombat) {
-      this.tactics.windups = this.tactics.windups.filter(w => { const m = this.mobRuntime.stateFor(w.mobId); return m && m.health > 0 && m.state === "combat" && m.targetEntityId === w.targetId && (this.peersByEntityId.get(w.targetId)?.health ?? 0) > 0; });
-      for (const [id, effects] of Object.entries(this.tactics.effects)) {
-        for (const key of Object.keys(effects) as (keyof typeof effects)[]) if ((effects[key] ?? 0) <= this.tickNumber) { delete effects[key]; changed = true; }
-        if (!Object.keys(effects).length) delete this.tactics.effects[id];
+      for (let i = this.tactics.windups.length - 1; i >= 0; i--) {
+        const w = this.tactics.windups[i]!;
+        const m = this.mobRuntime.stateFor(w.mobId);
+        if (!(m && m.health > 0 && m.state === "combat" && m.targetEntityId === w.targetId && (this.peersByEntityId.get(w.targetId)?.health ?? 0) > 0)) {
+          this.tactics.windups.splice(i, 1);
+        }
+      }
+      for (const id in this.tactics.effects) {
+        if (!this.tactics.effects.hasOwnProperty(id)) continue;
+        const effects = this.tactics.effects[id]!;
+        let hasKeys = false;
+        for (const key in effects) {
+          if (!effects.hasOwnProperty(key)) continue;
+          if ((effects[key as keyof typeof effects] ?? 0) <= this.tickNumber) {
+            delete effects[key as keyof typeof effects];
+            changed = true;
+          } else {
+            hasKeys = true;
+          }
+        }
+        if (!hasKeys) delete this.tactics.effects[id];
       }
     }
     for (const peer of this.sortedPeers) {
