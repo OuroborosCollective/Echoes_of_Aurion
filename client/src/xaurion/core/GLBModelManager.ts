@@ -447,22 +447,23 @@ export class GLBModelManager {
       const owned = new Set<string>();
       for (const { key } of uploads) if (!owned.has(key) && glbSharedTextures.acquire(key)) owned.add(key);
       const resident = new Set(owned);
-      // Images already decoded (possibly for another upload configuration) are
-      // borrowed with a held reference until this decode is done with them.
+      let admitted: ReturnType<GLBModelManager["admitDecodedModel"]>;
+      try {
+        admitted = this.admitDecodedModel(bytes, sha256, uploads, resident);
+      } catch (error) {
+        for (const key of owned) glbSharedTextures.releaseRef(key);
+        throw error;
+      }
+      // Only after admission (synchronously, no await in between): borrow images
+      // already decoded for another upload configuration, held until this decode
+      // is done. Borrowing saves a decode, not budget; borrowing before admission
+      // would pin idle uploads that eviction must be able to free (review: Devin).
       const borrowedImages = new Map<string, { data: unknown; release: () => void }>();
       for (const hash of new Set(hashes)) {
         const borrowed = glbSharedTextures.borrowImage(hash);
         if (borrowed) borrowedImages.set(hash, borrowed);
       }
       const releaseBorrowed = () => { for (const borrowed of borrowedImages.values()) borrowed.release(); borrowedImages.clear(); };
-      let admitted: ReturnType<GLBModelManager["admitDecodedModel"]>;
-      try {
-        admitted = this.admitDecodedModel(bytes, sha256, uploads, resident);
-      } catch (error) {
-        releaseBorrowed();
-        for (const key of owned) glbSharedTextures.releaseRef(key);
-        throw error;
-      }
       const { inspected, partReleases, textureDimension } = admitted;
       const release = partReleases[0]!;
       const freshParts = new Map(inspected.fresh.map((key, index) => [key, partReleases[index + 1]!] as const));

@@ -429,6 +429,32 @@ describe("textures shared by content across models and LOD levels", () => {
     expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 0, images: 0 });
   });
 
+  // Review (Devin on #1342): borrowing must not pin an idle upload that admission
+  // has to evict to make room for a different configuration of the same bytes.
+  it("evicts an idle upload of the same bytes when a different configuration needs its room", async () => {
+    const colour = texturedGlb(512, 1, "image/png", [9_901], "IdleColour");
+    const normal = rewriteGlbJson(texturedGlb(512, 1, "image/png", [9_901], "NeedsNormal"), json => {
+      json.materials = [{ normalTexture: { index: 0 } }];
+    });
+    const { target, createImageBitmap } = await stubBrowser(colour, true, [normal]);
+    const a = await glbManager.loadModel(target(colour).url, target(colour).normalization);
+    releaseGlbTree(a.scene); // idle colour upload stays cached
+    // Everything else is full: the normal upload only fits once the idle colour upload is evicted.
+    const limits = glbResourcePool.limits, now = glbResourcePool.evidence();
+    const filler = glbResourcePool.reserve({ decodedBytes: 1, textureBytes: limits.textureBytes - now.reservedTextureBytes - mipBytes(MIN_TEXTURE_DIMENSION) + 1, animations: 0 });
+    expect(filler).not.toBeNull();
+    let scene: THREE.Group | undefined;
+    try {
+      scene = (await glbManager.loadModel(target(normal).url, target(normal).normalization)).scene;
+      expect(glbSharedTextures.evidence()).toMatchObject({ uploads: 1 });
+      expect(createImageBitmap).toHaveBeenCalledTimes(2); // evicted, so decoded fresh
+    } finally {
+      if (scene) releaseGlbTree(scene);
+      glbManager.trimIdle();
+      filler!();
+    }
+  });
+
   // Review (Devin on #1342): identical bytes under different upload settings share one bitmap.
   it("keeps one decoded bitmap for identical bytes used with different settings in one GLB", async () => {
     const bytes = rewriteGlbJson(texturedGlb(512, 2, "image/png", [9_701, 9_701], "TwoSettings"), json => {
