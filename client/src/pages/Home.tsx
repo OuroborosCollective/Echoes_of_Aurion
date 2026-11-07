@@ -357,12 +357,21 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 sm:px-8">
+        {!isAuthenticated && !loading && (
+          <p
+            id="community-auth-required"
+            className="mb-4 text-sm text-slate-300"
+          >
+            Melde dich an, um Signalraum und Gildenzugehörigkeit zu öffnen.
+          </p>
+        )}
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
             aria-haspopup="dialog"
             disabled={!isAuthenticated || loading}
             aria-busy={loading}
+            aria-describedby={!isAuthenticated ? "community-auth-required" : undefined}
             title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Signalraum öffnen"}
             onClick={() => openCommunity("chat")}
             className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
@@ -415,6 +424,7 @@ export default function Home() {
             aria-haspopup="dialog"
             disabled={!isAuthenticated || loading}
             aria-busy={loading}
+            aria-describedby={!isAuthenticated ? "community-auth-required" : undefined}
             title={loading ? "Ladevorgang läuft..." : !isAuthenticated ? "Nur für angemeldete Explorer verfügbar" : "Gildenübersicht öffnen"}
             onClick={() => openCommunity("guild")}
             className="group inline-flex items-center min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-all hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
