@@ -217,13 +217,26 @@ describe("bounded, verified GLB ownership", () => {
     await expect(pool.job(bytes+1,async()=>{})).rejects.toThrow("GLB_NETWORK_BUDGET");
   });
 
-  it("rejects permanent decoded-memory pressure without parking a download indefinitely", async () => {
+  it("admits a bounded download alongside retained decoded data and still rejects oversized requests", async () => {
+    // Exact-limit arithmetic matters: 128 MiB decoded + 2 * 16 MiB
+    // temporary network reservation = 160 MiB, below the 192 MiB phone
+    // working-set ceiling. This must NOT produce false GLB_NETWORK_BUDGET.
     const pool = new GlbResourcePool("phone");
     const hold = pool.reserve({decodedBytes:pool.limits.decodedBytes,textureBytes:0,animations:0});
     expect(hold).not.toBeNull();
-    await expect(pool.job(pool.limits.assetBytes,async()=>{})).rejects.toThrow("GLB_NETWORK_BUDGET");
-    expect(pool.evidence()).toMatchObject({decoderJobs:0,pending:0,networkInFlightBytes:0});
+    let jobsRun = 0;
+    await pool.job(pool.limits.assetBytes,async()=>{jobsRun++;});
+    expect(jobsRun).toBe(1);
+    expect(pool.evidence()).toMatchObject({
+      decoderJobs:0,pending:0,networkInFlightBytes:0,rejected:0,
+      reservedDecodedBytes:pool.limits.decodedBytes,
+      peakAssetWorkingSetCeilingBytes:pool.limits.decodedBytes + 2*pool.limits.assetBytes,
+    });
+    await expect(pool.job(pool.limits.assetBytes+1,async()=>{jobsRun++;})).rejects.toThrow("GLB_NETWORK_BUDGET");
+    expect(jobsRun).toBe(1);
+    expect(pool.evidence()).toMatchObject({pending:0,networkInFlightBytes:0,rejected:1});
     hold!();
+    expect(pool.evidence().reservedDecodedBytes).toBe(0);
   });
 
   it("rejects working sets and animation actions above the profile and releases once", () => {
