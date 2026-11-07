@@ -159,6 +159,34 @@ describe("pinned city wall headroom", () => {
     expect(pool.reserve({ decodedBytes: 1, textureBytes: 1, animations: 0 })).not.toBeNull();
   });
 
+  // Review (Devin on 356f0330): a failed wall decode released its reservation
+  // into the free pool, so another model could take what the wall was promised.
+  it("returns a failed owner reservation to its still-active hold, not to other models", () => {
+    const pool = new GlbResourcePool("phone");
+    const limit = pool.limits.textureBytes;
+    const releaseHold = pool.holdHeadroom("wall", { decodedBytes: 30 * MiB, textureBytes: 30 * MiB });
+    const filler = pool.reserve({ decodedBytes: 1, textureBytes: limit - 30 * MiB, animations: 0 });
+    const lod0 = pool.reserve({ decodedBytes: 10 * MiB, textureBytes: 10 * MiB, animations: 0 }, "wall");
+    expect(lod0).not.toBeNull();
+    lod0!(); // decode failed
+    expect(pool.evidence().heldHeadroom).toEqual({ wall: { decodedBytes: 30 * MiB, textureBytes: 30 * MiB } });
+    expect(pool.reserve({ decodedBytes: 1, textureBytes: 10 * MiB, animations: 0 })).toBeNull();
+    // The wall's retry still gets the whole family.
+    expect(pool.reserve({ decodedBytes: 30 * MiB, textureBytes: 30 * MiB, animations: 0 }, "wall")).not.toBeNull();
+    releaseHold();
+    filler!();
+  });
+
+  it("does not refill a hold that was released before the reservation", () => {
+    const pool = new GlbResourcePool("phone");
+    const releaseHold = pool.holdHeadroom("wall", { decodedBytes: 30 * MiB, textureBytes: 30 * MiB });
+    const lod0 = pool.reserve({ decodedBytes: 10 * MiB, textureBytes: 10 * MiB, animations: 0 }, "wall");
+    releaseHold();
+    lod0!();
+    expect(pool.evidence().heldHeadroom).toEqual({});
+    expect(pool.evidence().reservedTextureBytes).toBe(0);
+  });
+
   it("decodes the pinned wall URL from its hold when other models filled the rest of the budget", async () => {
     vi.stubGlobal("crypto", webcrypto);
     const fixture = testGlb("Aurion_CityWall_LOD0");

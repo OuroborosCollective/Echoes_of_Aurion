@@ -128,9 +128,15 @@ export class GlbResourcePool {
     // The owner's remaining hold stays counted; this reservation is drawn from it first.
     const decodedNeed=Math.max(allocation.decodedBytes,own?.decodedBytes??0), textureNeed=Math.max(allocation.textureBytes,own?.textureBytes??0);
     if(this.models>=l.cacheModels||this.decoded+other.decodedBytes+decodedNeed>l.decodedBytes||this.textures+other.textureBytes+textureNeed>l.textureBytes||this.decoded+other.decodedBytes+decodedNeed+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
-    if(own){own.decodedBytes=Math.max(0,own.decodedBytes-allocation.decodedBytes);own.textureBytes=Math.max(0,own.textureBytes-allocation.textureBytes);}
+    // Remember what was drawn from the hold: if this reservation is released while
+    // the same hold is still active (e.g. a failed wall decode before its retry),
+    // the bytes return to the hold instead of becoming free for other models.
+    const drawn={decodedBytes:Math.min(own?.decodedBytes??0,allocation.decodedBytes),textureBytes:Math.min(own?.textureBytes??0,allocation.textureBytes)};
+    if(own){own.decodedBytes-=drawn.decodedBytes;own.textureBytes-=drawn.textureBytes;}
     this.models++;this.decoded+=allocation.decodedBytes;this.textures+=allocation.textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
-    let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;this.drainJobs();};
+    let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;
+      if(own&&headroomKey&&this.holds.get(headroomKey)===own){own.decodedBytes+=drawn.decodedBytes;own.textureBytes+=drawn.textureBytes;}
+      this.drainJobs();};
   }
   actor(animationActions:number):(()=>void)|null {
     integer(animationActions, 2);

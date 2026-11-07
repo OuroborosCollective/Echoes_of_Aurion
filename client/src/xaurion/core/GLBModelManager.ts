@@ -188,7 +188,8 @@ export function admitGlbAllocation<T extends { allocation: GlbAllocation; images
   inspect: (maxTextureDimension: number) => T,
   options: { headroomKey?: string; resizable: boolean; trimIdle?: () => void },
 ): { inspected: T; release: () => void; textureDimension: number } | null {
-  let textureDimension: number = options.resizable ? pool.limits.textureDimension : 4096;
+  const initialDimension: number = options.resizable ? pool.limits.textureDimension : 4096;
+  let textureDimension = initialDimension;
   let inspected = inspect(textureDimension);
   // Fair share: no single model may claim more than its share of the texture
   // budget, whatever order downloads finish in. The headroom owner is exempt.
@@ -208,8 +209,9 @@ export function admitGlbAllocation<T extends { allocation: GlbAllocation; images
     textureDimension = Math.max(MIN_TEXTURE_DIMENSION, textureDimension / 2);
     inspected = inspect(textureDimension);
     release = pool.reserve(inspected.allocation, options.headroomKey);
-    if (release) pool.reducedTextures();
   }
+  // Count every admission below the tier edge, whether fair share or pressure reduced it.
+  if (release && textureDimension < initialDimension) pool.reducedTextures();
   return release ? { inspected, release, textureDimension } : null;
 }
 

@@ -170,11 +170,14 @@ describe("decoding under the phone texture edge", () => {
     const { url, normalization, decoded } = await stubBrowser(bytes);
     const share = glbResourcePool.limits.textureBytes / glbResourcePool.limits.textureShareModels;
     const before = glbResourcePool.evidence().reservedTextureBytes;
+    const reducedBefore = glbResourcePool.evidence().reducedTextureModels;
     const loaded = await glbManager.loadModel(url, normalization);
     try {
       expect(decoded.every(size => size.width === 512)).toBe(true);
       const reserved = glbResourcePool.evidence().reservedTextureBytes - before;
       expect(reserved).toBe(3 * mipBytes(512));
+      // Review (Devin on 356f0330): fair-share reductions must show in diagnostics too.
+      expect(glbResourcePool.evidence().reducedTextureModels).toBe(reducedBefore + 1);
       expect(reserved).toBeLessThanOrEqual(share);
     } finally {
       releaseGlbTree(loaded.scene);
