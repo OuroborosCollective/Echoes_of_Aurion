@@ -14,8 +14,14 @@ const integer = (value: number, maximum = 1_073_741_824) => {
   return value;
 };
 
+type PendingGlbJob = Readonly<{
+  bytes: number;
+  resolve: () => void;
+  reject: (reason: Error) => void;
+}>;
+
 export class GlbResourcePool {
-  private activeJobs=0; private pending:Array<()=>void>=[];
+  private activeJobs=0; private pending:PendingGlbJob[]=[];
   private models=0; private decoded=0; private textures=0; private network=0;
   private actors=0; private animations=0; private staticInstances=0;
   private peakWorkingSet=0;
@@ -26,23 +32,70 @@ export class GlbResourcePool {
   // retroactively lower the ceiling underneath resources already reserved.
   constructor(readonly tier:AssetTier=assetTier(typeof window === "undefined" ? 412 : window.innerWidth)) {}
   get limits() {return assetBudgets[this.tier];}
+  /** Reserve a decoder slot and its estimated network bytes atomically. */
+  private canAdmitJob(bytes:number):boolean {
+    return this.activeJobs<this.limits.decoderJobs &&
+      this.network+bytes<=this.limits.networkBytes &&
+      this.decoded+2*(this.network+bytes)<=this.limits.assetWorkingSetBytes;
+  }
+  private admitJob(bytes:number):void {
+    this.activeJobs++;
+    this.network+=bytes;
+    this.peakJobs=Math.max(this.peakJobs,this.activeJobs);
+    this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
+    this.peakNetwork=Math.max(this.peakNetwork,this.network);
+  }
+  /** FIFO backpressure: contention must not pretend a verified model failed.
+   * Keep hard byte ceilings, reject permanently unschedulable work, and never
+   * reserve more than the per-device concurrent network allowance. */
+  private drainJobs():void {
+    while(this.pending.length) {
+      const next=this.pending[0]!;
+      if(this.canAdmitJob(next.bytes)) {
+        this.pending.shift();
+        this.admitJob(next.bytes);
+        next.resolve();
+        continue;
+      }
+      // No running download can release capacity. Fail closed instead of
+      // waiting forever on retained decoded models.
+      if(this.activeJobs===0 && this.decoded+2*next.bytes>this.limits.assetWorkingSetBytes) {
+        this.pending.shift();
+        this.rejected++;
+        next.reject(Error("GLB_NETWORK_BUDGET"));
+        continue;
+      }
+      break;
+    }
+  }
   async job<T>(networkBytes:number, work:()=>Promise<T>):Promise<T> {
     integer(networkBytes);
-    if (networkBytes>this.limits.assetBytes || this.pending.length>=64) {this.rejected++;throw Error("GLB_NETWORK_BUDGET");}
-    if(this.activeJobs>=this.limits.decoderJobs) await new Promise<void>(resolve=>this.pending.push(resolve));
-    else this.activeJobs++;
-    const releaseJob=()=>{const next=this.pending.shift();if(next)next();else this.activeJobs--;};
-    this.peakJobs=Math.max(this.peakJobs,this.activeJobs);
-    if(this.network+networkBytes>this.limits.networkBytes||this.decoded+2*(this.network+networkBytes)>this.limits.assetWorkingSetBytes) {releaseJob();this.rejected++;throw Error("GLB_NETWORK_BUDGET");}
-    this.network+=networkBytes;this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);this.peakNetwork=Math.max(this.peakNetwork,this.network);
-    try{return await work();}finally{this.network-=networkBytes;releaseJob();}
+    if(networkBytes>this.limits.assetBytes ||
+       networkBytes>this.limits.networkBytes ||
+       2*networkBytes>this.limits.assetWorkingSetBytes ||
+       this.pending.length>=64) {
+      this.rejected++;
+      throw Error("GLB_NETWORK_BUDGET");
+    }
+    if(this.pending.length || !this.canAdmitJob(networkBytes)) {
+      await new Promise<void>((resolve,reject)=>{
+        this.pending.push({bytes:networkBytes,resolve,reject});
+        this.drainJobs();
+      });
+    } else this.admitJob(networkBytes);
+    try {return await work();}
+    finally {
+      this.network-=networkBytes;
+      this.activeJobs--;
+      this.drainJobs();
+    }
   }
   reserve(allocation:GlbAllocation):(()=>void)|null {
     integer(allocation.decodedBytes);integer(allocation.textureBytes);
     const l=this.limits;
     if(this.models>=l.cacheModels||this.decoded+allocation.decodedBytes>l.decodedBytes||this.textures+allocation.textureBytes>l.textureBytes||this.decoded+allocation.decodedBytes+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
     this.models++;this.decoded+=allocation.decodedBytes;this.textures+=allocation.textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
-    let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;};
+    let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;this.drainJobs();};
   }
   actor(animationActions:number):(()=>void)|null {
     integer(animationActions, 2);

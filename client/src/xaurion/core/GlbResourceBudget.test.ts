@@ -183,6 +183,49 @@ describe("bounded, verified GLB ownership", () => {
     });
   });
 
+  it("queues byte-contention for concurrent phone GLBs instead of failing a verified third download", async () => {
+    // RED from actual browser pilot 42327899553: GLB_NETWORK_BUDGET on
+    // the public player while other approved world GLBs occupied the pool.
+    const pool = new GlbResourcePool("phone");
+    const bytes = pool.limits.assetBytes;
+    const releases: Array<() => void> = [];
+    let active = 0;
+    let peak = 0;
+    const launch = () => pool.job(bytes, async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise<void>(resolve => releases.push(resolve));
+      active--;
+    });
+    const outcomes = Promise.allSettled([launch(),launch(),launch()]);
+    expect(releases).toHaveLength(2);
+    expect(pool.evidence()).toMatchObject({
+      decoderJobs: 2,
+      networkInFlightBytes: 2*bytes,
+      pending: 1,
+      rejected: 0,
+    });
+    releases[0]!();
+    for(let i=0;i<6 && releases.length<3;i++) await Promise.resolve();
+    expect(releases).toHaveLength(3);
+    expect(peak).toBe(2);
+    releases[1]!();
+    releases[2]!();
+    const results = await outcomes;
+    expect(results.map(result=>result.status)).toEqual(["fulfilled","fulfilled","fulfilled"]);
+    expect(pool.evidence()).toMatchObject({decoderJobs:0,networkInFlightBytes:0,pending:0,rejected:0});
+    await expect(pool.job(bytes+1,async()=>{})).rejects.toThrow("GLB_NETWORK_BUDGET");
+  });
+
+  it("rejects permanent decoded-memory pressure without parking a download indefinitely", async () => {
+    const pool = new GlbResourcePool("phone");
+    const hold = pool.reserve({decodedBytes:pool.limits.decodedBytes,textureBytes:0,animations:0});
+    expect(hold).not.toBeNull();
+    await expect(pool.job(pool.limits.assetBytes,async()=>{})).rejects.toThrow("GLB_NETWORK_BUDGET");
+    expect(pool.evidence()).toMatchObject({decoderJobs:0,pending:0,networkInFlightBytes:0});
+    hold!();
+  });
+
   it("rejects working sets and animation actions above the profile and releases once", () => {
     const pool = new GlbResourcePool();
     const release = pool.reserve({
