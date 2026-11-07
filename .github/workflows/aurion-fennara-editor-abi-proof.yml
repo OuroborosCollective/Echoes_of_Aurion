@@ -17,6 +17,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: aurion
+          persist-credentials: false
       - name: Checkout pinned Fennara including godot-cpp
         uses: actions/checkout@v4
         with:
@@ -24,6 +25,7 @@ jobs:
           ref: 0abbac3b3a1cb46bbce4f90e8cebc6a3e5d61ec6
           submodules: recursive
           path: fennara
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -127,7 +129,7 @@ jobs:
             tail -n 80 "$RUNNER_TEMP/fennara-import.log"
             exit 1
           }
-          if grep -Ei "Can't open (GDExtension|dynamic library)|libfennara.*GLIBC_|GDExtension dynamic library" "$RUNNER_TEMP/fennara-import.log"; then
+          if grep -Ei "Can't open (GDExtension|dynamic library)|libfennara.*GLIBC_|GDExtension dynamic library|SCRIPT ERROR:|(^|[[:space:]])ERROR:" "$RUNNER_TEMP/fennara-import.log"; then
             echo "FENNARA_NATIVE_LOAD_FAIL"
             exit 1
           fi
