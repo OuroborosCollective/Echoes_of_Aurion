@@ -140,8 +140,12 @@ export function selectStaticWorldLodVariants(
     .slice()
     .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256));
   if (!isStarterCityWallSource(entry.sha256) || tier === "desktop") return variants;
+  // Never claim unknown bytes as the SHA-pinned city wall family.
   if (variants.some(variant => !isStarterCityWallSource(variant.sha256))) return [];
-  return variants.slice(-1);
+  // Preserve all LODs where the doubled tablet budget admits the measured 88 MB
+  // texture family; on phones, display the high-detail wall without loading
+  // three redundant resident texture sets at once.
+  return tier === "tablet" ? variants : variants.slice(0, 1);
 }
 
 type CachedModel = {
