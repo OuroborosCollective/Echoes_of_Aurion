@@ -10,11 +10,22 @@ export const AURION_STARTER_CITY_WALL_LEGACY_NORMALIZATIONS = Object.freeze([
   "45f869d6a81cf3f35fc3ed62c4e24f4265051b6e8d770e3d1071670dfa82dc03",
   "9f878c892589534186f811c72fc4b33465b4bf4792c7a75496343ac61ca69835",
 ] as const);
+// decodedBytes/textureBytes: `inspectGlbAllocation` of exactly these bytes (read back
+// from the live asset store 2026-11-07). The browser reserves them as wall headroom.
 export const AURION_STARTER_CITY_WALL_LODS = Object.freeze([
-  { level: 0, fileName: "Aurion_CityWall_LOD0.glb", sha256: "a6c164035b8c8f1855ccf52e38c3202731718acc28346cc07f4837591540f349", bytes: 9_299_064, triangles: 19_012 },
-  { level: 1, fileName: "Aurion_CityWall_LOD1.glb", sha256: "003420006a5e06fffe46f22e2d4e915b2fc45f752a5a09e75094de9e3e9f6f9d", bytes: 8_421_884, triangles: 13_170 },
-  { level: 2, fileName: "Aurion_CityWall_LOD2.glb", sha256: "1dab1c81a3c73d1970bbc2a68cc61f20452d4fda0384269dde0987ff04108a1d", bytes: 7_921_780, triangles: 9_836 },
+  { level: 0, fileName: "Aurion_CityWall_LOD0.glb", sha256: "a6c164035b8c8f1855ccf52e38c3202731718acc28346cc07f4837591540f349", bytes: 9_299_064, triangles: 19_012, decodedBytes: 38_029_584, textureBytes: 29_360_112 },
+  { level: 1, fileName: "Aurion_CityWall_LOD1.glb", sha256: "003420006a5e06fffe46f22e2d4e915b2fc45f752a5a09e75094de9e3e9f6f9d", bytes: 8_421_884, triangles: 13_170, decodedBytes: 35_365_632, textureBytes: 29_360_112 },
+  { level: 2, fileName: "Aurion_CityWall_LOD2.glb", sha256: "1dab1c81a3c73d1970bbc2a68cc61f20452d4fda0384269dde0987ff04108a1d", bytes: 7_921_780, triangles: 9_836, decodedBytes: 33_845_328, textureBytes: 29_360_112 },
 ] as const);
+
+/** Pool key under which the browser reserves the wall's decoded/texture headroom. */
+export const AURION_STARTER_CITY_WALL_HEADROOM_KEY = AURION_STARTER_CITY_WALL_VERSION;
+
+/** Pinned decoded allocation of one wall LOD, or null for any other bytes. */
+export function starterCityWallAllocation(sha256: string): { decodedBytes: number; textureBytes: number } | null {
+  const lod = AURION_STARTER_CITY_WALL_LODS.find(item => item.sha256 === sha256);
+  return lod ? { decodedBytes: lod.decodedBytes, textureBytes: lod.textureBytes } : null;
+}
 
 /** An arbitrary model named CityWall must not gain the large visual envelope. */
 export function isStarterCityWallSource(sha256: string): boolean {

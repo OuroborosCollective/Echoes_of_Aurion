@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
-import { AURION_STARTER_CITY_WALL_LODS } from "@shared/aurionStarterCityWallContract";
+import { AURION_STARTER_CITY_WALL_HEADROOM_KEY, AURION_STARTER_CITY_WALL_LODS, starterCityWallAllocation } from "@shared/aurionStarterCityWallContract";
 import { MAX_AUTHORED_RENDERED, UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { authoredPlacementRef } from "@shared/worldVisualOverrideContract";
-import { glbManager } from "../core/GLBModelManager";
+import { glbManager, selectStaticWorldLodVariants } from "../core/GLBModelManager";
+import { glbResourcePool } from "../core/GlbResourceBudget";
 
 afterEach(() => vi.restoreAllMocks());
 describe("authored city wall selection", () => {
@@ -226,5 +227,91 @@ describe("authored placement render robustness", () => {
     projection.update();
     await vi.waitFor(() => expect(authored(projection)).toBe(1));
     projection.dispose();
+  });
+});
+
+describe("city wall admission under device memory contention", () => {
+  // Production 2026-11-07: the wall was visible on PC and missing on Android phones.
+  // Earlier tests mocked the model load without the shared memory budget, so the
+  // race below (fast small models fill the budget, the 9 MB wall arrives last) was
+  // never exercised. This test runs the real pool with the real wall headroom.
+  it("renders the wall although faster-loading scenery would exhaust the device budget first", async () => {
+    const wallLods = AURION_STARTER_CITY_WALL_LODS.map(lod => ({ level: lod.level, sha256: lod.sha256, bytes: lod.bytes,
+      assetId: `glb_${lod.sha256.slice(0, 48)}`, storageUrl: `/api/assets/glb/${lod.sha256}.glb`, targetKey: null,
+      normalization: { lod: { level: lod.level } } }));
+    const wall = { assetId: wallLods[0]!.assetId, sha256: wallLods[0]!.sha256, displayName: "Wall", purpose: "world-environment", assetType: "arena",
+      targetKey: null, subcategory: "structure", equipmentSlot: null, storageUrl: wallLods[0]!.storageUrl, lods: wallLods } as unknown as GlbCatalogEntry;
+    const house = { ...wall, assetId: "glb_house", sha256: "d".repeat(64), subcategory: "building", storageUrl: `/api/assets/glb/${"d".repeat(64)}.glb`, lods: undefined } as GlbCatalogEntry;
+    const limits = glbResourcePool.limits;
+    const reservations: Array<() => void> = [];
+    const holdsSeenByScenery: boolean[] = [];
+    vi.spyOn(glbManager, "loadStaticLodFamily").mockImplementation(async entry => {
+      const isWall = entry.sha256 === wall.sha256;
+      // Scenery finishes downloading at once; the wall's 9 MB LODs arrive last.
+      await new Promise(resolve => setTimeout(resolve, isWall ? 30 : 0));
+      if (!isWall) holdsSeenByScenery.push(AURION_STARTER_CITY_WALL_HEADROOM_KEY in glbResourcePool.evidence().heldHeadroom);
+      const parts = isWall
+        ? selectStaticWorldLodVariants(entry).map(variant => starterCityWallAllocation(variant.sha256)!)
+        : [{ decodedBytes: Math.floor(limits.decodedBytes / 4), textureBytes: Math.floor(limits.textureBytes / 4) }];
+      for (const part of parts) {
+        // Same admission as GLBModelManager.decode, including the wall's headroom key.
+        const release = glbResourcePool.reserve({ ...part, animations: 0 }, isWall ? AURION_STARTER_CITY_WALL_HEADROOM_KEY : undefined);
+        if (!release) throw Error("GLB_DECODED_BUDGET");
+        reservations.push(release);
+      }
+      const scene = new THREE.Group(); scene.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()));
+      return { scene, animations: [], lodLevels: [0] };
+    });
+    const projection = new UploadedWorldCatalogProjection({ scene: new THREE.Scene(), player: { position: new THREE.Vector3(5, 0, 5) },
+      landscape: { chunkManager: { getElevationAt: () => 0 } } } as never);
+    try {
+      projection.setCatalog({ version: "aurion.glb-import.v1", revision: "a".repeat(64), entries: [wall, house] });
+      projection.setWorldDesign({ schemaVersion: "aurion.world-design.v1", revision: "b".repeat(64), designs: [{
+        designKey: "starter-city-wall", version: 1, title: "City", designHash: "c".repeat(64), expectedCatalogRevision: "a".repeat(64),
+        placements: [{ placementKey: "city-perimeter", assetId: wall.assetId, chunkX: 0, chunkZ: 0, xMm: 32000, zMm: 32000, rotationQuarterTurns: 0, scalePermille: 1000 },
+          // Six houses would need 150 % of the device budget on their own.
+          ...Array.from({ length: 6 }, (_, i) => ({ placementKey: `house-${i}`, assetId: house.assetId, chunkX: 0, chunkZ: 0,
+            xMm: 20_000 + i * 2_000, zMm: 20_000, rotationQuarterTurns: 0 as const, scalePermille: 1000 }))],
+      }] });
+      projection.update();
+      expect(projection.evidence().wallHeadroomHeld).toBe(true);
+      await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
+      expect(projection.evidence().assets.some(asset => asset.sha256 === wall.sha256)).toBe(true);
+      // The hold was in place before any scenery reserved memory, and is gone once the wall is drawn.
+      expect(holdsSeenByScenery.length).toBeGreaterThan(0);
+      expect(holdsSeenByScenery.every(Boolean)).toBe(true);
+      expect(projection.evidence().wallHeadroomHeld).toBe(false);
+      expect(glbResourcePool.evidence().heldHeadroom).toEqual({});
+      // Scenery got only what was left; nothing exceeded the profile.
+      expect(glbResourcePool.evidence().reservedDecodedBytes).toBeLessThanOrEqual(limits.decodedBytes);
+      expect(glbResourcePool.evidence().reservedTextureBytes).toBeLessThanOrEqual(limits.textureBytes);
+    } finally {
+      projection.dispose();
+      reservations.forEach(release => release());
+    }
+    expect(glbResourcePool.evidence().heldHeadroom).toEqual({});
+  });
+
+  it("releases the wall headroom when the wall leaves the projected area or the projection is disposed", () => {
+    const sha = AURION_STARTER_CITY_WALL_LODS[0].sha256;
+    const wall = { assetId: "glb_citywall", sha256: sha, displayName: "Wall", purpose: "world-environment", assetType: "arena",
+      targetKey: null, subcategory: "structure", equipmentSlot: null, storageUrl: `/api/assets/glb/${sha}.glb` } as GlbCatalogEntry;
+    vi.spyOn(glbManager, "loadStaticLodFamily").mockImplementation(() => new Promise(() => {}));
+    const engine = { scene: new THREE.Scene(), player: { position: new THREE.Vector3(5, 0, 5) }, landscape: { chunkManager: { getElevationAt: () => 0 } } };
+    const projection = new UploadedWorldCatalogProjection(engine as never);
+    projection.setCatalog({ version: "aurion.glb-import.v1", revision: "a".repeat(64), entries: [wall] });
+    projection.setWorldDesign({ schemaVersion: "aurion.world-design.v1", revision: "b".repeat(64), designs: [{
+      designKey: "starter-city-wall", version: 1, title: "City", designHash: "c".repeat(64), expectedCatalogRevision: "a".repeat(64),
+      placements: [{ placementKey: "city-perimeter", assetId: wall.assetId, chunkX: 0, chunkZ: 0, xMm: 32000, zMm: 32000, rotationQuarterTurns: 0, scalePermille: 1000 }],
+    }] });
+    projection.update();
+    expect(AURION_STARTER_CITY_WALL_HEADROOM_KEY in glbResourcePool.evidence().heldHeadroom).toBe(true);
+    // Far outside the city: the wall is not wanted, its headroom returns to other models.
+    projection.update({ x: 64 * 10, z: 64 * 10 });
+    expect(glbResourcePool.evidence().heldHeadroom).toEqual({});
+    projection.update({ x: 5, z: 5 });
+    expect(AURION_STARTER_CITY_WALL_HEADROOM_KEY in glbResourcePool.evidence().heldHeadroom).toBe(true);
+    projection.dispose();
+    expect(glbResourcePool.evidence().heldHeadroom).toEqual({});
   });
 });

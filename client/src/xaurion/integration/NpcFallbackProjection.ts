@@ -8,7 +8,8 @@ import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
 import { actorLodBand, actorUsesSkinnedVisual, emptyActorLodCounts, shouldUpdateActorAnimation, type ActorLodBand, type ActorLodCounts } from "../core/actorLod";
 import { glbManager } from "../core/GLBModelManager";
-import { assetTier, type AssetTier } from "@shared/glbPresentationBudget";
+import type { AssetTier } from "@shared/glbPresentationBudget";
+import { deviceAssetTier } from "../core/GlbResourceBudget";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
 import { NpcShellProjection } from "./NpcShellProjection";
 import { NPC_PURPOSE_SCHEMA, NpcPurposeDraftSchema, type NpcPurposeReadback } from "@shared/npcPurposeContract";
@@ -168,7 +169,7 @@ export class NpcFallbackProjection {
   }
 
   private presentationTier(): AssetTier {
-    return assetTier(typeof window === "undefined" ? 1200 : window.innerWidth);
+    return deviceAssetTier(typeof window === "undefined" ? 1200 : window.innerWidth);
   }
 
   private distanceToCamera(npc: NPCCharacter): number {

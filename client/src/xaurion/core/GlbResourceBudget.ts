@@ -7,6 +7,17 @@ import {
 } from "@shared/glbPresentationBudget";
 
 export { assetBudgets, assetTier, inspectGlbAllocation };
+
+/** Android, iOS and iPadOS (which reports itself as a Mac with touch points). */
+export function isTouchMobileOs(nav: Pick<Navigator, "userAgent" | "maxTouchPoints"> | undefined = typeof navigator === "undefined" ? undefined : navigator): boolean {
+  if (!nav) return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent) || (/Macintosh/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1);
+}
+
+/** Presentation tier of this device (viewport width plus touch-tablet detection). */
+export function deviceAssetTier(width = typeof window === "undefined" ? 412 : window.innerWidth): AssetTier {
+  return assetTier(width, isTouchMobileOs());
+}
 export type { AssetTier, GlbAllocation };
 
 const integer = (value: number, maximum = 1_073_741_824) => {
@@ -27,10 +38,11 @@ export class GlbResourcePool {
   private peakWorkingSet=0;
   private peakDecoded=0; private peakNetwork=0; private peakJobs=0;
   private fetchedBytes=0; private decodedCount=0; private decodeMs=0; private maximumDecodeMs=0;
-  private rejected=0;
+  private rejected=0; private reducedTextureModels=0;
+  private readonly holds=new Map<string,{decodedBytes:number;textureBytes:number}>();
   // Stable accounting profile for the loaded application. A resize must not
   // retroactively lower the ceiling underneath resources already reserved.
-  constructor(readonly tier:AssetTier=assetTier(typeof window === "undefined" ? 412 : window.innerWidth)) {}
+  constructor(readonly tier:AssetTier=deviceAssetTier()) {}
   get limits() {return assetBudgets[this.tier];}
   /** Reserve a decoder slot and its estimated network bytes atomically. */
   private canAdmitJob(bytes:number):boolean {
@@ -90,12 +102,41 @@ export class GlbResourcePool {
       this.drainJobs();
     }
   }
-  reserve(allocation:GlbAllocation):(()=>void)|null {
+  /**
+   * Keep decoded/texture capacity free for one owner-designated visual (key).
+   * Admission is otherwise first come, first served: without a hold, many small
+   * models that finish downloading first permanently occupy the budget and a
+   * large priority model (the pinned city wall on phones) can never be admitted.
+   * Only `reserve(..., key)` may consume a hold; it changes no byte ceiling.
+   */
+  holdHeadroom(key:string, allocation:Pick<GlbAllocation,"decodedBytes"|"textureBytes">):()=>void {
+    integer(allocation.decodedBytes);integer(allocation.textureBytes);
+    if(!key||this.holds.has(key))throw Error("GLB_HEADROOM_HOLD_DUPLICATE");
+    const hold={decodedBytes:allocation.decodedBytes,textureBytes:allocation.textureBytes};
+    this.holds.set(key,hold);
+    let released=false;return()=>{if(released)return;released=true;if(this.holds.get(key)===hold)this.holds.delete(key);this.drainJobs();};
+  }
+  private heldExcept(key:string|undefined) {
+    let decodedBytes=0,textureBytes=0;
+    for(const [holder,hold] of this.holds) if(holder!==key){decodedBytes+=hold.decodedBytes;textureBytes+=hold.textureBytes;}
+    return {decodedBytes,textureBytes};
+  }
+  reserve(allocation:GlbAllocation, headroomKey?:string):(()=>void)|null {
     integer(allocation.decodedBytes);integer(allocation.textureBytes);
     const l=this.limits;
-    if(this.models>=l.cacheModels||this.decoded+allocation.decodedBytes>l.decodedBytes||this.textures+allocation.textureBytes>l.textureBytes||this.decoded+allocation.decodedBytes+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
+    const other=this.heldExcept(headroomKey), own=headroomKey?this.holds.get(headroomKey):undefined;
+    // The owner's remaining hold stays counted; this reservation is drawn from it first.
+    const decodedNeed=Math.max(allocation.decodedBytes,own?.decodedBytes??0), textureNeed=Math.max(allocation.textureBytes,own?.textureBytes??0);
+    if(this.models>=l.cacheModels||this.decoded+other.decodedBytes+decodedNeed>l.decodedBytes||this.textures+other.textureBytes+textureNeed>l.textureBytes||this.decoded+other.decodedBytes+decodedNeed+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
+    // Remember what was drawn from the hold: if this reservation is released while
+    // the same hold is still active (e.g. a failed wall decode before its retry),
+    // the bytes return to the hold instead of becoming free for other models.
+    const drawn={decodedBytes:Math.min(own?.decodedBytes??0,allocation.decodedBytes),textureBytes:Math.min(own?.textureBytes??0,allocation.textureBytes)};
+    if(own){own.decodedBytes-=drawn.decodedBytes;own.textureBytes-=drawn.textureBytes;}
     this.models++;this.decoded+=allocation.decodedBytes;this.textures+=allocation.textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
-    let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;this.drainJobs();};
+    let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;
+      if(own&&headroomKey&&this.holds.get(headroomKey)===own){own.decodedBytes+=drawn.decodedBytes;own.textureBytes+=drawn.textureBytes;}
+      this.drainJobs();};
   }
   actor(animationActions:number):(()=>void)|null {
     integer(animationActions, 2);
@@ -120,12 +161,14 @@ export class GlbResourcePool {
     let released = false;
     return () => { if (released) return; released = true; this.animations -= count; };
   }
+  /** A model admitted only after its textures were decoded below the tier's edge. */
+  reducedTextures(){this.reducedTextureModels++;}
   fetched(bytes:number){this.fetchedBytes+=integer(bytes);}
   decodedModel(milliseconds:number){this.decodedCount++;this.decodeMs+=milliseconds;this.maximumDecodeMs=Math.max(this.maximumDecodeMs,milliseconds);}
   evidence(){return{tier:this.tier,limits:this.limits,models:this.models,actors:this.actors,staticInstances:this.staticInstances,animations:this.animations,decoderJobs:this.activeJobs,pending:this.pending.length,
     assetWorkingSetCeilingBytes:this.decoded+2*this.network,peakAssetWorkingSetCeilingBytes:this.peakWorkingSet,
-    reservedDecodedBytes:this.decoded,reservedTextureBytes:this.textures,networkInFlightBytes:this.network,peakReservedDecodedBytes:this.peakDecoded,peakNetworkInFlightBytes:this.peakNetwork,
-    peakDecoderJobs:this.peakJobs,fetchedBytes:this.fetchedBytes,decodedCount:this.decodedCount,totalDecodeMs:this.decodeMs,maxDecodeMs:this.maximumDecodeMs,rejected:this.rejected};}
+    reservedDecodedBytes:this.decoded,reservedTextureBytes:this.textures,heldHeadroom:Object.fromEntries([...this.holds].map(([key,hold])=>[key,{...hold}])),networkInFlightBytes:this.network,peakReservedDecodedBytes:this.peakDecoded,peakNetworkInFlightBytes:this.peakNetwork,
+    peakDecoderJobs:this.peakJobs,fetchedBytes:this.fetchedBytes,decodedCount:this.decodedCount,totalDecodeMs:this.decodeMs,maxDecodeMs:this.maximumDecodeMs,rejected:this.rejected,reducedTextureModels:this.reducedTextureModels};}
 }
 export const glbResourcePool = new GlbResourcePool();
 
