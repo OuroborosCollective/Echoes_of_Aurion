@@ -7,7 +7,7 @@ import { testGlb } from "../../../../server/glbImportFixtures";
 import { buildGlbImportPlan } from "../../../../server/glbImportPlan";
 import { assetBudgets, assetTier, cappedTextureSize, inspectGlbAllocation, MIN_TEXTURE_DIMENSION } from "@shared/glbPresentationBudget";
 import { glbResourcePool, isTouchMobileOs } from "./GlbResourceBudget";
-import { canDownsampleGlbTextures } from "../../game/glbTextureDownsample";
+import { canDownsampleGlbTextures, textureImageSource } from "../../game/glbTextureDownsample";
 import { glbManager } from "./GLBModelManager";
 import { releaseGlbTree } from "./GlbModelLease";
 
@@ -132,6 +132,16 @@ describe("tier texture edge", () => {
     const phone = inspectGlbAllocation(arrayBuffer(glb), 1024);
     expect(phone.images.map(size => size!.decodedWidth)).toEqual([2048, 2048]);
     expect(phone.allocation.textureBytes).toBe(2 * mipBytes(2048));
+  });
+
+  // Review (Devin on #1342): resolve the image GLTFLoader r186 really decodes.
+  it("resolves the decoded image like GLTFLoader: WebP/AVIF extension image, BasisU core fallback", () => {
+    expect(textureImageSource({ source: 0, extensions: { EXT_texture_webp: { source: 1 } } })).toBe(1);
+    expect(textureImageSource({ source: 0, extensions: { EXT_texture_avif: { source: 2 } } })).toBe(2);
+    // No KTX2 loader is registered, so GLTFLoader falls back to the core source.
+    expect(textureImageSource({ source: 0, extensions: { KHR_texture_basisu: { source: 3 } } })).toBe(0);
+    expect(textureImageSource({ extensions: { KHR_texture_basisu: { source: 3 } } })).toBeUndefined();
+    expect(textureImageSource({ source: 4 })).toBe(4);
   });
 
   // Production readback 2026-11-07: three 2048 px textures make one return stone
