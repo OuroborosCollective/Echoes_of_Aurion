@@ -14,7 +14,7 @@ import {
   fetchVerifiedGlb,
   inspectGlbAllocation,
 } from "./GlbResourceBudget";
-import { glbManager } from "./GLBModelManager";
+import { glbManager, selectStaticWorldLodVariants } from "./GLBModelManager";
 import { releaseGlbTree } from "./GlbModelLease";
 import { AnimatedGlbActor } from "./AnimatedGlbActor";
 import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
@@ -473,5 +473,29 @@ describe("bounded, verified GLB ownership", () => {
       subcategory: "structure", equipmentSlot: null, lods: [variant] };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(testGlb("different content"))));
     await expect(glbManager.loadStaticLodFamily(entry)).rejects.toThrow("GLB_HASH");
+  });
+});
+
+
+describe("real pinned city wall mobile LOD admission", () => {
+  const source = AURION_STARTER_CITY_WALL_LODS;
+  const wall = {
+    sha256: source[0]!.sha256,
+    lods: source.map(lod => ({ level: lod.level, sha256: lod.sha256, bytes: lod.bytes,
+      assetId: `glb_${lod.sha256.slice(0, 48)}`, storageUrl: `/api/assets/glb/${lod.sha256}.glb`,
+      targetKey: null, normalization: { lod: { level: lod.level } } })),
+  } as unknown as GlbCatalogEntry;
+
+  it("selects one verified lowest-cost wall LOD on phones and tablets without relaxing resource ceilings", () => {
+    expect(selectStaticWorldLodVariants(wall, "phone").map(lod => lod.level)).toEqual([2]);
+    expect(selectStaticWorldLodVariants(wall, "tablet").map(lod => lod.level)).toEqual([2]);
+    expect(selectStaticWorldLodVariants(wall, "desktop").map(lod => lod.level)).toEqual([0, 1, 2]);
+  });
+
+  it("does not reduce unrelated world models or admit missing oversized wall variants", () => {
+    const unrelated = { ...wall, sha256: "f".repeat(64) } as GlbCatalogEntry;
+    expect(selectStaticWorldLodVariants(unrelated, "tablet").map(lod => lod.level)).toEqual([0, 1, 2]);
+    const missingPhoneFallback = { ...wall, lods: wall.lods!.slice(0, 2) } as GlbCatalogEntry;
+    expect(selectStaticWorldLodVariants(missingPhoneFallback, "phone")).toEqual([]);
   });
 });
