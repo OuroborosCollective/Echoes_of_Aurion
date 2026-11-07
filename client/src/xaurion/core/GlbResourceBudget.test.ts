@@ -455,13 +455,15 @@ describe("bounded, verified GLB ownership", () => {
     const fetch = vi.fn(async (url: string) => new Response(physical.find(lod => lod.storageUrl === url)!.fixture));
     vi.stubGlobal("fetch", fetch);
     const loaded = await glbManager.loadStaticLodFamily(entry);
-    expect(loaded.lodLevels).toEqual([0]);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(physical[0]!.storageUrl, expect.anything());
+    // Synthetic fixture GLBs have different SHA256 identities: this is not the pinned live wall.
+    // Generic physical families retain their full admitted LOD set.
+    expect(loaded.lodLevels).toEqual([0, 1, 2]);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    for (const variant of physical) expect(fetch).toHaveBeenCalledWith(variant.storageUrl, expect.anything());
     expect(new THREE.Box3().setFromObject(loaded.scene).isEmpty()).toBe(false);
     releaseGlbTree(loaded.scene);
     await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.map(lod => ({ ...lod, bytes: assetBudgets.phone.assetBytes + 1 })) })).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it("does not disguise an invalid permitted LOD as a budget fallback", async () => {
