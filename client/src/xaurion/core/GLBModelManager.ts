@@ -27,8 +27,8 @@ import {
   releaseGlbTree,
 } from "./GlbModelLease";
 import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
-import { canDownsampleGlbTextures, GlbTextureDownsamplePlugin, texturesByImage } from "./GlbTextureDownsample";
-import { embeddedImageHashes, glbSharedTextures } from "./GlbSharedTextures";
+import { canDownsampleGlbTextures, GlbTextureDownsamplePlugin, texturesByImage } from "../../game/glbTextureDownsample";
+import { embeddedImageHashes, glbSharedTextures } from "../../game/glbSharedTextures";
 import { MIN_TEXTURE_DIMENSION, mipChainBytes, type GlbAllocation, type GlbImageSize } from "@shared/glbPresentationBudget";
 
 export interface GLBModelEntry {

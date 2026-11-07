@@ -975,18 +975,6 @@
       "role": "SUPPORT"
     },
     {
-      "path": "client/src/xaurion/core/GlbSharedTextures.ts",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
-      "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/core/GlbTextureDownsample.ts",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
-      "role": "SUPPORT"
-    },
-    {
       "path": "client/src/xaurion/core/GlbTextureEvidence.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",

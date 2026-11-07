@@ -7,9 +7,9 @@ import { testGlb } from "../../../../server/glbImportFixtures";
 import { buildGlbImportPlan } from "../../../../server/glbImportPlan";
 import { assetBudgets, assetTier, cappedTextureSize, inspectGlbAllocation, MIN_TEXTURE_DIMENSION } from "@shared/glbPresentationBudget";
 import { glbResourcePool, isTouchMobileOs } from "./GlbResourceBudget";
-import { canDownsampleGlbTextures } from "./GlbTextureDownsample";
+import { canDownsampleGlbTextures } from "../../game/glbTextureDownsample";
 import { glbManager } from "./GLBModelManager";
-import { glbSharedTextures } from "./GlbSharedTextures";
+import { glbSharedTextures } from "../../game/glbSharedTextures";
 import { releaseGlbTree } from "./GlbModelLease";
 
 afterEach(() => {

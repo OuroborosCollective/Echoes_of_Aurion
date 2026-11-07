@@ -75,23 +75,3 @@ export function texturesByImage(gltf: GLTF): Map<number, THREE.Texture[]> {
   });
   return result;
 }
-
-/** Largest decoded edge per glTF image index, read from the textures GLTFLoader produced. */
-export function decodedTextureEdges(gltf: GLTF): Map<number, number> {
-  const edges = new Map<number, number>();
-  gltf.scene.traverse(node => {
-    if (!(node as THREE.Mesh).isMesh) return;
-    const mesh = node as THREE.Mesh;
-    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-      for (const value of Object.values(material)) {
-        if (!(value instanceof THREE.Texture)) continue;
-        const textureIndex = gltf.parser.associations.get(value)?.textures;
-        const source = textureIndex === undefined ? undefined : gltf.parser.json.textures?.[textureIndex]?.source;
-        const image = value.image as { width?: number; height?: number } | undefined;
-        if (source === undefined || !image?.width || !image?.height) continue;
-        edges.set(source, Math.max(edges.get(source) ?? 0, image.width, image.height));
-      }
-    }
-  });
-  return edges;
-}
