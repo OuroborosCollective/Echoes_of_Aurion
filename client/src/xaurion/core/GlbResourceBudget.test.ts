@@ -67,13 +67,13 @@ describe("bounded, verified GLB ownership", () => {
         actors.push(new AnimatedGlbActor(loaded.scene, loaded.animations));
       }
       expect(glbResourcePool.tier).toBe("phone");
-      expect(actors).toHaveLength(12);
+      expect(actors).toHaveLength(glbResourcePool.limits.actors);
       expect(actors.every(actor => actor.group.visible && !new THREE.Box3().setFromObject(actor.group).isEmpty())).toBe(true);
-      expect(glbResourcePool.evidence()).toMatchObject({ actors: 12, staticInstances: 5, animations: clipless ? 0 : 8 });
-      expect(actors.reduce((count, actor) => count + actor.evidence().activeAnimationActions, 0)).toBe(clipless ? 0 : 8);
+      expect(glbResourcePool.evidence()).toMatchObject({ actors: glbResourcePool.limits.actors, staticInstances: 5, animations: clipless ? 0 : glbResourcePool.limits.animations });
+      expect(actors.reduce((count, actor) => count + actor.evidence().activeAnimationActions, 0)).toBe(clipless ? 0 : glbResourcePool.limits.animations);
       await expect(glbManager.loadModel("crowd-character")).rejects.toThrow("GLB_ACTOR_BUDGET");
       if (clipless) return;
-      const waiting = actors[11]!;
+      const waiting = actors[glbResourcePool.limits.animations + 1]!;
       expect(waiting.evidence().activeAnimationActions).toBe(0);
       expect(waiting.evidence().clip).toMatch(/idle/i);
       expect(waiting.evidence().clipTime).toBe(0);
@@ -83,7 +83,7 @@ describe("bounded, verified GLB ownership", () => {
       expect(waiting.evidence().clipTime).toBeGreaterThan(0);
       expect(actors[0]!.group.visible).toBe(true);
       for (const actor of actors) { actor.setLocomotion(2); actor.update(0.1); }
-      expect(glbResourcePool.evidence().animations).toBeLessThanOrEqual(8);
+      expect(glbResourcePool.evidence().animations).toBeLessThanOrEqual(glbResourcePool.limits.animations);
     } finally {
       actors.forEach(actor => actor.dispose());
       scenery.forEach(model => releaseGlbTree(model));
@@ -175,7 +175,7 @@ describe("bounded, verified GLB ownership", () => {
       await Promise.resolve();
     }
     await Promise.all(jobs);
-    expect(peak).toBe(2);
+    expect(peak).toBe(pool.limits.decoderJobs);
     expect(pool.evidence()).toMatchObject({
       decoderJobs: 0,
       networkInFlightBytes: 0,
@@ -211,7 +211,7 @@ describe("bounded, verified GLB ownership", () => {
     const animations = Array.from({ length: pool.limits.animations }, () => pool.animationActions(1)!);
     expect(pool.staticInstance()).toBeNull();
     expect(pool.animationActions(1)).toBeNull();
-    expect(pool.evidence()).toMatchObject({ staticInstances: 48, animations: 8, actors: 0 });
+    expect(pool.evidence()).toMatchObject({ staticInstances: pool.limits.worldInstances, animations: pool.limits.animations, actors: 0 });
     for (const release of [...models, ...animations]) { release(); release(); }
     expect(pool.evidence()).toMatchObject({ staticInstances: 0, animations: 0, actors: 0 });
   });
