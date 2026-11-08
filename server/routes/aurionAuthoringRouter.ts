@@ -1,4 +1,5 @@
 import { BehaviorDraftInput, BehaviorTestInput, BehaviorJourneyInput, readBehaviorJourneyMemory, draftBehavior, readBehaviorActors, testBehavior } from "../aiFabric/behaviorAuthoring";
+import { AiAuthoringToolInput, aiAuthoringToolCatalog, previewAiAuthoringTool } from "../aiFabric/authoringToolchain";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { DesignerInput, designerSurface, WorldDesigner, type DesignerRequest } from "../aiFabric/worldDesigner";
@@ -56,6 +57,11 @@ async function proposeWorldForSession(actorUserId: number, input: DesignerReques
 }
 
 export const aurionAuthoringRouter = router({
+  // External models and imported Fadenwerk are untrusted authoring data.
+  // No publish/apply path is reachable through this strict preview dispatcher.
+  aiToolCatalog: adminProcedure.query(() => aiAuthoringToolCatalog),
+  aiToolPreview: adminProcedure.input(AiAuthoringToolInput).mutation(({ ctx, input }) =>
+    previewAiAuthoringTool(input, { proposeWorld: candidate => proposeWorldForSession(ctx.user.id, candidate) })),
   behaviorJourneyMemory: adminProcedure.input(BehaviorJourneyInput).mutation(({ctx,input}) => readBehaviorJourneyMemory(ctx.user.id,input)),
   behaviorActors: adminProcedure.query(({ctx}) => readBehaviorActors(ctx.user.id)),
   behaviorDraft: adminProcedure.input(BehaviorDraftInput).mutation(({input}) => draftBehavior(input)),
