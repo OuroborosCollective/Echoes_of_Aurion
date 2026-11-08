@@ -56,6 +56,65 @@ describe("Issue #659: opt-in origin city terrace and server-owned paving", () =>
     expect(far.tiles.every(tile => tile.material === (tile.water ? "water" : tile.biome === "forest" ? "forest_floor" : tile.biome === "riverland" ? "riverbank" : tile.biome === "ashland" ? "ash" : tile.biome === "highland" ? "stone" : tile.biome === "ruins" ? "ruin_path" : "grass"))).toBe(true);
   });
 
+
+  it("draws a four-edge-connected complete city ring with axial routes from the Return Stone", () => {
+    // Neighbor chunks share one canonical global sample index; deduplicate seams.
+    const samples = new Map<string, { x: number; z: number; radius: number; paved: boolean }>();
+    for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) {
+      const chunk = generateDeterministicTerrainChunk(input(cx, cz));
+      for (const tile of chunk.tiles) {
+        const gx = cx * 15 + tile.x;
+        const gz = cz * 15 + tile.z;
+        const x = (gx * 64_000 - 32_000 * 15) / 15 - AURION_RETURN_STONE_POSITION.x;
+        const z = (gz * 64_000 - 32_000 * 15) / 15 - AURION_RETURN_STONE_POSITION.z;
+        if (Math.max(Math.abs(x), Math.abs(z)) > 31_000) continue;
+        const point = { x, z, radius: Math.hypot(x, z), paved: tile.material === "ruin_path" };
+        const key = `${gx}:${gz}`;
+        const previous = samples.get(key);
+        if (previous) expect(previous).toEqual(point);
+        samples.set(key, point);
+      }
+    }
+    const ring = new Set<string>();
+    const paved = new Set<string>();
+    let center: string | undefined;
+    for (const [key, point] of samples) {
+      if (point.paved) paved.add(key);
+      if (point.radius <= 3_500 && point.paved) center = key;
+      if (Math.abs(point.radius - 18_000) <= 3_000) {
+        expect(point.paved, `ring sample ${key} is missing paved surface`).toBe(true);
+        ring.add(key);
+      }
+    }
+    expect(ring.size).toBeGreaterThan(24);
+    expect(center).toBeDefined();
+    const flood = (start: string, allowed: Set<string>): Set<string> => {
+      const queue = [start], seen = new Set(queue);
+      for (let cursor = 0; cursor < queue.length; cursor++) {
+        const [gx, gz] = queue[cursor]!.split(":").map(Number);
+        for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const next = `${gx + dx}:${gz + dz}`;
+          if (allowed.has(next) && !seen.has(next)) { seen.add(next); queue.push(next); }
+        }
+      }
+      return seen;
+    };
+    const connectedRing = flood([...ring][0]!, ring);
+    expect(connectedRing.size, "ring must form one edge-connected loop, not isolated islands").toBe(ring.size);
+    const reachable = flood(center!, paved);
+    for (const key of ring) expect(reachable.has(key), `Return Stone plaza cannot reach ring segment ${key}`).toBe(true);
+    for (const [direction, predicate] of [
+      ["north", (p: { x: number; z: number }) => p.z < -25_000 && Math.abs(p.x) < 3_100],
+      ["south", (p: { x: number; z: number }) => p.z > 25_000 && Math.abs(p.x) < 3_100],
+      ["east", (p: { x: number; z: number }) => p.x > 25_000 && Math.abs(p.z) < 3_100],
+      ["west", (p: { x: number; z: number }) => p.x < -25_000 && Math.abs(p.z) < 3_100],
+    ] as const) {
+      const targets = [...samples.entries()].filter(([, point]) => predicate(point)).map(([key]) => key);
+      expect(targets.length, `missing ${direction} axial samples`).toBeGreaterThan(0);
+      expect(targets.some(key => reachable.has(key)), `disconnected ${direction} road`).toBe(true);
+    }
+  });
+
   it("replays both a terrain hash and a sample topology identically", () => {
     const chunks = Array.from({ length: 16 }, () => generateDeterministicTerrainChunk(input(1, 1)));
     expect(new Set(chunks.map(c => c.terrainHash)).size).toBe(1);
