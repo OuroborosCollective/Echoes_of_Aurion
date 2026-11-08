@@ -5941,3 +5941,13 @@ Learned: New read-only MCP tools must be included in existing full capability al
 Open: Exact-head CI/TypeScript/Vitest/Godot and all review threads; real production Auth/MariaDB/receipt/runtime and Android observations; native UI workflow and actual NPC controller activation separate. No merge/deployment.
 Next safe step: Re-read exact PR head, inspect current GitHub Actions runs and review comments; repair causal regressions, run independent evidence, then merge only after release gates and verified readback.
 
+### 2026-11-08 — PR #1349 native unified WorldStudio UI
+Status: PARTIAL — final exact-head CI/reviews and live acceptance pending.
+Task: Complete native WorldStudio UI wiring for the typed AI authoring tools.
+Decisions: One touch-friendly navigation across world/AI, Fadenwerk/quests, NPC Forge, confirmed inspector and read-only tool catalog. All drafts and validation remain preview-only; canonical plan/confirmation/receipt/readback and 100-ms server authority unchanged. Wrong/stale tool replies fail closed and release the relevant pending preview.
+Touched surfaces: godot-client/ui/screens/world_authoring_studio.gd, quest_authoring_editor.gd, tests/test_ai_authoring_toolchain_ui.gd, scripts/godot/check.mjs, docs/aurion/AI_AUTHORING_TOOLCHAIN_V1.md.
+Evidence: PR https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1349 ; prior exact-head 8d0e7663e320fe531142ddc975001e39e73e1dd2 had 23/23 GitHub Actions success before UI changes; new UI test added first at 109189913f849026b4a781b72a1a9ffbbfe7cd41, with real execution still pending for the current head. Do not interpret old runs as UI success.
+Learned: Separate native editor panels need a shared allowlisted dispatch, a session-bound catalog and explicit tool-response correlation; offline NPC Shadow Forge is not production activation.
+Open: Exact-head Godot/TypeScript/CI, reviews, independent live authenticated UI/DB/receipt readback and rollout; NPC canonical admission still blocked by missing authoritative tick/seed/chunk and controller-release evidence.
+Next safe step: Check latest exact SHA runs and review threads; fix causal failures and do not merge or deploy until required gates are proven.
+
