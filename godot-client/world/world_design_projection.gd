@@ -783,8 +783,10 @@ func _refresh() -> void:
 		holder.set_meta("aurion_design_key", item.designKey)
 		holder.set_meta("aurion_placement_key", item.placementKey)
 		holder.set_meta("aurion_asset_sha256", item.sha256)
-		holder.set_meta("aurion_world_design_revision", _design.revision)
-		holder.set_meta("aurion_catalog_revision", _catalog.revision)
+		# Draft previews deliberately have no confirmed world or catalog revision.
+		if _hex(_design.get("revision"), 64) and _hex(_catalog.get("revision"), 64):
+			holder.set_meta("aurion_world_design_revision", _design.revision)
+			holder.set_meta("aurion_catalog_revision", _catalog.revision)
 		# GLB-import observations are presentation metadata, never an action receipt.
 		holder.set_meta("aurion_visual_recipe", cost.visualRecipe.duplicate(true))
 		holder.position = Vector3(float(item.chunk.x * CHUNK_MM + item.xMm - HALF_CHUNK_MM) / 1000.0,

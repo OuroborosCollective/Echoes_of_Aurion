@@ -38,6 +38,7 @@ func verify() -> void:
 	require(preview.supply_asset(sha, bytes, SESSION), "hash-checked real GLB rejected")
 	require(preview.get_child_count() == 1, "actual preview model missing")
 	require(preview.get_child(0).get_meta("aurion_status") == "PREVIEW_ONLY", "draft model unlabelled")
+	require(not preview.get_child(0).has_meta("aurion_world_design_revision") and not preview.get_child(0).has_meta("aurion_catalog_revision"), "draft preview claimed confirmed server revisions")
 	require(preview.get_child(0).position.y == 0.0, "preview claimed terrain height")
 	require(confirmed.get_child_count() == 0 and confirmed._design.is_empty(), "draft altered confirmed projection")
 	var bad := d.duplicate(true)
