@@ -36,7 +36,11 @@ Invalid JSON and schema mismatches produce compact error diagnostics; invalid gr
 
 ## Godot native transport
 
-`godot-client/net/api/world_authoring_api.gd` now accepts `aiToolCatalog` (authenticated GET) and `aiToolPreview` (authenticated POST) using existing same-origin bearer/session-generation guards, redirect refusal, size limits and transport. This exposes an adapter to the existing editor; **there is no new automatic Godot UI action, scene mutation or client-side authority**. Godot may display returned previews only.
+`godot-client/net/api/world_authoring_api.gd` now accepts `aiToolCatalog` (authenticated GET) and `aiToolPreview` (authenticated POST) using existing same-origin bearer/session-generation guards, redirect refusal, size limits and transport. The existing WorldStudio now has a touch-friendly navigation row with `Welt & KI`, `Quests & Fadenwerk`, `NPCs`, `Live-Inspektor` and `KI-Werkzeuge`. Switching sections reuses the existing Godot panels and their existing authorization/session handling; it does not start a new game service. The KI-Werkzeuge section reads the exact five-tool allowlist from Aurion and displays `PREVIEW_ONLY` or a fail-closed reason. In the native quest editor, **Questgraph beim kanonischen Aurion-Validator prüfen** sends the current draft to the server and displays graph diagnostics without publishing. Fadenwerk inspect/import, NPC role templates and world proposals use the typed preview dispatcher when the verified catalog is present, with compatibility to the existing standalone preview routes if the catalog has not yet been read. World, quest and NPC effect/readback buttons continue to use their existing canonical routes and journals; there is no added automatic Godot world or NPC mutation.
+
+On mobile/desktop, open the existing WorldStudio through the game HUD, authenticate with an Aurion admin session, and choose `KI-Werkzeuge` to verify the shared catalog. Follow its section links to author. `Quests & Fadenwerk`: inspect a source, import a quarantined strand, inspect the graph, validate at Aurion, and only separately propose/plan/publish after explicitly enabling a new version. `NPCs`: read confirmed actor observations, draft a shadow template, and compare outside the simulation tick; controller activation is not implemented. `Welt & KI`: select a server-confirmed chunk and approved catalog assets, request a model draft, review/edit locally, request a plan, confirm, recover a receipt if uncertain, and independently read back the world. The `Live-Inspektor` shows the confirmed zone projection without fabricating source revision or state/receipt hashes.
+
+UI negative tests reject unknown tool catalogs, mismatched tool replies, stale drafts and missing sessions, while a separate native transport test covers HTTP serialization and session generation. These tests are isolated acceptance evidence; a real authenticated production UI workflow is not proven without a separate deployed readback.
 
 ## Effectful handoffs remain separate
 
@@ -60,11 +64,11 @@ Invalid JSON and schema mismatches produce compact error diagnostics; invalid gr
 | --- | --- |
 | Core / production authoring boundary | `server/aiFabric/authoringToolchain.ts`, `server/routes/aurionAuthoringRouter.ts` |
 | Effect / connector, without gameplay authority | `server/adminMcp.ts` |
-| Godot transport / projection | `godot-client/net/api/world_authoring_api.gd` |
-| Tests | `server/aiFabric/authoringToolchain.test.ts` |
+| Godot transport / projection | `godot-client/net/api/world_authoring_api.gd`, `godot-client/ui/screens/world_authoring_studio.gd`, `godot-client/ui/screens/quest_authoring_editor.gd` |
+| Tests | `server/aiFabric/authoringToolchain.test.ts`, `godot-client/tests/test_ai_authoring_toolchain_ui.gd`, `scripts/godot/check.mjs` |
 | Documentation / evidence | This document and one append-only `Memory.md` entry |
 | Canonical persistence / tick / economy / combat | **Untouched** |
 
 ## Remaining implementation work
 
-A complete cross-surface WorldStudio UI needs user-facing buttons, explicit workflow selection and approval UX. Automated NPC controller activation requires its separately verified archetype/receipt admission contract. Release acceptance, genuine Godot session checks, runtime and MariaDB readback are **not** claimed by these adapters.
+A full **native WorldStudio control surface is added in this PR, pending exact-head Godot/headless and independent live verification**. Automated NPC controller activation requires its separately verified archetype/receipt admission contract. Release acceptance, genuine Godot session checks, runtime and MariaDB readback are **not** claimed by these adapters.
