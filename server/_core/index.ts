@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { authBodyLimit } from "./authBodyLimit";
-import { closeHttpServerForShutdown } from "./httpServerClose";
 import { defensiveGatewayObserver } from "../defensiveGatewayObserver";
+import { closeHttpServerForShutdown } from "./httpServerClose";
 import { registerProductionProbeRoutes } from "../aurionProductionProbeHttp";
 import { createCorsMiddleware } from "./corsMiddleware";
 import express from "express";
