@@ -2,14 +2,47 @@
  * This contract is consumed by both server-side admission and the renderer.
  * It never grants gameplay, simulation, inventory, collision or world authority. */
 export const assetBudgets = {
-  phone: { worldModels: 18, worldInstances: 48, worldCache: 24, actors: 12, animations: 8, decoderJobs: 2, ktxWorkers: 1, cacheModels: 40, textureBytes: 48*1024*1024, decodedBytes: 64*1024*1024, assetWorkingSetBytes: 96*1024*1024, assetBytes: 8*1024*1024, networkBytes: 16*1024*1024 },
-  tablet: { worldModels: 24, worldInstances: 64, worldCache: 32, actors: 20, animations: 12, decoderJobs: 2, ktxWorkers: 1, cacheModels: 56, textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024, assetWorkingSetBytes: 192*1024*1024, assetBytes: 12*1024*1024, networkBytes: 24*1024*1024 },
-  desktop: { worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20, decoderJobs: 2, ktxWorkers: 2, cacheModels: 80, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
+  phone: { textureShareModels: 8, textureDimension: 1024, worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16, decoderJobs: 4, ktxWorkers: 2, cacheModels: 80, textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024, assetWorkingSetBytes: 192*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
+  tablet: { textureShareModels: 16, textureDimension: 2048, worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24, decoderJobs: 4, ktxWorkers: 2, cacheModels: 112, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 24*1024*1024, networkBytes: 48*1024*1024 },
+  desktop: { textureShareModels: 0, textureDimension: 4096, worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20, decoderJobs: 2, ktxWorkers: 2, cacheModels: 80, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
 } as const;
 
 export type AssetTier = keyof typeof assetBudgets;
-export const assetTier = (width: number): AssetTier => width < 768 ? "phone" : width < 1200 ? "tablet" : "desktop";
+/**
+ * `textureDimension` is the largest edge a texture is decoded at on that tier:
+ * the renderer downsamples larger embedded images while decoding (stored bytes
+ * and their SHA-256 stay unchanged). A ~360 CSS px phone cannot show 2048 px
+ * detail, but four times the memory decides whether models appear at all.
+ * Under memory pressure a model is decoded at half that edge again, never
+ * below MIN_TEXTURE_DIMENSION, instead of being dropped.
+ *
+ * `textureShareModels` (phones and touch tablets): no single model's newly
+ * decoded textures may exceed textureBytes / textureShareModels (12 MiB on both),
+ * independent of download order; images already resident in the shared texture
+ * cache cost nothing. Sized from the production starter-city scene (world visuals
+ * plus the largest NPC models, with their real image sharing) as the largest share
+ * at which every model is still admitted; 0 = no share (desktop).
+ */
+export const MIN_TEXTURE_DIMENSION = 256;
+/** Edge of an image decoded under a dimension cap (aspect ratio preserved). */
+export function cappedTextureSize(width: number, height: number, maxDimension: number): { width: number; height: number } {
+  const scale = Math.min(1, maxDimension / Math.max(width, height));
+  return { width: Math.max(1, Math.floor(width * scale)), height: Math.max(1, Math.floor(height * scale)) };
+}
+/**
+ * Width decides the tier; a touch tablet (Android/iPadOS) never gets the desktop
+ * profile, whatever its CSS width in landscape (e.g. Galaxy Tab A9: 1340 px).
+ */
+export const assetTier = (width: number, touchTablet = false): AssetTier =>
+  width < 768 ? "phone" : width < 1200 || touchTablet ? "tablet" : "desktop";
+/** RGBA bytes of an image including its full mip chain. */
+export function mipChainBytes(width: number, height: number): number {
+  let bytes = 0;
+  for (let w = width, h = height; ; w = Math.max(1, Math.floor(w / 2)), h = Math.max(1, Math.floor(h / 2))) { bytes += w * h * 4; if (w === 1 && h === 1) break; }
+  return bytes;
+}
 export type GlbAllocation = { decodedBytes: number; textureBytes: number; animations: number };
+export type GlbImageSize = Readonly<{ width: number; height: number; decodedWidth: number; decodedHeight: number }>;
 
 const integer = (value: number, maximum = 1_073_741_824) => {
   if (!Number.isSafeInteger(value) || value < 0 || value > maximum) throw Error("GLB_RESOURCE_BOUNDS");
@@ -17,7 +50,8 @@ const integer = (value: number, maximum = 1_073_741_824) => {
 };
 
 /** Bound decoded allocation before authenticated bytes reach Meshopt/Basis/Three.js. */
-export function inspectGlbAllocation(bytes: ArrayBuffer): { json: any; allocation: GlbAllocation } {
+export function inspectGlbAllocation(bytes: ArrayBuffer, maxTextureDimension = 4096): { json: any; allocation: GlbAllocation; images: (GlbImageSize | null)[] } {
+  if (!Number.isSafeInteger(maxTextureDimension) || maxTextureDimension < 1) throw Error("GLB_TEXTURE_DIMENSION_CAP");
   const view = new DataView(bytes);
   if (bytes.byteLength < 28 || view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== bytes.byteLength || view.getUint32(16, true) !== 0x4e4f534a) throw Error("GLB_HEADER");
   const length = view.getUint32(12, true), start = 28+length;
@@ -25,7 +59,16 @@ export function inspectGlbAllocation(bytes: ArrayBuffer): { json: any; allocatio
   const json = JSON.parse(new TextDecoder().decode(new Uint8Array(bytes, 20, length)));
   if (json.asset?.version !== "2.0" || json.buffers?.some((b: any) => b.uri)) throw Error("GLB_EMBEDDED_V2_REQUIRED");
   const images = new Set<number>(); let textureBytes = 0;
-  for (const image of json.images ?? []) {
+  const sizes: (GlbImageSize | null)[] = [];
+  // Textures loaded through an image extension (EXT_texture_webp, KHR_texture_basisu, …)
+  // are decoded by GLTFLoader's built-in handlers at stored size, including the core
+  // fallback source; budget those images uncapped.
+  const uncapped = new Set<number>();
+  for (const texture of json.textures ?? []) {
+    const extensionSources = Object.values(texture?.extensions ?? {}).map((extension: any) => extension?.source).filter(Number.isSafeInteger);
+    if (extensionSources.length) for (const source of [...extensionSources, texture.source]) if (Number.isSafeInteger(source)) uncapped.add(source);
+  }
+  for (const [imageIndex, image] of (json.images ?? []).entries()) {
     if (image.uri || !Number.isSafeInteger(image.bufferView)) throw Error("GLB_EMBEDDED_IMAGE_REQUIRED");
     const v = json.bufferViews?.[image.bufferView];
     if (!v) throw Error("GLB_IMAGE_VIEW");
@@ -50,7 +93,10 @@ export function inspectGlbAllocation(bytes: ArrayBuffer): { json: any; allocatio
       for(let i=2;i+4<size;) {const marker=u[i+1],length=b.getUint16(i+2,false);if(u[i]!==255||length<2||i+2+length>size)throw Error("GLB_JPEG_BOUNDS");if([0xc0,0xc1,0xc2].includes(marker)){height=b.getUint16(i+5,false);width=b.getUint16(i+7,false);break;}i+=2+length;}
     }
     if (!width || !height || width>4096 || height>4096) throw Error("GLB_TEXTURE_DIMENSIONS");
-    for(let w=width,h=height;;w=Math.max(1,Math.floor(w/2)),h=Math.max(1,Math.floor(h/2))) {textureBytes+=w*h*4;if(w===1&&h===1)break;}
+    // Compressed KTX2 stays at its stored size (no browser-side downsampling).
+    const decoded = image.mimeType === "image/ktx2" || uncapped.has(imageIndex) ? { width, height } : cappedTextureSize(width, height, maxTextureDimension);
+    sizes.push(Object.freeze({ width, height, decodedWidth: decoded.width, decodedHeight: decoded.height }));
+    textureBytes += mipChainBytes(decoded.width, decoded.height);
   }
   const components:Record<string,number>={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MAT3:9,MAT4:16};
   const accessorBytes=(json.accessors??[]).reduce((sum:number,a:any)=>{
@@ -60,5 +106,5 @@ export function inspectGlbAllocation(bytes: ArrayBuffer): { json: any; allocatio
   integer(json.nodes?.length??0,4096);
   for(const skin of json.skins??[])integer(skin.joints?.length??0,256);
   const geometryBytes = (json.bufferViews ?? []).reduce((sum:number, v:any, i:number) => sum + (images.has(i)?0:integer(v.byteLength)), 0);
-  return {json, allocation:{decodedBytes:integer(geometryBytes*2+accessorBytes+textureBytes),textureBytes:integer(textureBytes),animations:integer(json.animations?.length??0,64)}};
+  return {json, images:sizes, allocation:{decodedBytes:integer(geometryBytes*2+accessorBytes+textureBytes),textureBytes:integer(textureBytes),animations:integer(json.animations?.length??0,64)}};
 }

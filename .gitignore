@@ -147,6 +147,8 @@ scripts/__pycache__/
 # Godot editor cache stays local; stable script UIDs remain tracked.
 /godot-client/.godot/
 /godot-client/assets/generated/
+# Downloaded approved GLBs and SHA-bound local manifest for the editor.
+/godot-client/assets/aurion-catalog-sync/
 
 # Generated Godot GLB import sidecars and texture extractions for the
 # SHA-pinned CC0 village source GLBs. Source binaries and manifest stay tracked.

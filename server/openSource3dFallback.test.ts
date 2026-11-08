@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { assetBudgets } from "../shared/glbPresentationBudget";
 import {
   OS3A_FALLBACK_CONFIRMATION,
   applyOpenSource3dFallback,
@@ -20,7 +21,7 @@ describe("pinned OS3A fallback catalog", () => {
       classificationCandidateCount: 365,
       admissionCandidateCount: 355,
       transferOversizeCount: 10,
-      tierCandidateCounts: { phone: 336, tablet: 344, desktop: 355 },
+      tierCandidateCounts: { phone: 355, tablet: 361, desktop: 355 },
       discoveryOnlyCount: 60,
       enemyFallbackCandidateCount: 60,
       enemyFallbackTierCandidateCounts: { phone: 60, tablet: 60, desktop: 60 },
@@ -50,7 +51,7 @@ describe("pinned OS3A fallback catalog", () => {
       classificationStatus: "requires-pinned-byte-plan",
     });
     expect(first.matches.some(match => match.name.toLowerCase().includes("barrel"))).toBe(true);
-    expect(first.matches.every(match => match.transferBudgetBytes === 8 * 1024 * 1024)).toBe(true);
+    expect(first.matches.every(match => match.transferBudgetBytes === assetBudgets.phone.assetBytes)).toBe(true);
   });
 
   it("keeps XYZ provenance flagged while allowing only the dedicated enemy fallback lane to consume it", () => {

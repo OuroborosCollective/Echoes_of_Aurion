@@ -11,6 +11,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'tsconfig.json'
       - 'scripts/godot/live-bridge-*'
+      - 'scripts/godot/sync-approved-glbs*'
+      - 'deploy/*glb-catalog-sync*'
       - 'deploy/*aurion*godot*'
       - 'deploy/load-aurion-runtime-image.py'
       - 'scripts/build-aurion-runtime-image.mjs'
@@ -38,6 +40,9 @@ jobs:
           node scripts/test-aurion-godot-feed-compose.mjs
           sudo python3 scripts/test_aurion_godot_release_handoff.py
           bash -n deploy/promote-aurion-zone-runtime.sh deploy/install-aurion-godot-bridge.sh
+          bash -n deploy/install-aurion-glb-catalog-sync.sh
+          node --check scripts/godot/sync-approved-glbs.mjs
+          node --test scripts/godot/sync-approved-glbs.test.mjs
           git diff --check
   repository-regression:
     runs-on: ubuntu-24.04

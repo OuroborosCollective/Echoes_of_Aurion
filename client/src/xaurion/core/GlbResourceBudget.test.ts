@@ -9,12 +9,13 @@ import { buildGlbImportPlan } from "../../../../server/glbImportPlan";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
 import { AURION_STARTER_CITY_WALL_LODS } from "@shared/aurionStarterCityWallContract";
 import {
+  assetBudgets,
   GlbResourcePool,
   glbResourcePool,
   fetchVerifiedGlb,
   inspectGlbAllocation,
 } from "./GlbResourceBudget";
-import { glbManager } from "./GLBModelManager";
+import { glbManager, selectStaticWorldLodVariants } from "./GLBModelManager";
 import { releaseGlbTree } from "./GlbModelLease";
 import { AnimatedGlbActor } from "./AnimatedGlbActor";
 import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
@@ -66,13 +67,13 @@ describe("bounded, verified GLB ownership", () => {
         actors.push(new AnimatedGlbActor(loaded.scene, loaded.animations));
       }
       expect(glbResourcePool.tier).toBe("phone");
-      expect(actors).toHaveLength(12);
+      expect(actors).toHaveLength(glbResourcePool.limits.actors);
       expect(actors.every(actor => actor.group.visible && !new THREE.Box3().setFromObject(actor.group).isEmpty())).toBe(true);
-      expect(glbResourcePool.evidence()).toMatchObject({ actors: 12, staticInstances: 5, animations: clipless ? 0 : 8 });
-      expect(actors.reduce((count, actor) => count + actor.evidence().activeAnimationActions, 0)).toBe(clipless ? 0 : 8);
+      expect(glbResourcePool.evidence()).toMatchObject({ actors: glbResourcePool.limits.actors, staticInstances: 5, animations: clipless ? 0 : glbResourcePool.limits.animations });
+      expect(actors.reduce((count, actor) => count + actor.evidence().activeAnimationActions, 0)).toBe(clipless ? 0 : glbResourcePool.limits.animations);
       await expect(glbManager.loadModel("crowd-character")).rejects.toThrow("GLB_ACTOR_BUDGET");
       if (clipless) return;
-      const waiting = actors[11]!;
+      const waiting = actors[glbResourcePool.limits.animations + 1]!;
       expect(waiting.evidence().activeAnimationActions).toBe(0);
       expect(waiting.evidence().clip).toMatch(/idle/i);
       expect(waiting.evidence().clipTime).toBe(0);
@@ -82,7 +83,7 @@ describe("bounded, verified GLB ownership", () => {
       expect(waiting.evidence().clipTime).toBeGreaterThan(0);
       expect(actors[0]!.group.visible).toBe(true);
       for (const actor of actors) { actor.setLocomotion(2); actor.update(0.1); }
-      expect(glbResourcePool.evidence().animations).toBeLessThanOrEqual(8);
+      expect(glbResourcePool.evidence().animations).toBeLessThanOrEqual(glbResourcePool.limits.animations);
     } finally {
       actors.forEach(actor => actor.dispose());
       scenery.forEach(model => releaseGlbTree(model));
@@ -174,12 +175,68 @@ describe("bounded, verified GLB ownership", () => {
       await Promise.resolve();
     }
     await Promise.all(jobs);
-    expect(peak).toBe(2);
+    expect(peak).toBe(pool.limits.decoderJobs);
     expect(pool.evidence()).toMatchObject({
       decoderJobs: 0,
       networkInFlightBytes: 0,
       pending: 0,
     });
+  });
+
+  it("queues byte-contention for concurrent phone GLBs instead of failing a verified third download", async () => {
+    // RED from actual browser pilot 42327899553: GLB_NETWORK_BUDGET on
+    // the public player while other approved world GLBs occupied the pool.
+    const pool = new GlbResourcePool("phone");
+    const bytes = pool.limits.assetBytes;
+    const releases: Array<() => void> = [];
+    let active = 0;
+    let peak = 0;
+    const launch = () => pool.job(bytes, async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise<void>(resolve => releases.push(resolve));
+      active--;
+    });
+    const outcomes = Promise.allSettled([launch(),launch(),launch()]);
+    expect(releases).toHaveLength(2);
+    expect(pool.evidence()).toMatchObject({
+      decoderJobs: 2,
+      networkInFlightBytes: 2*bytes,
+      pending: 1,
+      rejected: 0,
+    });
+    releases[0]!();
+    for(let i=0;i<6 && releases.length<3;i++) await Promise.resolve();
+    expect(releases).toHaveLength(3);
+    expect(peak).toBe(2);
+    releases[1]!();
+    releases[2]!();
+    const results = await outcomes;
+    expect(results.map(result=>result.status)).toEqual(["fulfilled","fulfilled","fulfilled"]);
+    expect(pool.evidence()).toMatchObject({decoderJobs:0,networkInFlightBytes:0,pending:0,rejected:0});
+    await expect(pool.job(bytes+1,async()=>{})).rejects.toThrow("GLB_NETWORK_BUDGET");
+  });
+
+  it("admits a bounded download alongside retained decoded data and still rejects oversized requests", async () => {
+    // Exact-limit arithmetic matters: 128 MiB decoded + 2 * 16 MiB
+    // temporary network reservation = 160 MiB, below the 192 MiB phone
+    // working-set ceiling. This must NOT produce false GLB_NETWORK_BUDGET.
+    const pool = new GlbResourcePool("phone");
+    const hold = pool.reserve({decodedBytes:pool.limits.decodedBytes,textureBytes:0,animations:0});
+    expect(hold).not.toBeNull();
+    let jobsRun = 0;
+    await pool.job(pool.limits.assetBytes,async()=>{jobsRun++;});
+    expect(jobsRun).toBe(1);
+    expect(pool.evidence()).toMatchObject({
+      decoderJobs:0,pending:0,networkInFlightBytes:0,rejected:0,
+      reservedDecodedBytes:pool.limits.decodedBytes,
+      peakAssetWorkingSetCeilingBytes:pool.limits.decodedBytes + 2*pool.limits.assetBytes,
+    });
+    await expect(pool.job(pool.limits.assetBytes+1,async()=>{jobsRun++;})).rejects.toThrow("GLB_NETWORK_BUDGET");
+    expect(jobsRun).toBe(1);
+    expect(pool.evidence()).toMatchObject({pending:0,networkInFlightBytes:0,rejected:1});
+    hold!();
+    expect(pool.evidence().reservedDecodedBytes).toBe(0);
   });
 
   it("rejects working sets and animation actions above the profile and releases once", () => {
@@ -210,7 +267,7 @@ describe("bounded, verified GLB ownership", () => {
     const animations = Array.from({ length: pool.limits.animations }, () => pool.animationActions(1)!);
     expect(pool.staticInstance()).toBeNull();
     expect(pool.animationActions(1)).toBeNull();
-    expect(pool.evidence()).toMatchObject({ staticInstances: 48, animations: 8, actors: 0 });
+    expect(pool.evidence()).toMatchObject({ staticInstances: pool.limits.worldInstances, animations: pool.limits.animations, actors: 0 });
     for (const release of [...models, ...animations]) { release(); release(); }
     expect(pool.evidence()).toMatchObject({ staticInstances: 0, animations: 0, actors: 0 });
   });
@@ -413,7 +470,11 @@ describe("bounded, verified GLB ownership", () => {
         normalization: variant.plan.normalization,
       })),
     };
-    const loaded = await glbManager.loadStaticLodFamily(entry);
+    // Phones keep one physical LOD per family (each LOD carries its own textures).
+    const phone = await glbManager.loadStaticLodFamily(entry, "phone");
+    expect(phone.lodLevels).toEqual([0]);
+    releaseGlbTree(phone.scene);
+    const loaded = await glbManager.loadStaticLodFamily(entry, "tablet");
     const runtimeLod = loaded.scene.children.find(
       node => (node as THREE.LOD).isLOD
     ) as THREE.LOD;
@@ -439,7 +500,7 @@ describe("bounded, verified GLB ownership", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("uses a permitted lower LOD on phones without downloading the wall's oversized variants", async () => {
+  it("loads the full-detail pinned city wall once under the doubled phone byte ceiling", async () => {
     vi.stubGlobal("crypto", webcrypto);
     // Real Three.js decoder and budget pool, with small static fixture GLBs.
     // Catalog sizes reproduce all three actual approved wall file sizes.
@@ -453,14 +514,16 @@ describe("bounded, verified GLB ownership", () => {
       subcategory: "structure", equipmentSlot: null, lods: physical } as GlbCatalogEntry;
     const fetch = vi.fn(async (url: string) => new Response(physical.find(lod => lod.storageUrl === url)!.fixture));
     vi.stubGlobal("fetch", fetch);
-    const loaded = await glbManager.loadStaticLodFamily(entry);
-    expect(loaded.lodLevels).toEqual([2]);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(physical[2]!.storageUrl, expect.anything());
+    const loaded = await glbManager.loadStaticLodFamily(entry, "tablet");
+    // Synthetic fixture GLBs have different SHA256 identities: this is not the pinned live wall.
+    // Generic physical families retain their full admitted LOD set on tablet/desktop.
+    expect(loaded.lodLevels).toEqual([0, 1, 2]);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    for (const variant of physical) expect(fetch).toHaveBeenCalledWith(variant.storageUrl, expect.anything());
     expect(new THREE.Box3().setFromObject(loaded.scene).isEmpty()).toBe(false);
     releaseGlbTree(loaded.scene);
-    await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.slice(0, 2) })).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await expect(glbManager.loadStaticLodFamily({ ...entry, lods: physical.map(lod => ({ ...lod, bytes: assetBudgets.phone.assetBytes + 1 })) }, "phone")).rejects.toThrow("GLB_NO_SUPPORTED_LOD");
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it("does not disguise an invalid permitted LOD as a budget fallback", async () => {
@@ -473,5 +536,62 @@ describe("bounded, verified GLB ownership", () => {
       subcategory: "structure", equipmentSlot: null, lods: [variant] };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(testGlb("different content"))));
     await expect(glbManager.loadStaticLodFamily(entry)).rejects.toThrow("GLB_HASH");
+  });
+});
+
+
+describe("real pinned city wall mobile LOD admission", () => {
+  const source = AURION_STARTER_CITY_WALL_LODS;
+  const wall = {
+    sha256: source[0]!.sha256,
+    lods: source.map(lod => ({ level: lod.level, sha256: lod.sha256, bytes: lod.bytes,
+      assetId: `glb_${lod.sha256.slice(0, 48)}`, storageUrl: `/api/assets/glb/${lod.sha256}.glb`,
+      targetKey: null, normalization: { lod: { level: lod.level } } })),
+  } as unknown as GlbCatalogEntry;
+
+  it("allows full-detail wall rendering on phone and the measured three-LOD wall texture load on tablet", () => {
+    expect(selectStaticWorldLodVariants(wall, "phone").map(lod => lod.level)).toEqual([0]);
+    expect(selectStaticWorldLodVariants(wall, "tablet").map(lod => lod.level)).toEqual([0, 1, 2]);
+    expect(selectStaticWorldLodVariants(wall, "desktop").map(lod => lod.level)).toEqual([0, 1, 2]);
+  });
+
+  it("does not reduce unrelated world models or admit missing oversized wall variants", () => {
+    const unrelated = { ...wall, sha256: "f".repeat(64) } as GlbCatalogEntry;
+    expect(selectStaticWorldLodVariants(unrelated, "tablet").map(lod => lod.level)).toEqual([0, 1, 2]);
+    const oversize = { ...wall, lods: wall.lods!.map(lod => ({ ...lod, bytes: assetBudgets.phone.assetBytes + 1 })) } as GlbCatalogEntry;
+    expect(selectStaticWorldLodVariants(oversize, "phone")).toEqual([]);
+    const mixed = { ...wall, lods: wall.lods!.map((lod, index) => index === 1 ? { ...lod, sha256: "f".repeat(64) } : lod) } as GlbCatalogEntry;
+    expect(selectStaticWorldLodVariants(mixed, "tablet")).toEqual([]);
+  });
+});
+
+
+describe("owner-approved doubled mobile runtime budgets and measured wall textures", () => {
+  it("doubles mobile admission counts and byte limits while keeping the desktop profile unchanged", () => {
+    expect(assetBudgets.phone).toEqual({
+      textureShareModels: 8, textureDimension: 1024, worldModels: 36, worldInstances: 96, worldCache: 48, actors: 24, animations: 16,
+      decoderJobs: 4, ktxWorkers: 2, cacheModels: 80,
+      textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024,
+      assetWorkingSetBytes: 192*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024,
+    });
+    expect(assetBudgets.tablet).toEqual({
+      textureShareModels: 16, textureDimension: 2048, worldModels: 48, worldInstances: 128, worldCache: 64, actors: 40, animations: 24,
+      decoderJobs: 4, ktxWorkers: 2, cacheModels: 112,
+      textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024,
+      assetWorkingSetBytes: 384*1024*1024, assetBytes: 24*1024*1024, networkBytes: 48*1024*1024,
+    });
+    expect(assetBudgets.desktop).toEqual({
+      textureShareModels: 0, textureDimension: 4096, worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20,
+      decoderJobs: 2, ktxWorkers: 2, cacheModels: 80,
+      textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024,
+      assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024,
+    });
+    // Measured immutable LOD0+1+2 wall PNG allocations: 88,080,336 bytes (~88 MB).
+    // This is actual consumption, not a target cap: reserve headroom for neighboring assets.
+    expect(assetBudgets.tablet.textureBytes).toBeGreaterThan(88_080_336);
+    for (const lod of AURION_STARTER_CITY_WALL_LODS) {
+      expect(lod.bytes).toBeLessThanOrEqual(assetBudgets.phone.assetBytes);
+      expect(lod.bytes).toBeLessThanOrEqual(assetBudgets.tablet.assetBytes);
+    }
   });
 });
