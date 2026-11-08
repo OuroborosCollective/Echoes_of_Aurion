@@ -3,6 +3,7 @@ import type {
   ChunkSurface,
   WorldChunkCoordinate,
 } from "./worldChunkProtocol";
+import { AURION_RETURN_STONE_POSITION } from "./aurionReturnStoneContract";
 
 const TERRAIN_CHUNK_SIZE_MM = 64_000;
 const TERRAIN_GRID_SIZE = 16;
@@ -17,6 +18,17 @@ export const TERRAIN_MAX_SLOPE_BPS = 4_219;
 export const TERRAIN_MIN_WALKABLE_TILES = 32;
 export const TERRAIN_MAX_HEIGHT_MM = 900;
 export const TERRAIN_MIN_HEIGHT_MM = -900;
+/** Reserved opt-in revision for the reauthored starter city. Current existing
+ * world revisions are NEVER retroactively reclassified as terrace worlds.
+ * Publication requires an explicit generation-revision migration and replay proof.
+ */
+export const AURION_STARTER_CITY_TERRACE_REVISION = "0000000000000000000000000000000000000659" as const;
+export const STARTER_CITY_LEVEL_HALF_EXTENT_MM = 55_000 as const;
+export const STARTER_CITY_LEVEL_BLEND_MM = 20_000 as const;
+export const STARTER_CITY_RING_RADIUS_MM = 18_000 as const;
+export const STARTER_CITY_RING_HALF_WIDTH_MM = 2_000 as const;
+export const STARTER_CITY_RADIAL_HALF_WIDTH_MM = 3_000 as const;
+
 
 const REVISION = /^[a-f0-9]{40}$/;
 
@@ -134,6 +146,60 @@ function globalSampleCoordinate(
   };
 }
 
+/** All positions are derived from shared world-space sample identity, never
+ * from local tile indices. A 64 m chunk has 15 sample intervals and is
+ * centered at coordinate*64 m (starting -32 m). Adjacent chunks therefore
+ * evaluate exactly the same world coordinate at their common boundary.
+ * Numerators remain safe integer millimetres across the ±1M chunk range.
+ */
+function starterCitySampleOffset15(sample: Readonly<{ x: number; z: number }>): { x: number; z: number } {
+  const sampleNumeratorMm = TERRAIN_CHUNK_SIZE_MM;
+  const originNumeratorMm = TERRAIN_CHUNK_SIZE_MM / 2 * TERRAIN_SAMPLE_RESOLUTION_DENOMINATOR;
+  return {
+    x: sample.x * sampleNumeratorMm - originNumeratorMm - AURION_RETURN_STONE_POSITION.x * TERRAIN_SAMPLE_RESOLUTION_DENOMINATOR,
+    z: sample.z * sampleNumeratorMm - originNumeratorMm - AURION_RETURN_STONE_POSITION.z * TERRAIN_SAMPLE_RESOLUTION_DENOMINATOR,
+  };
+}
+
+function starterCityTerracedHeightMm(
+  input: DeterministicTerrainChunkInput,
+  sample: Readonly<{ x: number; z: number }>,
+  naturalHeightMm: number,
+): number {
+  if (input.worldGenerationRevision !== AURION_STARTER_CITY_TERRACE_REVISION) return naturalHeightMm;
+  const offset = starterCitySampleOffset15(sample);
+  const distance = Math.max(Math.abs(offset.x), Math.abs(offset.z));
+  const flat = STARTER_CITY_LEVEL_HALF_EXTENT_MM * TERRAIN_SAMPLE_RESOLUTION_DENOMINATOR;
+  const rim = STARTER_CITY_LEVEL_BLEND_MM * TERRAIN_SAMPLE_RESOLUTION_DENOMINATOR;
+  if (distance <= flat) return 0;
+  if (distance >= flat + rim) return naturalHeightMm;
+  return Math.trunc(naturalHeightMm * (distance - flat) / rim);
+}
+
+/** Pure paving designation for the revision-bound authored 18 m ring, four
+ * straight axial roads and central 6 m plaza. Collision and NPC pathfinding
+ * still require their independent canonical world-geometry evidence.
+ */
+function starterCityPavingAt(
+  input: DeterministicTerrainChunkInput,
+  sample: Readonly<{ x: number; z: number }>,
+): boolean {
+  if (input.worldGenerationRevision !== AURION_STARTER_CITY_TERRACE_REVISION) return false;
+  const offset = starterCitySampleOffset15(sample);
+  const x = Math.abs(offset.x), z = Math.abs(offset.z);
+  const scale = TERRAIN_SAMPLE_RESOLUTION_DENOMINATOR;
+  const limit = STARTER_CITY_LEVEL_HALF_EXTENT_MM * scale;
+  if (x > limit || z > limit) return false;
+  const squared = x * x + z * z;
+  const ringInner = (STARTER_CITY_RING_RADIUS_MM - STARTER_CITY_RING_HALF_WIDTH_MM) * scale;
+  const ringOuter = (STARTER_CITY_RING_RADIUS_MM + STARTER_CITY_RING_HALF_WIDTH_MM) * scale;
+  const centralPlaza = 6_000 * scale;
+  const ring = squared >= ringInner * ringInner && squared <= ringOuter * ringOuter;
+  const eastWest = z <= STARTER_CITY_RADIAL_HALF_WIDTH_MM * scale && x >= STARTER_CITY_RING_RADIUS_MM * scale;
+  const northSouth = x <= STARTER_CITY_RADIAL_HALF_WIDTH_MM * scale && z >= STARTER_CITY_RING_RADIUS_MM * scale;
+  return squared <= centralPlaza * centralPlaza || ring || eastWest || northSouth;
+}
+
 function heightAt(
   input: DeterministicTerrainChunkInput,
   sample: Readonly<{ x: number; z: number }>
@@ -158,7 +224,7 @@ function heightAt(
     ) %
       601) -
     300;
-  return base + regional;
+  return starterCityTerracedHeightMm(input, sample, base + regional);
 }
 
 function biomeAt(
@@ -311,7 +377,7 @@ export function generateDeterministicTerrainChunk(
       x,
       z,
       heightMm,
-      material: surfaceFor(biome, water),
+      material: starterCityPavingAt(input, sample) ? "ruin_path" : surfaceFor(biome, water),
       biome,
       water,
       slopeBps: slopeBps(delta),
