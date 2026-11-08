@@ -1,20 +1,60 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { worldAssetCatalog, worldAssetRegion, worldAssetRegionSchema, worldAssetsForChunk, worldAssetLod, legacyWorldAssetRegion, legacyWorldAssetRegionSchema } from "../shared/worldAssetProtocol";
+import { intersectsStarterCityWallClearance, worldAssetCatalog, worldAssetRegion, worldAssetRegionSchema, worldAssetsForChunk, worldAssetLod, legacyWorldAssetRegion, legacyWorldAssetRegionSchema } from "../shared/worldAssetProtocol";
 import { WORLD_CHUNK_COORDINATE_LIMIT } from "../shared/worldChunkProtocol";
+
+/** Historical deterministic candidate stream, intentionally kept as a test-only reference.
+ * The source generator must retain all far-world allocations; only city-adjacent
+ * projection admission may change. Never expose this ungated stream at runtime.
+ */
+function historicalCandidates(seed: string, coordinate: { x: number; z: number }) {
+  const mod = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;
+  let hash = 2166136261;
+  for (const c of seed) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+  const { x, z } = coordinate;
+  const settlement = mod(x, 6) < 2 && mod(z, 6) < 2;
+  const city = worldAssetCatalog.assets.filter(a => a.family === "city");
+  const nature = worldAssetCatalog.assets.filter(a => a.family === "nature");
+  const models = settlement ? city : nature;
+  const start = mod(x * 31 + z * 17 + (hash >>> 0), models.length);
+  const result: { id: string; assetId: string; xMm: number; zMm: number; rotation: number }[] = [];
+  let slot = 0;
+  for (const dz of [-24, -8, 8, 24]) for (const dx of [-24, -8, 8, 24]) {
+    if (Math.abs(dx) === 8 && Math.abs(dz) === 8) continue;
+    let asset = models[(start + slot) % models.length]!;
+    const anchors = models.filter(a => a.category === (settlement ? "building" : "tree"));
+    if ((slot === 0 || slot === 6) && anchors.length) asset = anchors[mod(start + slot, anchors.length)]!;
+    result.push({ id: `aurion-world-assets.v1:${x}:${z}:${slot}`, assetId: asset.id,
+      xMm: x * 64_000 + dx * 1000, zMm: z * 64_000 + dz * 1000, rotation: mod(start + slot, 4) });
+    slot++;
+  }
+  return result;
+}
 
 describe("worldwide optimized GLB selection",()=>{
  it("limits the fixed village to origin and preserves the pre-village outer-world asset pipeline",()=>{
   const coordinates=[{x:-1,z:-1},{x:0,z:-1},{x:1,z:-1},{x:-1,z:0},{x:1,z:0},{x:-1,z:1},{x:0,z:1},{x:1,z:1},{x:6,z:0},{x:-93,z:48},{x:1_000_000,z:-1_000_000}];
   const seeds=["echoes-of-aurion-v1","seed-a","seed-b"];
-  const plans=seeds.flatMap(seed=>coordinates.map(coordinate=>worldAssetsForChunk(seed,coordinate)));
-  // Independently captured from shared/worldAssetProtocol.ts at main 909ba47d,
-  // before the starter contract. Includes IDs, asset selection, positions and rotations.
-  expect(createHash("sha256").update(JSON.stringify(plans)).digest("hex"))
-   .toBe("2bc0d9734648dd28f485b450d5bec805aecf84d2978e866dd2bd685ae53c5f0d");
+  const historical=seeds.flatMap(seed=>coordinates.map(coordinate=>historicalCandidates(seed,coordinate)));
+  // Preserve the exact pre-starter external allocation stream as a historical
+  // independent baseline, including stable IDs and rotation: NEVER change its SHA
+  // to hide a regression in far-world geometry.
+  expect(createHash("sha256").update(JSON.stringify(historical)).digest("hex"))
+    .toBe("2bc0d9734648dd28f485b450d5bec805aecf84d2978e866dd2bd685ae53c5f0d");
   for(const coordinate of coordinates){
-   expect(worldAssetsForChunk("seed-a",coordinate)).not.toEqual(worldAssetsForChunk("seed-b",coordinate));
-   expect(worldAssetsForChunk("seed-a",coordinate)).toEqual(worldAssetsForChunk("seed-a",coordinate));
+    for(const seed of seeds) {
+      const original = historicalCandidates(seed,coordinate);
+      const current = worldAssetsForChunk(seed,coordinate);
+      expect(current).toEqual(original.filter(item => {
+        const asset = worldAssetCatalog.assets.find(a => a.id === item.assetId)!;
+        return !intersectsStarterCityWallClearance(asset,item);
+      }));
+      expect(current.every(item => original.some(o => JSON.stringify(o) === JSON.stringify(item)))).toBe(true);
+    }
+    expect(worldAssetsForChunk("seed-a",coordinate)).toEqual(worldAssetsForChunk("seed-a",coordinate));
+    // Far-world seed-dependent selection is unchanged; local city exclusion may be empty.
+    if(Math.abs(coordinate.x)>2 || Math.abs(coordinate.z)>2)
+      expect(worldAssetsForChunk("seed-a",coordinate)).not.toEqual(worldAssetsForChunk("seed-b",coordinate));
   }
   expect(worldAssetsForChunk("seed-a",{x:0,z:0})).toEqual(worldAssetsForChunk("seed-b",{x:0,z:0}));
  });
