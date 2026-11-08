@@ -24,7 +24,7 @@ BLOBS = {
 }
 
 def gitblob(b):
-    return hashlib.sha1(b"blob " + str(len(b)).encode() + b"\\0" + b).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(b)).encode() + b"\0" + b).hexdigest()
 
 def install(project):
     project = project.resolve(strict=True)
@@ -44,10 +44,10 @@ def install(project):
     if marker in settings or "McpRuntime=" in settings:
         raise ValueError("plugin already configured")
     if "[editor_plugins]" not in settings:
-        settings += '\\n[editor_plugins]\\nenabled=PackedStringArray("' + marker + '")\\n'
+        settings += '\n[editor_plugins]\nenabled=PackedStringArray("' + marker + '")\n'
     else:
         import re
-        match = re.search(r'^enabled=PackedStringArray\\(([^\\n]*)\\)$', settings, re.M)
+        match = re.search(r'^enabled=PackedStringArray\(([^\n]*)\)$', settings, re.M)
         if not match:
             raise ValueError("ambiguous editor plugin list")
         new = match.group(1)
