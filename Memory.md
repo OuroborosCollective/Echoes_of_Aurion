@@ -5930,3 +5930,14 @@ Evidence: Real RED overlap CI run 42488012488/job 128754036018; intermediate fal
 Learned: A visual-only exclusion must not delete nature colliders because Aurion movement authority uses their real positions; also browser readback acceptance must track the server-approved removal rather than retain a contradictory legacy fixed count.
 Open: Complete new exact-head CI and all review threads; separate world geometry/collision, Fadenwerk quest activation, and live design receipts remain outside this narrow fix.
 Next safe step: Verify new exact SHA, full jobs and review; merge only when all required checks pass and no unresolved threads remain. Never call a GitHub CI success a production world apply.
+
+### 2026-11-08 — Aurion cross-authoring AI toolchain (PR #1349)
+Status: PARTIAL — draft PR, final exact-head CI and release readback pending.
+Task: Reuse Fadenwerk, canonical quest validation, NPC Behavior Forge and authenticated live Godot World Designer behind a strict Cookbook-inspired preview-only tool contract.
+Decisions: Admin-only tRPC and read-only MCP discovery/preview, native Godot transport only; allowlisted schemas; NPC shadow-only; world proposal keeps live-zone, catalog/world revision and independent post-model checks; all publish/apply paths remain separate Aurion plan/confirmation/receipt/readback. Server authority and 100-ms tick unchanged.
+Touched surfaces: server/aiFabric/authoringToolchain.ts/.test.ts; server/routes/aurionAuthoringRouter.ts; server/adminMcp.ts/.test.ts; godot-client/net/api/world_authoring_api.gd; docs/aurion/AI_AUTHORING_TOOLCHAIN_V1.md; this entry.
+Evidence: Base main 21feb64bc170f4dcd5c4964f427db42d82aaa002; PR https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1349 ; test-first commit a9ff4107c7ec8d2586670a2d538ae0b42a550873 (RED not independently executed); first candidate d1af2734617d05d04cf3a9a822716f48d5c610b1: MCP run 42526130551 attempt 1 failed four exact capability-list expectations, world-authoring MariaDB run 42526130536 attempt 1 failed a world precondition test using invalid zone; real CI logs read. Narrow fixes d08c3a51c29234a48e55f31da56ea7b442af3427 and 42b7854d4dc76f7a5ee076eb7c3a023262456fc5; all later green checks unverified until exact final PR SHA readback.
+Learned: New read-only MCP tools must be included in existing full capability allowlist assertions; a negative live-zone test must use the canonical zoneId observatory_threshold, otherwise it only proves schema refusal.
+Open: Exact-head CI/TypeScript/Vitest/Godot and all review threads; real production Auth/MariaDB/receipt/runtime and Android observations; native UI workflow and actual NPC controller activation separate. No merge/deployment.
+Next safe step: Re-read exact PR head, inspect current GitHub Actions runs and review comments; repair causal regressions, run independent evidence, then merge only after release gates and verified readback.
+
