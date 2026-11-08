@@ -4,7 +4,7 @@ extends RefCounted
 ## Findings are a read-only presentation recipe, not an Aurion server receipt.
 const VERSION := "aurion.godot.visual-recipe.v1"
 const MAX_MESH_INSTANCES := 256
-const MAX_SURFACES := 512
+const MAX_SURFACES := 1024
 const MAX_COORDINATE_METERS := 1000000.0
 const CHANNEL_ORDER := ["baseColor", "normal", "metallic", "roughness", "occlusion", "emission"]
 
