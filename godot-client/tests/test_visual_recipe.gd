@@ -9,6 +9,22 @@ func require(condition: bool, reason: String) -> void:
     if not condition:
         failures.append(reason)
 
+
+## In-memory render-surface fixtures, never production-world or GLB receipts.
+func many_surface_model(instances: int, surfaces_per_instance: int) -> Node3D:
+    var arrays: Array = []
+    arrays.resize(Mesh.ARRAY_MAX)
+    arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP])
+    var geometry := ArrayMesh.new()
+    for surface_index in range(surfaces_per_instance):
+        geometry.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+    var root := Node3D.new()
+    for instance_index in range(instances):
+        var display := MeshInstance3D.new()
+        display.mesh = geometry
+        root.add_child(display)
+    return root
+
 func _init() -> void:
     call_deferred("verify")
 
@@ -68,6 +84,17 @@ func verify() -> void:
     var warning: Dictionary = VisualRecipe.inspect(untextured, SHA)
     require(warning.get("status") == "ready" and warning.materials.missingUv0Surfaces == 1, "textured surface without UV0 was not reported")
     untextured.free()
+    var within_existing_budget := many_surface_model(171, 3)
+    var accepted: Dictionary = VisualRecipe.inspect(within_existing_budget, SHA)
+    require(accepted.get("status") == "ready" and accepted.get("geometry", {}).get("surfaces") == 513, "513 approved surfaces within existing projection budget were rejected")
+    within_existing_budget.free()
+    var at_existing_budget := many_surface_model(256, 4)
+    var at_limit: Dictionary = VisualRecipe.inspect(at_existing_budget, SHA)
+    require(at_limit.get("status") == "ready" and at_limit.get("geometry", {}).get("surfaces") == 1024, "1024 approved surfaces at existing projection budget were rejected")
+    at_existing_budget.free()
+    var above_budget := many_surface_model(205, 5)
+    require(VisualRecipe.inspect(above_budget, SHA).get("reason") == "surface_budget_exceeded", "1025 surfaces bypassed existing projection budget")
+    above_budget.free()
     finish()
 
 func finish() -> void:
