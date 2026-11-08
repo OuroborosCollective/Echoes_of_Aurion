@@ -462,13 +462,17 @@ export function buildVisualGeometryCagProbe(input: AurionVisualGeometryBoundsMm)
       throw new Error("visual geometry millimeter bounds invalid");
     }
   }
-  const extents = max.map((value, axis) => value - min[axis]!) as [number, number, number];
-  if (extents.every(value => value === 0)) throw new Error("visual geometry is empty");
-  const coordinates = "p={{" + min.join(",") + "},{" + max.join(",") + "}}";
+  const extents: [number, number, number] = [
+    max[0]! - min[0]!,
+    max[1]! - min[1]!,
+    max[2]! - min[2]!
+  ];
+  if (extents[0] === 0 && extents[1] === 0 && extents[2] === 0) throw new Error("visual geometry is empty");
+  const coordinates = `p={{${min[0]},${min[1]},${min[2]}},{${max[0]},${max[1]},${max[2]}}}`;
   return Object.freeze({
     kind: "visual_geometry",
     code: coordinates + ";mn=Min/@Transpose[p];mx=Max/@Transpose[p];Join[mn,mx,mx-mn]",
-    expectedExact: "{" + [...min, ...max, ...extents].join(",") + "}",
+    expectedExact: `{${min[0]},${min[1]},${min[2]},${max[0]},${max[1]},${max[2]},${extents[0]},${extents[1]},${extents[2]}}`,
     truthNotice: "CAG independently checks bounded observed GLB mesh dimensions; server-owned collision, game behavior and world revisions are never changed.",
   });
 }
