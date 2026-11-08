@@ -5951,3 +5951,9 @@ Learned: Separate native editor panels need a shared allowlisted dispatch, a ses
 Open: Exact-head Godot/TypeScript/CI, reviews, independent live authenticated UI/DB/receipt readback and rollout; NPC canonical admission still blocked by missing authoritative tick/seed/chunk and controller-release evidence.
 Next safe step: Check latest exact SHA runs and review threads; fix causal failures and do not merge or deploy until required gates are proven.
 
+### 2026-11-08 — PR #1349 WorldStudio Headless and asset UID regression
+Status: PARTIAL — exact post-fix CI and live receipt readback pending.
+Change: Fail-closed inspector rendering for incomplete/foreign zone projections; add negative + positive headless regression; commit stable Godot script UID for the new UI test. No server gameplay authority/tick/DB changes.
+Finding: PR head 90dc6ac6a637710f65d0c49c71d18acae2ac3c36 Godot headless run 42528127154 failed because an incomplete inspection test fixture lacked tick; 3D audit run 42528127015 failed because the newly added .gd had a generated but untracked .gd.uid. Correct both source ownership problems, not CI assertions.
+Evidence: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1349 ; https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/42528127154 ; https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/42528127015 . Corrective commits 6416a1676ac0feaafcdcf279653bef457da04b90, 15da0be5c24ad211e76f8c5ace52379dfb4799bd, af26fd140cfecf4afc414de9bfe12483f4f0e9e3; resulting exact-head CI started but not yet completed.
+Next: Read post-fix 23/23 exact-head CI and reviews; fix remaining causal failures; only then merge and independently verify main. Production editor, DB, 3D and NPC admission remain UNVERIFIED pending separate live evidence.
