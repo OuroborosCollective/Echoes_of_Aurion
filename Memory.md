@@ -5888,3 +5888,14 @@ Change: Production activates `observatory_threshold` after verified MariaDB head
 DB load: active zones are never unloaded (only probe zones return to dormant), so today the zone already ticks at 10 Hz with persisted receipts from the first join until restart; always-on only removes the window between restart and first join — no new steady-state load class.
 Evidence: sync node tests 12/12 (four new, each RED without its fix; symlink launch verified on the VPS as aurion-deploy, root refused); zone tests incl. zoneAlwaysOn 4/4 (RED with activation removed); full vitest 541 files green, tsc clean, workflow-impact 6/6. Isolated readback on the VPS (not the live workspace): sync as aurion-deploy against the public catalog 62cdc30e… → 150/150 physical GLBs, second run 150 reused/0 downloaded, files owned by aurion-deploy, no temp files; Godot 4.7.2 headless `--import` → 150 `.import` + 150 imported scenes, 0 errors, exit 0 (5 min 18 s).
 Open: after release, read back `/healthz.alwaysOnWorld` = active, advancing durable receipts with zero players, timer active and first `catalog-manifest.json` in the live editor project; editor FileSystem/viewport visually unverified.
+
+
+### 2026-11-08 — PR #1336 GLB visual recipe and deterministic bounds
+Status: PARTIAL — PR branch; exact-head CI and merge readback required.
+Task: Validate decoded Godot GLB geometry/material channels and bounded Wolfram AABB probe without assigning gameplay or collision authority.
+Decisions: Godot recipes stay session-bound, defensive-copy and presentation-only; Aurion alone owns world/physics. Resolve missing GDScript dependency with explicit VisualRecipe preload, preserving existing render and memory budgets.
+Touched surfaces: godot-client/world/visual_recipe.gd, world_design_projection.gd, Godot native tests/check runner, shared CAG protocol and Vitest oracle tests.
+Evidence: PR https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1336 ; original head 1923dc71030231368d369990e391dbbcc066f077 Godot headless run 42435786157 attempt 1 FAIL with undeclared VisualRecipe; minimal preload fix commit 67880752cffc20a384dff569e836a74df9e38ffb, independently read back. Wolfram kernel verified observed test AABB vector {-398,0,-283,397,2020,277,795,2020,560}; static mathematical check, not native/production evidence.
+Learned: GDScript must explicitly preload the inspector before calling VisualRecipe.inspect; a new importer dependency can break every dependent Godot script even with independent unit tests.
+Open: Re-run and verify all required Godot/Android/CI jobs, follow-up review and merge at final Memory-head; isolated tests and production world/device evidence remain separate.
+Next safe step: Assess final PR head review threads and exact-head CI, merge only when gates are genuinely green; independently read back PR merged and main SHA. No production/VPS modification.
