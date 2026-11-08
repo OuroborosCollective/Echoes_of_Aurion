@@ -66,7 +66,7 @@ describe("Aurion AI authoring toolchain", () => {
     await expect(caller().aiToolPreview({ tool: "world.design.apply" } as never)).rejects.toThrow();
     await expect(caller().aiToolPreview({ tool: "fadenwerk.inspect", sourceJson: "界".repeat(50000) })).rejects.toThrow("FADENWERK_SOURCE_TOO_LARGE");
     const world = { tool: "world.design.propose" as const, input: {
-      request: "Place only approved models in the selected live chunk.", zoneId: "windhollow",
+      request: "Place only approved models in the selected live chunk.", zoneId: "observatory_threshold",
       connectionId: "zone_peer_not_connected", chunkX: 0, chunkZ: 0, assetIds: [],
     } };
     await expect(caller().aiToolPreview(world)).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: "AI_LIVE_SESSION_REQUIRED" });
