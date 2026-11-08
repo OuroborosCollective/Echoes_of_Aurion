@@ -47,12 +47,12 @@ describe("worldwide optimized GLB selection",()=>{
       const current = worldAssetsForChunk(seed,coordinate);
       expect(current).toEqual(original.filter(item => {
         const asset = worldAssetCatalog.assets.find(a => a.id === item.assetId)!;
-        return !intersectsStarterCityWallClearance(asset,item);
+        return asset.family !== "city" || !intersectsStarterCityWallClearance(asset,item);
       }));
       expect(current.every(item => original.some(o => JSON.stringify(o) === JSON.stringify(item)))).toBe(true);
     }
     expect(worldAssetsForChunk("seed-a",coordinate)).toEqual(worldAssetsForChunk("seed-a",coordinate));
-    // Far-world seed-dependent selection is unchanged; local city exclusion may be empty.
+    // Far-world seed-dependent selection is unchanged; origin-adjacent city exclusion may be empty.
     if(Math.abs(coordinate.x)>2 || Math.abs(coordinate.z)>2)
       expect(worldAssetsForChunk("seed-a",coordinate)).not.toEqual(worldAssetsForChunk("seed-b",coordinate));
   }
