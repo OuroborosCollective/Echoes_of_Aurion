@@ -169,6 +169,9 @@ async function startServer(){
   // Production can subsequently activate the verified head with zero players.
   // The existing 100 ms authoritative zone timer then produces real receipts.
   await zoneGateway.releaseOrphanedLeasesAtBoot();
+  // A shutdown that began while leases were released owns the drain: start nothing
+  // (activation would throw on the closing gateway and exit before the drain finishes).
+  if (shuttingDown) return;
   if (databaseConnected && process.env.NODE_ENV === "production" && process.env.AURION_ALWAYS_ON_WORLD_ENABLED === "1") {
     void zoneGateway.activatePersistentZonesAtBoot(["observatory_threshold"]);
   } else {

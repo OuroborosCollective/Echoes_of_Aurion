@@ -133,3 +133,20 @@ test('TDD: the command-line mirror refuses to run as root', {skip: !asRoot && 'n
  catch(error){ stderr=String(error.stderr); }
  assert.match(stderr,/CATALOG_ROOT_FORBIDDEN/);
 });
+
+// Review (CodeRabbit on 8dda2584): systemd launches the script through the `current`
+// release symlink; main() must still run (it used to exit 0 silently).
+test('TDD: the command-line mirror runs when launched through a release symlink', async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'aurion-glb-release-'));
+ try {
+  await mkdir(join(dir,'releases','abc'),{recursive:true});
+  await writeFile(join(dir,'releases','abc','sync-approved-glbs.mjs'),await readFile(new URL('./sync-approved-glbs.mjs', import.meta.url)));
+  await symlink(join(dir,'releases','abc'),join(dir,'current'));
+  let stderr='',status=0;
+  try { execFileSync(process.execPath,[join(dir,'current','sync-approved-glbs.mjs')],{stdio:['ignore','pipe','pipe']}); }
+  catch(error){ stderr=String(error.stderr); status=error.status; }
+  // Without arguments main() rejects the usage (or root): it ran and failed closed.
+  assert.equal(status,1);
+  assert.match(stderr,/CATALOG_(USAGE_INVALID|ROOT_FORBIDDEN)/);
+ } finally { await rm(dir,{recursive:true,force:true}); }
+});

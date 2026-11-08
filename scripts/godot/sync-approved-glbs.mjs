@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { constants } from 'node:fs';
+import { constants, realpathSync } from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, realpath, rename, statfs, unlink } from 'node:fs/promises';
 import { basename, join, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -205,7 +205,13 @@ async function main() {
   process.stdout.write(JSON.stringify({ schema: report.schema, catalogRevision: report.catalogRevision, physicalCount: report.physicalCount, downloaded: report.downloaded, reused: report.reused }) + '\n');
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+// systemd starts the script through the `current` release symlink; Node resolves the
+// module URL to its real path but not argv[1], so compare real paths (review: CodeRabbit).
+const invokedDirectly = (() => {
+  try { return !!process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href; }
+  catch { return false; }
+})();
+if (invokedDirectly) {
   main().catch(error => {
     const code = error instanceof Error && /^CATALOG_[A-Z0-9_]+$/.test(error.message) ? error.message : 'CATALOG_SYNC_FAILED';
     process.stderr.write(code + '\n');
