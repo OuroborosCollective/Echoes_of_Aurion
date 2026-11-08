@@ -53,7 +53,7 @@ export function cagOracleXpForNextLevelExact(levelExact: string): string {
 }
 
 export type AurionCagProbe = Readonly<{
-  kind: "progression" | "terrain_invariants" | "model_scale" | "terrain_texturization" | "terrain_continuity";
+  kind: "progression" | "terrain_invariants" | "model_scale" | "terrain_texturization" | "terrain_continuity" | "visual_geometry";
   code: string;
   expectedExact: string;
   truthNotice: string;
@@ -437,4 +437,38 @@ export function buildWorldAssetScaleCagProbe(category: string, bounds: ModelBoun
   const target = WORLD_ASSET_TARGET_MAX_EXTENT[category];
   if (target === undefined) throw new Error(`unsupported world asset category: ${category}`);
   return buildModelScaleCagProbe(bounds, target);
+}
+
+/**
+ * Editor/projection-only mesh bounds observed from a decoded approved GLB,
+ * quantized to millimeters. A CAG result cannot authorize collisions, behavior
+ * or a World Studio publish. Inputs MUST NOT be treated as a server receipt.
+ */
+export type AurionVisualGeometryBoundsMm = Readonly<{
+  minMm: readonly [number, number, number];
+  maxMm: readonly [number, number, number];
+}>;
+
+export function buildVisualGeometryCagProbe(input: AurionVisualGeometryBoundsMm): AurionCagProbe {
+  const min = input?.minMm;
+  const max = input?.maxMm;
+  if (!Array.isArray(min) || !Array.isArray(max) || min.length !== 3 || max.length !== 3) {
+    throw new Error("visual geometry must have exactly three axes");
+  }
+  for (let axis = 0; axis < 3; axis += 1) {
+    if (!Number.isSafeInteger(min[axis]) || !Number.isSafeInteger(max[axis]) ||
+        Math.abs(min[axis]!) > 1_000_000_000 || Math.abs(max[axis]!) > 1_000_000_000 ||
+        min[axis]! > max[axis]!) {
+      throw new Error("visual geometry millimeter bounds invalid");
+    }
+  }
+  const extents = max.map((value, axis) => value - min[axis]!) as [number, number, number];
+  if (extents.every(value => value === 0)) throw new Error("visual geometry is empty");
+  const coordinates = "p={{" + min.join(",") + "},{" + max.join(",") + "}}";
+  return Object.freeze({
+    kind: "visual_geometry",
+    code: coordinates + ";mn=Min/@Transpose[p];mx=Max/@Transpose[p];Join[mn,mx,mx-mn]",
+    expectedExact: "{" + [...min, ...max, ...extents].join(",") + "}",
+    truthNotice: "CAG independently checks bounded observed GLB mesh dimensions; server-owned collision, game behavior and world revisions are never changed.",
+  });
 }

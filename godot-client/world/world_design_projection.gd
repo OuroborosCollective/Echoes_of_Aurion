@@ -3,6 +3,7 @@ extends Node3D
 ## the response and chunk readbacks to the active authenticated zone session.
 ## This node creates no collisions, actions, scripts, or authoritative state.
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
+const VisualRecipe = preload("res://world/visual_recipe.gd")
 const MAX_VISUALS := 36
 const MAX_ASSET_BYTES := 48 * 1024 * 1024
 const MAX_JSON_BYTES := 4 * 1024 * 1024
@@ -305,6 +306,15 @@ func needed_assets() -> Array:
 			result.append(_assets[item.sha256].duplicate(true))
 	return result
 
+## A session-scoped, defensive copy for the native World Studio inspector.
+## Geometry and material observations never grant collision/gameplay rights.
+func visual_recipe(sha: String, connection_id: String) -> Dictionary:
+	if connection_id.is_empty() or connection_id != _connection or not _assets.has(sha) or not _models.has(sha):
+		return {}
+	var costs: Dictionary = _model_costs.get(sha, {})
+	var recipe: Variant = costs.get("visualRecipe")
+	return recipe.duplicate(true) if typeof(recipe) == TYPE_DICTIONARY else {}
+
 func try_next_asset(sha: String, connection_id: String) -> bool:
 	if connection_id != _connection or _connection.is_empty():
 		return false
@@ -357,13 +367,17 @@ func supply_asset(sha: String, bytes: PackedByteArray, connection_id: String) ->
 	if model.find_children("*", "MeshInstance3D", true, false).is_empty() or not model.find_children("*", "Skeleton3D", true, false).is_empty() or not model.find_children("*", "CollisionObject3D", true, false).is_empty():
 		model.free()
 		return false
+	var recipe: Dictionary = VisualRecipe.inspect(model, sha)
+	if recipe.get("status") != "ready":
+		model.free()
+		return false
 	var packed := PackedScene.new()
 	var result := packed.pack(model)
 	model.free()
 	if result != OK:
 		return false
 	_models[sha] = packed
-	_model_costs[sha] = {"pixels":costs.pixels,"vertices":costs.vertices,"materials":costs.materials,"triangles":costs.triangles,"instances":costs.instances,"surfaces":costs.surfaces,"bytes":bytes.size()}
+	_model_costs[sha] = {"pixels":costs.pixels,"vertices":costs.vertices,"materials":costs.materials,"triangles":costs.triangles,"instances":costs.instances,"surfaces":costs.surfaces,"bytes":bytes.size(),"visualRecipe":recipe}
 	_refresh()
 	return true
 
@@ -769,6 +783,12 @@ func _refresh() -> void:
 		holder.set_meta("aurion_design_key", item.designKey)
 		holder.set_meta("aurion_placement_key", item.placementKey)
 		holder.set_meta("aurion_asset_sha256", item.sha256)
+		# Draft previews deliberately have no confirmed world or catalog revision.
+		if _hex(_design.get("revision"), 64) and _hex(_catalog.get("revision"), 64):
+			holder.set_meta("aurion_world_design_revision", _design.revision)
+			holder.set_meta("aurion_catalog_revision", _catalog.revision)
+		# GLB-import observations are presentation metadata, never an action receipt.
+		holder.set_meta("aurion_visual_recipe", cost.visualRecipe.duplicate(true))
 		holder.position = Vector3(float(item.chunk.x * CHUNK_MM + item.xMm - HALF_CHUNK_MM) / 1000.0,
 			_placement_height(item), float(item.chunk.y * CHUNK_MM + item.zMm - HALF_CHUNK_MM) / 1000.0)
 		holder.rotation.y = float(item.rotation) * PI / 2.0

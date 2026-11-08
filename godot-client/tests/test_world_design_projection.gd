@@ -147,6 +147,7 @@ func verify() -> void:
 		require(is_equal_approx(holder.rotation.y, PI / 2.0), "server quarter-turn was not projected")
 		require(not holder.find_children("*", "MeshInstance3D", true, false).is_empty(), "approved GLB has no visible mesh")
 		require(holder.find_children("*", "CollisionObject3D", true, false).is_empty(), "visual projection created gameplay collision")
+		require(holder.get_meta("aurion_world_design_revision", "") == "c".repeat(64) and holder.get_meta("aurion_catalog_revision", "") == "a".repeat(64), "confirmed world/catalog revision metadata lost or changed")
 	var empty := design()
 	empty.designs.clear()
 	require(projection.bind_confirmed(empty, catalog(), SESSION), "valid empty readback rejected")
