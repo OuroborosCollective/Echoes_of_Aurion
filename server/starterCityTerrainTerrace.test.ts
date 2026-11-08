@@ -53,7 +53,7 @@ describe("Issue #659: opt-in origin city terrace and server-owned paving", () =>
     }
     const far = generateDeterministicTerrainChunk(input(3, 3));
     expect(far.tiles.some(tile => tile.heightMm !== 0)).toBe(true);
-    expect(far.tiles.some(tile => tile.material === "ruin_path")).toBe(false);
+    expect(far.tiles.every(tile => tile.material === (tile.water ? "water" : tile.biome === "forest" ? "forest_floor" : tile.biome === "riverland" ? "riverbank" : tile.biome === "ashland" ? "ash" : tile.biome === "highland" ? "stone" : tile.biome === "ruins" ? "ruin_path" : "grass"))).toBe(true);
   });
 
   it("replays both a terrain hash and a sample topology identically", () => {
