@@ -1,0 +1,28 @@
+name: Aurion Godot MCP Bridge editor isolation
+on:
+  pull_request:
+    paths:
+      - 'tools/godot-mcp-bridge/**'
+      - 'scripts/godot/*editor_mcp_bridge.py'
+      - '.github/workflows/godot-mcp-editor-bridge.yml'
+      - 'godot-client/project.godot'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-godot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Boot verified Godot 4.7.2 toolchain
+        run: |
+          node scripts/godot/bootstrap.mjs
+          node scripts/godot/doctor.mjs
+      - name: Source isolation regressions
+        run: python3 -m unittest discover -s scripts/godot -p 'test_editor_mcp_bridge.py' -v
+      - name: Real editor TCP smoke and read-only negative case
+        run: python3 scripts/godot/smoke_editor_mcp_bridge.py --godot .aurion-godot/editor/Godot_v4.7.2-stable_linux.x86_64
