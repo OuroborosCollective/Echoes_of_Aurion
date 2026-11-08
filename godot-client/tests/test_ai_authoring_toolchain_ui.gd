@@ -71,6 +71,9 @@ func verify() -> void:
 	editor._faden_source.text = source
 	check(editor.inspect_fadenwerk(), "Fadenwerk inspection did not start")
 	check(recorder.sent.back().kind == "aiToolPreview" and recorder.sent.back().payload.tool == "fadenwerk.inspect", "Fadenwerk failed typed dispatch")
+	studio._completed("aiToolPreview", envelope("npc.behavior.draft", {"status":"DRAFT","artifact":{}}), SESSION, 7)
+	check(editor._faden_pending.is_empty() and editor._faden_choice.item_count == 0, "mismatched model tool reply was accepted or blocked future imports")
+	check(editor.inspect_fadenwerk(), "Fadenwerk inspection could not retry after rejected mismatched tool")
 	studio._completed("aiToolPreview", envelope("fadenwerk.inspect", {"previewOnly":true,"sourceHash":source.sha256_text(),"questlines":[{"id":"test_strand","title":"Test Strand","issues":[]}]}), SESSION, 7)
 	check(editor._faden_choice.item_count == 1, "typed Fadenwerk inspection did not reach quest editor")
 	check(editor.import_fadenwerk(), "Fadenwerk draft did not start")
