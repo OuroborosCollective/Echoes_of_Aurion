@@ -105,8 +105,16 @@ func verify() -> void:
 	studio._completed("aiToolPreview", envelope("world.design.propose", {"status":"AI_DRAFT","requiresHumanReview":true,"draftJson":"{}"}), SESSION, 7)
 	check(studio._draft.text != original and studio._draft.text.contains("not"), "stale or invalid AI world proposal replaced current editor draft")
 
+	# A truncated/non-canonical zone projection must never render as confirmed.
 	check(studio.show_section("inspector"), "confirmed world inspection page not reachable")
 	check(studio._inspection_panel.visible, "inspection panel not shown by navigation")
+	check(studio._inspection_status.text.contains("UNVERIFIED"), "incomplete zone fixture was presented as confirmed world")
+	studio._inspection = {"schemaVersion":"aurion.inspection.v1", "connectionId":SESSION,
+		"zoneId":"observatory_threshold", "tick":1, "snapshotSeq":1, "stale":false,
+		"totalEntities":0, "truncated":false, "entities":[]}
+	studio._render_inspector()
+	check(studio._inspection_status.text.contains("Zone observatory_threshold") and studio._inspection_status.text.contains("Tick 1"),
+		"well-formed confirmed projection could not render independently")
 	studio.close_session()
 	check(not studio._tools_ready and studio._pending_tool.is_empty(), "tools survived logout")
 	check(not studio.show_section("tools"), "closed session could request tool catalog")
