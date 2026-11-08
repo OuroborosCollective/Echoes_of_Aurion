@@ -319,6 +319,15 @@ func _render_inspector() -> void:
 	if _inspection.is_empty():
 		_inspection_status.text = "Keine bestätigte Zonenprojektion für diese Sitzung."
 		return
+	# Never render partial or incorrectly shaped inspection data as confirmed.
+	# Session identity and numerical sequence are required; a missing value
+	# cannot become a fabricated tick or an authoritative readback.
+	if _inspection.get("schemaVersion") != "aurion.inspection.v1" or _inspection.get("connectionId") != _connection or typeof(_inspection.get("zoneId")) != TYPE_STRING or _inspection.get("zoneId") != "observatory_threshold" or typeof(_inspection.get("tick")) != TYPE_INT or int(_inspection.tick) < 0 or typeof(_inspection.get("snapshotSeq")) != TYPE_INT or int(_inspection.snapshotSeq) < 0 or typeof(_inspection.get("stale")) != TYPE_BOOL or typeof(_inspection.get("totalEntities")) != TYPE_INT or int(_inspection.totalEntities) < 0 or typeof(_inspection.get("truncated")) != TYPE_BOOL or typeof(_inspection.get("entities")) != TYPE_ARRAY:
+		_inspection_status.text = "UNVERIFIED · Unvollständige oder sitzungsfremde Zonenprojektion; keine bestätigte Weltanzeige."
+		_inspection_list.clear()
+		_inspection_properties.text = ""
+		_inspection_rows.clear()
+		return
 	_inspection_status.text = "Zone %s · Tick %d · Seq %d · %s\n%d Entitäten%s · nur lesend\nServerrevision / Receipt / State-Hash: im Zonenprotokoll nicht enthalten; Kausalbeweis offen." % [
 		_inspection.zoneId, _inspection.tick, _inspection.snapshotSeq,
 		"VERALTET" if _inspection.stale else "bestätigte Projektion", _inspection.totalEntities,
