@@ -3,6 +3,7 @@ extends Node3D
 ## the response and chunk readbacks to the active authenticated zone session.
 ## This node creates no collisions, actions, scripts, or authoritative state.
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
+const VisualRecipe = preload("res://world/visual_recipe.gd")
 const MAX_VISUALS := 36
 const MAX_ASSET_BYTES := 48 * 1024 * 1024
 const MAX_JSON_BYTES := 4 * 1024 * 1024
