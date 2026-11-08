@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, writeFile, symlink, rm, chown } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { synchronizeApprovedGlbs, approvedPhysicalAssets, sha256 } from './sync-approved-glbs.mjs';
+import { synchronizeApprovedGlbs, approvedPhysicalAssets, sha256, atomicWrite } from './sync-approved-glbs.mjs';
 
 const base = 'https://arelogic.space';
 const makeGlb = text => {
@@ -104,4 +106,30 @@ test('TDD: requires the server-approved catalog and refuses unvalidated inventor
  const e=entryFor(makeGlb('version'));
  assert.throws(()=>approvedPhysicalAssets({...catalogFor(e),version:'custom.catalog.v1'}),/CATALOG_VERSION_INVALID/);
  assert.throws(()=>approvedPhysicalAssets({...catalogFor(e),revision:'not-a-hash'}),/CATALOG_REVISION_INVALID/);
+});
+
+// Review (Devin on 8dda2584): a failed write must not leave its temporary file behind.
+test('TDD: a failed atomic write removes its temporary file', async()=>project(async root=>{
+ const target=join(root,'assets','manifest.json');
+ await assert.rejects(atomicWrite(target, 42));
+ assert.deepEqual((await readdir(join(root,'assets'))).filter(name=>name.endsWith('.tmp')),[]);
+}));
+
+// Review (Devin on 8dda2584): the mirror never writes into a project owned by another
+// account, so a workspace user cannot redirect privileged writes through path swaps.
+const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+test('TDD: refuses a project directory owned by another account', {skip: !asRoot && 'needs root to create a foreign-owned directory'}, async()=>project(async root=>{
+ await chown(root, 65534, 65534);
+ const bytes=makeGlb('foreign'),e=entryFor(bytes);const {fetcher,requested}=reader(catalogFor(e),new Map([[e.sha256,bytes]]));
+ await assert.rejects(synchronizeApprovedGlbs({projectDirectory:root,fetcher}),/CATALOG_PROJECT_OWNER_MISMATCH/);
+ assert.deepEqual(requested,[]);
+ assert.ok(!(await readdir(join(root,'assets'))).includes('aurion-catalog-sync'));
+}));
+
+test('TDD: the command-line mirror refuses to run as root', {skip: !asRoot && 'needs root'}, ()=>{
+ const script=fileURLToPath(new URL('./sync-approved-glbs.mjs', import.meta.url));
+ let stderr='';
+ try { execFileSync(process.execPath,[script,'--project','/nonexistent'],{stdio:['ignore','pipe','pipe']}); }
+ catch(error){ stderr=String(error.stderr); }
+ assert.match(stderr,/CATALOG_ROOT_FORBIDDEN/);
 });

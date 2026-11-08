@@ -12,8 +12,9 @@ print(r)
 PY
 )"
 target="$root/releases/$revision"
-install -d -m 0750 "$target"
-install -m 0640 "$source_release/scripts/godot/sync-approved-glbs.mjs" "$target/sync-approved-glbs.mjs"
+# Root-owned and read-only for the service account (aurion-deploy runs it, cannot change it).
+install -d -m 0755 "$root" "$root/releases" "$target"
+install -m 0644 "$source_release/scripts/godot/sync-approved-glbs.mjs" "$target/sync-approved-glbs.mjs"
 install -m 0644 "$source_release/deploy/aurion-glb-catalog-sync.service" /etc/systemd/system/aurion-glb-catalog-sync.service
 install -m 0644 "$source_release/deploy/aurion-glb-catalog-sync.timer" /etc/systemd/system/aurion-glb-catalog-sync.timer
 ln -sfn "$target" "$root/.current-$revision"

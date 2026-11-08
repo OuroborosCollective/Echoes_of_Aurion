@@ -18,7 +18,7 @@ The script is *not* a gameplay authority, GLB approval path, asset assignment or
 
 ### Isolated validation
 
-`node --test scripts/godot/sync-approved-glbs.test.mjs` covers exact copy, deduplication, LOD, corrupted bytes, untrusted URL, revision update, symlink denial and catalog validation. The test creates a temporary real on-disk Godot-shaped project; it does not use a live DB or claim live rendering.
+`node --test scripts/godot/sync-approved-glbs.test.mjs` covers exact copy, deduplication, LOD, corrupted bytes, untrusted URL, revision update, symlink denial, catalog validation, temporary-file cleanup on failed writes, foreign-owned project refusal and root refusal (the last two need root to set up and are skipped otherwise). The test creates a temporary real on-disk Godot-shaped project; it does not use a live DB or claim live rendering.
 
 ### Host installation after approved runtime revision
 
@@ -26,7 +26,7 @@ With a verified immutable release directory containing `manifest.json`, `scripts
 
 `sudo bash deploy/install-aurion-glb-catalog-sync.sh /srv/serverin/releases/<approved-exact-sha>`
 
-The installer pins the script to that release's full SHA, refreshes a managed symlink and enables a **one-minute timer**. Each run derives the active Godot editor project from `serverin-aurion-godot-editor.service`'s `WorkingDirectory`, rather than writing into a stale workspace. It requires only public read endpoints, validates each asset before introducing it to Godot and can be audited via `systemctl status aurion-glb-catalog-sync.service` and the local `catalog-manifest.json`.
+The installer pins the script to that release's full SHA (root-owned, read-only for the service account), refreshes a managed symlink and enables a **one-minute timer**. The service runs as `aurion-deploy`, the account that owns the editor workspace and runs the Godot editor; the script refuses to run as root and refuses a project directory owned by another account, so no privileged write ever happens inside a directory an unprivileged user controls. Each run derives the active Godot editor project from `serverin-aurion-godot-editor.service`'s `WorkingDirectory`, rather than writing into a stale workspace. It requires only public read endpoints, validates each asset before introducing it to Godot and can be audited via `systemctl status aurion-glb-catalog-sync.service` and the local `catalog-manifest.json`.
 
 The separate Godot FileSystem importer scans the newly added GLBs. If a native import or dependency fails, retain the exact hash and error, do not mark it rendered. In production the script must be installed and read back independently; repository CI alone does not install a timer on the VPS. Ensure the release packaging includes the new script and units or use a revision-pinned, manually reviewed installer source.
 

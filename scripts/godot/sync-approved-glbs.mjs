@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readdir, readFile, realpath, rename, statfs } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, readFile, realpath, rename, statfs, unlink } from 'node:fs/promises';
 import { basename, join, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -101,15 +101,20 @@ async function scanExisting(project, managed) {
   return found;
 }
 
-async function atomicWrite(target, bytes) {
+export async function atomicWrite(target, bytes) {
   const temporary = join(resolve(target, '..'), '.' + basename(target) + '.' + process.pid + '.tmp');
   const file = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644);
   try {
-    await file.writeFile(bytes);
-    await file.sync();
-  } finally { await file.close(); }
-  try { await rename(temporary, target); }
-  catch (error) { const { unlink } = await import('node:fs/promises'); await unlink(temporary).catch(() => {}); throw error; }
+    try {
+      await file.writeFile(bytes);
+      await file.sync();
+    } finally { await file.close(); }
+    await rename(temporary, target);
+  } catch (error) {
+    // A failed write, sync or rename never leaves a temporary file behind.
+    await unlink(temporary).catch(() => {});
+    throw error;
+  }
   const directory = await open(resolve(target, '..'), constants.O_RDONLY);
   try { await directory.sync(); } finally { await directory.close(); }
 }
@@ -145,6 +150,9 @@ export async function synchronizeApprovedGlbs({ projectDirectory, fetcher = fetc
   assert.equal(base, BASE, 'CATALOG_SERVER_ORIGIN_LOCKED');
   const project = resolve(projectDirectory);
   await safeDir(project);
+  // Write only into a project owned by the running account: no privilege boundary
+  // is ever crossed, so a workspace user cannot redirect another account's writes.
+  if (typeof process.getuid === 'function') assert.equal((await lstat(project)).uid, process.getuid(), 'CATALOG_PROJECT_OWNER_MISMATCH');
   const projectFile = await lstat(join(project, 'project.godot'));
   assert.ok(projectFile.isFile() && !projectFile.isSymbolicLink(), 'CATALOG_GODOT_PROJECT_REQUIRED');
   const response = await fetcher(BASE + '/api/game/glb-catalog', { redirect: 'error', signal: AbortSignal.timeout(30000), headers: { Accept: 'application/json' } });
@@ -186,6 +194,8 @@ function editorProjectFromSystemd(service) {
 }
 
 async function main() {
+  // The mirror runs as the editor workspace owner (systemd User=), never as root.
+  assert.notEqual(process.getuid?.(), 0, 'CATALOG_ROOT_FORBIDDEN');
   const argv = process.argv.slice(2);
   let project = null;
   if (argv.length === 2 && argv[0] === '--project') project = argv[1];
