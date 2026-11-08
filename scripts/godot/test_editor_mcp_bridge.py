@@ -35,8 +35,13 @@ class McpEditorContract(unittest.TestCase):
         spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory(prefix="aurion-fennara-mcp-test-") as temp:
             project = Path(temp)
-            source = '[application]\\nconfig/name="Aurion"\\n[editor_plugins]\\nenabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg", "res://addons/fennara/plugin.cfg")\\n[autoload]\\n_fennara_game_capture="*res://addons/fennara/runtime/game_capture_helper.gd"\\n'
-            source = source.replace("\\\\n", "\\n")
+            source = """[application]
+config/name="Aurion"
+[editor_plugins]
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg", "res://addons/fennara/plugin.cfg")
+[autoload]
+_fennara_game_capture="*res://addons/fennara/runtime/game_capture_helper.gd"
+"""
             config = project / "project.godot"
             config.write_text(source)
             module.install(project)
