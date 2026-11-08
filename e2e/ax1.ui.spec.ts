@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { AURION_STARTER_VILLAGE_ASSET_PLACEMENTS, AURION_STARTER_VILLAGE_CONTRACT_VERSION } from "../shared/aurionStarterVillageContract";
-import { worldAssetRegionSchema } from "../shared/worldAssetProtocol";
+import { intersectsStarterCityWallClearance, worldAssetById, worldAssetRegionSchema, worldAssetsForChunk } from "../shared/worldAssetProtocol";
+import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 import { projectPlayerReadback } from "../client/src/xaurion/integration/authoritativeHudProjection";
@@ -158,7 +159,27 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
         .toEqual(AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.map(p => ({
           ...p, id: `${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:${p.id}`,
         })));
-      expect(region.placements).toHaveLength(8 * 12 + AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.length);
+      // The old 106-placement constant predated the owner-requested 110 m
+      // city-wall clearance. Keep the actual HTTP contract strict: every
+      // admitted placement must match the canonical seed/coordinate plan, all
+      // 10 authored village objects must survive, and colliding city props
+      // must never be projected. No count assertion is silently weakened.
+      const expectedRegion = [];
+      for (let chunkZ = -1; chunkZ <= 1; chunkZ++)
+        for (let chunkX = -1; chunkX <= 1; chunkX++)
+          expectedRegion.push(...worldAssetsForChunk(GLOBAL_WORLD_SEED, { x: chunkX, z: chunkZ }));
+      expect(region.placements).toEqual(expectedRegion);
+      expect(region.placements.length).toBeLessThan(8 * 12 + AURION_STARTER_VILLAGE_ASSET_PLACEMENTS.length);
+      for (const placement of region.placements) {
+        if (placement.id.startsWith(`${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:`)) continue;
+        const asset = worldAssetById.get(placement.assetId)!;
+        if (asset.family === "city")
+          expect(intersectsStarterCityWallClearance(asset, placement), `city wall breach: ${placement.id}`).toBe(false);
+      }
+      for (const chunk of [{ x: -1, z: -1 }, { x: -1, z: 0 }, { x: -1, z: 1 }, { x: 0, z: -1 }, { x: 0, z: 1 }]) {
+        const expectedNature = worldAssetsForChunk(GLOBAL_WORLD_SEED, chunk).filter(p => worldAssetById.get(p.assetId)?.family === "nature");
+        expect(region.placements.filter(p => expectedNature.some(item => item.id === p.id))).toEqual(expectedNature);
+      }
       expect((await assetEvidence()).center).toEqual(region.center);
       expect((await assetEvidence()).planned).toBe(region.placements.length);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-world-assets.png`) });

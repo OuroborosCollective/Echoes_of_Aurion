@@ -1,4 +1,5 @@
 import collision from "./worldCollisionManifest.json" with { type: "json" };
+import { AURION_STARTER_CITY_WALL_ENVELOPE_MM } from "./aurionStarterCityWallContract";
 import { z } from "zod";
 import catalog from "./worldAssetCatalog.json" with { type: "json" };
 import { WORLD_CHUNK_COORDINATE_LIMIT, type WorldChunkCoordinate } from "./worldChunkProtocol";
@@ -17,6 +18,30 @@ export type WorldAssetRegion = z.infer<typeof worldAssetRegionSchema>;
 const mod = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;
 function seedHash(seed: string): number { let hash=2166136261; for(const c of seed) hash=Math.imul(hash^c.charCodeAt(0),16777619); return hash>>>0; }
 const city = catalog.assets.filter(a => a.family === "city"), nature = catalog.assets.filter(a => a.family === "nature");
+/**
+ * The published city-wall GLB encloses the origin across multiple 64 m chunks.
+ * Generic seeded houses previously materialized through the wall. Reserve the
+ * measured 110 x 110 m footprint plus 6 m of construction clearance from
+ * generic non-collider city scenery. Nature colliders remain canonical;
+ * deleting them would alter established movement/replay semantics.
+ * The canonical origin chunk is handled separately.
+ * Presentation-only: this does not modify physics, terrain or persisted truth.
+ */
+export const STARTER_CITY_PROCEDURAL_CLEARANCE_MM = 6_000;
+export function intersectsStarterCityWallClearance(
+  asset: WorldAsset,
+  placement: Pick<WorldAssetPlacement, "xMm" | "zMm" | "rotation">,
+): boolean {
+  const halfX = Math.ceil(Math.max(...asset.lods.map(lod =>
+    lod.bounds.max[0] - lod.bounds.min[0])) * asset.scale * 500);
+  const halfZ = Math.ceil(Math.max(...asset.lods.map(lod =>
+    lod.bounds.max[2] - lod.bounds.min[2])) * asset.scale * 500);
+  const extentX = placement.rotation % 2 === 0 ? halfX : halfZ;
+  const extentZ = placement.rotation % 2 === 0 ? halfZ : halfX;
+  return Math.abs(placement.xMm) - extentX < AURION_STARTER_CITY_WALL_ENVELOPE_MM[0] / 2 + STARTER_CITY_PROCEDURAL_CLEARANCE_MM
+    && Math.abs(placement.zMm) - extentZ < AURION_STARTER_CITY_WALL_ENVELOPE_MM[2] / 2 + STARTER_CITY_PROCEDURAL_CLEARANCE_MM;
+}
+
 /** Stable server plan over the full canonical ±1,000,000-chunk world. No user-specific seed,
  * clock, local randomness, progression, inventory or reward writes participate. Open central
  * roads and a 20 m spawn/service area stay free. Each catalog member is selected by a cyclic
@@ -37,7 +62,9 @@ export function worldAssetsForChunk(worldSeed: string, coordinate: WorldChunkCoo
     let asset=models[(start+slot)%models.length]!;
     const anchors=models.filter(a=>a.category===(settlement?"building":"tree"));
     if((slot===0||slot===6)&&anchors.length)asset=anchors[mod(start+slot,anchors.length)]!;
-    result.push({id:`${WORLD_ASSET_VERSION}:${x}:${z}:${slot}`,assetId:asset.id,xMm:x*64_000+dx*1000,zMm:z*64_000+dz*1000,rotation:mod(start+slot,4)});slot++;
+    const candidate = {id:`${WORLD_ASSET_VERSION}:${x}:${z}:${slot}`,assetId:asset.id,xMm:x*64_000+dx*1000,zMm:z*64_000+dz*1000,rotation:mod(start+slot,4)};
+    if (asset.family !== "city" || !intersectsStarterCityWallClearance(asset, candidate)) result.push(candidate);
+    slot++;
   }
   return result;
 }
