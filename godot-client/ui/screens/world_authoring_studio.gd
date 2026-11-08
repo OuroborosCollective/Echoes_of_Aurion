@@ -181,7 +181,7 @@ func show_section(section: String) -> bool:
 	_inspection_panel.visible = section == "inspector"
 	_tools_section.visible = section == "tools"
 	if section == "inspector": _render_inspector()
-	if section == "tools" and not _tools_ready: _refresh_tool_catalog()
+	if section in ["tools", "quests", "npc", "world"] and not _tools_ready and _api != null and not _api.busy(): _refresh_tool_catalog()
 	return true
 
 func _refresh_tool_catalog() -> void:
@@ -546,7 +546,10 @@ func _send(kind: String, payload: Dictionary = {}) -> bool:
 	if not kind.begins_with("quest"):
 		_failure_reason = ""
 
-	if not _ensure_access() or _api == null or _api.busy():
+	if not _ensure_access() or _api == null or _api.busy() or not _pending_tool.is_empty():
+		return false
+	if kind == "questValidate" and not _tools_ready:
+		_refresh_tool_catalog()
 		return false
 	var wrapped := _wrapped_tool(kind, payload)
 	if not wrapped.is_empty():
@@ -687,6 +690,8 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 		_pending_tool.clear()
 		if pending.is_empty() or data.get("tool") != pending.get("tool") or data.get("previewOnly") != true or data.get("mutationAuthority") != "none" or typeof(data.get("result")) != TYPE_DICTIONARY:
 			_tool_status.text = "UNVERIFIED · Tool-Antwort passt nicht zum Auftrag; kein Entwurf übernommen."
+			if not pending.is_empty():
+				_failed(str(pending.alias), "AURION_AI_TOOL_RESULT_MISMATCH", connection, generation)
 			return
 		_completed(pending.alias, data.result, connection, generation)
 		return
