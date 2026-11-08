@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Offline artifact contract tests for Aurion's vendored MCP editor plugin."""
 import hashlib
+import importlib.util
+import tempfile
+import shutil
 from pathlib import Path
 import unittest
 
@@ -25,6 +28,28 @@ class McpEditorContract(unittest.TestCase):
 
     def test_license(self):
         self.assertIn('MIT License', (VENDOR/"LICENSE").read_text())
+
+    def test_isolated_installer_preserves_other_plugins(self):
+        spec = importlib.util.spec_from_file_location("aurion_mcp_installer", ROOT / "scripts/godot/install_editor_mcp_bridge.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory(prefix="aurion-fennara-mcp-test-") as temp:
+            project = Path(temp)
+            source = '[application]\\nconfig/name="Aurion"\\n[editor_plugins]\\nenabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg", "res://addons/fennara/plugin.cfg")\\n[autoload]\\n_fennara_game_capture="*res://addons/fennara/runtime/game_capture_helper.gd"\\n'
+            source = source.replace("\\\\n", "\\n")
+            config = project / "project.godot"
+            config.write_text(source)
+            module.install(project)
+            actual = config.read_text()
+            self.assertIn('res://addons/godot_mcp/plugin.cfg', actual)
+            self.assertIn('res://addons/fennara/plugin.cfg', actual)
+            self.assertIn('res://addons/godot-mcp/plugin.cfg', actual)
+            self.assertIn('_fennara_game_capture=', actual)
+            self.assertNotIn('McpRuntime=', actual)
+            self.assertTrue((project / "addons/godot-mcp/plugin.cfg").is_file())
+            with self.assertRaises(ValueError):
+                module.install(project)
+            self.assertEqual(actual, config.read_text())
 
 if __name__ == "__main__":
     unittest.main()
