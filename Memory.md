@@ -5909,3 +5909,10 @@ Evidence: ZIP SHA256 2f882223ea6907ea1464cec2eb0b21910553392253759444be1d9218df1
 Learned: Existing live editor already has Fennara and hybridindie; its runtime workspace differs from repository checkout, and auto-registered debugger autoload needs explicit export isolation.
 Open: Exact final-head CI and code review; actual Fennara+hybridindie+letsagents isolated coexistence; active editor rollout/rollback; signed Android artifact readback.
 Next safe step: inspect CI on exact PR head, negative installer test, and independent Fennara/service and Godot project readbacks; only merge after required gates and roll out via controlled separate editor step.
+
+
+### 2026-11-08 — Issue #659: procedural city-wall protection
+Status: IN DRAFT PR #1346 — source/tests verified on pre-Memory head, final exact-head CI and review pending; no release/live change.
+Change: Retain the deterministic worldwide asset selection and all authoritative nature colliders, but exclude generic collision-free city GLBs from the measured 110 × 110 m published starter-city wall envelope plus 6 m clearance. Preserve the ten separately authored origin-chunk placements and original historical seed-selection SHA. No gameplay, DB or terrain mutation.
+Finding: Real RED run 42488012488/job 128754036018 exposed a neighboring-chunk hut crossing the wall; intermediate all-asset filtering broke real zone movement (run 42488164353/job 128754497284), confirming that nature colliders must never be deleted cosmetically. Repaired filter passes exact-head full repository regression 42488411948/job 128755249983: 543 test files/2,863 tests passed, 78 files/357 tests skipped; zoneRuntime, worldAssetProtocol and new 2-case protection test pass. Godot headless 42488411946, runtime candidate 42488411944, container proof 42488412190 and core/auth 42488411977 success. Pending AIM259 final-head gate and PR review at the time of this entry.
+Open: actual visible walled city, Fadenwerk quest completion, terrain regrading, aligned four gates, explicit client rendering and world-apply receipts are separate gates. Next: exact final-head CI/review after this Memory commit, no merge until cleared.
