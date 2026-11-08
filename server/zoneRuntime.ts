@@ -1110,6 +1110,7 @@ export class ZoneRegistry {
   async getOrRecover(
     zoneId: ZoneId,
     recover: (zoneId: ZoneId) => Promise<AuthoritativeMovementZone>,
+    mayActivate: () => boolean = () => true,
   ): Promise<AuthoritativeMovementZone> {
     // A boot settlement may be committing the durable head; never race it.
     await this.waitForSettlement(zoneId);
@@ -1121,6 +1122,7 @@ export class ZoneRegistry {
     let recovery!: Promise<AuthoritativeMovementZone>;
     recovery = Promise.resolve().then(() => recover(zoneId)).then(zone => {
       if (zone.zoneId !== zoneId) throw new Error("ZONE_RECOVERY_ZONE_MISMATCH");
+      if (!mayActivate()) throw new Error("ZONE_BOOT_ACTIVATION_CANCELLED");
       if (this.zones.has(zoneId)) throw new Error("ZONE_ACTIVATION_RACE");
       const dormant = this.dormantZones.get(zoneId);
       if (dormant?.getLatestReceipt()) {

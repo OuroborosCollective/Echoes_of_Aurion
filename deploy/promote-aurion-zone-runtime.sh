@@ -106,7 +106,7 @@ node --input-type=module -e '
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "docker-compose.godot-feed.yml", "deploy/load-aurion-runtime-image.py", "deploy/verify-aurion-godot-feed.py", "deploy/readback-aurion-godot-bridge.mjs", "deploy/install-aurion-godot-bridge.sh", "deploy/aurion-godot-bridge.service", "deploy/aurion-godot-bridge.environment.template", "godot-bridge/aurion-godot-bridge.mjs", "godot-bridge/build-manifest.json", "runtime-image.tar", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
+  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "docker-compose.godot-feed.yml", "deploy/load-aurion-runtime-image.py", "deploy/verify-aurion-godot-feed.py", "deploy/readback-aurion-godot-bridge.mjs", "deploy/install-aurion-godot-bridge.sh", "deploy/aurion-godot-bridge.service", "deploy/aurion-godot-bridge.environment.template", "deploy/aurion-glb-catalog-sync.service", "deploy/aurion-glb-catalog-sync.timer", "deploy/install-aurion-glb-catalog-sync.sh", "scripts/godot/sync-approved-glbs.mjs", "godot-bridge/aurion-godot-bridge.mjs", "godot-bridge/build-manifest.json", "runtime-image.tar", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "deploy/aurion-arelogic-companion-export", "scripts/export-arelogic-companion-memory.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -615,6 +615,12 @@ else
   mv -Tf "$godot_readback_tmp" "$godot_readback"
   exit 70
 fi
+
+# The timer starts asynchronously and never delays the critical production
+# release on a bulk download of the GLB catalog. Service failures stay red in
+# the separately auditable systemd journal (no synthetic success receipt).
+phase=godot-catalog-sync-installation
+bash "${release}/deploy/install-aurion-glb-catalog-sync.sh" "$release"
 
 # release-retention-start
 # Every promotion leaves a full release directory (incl. its runtime image tar)

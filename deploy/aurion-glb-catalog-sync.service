@@ -1,0 +1,21 @@
+[Unit]
+Description=Aurion approved GLB catalog mirror for the existing Godot editor
+After=network-online.target serverin-aurion-godot-editor.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Same account as the Godot editor that owns the workspace: no root writes into
+# a directory an unprivileged user controls (path swaps cannot escalate).
+User=aurion-deploy
+Group=aurion-deploy
+WorkingDirectory=/srv/serverin/tools/aurion-glb-sync/current
+ExecStart=/usr/bin/node /srv/serverin/tools/aurion-glb-sync/current/sync-approved-glbs.mjs --project-from-service serverin-aurion-godot-editor.service
+TimeoutStartSec=900
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/serverin/workspaces
+StandardOutput=journal
+StandardError=journal

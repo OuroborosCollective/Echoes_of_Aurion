@@ -12,6 +12,8 @@ services:
       STRICT_PORT: "true"
       TRUST_PROXY_HOPS: "1"
       AURION_GLB_STORAGE_DIR: /var/lib/aurion/glb
+      # Owner-approved player-independent recovery of the same causal zone.
+      AURION_ALWAYS_ON_WORLD_ENABLED: "${AURION_ALWAYS_ON_WORLD_ENABLED:-1}"
       AURION_GAME_DEV_WORKSPACE: /var/lib/aurion/game-dev-workspace
       COMPANION_MEMORY_DIR: /var/lib/aurion/companion-memory
       # Companion memory is local-first. Clear the retired external Redis URL
