@@ -22,7 +22,9 @@ const city = catalog.assets.filter(a => a.family === "city"), nature = catalog.a
  * The published city-wall GLB encloses the origin across multiple 64 m chunks.
  * Generic seeded houses previously materialized through the wall. Reserve the
  * measured 110 x 110 m footprint plus 6 m of construction clearance from
- * all generic decorations. The canonical origin chunk is handled separately.
+ * generic non-collider city scenery. Nature colliders remain canonical;
+ * deleting them would alter established movement/replay semantics.
+ * The canonical origin chunk is handled separately.
  * Presentation-only: this does not modify physics, terrain or persisted truth.
  */
 export const STARTER_CITY_PROCEDURAL_CLEARANCE_MM = 6_000;
@@ -61,7 +63,7 @@ export function worldAssetsForChunk(worldSeed: string, coordinate: WorldChunkCoo
     const anchors=models.filter(a=>a.category===(settlement?"building":"tree"));
     if((slot===0||slot===6)&&anchors.length)asset=anchors[mod(start+slot,anchors.length)]!;
     const candidate = {id:`${WORLD_ASSET_VERSION}:${x}:${z}:${slot}`,assetId:asset.id,xMm:x*64_000+dx*1000,zMm:z*64_000+dz*1000,rotation:mod(start+slot,4)};
-    if (!intersectsStarterCityWallClearance(asset, candidate)) result.push(candidate);
+    if (asset.family !== "city" || !intersectsStarterCityWallClearance(asset, candidate)) result.push(candidate);
     slot++;
   }
   return result;
