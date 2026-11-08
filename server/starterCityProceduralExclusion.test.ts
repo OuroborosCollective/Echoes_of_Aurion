@@ -10,7 +10,6 @@ import { worldAssetById, worldAssetsForChunk } from "../shared/worldAssetProtoco
 function intersectsStarterWall(placement: ReturnType<typeof worldAssetsForChunk>[number]): boolean {
   const asset = worldAssetById.get(placement.assetId);
   if (!asset) throw new Error("WORLD_ASSET_CATALOG_MISSING");
-  if (asset.family !== "city") return false;
   const halfX = Math.ceil(Math.max(...asset.lods.map(lod =>
     lod.bounds.max[0] - lod.bounds.min[0])) * asset.scale * 500);
   const halfZ = Math.ceil(Math.max(...asset.lods.map(lod =>
@@ -23,7 +22,7 @@ function intersectsStarterWall(placement: ReturnType<typeof worldAssetsForChunk>
 }
 
 describe("Issue #659: no procedural structures through the published starter-city wall", () => {
-  it("never places generic city GLBs inside or through the wall clearance across nearby chunks", () => {
+  it("never places generic city or nature GLBs inside or through the wall clearance across nearby chunks", () => {
     for (const seed of ["echoes-of-aurion-v1", "seed-a", "seed-b"]) {
       for (let z = -2; z <= 2; z++) for (let x = -2; x <= 2; x++) {
         if (x === 0 && z === 0) continue; // authored starter-village markers stay under their separate contract
