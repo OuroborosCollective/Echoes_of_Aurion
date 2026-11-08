@@ -24,7 +24,9 @@ The script is *not* a gameplay authority, GLB approval path, asset assignment or
 
 With a verified immutable release directory containing `manifest.json`, `scripts/godot/sync-approved-glbs.mjs` and the two systemd units, the release operator may run:
 
-`sudo bash deploy/install-aurion-glb-catalog-sync.sh /srv/serverin/releases/<approved-exact-sha>`
+`sudo bash /opt/aurion-traefik-runtime/releases/<approved-exact-sha>-<run-id>/deploy/install-aurion-glb-catalog-sync.sh /opt/aurion-traefik-runtime/releases/<approved-exact-sha>-<run-id>`
+
+(The promoter runs exactly this for every verified release; a manual run uses the same verified release directory for both the installer and its argument.)
 
 The installer pins the script to that release's full SHA (root-owned, read-only for the service account), refreshes a managed symlink and enables a **one-minute timer**. The service runs as `aurion-deploy`, the account that owns the editor workspace and runs the Godot editor; the script refuses to run as root and refuses a project directory owned by another account, so no privileged write ever happens inside a directory an unprivileged user controls. Each run derives the active Godot editor project from `serverin-aurion-godot-editor.service`'s `WorkingDirectory`, rather than writing into a stale workspace. It requires only public read endpoints, validates each asset before introducing it to Godot and can be audited via `systemctl status aurion-glb-catalog-sync.service` and the local `catalog-manifest.json`.
 

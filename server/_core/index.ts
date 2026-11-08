@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { authBodyLimit } from "./authBodyLimit";
+import { closeHttpServerForShutdown } from "./httpServerClose";
 import { defensiveGatewayObserver } from "../defensiveGatewayObserver";
 import { registerProductionProbeRoutes } from "../aurionProductionProbeHttp";
 import { createCorsMiddleware } from "./corsMiddleware";
@@ -147,7 +148,7 @@ async function startServer(){
           try{await globalTickRecorder.flushPersistence();logPending();}
           finally{clearInterval(progress);}
         },
-        closeHttpServer:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
+        closeHttpServer:()=>closeHttpServerForShutdown(server),
         persistenceStatus:()=>globalTickRecorder.getPersistenceStatus(),
       });
       })());
