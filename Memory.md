@@ -5909,3 +5909,14 @@ Evidence: ZIP SHA256 2f882223ea6907ea1464cec2eb0b21910553392253759444be1d9218df1
 Learned: Existing live editor already has Fennara and hybridindie; its runtime workspace differs from repository checkout, and auto-registered debugger autoload needs explicit export isolation.
 Open: Exact final-head CI and code review; actual Fennara+hybridindie+letsagents isolated coexistence; active editor rollout/rollback; signed Android artifact readback.
 Next safe step: inspect CI on exact PR head, negative installer test, and independent Fennara/service and Godot project readbacks; only merge after required gates and roll out via controlled separate editor step.
+
+
+### 2026-11-08 — Issue #659: opt-in deterministic starter city terrace and paving
+Status: PARTIAL — PR #1347, exact-final-head CI and review required; no world activation or live deployment.
+Task: Introduce an optional deterministic starter-city terrace and paved streets for issue #659 without replacing the existing world revision.
+Decisions: Aurion-only height/material authority, fixed global integer-mm source samples, 55 m level plaza and 20 m bounded transition, Return Stone remains at (0,8000) mm, preserved old worldGenerationRevision, no client-side or production terrain override.
+Touched surfaces: shared/deterministicTerrainPipelineProtocol.ts, server/starterCityTerrainTerrace.test.ts and this single PR-local Memory.md entry.
+Evidence: Initial source head 59e3093f731f0347c8f1a2a86ceeb6dbe4675a7d, CI run 42488608576 attempt 1, job 128755841819, 543 test files/2865 passed; 78 files/357 tests skipped. Godot 42488608586 and container candidate 42488608572 success on the initial head, not proof for later edits. Review then found a disconnected 4 m ring and an isolated central plaza (Devin threads PRRT_kwDOTkRfss61BePP / PRRT_kwDOTkRfss61BePl). Regression commit e8d3586cbb37fca4a2ca4eede6c591b9e8c47809 adds source-grid four-neighbor connectivity assertions; fix 6bb6343e9500d8376379665d04ced2ca65401a68 adds a documented 1 m raster margin and connects all four axes from the plaza. Exact current-head regression is pending, not falsely marked green.
+Learned: City hills come from Aurion's deterministic terrain generator; 4.27 m chunk samples cannot produce a guaranteed connected 4 m ring by center-point annulus alone. Cosmetic client-only edits cannot fix the authoritative geometry.
+Open: Complete exact-head checks, review threads, runtime migration/replay compatibility, 4-gate collision and live Godot visual acceptance before publishing anything. This opt-in revision is not deployed or active.
+Next safe step: Rerun the actual revised source and review gates, prove all ring samples in one four-neighbor component and the plaza reaches four cardinal roads. Merge only on fully verified exact head. Keep existing world generation in production until a separately approved canonical migration.
