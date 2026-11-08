@@ -27,6 +27,11 @@ export const STARTER_CITY_LEVEL_HALF_EXTENT_MM = 55_000 as const;
 export const STARTER_CITY_LEVEL_BLEND_MM = 20_000 as const;
 export const STARTER_CITY_RING_RADIUS_MM = 18_000 as const;
 export const STARTER_CITY_RING_HALF_WIDTH_MM = 2_000 as const;
+/** A 4.27 m source-sample raster must admit adjacent ring tiles at cell edges.
+ * This coverage margin is presentation quantization, not extra gameplay width.
+ * It keeps the declared 4 m road width while preventing diagonal-only tiles.
+ */
+export const STARTER_CITY_RING_RASTER_MARGIN_MM = 1_000 as const;
 export const STARTER_CITY_RADIAL_HALF_WIDTH_MM = 3_000 as const;
 
 
@@ -191,12 +196,15 @@ function starterCityPavingAt(
   const limit = STARTER_CITY_LEVEL_HALF_EXTENT_MM * scale;
   if (x > limit || z > limit) return false;
   const squared = x * x + z * z;
-  const ringInner = (STARTER_CITY_RING_RADIUS_MM - STARTER_CITY_RING_HALF_WIDTH_MM) * scale;
-  const ringOuter = (STARTER_CITY_RING_RADIUS_MM + STARTER_CITY_RING_HALF_WIDTH_MM) * scale;
+  const rasterRadius = STARTER_CITY_RING_HALF_WIDTH_MM + STARTER_CITY_RING_RASTER_MARGIN_MM;
+  const ringInner = (STARTER_CITY_RING_RADIUS_MM - rasterRadius) * scale;
+  const ringOuter = (STARTER_CITY_RING_RADIUS_MM + rasterRadius) * scale;
   const centralPlaza = 6_000 * scale;
   const ring = squared >= ringInner * ringInner && squared <= ringOuter * ringOuter;
-  const eastWest = z <= STARTER_CITY_RADIAL_HALF_WIDTH_MM * scale && x >= STARTER_CITY_RING_RADIUS_MM * scale;
-  const northSouth = x <= STARTER_CITY_RADIAL_HALF_WIDTH_MM * scale && z >= STARTER_CITY_RING_RADIUS_MM * scale;
+  // Connect all four axes from the central plaza through the ring to the gates.
+  // The previous >= 18 m condition disconnected the plaza from every road.
+  const eastWest = z <= STARTER_CITY_RADIAL_HALF_WIDTH_MM * scale;
+  const northSouth = x <= STARTER_CITY_RADIAL_HALF_WIDTH_MM * scale;
   return squared <= centralPlaza * centralPlaza || ring || eastWest || northSouth;
 }
 
