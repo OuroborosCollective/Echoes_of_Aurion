@@ -206,14 +206,14 @@ func verify() -> void:
 	var real_asset := FileAccess.get_file_as_bytes("res://assets/starter_village/Barrel.glb")
 	require(not WorldProjection._inspect_glb(real_asset).is_empty(), "real CC0 barrel GLB rejected")
 	projection.queue_free()
-	# Each model is individually legal, but the fifth must not push the cached
+	# Each model is individually legal, but the ninth must not push the cached
 	# family of models past the aggregate importer-material budget.
 	var family_design := design()
 	family_design.designs[0].placements.clear()
 	var family_catalog := catalog("a".repeat(64))
 	family_catalog.entries.clear()
 	var models: Array = []
-	for i in range(5):
+	for i in range(9):
 		var member := max_materials.duplicate(true)
 		member.asset["generator"] = "material-budget-%d" % i
 		var bytes := glb(member)
@@ -232,8 +232,8 @@ func verify() -> void:
 	require(family.accept_surface(surface(), SESSION, Vector2i.ZERO), "material-budget surface not bound")
 	for i in range(models.size()):
 		var accepted: bool = family.supply_asset(models[i].sha, models[i].bytes, SESSION)
-		require(accepted == (i < 4), "aggregate material budget failed at model %d" % i)
-	require(family.get_child_count() == 4, "aggregate material budget drew the wrong number of models")
+		require(accepted == (i < 8), "aggregate material budget failed at model %d" % i)
+	require(family.get_child_count() == 8, "aggregate material budget drew the wrong number of models")
 	family.queue_free()
 	await process_frame
 	if failures.is_empty():

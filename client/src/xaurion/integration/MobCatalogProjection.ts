@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { type GlbLodLevel, type GlbRuntimeCatalog } from "@shared/glbImportContract";
-import { assetTier, type AssetTier } from "@shared/glbPresentationBudget";
+import type { AssetTier } from "@shared/glbPresentationBudget";
+import { deviceAssetTier } from "../core/GlbResourceBudget";
 import { validConfirmedZoneCombatEvent, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -36,7 +37,7 @@ export class MobCatalogProjection {
   }
 
   private presentationTier(): AssetTier {
-    return assetTier(typeof window === "undefined" ? 1200 : window.innerWidth);
+    return deviceAssetTier(typeof window === "undefined" ? 1200 : window.innerWidth);
   }
 
   private preferredLod(visual: MobVisual): GlbLodLevel {
