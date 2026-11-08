@@ -4,6 +4,8 @@ const Studio = preload("res://ui/screens/world_authoring_studio.gd")
 const SESSION := "zone_peer_ai_tools_fixture"
 var failures: Array[String] = []
 
+func _init() -> void: call_deferred("verify")
+
 class FixtureAuth:
 	extends Node
 	signal refresh_succeeded
