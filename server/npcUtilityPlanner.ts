@@ -346,6 +346,17 @@ export function resolveNpcUtilityDecision(
     assertBps(candidate.benefitBps, "CANDIDATE_BENEFIT");
     assertBps(candidate.riskBps, "CANDIDATE_RISK");
     assertBps(candidate.costBps, "CANDIDATE_COST");
+    if (candidate.constraintStatus !== "eligible" && candidate.constraintStatus !== "blocked") {
+      throw new Error("NPC_UTILITY_CANDIDATE_CONSTRAINT_STATUS_INVALID");
+    }
+    if (candidate.constraintStatus === "eligible" && candidate.constraintCode !== null) {
+      throw new Error("NPC_UTILITY_CANDIDATE_CONSTRAINT_CODE_INVALID");
+    }
+    if (candidate.constraintStatus === "blocked" && candidate.constraintCode !== null) {
+      if (typeof candidate.constraintCode !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(candidate.constraintCode)) {
+        throw new Error("NPC_UTILITY_CANDIDATE_CONSTRAINT_CODE_INVALID");
+      }
+    }
     if (!NPC_UTILITY_GOAL_KEYS.includes(candidate.goal)) {
       throw new Error("NPC_UTILITY_CANDIDATE_GOAL_INVALID");
     }
