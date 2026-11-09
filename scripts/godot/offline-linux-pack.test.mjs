@@ -153,3 +153,12 @@ test('pinned Godot download does not retry permanent 404 or empty successful res
     /Download failed: 200/,
   );
 });
+
+test('Terrain3D independent download is bounded and keeps mandatory pinned archive integrity', () => {
+  const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'install-terrain3d.mjs'), 'utf8');
+  for (const token of ["'--retry', '6'", "'--retry-all-errors'", "'--retry-max-time', '240'"]) {
+    assert.ok(source.includes(token), "Terrain3D failed HTTP retrieval must use bounded retries: " + token);
+  }
+  assert.ok(source.includes("actual !== SHA256"), 'Terrain3D native archive SHA256 verification must not be weakened');
+  assert.ok(source.includes("Unsafe Terrain3D archive entry"), 'ZIP traversal guard must remain');
+});
