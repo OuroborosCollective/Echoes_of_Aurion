@@ -24,6 +24,20 @@ func verify() -> void:
 	var atlas_image: Image = source.get_image()
 	require(atlas_image.get_width() == 1024 and atlas_image.get_height() == 1024, "original atlas dimensions differ from provenance")
 	var catalog = catalog_script.new()
+	# G17/G18/G19: one presentation mapping for both native terrain renderers.
+	# A script-level fixture is explicitly NOT a live-world receipt.
+	require(catalog.has_method("terrain3d_id_for_surface"), "G17 shared native terrain surface mapping missing")
+	if catalog.has_method("terrain3d_id_for_surface"):
+		var expected_ids := {
+			"grass": 0, "forest_floor": 0,
+			"riverbank": 1, "stone": 1, "ash": 1,
+			"ruin_path": 2,
+		}
+		for surface in expected_ids:
+			require(catalog.terrain3d_id_for_surface(surface) == expected_ids[surface],
+				"G17 native surface atlas mapping mismatch: " + surface)
+		require(catalog.terrain3d_id_for_surface("unknown_material") == -1,
+			"G17 unknown surface must fail closed without a neutral replacement")
 	var result: Dictionary = catalog.build()
 	require(result.get("status") == "resolved", "G17 real atlas cannot produce four native materials")
 	if result.get("status") == "resolved":
