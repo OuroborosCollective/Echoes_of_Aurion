@@ -5968,3 +5968,14 @@ Evidence: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1349 ; re
 Learned: Catalog unattempted and catalog denied are different trust states. A syntactically malformed diagnostic must terminate visibly; neither an isolated request recorder nor a green older commit proves native/live acceptance.
 Open: Verify exact final-head TypeScript/Godot/CI, any new review comments, merge SHA and independent main readback; separately verify authenticated live Godot/world/DB/NPC and release-owner preflight.
 Next safe step: Read full final SHA and CI job logs, repair any causal failures, resolve only addressed review threads, merge with an expected head lease and read back main; use actual production workflow run ID/attempt for a prefilled Owner preflight link.
+
+
+### 2026-11-09 — Issue #876 atlas load evidence candidate
+Status: PARTIAL; draft-only, issue remains open.
+Task: https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/876 — expose real existing-atlas load failures without changing world, gameplay authority, GLBs, persistence or production.
+Decisions: Branch `fix/issue-876-atlas-load-evidence-20261109` is based on current `main` `ae898dd1673fc3b765420076817c6cff8ee61e31`. The existing same-origin WebP is SHA-256 checked before decode; only a correctly hashed 1024×1024 image is split into four prepared 512×512 tiles. The neutral fallback remains on any failure. Active `/play` emits stable load/readback evidence and material-map binding counts; these counts do not prove GPU upload or rendered pixels.
+Touched surfaces: `client/src/xaurion/world/WorldSurfaceAtlas.ts`, `client/src/xaurion/world/WorldSurfaceAtlas.test.ts`, `client/src/xaurion/integration/AurionOpenWorldRuntime.tsx`, `Memory.md`.
+Evidence: Focused atlas tests 9/9; `pnpm check` passed; full Vitest suite 545 files / 2,878 tests passed, 78 files / 357 tests skipped; `git diff --check` passed. Shipped WebP SHA-256 `f329e8e1224416e38967f888d40d4459bf8b359001370a432cb270c13f1f3f35`. Wolfram verified quadrant bounds `{{0,0,512,512},{512,0,1024,512},{0,512,512,1024},{512,512,1024,1024}}` and full area coverage; this is arithmetic verification, not CAG artifact materialization.
+Learned: A silent image failure left a plausible 1×1 fallback with no diagnostic status. Explicit response/hash/decode/dimension evidence closes that observability gap but does not prove high-resolution quality or an active production render.
+Open: Owner-approved high-resolution paving/city assets, provenance and UV/material manifest; authenticated immutable production image/runtime identity; real browser/WebGL/mobile pixel and player/NPC GLB readbacks; revision-bound Wolfram/CAG-to-shipping-to-GPU pipeline. No production auth/readback, asset promotion, issue closure, merge or deployment was performed.
+Next safe step: Keep the PR draft; complete the blocked owner asset and independent authenticated runtime/browser evidence gates before claiming #876 complete.
