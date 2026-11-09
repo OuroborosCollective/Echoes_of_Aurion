@@ -44,6 +44,7 @@ export const aiAuthoringToolCatalog = Object.freeze({
     "Canonical effects require a separate Aurion plan, explicit confirmation, receipt and readback."],
 });
 
+/** Parse an untrusted quest template with bounded bytes, then call the canonical graph validator. */
 function validateQuestJson(text: string) {
   if (Buffer.byteLength(text, "utf8") > 120_000) throw new TRPCError({ code: "BAD_REQUEST", message: "QUEST_INPUT_TOO_LARGE" });
   let parsed: unknown;
