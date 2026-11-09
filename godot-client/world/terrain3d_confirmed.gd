@@ -7,7 +7,6 @@ const CHUNK_METERS := 64
 const REGION_METERS := 256
 const TILE_METERS := 4
 const MAX_CHUNKS := 9
-const MATERIAL_IDS := {"grass":0, "forest_floor":0, "riverbank":1, "stone":1, "ash":1, "ruin_path":2}
 var _models: Dictionary = {}
 var _connection := ""
 var _terrain: Node3D = null
@@ -100,7 +99,8 @@ func _rebuild() -> bool:
 	if not ClassDB.class_exists("Terrain3DUtil") or not ClassDB.class_has_method("Terrain3DUtil", "as_float", true):
 		diagnostic = "terrain3d_utility_unavailable"
 		return false
-	var catalog := MaterialCatalog.new().build()
+	var material_resolver := MaterialCatalog.new()
+	var catalog: Dictionary = material_resolver.build()
 	if catalog.get("status") != "resolved":
 		diagnostic = "terrain_atlas_unavailable"
 		return false
@@ -140,7 +140,7 @@ func _rebuild() -> bool:
 				for x in range(base_x, base_x + TILE_METERS):
 					var reg := Vector2i(floori(float(x) / REGION_METERS), floori(float(z) / REGION_METERS))
 					regions[reg] = true
-					samples[Vector2i(x,z)] = {"height":float(tile.heightMm) / 1000.0,"mat":int(MATERIAL_IDS[tile.surface])}
+					samples[Vector2i(x,z)] = {"height":float(tile.heightMm) / 1000.0,"mat":material_resolver.terrain3d_id_for_surface(str(tile.surface))}
 	if regions.size() > 9:
 		_retire_terrain(terrain)
 		diagnostic = "terrain_region_budget_exceeded"
