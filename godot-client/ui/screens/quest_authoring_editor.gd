@@ -297,6 +297,7 @@ func _copy_json() -> void:
 	var value := current_draft()
 	if not value.is_empty(): DisplayServer.clipboard_set(JSON.stringify(value, "\t"))
 
+## Request the canonical Aurion quest graph validator without publishing the draft.
 func validate_current_draft() -> bool:
 	if not _can_edit():
 		if is_instance_valid(_validation_status): _validation_status.text = "BLOCKED · Entwurf ist nicht bearbeitbar oder ein Receipt ist ungeklärt."
