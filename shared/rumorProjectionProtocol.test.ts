@@ -48,6 +48,36 @@ function communicatedChain() {
 }
 
 describe("AIM-781 player-facing causal rumor projection", () => {
+  it("does not expose information receipts before their logical observation index", () => {
+    const future = experienced("true", "npc-future", 30, 100);
+    const before = projectRumorClaims({
+      viewerId: "npc-future", worldId: "world-1", atIndex: 29, receipts: [future],
+    });
+    expect(before.claims).toEqual([]);
+    const at = projectRumorClaims({
+      viewerId: "npc-future", worldId: "world-1", atIndex: 30, receipts: [future],
+    });
+    expect(at.claims).toHaveLength(1);
+  });
+
+  it("cannot disclose a communication to its receiver before that receipt exists", () => {
+    const exp = experienced("true", "npc-a", 10, 100);
+    const rem = rememberNpcInformation(exp, 11);
+    const futureTransmission = communicateNpcInformation({
+      source: rem, receiverNpcId: "player-1", logicalIndex: 40,
+    });
+    const before = projectRumorClaims({
+      viewerId: "player-1", worldId: "world-1", atIndex: 39,
+      receipts: [exp, rem, futureTransmission],
+    });
+    expect(before.claims).toEqual([]);
+    const after = projectRumorClaims({
+      viewerId: "player-1", worldId: "world-1", atIndex: 40,
+      receipts: [exp, rem, futureTransmission],
+    });
+    expect(after.claims).toHaveLength(1);
+  });
+
   it("produces the same projection hash for the same confirmed graph in any order", () => {
     const chain = communicatedChain();
     const first = projectRumorClaims({ viewerId: "npc-b", worldId: "world-1", atIndex: 20, receipts: chain });

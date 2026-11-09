@@ -22,7 +22,7 @@ export async function installTerrain3D(targetDirectory = resolve('godot-client/a
   const work = await mkdtemp(join(tmpdir(), 'aurion-terrain3d-'));
   try {
     const zip = join(work, NAME);
-    run('curl', ['--fail', '--location', '--retry', '2', '--connect-timeout', '15', '--max-time', '180', '--silent', '--show-error', '--output', zip, URL]);
+    run('curl', ['--fail', '--location', '--retry', '6', '--retry-max-time', '240', '--connect-timeout', '15', '--max-time', '180', '--silent', '--show-error', '--output', zip, URL]);
     const file = await readFile(zip);
     const actual = createHash('sha256').update(file).digest('hex');
     if (actual !== SHA256) throw new Error('Terrain3D ZIP SHA256 mismatch: expected ' + SHA256 + ', received ' + actual);

@@ -391,7 +391,10 @@ export function projectRumorClaims(input: Readonly<{
     }
   }
 
-  const groups = groupLatestByFact(parsed);
+  // A confirmed receipt is not yet knowable before its logical observation index.
+  // This also prevents a future transmission from granting its receiver early access.
+  const observed = parsed.filter(receipt => receipt.logicalIndex <= input.atIndex);
+  const groups = groupLatestByFact(observed);
   const live = groups.filter(group => !isLogicallyExpired(group.latest, input.atIndex));
 
   const claims: RumorClaimProjection[] = [];
