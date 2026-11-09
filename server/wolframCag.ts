@@ -66,9 +66,23 @@ function sha256(value: string): string {
 
 function stable(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (Array.isArray(value)) {
+    let str = "[";
+    for (let i = 0; i < value.length; i++) {
+      if (i > 0) str += ",";
+      str += stable(value[i]);
+    }
+    return str + "]";
+  }
   const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${stable(record[key])}`).join(",")}}`;
+  const keys = Object.keys(record).sort();
+  let str = "{";
+  for (let i = 0; i < keys.length; i++) {
+    if (i > 0) str += ",";
+    const key = keys[i];
+    str += JSON.stringify(key) + ":" + stable(record[key]);
+  }
+  return str + "}";
 }
 
 function boundedText(value: unknown, label: string): string {
