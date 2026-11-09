@@ -36,6 +36,7 @@ func quest_template() -> Dictionary:
 		"edges":[{"id":"finish","fromNodeId":"start","toNodeId":"end","priority":0}],"outcomes":[],
 		"maxCompositionDepth":10,"active":false,"quarantined":true}
 
+## Exercise the isolated UI dispatch and malformed-response contracts with no world writes.
 func verify() -> void:
 	var auth := FixtureAuth.new()
 	root.add_child(auth)
@@ -49,13 +50,25 @@ func verify() -> void:
 	check(studio.open_studio(), "studio identity request did not start")
 	studio._completed("identity", {"id":42,"role":"admin"}, SESSION, 7)
 	studio._completed("catalog", {"glbCatalogRevision":"a".repeat(64),"assets":[]}, SESSION, 7)
+	# Legacy previews are possible only before catalog discovery in this session.
+	check(studio._send("behaviorDraft", {"role":"guard","mode":"tree","brief":"Before discovery"}), "unattempted compatibility preview was blocked")
+	check(recorder.sent.back().kind == "behaviorDraft", "unattempted preview did not use legacy route")
 	check(studio.has_method("show_section") and studio.show_section("tools"), "unified tools navigation missing")
 	check(recorder.sent.back().kind == "aiToolCatalog", "tools tab failed to load canonical tool catalog")
 	check(not studio._tools_ready, "tools advertised readiness before server reply")
 	var invalid := {"schemaVersion":"aurion.ai-authoring-tools.v1","mutationAuthority":"write","tools":[]}
 	studio._completed("aiToolCatalog", invalid, SESSION, 7)
 	check(not studio._tools_ready, "catalog with write authority accepted")
+	var rejected_count := recorder.sent.size()
+	for blocked in ["questFadenInspect", "questFadenDraft", "questValidate", "behaviorDraft", "aiPropose"]:
+		check(not studio._send(blocked, {}), "rejected catalog dispatched preview: " + blocked)
+	check(recorder.sent.size() == rejected_count, "rejected catalog silently used legacy authoring routes")
+	check(studio._send("worldReceipt", {}), "rejected tool catalog blocked canonical receipt readback")
+	check(recorder.sent.back().kind == "worldReceipt", "canonical receipt was routed through tool preview")
 	studio._refresh_tool_catalog()
+	var retry_count := recorder.sent.size()
+	check(not studio._send("behaviorDraft", {}), "catalog refresh allowed a legacy preview while tool discovery was pending")
+	check(recorder.sent.size() == retry_count, "catalog retry fell through to a legacy preview")
 	var tool_names := ["fadenwerk.inspect","fadenwerk.draft","quest.template.validate","npc.behavior.draft","world.design.propose"]
 	var catalog := {"schemaVersion":"aurion.ai-authoring-tools.v1","mutationAuthority":"none",
 		"tools":tool_names.map(func(name: String): return {"tool":name,"previewOnly":true}), "handoffs":{"quest":[],"npc":[],"world":[],"godot":[]}}
@@ -85,6 +98,12 @@ func verify() -> void:
 	var draft_before: Dictionary = editor.current_draft()
 	studio._completed("aiToolPreview", envelope("quest.template.validate", {"valid":true,"diagnostics":[]}), SESSION, 7)
 	check(editor.current_draft() == draft_before and editor._validation_status.text.contains("PREVIEW_ONLY"), "validation changed draft or was mistaken for publication")
+	check(editor.validate_current_draft(), "invalid-code validator regression could not start")
+	studio._completed("aiToolPreview", envelope("quest.template.validate", {"valid":false,"diagnostics":[{"code":42}]}), SESSION, 7)
+	check(editor._validation_status.text.begins_with("UNVERIFIED"), "non-string diagnostic code kept validator in checking state")
+	check(editor.validate_current_draft(), "non-dictionary validator regression could not start")
+	studio._completed("aiToolPreview", envelope("quest.template.validate", {"valid":false,"diagnostics":[null]}), SESSION, 7)
+	check(editor._validation_status.text.begins_with("UNVERIFIED"), "malformed diagnostic object kept validator in checking state")
 	check(not recorder.sent.back().kind in ["questPublish","worldApply"], "preview published world or quest")
 
 	check(studio.show_section("npc"), "NPC Forge page not reachable")
