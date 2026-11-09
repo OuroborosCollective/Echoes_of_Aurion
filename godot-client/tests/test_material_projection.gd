@@ -38,6 +38,17 @@ func verify() -> void:
 				"G17 native surface atlas mapping mismatch: " + surface)
 		require(catalog.terrain3d_id_for_surface("unknown_material") == -1,
 			"G17 unknown surface must fail closed without a neutral replacement")
+	# The protected WorldSlice consumer still reads ChunkTerrain.SURFACE_MATERIAL.
+	# The compatibility symbol must reference the same six Godot presentation IDs.
+	var chunk_script: Script = load("res://world/chunk_terrain.gd") as Script
+	require(chunk_script != null, "G17 confirmed chunk module missing")
+	if chunk_script != null:
+		var compatibility: Variant = chunk_script.get_script_constant_map().get("SURFACE_MATERIAL")
+		var canonical: Variant = catalog_script.get_script_constant_map().get("TERRAIN_SURFACE_TO_MATERIAL")
+		require(typeof(compatibility) == TYPE_DICTIONARY and compatibility.size() == 6 and compatibility == canonical,
+			"G17 WorldSlice compatibility mapping drifted from canonical surface IDs")
+	require(load("res://projection/world_slice.gd") is Script,
+		"G17 legacy WorldSlice consumer cannot parse against the shared material mapping")
 	var result: Dictionary = catalog.build()
 	require(result.get("status") == "resolved", "G17 real atlas cannot produce four native materials")
 	if result.get("status") == "resolved":
