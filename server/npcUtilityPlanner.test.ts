@@ -308,6 +308,43 @@ describe("NPC Utility Planner — scoring", () => {
 });
 
 describe("NPC Utility Planner — input validation", () => {
+  it("fails closed on an unknown candidate constraint status before selecting an action", () => {
+    const malformed = {
+      ...candidate({ id: "untrusted", action: "trade", goal: "trade", needPressureBps: 10000, benefitBps: 10000, riskBps: 0, costBps: 0 }),
+      constraintStatus: "ignored-by-parser",
+    } as unknown as NpcUtilityCandidate;
+    const safe = candidate({ id: "safe", action: "patrol", goal: "seek_safety" });
+    expect(() => resolveNpcUtilityDecision(ctx({ candidates: [malformed, safe] })))
+      .toThrow("NPC_UTILITY_CANDIDATE_CONSTRAINT_STATUS_INVALID");
+  });
+
+  it("rejects an eligible candidate carrying a contradictory block code", () => {
+    const malformed = {
+      ...candidate({ id: "contradiction" }),
+      constraintStatus: "eligible",
+      constraintCode: "MARKET_CLOSED",
+    } as NpcUtilityCandidate;
+    expect(() => resolveNpcUtilityDecision(ctx({ candidates: [malformed] })))
+      .toThrow("NPC_UTILITY_CANDIDATE_CONSTRAINT_CODE_INVALID");
+  });
+
+  it("rejects non-string blocked reason data before provenance hashing", () => {
+    const malformed = {
+      ...candidate({ id: "bad-reason" }),
+      constraintStatus: "blocked",
+      constraintCode: { code: "MARKET_CLOSED" },
+    } as unknown as NpcUtilityCandidate;
+    expect(() => resolveNpcUtilityDecision(ctx({ candidates: [malformed] })))
+      .toThrow("NPC_UTILITY_CANDIDATE_CONSTRAINT_CODE_INVALID");
+  });
+
+  it("retains the established nullable blocked-code fallback", () => {
+    const blocked = { ...candidate({ id: "blocked" }), constraintStatus: "blocked", constraintCode: null } as NpcUtilityCandidate;
+    const result = resolveNpcUtilityDecision(ctx({ candidates: [blocked] }));
+    expect(result.winnerId).toBeNull();
+    expect(result.blockedCount).toBe(1);
+  });
+
   it("rejects empty candidate sets", () => {
     expect(() => resolveNpcUtilityDecision(ctx({ candidates: [] }))).toThrow("NPC_UTILITY_CANDIDATES_EMPTY");
   });
