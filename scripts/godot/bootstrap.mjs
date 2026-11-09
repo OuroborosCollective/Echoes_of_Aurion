@@ -4,6 +4,7 @@ import { createWriteStream } from 'node:fs';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { lock, root, executable, digest, run } from './toolchain.mjs';
+import { fetchPinnedArchiveWithRetry } from './download-pinned-editor.mjs';
 
 if (`${process.platform}-${process.arch}` !== lock.host) throw new Error(`Unsupported host; expected ${lock.host}`);
 await mkdir(root, { recursive: true });
@@ -23,8 +24,8 @@ try {
     let cached = false;
     try { cached = (await stat(archive)).size === lock.engine.bytes && await digest(archive) === lock.engine.sha256; } catch { /* Missing cache. */ }
     if (!cached) {
-      const response = await fetch(lock.engine.url, { signal: AbortSignal.timeout(120000) });
-      if (!response.ok || !response.body) throw new Error(`Download failed: ${response.status}`);
+      // Preserve pinned size/SHA proof; only transient HTTP retrieval may retry.
+      const response = await fetchPinnedArchiveWithRetry(lock.engine.url);
       let received = 0;
       const bound = new Transform({ transform(chunk, encoding, callback) {
         received += chunk.length;

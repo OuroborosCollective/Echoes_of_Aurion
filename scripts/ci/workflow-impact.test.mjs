@@ -45,24 +45,6 @@ const specs = [
     ],
   },
   {
-    workflow: ".github/workflows/aim259-group-instances.yml",
-    changed: [
-      "server/groupInstanceService.ts", "server/db.ts",
-      "drizzle/0032_aurion_group_instances.sql",
-      "drizzle/groupInstanceSchema.ts", "server/zoneGateway.ts",
-    ],
-    unchanged: [
-      "server/nativeAuthPersistence.ts",
-      "drizzle/nativeAuthSchema.ts",
-      "server/nativeAuthProtocol.test.ts",
-      "godot-client/project.godot",
-      "drizzle/0075_aurion_native_auth_sessions.sql",
-      "drizzle/0076_auth.sql",
-      "drizzle/meta/_journal.json",
-      "drizzle.config.ts",
-    ],
-  },
-  {
     workflow: ".github/workflows/issue-502-inventory-mariadb.yml",
     changed: [
       "server/aurionInventoryBackendAdapter.ts",
@@ -135,6 +117,19 @@ for (const spec of specs) {
     }
   });
 }
+
+test("AIM259 five-client acceptance is deferred from PR and push gates, not deleted", () => {
+  const source = readFileSync(".github/workflows/aim259-group-instances.yml", "utf8");
+  assert.ok(source.includes("on:\n  workflow_dispatch:"), "manual dispatch must remain available");
+  assert.doesNotMatch(source, /^  pull_request:/m, "unfinished gameplay must not block unrelated PRs");
+  assert.doesNotMatch(source, /^  push:/m, "unfinished gameplay must not falsely gate production pushes");
+  assert.ok(source.includes("pnpm exec playwright test --config playwright.aurion-groups.config.ts"),
+    "five-client assertions must remain intact");
+  assert.ok(source.includes("server/aim259GroupMariaDb.test.ts"),
+    "real group database verification must remain");
+  assert.ok(source.includes("actions/upload-artifact@v4"),
+    "manual test must retain failed-run evidence");
+});
 
 test("native-auth migrations are still covered by the dedicated core schema pack", () => {
   const source = readFileSync(".github/workflows/aurion-core-schema-gate.yml", "utf8");
