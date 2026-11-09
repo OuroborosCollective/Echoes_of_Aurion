@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "issue": "https://github.com/OuroborosCollective/Echoes_of_Aurion/issues/876",
+  "pullRequest": "https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1353",
+  "status": "inactive_test_candidate",
+  "approval": {
+    "scope": "User-approved for local test-candidate derivation only; not approved for active runtime assignment or production promotion.",
+    "date": "2026-11-09"
+  },
+  "source": {
+    "publisher": "Poly Haven",
+    "assetId": "cobblestone_large_01",
+    "assetName": "Cobblestone Large 01",
+    "author": "Rob Tuytel",
+    "assetPage": "https://polyhaven.com/a/cobblestone_large_01",
+    "assetMetadataApi": "https://api.polyhaven.com/info/cobblestone_large_01",
+    "fileManifestApi": "https://api.polyhaven.com/files/cobblestone_large_01",
+    "license": "CC0 1.0 Universal",
+    "licenseUrl": "https://polyhaven.com/license",
+    "sourceFilename": "cobblestone_large_01_diff_8k.jpg",
+    "sourceDownloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/8k/cobblestone_large_01/cobblestone_large_01_diff_8k.jpg",
+    "retrievedAtUtc": "2026-11-09T03:36:52.245009Z",
+    "bytes": 32747223,
+    "dimensions": [8192, 8192],
+    "mode": "RGB",
+    "assetScaleMeters": [4, 4],
+    "providerMd5": "a9908adff909ccdd44f29185d6596f54",
+    "sha256": "b7271b08dc478ea54c54bdafbcc748be0c201c69ea19b4f5f4d6833f1a4ec0d1",
+    "embeddedIccProfile": false,
+    "includedInPullRequest": false,
+    "note": "The original is retained outside the repository; the official URL and independent SHA-256 pin the downloaded master. The provider MD5 was also checked against its file manifest."
+  },
+  "derivative": {
+    "filename": "cobblestone_large_01_basecolor_2k_q88.webp",
+    "relativePath": "client/src/xaurion/world/assets/candidates/cobblestone_large_01_basecolor_2k_q88.webp",
+    "bytes": 1295412,
+    "dimensions": [2048, 2048],
+    "mode": "RGB",
+    "format": "WebP",
+    "sha256": "88e76ddb69da450cd16ceee2a381d7c314ff892f79633167a87dea0120cb9d2b",
+    "operation": "Downscale full 8192x8192 source to 2048x2048 with Pillow Image.Resampling.LANCZOS; encode lossy WebP quality=88, method=6.",
+    "toolchain": {
+      "python": "3.12.3",
+      "pillow": "13.0.0",
+      "libwebp": "1.6.0"
+    },
+    "colorHandling": "Source is RGB JPEG with no embedded ICC profile; pixel values were resized and encoded without an ICC transform. Aurion surface materials use sRGB for base color.",
+    "mapType": "baseColor/diffuse only; no normal, roughness or displacement map is included in this derivative.",
+    "runtimeAssignment": false,
+    "note": "Standalone 4m x 4m paving-texture test tile. Existing active atlas and its 1024x1024/four-512x512 contract remain unchanged. The existing UV scale of 1 repeat per 4 world units is nominally aligned; visual/material approval remains pending."
+  }
+}

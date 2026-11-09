@@ -1,4 +1,5 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
+import { subscribeWorldSurfaceAtlasEvidence } from "../world/WorldSurfaceAtlas";
 import { installStartupViewCapture, type StartupViewCapture } from "@/lib/startupViewCapture";
 import { GLOBAL_WORLD_ID } from "@shared/worldIdentity";
 import { ConfirmedChunkProjection } from "./ConfirmedChunkProjection";
@@ -83,6 +84,7 @@ export default function AurionOpenWorldRuntime() {
   const rpcUtils = trpc.useUtils();
   const worldAssetsEvidenceRef = useRef<HTMLOutputElement>(null);
   const runtimePerformanceEvidenceRef = useRef<HTMLOutputElement>(null);
+  const surfaceAtlasEvidenceRef = useRef<HTMLOutputElement>(null);
   const explorationMemoryEvidenceRef = useRef<HTMLOutputElement>(null);
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -309,10 +311,12 @@ export default function AurionOpenWorldRuntime() {
     let rendererHandle: RendererHandle | undefined;
     setReadyGeneration(null);
     setRendererEvidence(null);
+    if (surfaceAtlasEvidenceRef.current) delete surfaceAtlasEvidenceRef.current.dataset.evidence;
     setChunkLoadingEvidence(null);
     setWorldAssetLoadingEvidence(null);
     setModelStatus("procedural");
     let engine: MMOEngine | undefined;
+    let surfaceAtlasEvidenceUnsubscribe: (() => void) | undefined;
     let remotePresence: RemotePresenceProjection | undefined;
     let capture: VisibleCanvasCapture | undefined;
     let worldAssets: WorldAssetProjection | undefined;
@@ -338,6 +342,8 @@ export default function AurionOpenWorldRuntime() {
       motionRef.current = null;
       serviceNpcRef.current?.dispose();
       serviceNpcRef.current = null;
+      surfaceAtlasEvidenceUnsubscribe?.();
+      surfaceAtlasEvidenceUnsubscribe = undefined;
       worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
@@ -386,6 +392,10 @@ export default function AurionOpenWorldRuntime() {
       rendererHandle = initialized.handle;
       if (disposed || !containerRef.current || rendererGeneration.current !== generation) { rendererHandle.dispose(); return; }
       engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch), rendererHandle, confirmedNpcReadback);
+      surfaceAtlasEvidenceUnsubscribe = subscribeWorldSurfaceAtlasEvidence(engine.scene, evidence => {
+        const output = surfaceAtlasEvidenceRef.current;
+        if (output) output.dataset.evidence = JSON.stringify(evidence);
+      });
       setRendererEvidence({ ...initialized.evidence, generation, recoveryAttempt: recoveryAttempts.current, recoveryCause: recoveryCause.current, status: "awaiting_snapshot", worldSeed: world.worldSeed, epoch: world.epoch });
       engineRef.current = engine;
       startupCaptureRef.current = installStartupViewCapture(() => {
@@ -515,6 +525,8 @@ export default function AurionOpenWorldRuntime() {
       disposed = true;
       abort.abort();
       window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
+      surfaceAtlasEvidenceUnsubscribe?.();
+      surfaceAtlasEvidenceUnsubscribe = undefined;
       worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
@@ -934,6 +946,7 @@ export default function AurionOpenWorldRuntime() {
         worldAssets={worldAssetLoadingEvidence}
       />
       <output data-testid="renderer-evidence" hidden>{JSON.stringify(rendererEvidence)}</output>
+      <output ref={surfaceAtlasEvidenceRef} data-testid="aurion-surface-atlas-evidence" hidden />
       <output data-testid="glb-model-status" aria-label="Charaktermodell" className="sr-only">{modelStatus}</output>
       <output ref={modelEvidenceRef} data-testid="glb-presentation" className="sr-only" />
       <output ref={npcEvidenceRef} data-testid="smith-presentation" className="sr-only" />
