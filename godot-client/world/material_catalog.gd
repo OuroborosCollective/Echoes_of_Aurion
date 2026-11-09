@@ -6,6 +6,20 @@ const META_PATH := "res://assets/world/aurion-surface-atlas.json"
 const IMAGE_SIZE := 1024
 const TILE_SIZE := 512
 const NAMES := ["paving", "forest", "wood", "rock"]
+## One presentation mapping for confirmed Aurion tile surfaces. This does not
+## create or amend the server's world, terrain, collision or asset identities.
+const TERRAIN_SURFACE_TO_MATERIAL := {
+	"grass": "forest", "forest_floor": "forest",
+	"riverbank": "rock", "stone": "rock", "ash": "rock",
+	"ruin_path": "paving",
+}
+## Terrain3D's imported texture order (forest, rock, paving) is fixed and
+## resolved through the same names as the G18 native mesh path.
+const TERRAIN3D_MATERIAL_TO_ID := {"forest": 0, "rock": 1, "paving": 2}
+
+func terrain3d_id_for_surface(surface: String) -> int:
+	var material: String = str(TERRAIN_SURFACE_TO_MATERIAL.get(surface, ""))
+	return int(TERRAIN3D_MATERIAL_TO_ID.get(material, -1))
 const EXPECTED_SHA256 := "f329e8e1224416e38967f888d40d4459bf8b359001370a432cb270c13f1f3f35"
 
 static func blocked(reason: String) -> Dictionary:
