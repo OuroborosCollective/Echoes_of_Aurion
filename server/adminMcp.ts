@@ -75,6 +75,7 @@ import {
 } from "./chatgptCausalityBridge";
 import { registerDevControlChannel } from "./devControlChannel";
 import { AdminQuestStudioService } from "./questCompiler/adminService";
+import { aiAuthoringToolCatalog, previewAiAuthoringTool } from "./aiFabric/authoringToolchain";
 import { QuestTemplateVersionSchema } from "../shared/aurionQuestContract";
 import { QuestValidator } from "./questCompiler/validator";
 import { aurionWorldContextService } from "./worldContext/service";
@@ -154,6 +155,8 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
     tools: Object.freeze([
       { name: "aurion_admin_get_capabilities", mode: "read", description: "Lists the current safe capabilities and boundaries." },
       { name: "aurion_admin_get_world_overview", mode: "read", description: "Reads the confirmed global world descriptor without advancing an epoch." },
+      { name: "aurion_ai_authoring_catalog", mode: "read", description: "Lists bounded authoring previews and existing canonical handoff routes." },
+      { name: "aurion_ai_authoring_preview", mode: "read", description: "Dispatches bounded quest, Fadenwerk and NPC previews; world requires live tRPC session." },
       { name: "aurion_admin_wolfram_status", mode: "read", description: "Reports secret-free Wolfram CAG runtime configuration without making a provider request." },
       { name: "aurion_causality_status", mode: "read", description: "Reads receipt-chain, persistence and replay coverage without mutating gameplay." },
       { name: "aurion_assurance_status", mode: "read", description: "Reads continuous causal-assurance evidence and a non-destructive recovery plan." },
@@ -220,6 +223,21 @@ function createAdminMcpServer(actor: AdminActor) {
   server.registerTool("aurion_admin_get_world_overview", { title: "Read confirmed Aurion world overview", description: "Reads the compact global world descriptor without mutation.", inputSchema: z.object({}) }, async () => {
     const overview = await db.getGlobalWorldAdminReadModel();
     return content(Object.freeze({ protocol: "aurion.admin-world-read.v1", actorUserId: actor.userId, source: overview.source, updatedAt: overview.updatedAt, globalWorld: overview.globalWorld, mutation: "none" }));
+  });
+  server.registerTool("aurion_ai_authoring_catalog", {
+    title: "Aurion AI authoring tool catalog",
+    description: "Read only. Lists Fadenwerk, quest, NPC and world authoring previews plus existing Aurion approval routes.",
+    inputSchema: z.object({}),
+  }, async () => content(aiAuthoringToolCatalog));
+  server.registerTool("aurion_ai_authoring_preview", {
+    title: "Preview one Aurion authoring tool",
+    description: "Read only. Accepts strict JSON for Fadenwerk, quest validation or NPC template drafting. World design requires the authenticated live-zone tRPC route and cannot be previewed here.",
+    inputSchema: z.object({ requestJson: z.string().min(2).max(120_000) }).strict(),
+  }, async input => {
+    let candidate: unknown;
+    try { candidate = JSON.parse(input.requestJson) as unknown; }
+    catch { throw new Error("AURION_AI_TOOL_JSON_INVALID"); }
+    return content(await previewAiAuthoringTool(candidate));
   });
   server.registerTool("aurion_admin_wolfram_status", { title: "Read Wolfram CAG status", description: "Secret-free configuration status; no provider request.", inputSchema: z.object({}) }, async () => content(wolframCagConfigurationStatus()));
 

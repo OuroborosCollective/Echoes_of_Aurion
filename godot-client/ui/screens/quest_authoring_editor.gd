@@ -29,6 +29,8 @@ var _faden_source_hash := ""
 var _faden_pending: Dictionary = {}
 var _quest_title: LineEdit
 var _node_title: LineEdit
+var _validation_status: Label
+var _validation_source := ""
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 8)
@@ -77,6 +79,11 @@ func _ready() -> void:
 		var item := _graph.get_selected()
 		if item != null and typeof(item.get_metadata(0)) == TYPE_STRING: rename_node(item.get_metadata(0), _node_title.text))
 	_button("Graph aus Entwurf anzeigen", _render_graph)
+	_button("Questgraph beim kanonischen Aurion-Validator prüfen", validate_current_draft)
+	_validation_status = Label.new()
+	_validation_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_validation_status.text = "UNVERIFIED · Questgraph noch nicht gegen den Aurion-Validator geprüft."
+	add_child(_validation_status)
 	_button("Lokalen Questentwurf als JSON kopieren", _copy_json)
 	_activation = CheckBox.new()
 	_activation.text = "Diese geprüfte Vorlagenversion aktiv veröffentlichen"
@@ -139,6 +146,8 @@ func close_context() -> void:
 	_faden_pending.clear()
 	_faden_lines.clear()
 	_faden_source_hash = ""
+	_validation_source = ""
+	if is_instance_valid(_validation_status): _validation_status.text = "UNVERIFIED · Keine bestätigte Sitzung."
 	if is_instance_valid(_faden_source): _faden_source.text = ""
 	if is_instance_valid(_faden_choice): _faden_choice.clear()
 	if is_instance_valid(_faden_status): _faden_status.text = ""
@@ -159,7 +168,7 @@ func _request(kind: String, payload: Dictionary = {}) -> bool:
 	_request_in_progress = false
 	# Native request-start errors emit failed before returning false. Wait for
 	# that return before deciding whether publication could have been sent.
-	if _request_failure_notified and kind not in ["questFadenInspect", "questFadenDraft"] and (started or kind != "questPublish"):
+	if _request_failure_notified and kind not in ["questFadenInspect", "questFadenDraft", "questValidate"] and (started or kind != "questPublish"):
 		_state.failed(kind)
 	_show_status()
 	if started and not _request_failure_notified:
@@ -252,6 +261,8 @@ func set_activation(enabled: bool) -> void:
 	_draft_changed()
 
 func _draft_changed() -> void:
+	_validation_source = ""
+	if is_instance_valid(_validation_status): _validation_status.text = "UNVERIFIED · Entwurf geändert; Aurion-Validierung wiederholen."
 	_failure_reason = ""
 	_state.draft_changed()
 	if is_instance_valid(_confirm): _confirm.hide()
@@ -285,6 +296,22 @@ func _render_graph() -> void:
 func _copy_json() -> void:
 	var value := current_draft()
 	if not value.is_empty(): DisplayServer.clipboard_set(JSON.stringify(value, "\t"))
+
+## Request the canonical Aurion quest graph validator without publishing the draft.
+func validate_current_draft() -> bool:
+	if not _can_edit():
+		if is_instance_valid(_validation_status): _validation_status.text = "BLOCKED · Entwurf ist nicht bearbeitbar oder ein Receipt ist ungeklärt."
+		return false
+	var draft := current_draft()
+	if draft.is_empty():
+		_validation_status.text = "BLOCKED · Questgraph ist nicht als kanonisches JSON lesbar."
+		return false
+	_validation_source = _json.text
+	_validation_status.text = "UNVERIFIED · Aurion prüft Schema und Graph; keine Veröffentlichung."
+	if not _request("questValidate", {"templateJson":JSON.stringify(draft)}):
+		_validation_status.text = "UNVERIFIED · Werkzeugkatalog oder Sitzung nicht bereit; erneut prüfen."
+		return false
+	return true
 
 func request_plan() -> void:
 	if not _can_edit():
@@ -344,6 +371,20 @@ func completed(kind: String, data: Dictionary) -> void:
 	if kind in ["questFadenInspect", "questFadenDraft"]:
 		_accept_fadenwerk(kind, data)
 		return
+	if kind == "questValidate":
+		if _validation_source.is_empty() or _json.text != _validation_source: return
+		_validation_source = ""
+		if typeof(data.get("diagnostics")) != TYPE_ARRAY or typeof(data.get("valid")) != TYPE_BOOL:
+			_validation_status.text = "UNVERIFIED · Aurion lieferte keine gültige Validierung."
+			return
+		var labels: Array[String] = []
+		for item in data.diagnostics:
+			if typeof(item) != TYPE_DICTIONARY or typeof(item.get("code")) != TYPE_STRING:
+				_validation_status.text = "UNVERIFIED · Aurion lieferte keine gültige Validierung."
+				return
+			labels.append(str(item.code))
+		_validation_status.text = ("PREVIEW_ONLY · Questgraph ist valide; kein Publish-Receipt." if data.valid else "BLOCKED · Aurion-Graphvalidator: " + ", ".join(labels))
+		return
 	match kind:
 		"questTemplates":
 			if data.get("schemaVersion") != "aurion.quest-template-page.v1" or typeof(data.get("items")) != TYPE_ARRAY or data.items.size() > 20 or not data.has("nextCursor"):
@@ -400,6 +441,10 @@ func failed(kind: String, reason: String = "") -> void:
 	_request_failure_notified = true
 	_failure_reason = reason
 	if kind == "questTemplate": _copying.clear()
+	if kind == "questValidate":
+		_validation_source = ""
+		if is_instance_valid(_validation_status): _validation_status.text = "UNVERIFIED · Questvalidierung fehlgeschlagen: " + reason
+		return
 	if kind in ["questFadenInspect", "questFadenDraft"]:
 		_faden_pending.clear()
 		if not _request_in_progress:

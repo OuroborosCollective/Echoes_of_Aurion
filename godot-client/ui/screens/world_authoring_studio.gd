@@ -46,6 +46,16 @@ var _quest_editor: VBoxContainer
 var _ai_panel: VBoxContainer
 var _ai_pending_draft := ""
 var _failure_reason := ""
+var _world_section: VBoxContainer
+var _tools_section: VBoxContainer
+var _tool_status: Label
+var _tools_ready := false
+var _tool_catalog_attempted := false
+var _tool_catalog: Dictionary = {}
+var _pending_tool: Dictionary = {}
+var _active_section := "world"
+const AUTHORING_TOOLS := ["fadenwerk.inspect", "fadenwerk.draft", "quest.template.validate", "npc.behavior.draft", "world.design.propose"]
+const AI_PREVIEW_KINDS := ["questFadenInspect", "questFadenDraft", "questValidate", "behaviorDraft", "aiPropose"]
 
 func _ready() -> void:
 	visible = false
@@ -76,39 +86,49 @@ func _ready() -> void:
 	_catalog_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_catalog_info.text = "Admin-Zugang und Katalog noch nicht geprüft."
 	stack.add_child(_catalog_info)
-	_button(stack, "Bestätigte Entitäten und Diagnose", _toggle_inspector)
+	var navigation := HFlowContainer.new()
+	navigation.add_theme_constant_override("h_separation", 8)
+	navigation.add_theme_constant_override("v_separation", 8)
+	stack.add_child(navigation)
+	for section in [["world", "Welt & KI"], ["quests", "Quests & Fadenwerk"], ["npc", "NPCs"], ["inspector", "Live-Inspektor"], ["tools", "KI-Werkzeuge"]]:
+		var tab := Button.new()
+		tab.text = section[1]
+		tab.custom_minimum_size.y = 48
+		tab.pressed.connect(show_section.bind(section[0]))
+		navigation.add_child(tab)
 	_build_inspector(stack)
 	_quest_editor = QuestEditor.new()
 	_quest_editor.name = "QuestStudio"
 	_quest_editor.visible = false
-	_button(stack, "Questvorlagen und Graphentwürfe", func(): _quest_editor.visible = not _quest_editor.visible)
 	stack.add_child(_quest_editor)
 	_behavior_forge = BehaviorForge.new()
 	_behavior_forge.name = "BehaviorForge"
 	_behavior_forge.visible = false
-	_button(stack, "NPC Behavior Forge", func(): _behavior_forge.visible = not _behavior_forge.visible)
 	stack.add_child(_behavior_forge)
+	_build_tool_center(stack)
+	_world_section = VBoxContainer.new()
+	stack.add_child(_world_section)
 	_brief = TextEdit.new()
 	_brief.placeholder_text = "Idee für KI-Entwurf"
 	_brief.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_brief.custom_minimum_size.y = 90
-	stack.add_child(_brief)
+	_world_section.add_child(_brief)
 	_ai_panel = AiDesignerPanel.new()
-	stack.add_child(_ai_panel)
+	_world_section.add_child(_ai_panel)
 	_ai_panel.status_requested.connect(func(): _send("aiStatus"))
 	_ai_panel.history_selected.connect(func(text: String): import_world_draft(text))
-	_button(stack, "KI-Entwurf anfordern", _propose)
+	_button(_world_section, "KI-Entwurf anfordern", _propose)
 	_draft = TextEdit.new()
 	_draft.placeholder_text = "Aurion-Weltentwurf als JSON prüfen und bearbeiten"
 	_draft.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_draft.custom_minimum_size.y = 210
 	_draft.text_changed.connect(_on_draft_changed)
-	stack.add_child(_draft)
-	_build_catalog_tools(stack)
-	_button(stack, "Entwurf bei Aurion prüfen", _plan)
-	_button(stack, "Geprüften Plan ansehen", _request_confirmation)
-	_button(stack, "Offenes Receipt bei Aurion suchen", _recover_receipt)
-	_button(stack, "Weltstand erneut lesen", _readback)
+	_world_section.add_child(_draft)
+	_build_catalog_tools(_world_section)
+	_button(_world_section, "Entwurf bei Aurion prüfen", _plan)
+	_button(_world_section, "Geprüften Plan ansehen", _request_confirmation)
+	_button(_world_section, "Offenes Receipt bei Aurion suchen", _recover_receipt)
+	_button(_world_section, "Weltstand erneut lesen", _readback)
 	_info = Label.new()
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(_info)
@@ -126,6 +146,95 @@ func _ready() -> void:
 	add_child(_confirm)
 	_touch_dialog_button(_confirm.get_ok_button())
 	_touch_dialog_button(_confirm.get_cancel_button())
+
+## Build the read-only tool discovery panel; effectful world actions stay separate.
+func _build_tool_center(parent: VBoxContainer) -> void:
+	_tools_section = VBoxContainer.new()
+	_tools_section.visible = false
+	parent.add_child(_tools_section)
+	var title := Label.new()
+	title.text = "Aurion KI-Werkzeuge · gemeinsame Authoring-Schnittstelle"
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tools_section.add_child(title)
+	_tool_status = Label.new()
+	_tool_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tool_status.text = "PREVIEW_ONLY · Werkzeugkatalog noch nicht bei Aurion geprüft."
+	_tools_section.add_child(_tool_status)
+	_button(_tools_section, "Werkzeugkatalog vom Aurion-Server lesen", _refresh_tool_catalog)
+	for entry in [
+		["quests", "Fadenwerk importieren und Questgraph prüfen"],
+		["npc", "NPC-Archetypen und Shadow-Controller vergleichen"],
+		["world", "Weltentwurf vorschlagen, planen und bestätigen"],
+		["inspector", "Bestätigte Weltprojektion untersuchen"],
+	]:
+		_button(_tools_section, entry[1], show_section.bind(entry[0]))
+	var note := Label.new()
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.text = "KI-Vorschläge sind keine Runtime-Wahrheit. Nur Aurion darf nach ausdrücklicher Bestätigung einen kanonischen Plan anwenden und dessen Receipt unabhängig zurücklesen."
+	_tools_section.add_child(note)
+
+## Navigation uses existing authoring panels and never grants gameplay authority.
+func show_section(section: String) -> bool:
+	if section not in ["world", "quests", "npc", "inspector", "tools"] or not _session_valid() or _state.phase == "closed":
+		return false
+	_active_section = section
+	_world_section.visible = section == "world"
+	_quest_editor.visible = section == "quests"
+	_behavior_forge.visible = section == "npc"
+	_inspection_panel.visible = section == "inspector"
+	_tools_section.visible = section == "tools"
+	if section == "inspector": _render_inspector()
+	if section in ["tools", "quests", "npc", "world"] and not _tools_ready and _api != null and not _api.busy(): _refresh_tool_catalog()
+	return true
+
+## Discovery attempted is session-scoped; rejected/failed catalogs must never enable legacy preview fallback.
+func _refresh_tool_catalog() -> void:
+	_tool_catalog_attempted = true
+	_tools_ready = false
+	_tool_catalog.clear()
+	_tool_status.text = "Werkzeugkatalog wird vom Aurion-Server gelesen."
+	if not _send("aiToolCatalog"):
+		_tool_status.text = "UNVERIFIED · Werkzeugkatalog konnte nicht angefordert werden."
+
+## A server-declared invalid catalog is a hard preview denial, not an unsupported legacy server.
+func _accept_tool_catalog(data: Dictionary) -> void:
+	_tool_catalog_attempted = true
+	_tools_ready = false
+	_tool_catalog.clear()
+	if data.get("schemaVersion") != "aurion.ai-authoring-tools.v1" or data.get("mutationAuthority") != "none":
+		_tool_status.text = "BLOCKED · Werkzeugvertrag ungültig oder Autorität unzulässig."
+		return
+	var tools: Variant = data.get("tools")
+	if typeof(tools) != TYPE_ARRAY or tools.size() != AUTHORING_TOOLS.size():
+		_tool_status.text = "BLOCKED · Werkzeugliste unvollständig."
+		return
+	for index in range(AUTHORING_TOOLS.size()):
+		var tool: Variant = tools[index]
+		if typeof(tool) != TYPE_DICTIONARY or tool.get("tool") != AUTHORING_TOOLS[index] or tool.get("previewOnly") != true:
+			_tool_status.text = "BLOCKED · Werkzeug-Allowlist abweichend."
+			return
+	if typeof(data.get("handoffs")) != TYPE_DICTIONARY:
+		_tool_status.text = "BLOCKED · Kanonische Übergänge fehlen."
+		return
+	_tools_ready = true
+	_tool_catalog = data.duplicate(true)
+	_tool_status.text = "PREVIEW_ONLY · 5 Aurion-Werkzeuge freigegeben. Questveröffentlichung, NPC-Aktivierung und Welt-Apply bleiben getrennt und bestätigungspflichtig."
+
+## Wrap only allowlisted preview commands when the server catalog is verified for this session.
+func _wrapped_tool(kind: String, payload: Dictionary) -> Dictionary:
+	if not _tools_ready or not _pending_tool.is_empty(): return {}
+	match kind:
+		"questFadenInspect":
+			return {"tool":"fadenwerk.inspect", "sourceJson":payload.get("sourceJson")}
+		"questFadenDraft":
+			return {"tool":"fadenwerk.draft", "sourceJson":payload.get("sourceJson"), "questlineIndex":payload.get("questlineIndex"), "version":payload.get("version")}
+		"questValidate":
+			return {"tool":"quest.template.validate", "templateJson":payload.get("templateJson")}
+		"behaviorDraft":
+			return {"tool":"npc.behavior.draft", "input":payload}
+		"aiPropose":
+			return {"tool":"world.design.propose", "input":payload}
+	return {}
 
 func _touch_dialog_button(button: Button) -> void:
 	# AcceptDialog resets custom_minimum_size when opened. Theme margins survive
@@ -217,6 +326,15 @@ func _render_inspector() -> void:
 	_inspection_rows = inspection_entities(_inspection_filter.text)
 	if _inspection.is_empty():
 		_inspection_status.text = "Keine bestätigte Zonenprojektion für diese Sitzung."
+		return
+	# Never render partial or incorrectly shaped inspection data as confirmed.
+	# Session identity and numerical sequence are required; a missing value
+	# cannot become a fabricated tick or an authoritative readback.
+	if _inspection.get("schemaVersion") != "aurion.inspection.v1" or _inspection.get("connectionId") != _connection or typeof(_inspection.get("zoneId")) != TYPE_STRING or _inspection.get("zoneId") != "observatory_threshold" or typeof(_inspection.get("tick")) != TYPE_INT or int(_inspection.tick) < 0 or typeof(_inspection.get("snapshotSeq")) != TYPE_INT or int(_inspection.snapshotSeq) < 0 or typeof(_inspection.get("stale")) != TYPE_BOOL or typeof(_inspection.get("totalEntities")) != TYPE_INT or int(_inspection.totalEntities) < 0 or typeof(_inspection.get("truncated")) != TYPE_BOOL or typeof(_inspection.get("entities")) != TYPE_ARRAY:
+		_inspection_status.text = "UNVERIFIED · Unvollständige oder sitzungsfremde Zonenprojektion; keine bestätigte Weltanzeige."
+		_inspection_list.clear()
+		_inspection_properties.text = ""
+		_inspection_rows.clear()
 		return
 	_inspection_status.text = "Zone %s · Tick %d · Seq %d · %s\n%d Entitäten%s · nur lesend\nServerrevision / Receipt / State-Hash: im Zonenprotokoll nicht enthalten; Kausalbeweis offen." % [
 		_inspection.zoneId, _inspection.tick, _inspection.snapshotSeq,
@@ -389,6 +507,11 @@ func close_session() -> void:
 	_api = null
 	_state.close()
 	_ai_pending_draft = ""
+	_pending_tool.clear()
+	_tools_ready = false
+	_tool_catalog_attempted = false
+	_tool_catalog.clear()
+	if is_instance_valid(_tool_status): _tool_status.text = "PREVIEW_ONLY · Keine bestätigte Admin-Sitzung."
 	if is_instance_valid(_ai_panel): _ai_panel.clear_session()
 	if is_instance_valid(_quest_editor): _quest_editor.close_context()
 	if is_instance_valid(_behavior_forge): _behavior_forge.close_context()
@@ -440,7 +563,20 @@ func _on_refresh_succeeded() -> void:
 func _send(kind: String, payload: Dictionary = {}) -> bool:
 	if not kind.begins_with("quest"):
 		_failure_reason = ""
-	if not _ensure_access() or _api == null or _api.busy():
+
+	if not _ensure_access() or _api == null or _api.busy() or not _pending_tool.is_empty():
+		return false
+	if kind in AI_PREVIEW_KINDS and _tool_catalog_attempted and not _tools_ready:
+		_tool_status.text = "BLOCKED · Kein bestätigter Aurion-Werkzeugkatalog; Vorschau gesperrt."
+		return false
+	if kind == "questValidate" and not _tools_ready:
+		_refresh_tool_catalog()
+		return false
+	var wrapped := _wrapped_tool(kind, payload)
+	if not wrapped.is_empty():
+		_pending_tool = {"tool":wrapped.tool, "alias":kind}
+		if _api.request("aiToolPreview", _server, _connection, wrapped, _allow_local): return true
+		_pending_tool.clear()
 		return false
 	return _api.request(kind, _server, _connection, payload, _allow_local)
 
@@ -567,6 +703,19 @@ func _completed(kind: String, data: Dictionary, connection: String, generation: 
 		_quest_editor.completed(kind, data)
 		return
 	_failure_reason = ""
+	if kind == "aiToolCatalog":
+		_accept_tool_catalog(data)
+		return
+	if kind == "aiToolPreview":
+		var pending := _pending_tool.duplicate()
+		_pending_tool.clear()
+		if pending.is_empty() or data.get("tool") != pending.get("tool") or data.get("previewOnly") != true or data.get("mutationAuthority") != "none" or typeof(data.get("result")) != TYPE_DICTIONARY:
+			_tool_status.text = "UNVERIFIED · Tool-Antwort passt nicht zum Auftrag; kein Entwurf übernommen."
+			if not pending.is_empty():
+				_failed(str(pending.alias), "AURION_AI_TOOL_RESULT_MISMATCH", connection, generation)
+			return
+		_completed(pending.alias, data.result, connection, generation)
+		return
 	match kind:
 		"identity":
 			if data.get("role") != "admin" or not _state.open(connection, generation, data.get("id")):
@@ -681,6 +830,17 @@ func _failed(kind: String, _reason: String, connection: String, generation: int)
 		return
 	if kind.begins_with("quest"):
 		_quest_editor.failed(kind, _reason)
+		return
+	if kind == "aiToolCatalog":
+		_tool_catalog_attempted = true
+		_tools_ready = false
+		_tool_status.text = "UNVERIFIED · Werkzeugkatalog: " + _reason
+		return
+	if kind == "aiToolPreview":
+		var pending := _pending_tool.duplicate()
+		_pending_tool.clear()
+		if not pending.is_empty():
+			_failed(pending.alias, _reason, connection, generation)
 		return
 	_failure_reason = _reason
 	_state.failed(kind)

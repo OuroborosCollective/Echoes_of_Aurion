@@ -5,6 +5,8 @@ import { getGlobalWorldAdminReadModel } from "./db";
 const BASE_READ_TOOLS = [
   "aurion_admin_get_capabilities",
   "aurion_admin_get_world_overview",
+  "aurion_ai_authoring_catalog",
+  "aurion_ai_authoring_preview",
   "aurion_admin_wolfram_status",
   "aurion_causality_status",
   "aurion_assurance_status",
@@ -121,6 +123,10 @@ describe("adminMcp", () => {
     expect(capabilities.chatGptProMode).toBe("read_evidence_only");
     expect(capabilities.tools.map(tool => tool.name)).toEqual(BASE_READ_TOOLS);
     expect(capabilities.tools.every(tool => tool.mode === "read")).toBe(true);
+    expect(capabilities.tools.filter(tool => tool.name.startsWith("aurion_ai_authoring_"))).toEqual([
+      expect.objectContaining({ name: "aurion_ai_authoring_catalog", mode: "read" }),
+      expect.objectContaining({ name: "aurion_ai_authoring_preview", mode: "read" }),
+    ]);
     expect(capabilities.consent).toMatchObject({
       defaultAuthority: "read_only",
       assetWriteScope: null,
