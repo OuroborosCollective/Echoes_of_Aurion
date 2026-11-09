@@ -28,7 +28,9 @@ function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, current) => {
     if (current && typeof current === "object" && !Array.isArray(current)) {
       return Object.fromEntries(
-        Object.entries(current as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
+        Object.keys(current as Record<string, unknown>)
+          .sort((a, b) => a.localeCompare(b))
+          .map(key => [key, (current as Record<string, unknown>)[key]]),
       );
     }
     return current;
