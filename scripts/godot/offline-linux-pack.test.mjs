@@ -6,6 +6,7 @@ import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { fetchPinnedArchiveWithRetry } from './download-pinned-editor.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'build-offline-linux-pack.sh');
 const engineName = 'Godot_v4.7.2-stable_linux.x86_64';
@@ -107,4 +108,48 @@ test('fail closed if the shared coordinate dependency was modified', () => {
     assert.notEqual(r.status, 0);
     assert.match(r.stderr + r.stdout, /dirty source files/);
   } finally { rmSync(dir, { recursive:true, force:true }); }
+});
+
+test('pinned Godot download retries only temporary HTTP errors with a bounded delay', async () => {
+  let count = 0;
+  const delays = [];
+  const valid = { ok: true, status: 200, body: {} };
+  const result = await fetchPinnedArchiveWithRetry('https://example.invalid/pinned-editor.zip', {
+    fetcher: async () => (++count < 3 ? { ok: false, status: 504 } : valid),
+    pause: async ms => delays.push(ms),
+  });
+  assert.equal(result, valid);
+  assert.equal(count, 3);
+  assert.deepEqual(delays, [1000, 2000]);
+});
+
+test('pinned Godot download fails closed after repeated HTTP 503', async () => {
+  let calls = 0;
+  await assert.rejects(
+    fetchPinnedArchiveWithRetry('https://example.invalid/pinned-editor.zip', {
+      fetcher: async () => { calls++; return { ok: false, status: 503 }; },
+      pause: async () => {},
+    }),
+    /Download failed: 503/,
+  );
+  assert.equal(calls, 4);
+});
+
+test('pinned Godot download does not retry permanent 404 or empty successful response', async () => {
+  let calls = 0;
+  await assert.rejects(
+    fetchPinnedArchiveWithRetry('https://example.invalid/pinned-editor.zip', {
+      fetcher: async () => { calls++; return { ok: false, status: 404 }; },
+      pause: async () => {},
+    }),
+    /Download failed: 404/,
+  );
+  assert.equal(calls, 1);
+  await assert.rejects(
+    fetchPinnedArchiveWithRetry('https://example.invalid/pinned-editor.zip', {
+      fetcher: async () => ({ ok: true, status: 200, body: null }),
+      pause: async () => {},
+    }),
+    /Download failed: 200/,
+  );
 });
