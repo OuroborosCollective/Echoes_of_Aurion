@@ -57,16 +57,16 @@ export class ZoneResourceRuntime {
   }
 
   public snapshot(currentTick: number): ConfirmedZoneResourceSnapshot {
-    const nodes: ConfirmedZoneResourceNode[] = [];
-    for (const state of this.orderedStates) {
-      nodes.push(
-        Object.freeze({
-          nodeId: state.nodeId,
-          remaining: state.remaining,
-          depleted: state.depleted,
-          respawnAtTick: state.respawnAtTick,
-        })
-      );
+    // ⚡ Bolt: Pre-allocate array to avoid dynamic sizing overhead per tick
+    const nodes = new Array<ConfirmedZoneResourceNode>(this.orderedStates.length);
+    for (let i = 0; i < this.orderedStates.length; i++) {
+      const state = this.orderedStates[i];
+      nodes[i] = Object.freeze({
+        nodeId: state.nodeId,
+        remaining: state.remaining,
+        depleted: state.depleted,
+        respawnAtTick: state.respawnAtTick,
+      });
     }
 
     const snapshot = Object.freeze({

@@ -1042,23 +1042,26 @@ export class AuthoritativeMovementZone {
 
   private combatants(): readonly ConfirmedZoneCombatant[] {
     this.refreshPeerOrder();
-    const out: ConfirmedZoneCombatant[] = [];
-    let peerIndex = 0;
     const mobs = this.mobRuntime.orderedStates();
+    // ⚡ Bolt: Pre-allocate array to avoid dynamic sizing overhead per tick
+    const out = new Array<ConfirmedZoneCombatant>(this.sortedPeersByEntityId.length + mobs.length);
+    let peerIndex = 0;
     let mobIndex = 0;
+    let outIndex = 0;
     while (peerIndex < this.sortedPeersByEntityId.length || mobIndex < mobs.length) {
       const peer = this.sortedPeersByEntityId[peerIndex];
       const mob = mobs[mobIndex];
       const peerId = peer ? `player:${peer.userId}` : null;
       const mobId = mob ? mob.definition.entityId : null;
       if (peerId && (!mobId || compareBinary(peerId, mobId) < 0)) {
-        out.push(Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence, ...(this.tacticalCombat ? { effects: { ...this.tactics.effects[peerId] }, skillCooldowns: Object.fromEntries(peer.skillCooldownUntilTick) } : {}) }));
+        out[outIndex++] = Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence, ...(this.tacticalCombat ? { effects: { ...this.tactics.effects[peerId] }, skillCooldowns: Object.fromEntries(peer.skillCooldownUntilTick) } : {}) });
         peerIndex += 1;
       } else if (mobId) {
-        out.push(Object.freeze({ entityId: mobId, health: mob.health, maxHealth: mob.maxHealth, stamina: mob.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: mob.health > 0, combatLevel: mob.definition.level, lastCombatSequence: 0 }));
+        out[outIndex++] = Object.freeze({ entityId: mobId, health: mob.health, maxHealth: mob.maxHealth, stamina: mob.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: mob.health > 0, combatLevel: mob.definition.level, lastCombatSequence: 0 });
         mobIndex += 1;
       }
     }
+    out.length = outIndex;
     return Object.freeze(out);
   }
 
