@@ -147,6 +147,7 @@ func _ready() -> void:
 	_touch_dialog_button(_confirm.get_ok_button())
 	_touch_dialog_button(_confirm.get_cancel_button())
 
+## Build the read-only tool discovery panel; effectful world actions stay separate.
 func _build_tool_center(parent: VBoxContainer) -> void:
 	_tools_section = VBoxContainer.new()
 	_tools_section.visible = false
@@ -219,6 +220,7 @@ func _accept_tool_catalog(data: Dictionary) -> void:
 	_tool_catalog = data.duplicate(true)
 	_tool_status.text = "PREVIEW_ONLY · 5 Aurion-Werkzeuge freigegeben. Questveröffentlichung, NPC-Aktivierung und Welt-Apply bleiben getrennt und bestätigungspflichtig."
 
+## Wrap only allowlisted preview commands when the server catalog is verified for this session.
 func _wrapped_tool(kind: String, payload: Dictionary) -> Dictionary:
 	if not _tools_ready or not _pending_tool.is_empty(): return {}
 	match kind:
