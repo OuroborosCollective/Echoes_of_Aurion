@@ -50,10 +50,12 @@ var _world_section: VBoxContainer
 var _tools_section: VBoxContainer
 var _tool_status: Label
 var _tools_ready := false
+var _tool_catalog_attempted := false
 var _tool_catalog: Dictionary = {}
 var _pending_tool: Dictionary = {}
 var _active_section := "world"
 const AUTHORING_TOOLS := ["fadenwerk.inspect", "fadenwerk.draft", "quest.template.validate", "npc.behavior.draft", "world.design.propose"]
+const AI_PREVIEW_KINDS := ["questFadenInspect", "questFadenDraft", "questValidate", "behaviorDraft", "aiPropose"]
 
 func _ready() -> void:
 	visible = false
@@ -184,14 +186,18 @@ func show_section(section: String) -> bool:
 	if section in ["tools", "quests", "npc", "world"] and not _tools_ready and _api != null and not _api.busy(): _refresh_tool_catalog()
 	return true
 
+## Discovery attempted is session-scoped; rejected/failed catalogs must never enable legacy preview fallback.
 func _refresh_tool_catalog() -> void:
+	_tool_catalog_attempted = true
 	_tools_ready = false
 	_tool_catalog.clear()
 	_tool_status.text = "Werkzeugkatalog wird vom Aurion-Server gelesen."
 	if not _send("aiToolCatalog"):
 		_tool_status.text = "UNVERIFIED · Werkzeugkatalog konnte nicht angefordert werden."
 
+## A server-declared invalid catalog is a hard preview denial, not an unsupported legacy server.
 func _accept_tool_catalog(data: Dictionary) -> void:
+	_tool_catalog_attempted = true
 	_tools_ready = false
 	_tool_catalog.clear()
 	if data.get("schemaVersion") != "aurion.ai-authoring-tools.v1" or data.get("mutationAuthority") != "none":
@@ -501,6 +507,7 @@ func close_session() -> void:
 	_ai_pending_draft = ""
 	_pending_tool.clear()
 	_tools_ready = false
+	_tool_catalog_attempted = false
 	_tool_catalog.clear()
 	if is_instance_valid(_tool_status): _tool_status.text = "PREVIEW_ONLY · Keine bestätigte Admin-Sitzung."
 	if is_instance_valid(_ai_panel): _ai_panel.clear_session()
@@ -556,6 +563,9 @@ func _send(kind: String, payload: Dictionary = {}) -> bool:
 		_failure_reason = ""
 
 	if not _ensure_access() or _api == null or _api.busy() or not _pending_tool.is_empty():
+		return false
+	if kind in AI_PREVIEW_KINDS and _tool_catalog_attempted and not _tools_ready:
+		_tool_status.text = "BLOCKED · Kein bestätigter Aurion-Werkzeugkatalog; Vorschau gesperrt."
 		return false
 	if kind == "questValidate" and not _tools_ready:
 		_refresh_tool_catalog()
@@ -820,6 +830,7 @@ func _failed(kind: String, _reason: String, connection: String, generation: int)
 		_quest_editor.failed(kind, _reason)
 		return
 	if kind == "aiToolCatalog":
+		_tool_catalog_attempted = true
 		_tools_ready = false
 		_tool_status.text = "UNVERIFIED · Werkzeugkatalog: " + _reason
 		return
