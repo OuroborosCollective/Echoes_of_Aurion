@@ -24,12 +24,15 @@ class Recorder:
 		sent.append({"kind":kind, "payload":payload.duplicate(true)})
 		return true
 
+## Collect failed fixture assertions for an explicit nonzero SceneTree exit.
 func check(ok: bool, message: String) -> void:
 	if not ok: failures.append(message)
 
+## Build an isolated preview response; this is not production evidence.
 func envelope(tool: String, value: Dictionary) -> Dictionary:
 	return {"tool":tool, "previewOnly":true, "mutationAuthority":"none", "result":value}
 
+## Provide an inactive, quarantined template solely for the isolated UI regression.
 func quest_template() -> Dictionary:
 	return {"templateId":"fadenwerk_test_strand","version":1,"title":"Test Strand","description":"Native draft",
 		"roles":[],"prerequisiteFacts":[],"nodes":[{"id":"start","type":"start","title":"Start"}, {"id":"end","type":"end","title":"End"}],
