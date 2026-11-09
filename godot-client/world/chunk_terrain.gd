@@ -8,7 +8,6 @@ const TILE_COUNT := 256
 const GRID_SIZE := 16
 const TILE_METERS := 4.0
 const CHUNK_METERS := 64.0
-const SURFACE_MATERIAL := MaterialCatalog.TERRAIN_SURFACE_TO_MATERIAL
 var diagnostic := "Nicht geladen"
 var _last_connection := ""
 var _last_model: Dictionary = {}
@@ -84,7 +83,7 @@ static func _validate_tiles(tiles: Variant, coordinate: Variant) -> Dictionary:
 			return {"reason": "chunk_tile_coordinate_invalid"}
 		if not _whole(item.get("heightMm"), -100000, 100000):
 			return {"reason": "chunk_height_invalid"}
-		if typeof(item.get("surface")) != TYPE_STRING or not SURFACE_MATERIAL.has(item.surface):
+		if typeof(item.get("surface")) != TYPE_STRING or not MaterialCatalog.TERRAIN_SURFACE_TO_MATERIAL.has(item.surface):
 			return {"reason": "chunk_surface_invalid"}
 		var index: int = int(z) * GRID_SIZE + int(x)
 		if tiles_by_index[index] != null:
@@ -146,7 +145,7 @@ func _render_validated(checked: Dictionary, read_model: Dictionary, connection_i
 		st.set_material(material)
 		var count := 0
 		for tile in sorted_tiles:
-			if float(tile.heightMm) / 1000.0 > ceiling or SURFACE_MATERIAL.get(tile.surface) != material_name:
+			if float(tile.heightMm) / 1000.0 > ceiling or MaterialCatalog.TERRAIN_SURFACE_TO_MATERIAL.get(tile.surface) != material_name:
 				continue
 			count += 1
 			var x: float = origin_x + float(tile.x) * TILE_METERS
