@@ -8,6 +8,9 @@ const TILE_COUNT := 256
 const GRID_SIZE := 16
 const TILE_METERS := 4.0
 const CHUNK_METERS := 64.0
+## Backwards-compatible surface contract used by the authenticated WorldSlice validator.
+## Single mapping source stays in MaterialCatalog, never duplicated here.
+const SURFACE_MATERIAL = MaterialCatalog.TERRAIN_SURFACE_TO_MATERIAL
 var diagnostic := "Nicht geladen"
 var _last_connection := ""
 var _last_model: Dictionary = {}
