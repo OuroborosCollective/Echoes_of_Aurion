@@ -120,14 +120,15 @@ for (const spec of specs) {
 
 test("AIM259 five-client acceptance is deferred from PR and push gates, not deleted", () => {
   const source = readFileSync(".github/workflows/aim259-group-instances.yml", "utf8");
-  assert.match(source, /^on:\\n  workflow_dispatch:/m, "five-client proof must remain manually runnable");
+  assert.ok(source.includes("on:\n  workflow_dispatch:"), "manual dispatch must remain available");
   assert.doesNotMatch(source, /^  pull_request:/m, "unfinished gameplay must not block unrelated PRs");
   assert.doesNotMatch(source, /^  push:/m, "unfinished gameplay must not falsely gate production pushes");
-  assert.match(source, /pnpm exec playwright test --config playwright\\.aurion-groups\\.config\\.ts/,
+  assert.ok(source.includes("pnpm exec playwright test --config playwright.aurion-groups.config.ts"),
     "five-client assertions must remain intact");
-  assert.match(source, /server\\/aim259GroupMariaDb\\.test\\.ts/,
+  assert.ok(source.includes("server/aim259GroupMariaDb.test.ts"),
     "real group database verification must remain");
-  assert.match(source, /actions\\/upload-artifact@v4/, "manual test must retain failed-run evidence");
+  assert.ok(source.includes("actions/upload-artifact@v4"),
+    "manual test must retain failed-run evidence");
 });
 
 test("native-auth migrations are still covered by the dedicated core schema pack", () => {
