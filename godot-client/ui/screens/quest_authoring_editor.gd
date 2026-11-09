@@ -378,7 +378,9 @@ func completed(kind: String, data: Dictionary) -> void:
 			return
 		var labels: Array[String] = []
 		for item in data.diagnostics:
-			if typeof(item) != TYPE_DICTIONARY or typeof(item.get("code")) != TYPE_STRING: return
+			if typeof(item) != TYPE_DICTIONARY or typeof(item.get("code")) != TYPE_STRING:
+				_validation_status.text = "UNVERIFIED · Aurion lieferte keine gültige Validierung."
+				return
 			labels.append(str(item.code))
 		_validation_status.text = ("PREVIEW_ONLY · Questgraph ist valide; kein Publish-Receipt." if data.valid else "BLOCKED · Aurion-Graphvalidator: " + ", ".join(labels))
 		return
