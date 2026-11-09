@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
 import { AuthoritativeMovementZone } from "./zoneRuntime";
+import { ZoneMobRuntime } from "./zoneMobRuntime";
 import { resolveCombatDelta } from "./wasdCombatDeltaProtocol";
 import type { ZoneId } from "./zoneProtocol";
 
@@ -102,4 +103,34 @@ describe("continuous authoritative zone combat", () => {
     expect(zone.combatSnapshot().find(actor => actor.entityId === "player:73")!.health).toBeLessThan(before);
     expect(events().some(event => event.tick > 300 && event.attackerEntityId === "mob_12" && event.damage > 0)).toBe(true);
   });
+
+  it("keeps cached mob state in parity with canonical lookup after ticks, combat and freeze", () => {
+    const runtime = new ZoneMobRuntime();
+    const ids = runtime.orderedStates().map(mob => mob.definition.entityId);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+
+    for (let tick = 1; tick <= 4; tick++) {
+      runtime.tick([], tick);
+      expect(runtime.snapshot().map(mob => mob.entityId)).toEqual(ids);
+      for (let index = 0; index < ids.length; index++) {
+        expect(runtime.orderedStates()[index]).toBe(runtime.stateFor(ids[index]));
+      }
+    }
+
+    const id = ids[0]!;
+    const before = runtime.stateFor(id)!;
+    expect(before.health).toBeGreaterThan(0);
+    const changed = runtime.applyCombatState(id, { health: before.health - 1 });
+    expect(changed).toBeDefined();
+    expect(runtime.orderedStates()[0]).toBe(changed);
+    expect(runtime.stateFor(id)).toBe(changed);
+    expect(runtime.snapshot()[0]!.health).toBe(changed!.health);
+
+    runtime.tick([], 5, new Set([id]));
+    expect(runtime.stateFor(id)).toBe(changed);
+    expect(runtime.orderedStates()[0]).toBe(changed);
+    expect(runtime.snapshot()[0]!.health).toBe(changed!.health);
+  });
+
 });
