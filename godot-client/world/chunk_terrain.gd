@@ -8,11 +8,7 @@ const TILE_COUNT := 256
 const GRID_SIZE := 16
 const TILE_METERS := 4.0
 const CHUNK_METERS := 64.0
-const SURFACE_MATERIAL := {
-	"grass": "forest", "forest_floor": "forest",
-	"riverbank": "rock", "stone": "rock", "ash": "rock",
-	"ruin_path": "paving",
-}
+const SURFACE_MATERIAL := MaterialCatalog.TERRAIN_SURFACE_TO_MATERIAL
 var diagnostic := "Nicht geladen"
 var _last_connection := ""
 var _last_model: Dictionary = {}
