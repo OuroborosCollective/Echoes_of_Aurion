@@ -5968,3 +5968,14 @@ Evidence: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1349 ; re
 Learned: Catalog unattempted and catalog denied are different trust states. A syntactically malformed diagnostic must terminate visibly; neither an isolated request recorder nor a green older commit proves native/live acceptance.
 Open: Verify exact final-head TypeScript/Godot/CI, any new review comments, merge SHA and independent main readback; separately verify authenticated live Godot/world/DB/NPC and release-owner preflight.
 Next safe step: Read full final SHA and CI job logs, repair any causal failures, resolve only addressed review threads, merge with an expected head lease and read back main; use actual production workflow run ID/attempt for a prefilled Owner preflight link.
+
+
+### 2026-11-09 — Draft #1352 G17 shared material projection
+Status: PARTIAL — presentation-only G17/G18/G19 mapping refactor in draft #1352; exact-head CI, confirmed-world and Android export evidence pending; no merge or deployment.
+Task: Reconcile #924 material-surface IDs across G18 chunk mesh and G19 native Terrain3D, preserving original source atlas and established server authority.
+Decisions: Shared six surface-name mapping lives in Godot material_catalog; Terrain3D slot IDs derive from mapped native material names. Reject unknown surfaces without neutral fallback; no changes to canonical world, 100-ms tick, collision, DB or receipts. Physical Tab A9 remains optional.
+Touched surfaces: godot-client/world/material_catalog.gd, chunk_terrain.gd, terrain3d_confirmed.gd, tests/test_material_projection.gd, Memory.md.
+Evidence: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1352 ; main base ae898dd1673fc3b765420076817c6cff8ee61e31; test-first commit aecbe0b11b851108bd0fc4590718719c45be06fc (failing RED execution not independently proven); implementation 7e2755226e3690eb1f867b9b1f16c9056af516b9, c9616f98e31e37d5ed55fb4ea6f0305f86acb815, 32fb25747f4436e6bda7bf78a8df8fbd1d2d9488, 4eff09416b0868f9bc1a3fb1fbc8ce0ef007be5a. Original texture SHA256 f329e8e1224416e38967f888d40d4459bf8b359001370a432cb270c13f1f3f35 unchanged; old #1201 and #1177 test runs apply only to historical SHAs.
+Learned: G18 and G19 duplicated their atlas surface classification. Source material availability and fixture rendering do not prove the authenticated production world or Android export parity.
+Open: Exact-head CI, actual Godot import/parse and G17/G18/G19 native headless assertions, Android/JNI/export material readback, confirmed-world material projection and visual source/UV parity. #924 remains OPEN.
+Next safe step: Inspect final-head Godot and Android jobs; repair causal failures; independently read back native app export and confirmed server-backed scene material identities before review-ready/merge/issue close.
