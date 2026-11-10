@@ -173,8 +173,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       for (const placement of region.placements) {
         if (placement.id.startsWith(`${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:`)) continue;
         const asset = worldAssetById.get(placement.assetId)!;
-        if (asset.family === "city")
-          expect(intersectsStarterCityWallClearance(asset, placement), `city wall breach: ${placement.id}`).toBe(false);
+        // Owner design brief 2026-11-10: no procedural model of any family inside the walls.
+        expect(intersectsStarterCityWallClearance(asset, placement), `city wall breach: ${placement.id}`).toBe(false);
       }
       for (const chunk of [{ x: -1, z: -1 }, { x: -1, z: 0 }, { x: -1, z: 1 }, { x: 0, z: -1 }, { x: 0, z: 1 }]) {
         const expectedNature = worldAssetsForChunk(GLOBAL_WORLD_SEED, chunk).filter(p => worldAssetById.get(p.assetId)?.family === "nature");
