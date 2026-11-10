@@ -127,3 +127,42 @@ describe("Blocker 5 causal receipt v2", () => {
     }
   });
 });
+
+it("replays recorded collision inputs after live overrides change", async () => {
+ const {applyShippedPlacementReadback,resetShippedPlacementOverridesForTest}=await import("../worldShippedPlacementOverrides");
+ const {GLOBAL_WORLD_ID}=await import("../../shared/worldIdentity");
+ try {
+  resetShippedPlacementOverridesForTest();
+  const before=v2Fixture("collision-before");
+  applyShippedPlacementReadback({worldId:GLOBAL_WORLD_ID,overrides:[{placementRef:"shipped:aurion-world-assets.v1:0:-1:4",assetId:"removed"}] as any});
+  const after=v2Fixture("collision-after");
+  expect(after.receipt.stages[1].hiddenShippedPlacementIds).toEqual(["aurion-world-assets.v1:0:-1:4"]);
+  resetShippedPlacementOverridesForTest();
+  for(const fixture of [before,after]) expect(replayZoneTick({preState:fixture.preState,intents:fixture.intents,expectedReceipt:JSON.parse(JSON.stringify(fixture.receipt))}).verdict).toBe("MATCH");
+ } finally {resetShippedPlacementOverridesForTest();}
+});
+
+it("replays blocked and removed-tree ticks from the checkpoint tail", async () => {
+ const {applyShippedPlacementReadback,resetShippedPlacementOverridesForTest}=await import("../worldShippedPlacementOverrides");
+ const {GLOBAL_WORLD_ID}=await import("../../shared/worldIdentity");
+ try {
+  resetShippedPlacementOverridesForTest();
+  const setup=v2Fixture("collision-boundary");
+  const preState=JSON.parse(JSON.stringify(replayZoneTick({preState:setup.preState,intents:setup.intents,expectedReceipt:setup.receipt}).postState));
+  Object.assign(preState.players[0],{x:-21420,z:-73780,inputX:-1,inputZ:0});
+  const zone=new AuthoritativeMovementZone(preState.zoneId);
+  zone.restoreFromCanonicalState(preState,setup.receipt.receiptHash);
+  zone.tick();
+  const blocked=zone.getLatestReceipt()!;
+  const blockedState=zone.getCanonicalZoneState();
+  expect(blockedState.players[0].x).toBe(-21420);
+  applyShippedPlacementReadback({worldId:GLOBAL_WORLD_ID,overrides:[{placementRef:"shipped:aurion-world-assets.v1:0:-1:4",assetId:"removed"}] as any});
+  zone.tick();
+  const removed=zone.getLatestReceipt()!;
+  expect(zone.getCanonicalZoneState().players[0].x).toBe(-21760);
+  resetShippedPlacementOverridesForTest();
+  const first=replayZoneTick({preState,intents:[],expectedReceipt:JSON.parse(JSON.stringify(blocked))});
+  expect(first.verdict).toBe("MATCH");
+  expect(replayZoneTick({preState:first.postState!,intents:[],expectedReceipt:JSON.parse(JSON.stringify(removed))}).verdict).toBe("MATCH");
+ } finally {resetShippedPlacementOverridesForTest();}
+});

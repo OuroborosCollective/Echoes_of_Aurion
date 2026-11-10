@@ -5,6 +5,8 @@ import { tsImport } from "tsx/esm/api";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 import { WASD_ZONE_CARDINAL_STEP_FIXED as STEP } from "../server/wasdZoneMovementProtocol";
 
+import { AURION_STARTER_VILLAGE_CONTRACT_VERSION } from "../shared/aurionStarterVillageContract";
+
 const manifest = JSON.parse(readFileSync("shared/worldCollisionManifest.json", "utf8"));
 test.skip(process.env.AURION_COLLISION_E2E !== "1", "Isolated collision runtime required");
 
@@ -174,7 +176,7 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
     expect(region.collisionHash).toBe(manifest.manifestSha256);
     const obstacle = region.placements.find((entry: { assetId: string; xMm: number; zMm: number }) => entry.assetId === "nature-tree-oak-4" && entry.xMm === -23000 && entry.zMm === -74000);
     expect(obstacle).toBeDefined();
-    expect(region.placements.some((entry: { xMm: number; zMm: number }) => Math.abs(entry.xMm) < 55000 && Math.abs(entry.zMm) < 55000)).toBe(false);
+    expect(region.placements.filter((entry: { id: string }) => !entry.id.startsWith(`${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:`)).some((entry: { xMm: number; zMm: number }) => Math.abs(entry.xMm) < 55000 && Math.abs(entry.zMm) < 55000)).toBe(false);
     expect(manifest.colliders.find((entry: { assetId: string }) => entry.assetId === "nature-tree-oak-4").blocksMovement).toBe(true);
     expect(manifest.colliders.find((entry: { assetId: string }) => entry.assetId === "nature-stump-3").blocksMovement).toBe(false);
 

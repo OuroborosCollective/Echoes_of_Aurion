@@ -79,6 +79,8 @@ export const AdminGlbMenu: React.FC = () => {
   const [removalArmed, setRemovalArmed] = useState(false);
   React.useEffect(() => { setRemovalArmed(false); }, [currentTarget?.id]);
 
+  const worldVisualSaving = React.useRef(false);
+
   if (!isAdmin) return null;
 
   const filteredCatalog = catalogQuery.data?.filter(asset => 
@@ -117,7 +119,8 @@ export const AdminGlbMenu: React.FC = () => {
    * objects passes its own reference, because a removed object can no longer be targeted.
    */
   const saveWorldVisual = async (assetId: string | null, placementRef = currentTarget?.placementRef) => {
-    if (!placementRef) return;
+    if (!placementRef || worldVisualSaving.current) return;
+    worldVisualSaving.current = true;
     setRemovalArmed(false);
     setIntegrationStatus({ tone: "info", text: "Wird serverseitig gespeichert…" });
     try {
@@ -132,6 +135,8 @@ export const AdminGlbMenu: React.FC = () => {
       window.dispatchEvent(new Event(WORLD_VISUALS_CHANGED_EVENT));
     } catch (err) {
       setIntegrationStatus({ tone: "error", text: worldVisualMessage(err) });
+    } finally {
+      worldVisualSaving.current = false;
     }
   };
 

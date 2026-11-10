@@ -35,6 +35,7 @@ function contextFor(receipt: AurionCausalTickReceipt): ReplayVerdictContext {
 
 function stageHash(stage: AurionCausalStageReceipt): string {
   return canonicalSha256({
+    ...(stage.hiddenShippedPlacementIds === undefined ? {} : { hiddenShippedPlacementIds: stage.hiddenShippedPlacementIds }),
     stageName: stage.stageName,
     stageOrdinal: stage.stageOrdinal,
     stageInputIdentity: stage.stageInputIdentity,
@@ -139,6 +140,9 @@ export function replayZoneTick(input: ReplayInput): ReplayVerdict {
 
   const zone = new AuthoritativeMovementZone(preState.zoneId as any);
   zone.isReplay = true;
+  if (expectedReceipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2) {
+    zone.collisionSnapshotOverride = expectedReceipt.stages.find(stage => stage.stageName === "MOVEMENT")?.hiddenShippedPlacementIds;
+  }
   zone.sourceRevisionOverride = expectedReceipt.sourceRevision;
   zone.receiptSchemaOverride = expectedReceipt.schema;
   zone.restoreFromCanonicalState(preState, expectedReceipt.previousReceiptHash);

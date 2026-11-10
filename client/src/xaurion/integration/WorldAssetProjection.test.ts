@@ -27,7 +27,7 @@ describe("confirmed world-asset position units", () => {
 // Design brief 2026-11-10: after an admin removes, replaces or restores a procedural
 // model, the same chunk must be read again; a cached plan would keep showing the old world.
 describe("confirmed world plan after an admin change", () => {
-  it("re-reads the unchanged chunk once per confirmed override readback and never after dispose", () => {
+  it("re-reads the unchanged chunk once per confirmed override readback and never after dispose", async () => {
     const fetchRegion = vi.fn(() => new Promise<unknown>(() => {}));
     const projection = new WorldAssetProjection(new THREE.Scene(), new THREE.PerspectiveCamera(), () => 0, fetchRegion, vi.fn());
     const here = { x: 70, z: -70 };
@@ -35,6 +35,7 @@ describe("confirmed world plan after an admin change", () => {
     projection.update(1, here, 1440);
     expect(fetchRegion).toHaveBeenCalledTimes(1);
     window.dispatchEvent(new Event(WORLD_VISUAL_READBACK_CHANGED_EVENT));
+    await new Promise(resolve => setTimeout(resolve, 0));
     projection.update(0.016, here, 1440); // the very next frame, not half a second later
     expect(fetchRegion).toHaveBeenCalledTimes(2);
     expect(fetchRegion).toHaveBeenLastCalledWith({ x: 1, z: -1 });
@@ -45,4 +46,47 @@ describe("confirmed world plan after an admin change", () => {
     projection.update(1, here, 1440);
     expect(fetchRegion).toHaveBeenCalledTimes(2);
   });
+});
+
+it("retries failed reads with backoff", async () => {
+ const fetchRegion=vi.fn().mockRejectedValue(Error("offline"));
+ const projection=new WorldAssetProjection(new THREE.Scene(),new THREE.PerspectiveCamera(),()=>0,fetchRegion,vi.fn());
+ projection.update(1,{x:0,z:0},1440);
+ await new Promise(resolve=>setTimeout(resolve,0));
+ projection.update(0.5,{x:0,z:0},1440);
+ expect(fetchRegion).toHaveBeenCalledTimes(1);
+ projection.update(0.5,{x:0,z:0},1440);
+ expect(fetchRegion).toHaveBeenCalledTimes(2);
+ projection.dispose();
+});
+it("waits for query cancellation before reading again", async () => {
+ let finish!:()=>void;
+ const cancel=()=>new Promise<void>(resolve=>{finish=resolve;});
+ const fetchRegion=vi.fn(()=>new Promise<unknown>(()=>{}));
+ const projection=new WorldAssetProjection(new THREE.Scene(),new THREE.PerspectiveCamera(),()=>0,fetchRegion,vi.fn(),undefined,cancel);
+ projection.update(1,{x:0,z:0},1440);
+ projection.refresh();
+ projection.update(1,{x:0,z:0},1440);
+ expect(fetchRegion).toHaveBeenCalledTimes(1);
+ finish();
+ await new Promise(resolve=>setTimeout(resolve,0));
+ projection.update(0.016,{x:0,z:0},1440);
+ expect(fetchRegion).toHaveBeenCalledTimes(2);
+ projection.dispose();
+});
+it("ignores failed reads after a newer center is selected or disposal", async () => {
+ let rejectOld!:(error:Error)=>void;
+ const fetchRegion=vi.fn().mockImplementationOnce(()=>new Promise((_,reject)=>{rejectOld=reject;})).mockImplementation(()=>new Promise(()=>{}));
+ const report=vi.fn();
+ const projection=new WorldAssetProjection(new THREE.Scene(),new THREE.PerspectiveCamera(),()=>0,fetchRegion,report);
+ projection.update(1,{x:0,z:0},1440);
+ projection.update(1,{x:70,z:0},1440);
+ rejectOld(Error("retired"));
+ await new Promise(resolve=>setTimeout(resolve,0));
+ expect(report).not.toHaveBeenCalled();
+ projection.update(30,{x:70,z:0},1440);
+ expect(fetchRegion).toHaveBeenCalledTimes(2);
+ projection.dispose();
+ projection.update(30,{x:0,z:0},1440);
+ expect(fetchRegion).toHaveBeenCalledTimes(2);
 });

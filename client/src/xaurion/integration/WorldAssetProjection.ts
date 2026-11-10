@@ -44,6 +44,7 @@ export class WorldAssetProjection {
  private region: WorldAssetRegion|null=null;
  private selected: Selection[]=[];
  private disposed=false;private elapsed=1;private lastCenter="";private readGeneration=0;private access=0;private readFailed=false;
+ private retryAfter=0;private retryDelay=1;private readClock=0;
  private previousLod=new Map<string,0|1|2>();
  private rendered=0;private drawCalls=0;private triangles=0;private activeLights=0;
  private readonly onConfirmedZoneSnapshot=(event:Event)=>{
@@ -56,7 +57,7 @@ export class WorldAssetProjection {
   this.update(1,{x:x/1000,z:z/1000},this.renderer?.domElement.clientWidth||this.viewportWidth);
  };
  private readonly onVisualReadbackChanged=()=>this.refresh();
- constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer){
+ constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer,private readonly cancelRegion:()=>Promise<unknown>=()=>Promise.resolve()){
   this.root.name="aurion-optimized-world-assets";scene.add(this.root);
   // Detect KTX2 support once, but do not attach the decoder to a shared GLTFLoader.
   // A failed KTX2 worker must never poison the separately hash-verified raster fallback.
@@ -64,13 +65,21 @@ export class WorldAssetProjection {
   if(typeof window!=="undefined"){window.addEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);window.addEventListener(WORLD_VISUAL_READBACK_CHANGED_EVENT,this.onVisualReadbackChanged);}
  }
  update(delta:number,position:{x:number;z:number},viewportWidth:number){
-  if(this.disposed)return;this.elapsed+=delta;if(this.elapsed<0.5)return;this.elapsed=0;
+  if(this.disposed)return;this.readClock+=delta;this.elapsed+=delta;if(this.elapsed<0.5)return;this.elapsed=0;
   const center=splitWorldChunkPositionMm({x:Math.round(position.x*1000),z:Math.round(position.z*1000)}).coordinate,key=`${center.x}:${center.z}`;
-  if(key!==this.lastCenter){this.lastCenter=key;const generation=++this.readGeneration;void this.fetchRegion(center).then(value=>{if(this.disposed||generation!==this.readGeneration)return;const region=worldAssetRegionSchema.parse(value);if(region.center.x!==center.x||region.center.z!==center.z)throw Error("WORLD_ASSET_CENTER_MISMATCH");this.region=region;this.readFailed=false;this.select(position,viewportWidth);}).catch(()=>{if(!this.disposed&&generation===this.readGeneration){this.readFailed=true;this.report(this.evidence());}});}
+  if(key!==this.lastCenter&&this.readClock>=this.retryAfter){this.lastCenter=key;const generation=++this.readGeneration;void this.fetchRegion(center).then(value=>{if(this.disposed||generation!==this.readGeneration)return;const region=worldAssetRegionSchema.parse(value);if(region.center.x!==center.x||region.center.z!==center.z)throw Error("WORLD_ASSET_CENTER_MISMATCH");this.region=region;this.readFailed=false;this.retryDelay=1;this.select(position,viewportWidth);}).catch(()=>{if(!this.disposed&&generation===this.readGeneration){this.lastCenter="";this.retryAfter=this.readClock+this.retryDelay;this.retryDelay=Math.min(30,this.retryDelay*2);this.readFailed=true;this.report(this.evidence());}});}
   this.select(position,viewportWidth);
  }
  /** Re-read the confirmed region on the next update (an admin removed, replaced or restored a placement). */
- refresh(){if(this.disposed)return;this.lastCenter="";this.elapsed=1;}
+ refresh(){
+  if(this.disposed)return;
+  const generation=++this.readGeneration;
+  this.retryAfter=Infinity;
+  void this.cancelRegion().catch(()=>{}).finally(()=>{
+   if(this.disposed||generation!==this.readGeneration)return;
+   this.lastCenter="";this.elapsed=1;this.retryAfter=0;this.retryDelay=1;
+  });
+ }
  private select(position:{x:number;z:number},width:number){
   if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width,isTouchMobileOs())],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
   // Selection is presentation-only. Under a tight asset budget, use the same

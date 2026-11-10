@@ -7,6 +7,7 @@ import {
 import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import {
   isShippedPlacementHidden,
+  snapshotHiddenShippedPlacementIds,
   onShippedPlacementOverridesChanged,
 } from "./worldShippedPlacementOverrides";
 import {
@@ -240,3 +241,9 @@ export const worldNatureCollision = new WorldNatureCollision(
   isShippedPlacementHidden
 );
 onShippedPlacementOverridesChanged(() => worldNatureCollision.invalidate());
+
+/** Tick-local immutable index; cache invalidation of the live view cannot change it. */
+export function snapshotWorldNatureCollision(ids = snapshotHiddenShippedPlacementIds()): WorldNatureCollision {
+  const hidden = new Set(ids);
+  return new WorldNatureCollision(GLOBAL_WORLD_SEED, id => hidden.has(id));
+}

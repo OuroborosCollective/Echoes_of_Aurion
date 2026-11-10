@@ -296,3 +296,19 @@ describe("free placement and removal from the admin menu", () => {
     expect(screen.queryByTestId("admin-glb-remove-placement")).toBeNull();
   });
 });
+
+it("serializes repeated save actions and releases the guard after failure and success", async () => {
+ let fail!:(error:Error)=>void;
+ fixture.setWorldVisual.mockImplementationOnce(()=>new Promise((_,reject)=>{fail=reject;})).mockResolvedValue({revision:2});
+ useAdminStore.setState({inspectionMode:true,activeModelId:"glb_new_house",currentTarget:house});
+ openInspection();
+ const save=screen.getByRole("button",{name:/Hier austauschen/});
+ fireEvent.click(save); fireEvent.click(save);
+ await vi.waitFor(()=>expect(fixture.setWorldVisual).toHaveBeenCalledTimes(1));
+ fail(Error("WORLD_VISUAL_WRITE_FAILED"));
+ await screen.findByText(/Speichern fehlgeschlagen/);
+ fireEvent.click(save);
+ await screen.findByText(/Gespeichert/);
+ fireEvent.click(save);
+ await vi.waitFor(()=>expect(fixture.setWorldVisual).toHaveBeenCalledTimes(3));
+});

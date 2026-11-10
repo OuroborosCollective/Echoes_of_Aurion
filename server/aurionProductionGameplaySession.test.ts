@@ -176,6 +176,10 @@ describe("effectful production gameplay session readback", () => {
       probe.tick(); idle.tick(); player.tick();
       expect(probe.getCanonicalZoneState().mobs).toEqual(idle.getCanonicalZoneState().mobs);
       for (const intent of recorder.getEntry(probe.zoneId, tick)!.intents!) replay.enqueueIntent(intent);
+      const recordedReceipt = recorder.getEntry(probe.zoneId, tick)!.receipt;
+      if (recordedReceipt.schema === "aurion.causal.tick.v2") {
+        replay.collisionSnapshotOverride = recordedReceipt.stages.find(stage => stage.stageName === "MOVEMENT")?.hiddenShippedPlacementIds;
+      }
       replay.tick();
       expect(replay.getLatestReceipt()?.receiptHash).toBe(probe.getLatestReceipt()?.receiptHash);
       if (tick === 10) probe.leave(welcome.connectionId);

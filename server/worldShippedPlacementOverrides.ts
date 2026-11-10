@@ -60,6 +60,7 @@ export function markShippedPlacementOverridesEmpty(): void { replace(new Set());
 
 export const shippedPlacementOverridesLoaded = () => loaded;
 export const isShippedPlacementHidden = (placementId: string) => hidden.has(placementId);
+export const snapshotHiddenShippedPlacementIds = (): readonly string[] => Object.freeze([...hidden].sort());
 export const hiddenShippedPlacementCount = () => hidden.size;
 
 /** Derived caches (movement collision) drop their state when the index changes. */

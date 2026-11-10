@@ -429,7 +429,7 @@ export default function AurionOpenWorldRuntime() {
           if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence);
           setWorldAssetsFailed(evidence.failed > 0);
           setWorldAssetLoadingEvidence({ version: evidence.version, planned: evidence.planned, rendered: evidence.rendered, loading: evidence.loading, failed: evidence.failed });
-        }, engine.renderer);
+        }, engine.renderer, () => rpcUtils.worldAssets.regionV2.cancel());
       worldRoads = new WorldRoadProjection(engine.scene, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       delete containerRef.current.dataset.chunkProjection;
       delete containerRef.current.dataset.clientVerification;
