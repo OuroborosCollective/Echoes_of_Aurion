@@ -821,7 +821,21 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    const frozenEntityIds = new Set<string>();
+    for (let i = 0; i < this.tactics.windups.length; i++) {
+      frozenEntityIds.add(this.tactics.windups[i]!.mobId);
+    }
+    if (this.tickNumber % 2 === 0) {
+      for (const id in this.tactics.effects) {
+        if (Object.prototype.hasOwnProperty.call(this.tactics.effects, id)) {
+          const effect = this.tactics.effects[id];
+          if (effect && (effect.slowUntil ?? 0) > this.tickNumber) {
+            frozenEntityIds.add(id);
+          }
+        }
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, frozenEntityIds);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -929,7 +943,14 @@ export class AuthoritativeMovementZone {
       else effects.overdriveUntil = this.tickNumber + 50;
       result.changed = true;
     } else {
-      const targets = skillId === "k_whirlwind" ? this.mobRuntime.orderedStates().filter(m => m.health > 0 && mobDistance(peer.position, m.position) <= rule.range).map(m => m.definition.entityId) : [targetId];
+      const targets: string[] = [];
+      if (skillId === "k_whirlwind") {
+        for (const m of this.mobRuntime.orderedStates()) {
+          if (m.health > 0 && mobDistance(peer.position, m.position) <= rule.range) targets.push(m.definition.entityId);
+        }
+      } else {
+        targets.push(targetId);
+      }
       const initialStamina = peer.stamina;
       for (const target of targets) {
         peer.stamina = initialStamina;
