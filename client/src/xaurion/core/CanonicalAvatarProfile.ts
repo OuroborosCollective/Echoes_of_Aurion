@@ -234,7 +234,7 @@ function regionEnvelope(
     regionId,
     boneId,
     normalizedBounds: { min, max },
-    clearanceRadiusNormalized: Math.max(...radius),
+    clearanceRadiusNormalized: Math.max(radius[0]!, radius[1]!, radius[2]!),
   });
 }
 

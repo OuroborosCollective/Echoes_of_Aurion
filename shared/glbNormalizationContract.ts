@@ -87,7 +87,7 @@ export const glbNormalizationManifestSchema = z.object({
   manifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict().superRefine((manifest, context) => {
   const sourceExtents = manifest.sourceBoundsMm.max.map((value, axis) => value - manifest.sourceBoundsMm.min[axis]!);
-  const maximumSourceExtent = Math.max(...sourceExtents);
+  const maximumSourceExtent = Math.max(sourceExtents[0]!, sourceExtents[1]!, sourceExtents[2]!);
   const expectedScale = sourceExtents.reduce((scale, extent, axis) => {
     const candidate = BigInt(manifest.targetEnvelopeMm[axis]!) * BigInt(GLB_NORMALIZATION_SCALE_E8) / BigInt(Math.max(1, extent));
     return candidate < scale ? candidate : scale;
@@ -113,7 +113,7 @@ export const glbNormalizationManifestSchema = z.object({
   const normalizedExtents = expectedBounds.max.map((value, axis) => value - expectedBounds.min[axis]!);
   if (normalizedExtents.some((extent, axis) => extent < 0 || extent > manifest.targetEnvelopeMm[axis]!)) context.addIssue({ code: "custom", path: ["targetEnvelopeMm"], message: "Measured bounds must fit inside the gameplay envelope." });
 
-  const maximumNormalizedExtent = Math.max(...normalizedExtents);
+  const maximumNormalizedExtent = Math.max(normalizedExtents[0]!, normalizedExtents[1]!, normalizedExtents[2]!);
   const expectedAspect = normalizedExtents.map(extent => maximumNormalizedExtent === 0 ? 0 : roundRatioHalfAway(BigInt(extent) * 1_000_000n, BigInt(maximumNormalizedExtent)));
   if (JSON.stringify(expectedAspect) !== JSON.stringify(manifest.aspectRatioE6)) context.addIssue({ code: "custom", path: ["aspectRatioE6"], message: "Aspect ratios must be measured in millionths from normalized bounds." });
   const expectedClearance = manifest.targetEnvelopeMm.map((extent, axis) => extent - normalizedExtents[axis]!);
