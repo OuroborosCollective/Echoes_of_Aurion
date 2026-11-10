@@ -1,4 +1,5 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
+import { WorldRoadProjection } from "./WorldRoadProjection";
 import { subscribeWorldSurfaceAtlasEvidence } from "../world/WorldSurfaceAtlas";
 import { installStartupViewCapture, type StartupViewCapture } from "@/lib/startupViewCapture";
 import { GLOBAL_WORLD_ID } from "@shared/worldIdentity";
@@ -320,6 +321,7 @@ export default function AurionOpenWorldRuntime() {
     let remotePresence: RemotePresenceProjection | undefined;
     let capture: VisibleCanvasCapture | undefined;
     let worldAssets: WorldAssetProjection | undefined;
+    let worldRoads: WorldRoadProjection | undefined;
     const confirmedVisuals = new ConfirmedVisualEffects();
     const onConfirmedAction = (event: Event) => {
       if (disposed || !engine || engineRef.current !== engine) return;
@@ -345,6 +347,7 @@ export default function AurionOpenWorldRuntime() {
       surfaceAtlasEvidenceUnsubscribe?.();
       surfaceAtlasEvidenceUnsubscribe = undefined;
       worldAssets?.dispose();
+      worldRoads?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
       remotePresenceRef.current = null;
@@ -426,6 +429,7 @@ export default function AurionOpenWorldRuntime() {
           setWorldAssetsFailed(evidence.failed > 0);
           setWorldAssetLoadingEvidence({ version: evidence.version, planned: evidence.planned, rendered: evidence.rendered, loading: evidence.loading, failed: evidence.failed });
         }, engine.renderer);
+      worldRoads = new WorldRoadProjection(engine.scene, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       delete containerRef.current.dataset.chunkProjection;
       delete containerRef.current.dataset.clientVerification;
       const chunkProjection = new ConfirmedChunkProjection(engine.scene, world.epoch,
@@ -482,6 +486,7 @@ export default function AurionOpenWorldRuntime() {
         serviceNpcRef.current?.update(delta);
         chunkProjection.update(engine!.player.position, delta);
         worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth);
+        worldRoads?.update(engine!.player.position, delta);
         if (containerRef.current) containerRef.current.dataset.playerProjection = JSON.stringify({ position: engine!.player.position, rendered: engine!.player.group.position });
       };
       engine.onRuntimeError = fail;
@@ -528,6 +533,7 @@ export default function AurionOpenWorldRuntime() {
       surfaceAtlasEvidenceUnsubscribe?.();
       surfaceAtlasEvidenceUnsubscribe = undefined;
       worldAssets?.dispose();
+      worldRoads?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
       if (remotePresenceRef.current === remotePresence) remotePresenceRef.current = null;

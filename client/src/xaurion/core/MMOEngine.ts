@@ -849,8 +849,10 @@ export class MMOEngine {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, this.camera);
     const hit = raycaster.intersectObject(this.landscape.groundMesh, false)[0];
-    if (!hit) return null;
-    return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+    if (hit) return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+    // Outside the flat starter-city floor: the horizontal plane at the player's ground height.
+    const point = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.player.position.y), new THREE.Vector3());
+    return point ? { x: point.x, y: point.y, z: point.z } : null;
   }
 
   public performAdminRaycast(screenX: number, screenY: number): any {
