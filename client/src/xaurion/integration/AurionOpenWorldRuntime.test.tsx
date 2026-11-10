@@ -102,6 +102,8 @@ vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn((options: {
 vi.mock("./aurionAuthorityAdapter", () => ({ bindAurionAuthorityProjection: vi.fn(), ax1MovementToAurionIntent: vi.fn(() => ({ x: 0, z: 0 })) }));
 vi.mock("./ConfirmedPlayerMotion", () => ({ ConfirmedPlayerMotion: vi.fn(() => ({ project: vi.fn(), stop: vi.fn() })) }));
 vi.mock("./WorldAssetProjection", () => ({ WorldAssetProjection: vi.fn(() => ({ dispose: vi.fn(), update: vi.fn() })) }));
+// Road strips need a real scene; their geometry and lifecycle are covered in WorldRoadProjection.test.ts.
+vi.mock("./WorldRoadProjection", () => ({ WorldRoadProjection: vi.fn(() => ({ dispose: vi.fn(), update: vi.fn() })) }));
 vi.mock("./RemotePresenceProjection", () => ({ RemotePresenceProjection: vi.fn(() => ({ dispose: vi.fn(), clear: vi.fn(), apply: vi.fn(), presences: [] })) }));
 vi.mock("../components/GameHUD", () => ({ GameHUD: () => <p>World controls</p> }));
 const hud = vi.hoisted(() => ({ touchMove: null as null | ((x: number, y: number) => void) }));

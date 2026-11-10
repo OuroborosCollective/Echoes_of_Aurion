@@ -18,7 +18,8 @@ import {
   FileCode
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
+import { WORLD_VISUAL_REMOVED_ASSET_ID, WORLD_VISUALS_CHANGED_EVENT, isWorldVisualRemoval, worldVisualTargetIsRemovable, worldVisualTargetKind } from "@shared/worldVisualOverrideContract";
+import { adminPlacementFromRef } from "@shared/adminPlacementPlan";
 import { PlaceSelectedModelButton, RemovePlacedObjectButton } from "./AdminPlacement";
 
 /** Server codes of the world visual replacement, shown to the admin instead of failing silently. */
@@ -29,6 +30,13 @@ const WORLD_VISUAL_MESSAGES: Readonly<Record<string, string>> = {
   WORLD_VISUAL_REVISION_CONFLICT: "Das Objekt wurde inzwischen geändert. Bitte erneut anvisieren und noch einmal speichern.",
   WORLD_VISUAL_UNCHANGED: "Dieses Modell steht dort bereits.",
   WORLD_VISUAL_PLACEMENT_INVALID: "Dieses Objekt kann nicht adressiert werden.",
+  WORLD_VISUAL_PLACEMENT_UNKNOWN: "Dieses Objekt gehört nicht mehr zum Welt-Plan. Bitte erneut anvisieren.",
+  WORLD_VISUAL_REMOVAL_UNSUPPORTED: "Boden-Materialien können ersetzt, aber nicht entfernt werden.",
+  WORLD_VISUAL_WRITE_BUSY: "Gerade speichert ein anderer Admin. Bitte noch einmal tippen.",
+};
+/** What an override row means for the admin, in the list of changed world objects. */
+const KIND_LABEL: Readonly<Record<string, string>> = {
+  uploaded_anchor: "Katalog-Objekt", authored_placement: "Welt-Design", shipped_placement: "Welt-Objekt", surface_texture: "Boden",
 };
 function worldVisualMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -66,6 +74,10 @@ export const AdminGlbMenu: React.FC = () => {
   // A new target starts without the previous target's result.
   React.useEffect(() => { setIntegrationStatus(null); }, [currentTarget?.id]);
   const uploadMutation = trpc.admin.assets.upload.useMutation();
+  // Removing is two-step: the first tap arms, the second commits. (All hooks stay
+  // above the admin guard so the hook order never changes when the role resolves.)
+  const [removalArmed, setRemovalArmed] = useState(false);
+  React.useEffect(() => { setRemovalArmed(false); }, [currentTarget?.id]);
 
   if (!isAdmin) return null;
 
@@ -99,17 +111,23 @@ export const AdminGlbMenu: React.FC = () => {
     reader.readAsDataURL(uploadFile);
   };
 
-  /** Replace (assetId) or restore (null) the targeted world visual; persisted server-side. */
-  const saveWorldVisual = async (assetId: string | null) => {
-    const placementRef = currentTarget?.placementRef;
+  /**
+   * Replace (assetId), remove (`WORLD_VISUAL_REMOVED_ASSET_ID`) or restore (null) a world
+   * visual; persisted server-side. Defaults to the targeted object; the list of changed
+   * objects passes its own reference, because a removed object can no longer be targeted.
+   */
+  const saveWorldVisual = async (assetId: string | null, placementRef = currentTarget?.placementRef) => {
     if (!placementRef) return;
+    setRemovalArmed(false);
     setIntegrationStatus({ tone: "info", text: "Wird serverseitig gespeichert…" });
     try {
       const latest = await overridesQuery.refetch();
       const expectedRevision = latest.data?.revisions?.[placementRef] ?? 0;
       const receipt = await worldVisualMutation.mutateAsync({ placementRef, assetId, expectedRevision });
       soundSynth.playUiSuccess();
-      setIntegrationStatus({ tone: "ok", text: assetId ? `Gespeichert (Revision ${receipt.revision}). Bleibt auch nach Neustart erhalten.` : `Original wiederhergestellt (Revision ${receipt.revision}).` });
+      setIntegrationStatus({ tone: "ok", text: isWorldVisualRemoval(assetId)
+        ? `Entfernt (Revision ${receipt.revision}). Bleibt auch nach Neustart entfernt; unten wiederherstellbar.`
+        : assetId ? `Gespeichert (Revision ${receipt.revision}). Bleibt auch nach Neustart erhalten.` : `Original wiederhergestellt (Revision ${receipt.revision}).` });
       void overridesQuery.refetch();
       window.dispatchEvent(new Event(WORLD_VISUALS_CHANGED_EVENT));
     } catch (err) {
@@ -123,7 +141,7 @@ export const AdminGlbMenu: React.FC = () => {
     if (!currentTarget?.targetKey || !currentTarget?.targetType) {
       setIntegrationStatus({ tone: "error", text: currentTarget?.type === "terrain"
         ? "Boden und Gelände-Texturen sind noch nicht austauschbar. Visiere ein Gebäude oder Objekt an."
-        : "Dieses Objekt ist noch nicht austauschbar (z. B. Bäume und Felsen folgen in einem nächsten Schritt)." });
+        : "Dieses Objekt ist kein Welt-Modell (z. B. Stadtmauer, NPC oder Effekt) und hier nicht austauschbar." });
       return;
     }
 
@@ -396,6 +414,18 @@ export const AdminGlbMenu: React.FC = () => {
                                 Original wiederherstellen
                               </button>
                             )}
+                            {currentTarget.placementRef && worldVisualTargetIsRemovable(currentTarget.worldTargetKind) && !adminPlacementFromRef(currentTarget.placementRef)
+                              && !overridesQuery.data?.overrides?.some((entry) => entry.placementRef === currentTarget.placementRef && isWorldVisualRemoval(entry.assetId)) && (
+                              <button
+                                type="button"
+                                data-testid="admin-glb-remove-world-visual"
+                                disabled={worldVisualMutation.isPending}
+                                onClick={() => { if (removalArmed) void saveWorldVisual(WORLD_VISUAL_REMOVED_ASSET_ID); else setRemovalArmed(true); }}
+                                className={`w-full border py-2 rounded-lg text-[10px] uppercase tracking-widest disabled:text-gray-600 ${removalArmed ? "border-red-400 bg-red-500/20 text-red-100" : "border-red-500/40 text-red-300 hover:border-red-400"}`}
+                              >
+                                {removalArmed ? "Wirklich entfernen? Nochmal tippen" : "Objekt entfernen"}
+                              </button>
+                            )}
                             <RemovePlacedObjectButton placementRef={currentTarget.placementRef} />
                             {!activeModelId && <p className="text-[8px] text-amber-500/80 text-center italic">Wähle zuerst ein Modell im Katalog aus!</p>}
                             {integrationStatus && (
@@ -413,6 +443,42 @@ export const AdminGlbMenu: React.FC = () => {
                           </div>
                           <p className="text-[10px] uppercase tracking-widest font-medium">Bewege den Charakter und <br/>visiere Objekte an</p>
                         </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(overridesQuery.data?.overrides?.length ?? 0) > 0 && (
+                    <div className="space-y-2" data-testid="admin-glb-changed-world-visuals">
+                      <div className="text-[9px] uppercase tracking-widest font-bold text-gray-500 ml-1">
+                        Geänderte Welt-Objekte ({overridesQuery.data!.overrides.length})
+                      </div>
+                      <p className="text-[10px] text-gray-500 leading-relaxed">Entfernte Objekte sind in der Welt nicht mehr anvisierbar – hier stellst du sie wieder her.</p>
+                      <ul className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                        {overridesQuery.data!.overrides.map((entry) => (
+                          <li key={entry.placementRef} className="flex items-center gap-2 bg-black/40 border border-white/5 rounded px-2 py-1.5">
+                            <div className="min-w-0 flex-1">
+                              <div className={`text-[10px] font-bold ${isWorldVisualRemoval(entry.assetId) ? "text-red-300" : "text-sky-300"}`}>
+                                {isWorldVisualRemoval(entry.assetId) ? "Entfernt" : "Ausgetauscht"} · {KIND_LABEL[worldVisualTargetKind(entry.placementRef) ?? ""] ?? "Objekt"}
+                              </div>
+                              <div className="text-[9px] text-gray-500 font-mono truncate">{entry.placementRef}</div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={worldVisualMutation.isPending}
+                              onClick={() => void saveWorldVisual(null, entry.placementRef)}
+                              aria-label={`Wiederherstellen ${entry.placementRef}`}
+                              className="shrink-0 border border-white/20 text-gray-200 hover:border-sky-400 disabled:text-gray-600 px-2 py-1 rounded text-[9px] uppercase tracking-widest"
+                            >
+                              Wiederherstellen
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      {!currentTarget && integrationStatus && (
+                        <p role={integrationStatus.tone === "error" ? "alert" : "status"}
+                          className={`text-[10px] text-center ${integrationStatus.tone === "error" ? "text-red-300" : integrationStatus.tone === "ok" ? "text-emerald-300" : "text-sky-300"}`}>
+                          {integrationStatus.text}
+                        </p>
                       )}
                     </div>
                   )}

@@ -47,6 +47,7 @@ import { globalTickRecorder } from "../causality/tickRecorder";
 import { createOtelHttpMiddleware } from "../observability/otelBoundary";
 import { drainAurionRuntimeForShutdown, withShutdownDeadline } from "./gracefulCausalShutdown";
 import { assertProductionDatabaseConfigured, assertProductionDatabaseConnected } from "./productionDatabaseGate";
+import { ensureShippedPlacementOverridesLoaded } from "../worldAssetRegionReadback";
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
@@ -65,6 +66,8 @@ async function startServer(){
   const databaseConnected = await canConnectToDatabase(1000);
   assertProductionDatabaseConnected(process.env.NODE_ENV, databaseConnected);
   if (databaseConnected) {
+    // Admin-removed/replaced procedural placements must not block movement after a restart.
+    void ensureShippedPlacementOverridesLoaded().catch(error => console.error("[WorldVisual] shipped placement overrides not loaded at boot; retried on the next region read", error instanceof Error ? error.message : error));
     globalReadbackService.start();
     globalSnapshotReconciliationService.start();
     globalCausalArchivingService.start();

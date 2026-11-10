@@ -423,7 +423,8 @@ export default function AurionOpenWorldRuntime() {
       engine.onBeforeFrameRendered = () => startupCaptureRef.current?.beforeFrame();
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
-        center => rpcUtils.worldAssets.regionV2.fetch(center),
+        // Always the confirmed plan: an admin may have removed or restored a placement.
+        center => rpcUtils.worldAssets.regionV2.fetch(center, { staleTime: 0 }),
         evidence => {
           if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence);
           setWorldAssetsFailed(evidence.failed > 0);

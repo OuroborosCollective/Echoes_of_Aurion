@@ -14,6 +14,8 @@ export const ORE_OUTCROP_HEIGHT_M = 1.1;
 export const ORE_OUTCROP_CROWN_RADIUS_M = 1.2;
 /** Radius at which the outcrop has fully merged with the surrounding ground. */
 export const ORE_OUTCROP_RADIUS_M = 3.6;
+/** Material constant: weathered rock of the outcrop below an ore vein (vertex shades modulate it). */
+export const ORE_OUTCROP_ROCK_COLOR = "#8d8880";
 
 const ORE_SITES = Object.freeze(AX1_INITIAL_RESOURCE_NODES
   .filter(node => node.nodeKind === "ore")

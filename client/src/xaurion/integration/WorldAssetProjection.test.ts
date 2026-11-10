@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { WorldAssetProjection } from "./WorldAssetProjection";
+import { WORLD_VISUAL_READBACK_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
 
 describe("confirmed world-asset position units", () => {
   it.each([
@@ -20,5 +21,28 @@ describe("confirmed world-asset position units", () => {
       projection.update(1, { x: positionMm.x / 1000, z: positionMm.z / 1000 }, 1440);
       expect(fetchRegion).toHaveBeenCalledTimes(1);
     } finally { projection.dispose(); }
+  });
+});
+
+// Design brief 2026-11-10: after an admin removes, replaces or restores a procedural
+// model, the same chunk must be read again; a cached plan would keep showing the old world.
+describe("confirmed world plan after an admin change", () => {
+  it("re-reads the unchanged chunk once per confirmed override readback and never after dispose", () => {
+    const fetchRegion = vi.fn(() => new Promise<unknown>(() => {}));
+    const projection = new WorldAssetProjection(new THREE.Scene(), new THREE.PerspectiveCamera(), () => 0, fetchRegion, vi.fn());
+    const here = { x: 70, z: -70 };
+    projection.update(1, here, 1440);
+    projection.update(1, here, 1440);
+    expect(fetchRegion).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event(WORLD_VISUAL_READBACK_CHANGED_EVENT));
+    projection.update(0.016, here, 1440); // the very next frame, not half a second later
+    expect(fetchRegion).toHaveBeenCalledTimes(2);
+    expect(fetchRegion).toHaveBeenLastCalledWith({ x: 1, z: -1 });
+    projection.update(1, here, 1440);
+    expect(fetchRegion).toHaveBeenCalledTimes(2);
+    projection.dispose();
+    window.dispatchEvent(new Event(WORLD_VISUAL_READBACK_CHANGED_EVENT));
+    projection.update(1, here, 1440);
+    expect(fetchRegion).toHaveBeenCalledTimes(2);
   });
 });

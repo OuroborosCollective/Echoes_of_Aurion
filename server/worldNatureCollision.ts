@@ -6,6 +6,10 @@ import {
 } from "../shared/worldAssetProtocol";
 import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import {
+  isShippedPlacementHidden,
+  onShippedPlacementOverridesChanged,
+} from "./worldShippedPlacementOverrides";
+import {
   splitWorldChunkPositionMm,
   WORLD_CHUNK_COORDINATE_LIMIT,
   type WorldChunkCoordinate,
@@ -124,7 +128,18 @@ function rotate(p: GroundPoint, quarter: number): GroundPoint {
 /** Bounded derived cache only; eviction never changes collision outcomes. */
 export class WorldNatureCollision {
   private readonly chunks = new Map<string, readonly NatureObstacle[]>();
-  constructor(private readonly worldSeed = GLOBAL_WORLD_SEED) {}
+  /**
+   * `hidden` names placements an administrator removed or replaced: Aurion no
+   * longer plans them, so they carry no movement hull either.
+   */
+  constructor(
+    private readonly worldSeed = GLOBAL_WORLD_SEED,
+    private readonly hidden: (placementId: string) => boolean = () => false
+  ) {}
+  /** Drop the derived cache after the set of hidden placements changed. */
+  invalidate(): void {
+    this.chunks.clear();
+  }
   obstaclesForChunk(
     coordinate: WorldChunkCoordinate
   ): readonly NatureObstacle[] {
@@ -138,7 +153,7 @@ export class WorldNatureCollision {
     const obstacles = worldAssetsForChunk(this.worldSeed, coordinate).flatMap(
       p => {
         const source = footprints.get(p.assetId);
-        if (!source?.blocksMovement) return [];
+        if (!source?.blocksMovement || this.hidden(p.id)) return [];
         const hull = Object.freeze(
           source.hullMm.map(([x, z]) =>
             Object.freeze(rotate({ x: x!, z: z! }, p.rotation))
@@ -220,4 +235,8 @@ export class WorldNatureCollision {
     return { ...from };
   }
 }
-export const worldNatureCollision = new WorldNatureCollision();
+export const worldNatureCollision = new WorldNatureCollision(
+  GLOBAL_WORLD_SEED,
+  isShippedPlacementHidden
+);
+onShippedPlacementOverridesChanged(() => worldNatureCollision.invalidate());

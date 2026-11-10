@@ -43,6 +43,7 @@ import { DeterministicSimulation } from '@shared/deterministicSimulation';
 import { syncManager } from './SyncManager';
 import { PartyManager } from './PartyManager';
 import { Ax1CameraDirector } from './Ax1CameraDirector';
+import { shippedWorldVisualTarget } from '../integration/shippedWorldVisualTarget';
 
 
 interface ActiveProjectile {
@@ -875,6 +876,10 @@ export class MMOEngine {
       // Try to find a parent that represents an entity or world asset
       let entityData: any = null;
       
+      // One instance of a shipped world model (tree, rock, flower, road house, ...).
+      const shippedTarget = shippedWorldVisualTarget(hit.object.userData, hit.instanceId);
+      if (shippedTarget) return { hit, entityData: { ...shippedTarget, worldVisualTarget: true }, point: hit.point };
+
       while (object) {
         // Replaceable world visuals (uploaded catalog anchors, World Design placements).
         if (object.userData?.worldVisualTarget) {

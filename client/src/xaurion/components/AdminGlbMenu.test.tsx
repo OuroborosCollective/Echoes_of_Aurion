@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminGlbMenu } from "./AdminGlbMenu";
 import { useAdminStore } from "../core/AdminService";
@@ -104,6 +104,87 @@ describe("world visual replacement through the inspection cursor", () => {
     expect(fixture.setWorldVisual).not.toHaveBeenCalled();
   });
 });
+// Design brief 2026-11-10: the admin could not remove a tree, rock or house that the
+// world plan had placed. Removal is a persisted server write and must be undoable.
+describe("removing and restoring world objects through the inspection cursor", () => {
+  const treeRef = "shipped:aurion-world-assets.v1:3:-2:5";
+  const tree = { type: "model" as const, id: treeRef, name: "Eiche", assetId: undefined, placementRef: treeRef, worldTargetKind: "shipped_placement" as const, position: { x: 200, y: 0, z: -130 } };
+  const removeButton = () => screen.queryByTestId("admin-glb-remove-world-visual");
+
+  it("removes a procedural world model only after a second confirming tap, with the current revision", async () => {
+    fixture.setWorldVisual.mockResolvedValue({ revision: 1 });
+    const changed = vi.fn(); window.addEventListener("aurion:world-visuals-changed", changed);
+    useAdminStore.setState({ inspectionMode: true, activeModelId: null, currentTarget: tree });
+    openInspection();
+    expect(removeButton()!.textContent).toBe("Objekt entfernen");
+    fireEvent.click(removeButton()!);
+    expect(fixture.setWorldVisual).not.toHaveBeenCalled(); // armed, nothing written yet
+    expect(removeButton()!.textContent).toContain("Wirklich entfernen");
+    fireEvent.click(removeButton()!);
+    await screen.findByText(/Entfernt \(Revision 1\)/);
+    expect(fixture.setWorldVisual).toHaveBeenCalledTimes(1);
+    expect(fixture.setWorldVisual).toHaveBeenCalledWith({ placementRef: treeRef, assetId: "aurion.world-visual.removed", expectedRevision: 0 });
+    expect(changed).toHaveBeenCalledTimes(1);
+    window.removeEventListener("aurion:world-visuals-changed", changed);
+  });
+
+  it("disarms the removal when the cursor moves to another object", () => {
+    useAdminStore.setState({ inspectionMode: true, activeModelId: null, currentTarget: tree });
+    openInspection();
+    fireEvent.click(removeButton()!);
+    expect(removeButton()!.textContent).toContain("Wirklich entfernen");
+    act(() => useAdminStore.setState({ currentTarget: house }));
+    expect(removeButton()!.textContent).toBe("Objekt entfernen");
+    expect(fixture.setWorldVisual).not.toHaveBeenCalled();
+  });
+
+  it("offers removal for catalog objects but not for ground materials, admin-placed objects or non-world targets", () => {
+    useAdminStore.setState({ inspectionMode: true, activeModelId: null, currentTarget: house });
+    openInspection();
+    expect(removeButton()).not.toBeNull();
+    for (const currentTarget of [
+      { type: "terrain" as const, id: "surface:grass", name: "Gras", placementRef: "surface:grass", worldTargetKind: "surface_texture" as const, position: { x: 0, y: 0, z: 0 } },
+      // Admin-placed objects are removed through their own World Design path.
+      { ...house, id: "authored:admin.placements.1a2b3c4d:p.000000000003", placementRef: "authored:admin.placements.1a2b3c4d:p.000000000003", worldTargetKind: "authored_placement" as const },
+      { type: "terrain" as const, id: "unknown", name: "Unbekanntes Objekt", position: { x: 0, y: 0, z: 0 } },
+    ]) {
+      act(() => useAdminStore.setState({ currentTarget }));
+      expect(removeButton()).toBeNull();
+    }
+  });
+
+  it("lists removed and replaced objects and restores a removed one that can no longer be targeted", async () => {
+    fixture.revisions = { [treeRef]: 1, "uploaded:0:0:2": 4 };
+    fixture.overrides = [{ placementRef: treeRef, assetId: "aurion.world-visual.removed" }, { placementRef: "uploaded:0:0:2", assetId: "glb_new_house" }];
+    fixture.setWorldVisual.mockResolvedValue({ revision: 2 });
+    useAdminStore.setState({ inspectionMode: true, activeModelId: null, currentTarget: null });
+    openInspection();
+    const list = screen.getByTestId("admin-glb-changed-world-visuals");
+    expect(list.textContent).toContain("Geänderte Welt-Objekte (2)");
+    expect(list.textContent).toContain("Entfernt · Welt-Objekt");
+    expect(list.textContent).toContain("Ausgetauscht · Katalog-Objekt");
+    fireEvent.click(screen.getByRole("button", { name: `Wiederherstellen ${treeRef}` }));
+    await screen.findByText(/Original wiederhergestellt \(Revision 2\)/);
+    expect(fixture.setWorldVisual).toHaveBeenCalledWith({ placementRef: treeRef, assetId: null, expectedRevision: 1 });
+  });
+
+  it("does not offer to remove an already removed object twice and explains the new server refusals", async () => {
+    fixture.revisions = { "uploaded:0:0:2": 1 };
+    fixture.overrides = [{ placementRef: "uploaded:0:0:2", assetId: "aurion.world-visual.removed" }];
+    useAdminStore.setState({ inspectionMode: true, activeModelId: "glb_new_house", currentTarget: house });
+    openInspection();
+    expect(removeButton()).toBeNull();
+    for (const [code, text] of [
+      ["WORLD_VISUAL_PLACEMENT_UNKNOWN", "gehört nicht mehr zum Welt-Plan"],
+      ["WORLD_VISUAL_REMOVAL_UNSUPPORTED", "nicht entfernt werden"],
+      ["WORLD_VISUAL_WRITE_BUSY", "anderer Admin"],
+    ] as const) {
+      fixture.setWorldVisual.mockRejectedValueOnce(new Error(code));
+      fireEvent.click(screen.getByRole("button", { name: /Hier austauschen/ }));
+      await vi.waitFor(() => expect(screen.getByTestId("admin-glb-integration-status").textContent).toContain(text));
+    }
+  });
+});
 describe("in-game admin GLB catalog", () => {
   it("reads administrator-owned models and fallback assets without requiring community submissions", () => {
     Object.assign(fixture.query, { isSuccess: true, data: [
@@ -149,6 +230,16 @@ describe("in-game admin GLB catalog", () => {
     useAdminStore.setState({ isAdmin: true });
     render(<AdminGlbMenu />);
     expect(fixture.adminQuery).toHaveBeenLastCalledWith(undefined, expect.objectContaining({ enabled: false }));
+  });
+  it("shows the menu when the admin role resolves after the first render", () => {
+    // The role arrives after mount in the live game; the mounted menu must survive that.
+    useAdminStore.setState({ isAdmin: false });
+    render(<AdminGlbMenu />);
+    expect(screen.queryByRole("button")).toBeNull();
+    act(() => useAdminStore.setState({ isAdmin: true }));
+    expect(screen.getAllByRole("button").length).toBeGreaterThan(0);
+    act(() => useAdminStore.setState({ isAdmin: false }));
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });
 

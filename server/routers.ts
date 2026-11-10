@@ -2,7 +2,8 @@ import { executeAurionItemManipulation, itemManipulationCommandSchema, readAurio
 import { readConfirmedNpcMultiMemoryPacket } from "./npcMultiMemoryPersistence";
 import { readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
 import { readConfirmedNpcProjectionProvenancePacket, readConfirmedNpcSemanticGraphPacket } from "./wasdSemanticGraphV2Persistence";
-import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from "../shared/worldAssetProtocol";
+import { worldAssetRegionInput } from "../shared/worldAssetProtocol";
+import { confirmedLegacyWorldAssetRegion, confirmedWorldAssetRegion } from "./worldAssetRegionReadback";
 import { WorldVisualOverrideSetInput } from "../shared/worldVisualOverrideContract";
 import { readWorldVisualOverrides, setWorldVisualOverride } from "./worldVisualOverridePersistence";
 import { withDomainErrors } from "./domainErrorBoundary";
@@ -111,8 +112,9 @@ export const appRouter = router({
   aurionAuthoring: aurionAuthoringRouter,
   aurionContext: aurionContextRouter,
   worldAssets: router({
-    region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => legacyWorldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
-    regionV2: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => worldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
+    // The Aurion placement plan minus procedural placements an admin removed or replaced.
+    region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => withDomainErrors("WORLD_ASSET_REGION", ["WORLD_VISUAL_"], () => confirmedLegacyWorldAssetRegion(input))),
+    regionV2: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => withDomainErrors("WORLD_ASSET_REGION", ["WORLD_VISUAL_"], () => confirmedWorldAssetRegion(input))),
     // Persisted admin replacements of world visuals; every player sees the same world.
     visualOverrides: protectedProcedure.query(() => withDomainErrors("WORLD_VISUAL_READBACK", ["WORLD_VISUAL_"], () => readWorldVisualOverrides())),
   }),

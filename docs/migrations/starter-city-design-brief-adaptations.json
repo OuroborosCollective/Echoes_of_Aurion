@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "reason": "Owner design brief 2026-11-10: flat paved starter city inside the walls, no legacy client scenery there, ore outcrops as presentation relief. Reversible changes preserve the earlier owner ZIP, tree visual and surface atlas provenance chain; the removed legacy builders stay recoverable from the before text.",
+  "sourceRevision": "3b050eb06e2903f359cb2554048e6a077f9102ae",
+  "files": [
+    {
+      "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
+      "sourceSha256": "9ceeba1f3ea4642f5b4880f957e6ac84b0833b239726c20d7715fcd3ea015424",
+      "targetSha256": "ec547cd44ccc2bda2ec297c652362c16af2089c40009b488446997fb929cb760",
+      "adaptations": [
+        {
+          "before": "import { WorldChunkManager } from './WorldChunkManager';\nimport { worldSurfaceMaterial, mapWorldGround, addSanctumSurfaceDetails } from './WorldSurfaceAtlas';\nimport { attachMeshBVHToGroup } from '../spatial/bvhWorkerHelper';\n",
+          "after": "import { WorldChunkManager } from './WorldChunkManager';\nimport { worldSurfaceMaterial, mapWorldGround } from './WorldSurfaceAtlas';\nimport { STARTER_CITY_FLAT_HALF_EXTENT_M, touchesStarterCityGround } from './starterCityGround';\nimport { attachMeshBVHToGroup } from '../spatial/bvhWorkerHelper';\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n    // 1. Build Vast Open World Ground Plane (280 x 280 meters)\n    this.groundMesh = this.createOpenWorldTerrain();\n    this.group.add(this.groundMesh);\n",
+          "after": "\n    // 1. Flat paved starter-city floor inside the city walls. Legacy client scenery\n    //    (sanctum props, boss arena, plaza stones) is no longer built there: inside the\n    //    walls only Aurion-confirmed, admin-editable content is projected.\n    this.groundMesh = this.createStarterCityFloor();\n    this.group.add(this.groundMesh);\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n    // 2. Build Zone 1: Aethelgard Sanctum (Center Hub)\n    this.buildSanctumHub();\n\n    // 3. Build Zone 2: Whispering Clockwork Woods (North-East)\n    this.buildClockworkWoods();\n",
+          "after": "\n    // 2. Legacy scenery outside the walls: Whispering Clockwork Woods (North-East)\n    this.buildClockworkWoods();\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n    // 4. Build Zone 3: Scorched Iron Quarry (West)\n    this.buildScorchedQuarry();\n",
+          "after": "\n    // 3. Legacy scenery outside the walls: Scorched Iron Quarry (West)\n    this.buildScorchedQuarry();\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n    // 5. Build Zone 4: Crystalline Void Spire & World Boss Arena (South)\n    this.buildVoidSpireArena();\n\n    // 6. Ambient Environment Lighting & Skybox Stars\n    this.buildEnvironmentProps();\n",
+          "after": "\n    // 4. Ambient Environment Lighting & Skybox Stars\n    this.buildEnvironmentProps();\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    this.buildEnvironmentProps();\n    addSanctumSurfaceDetails(this.scene, this.group);\n\n",
+          "after": "    this.buildEnvironmentProps();\n\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n  private createOpenWorldTerrain(): THREE.Mesh {\n    const size = 280;\n    const segments = 96;\n    const geo = new THREE.PlaneGeometry(size, size, segments, segments);\n    geo.rotateX(-Math.PI / 2);\n",
+          "after": "\n  /**\n   * The paved, perfectly flat starter-city floor (owner design brief 2026-11-10).\n   * It spans exactly the starter-city ground envelope; everything outside of it is\n   * the chunk terrain of WorldChunkManager, which shares the same flat/blend rule.\n   */\n  private createStarterCityFloor(): THREE.Mesh {\n    const size = STARTER_CITY_FLAT_HALF_EXTENT_M * 2;\n    const geo = new THREE.PlaneGeometry(size, size, 24, 24);\n    geo.rotateX(-Math.PI / 2);\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    geo.rotateX(-Math.PI / 2);\n\n    const posAttr = geo.attributes.position;\n    const count = posAttr.count;\n\n    // Procedural terrain elevation & biome coloring\n    const colors = new Float32Array(count * 3);\n\n    for (let i = 0; i < count; i++) {\n      const x = posAttr.getX(i);\n      const z = posAttr.getZ(i);\n\n      let height = 0;\n      let r = 0.22, g = 0.25, b = 0.28; // Default Slate\n\n      // Sanctum Hub (Center: radius < 35) -> Flat paved marble plaza\n      const distFromCenter = Math.hypot(x, z);\n      if (distFromCenter < 34) {\n        height = 0;\n        // Paved stone with gold trim\n        r = 0.35; g = 0.36; b = 0.40;\n        if (Math.abs(x) < 4 || Math.abs(z) < 4) {\n          // Gilded grand thoroughfare roads\n          r = 0.52; g = 0.44; b = 0.25;\n        } else if (distFromCenter < 12) {\n          // Central plaza circle\n          r = 0.42; g = 0.38; b = 0.48;\n        }\n      } else if (x > 15 && z < 20) {\n        // Whispering Woods (North-East) -> Rolling gentle hills & emerald aether meadows\n        height = Math.sin(x * 0.08) * Math.cos(z * 0.08) * 2.2 + Math.sin(x * 0.2) * 0.8;\n        r = 0.18; g = 0.45; b = 0.24; // Forest Green Emerald\n      } else if (x < -15) {\n        // Scorched Quarry (West) -> Rugged jagged cliffs & copper rust canyons\n        height = Math.sin(x * 0.1) * 3.5 + Math.cos(z * 0.06) * 2.5;\n        r = 0.45; g = 0.25; b = 0.15; // Terracotta Volcanic Rust\n      } else if (z > 25) {\n        // Void Spire Boss Arena (South) -> Sunken circular crater with raised perimeter\n        const bossDist = Math.hypot(x, z - 65);\n        if (bossDist < 32) {\n          height = Math.sin(bossDist * 0.2) * 1.8 - 1.0;\n          r = 0.32; g = 0.16; b = 0.48; // Void Amethyst Violet\n        } else {\n          height = Math.sin(x * 0.05) * 2.2;\n          r = 0.26; g = 0.22; b = 0.36;\n        }\n      }\n\n      posAttr.setY(i, height);\n\n      colors[i * 3] = r;\n      colors[i * 3 + 1] = g;\n      colors[i * 3 + 2] = b;\n    }\n\n    geo.computeVertexNormals();\n    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));\n\n    mapWorldGround(geo);\n",
+          "after": "    geo.rotateX(-Math.PI / 2);\n    mapWorldGround(geo);\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    mapWorldGround(geo);\n    const materials = ['paving', 'forest', 'rock'].map(kind => worldSurfaceMaterial(this.scene, kind as 'paving' | 'forest' | 'rock'));\n    const indices = geo.index!;\n    geo.clearGroups();\n    // Group adjacent triangles by their visual biome, preserving the original terrain exactly.\n    let groupStart = 0, previous = -1;\n    for (let i = 0; i < indices.count; i += 3) {\n      const ids = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)];\n      const x = ids.reduce((sum, id) => sum + posAttr.getX(id), 0) / 3;\n      const z = ids.reduce((sum, id) => sum + posAttr.getZ(id), 0) / 3;\n      const kind = Math.hypot(x, z) < 34 ? 0 : x > 15 && z < 20 ? 1 : 2;\n      if (kind !== previous) {\n        if (previous >= 0) geo.addGroup(groupStart, i - groupStart, previous);\n        groupStart = i; previous = kind;\n      }\n    }\n    geo.addGroup(groupStart, indices.count - groupStart, previous);\n    const grouped = [[], [], []] as number[][];\n    for (const group of geo.groups) for (let i = group.start; i < group.start + group.count; i++) grouped[group.materialIndex ?? 0].push(indices.getX(i));\n    geo.setIndex(grouped.flat());\n    geo.clearGroups();\n    let offset = 0;\n    grouped.forEach((items, kind) => { if (items.length) geo.addGroup(offset, items.length, kind); offset += items.length; });\n    const mesh = new THREE.Mesh(geo, materials);\n    mesh.receiveShadow = true;\n",
+          "after": "    mapWorldGround(geo);\n    const mesh = new THREE.Mesh(geo, worldSurfaceMaterial(this.scene, 'paving'));\n    mesh.name = 'aurion-starter-city-floor';\n    mesh.receiveShadow = true;\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    return mesh;\n  }\n\n  private buildSanctumHub() {\n    const hubGroup = new THREE.Group();\n\n    // 1. Central Aethelgard Aetherium Fountain & Levitating Core\n    const brassTrimMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.85, roughness: 0.25 });\n    const marbleMat = worldSurfaceMaterial(this.scene, 'paving');\n    const waterMat = new THREE.MeshStandardMaterial({\n      color: 0x06b6d4,\n      emissive: 0x0891b2,\n      emissiveIntensity: 0.9,\n      roughness: 0.1,\n      metalness: 0.8,\n    });\n    const crystalMat = new THREE.MeshStandardMaterial({\n      color: 0x38bdf8,\n      emissive: 0x0284c7,\n      emissiveIntensity: 1.5,\n      roughness: 0.1,\n    });\n\n    // Fountain Outer Marble Basin (Low rim, y: 0 to 0.35)\n    const basinGeo = new THREE.CylinderGeometry(4.0, 4.4, 0.4, 16);\n    const basin = new THREE.Mesh(basinGeo, marbleMat);\n    basin.position.set(0, 0.2, 0);\n    hubGroup.add(basin);\n\n    collisionSystem.registerObstacle({\n      id: 'hub_fountain_basin',\n      type: 'fountain',\n      x: 0,\n      z: 0,\n      radius: 4.4,\n      name: 'Aethelgard Aetherium-Brunnen',\n    });\n\n    // Glowing Azure Aether Basin Pool\n    const poolGeo = new THREE.CylinderGeometry(3.6, 3.6, 0.15, 16);\n    const pool = new THREE.Mesh(poolGeo, waterMat);\n    pool.position.set(0, 0.38, 0);\n    hubGroup.add(pool);\n\n    // 4 Slim Decorative Brass Arch Struts supporting the levitation field\n    const strutPositions = [\n      { x: -2.4, z: -2.4 },\n      { x: 2.4, z: -2.4 },\n      { x: -2.4, z: 2.4 },\n      { x: 2.4, z: 2.4 },\n    ];\n    strutPositions.forEach((sp) => {\n      const strutGeo = new THREE.CylinderGeometry(0.12, 0.16, 2.8, 6);\n      const strut = new THREE.Mesh(strutGeo, brassTrimMat);\n      strut.position.set(sp.x, 1.4, sp.z);\n      hubGroup.add(strut);\n\n      const capGeo = new THREE.SphereGeometry(0.22, 8, 8);\n      const cap = new THREE.Mesh(capGeo, brassTrimMat);\n      cap.position.set(sp.x, 2.8, sp.z);\n      hubGroup.add(cap);\n    });\n\n    // Levitating Floating Core Crystal (Suspended above eye-line at Y: 4.8)\n    const crystalGeo = new THREE.OctahedronGeometry(1.2, 0);\n    const crystal = new THREE.Mesh(crystalGeo, crystalMat);\n    crystal.position.set(0, 4.8, 0);\n    hubGroup.add(crystal);\n    this.animatedProps.push({ mesh: crystal, rotSpeed: 1.0 });\n\n    // Orbiting Golden Halo Ring\n    const haloGeo = new THREE.TorusGeometry(1.8, 0.1, 6, 16);\n    const halo = new THREE.Mesh(haloGeo, brassTrimMat);\n    halo.position.set(0, 4.8, 0);\n    halo.rotation.x = Math.PI / 4;\n    hubGroup.add(halo);\n    this.animatedProps.push({ mesh: halo, rotSpeed: -0.6 });\n\n    // 2. City Castle Watchtowers at 4 Corners\n    const towerPositions = [\n      { x: -26, z: -26 },\n      { x: 26, z: -26 },\n      { x: -26, z: 26 },\n      { x: 26, z: 26 },\n    ];\n\n    const stoneMat = worldSurfaceMaterial(this.scene, 'rock');\n\n    towerPositions.forEach((pos, idx) => {\n      const tower = new THREE.Group();\n      const bodyGeo = new THREE.CylinderGeometry(2.4, 2.8, 10, 8);\n      const body = new THREE.Mesh(bodyGeo, stoneMat);\n      body.position.y = 5;\n      tower.add(body);\n\n      const roofGeo = new THREE.ConeGeometry(3.2, 4.5, 8);\n      const roof = new THREE.Mesh(roofGeo, brassTrimMat);\n      roof.position.y = 12.2;\n      tower.add(roof);\n\n      // Light beacon\n      const beaconGeo = new THREE.SphereGeometry(0.5, 8, 8);\n      const beacon = new THREE.Mesh(beaconGeo, crystalMat);\n      beacon.position.y = 14.8;\n      tower.add(beacon);\n\n      tower.position.set(pos.x, 0, pos.z);\n      hubGroup.add(tower);\n\n      collisionSystem.registerObstacle({\n        id: `hub_tower_${idx}`,\n        type: 'tower',\n        x: pos.x,\n        z: pos.z,\n        radius: 3.0,\n        name: 'Sanctum Eck-Wachturm',\n      });\n    });\n\n    // 3. Royal Forge Pavilion (North)\n    const forgeGroup = new THREE.Group();\n    const anvilGeo = new THREE.BoxGeometry(2.2, 1.2, 1.4);\n    const anvilMat = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.9, roughness: 0.3 });\n    const anvil = new THREE.Mesh(anvilGeo, anvilMat);\n    anvil.position.set(0, 0.6, -14);\n    forgeGroup.add(anvil);\n\n    collisionSystem.registerObstacle({\n      id: 'hub_forge_anvil',\n      type: 'anvil',\n      x: 0,\n      z: -14,\n      radius: 1.4,\n      name: 'Königlicher Meisterschmiede-Amboss',\n    });\n\n    // Glowing Furnace\n    const furnaceGeo = new THREE.BoxGeometry(3.5, 3.5, 3.5);\n    const furnaceMat = new THREE.MeshStandardMaterial({\n      color: 0xef4444,\n      emissive: 0xd97706,\n      emissiveIntensity: 1.0,\n    });\n    const furnace = new THREE.Mesh(furnaceGeo, furnaceMat);\n    furnace.position.set(0, 1.75, -17);\n    forgeGroup.add(furnace);\n\n    collisionSystem.registerObstacle({\n      id: 'hub_forge_furnace',\n      type: 'furnace',\n      x: 0,\n      z: -17,\n      radius: 2.2,\n      name: 'Aetherium-Schmelzofen',\n    });\n\n    // Chimney with steam\n    const pipeGeo = new THREE.CylinderGeometry(0.4, 0.4, 5, 8);\n    const pipe = new THREE.Mesh(pipeGeo, brassTrimMat);\n    pipe.position.set(0, 6, -17);\n    forgeGroup.add(pipe);\n\n    hubGroup.add(forgeGroup);\n\n    // 4. Street Lamps along the plaza\n    const lampPositions = [\n      { x: -8, z: -8 },\n      { x: 8, z: -8 },\n      { x: -8, z: 8 },\n      { x: 8, z: 8 },\n      { x: -16, z: -16 },\n      { x: 16, z: -16 },\n      { x: -16, z: 16 },\n      { x: 16, z: 16 },\n    ];\n\n    lampPositions.forEach((p, idx) => {\n      const lamp = new THREE.Group();\n      const poleGeo = new THREE.CylinderGeometry(0.12, 0.18, 4.2, 6);\n      const pole = new THREE.Mesh(poleGeo, brassTrimMat);\n      pole.position.y = 2.1;\n      lamp.add(pole);\n\n      const lanternGeo = new THREE.OctahedronGeometry(0.4, 0);\n      const lanternMat = new THREE.MeshStandardMaterial({\n        color: 0xfef08a,\n        emissive: 0xeab308,\n        emissiveIntensity: 1.5,\n      });\n      const lantern = new THREE.Mesh(lanternGeo, lanternMat);\n      lantern.position.y = 4.2;\n      lamp.add(lantern);\n\n      lamp.position.set(p.x, 0, p.z);\n      hubGroup.add(lamp);\n\n      collisionSystem.registerObstacle({\n        id: `hub_lamp_${idx}`,\n        type: 'streetlamp',\n        x: p.x,\n        z: p.z,\n        radius: 0.5,\n        name: 'Laternenmast',\n      });\n    });\n\n    this.group.add(hubGroup);\n  }\n",
+          "after": "    return mesh;\n  }\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      const z = -20 - ((i * 47 + 19) % 68);\n\n",
+          "after": "      const z = -20 - ((i * 47 + 19) % 68);\n      if (touchesStarterCityGround(x, z, 3.2)) continue; // nothing legacy inside the city walls\n\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      const gz = -35 - (g * 16) % 45;\n      const gearGeo = new THREE.TorusGeometry(3.5, 0.6, 6, 12);\n",
+          "after": "      const gz = -35 - (g * 16) % 45;\n      if (touchesStarterCityGround(gx, gz, 2.2)) continue;\n      const gearGeo = new THREE.TorusGeometry(3.5, 0.6, 6, 12);\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    runePositions.forEach((p, idx) => {\n      const obeliskGeo = new THREE.BoxGeometry(1.2, 4.5, 1.2);\n",
+          "after": "    runePositions.forEach((p, idx) => {\n      if (touchesStarterCityGround(p.x, p.z, 1.3)) return;\n      const obeliskGeo = new THREE.BoxGeometry(1.2, 4.5, 1.2);\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      const rockRadius = 2.4 + (i % 3) * 0.7;\n\n",
+          "after": "      const rockRadius = 2.4 + (i % 3) * 0.7;\n      if (touchesStarterCityGround(x, z, rockRadius)) continue;\n\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    this.group.add(quarryGroup);\n  }\n\n  private buildVoidSpireArena() {\n    const arenaGroup = new THREE.Group();\n\n    const spireMat = new THREE.MeshStandardMaterial({\n      color: 0x581c87,\n      emissive: 0x7e22ce,\n      emissiveIntensity: 0.9,\n      roughness: 0.2,\n      metalness: 0.8,\n    });\n\n    const riftMat = new THREE.MeshStandardMaterial({\n      color: 0xa855f7,\n      emissive: 0xc084fc,\n      emissiveIntensity: 1.8,\n      wireframe: true,\n    });\n\n    // Central Boss Arena Portal (Z = 65, X = 0)\n    const bossArenaCenter = new THREE.Vector3(0, 0, 65);\n\n    // Floating Rune Monoliths around the arena perimeter\n    const numMonoliths = 8;\n    const arenaRadius = 24;\n    for (let i = 0; i < numMonoliths; i++) {\n      const angle = (i / numMonoliths) * Math.PI * 2;\n      const mx = bossArenaCenter.x + Math.cos(angle) * arenaRadius;\n      const mz = bossArenaCenter.z + Math.sin(angle) * arenaRadius;\n\n      const monoGeo = new THREE.OctahedronGeometry(1.8, 0);\n      monoGeo.scale(0.8, 3.2, 0.8);\n      const monolith = new THREE.Mesh(monoGeo, spireMat);\n      monolith.position.set(mx, 4.5, mz);\n      arenaGroup.add(monolith);\n\n      this.animatedProps.push({ mesh: monolith, rotSpeed: 0.4 + (i * 0.05) });\n\n      collisionSystem.registerObstacle({\n        id: `void_monolith_${i}`,\n        type: 'monolith',\n        x: mx,\n        z: mz,\n        radius: 1.6,\n        name: 'Leeren-Monolith',\n      });\n    }\n\n    // Central Void Rift Core Sphere\n    const riftGeo = new THREE.IcosahedronGeometry(3.5, 2);\n    const riftCore = new THREE.Mesh(riftGeo, riftMat);\n    riftCore.position.set(bossArenaCenter.x, 8, bossArenaCenter.z);\n    arenaGroup.add(riftCore);\n    this.animatedProps.push({ mesh: riftCore, rotSpeed: 1.2 });\n\n    collisionSystem.registerObstacle({\n      id: 'void_rift_pedestal',\n      type: 'monolith',\n      x: bossArenaCenter.x,\n      z: bossArenaCenter.z,\n      radius: 3.5,\n      name: 'Leerenriss-Sphäre',\n    });\n\n    // Boss Summoning Rune Ring on ground\n    const ringGeo = new THREE.RingGeometry(18, 20, 32);\n    ringGeo.rotateX(-Math.PI / 2);\n    const ringMat = new THREE.MeshBasicMaterial({\n      color: 0x9333ea,\n      side: THREE.DoubleSide,\n      transparent: true,\n      opacity: 0.7,\n    });\n    const ring = new THREE.Mesh(ringGeo, ringMat);\n    ring.position.set(bossArenaCenter.x, 0.05, bossArenaCenter.z);\n    arenaGroup.add(ring);\n    this.animatedProps.push({ mesh: ring, rotSpeed: 0.2 });\n\n    this.group.add(arenaGroup);\n  }\n",
+          "after": "    this.group.add(quarryGroup);\n  }\n",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "client/src/xaurion/world/WorldChunkManager.ts",
+      "sourceSha256": "35a2c6292a777f126a4a12038e281c6e31f593c6e9daa8a30fac6974aa27abf5",
+      "targetSha256": "4056e9ec1e37f17e36c347281da2caa2ef2fc3762bcfda6f95bcb9df2ab16ded",
+      "adaptations": [
+        {
+          "before": "import { renderBudget } from '../core/renderBudget';\n\n",
+          "after": "import { renderBudget } from '../core/renderBudget';\nimport { starterCityGroundFactor, touchesStarterCityGround } from './starterCityGround';\nimport { oreOutcropHeightM } from './oreOutcrop';\n\n/** Depth of the chunk terrain below the paved starter-city floor (metres). */\nexport const STARTER_CITY_FLOOR_UNDERLAY_M = 0.08;\n\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    \n    // Exact match of the formula in renderChunkMeshes\n    return Math.sin(worldX * 0.08) * Math.cos(worldZ * 0.08) * 1.8 + elevationBase * 0.5;\n  }\n",
+          "after": "    \n    return this.terrainHeight(worldX, worldZ, elevationBase) + oreOutcropHeightM(worldX, worldZ);\n  }\n\n  /**\n   * The one presentation height formula (ground query and chunk mesh). The starter\n   * city inside the walls is a flat plane; the relief blends in outside of it.\n   */\n  private terrainHeight(worldX: number, worldZ: number, elevationBase: number): number {\n    const factor = starterCityGroundFactor(worldX, worldZ);\n    if (factor === 0) return 0;\n    return (Math.sin(worldX * 0.08) * Math.cos(worldZ * 0.08) * 1.8 + elevationBase * 0.5) * factor;\n  }\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    }\n\n    const chunkData: WorldChunkData = {\n      chunkKey,\n",
+          "after": "    }\n\n    // Owner design brief 2026-11-10: no legacy client scenery inside the city walls.\n    // Filtered after generation so the deterministic stream of every other object is unchanged;\n    // visuals and local colliders both derive from this one list.\n    const admitted = obstacles.filter(obstacle => !touchesStarterCityGround(obstacle.x, obstacle.z, obstacle.radius));\n    obstacles.length = 0;\n    obstacles.push(...admitted);\n\n    const chunkData: WorldChunkData = {\n      chunkKey,\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n      const elev = Math.sin((worldX) * 0.08) * Math.cos((worldZ) * 0.08) * 1.8 + chunk.elevationBase * 0.5;\n      pos.setY(i, elev);\n    }\n",
+          "after": "\n      // Inside the starter city the paved city floor (OpenWorldLandscape) is the visible\n      // surface; this mesh stays just below it so the two planes never z-fight.\n      const flat = starterCityGroundFactor(worldX, worldZ) === 0;\n      pos.setY(i, flat ? -STARTER_CITY_FLOOR_UNDERLAY_M : this.terrainHeight(worldX, worldZ, chunk.elevationBase));\n    }\n",
+          "occurrences": 1
+        }
+      ]
+    }
+  ]
+}

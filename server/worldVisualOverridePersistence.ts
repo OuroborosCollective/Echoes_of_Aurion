@@ -3,14 +3,19 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { aurionWorldVisualOverrides } from "../drizzle/schema";
 import { getDb } from "./db";
 import { glbImportStore } from "./glbImportStore";
-import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
+import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import { isPlaceableWorldAsset } from "../shared/adminPlacementPlan";
+import { findProceduralPlacement } from "../shared/worldAssetProtocol";
 import {
   WORLD_VISUAL_OVERRIDE_SCHEMA,
+  isWorldVisualRemoval,
+  shippedPlacementIdOf,
+  worldVisualTargetIsRemovable,
   worldVisualTargetKind,
   type WorldVisualOverride,
   type WorldVisualOverrideReadback,
 } from "../shared/worldVisualOverrideContract";
+import { applyShippedPlacementReadback, applyShippedPlacementWrite } from "./worldShippedPlacementOverrides";
 
 /**
  * Bound on distinct addressed placements (hand-authored by an administrator). Writes
@@ -41,7 +46,36 @@ export async function readWorldVisualOverrides(worldId = GLOBAL_WORLD_ID): Promi
     .where(eq(table.worldId, worldId))
     .limit(MAX_WORLD_VISUAL_PLACEMENTS + READBACK_SLACK + 1);
   if (joined.length > MAX_WORLD_VISUAL_PLACEMENTS + READBACK_SLACK) throw new Error("WORLD_VISUAL_READBACK_OVERFLOW");
-  return buildWorldVisualOverrideReadback(worldId, joined.map(({ row }) => row));
+  const readback = buildWorldVisualOverrideReadback(worldId, joined.map(({ row }) => row));
+  // Every confirmed readback of the global world refreshes the derived placement index.
+  applyShippedPlacementReadback(readback);
+  return readback;
+}
+
+const DEADLOCK_ATTEMPTS = 4;
+const isDeadlock = (error: unknown): boolean => {
+  for (let current: unknown = error, depth = 0; current && depth < 4; current = (current as { cause?: unknown }).cause, depth++) {
+    const { code, errno } = current as { code?: unknown; errno?: unknown };
+    if (code === "ER_LOCK_DEADLOCK" || errno === 1213) return true;
+  }
+  return false;
+};
+/**
+ * Two admins writing two never-touched placements at the same moment hold the same
+ * index gap and InnoDB rolls one transaction back completely. Nothing was written, so
+ * the same optimistic transaction is simply run again (it re-reads the revision).
+ * Bounded: after the last attempt the admin gets the stable code WORLD_VISUAL_WRITE_BUSY.
+ */
+async function retryOnDeadlock<T>(transaction: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try { return await transaction(); } catch (error) {
+      if (!isDeadlock(error)) throw error;
+      if (attempt >= DEADLOCK_ATTEMPTS) throw new Error("WORLD_VISUAL_WRITE_BUSY");
+      // Only the rolled-back victim waits; the winner has already committed, so a fixed
+      // growing pause suffices (no ambient randomness in Aurion application logic).
+      await new Promise(resolve => setTimeout(resolve, 20 * attempt));
+    }
+  }
 }
 
 type OverrideHead = Readonly<{ placementRef: string; targetKind: WorldVisualOverride["targetKind"]; assetId: string | null; revision: number }>;
@@ -63,16 +97,23 @@ export function buildWorldVisualOverrideReadback(worldId: string, heads: readonl
 }
 
 /**
- * Admin write: replace (or with assetId null, restore) the visual of one placement.
+ * Admin write: replace, remove (`WORLD_VISUAL_REMOVED_ASSET_ID`) or, with assetId null,
+ * restore the visual of one placement.
  * Optimistic: expectedRevision must equal the placement's current revision (0 when it
- * was never overridden). The asset must be an approved world asset in the runtime
- * catalog, so every client can actually load it.
+ * was never overridden). A replacement must be an approved world asset in the runtime
+ * catalog, so every client can actually load it. A `shipped:` reference must address a
+ * placement the Aurion world plan really emits (never the authored starter village).
  */
 export async function setWorldVisualOverride(actorUserId: number, input: Readonly<{ placementRef: string; assetId: string | null; expectedRevision: number }>, worldId = GLOBAL_WORLD_ID) {
   const targetKind = worldVisualTargetKind(input.placementRef);
   if (!targetKind) throw new Error("WORLD_VISUAL_PLACEMENT_INVALID");
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) throw new Error("WORLD_VISUAL_REVISION_INVALID");
-  if (input.assetId !== null) {
+  const shippedPlacementId = shippedPlacementIdOf(input.placementRef);
+  // Restoring stays possible even when a later world plan no longer emits the placement.
+  if (input.assetId !== null && shippedPlacementId !== null && !findProceduralPlacement(GLOBAL_WORLD_SEED, shippedPlacementId)) throw new Error("WORLD_VISUAL_PLACEMENT_UNKNOWN");
+  if (isWorldVisualRemoval(input.assetId)) {
+    if (!worldVisualTargetIsRemovable(targetKind)) throw new Error("WORLD_VISUAL_REMOVAL_UNSUPPORTED");
+  } else if (input.assetId !== null) {
     const catalog = await glbImportStore().catalog();
     const asset = catalog.entries.find(entry => entry.assetId === input.assetId);
     if (!asset) throw new Error("WORLD_VISUAL_ASSET_NOT_IN_RUNTIME_CATALOG");
@@ -81,7 +122,7 @@ export async function setWorldVisualOverride(actorUserId: number, input: Readonl
   }
   const db = await getDb();
   if (!db) throw new Error("WORLD_VISUAL_DATABASE_REQUIRED");
-  return db.transaction(async tx => {
+  const receipt = await retryOnDeadlock(() => db.transaction(async tx => {
     // Locking read of the placement's head serializes concurrent admin writes.
     const head = (await tx.select().from(aurionWorldVisualOverrides)
       .where(and(eq(aurionWorldVisualOverrides.worldId, worldId), eq(aurionWorldVisualOverrides.placementRef, input.placementRef)))
@@ -103,5 +144,8 @@ export async function setWorldVisualOverride(actorUserId: number, input: Readonl
     const row = (await tx.select().from(aurionWorldVisualOverrides).where(eq(aurionWorldVisualOverrides.id, id)).limit(1))[0];
     if (!row || row.receiptHash !== hash || row.revision !== revision || row.assetId !== input.assetId) throw new Error("WORLD_VISUAL_READBACK_MISMATCH");
     return Object.freeze({ ...core, receiptId: id, receiptHash: hash });
-  });
+  }));
+  // Committed: the region read and movement collision follow without a restart.
+  applyShippedPlacementWrite(worldId, input.placementRef, input.assetId);
+  return receipt;
 }

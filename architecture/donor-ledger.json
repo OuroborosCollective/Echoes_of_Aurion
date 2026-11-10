@@ -1311,6 +1311,18 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/integration/WorldRoadProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/shippedWorldVisualTarget.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/integration/aurionAuthorityAdapter.ts",
       "donor": "AX1",
       "capabilityId": "client.input-zone-bridge",
@@ -1476,6 +1488,18 @@
       "path": "client/src/xaurion/world/chunkProjection.worker.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/oreOutcrop.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/starterCityGround.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
       "role": "SUPPORT"
     },
     {

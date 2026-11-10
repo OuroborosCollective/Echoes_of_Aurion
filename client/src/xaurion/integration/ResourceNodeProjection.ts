@@ -9,7 +9,7 @@ import {
   validConfirmedZoneResourceSnapshot,
   type ConfirmedZoneResourceSnapshot,
 } from "@shared/zoneResourceContract";
-import { ORE_OUTCROP_RADIUS_M } from "../world/oreOutcrop";
+import { ORE_OUTCROP_RADIUS_M, ORE_OUTCROP_ROCK_COLOR } from "../world/oreOutcrop";
 
 type NodeVisual = Readonly<{
   root: THREE.Group;
@@ -102,7 +102,7 @@ function createOutcrop(definition: Ax1ResourceNodeDefinition): THREE.Mesh {
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
-  const outcrop = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x8d8880, roughness: 1, metalness: 0, vertexColors: true, flatShading: true }));
+  const outcrop = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: new THREE.Color(ORE_OUTCROP_ROCK_COLOR), roughness: 1, metalness: 0, vertexColors: true, flatShading: true }));
   outcrop.name = `ax1-resource-outcrop:${definition.id}`;
   outcrop.userData.nodeId = definition.id;
   outcrop.receiveShadow = true;
