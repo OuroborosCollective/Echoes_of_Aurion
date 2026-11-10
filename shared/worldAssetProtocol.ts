@@ -187,7 +187,10 @@ export function worldAssetsForChunk(worldSeed: string, coordinate: WorldChunkCoo
   for (let index = result.length - 1; index >= 0 && trees > 0 && floraCount <= trees; index--) if (isTree(result[index]!)) { result.splice(index, 1); trees--; }
   return result;
 }
-const PROCEDURAL_PLACEMENT_ID = new RegExp(`^${WORLD_ASSET_VERSION.replace(/\./g, "\\.")}:(-?\\d{1,7}):(-?\\d{1,7}):(\\d{1,2})$`);
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+const PROCEDURAL_PLACEMENT_ID = new RegExp(`^${escapeRegexLiteral(WORLD_ASSET_VERSION)}:(-?\\d{1,7}):(-?\\d{1,7}):(\\d{1,2})$`);
 /** Chunk of a procedural placement id, or null for authored/unknown ids. Never matches the starter village. */
 export function proceduralPlacementChunk(placementId: string): WorldChunkCoordinate | null {
   const match = PROCEDURAL_PLACEMENT_ID.exec(placementId);
