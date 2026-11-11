@@ -24,13 +24,37 @@ if (!/^\d+$/.test(runId) || databaseNetwork !== `aurion-runtime-database-verify-
     || !/^[a-f0-9]{48}$/.test(database.password) || database.search || database.hash) {
   throw new Error("FEED_CONTAINER_DATABASE_SCOPE_INVALID");
 }
+const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+// Fixture initialization belongs to this strictly run-bound hosted test harness.
+// Production DDL remains exclusively behind the allowlisted root promoter.
+const isolatedDatabase = JSON.parse(docker(["inspect", `aurion-runtime-db-verify-${runId}`]))[0];
+assert.equal(isolatedDatabase.Name, `/aurion-runtime-db-verify-${runId}`);
+assert.equal(isolatedDatabase.Config.Image, "mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1");
+assert.equal(isolatedDatabase.State.Running, true);
+assert.ok(isolatedDatabase.NetworkSettings.Networks[databaseNetwork]?.Aliases.includes("mariadb"));
+const databasePorts = isolatedDatabase.NetworkSettings.Ports["3306/tcp"];
+assert.equal(databasePorts?.length, 1);
+assert.equal(databasePorts[0].HostIp, "127.0.0.1");
+assert.match(databasePorts[0].HostPort, /^[1-9][0-9]{0,4}$/);
+assert.ok(Number(databasePorts[0].HostPort) <= 65535);
+const isolatedUrl = new URL(database.href);
+isolatedUrl.hostname = "127.0.0.1";
+isolatedUrl.port = databasePorts[0].HostPort;
+for (const args of [["verify:migrations"], ["exec", "drizzle-kit", "migrate"]]) {
+  const migrated = spawnSync("pnpm", args, { env: { ...process.env, DATABASE_URL: isolatedUrl.href }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  if (migrated.status !== 0) {
+    const category = /ER_[A-Z_]+/.exec(String(migrated.stderr) + String(migrated.stdout))?.[0] ?? "migration_command_failed";
+    console.error(JSON.stringify({ status: "ISOLATED_FEED_SCHEMA_MIGRATION_FAILED", category, sourceRevision: revision, credentialReturned: false }));
+    throw new Error("ISOLATED_FEED_SCHEMA_MIGRATION_FAILED");
+  }
+}
+console.log(JSON.stringify({ status: "ISOLATED_FEED_SCHEMA_MIGRATED", sourceRevision: revision, databaseScope: "run-bound-loopback", productionEvidence: false }));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-feed-container-"));
 const tokenFile = path.join(directory, "feed.token");
 const token = randomBytes(32).toString("hex");
 fs.writeFileSync(tokenFile, token + "\n", { mode: 0o600 });
 execFileSync("sudo", ["chown", "0:1000", tokenFile]);
 execFileSync("sudo", ["chmod", "0440", tokenFile]);
-const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 let container;
 let bridge;
 /** Report only bounded failure categories; never print container logs or credentials. */
