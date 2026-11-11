@@ -20,7 +20,7 @@
       },
       {
         "path": "server/scopedMasteryProtocol.ts",
-        "sha256": "bff7434eb11e544d9b447625a7067d8f2fab8171bfecc4d8381df1d2628ce193"
+        "sha256": "adda5b6c3f528d7cd2bb6b426f3e380fb9117903a5093f05ad4c26ce37d69f6d"
       },
       {
         "path": "server/professionMasteryProtocol.ts",
