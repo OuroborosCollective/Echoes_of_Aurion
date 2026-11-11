@@ -34,6 +34,9 @@ function missingTables() {
   const migrations = contracts.filter(m => (REPAIR_POLICY.absent as readonly string[]).includes(m.tag));
   const names = migrations.flatMap(m => m.createdTableNames ?? []);
   o.observedTables = o.observedTables.filter(t => !names.includes(t.name));
+  // Reconstruct the actual pre-0079 schema as well as its absent journal row.
+  o.observedTables = o.observedTables.map(t => ({ ...t, columns: t.columns.map(c =>
+    ["aurionCausalTickReceipts.stageReceiptsJson", "aurionCausalArchive.payloadJson"].includes(`${t.name}.${c.name}`) ? { ...c, columnType: "text" } : c) }));
   const hashes = migrations.map(m => journal.find(e => e.tag === m.tag)!.hash);
   o.drizzleJournal[0].rows = o.drizzleJournal[0].rows!.filter(r => !hashes.includes(r.hash));
   return classify(o);

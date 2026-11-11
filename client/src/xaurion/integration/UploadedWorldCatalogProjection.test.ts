@@ -371,7 +371,7 @@ describe("city wall admission under device memory contention", () => {
 
 it("reserves all authored slots when a nearer shipped replacement is visible", async () => {
  const prop={assetId:"glb_budget_prop",sha256:"d".repeat(64),displayName:"Prop",purpose:"world-environment",assetType:"arena",targetKey:null,subcategory:"street-prop",equipmentSlot:null,storageUrl:`/api/assets/glb/${"d".repeat(64)}.glb`} as GlbCatalogEntry;
- vi.spyOn(glbManager,"loadStaticLodFamily").mockImplementation(async()=>({scene:new THREE.Group(),animations:[],lodLevels:[0]}));
+ vi.spyOn(glbManager,"loadStaticLodFamily").mockImplementation(async()=>{const scene=new THREE.Group();scene.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()));return {scene,animations:[],lodLevels:[0]};});
  const original=worldAssetsForChunk(GLOBAL_WORLD_SEED,{x:1,z:1})[0]!;
  const projection=new UploadedWorldCatalogProjection({scene:new THREE.Scene(),player:{position:new THREE.Vector3(60,0,60)},landscape:{chunkManager:{getElevationAt:()=>0}}} as never);
  projection.setCatalog({version:"aurion.glb-import.v1",revision:"a".repeat(64),entries:[prop]});
