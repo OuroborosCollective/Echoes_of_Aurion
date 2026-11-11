@@ -167,6 +167,7 @@ export class UploadedWorldCatalogProjection {
     return placements;
   }
 
+  /** Select nearby confirmed visuals with independent authored and automatic budgets. */
   private desired(position: { x: number; z: number }): { center: WorldChunkCoordinate; placements: ProjectedPlacement[] } {
     if (!this.catalog) return { center: { x: 0, z: 0 }, placements: [] };
     const center = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;
@@ -254,6 +255,7 @@ export class UploadedWorldCatalogProjection {
     this.rendered.delete(id);
   }
 
+  /** Load one confirmed visual and recheck ownership before attaching its terrain projection. */
   private async project(placement: ProjectedPlacement, originX: number, originZ: number): Promise<void> {
     if (this.disposed || this.pending.has(placement.id)) return;
     const current = this.rendered.get(placement.id);

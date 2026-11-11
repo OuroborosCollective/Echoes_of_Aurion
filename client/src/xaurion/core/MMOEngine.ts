@@ -840,6 +840,7 @@ export class MMOEngine {
     );
   }
 
+  /** Resolve touch input against loaded ground meshes; missing terrain yields no destination. */
   public projectTouchDestination(screenX: number, screenY: number): { x: number; y: number; z: number } | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0 || screenX < rect.left || screenX > rect.right || screenY < rect.top || screenY > rect.bottom) return null;

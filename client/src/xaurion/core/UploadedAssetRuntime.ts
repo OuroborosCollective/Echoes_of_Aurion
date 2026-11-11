@@ -120,6 +120,7 @@ const ANCHOR_POOL: Readonly<Record<UploadedAnchorClass, (asset: GlbCatalogEntry)
 /** Offset across a road strip `[0 m, 4 m)`: beside the kerb on the given side. */
 const besideRoad = (side: number, half: number, gap: number) => side < 0 ? -(gap + half) : ROAD_WIDTH_M + gap + half;
 /** Chunk-local centre (metres) of an anchor for a model with this half footprint. */
+/** Compute the fixed class-specific location; asset selection cannot move an anchor. */
 function anchorOffset(anchor: Anchor, half: number): readonly [number, number] {
   if (anchor.kind === "road-lot") return [besideRoad(anchor.x, half, ROAD_LOT_GAP_M), besideRoad(anchor.z, half, ROAD_LOT_GAP_M)];
   if (anchor.kind === "verge") return anchor.x ? [besideRoad(anchor.x, half, VERGE_GAP_M), VERGE_ALONG_M] : [VERGE_ALONG_M, besideRoad(anchor.z, half, VERGE_GAP_M)];

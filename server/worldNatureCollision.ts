@@ -254,12 +254,16 @@ export const preCityWorldNatureCollision = new WorldNatureCollision(
 
 const immutableCollisionViews = new WeakMap<readonly string[], WorldNatureCollision>();
 
-/** Reuse immutable collision inputs and their bounded chunk cache between ticks. */
+/** Reuse bounded chunk caches only for frozen string arrays. Mutable replay inputs
+ * are copied into a fresh view on every call, so an in-place edit cannot reuse a
+ * stale identity entry. Live snapshots are frozen and retain the O(1) fast path.
+ */
 export function snapshotWorldNatureCollision(ids = snapshotHiddenShippedPlacementIds()): WorldNatureCollision {
-  const cached = immutableCollisionViews.get(ids);
+  const reusable = Object.isFrozen(ids);
+  const cached = reusable ? immutableCollisionViews.get(ids) : undefined;
   if (cached) return cached;
   const hidden = new Set(ids);
   const view = new WorldNatureCollision(GLOBAL_WORLD_SEED, id => hidden.has(id));
-  immutableCollisionViews.set(ids, view);
+  if (reusable) immutableCollisionViews.set(ids, view);
   return view;
 }

@@ -244,6 +244,7 @@ jobs:
             --name "${runtime_verify_db_container}" \
             --network "${runtime_verify_database_network}" \
             --network-alias mariadb \
+            -p 127.0.0.1::3306 \
             -e MARIADB_ROOT_PASSWORD="${runtime_verify_db_password}" \
             -e MARIADB_DATABASE=aurion_runtime \
             -e MARIADB_USER=aurion_runtime \
@@ -262,6 +263,10 @@ jobs:
             echo "aurion-runtime-database-verify failed category=database_not_ready" >&2
             exit 1
           fi
+          # The feed and runtime boot against the real, fully migrated isolated schema.
+          runtime_verify_db_port="$(docker port "${runtime_verify_db_container}" 3306/tcp | sed 's/.*://')"
+          pnpm verify:migrations
+          DATABASE_URL="mysql://aurion_runtime:${runtime_verify_db_password}@127.0.0.1:${runtime_verify_db_port}/aurion_runtime" pnpm exec drizzle-kit migrate
           # Remove the builder's image before importing: verification exercises
           # the same exact archive handoff that the VPS will execute.
           docker image rm "${runtime_verify_image}"

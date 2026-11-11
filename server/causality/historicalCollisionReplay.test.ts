@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { describe,expect,it } from "vitest";
 import { replayZoneTick } from "./replayZoneTick";
-import { worldNatureCollision } from "../worldNatureCollision";
+import { worldNatureCollision, snapshotWorldNatureCollision } from "../worldNatureCollision";
 const file=process.env.AURION_HISTORICAL_COLLISION_FIXTURE;
 (file?describe:describe.skip)("independent pre-city authority compatibility",()=>{
  it("replays an actual old-source receipt whose collider the new live plan removes",()=>{
@@ -21,4 +21,16 @@ const file=process.env.AURION_HISTORICAL_COLLISION_FIXTURE;
   expect(result.verdict).toBe("MATCH");
   expect(result.postState).toEqual(f.postState);
  });
+});
+
+it("does not reuse a stale collision view for a mutated replay-input array",()=>{
+ const ids:string[]=[],coordinate={x:3,z:3};
+ const before=snapshotWorldNatureCollision(ids);
+ const id=before.obstaclesForChunk(coordinate)[0]?.id;
+ expect(id).toBeDefined();
+ ids.push(id!);
+ const after=snapshotWorldNatureCollision(ids);
+ expect(after).not.toBe(before);
+ expect(before.obstaclesForChunk(coordinate).some(o=>o.id===id)).toBe(true);
+ expect(after.obstaclesForChunk(coordinate).some(o=>o.id===id)).toBe(false);
 });

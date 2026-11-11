@@ -61,8 +61,13 @@ jobs:
         run: |
           set -euo pipefail
           historical_source="$(mktemp -d)"
-          trap 'rm -rf "$historical_source"' EXIT
-          git fetch --no-tags --depth=1 origin 3b050eb06e2903f359cb2554048e6a077f9102ae
+          mutable_source="$(mktemp -d)"
+          trap 'rm -rf "$historical_source" "$mutable_source"' EXIT
+          git fetch --no-tags --depth=1 origin 3b050eb06e2903f359cb2554048e6a077f9102ae 0484b9552dd44e18183e532a00a2ff7ba9d6bc4a
+          git archive 0484b9552dd44e18183e532a00a2ff7ba9d6bc4a server shared drizzle scripts config package.json tsconfig.json | tar -x -C "$mutable_source"
+          cp scripts/check-pr1357-mutable-cache-red.mts "$mutable_source/scripts/"
+          ln -s "$PWD/node_modules" "$mutable_source/node_modules"
+          env -u DATABASE_URL pnpm exec tsx --tsconfig "$mutable_source/tsconfig.json" "$mutable_source/scripts/check-pr1357-mutable-cache-red.mts"
           git archive 3b050eb06e2903f359cb2554048e6a077f9102ae server shared drizzle scripts config package.json tsconfig.json | tar -x -C "$historical_source"
           mkdir -p "$historical_source/scripts"
           cp scripts/generate-historical-collision-fixture.mts "$historical_source/scripts/"
