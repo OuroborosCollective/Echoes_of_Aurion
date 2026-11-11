@@ -8,6 +8,7 @@ import { WASD_MOB_COLLISION_SUBSTEP_MAX_MM, mobCollisionSubsteps } from "./wasdM
 import { WASD_ZONE_CARDINAL_STEP_FIXED, WASD_ZONE_DIAGONAL_STEP_FIXED } from "./wasdZoneMovementProtocol";
 import { AuthoritativeMovementZone, integrateZoneMovement } from "./zoneRuntime";
 import type { ZoneId } from "./zoneProtocol";
+import { WORLD_PLAYER_COLLISION_RADIUS_MM, worldNatureCollision } from "./worldNatureCollision";
 
 let isolatedZoneSequence = 0;
 function createIsolatedTestZone(): AuthoritativeMovementZone {
@@ -80,13 +81,24 @@ describe("WASD authoritative zone movement", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
     const zone = createIsolatedTestZone();
     const { connectionId } = zone.join({ userId: 2, socket: socket as unknown as WebSocket });
+    // Owner design brief 2026-11-10: the walled starter city carries no trees any more,
+    // so the nearest real collider north of spawn is the first oak outside the wall.
+    const oak = worldNatureCollision.obstaclesForChunk({ x: 0, z: -1 }).find(obstacle => obstacle.id === "aurion-world-assets.v1:0:-1:4")!;
+    expect(oak.assetId).toBe("nature-tree-oak-4");
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
-    for (let tick = 0; tick < 165; tick += 1) zone.tick();
+    for (let tick = 0; tick < 217; tick += 1) zone.tick();
+    // The whole way north through the city and its gate is free of nature colliders.
+    expect(zone.positionForConnection(connectionId)).toEqual({ x: 0, z: -217 * WASD_ZONE_CARDINAL_STEP_FIXED });
     zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: -1, z: 0 } });
     for (let tick = 0; tick < 64; tick += 1) zone.tick();
     const boundary = JSON.parse(socket.send.mock.calls.at(-1)![0]);
-    const boundaryPosition = {x:-21_760,z:-56_100};
+    const boundaryPosition = {x:-21_420,z:-73_780};
     expect(boundary.presences[0].position).toEqual(boundaryPosition);
+    // Independent of the pinned coordinates: it is this oak's hull that stops the next step.
+    const next = { x: boundaryPosition.x - WASD_ZONE_CARDINAL_STEP_FIXED, z: boundaryPosition.z };
+    expect(worldNatureCollision.blockingObstacle(boundaryPosition, next)?.id).toBe(oak.id);
+    expect(boundaryPosition.x - WORLD_PLAYER_COLLISION_RADIUS_MM).toBeGreaterThanOrEqual(oak.origin.x + oak.max.x);
+    expect(next.x - WORLD_PLAYER_COLLISION_RADIUS_MM).toBeLessThan(oak.origin.x + oak.max.x);
     for (let tick = 0; tick < 4; tick += 1) {
       zone.tick();
       expect(zone.positionForConnection(connectionId)).toEqual(boundaryPosition);

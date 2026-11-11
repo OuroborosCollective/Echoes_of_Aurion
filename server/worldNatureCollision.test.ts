@@ -120,15 +120,23 @@ describe("source-bound nature collision and global movement", () => {
           expect(world.blockingObstacle(actual, actual)?.id).toBe(obstacle.id);
         }
       }
-    expect(covered.size).toBe(42);
+    // 42 solid nature models exist; the six crownless Tree_Bare models are no longer
+    // scattered (owner design brief 2026-11-10: trees always carry a crown).
+    expect(covered.size).toBe(36);
     expect([...covered].sort()).toEqual(
       worldAssetCatalog.assets
         .filter(
-          a => a.family === "nature" && /^(Tree_|Rock_|Mountain_)/.test(a.name)
+          a =>
+            a.family === "nature" &&
+            /^(Tree_|Rock_|Mountain_)/.test(a.name) &&
+            !/^Tree_Bare_/.test(a.name)
         )
         .map(a => a.id)
         .sort()
     );
+    expect(
+      manifest.colliders.filter(c => c.blocksMovement).map(c => c.assetId)
+    ).toHaveLength(42);
     expect(world.obstaclesForChunk({ x: 0, z: -1 })).toEqual(
       other.obstaclesForChunk({ x: 0, z: -1 })
     );
@@ -136,11 +144,13 @@ describe("source-bound nature collision and global movement", () => {
       world.blockingObstacle({ x: 0, z: 0 }, { x: 0, z: 64_000 })
     ).toThrow("STEP_EXCEEDED");
   });
-  it("replays travel beyond the old boundary and stops against the real Tree_Oak_6 collider", () => {
-    const trace = () => {
+  it("replays travel beyond the old boundary, crosses the cleared village and stops against the real Tree_Oak_4 collider", () => {
+    // The former target Tree_Oak_6 at (-24 m, -56 m) stood inside the starter-city wall
+    // clearance and no longer exists; row -56.1 m is now free all the way west.
+    const trace = (northTicks: number) => {
       let p = { x: 0, z: 0 };
       const positions = [];
-      for (let i = 0; i < 165; i++) {
+      for (let i = 0; i < northTicks; i++) {
         p = integrateZoneMovement(p, { x: 0, z: -1 });
         positions.push(p);
       }
@@ -150,18 +160,19 @@ describe("source-bound nature collision and global movement", () => {
       }
       return positions;
     };
-    expect(trace()).toEqual(trace());
-    expect(trace().at(-1)).toEqual({ x: -21760, z: -56100 });
-    expect(splitWorldChunkPositionMm(trace().at(-1)!).coordinate).toEqual({
+    expect(trace(165).at(-1)).toEqual({ x: -34_000, z: -56_100 });
+    expect(trace(218)).toEqual(trace(218));
+    expect(trace(218).at(-1)).toEqual({ x: -21_420, z: -74_120 });
+    expect(splitWorldChunkPositionMm(trace(218).at(-1)!).coordinate).toEqual({
       x: 0,
       z: -1,
     });
-    expect(integrateZoneMovement(trace().at(-1)!, { x: 1, z: 0 })).toEqual({
-      x: -21420,
-      z: -56100,
+    expect(integrateZoneMovement(trace(218).at(-1)!, { x: 1, z: 0 })).toEqual({
+      x: -21_080,
+      z: -74_120,
     });
   });
-  it("lets players cross flowers, grass, stumps and every other small decoration", () => {
+  it("lets players cross flowers, grass and every other small decoration", () => {
     const world = new WorldNatureCollision(),
       checked = new Set<string>();
     const passive = new Set(
@@ -181,9 +192,13 @@ describe("source-bound nature collision and global movement", () => {
           expect(integrateZoneMovement(from, { x: 1, z: 0 })).toEqual(to);
           checked.add(placement.assetId);
         }
-    expect(checked.size).toBe(70);
+    // 70 passive nature models exist; the 23 loose tree fragments (stumps, logs,
+    // timber, branches, roots) are no longer scattered, the other 47 all are.
+    expect(passive.size).toBe(70);
+    expect(checked.size).toBe(47);
     expect([...checked].some(id => id.startsWith("nature-flower-"))).toBe(true);
-    expect(checked.has("nature-stump-3")).toBe(true);
+    expect([...checked].some(id => id.startsWith("nature-grass-clump-"))).toBe(true);
+    expect(checked.has("nature-stump-3")).toBe(false);
   });
   it("round-trips the full world through centered INT storage, preserving old chunk-zero rows", () => {
     for (const x of [

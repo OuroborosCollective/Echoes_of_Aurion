@@ -7,7 +7,7 @@ import { proposeReviewed0068Transitions } from "./aurionSchemaReviewedTransition
 import { REVIEWED_JOURNAL, reviewedDialogueTable, type ReviewedJournalContract } from "./aurionSchemaReviewedJournal";
 
 export const REPAIR_POLICY = {
-  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts", "0077_aurion_npc_archetype_registry", "0078_aurion_world_visual_overrides"],
+  absent: ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts", "0077_aurion_npc_archetype_registry", "0078_aurion_world_visual_overrides", "0079_aurion_collision_receipt_capacity"],
   drift: ["0025_aurion_loot_mastery_ethos", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0033_aurion_ax1_ui_controls", "0066_aurion_inventory_transaction_kernel", "0068_aurion_item_manipulation_runtime"],
 } as const;
 export const REPAIR_MAX_AGE_MS = 15 * 60 * 1000;
@@ -20,7 +20,7 @@ export type RepairObservation = {
 };
 export type RepairOperation = {
   tag: string; statementIndex: number; sql: string; sqlSha256: string;
-  kind: "CREATE_TABLE" | "CREATE_TRIGGER" | "ADD_COLUMN" | "ADD_INDEX" | "ADD_CHECK" | "REPLACE_CHECK_ATOMIC" | "DROP_REVIEWED_INDEX";
+  kind: "CREATE_TABLE" | "CREATE_TRIGGER" | "ADD_COLUMN" | "ADD_INDEX" | "ADD_CHECK" | "REPLACE_CHECK_ATOMIC" | "DROP_REVIEWED_INDEX" | "WIDEN_RECEIPT_TEXT";
   sourceStatementIndexes?: number[]; sourceSqlSha256?: string[];
 };
 export function canonicalJson(value: unknown): string {
@@ -44,7 +44,9 @@ const asObserved = (table: ExpectedTable): ObservedTable => ({
 });
 
 /** Pure, bounded planner. SQL is selected byte-for-byte from the pinned source.
- * No DROP, MODIFY, UPDATE, trigger replacement or journal overwrite is emitted.
+ * No generic MODIFY, DROP, UPDATE, trigger replacement or journal overwrite is emitted.
+ * Migration 0079 permits only its two pinned TEXT-to-MEDIUMTEXT widenings,
+ * preserving each column's nullability, default and extra metadata.
  * Every unresolved discrepancy blocks the ENTIRE plan before its first write. */
 export function buildSchemaRepairPlan(input: {
   sourceRevision: string; ledgerPlanSha256: string; nowMs: number;
@@ -139,6 +141,23 @@ export function buildSchemaRepairPlan(input: {
       }
       if (allowedTrigger && simulated.has(trigger[4]) && !(simulated.get(trigger[4])!.triggers ?? []).some(t => t.name === `${trigger[1]}_no_${trigger[2]}`)) {
         kind = "CREATE_TRIGGER"; tableName = trigger[4];
+      }
+      // Only the revision-pinned capacity migration may widen these exact
+      // receipt columns. Any other type/default/nullability drift stays blocked.
+      if (m.tag === "0079_aurion_collision_receipt_capacity") {
+        const widen = clean.match(/^ALTER TABLE `(aurionCausalTickReceipts|aurionCausalArchive)` MODIFY COLUMN `(stageReceiptsJson|payloadJson)` mediumtext(?: NOT NULL)?;$/);
+        if (widen) {
+          const pair = `${widen[1]}.${widen[2]}`;
+          const permitted = pair === "aurionCausalTickReceipts.stageReceiptsJson" || pair === "aurionCausalArchive.payloadJson";
+          const before = simulated.get(widen[1])?.columns.find(c => c.name === widen[2]);
+          const target = m.tables.find(t => t.name === widen[1])?.columns.find(c => c.name === widen[2]);
+          const expectedNullable = pair === "aurionCausalTickReceipts.stageReceiptsJson";
+          if (permitted && before && target && before.columnType.toLowerCase() === "text"
+            && before.nullable === expectedNullable && target.nullable === expectedNullable
+            && (!before.defaultSql || before.defaultSql.toLowerCase() === "null") && !before.extra) {
+            kind = "WIDEN_RECEIPT_TEXT"; tableName = widen[1];
+          }
+        }
       }
       if (!kind || !tableName) continue;
       const before = simulated.get(tableName);

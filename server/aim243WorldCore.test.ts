@@ -60,9 +60,14 @@ describe("AIM-243 deterministic xaurion world core", () => {
     expect(core).toContain("renderer.info.render.calls");
     expect(core).toContain("aurion:xaurion-world-core-metrics");
     expect(adapter).toContain("attachAurionWorldCore(engine,worldContext)");
-    expect(landscape).toContain("buildSanctumHub");
+    expect(landscape).toContain("export class OpenWorldLandscape");
     expect(landscape).toContain("buildClockworkWoods");
     expect(landscape).toContain("buildScorchedQuarry");
-    expect(landscape).toContain("buildVoidSpireArena");
+    // Owner design brief 2026-11-10: the hand-built scenery inside the city walls
+    // (sanctum hub, boss arena) was removed by the owner, not by the world core; the
+    // landscape now provides the flat starter-city floor there instead.
+    expect(landscape).toContain("createStarterCityFloor");
+    expect(landscape).not.toContain("buildSanctumHub");
+    expect(landscape).not.toContain("buildVoidSpireArena");
   });
 });

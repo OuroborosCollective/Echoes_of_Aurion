@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { findProceduralNpcVisual, NpcFallbackProjection } from "./NpcFallbackProjection";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
-import { WORLD_VISUAL_OVERRIDE_SCHEMA, WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
+import { WORLD_VISUAL_OVERRIDE_SCHEMA, WORLD_VISUAL_READBACK_CHANGED_EVENT, WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
 
 describe("procedural NPC visual boundary", () => {
   it("selects only the cylinder/head body and leaves the quest marker outside replacement", () => {
@@ -67,6 +67,8 @@ describe("admin world-visual refresh ordering", () => {
       throw new Error("UNEXPECTED_FETCH");
     });
     const projected = vi.spyOn(UploadedWorldCatalogProjection.prototype, "setVisualOverrides");
+    // Each *changed* confirmed readback tells the procedural world plan to re-read itself.
+    const planReread = vi.fn(); window.addEventListener(WORLD_VISUAL_READBACK_CHANGED_EVENT, planReread);
     const projection = new NpcFallbackProjection({
       scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(),
       player: { position: new THREE.Vector3() }, landscape: { chunkManager: { getElevationAt: () => 0 } },
@@ -81,7 +83,14 @@ describe("admin world-visual refresh ordering", () => {
       await vi.waitFor(() => expect(overrideReads).toBe(2));
       await vi.waitFor(() => expect(projected).toHaveBeenLastCalledWith(newReadback));
       expect(overrideReads).toBe(2); // coalesced, not an unbounded refresh loop
+      expect(planReread).toHaveBeenCalledTimes(2); // old readback, then the new one
+      // The same readback again changes nothing and must not trigger another plan read.
+      window.dispatchEvent(new Event(WORLD_VISUALS_CHANGED_EVENT));
+      await vi.waitFor(() => expect(overrideReads).toBe(3));
+      await vi.waitFor(() => expect(projected).toHaveBeenCalledTimes(3));
+      expect(planReread).toHaveBeenCalledTimes(2);
     } finally {
+      window.removeEventListener(WORLD_VISUAL_READBACK_CHANGED_EVENT, planReread);
       projection.dispose();
     }
   });

@@ -51,7 +51,9 @@ import {
 } from "./zoneProtocol";
 import { ZoneMobRuntime } from "./zoneMobRuntime";
 import { ZoneResourceRuntime } from "./zoneResourceRuntime";
-import { worldNatureCollision } from "./worldNatureCollision";
+import { resolveWasdMobCollisionMovement } from "./wasdMobCollisionProtocol";
+import { worldNatureCollision, snapshotWorldNatureCollision, preCityWorldNatureCollision } from "./worldNatureCollision";
+import { snapshotHiddenShippedPlacementIds } from "./worldShippedPlacementOverrides";
 import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
 import { mobDistance } from "./wasdMobFsmProtocol";
 import { reduceCombatDelta, resolveCombatDelta, type CombatEntropy } from "./wasdCombatDeltaProtocol";
@@ -144,12 +146,16 @@ function createPresencePeer(values: {
  * below are donor provenance, not external runtime authorities.
  */
 export class AuthoritativeMovementZone {
+  /** Set only by replay from the persisted movement-stage input. */
+  collisionSnapshotOverride?: readonly string[];
+  private tickCollision = worldNatureCollision;
+
   private tactics: ZoneCombatTactics = { effects: {}, windups: [] };
   private get tacticalCombat(): boolean { return this.rulesetVersion === "aurion.zone.rules.v4"; }
   private rulesetVersion: string = AURION_ZONE_RULESET_VERSION;
   private readonly peers = new Map<string, PresencePeer>();
   private readonly peersByEntityId = new Map<string, PresencePeer>();
-  private readonly mobRuntime = new ZoneMobRuntime();
+  private readonly mobRuntime = new ZoneMobRuntime((from, desired) => resolveWasdMobCollisionMovement(from, desired, (current, target) => this.tickCollision.resolve(current, target)));
   private readonly resourceRuntime = new ZoneResourceRuntime();
   private snapshotSeq = 0;
   private tickNumber = 0;
@@ -620,7 +626,7 @@ export class AuthoritativeMovementZone {
       const steps = Math.ceil(travel / 300);
         for (let step = 0; step < steps; step++) {
           const desired = { x: candidate.x + Math.round(dx / distance * Math.min(300, travel - step * 300)), z: candidate.z + Math.round(dz / distance * Math.min(300, travel - step * 300)) };
-          candidate = worldNatureCollision.resolve(candidate, desired);
+          candidate = this.tickCollision.resolve(candidate, desired);
         }
       if (mobDistance(candidate, mob.position) > AX1_PLAYER_BASIC_MELEE_RANGE_FIXED) return { result: "out_of_range", rngEvents: [] };
       peer.position = candidate;
@@ -647,7 +653,16 @@ export class AuthoritativeMovementZone {
     return { result: "accepted", event: this.combatEvent(delta, peer.stamina, patch.defender.health, skillId), rngEvents: entropyBundle.events };
   }
 
+  /** Advance one canonical 100 ms authority tick and record its ordered stage evidence.
+   * Replay selects the receipt-compatible collision plan before any movement phase.
+   */
   tick(): boolean {
+    const collisionIds = this.isReplay ? this.collisionSnapshotOverride : snapshotHiddenShippedPlacementIds();
+    // The collision-input field was introduced together with the city-design plan.
+    // Field-free persisted receipts must execute their unchanged historical plan.
+    const historicalPlan = (this.isReplay && collisionIds === undefined)
+      || (this.receiptSchemaOverride ?? AURION_ACTIVE_CAUSAL_TICK_SCHEMA) === AURION_CAUSAL_TICK_SCHEMA_V1;
+    this.tickCollision = historicalPlan ? preCityWorldNatureCollision : snapshotWorldNatureCollision(collisionIds ?? []);
     const preState = this.lastCommittedState;
     const preStateHash = hashCanonicalZoneState(preState);
     const intentsToProcess = orderCanonicalZoneIntents(this.pendingIntents);
@@ -676,7 +691,8 @@ export class AuthoritativeMovementZone {
         orderedIntentHash,
         canonicalStateHash,
       });
-      stageReceipts.push(stage);
+      stageReceipts.push(stageName === "MOVEMENT" && collisionIds !== undefined
+        ? Object.freeze({ ...stage, hiddenShippedPlacementIds: Object.freeze([...collisionIds]) }) : stage);
       previousStageStateHash = canonicalStateHash;
     };
 
@@ -749,7 +765,7 @@ export class AuthoritativeMovementZone {
     }
     for (const peer of this.sortedPeers) {
       if ((peer.input.x === 0 && peer.input.z === 0) || peer.health <= 0) continue;
-      const next = integrateZoneMovement(peer.position, peer.input);
+      const next = integrateWasdZoneMovement(peer.position, peer.input, (from, desired) => this.tickCollision.resolve(from, desired));
       if (next.x === peer.position.x && next.z === peer.position.z) continue;
       peer.position = next;
       changed = true;

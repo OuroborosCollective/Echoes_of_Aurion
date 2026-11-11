@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { aurionCausalTickReceipts } from "../../drizzle/aurionCausalitySchema";
 
 export const CAUSAL_ARCHIVE_PACKET_MAX_BYTES = 60 * 1024;
+/** Capacity of a singleton receipt carrying the complete bounded collision input. */
+export const CAUSAL_ARCHIVE_SINGLE_RECEIPT_MAX_BYTES = 4 * 1024 * 1024;
 export function archiveReceiptPayload(row: typeof aurionCausalTickReceipts.$inferSelect) {
   return {
     id: row.id, worldId: row.worldId, zoneId: row.zoneId, tick: row.tick, revision: row.revision,
@@ -24,8 +26,8 @@ export function packCausalArchivePayloads(rows: readonly ArchiveReceiptPayload[]
   for (const row of rows) {
     const json = JSON.stringify(row);
     const size = Buffer.byteLength(json, "utf8");
-    if (size + 2 > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) throw new Error(`CAUSAL_ARCHIVE_RECEIPT_TOO_LARGE:${row.tick}`);
-    if (bytes + size + (packet.length ? 1 : 0) > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+    if (size + 2 > CAUSAL_ARCHIVE_SINGLE_RECEIPT_MAX_BYTES) throw new Error(`CAUSAL_ARCHIVE_RECEIPT_TOO_LARGE:${row.tick}`);
+    if (packet.length && bytes + size + 1 > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
       packets.push(`[${packet.join(",")}]`);
       packet = [];
       bytes = 2;
@@ -38,7 +40,8 @@ export function packCausalArchivePayloads(rows: readonly ArchiveReceiptPayload[]
 }
 
 /**
- * Incremental archive packet encoder. Holds at most one <60 KiB packet of
+ * Incremental archive packet encoder. Holds at most one ordinary <60 KiB packet or
+ * one capacity-bounded singleton collision receipt. Preserves historical bytes of
  * receipts, preserving the historical byte-for-byte JSON packet format.
  */
 export class BoundedCausalArchivePacker {
@@ -48,11 +51,11 @@ export class BoundedCausalArchivePacker {
   push(row: ArchiveReceiptPayload): string | null {
     const json = JSON.stringify(row);
     const size = Buffer.byteLength(json, "utf8");
-    if (size + 2 > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+    if (size + 2 > CAUSAL_ARCHIVE_SINGLE_RECEIPT_MAX_BYTES) {
       throw new Error(`CAUSAL_ARCHIVE_RECEIPT_TOO_LARGE:${row.tick}`);
     }
     let complete: string | null = null;
-    if (this.bytes + size + (this.parts.length ? 1 : 0) > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+    if (this.parts.length && this.bytes + size + 1 > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
       complete = `[${this.parts.join(",")}]`;
       this.parts = [];
       this.bytes = 2;

@@ -4,7 +4,13 @@ import {
   worldAssetCatalog,
   worldAssetsForChunk,
 } from "../shared/worldAssetProtocol";
+import { worldAssetsForChunk as preCityPlacementsForChunk } from "../shared/worldAssetProtocolPreCity";
 import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
+import {
+  isShippedPlacementHidden,
+  snapshotHiddenShippedPlacementIds,
+  onShippedPlacementOverridesChanged,
+} from "./worldShippedPlacementOverrides";
 import {
   splitWorldChunkPositionMm,
   WORLD_CHUNK_COORDINATE_LIMIT,
@@ -124,7 +130,20 @@ function rotate(p: GroundPoint, quarter: number): GroundPoint {
 /** Bounded derived cache only; eviction never changes collision outcomes. */
 export class WorldNatureCollision {
   private readonly chunks = new Map<string, readonly NatureObstacle[]>();
-  constructor(private readonly worldSeed = GLOBAL_WORLD_SEED) {}
+  /**
+   * `hidden` names placements an administrator removed or replaced: Aurion no
+   * longer plans them, so they carry no movement hull either.
+   */
+  constructor(
+    private readonly worldSeed = GLOBAL_WORLD_SEED,
+    private readonly hidden: (placementId: string) => boolean = () => false,
+    private readonly placementPlan = worldAssetsForChunk
+  ) {}
+  /** Drop the derived cache after the set of hidden placements changed. */
+  invalidate(): void {
+    this.chunks.clear();
+  }
+  /** Derive canonical integer hulls for one chunk; bounded cache eviction never changes results. */
   obstaclesForChunk(
     coordinate: WorldChunkCoordinate
   ): readonly NatureObstacle[] {
@@ -135,10 +154,10 @@ export class WorldNatureCollision {
       this.chunks.set(key, cached);
       return cached;
     }
-    const obstacles = worldAssetsForChunk(this.worldSeed, coordinate).flatMap(
+    const obstacles = this.placementPlan(this.worldSeed, coordinate).flatMap(
       p => {
         const source = footprints.get(p.assetId);
-        if (!source?.blocksMovement) return [];
+        if (!source?.blocksMovement || this.hidden(p.id)) return [];
         const hull = Object.freeze(
           source.hullMm.map(([x, z]) =>
             Object.freeze(rotate({ x: x!, z: z! }, p.rotation))
@@ -220,4 +239,32 @@ export class WorldNatureCollision {
     return { ...from };
   }
 }
-export const worldNatureCollision = new WorldNatureCollision();
+export const worldNatureCollision = new WorldNatureCollision(
+  GLOBAL_WORLD_SEED,
+  isShippedPlacementHidden
+);
+onShippedPlacementOverridesChanged(() => worldNatureCollision.invalidate());
+
+/** Historical field-free receipts predate admin overrides and the city-design plan.
+ * This bounded derived cache uses the byte-pinned prior plan only during replay
+ * (or the historical v1 test override), never as a second live-world authority.
+ */
+export const preCityWorldNatureCollision = new WorldNatureCollision(
+  GLOBAL_WORLD_SEED, () => false, preCityPlacementsForChunk
+);
+
+const immutableCollisionViews = new WeakMap<readonly string[], WorldNatureCollision>();
+
+/** Reuse bounded chunk caches only for frozen string arrays. Mutable replay inputs
+ * are copied into a fresh view on every call, so an in-place edit cannot reuse a
+ * stale identity entry. Live snapshots are frozen and retain the O(1) fast path.
+ */
+export function snapshotWorldNatureCollision(ids = snapshotHiddenShippedPlacementIds()): WorldNatureCollision {
+  const reusable = Object.isFrozen(ids);
+  const cached = reusable ? immutableCollisionViews.get(ids) : undefined;
+  if (cached) return cached;
+  const hidden = new Set(ids);
+  const view = new WorldNatureCollision(GLOBAL_WORLD_SEED, id => hidden.has(id));
+  if (reusable) immutableCollisionViews.set(ids, view);
+  return view;
+}

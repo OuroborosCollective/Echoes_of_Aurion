@@ -5,6 +5,11 @@ import { collisionSystem } from './WorldCollisionSystem';
 import { attachMeshBVHToGroup } from '../spatial/bvhWorkerHelper';
 import { calculateSplatWeights, createTerrainSplatMaterial } from './TerrainSplatting';
 import { renderBudget } from '../core/renderBudget';
+import { starterCityGroundFactor, touchesStarterCityGround } from './starterCityGround';
+import { oreOutcropHeightM } from './oreOutcrop';
+
+/** Depth of the chunk terrain below the paved starter-city floor (metres). */
+export const STARTER_CITY_FLOOR_UNDERLAY_M = 0.08;
 
 export class WorldChunkManager {
   public scene: THREE.Scene;
@@ -117,8 +122,17 @@ export class WorldChunkManager {
     
     const elevationBase = chunk ? chunk.elevationBase : 0;
     
-    // Exact match of the formula in renderChunkMeshes
-    return Math.sin(worldX * 0.08) * Math.cos(worldZ * 0.08) * 1.8 + elevationBase * 0.5;
+    return this.terrainHeight(worldX, worldZ, elevationBase) + oreOutcropHeightM(worldX, worldZ);
+  }
+
+  /**
+   * The one presentation height formula (ground query and chunk mesh). The starter
+   * city inside the walls is a flat plane; the relief blends in outside of it.
+   */
+  private terrainHeight(worldX: number, worldZ: number, elevationBase: number): number {
+    const factor = starterCityGroundFactor(worldX, worldZ);
+    if (factor === 0) return 0;
+    return (Math.sin(worldX * 0.08) * Math.cos(worldZ * 0.08) * 1.8 + elevationBase * 0.5) * factor;
   }
 
   /**
@@ -412,6 +426,13 @@ export class WorldChunkManager {
       }
     }
 
+    // Owner design brief 2026-11-10: no legacy client scenery inside the city walls.
+    // Filtered after generation so the deterministic stream of every other object is unchanged;
+    // visuals and local colliders both derive from this one list.
+    const admitted = obstacles.filter(obstacle => !touchesStarterCityGround(obstacle.x, obstacle.z, obstacle.radius));
+    obstacles.length = 0;
+    obstacles.push(...admitted);
+
     const chunkData: WorldChunkData = {
       chunkKey,
       chunkX: cx,
@@ -477,13 +498,16 @@ export class WorldChunkManager {
       splats[i * 4 + 2] = weights[2];
       splats[i * 4 + 3] = weights[3];
 
-      const elev = Math.sin((worldX) * 0.08) * Math.cos((worldZ) * 0.08) * 1.8 + chunk.elevationBase * 0.5;
-      pos.setY(i, elev);
+      // Inside the starter city the paved city floor (OpenWorldLandscape) is the visible
+      // surface; this mesh stays just below it so the two planes never z-fight.
+      const flat = starterCityGroundFactor(worldX, worldZ) === 0;
+      pos.setY(i, flat ? -STARTER_CITY_FLOOR_UNDERLAY_M : this.terrainHeight(worldX, worldZ, chunk.elevationBase));
     }
     terrainGeo.setAttribute('splatWeight', new THREE.BufferAttribute(splats, 4));
     terrainGeo.computeVertexNormals();
 
     const terrainMesh = new THREE.Mesh(terrainGeo, this.getSplatMaterial());
+    terrainMesh.userData.aurionGround = true;
     terrainMesh.receiveShadow = true;
     group.add(terrainMesh);
 

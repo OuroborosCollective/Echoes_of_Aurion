@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   BoundedCausalArchivePacker,
   CAUSAL_ARCHIVE_PACKET_MAX_BYTES,
+  CAUSAL_ARCHIVE_SINGLE_RECEIPT_MAX_BYTES,
   packCausalArchivePayloads,
   type ArchiveReceiptPayload,
 } from "./archivePacking";
@@ -47,7 +48,7 @@ describe("causal archive bounded-memory contracts", () => {
 
   it("rejects one oversized UTF-8 receipt before allocating any archive packet", () => {
     const packer = new BoundedCausalArchivePacker();
-    expect(() => packer.push({ ...payload(1), inputJson: "🐺".repeat(20_000) }))
+    expect(() => packer.push({ ...payload(1), inputJson: "🐺".repeat(CAUSAL_ARCHIVE_SINGLE_RECEIPT_MAX_BYTES / 4) }))
       .toThrow("CAUSAL_ARCHIVE_RECEIPT_TOO_LARGE:1");
     expect(packer.finish()).toBeNull();
   });

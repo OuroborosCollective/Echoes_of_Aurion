@@ -11,6 +11,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'tsconfig.json'
       - 'scripts/godot/live-bridge-*'
+      - 'scripts/godot/feed-proof-command*'
       - 'scripts/godot/sync-approved-glbs*'
       - 'deploy/*glb-catalog-sync*'
       - 'deploy/*aurion*godot*'
@@ -38,6 +39,7 @@ jobs:
       - name: Actual Compose merge and protected image/file rejection boundaries
         run: |
           node scripts/test-aurion-godot-feed-compose.mjs
+          timeout --kill-after=5s 30s node --test scripts/godot/feed-proof-command.test.mjs
           sudo python3 scripts/test_aurion_godot_release_handoff.py
           bash -n deploy/promote-aurion-zone-runtime.sh deploy/install-aurion-godot-bridge.sh
           bash -n deploy/install-aurion-glb-catalog-sync.sh
@@ -55,9 +57,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install exact lock and run unchanged full repository regression
+      - name: Install exact lock
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate old-source collision receipt and replay against this candidate
         run: |
-          pnpm install --frozen-lockfile --ignore-scripts
+          set -euo pipefail
+          historical_source="$(mktemp -d)"
+          mutable_source="$(mktemp -d)"
+          trap 'rm -rf "$historical_source" "$mutable_source"' EXIT
+          git fetch --no-tags --depth=1 origin 3b050eb06e2903f359cb2554048e6a077f9102ae 0484b9552dd44e18183e532a00a2ff7ba9d6bc4a
+          git archive 0484b9552dd44e18183e532a00a2ff7ba9d6bc4a server shared drizzle scripts config package.json tsconfig.json | tar -x -C "$mutable_source"
+          cp scripts/check-pr1357-mutable-cache-red.mts "$mutable_source/scripts/"
+          ln -s "$PWD/node_modules" "$mutable_source/node_modules"
+          env -u DATABASE_URL pnpm exec tsx --tsconfig "$mutable_source/tsconfig.json" "$mutable_source/scripts/check-pr1357-mutable-cache-red.mts"
+          git archive 3b050eb06e2903f359cb2554048e6a077f9102ae server shared drizzle scripts config package.json tsconfig.json | tar -x -C "$historical_source"
+          mkdir -p "$historical_source/scripts"
+          cp scripts/generate-historical-collision-fixture.mts "$historical_source/scripts/"
+          ln -s "$PWD/node_modules" "$historical_source/node_modules"
+          env -u DATABASE_URL pnpm exec tsx --tsconfig "$historical_source/tsconfig.json" "$historical_source/scripts/generate-historical-collision-fixture.mts" "$RUNNER_TEMP/pre-city-receipt.json"
+          AURION_HISTORICAL_COLLISION_FIXTURE="$RUNNER_TEMP/pre-city-receipt.json" pnpm exec vitest run server/causality/historicalCollisionReplay.test.ts
+      - name: Run unchanged full repository regression
+        run: |
           pnpm check
           pnpm test
           git diff --check

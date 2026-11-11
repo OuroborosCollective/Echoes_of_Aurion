@@ -1,7 +1,7 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0078",
+  "waveId": "aurion-production-0021-0079",
   "migrations": [
     {
       "tag": "0021_aurion_global_world_state",
@@ -229,6 +229,10 @@
     },
     {
       "tag": "0078_aurion_world_visual_overrides",
+      "source": "aurion"
+    },
+    {
+      "tag": "0079_aurion_collision_receipt_capacity",
       "source": "aurion"
     }
   ],

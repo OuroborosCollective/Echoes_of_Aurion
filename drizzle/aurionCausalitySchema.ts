@@ -1,4 +1,4 @@
-import { bigint, index, int, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { bigint, index, int, mysqlEnum, mysqlTable, primaryKey, mediumtext, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 const HASH_LENGTH = 96;
 
@@ -13,7 +13,7 @@ export const aurionCausalTickReceipts = mysqlTable("aurionCausalTickReceipts", {
   preStateHash: varchar("preStateHash", { length: HASH_LENGTH }).notNull(),
   inputHash: varchar("inputHash", { length: HASH_LENGTH }).notNull(),
   inputJson: text("inputJson"),
-  stageReceiptsJson: text("stageReceiptsJson"),
+  stageReceiptsJson: mediumtext("stageReceiptsJson"),
   transitionHash: varchar("transitionHash", { length: HASH_LENGTH }).notNull(),
   rngRootHash: varchar("rngRootHash", { length: HASH_LENGTH }).notNull(),
   postStateHash: varchar("postStateHash", { length: HASH_LENGTH }).notNull(),
@@ -64,7 +64,7 @@ export const aurionCausalArchive = mysqlTable("aurionCausalArchive", {
   endTick: int("endTick").notNull(),
   receiptCount: int("receiptCount").notNull(),
   archiveHash: varchar("archiveHash", { length: HASH_LENGTH }).notNull(),
-  payloadJson: text("payloadJson").notNull(),
+  payloadJson: mediumtext("payloadJson").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   uniqueIndex("aurionCausalArchive_world_zone_start_uq").on(table.worldId, table.zoneId, table.startTick),

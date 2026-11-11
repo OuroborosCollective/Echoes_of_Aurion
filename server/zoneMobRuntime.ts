@@ -44,7 +44,7 @@ export class ZoneMobRuntime {
   private readonly cachedOrderedStates: MobRuntimeState[] = [];
   private readonly entityIdToIndex = new Map<string, number>();
 
-  constructor() {
+  constructor(private readonly resolveMovement: typeof resolveMobCollisionMovement = resolveMobCollisionMovement) {
     for (const definition of observatoryMobDefinitions) {
       this.states.set(definition.entityId, initialMobRuntimeState(definition, 0));
     }
@@ -69,7 +69,7 @@ export class ZoneMobRuntime {
     for (let i = 0; i < this.cachedOrderedStates.length; i++) {
       const current = this.cachedOrderedStates[i]!;
       const entityId = current.definition.entityId;
-      const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
+      const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: this.resolveMovement });
       this.updateState(entityId, next);
       if (!sameMobState(current, next)) changed = true;
     }

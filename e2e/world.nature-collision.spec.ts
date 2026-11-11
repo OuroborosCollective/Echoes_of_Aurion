@@ -5,6 +5,8 @@ import { tsImport } from "tsx/esm/api";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 import { WASD_ZONE_CARDINAL_STEP_FIXED as STEP } from "../server/wasdZoneMovementProtocol";
 
+import { AURION_STARTER_VILLAGE_CONTRACT_VERSION } from "../shared/aurionStarterVillageContract";
+
 const manifest = JSON.parse(readFileSync("shared/worldCollisionManifest.json", "utf8"));
 test.skip(process.env.AURION_COLLISION_E2E !== "1", "Isolated collision runtime required");
 
@@ -162,16 +164,20 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
     const passedDecoration = structuredClone(current!);
     expect(passedDecoration.position.x).toBeGreaterThan(9000);
     await driveUntil("a", () => !!current && current.position.x <= 0);
-    await driveUntil("w", () => !!current && current.position.z <= -55760);
+    // Owner design brief 2026-11-10: nothing procedural stands inside the starter-city
+    // walls any more (the former target Tree_Oak_6 at -24 m/-56 m is gone). Leave the
+    // village through the north gate; the first solid tree is Tree_Oak_4 beyond the wall.
+    await driveUntil("w", () => !!current && current.position.z <= -73780, 30_000);
 
     const response = await mover.request.get("/api/trpc/worldAssets.regionV2?input=" + encodeURIComponent(JSON.stringify({ json: { x: 0, z: -1 } })));
     expect(response.ok()).toBe(true);
     const region = (await response.json()).result.data.json;
     expect(region.version).toBe("aurion-world-assets.v2");
     expect(region.collisionHash).toBe(manifest.manifestSha256);
-    const obstacle = region.placements.find((entry: { assetId: string; xMm: number; zMm: number }) => entry.assetId === "nature-tree-oak-6" && entry.xMm === -24000 && entry.zMm === -56000);
+    const obstacle = region.placements.find((entry: { assetId: string; xMm: number; zMm: number }) => entry.assetId === "nature-tree-oak-4" && entry.xMm === -23000 && entry.zMm === -74000);
     expect(obstacle).toBeDefined();
-    expect(manifest.colliders.find((entry: { assetId: string }) => entry.assetId === "nature-tree-oak-6").blocksMovement).toBe(true);
+    expect(region.placements.filter((entry: { id: string }) => !entry.id.startsWith(`${AURION_STARTER_VILLAGE_CONTRACT_VERSION}:`)).some((entry: { xMm: number; zMm: number }) => Math.abs(entry.xMm) < 55000 && Math.abs(entry.zMm) < 55000)).toBe(false);
+    expect(manifest.colliders.find((entry: { assetId: string }) => entry.assetId === "nature-tree-oak-4").blocksMovement).toBe(true);
     expect(manifest.colliders.find((entry: { assetId: string }) => entry.assetId === "nature-stump-3").blocksMovement).toBe(false);
 
     phase = "align-tree-approach";

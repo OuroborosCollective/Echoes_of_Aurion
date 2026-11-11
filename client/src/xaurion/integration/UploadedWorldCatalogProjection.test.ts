@@ -3,7 +3,9 @@ import * as THREE from "three";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
 import { AURION_STARTER_CITY_WALL_HEADROOM_KEY, AURION_STARTER_CITY_WALL_LODS, starterCityWallAllocation } from "@shared/aurionStarterCityWallContract";
 import { MAX_AUTHORED_RENDERED, UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
-import { authoredPlacementRef } from "@shared/worldVisualOverrideContract";
+import { authoredPlacementRef, shippedPlacementRef, WORLD_VISUAL_REMOVED_ASSET_ID } from "@shared/worldVisualOverrideContract";
+import { GLOBAL_WORLD_SEED } from "@shared/worldIdentity";
+import { worldAssetsForChunk } from "@shared/worldAssetProtocol";
 import { glbManager, selectStaticWorldLodVariants } from "../core/GLBModelManager";
 import { glbResourcePool } from "../core/GlbResourceBudget";
 
@@ -153,6 +155,57 @@ describe("addressable and persistently replaceable world visuals", () => {
     projection.update();
     await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
     expect(targets(projection)[ref]).toBe("glb_house_a");
+    projection.dispose();
+  });
+
+  // Design brief 2026-11-10: the admin must be able to remove a world object, not only swap it.
+  it("stops drawing a placement the admin removed and draws it again once restored", async () => {
+    const projection = make();
+    projection.setCatalog({ version: "aurion.glb-import.v1", revision: "a".repeat(64), entries: [house("glb_house_a", "1".repeat(64))] });
+    projection.update();
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
+    const before = Object.keys(targets(projection));
+    const ref = before[0]!;
+    const removed = { schemaVersion: "aurion.world-visual-overrides.v1" as const, worldId: "w", overrides: [{ placementRef: ref, targetKind: "uploaded_anchor" as const, assetId: WORLD_VISUAL_REMOVED_ASSET_ID, revision: 1 }], revisions: { [ref]: 1 }, readbackHash: "removed" };
+    expect(projection.setVisualOverrides(removed)).toBe(true);
+    expect(projection.setVisualOverrides(removed)).toBe(false); // same confirmed readback: nothing to re-read
+    projection.update();
+    await vi.waitFor(() => expect(Object.keys(targets(projection)).sort()).toEqual(before.filter(key => key !== ref).sort()));
+    expect(projection.setVisualOverrides({ ...removed, overrides: [], revisions: { [ref]: 2 }, readbackHash: "restored" })).toBe(true);
+    projection.update();
+    await vi.waitFor(() => expect(Object.keys(targets(projection)).sort()).toEqual([...before].sort()));
+    projection.dispose();
+  });
+
+  it("draws the admin's replacement of a procedural Aurion model at that model's spot, addressable for restore", async () => {
+    const original = [{ x: 1, z: 0 }, { x: 0, z: 1 }, { x: -1, z: 0 }, { x: 1, z: 1 }].flatMap(chunk => worldAssetsForChunk(GLOBAL_WORLD_SEED, chunk))[0]!;
+    const ref = shippedPlacementRef(original.id);
+    const projection = make();
+    projection.setCatalog({ version: "aurion.glb-import.v1", revision: "a".repeat(64), entries: [house("glb_house_b", "2".repeat(64))] });
+    const readback = (assetId: string, readbackHash: string) => ({ schemaVersion: "aurion.world-visual-overrides.v1" as const, worldId: "w",
+      overrides: [{ placementRef: ref, targetKind: "shipped_placement" as const, assetId, revision: 1 }], revisions: { [ref]: 1 }, readbackHash });
+    const holderOf = () => { let found: THREE.Object3D | undefined; projection.root.traverse(node => { if (node.userData.worldVisualTarget?.placementRef === ref) found = node; }); return found; };
+
+    // Removed: Aurion no longer plans it and the client draws nothing in its place.
+    projection.setVisualOverrides(readback(WORLD_VISUAL_REMOVED_ASSET_ID, "h-removed"));
+    projection.update();
+    await vi.waitFor(() => expect(projection.evidence().pending).toBe(0));
+    expect(holderOf()).toBeUndefined();
+
+    projection.setVisualOverrides(readback("glb_house_b", "h-replaced"));
+    projection.update();
+    await vi.waitFor(() => expect(holderOf()).toBeDefined());
+    const holder = holderOf()!;
+    expect(holder.userData.worldVisualTarget).toMatchObject({ placementRef: ref, targetKind: "shipped_placement", assetId: "glb_house_b" });
+    projection.root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(holder).getCenter(new THREE.Vector3());
+    expect(Math.abs(box.x - original.xMm / 1000)).toBeLessThan(1);
+    expect(Math.abs(box.z - original.zMm / 1000)).toBeLessThan(1);
+
+    // A replacement that is not an approved world model is never shown.
+    projection.setVisualOverrides(readback("glb_not_in_catalog", "h-unknown"));
+    projection.update();
+    await vi.waitFor(() => expect(holderOf()).toBeUndefined());
     projection.dispose();
   });
 });
@@ -314,4 +367,18 @@ describe("city wall admission under device memory contention", () => {
     projection.dispose();
     expect(glbResourcePool.evidence().heldHeadroom).toEqual({});
   });
+});
+
+it("reserves all authored slots when a nearer shipped replacement is visible", async () => {
+ const prop={assetId:"glb_budget_prop",sha256:"d".repeat(64),displayName:"Prop",purpose:"world-environment",assetType:"arena",targetKey:null,subcategory:"street-prop",equipmentSlot:null,storageUrl:`/api/assets/glb/${"d".repeat(64)}.glb`} as GlbCatalogEntry;
+ vi.spyOn(glbManager,"loadStaticLodFamily").mockImplementation(async()=>{const scene=new THREE.Group();scene.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()));return {scene,animations:[],lodLevels:[0]};});
+ const original=worldAssetsForChunk(GLOBAL_WORLD_SEED,{x:1,z:1})[0]!;
+ const projection=new UploadedWorldCatalogProjection({scene:new THREE.Scene(),player:{position:new THREE.Vector3(60,0,60)},landscape:{chunkManager:{getElevationAt:()=>0}}} as never);
+ projection.setCatalog({version:"aurion.glb-import.v1",revision:"a".repeat(64),entries:[prop]});
+ projection.setWorldDesign({schemaVersion:"aurion.world-design.v1",revision:"b".repeat(64),designs:[{designKey:"budget",version:1,title:"Budget",designHash:"c".repeat(64),expectedCatalogRevision:"a".repeat(64),placements:Array.from({length:MAX_AUTHORED_RENDERED},(_,i)=>({placementKey:`p${i}`,assetId:prop.assetId,chunkX:1,chunkZ:1,xMm:32000+i,zMm:32000,rotationQuarterTurns:0 as const,scalePermille:1000}))}]});
+ const ref=shippedPlacementRef(original.id);
+ projection.setVisualOverrides({schemaVersion:"aurion.world-visual-overrides.v1",worldId:"w",overrides:[{placementRef:ref,targetKind:"shipped_placement",assetId:prop.assetId,revision:1}],revisions:{[ref]:1},readbackHash:"budget"});
+ projection.update();await vi.waitFor(()=>expect(projection.evidence().pending).toBe(0));
+ expect(projection.evidence().assets.filter(a=>a.id.startsWith("authored:"))).toHaveLength(MAX_AUTHORED_RENDERED);
+ projection.dispose();
 });

@@ -1,4 +1,4 @@
-import { WORLD_VISUAL_OVERRIDE_SCHEMA, WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
+import { WORLD_VISUAL_OVERRIDE_SCHEMA, WORLD_VISUAL_READBACK_CHANGED_EVENT, WORLD_VISUALS_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
 import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import { glbRuntimeCatalogSchema, type GlbRuntimeCatalog } from "@shared/glbImportContract";
@@ -142,7 +142,11 @@ export class NpcFallbackProjection {
           const overrideResponse = await fetch("/api/game/world-visual-overrides", { credentials: "same-origin" });
           if (overrideResponse.ok) {
             const readback = await overrideResponse.json();
-            if (readback?.schemaVersion === WORLD_VISUAL_OVERRIDE_SCHEMA && Array.isArray(readback.overrides)) this.uploadedWorld.setVisualOverrides(readback);
+            if (readback?.schemaVersion === WORLD_VISUAL_OVERRIDE_SCHEMA && Array.isArray(readback.overrides)
+              && this.uploadedWorld.setVisualOverrides(readback) && typeof window !== "undefined") {
+              // Removed/replaced procedural placements leave the Aurion world plan: re-read it.
+              window.dispatchEvent(new Event(WORLD_VISUAL_READBACK_CHANGED_EVENT));
+            }
           }
         } catch {
           // Retain the last confirmed overrides through transient failures.

@@ -27,6 +27,8 @@ export const AURION_CAUSAL_STAGE_NAMES = [
 export type AurionCausalStageName = (typeof AURION_CAUSAL_STAGE_NAMES)[number];
 
 export interface AurionCausalStageReceipt {
+  /** Immutable shipped-placement override input used by this tick (v2 movement). */
+  hiddenShippedPlacementIds?: readonly string[];
   stageName: AurionCausalStageName;
   stageOrdinal: number;
   stageInputIdentity: string;
@@ -142,6 +144,7 @@ export function computeReceiptHash(
   return canonicalSha256({
     ...payload,
     stages: receipt.stages.map(stage => ({
+      ...(stage.hiddenShippedPlacementIds === undefined ? {} : { hiddenShippedPlacementIds: stage.hiddenShippedPlacementIds }),
       stageName: stage.stageName,
       stageOrdinal: stage.stageOrdinal,
       stageInputIdentity: stage.stageInputIdentity,

@@ -40,6 +40,9 @@ function sparse() {
   const missing = contracts.filter(m => (REPAIR_POLICY.absent as readonly string[]).includes(m.tag));
   const names = missing.flatMap(m => m.createdTableNames ?? []);
   o.observedTables = o.observedTables.filter(t => !names.includes(t.name));
+  // This historical sparse prestate precedes the receipt-capacity migration.
+  o.observedTables = o.observedTables.map(t => ({ ...t, columns: t.columns.map(c =>
+    ["aurionCausalTickReceipts.stageReceiptsJson", "aurionCausalArchive.payloadJson"].includes(`${t.name}.${c.name}`) ? { ...c, columnType: "text" } : c) }));
   const remove = new Set([...missing.map(m => m.tag), migration.tag].map(tag => journal.find(e => e.tag===tag)!.hash));
   o.drizzleJournal[0].rows = o.drizzleJournal[0].rows!.filter(r => !remove.has(r.hash));
   o.migrations = classifyMigrationContracts(contracts,new Map(o.observedTables.map(t => [t.name,t]))).map(({tag,state}) => ({tag,state}));

@@ -9,12 +9,29 @@ const adaptations = JSON.parse(read("docs/migrations/aim239-determinism-adaptati
 };
 const treeVisualAdaptations = JSON.parse(read("docs/migrations/fantasy-tree-visual-adaptations.json")) as typeof adaptations;
 const surfaceAtlasAdaptations = JSON.parse(read("docs/migrations/ax1-surface-atlas-adaptations.json")) as typeof adaptations;
+const starterCityBriefAdaptations = JSON.parse(read("docs/migrations/starter-city-design-brief-adaptations.json")) as typeof adaptations;
 
-function beforeSurfaceAtlas(path: string): string {
+/** Outermost layer: the owner design brief of 2026-11-10 (flat starter city, no
+ * legacy client scenery inside the walls). Verifies the complete current file and
+ * reconstructs the exact bytes the surface-atlas layer was recorded against. */
+function beforeStarterCityBrief(path: string): string {
   let source = read(path);
-  const entry = surfaceAtlasAdaptations.files.find(file => file.path === path);
+  const entry = starterCityBriefAdaptations.files.find(file => file.path === path);
   if (!entry) return source;
   expect(sha256(path)).toBe(entry.targetSha256);
+  for (const change of [...entry.adaptations].reverse()) {
+    expect(source.split(change.after).length - 1).toBe(change.occurrences);
+    source = source.replaceAll(change.after, change.before);
+  }
+  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.sourceSha256);
+  return source;
+}
+
+function beforeSurfaceAtlas(path: string): string {
+  let source = beforeStarterCityBrief(path);
+  const entry = surfaceAtlasAdaptations.files.find(file => file.path === path);
+  if (!entry) return source;
+  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.targetSha256);
   for (const change of [...entry.adaptations].reverse()) {
     
     if(source.includes(change.after)) source = source.replaceAll(change.after, change.before);
@@ -126,12 +143,19 @@ describe("AIM-239 xaurion integration boundary", () => {
   it("pins the hash-materialized owner ZIP landscape wave and its visible world structure", () => {
     const landscape = read("client/src/xaurion/world/OpenWorldLandscape.ts");
     expect(sourceHashBeforeDeterminism("client/src/xaurion/world/OpenWorldLandscape.ts")).toBe("27f150e4763f125d32eea3c6f600a1d23031de78dcc2f2ccd6109d74294ea430");
-    expect(landscape).toContain("buildSanctumHub");
     expect(landscape).toContain("buildClockworkWoods");
     expect(landscape).toContain("buildScorchedQuarry");
-    expect(landscape).toContain("buildVoidSpireArena");
-    expect(landscape).toContain("Aethelgard Aetherium-Brunnen");
     expect(landscape).toContain("sporeCount = 280");
+    // Owner design brief 2026-11-10: inside the city walls there is one flat paved
+    // floor and no hand-built client scenery. The removed builders are not lost: the
+    // reversible ledger reconstructs them byte-exactly as provenance.
+    expect(landscape).toContain("createStarterCityFloor");
+    expect(landscape).toContain("touchesStarterCityGround");
+    const beforeBrief = beforeStarterCityBrief("client/src/xaurion/world/OpenWorldLandscape.ts");
+    for (const removed of ["buildSanctumHub", "buildVoidSpireArena", "Aethelgard Aetherium-Brunnen"]) {
+      expect(landscape).not.toContain(removed);
+      expect(beforeBrief).toContain(removed);
+    }
   });
 
   it("pins the owner ZIP chunk and collision wave while keeping Aurion persistence authoritative", () => {

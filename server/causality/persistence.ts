@@ -26,7 +26,7 @@ import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContra
 import { drainCombatQuestProjections, persistAurionCombatVictoryEvidenceInTransaction } from "../aurionCombatVictoryPersistence";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
-import { archiveReceiptPayload, BoundedCausalArchivePacker, CAUSAL_ARCHIVE_PACKET_MAX_BYTES, causalArchiveHash } from "./archivePacking";
+import { archiveReceiptPayload, BoundedCausalArchivePacker, CAUSAL_ARCHIVE_PACKET_MAX_BYTES, CAUSAL_ARCHIVE_SINGLE_RECEIPT_MAX_BYTES, causalArchiveHash } from "./archivePacking";
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
 
@@ -323,7 +323,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
             this.mapReceipt(row);
             const json = stableJson(archiveReceiptPayload(row));
             verifiedBytes += Buffer.byteLength(json, "utf8") + (validatedCount ? 1 : 0);
-            if (verifiedBytes > CAUSAL_ARCHIVE_PACKET_MAX_BYTES) {
+            if (verifiedBytes > (archive.receiptCount === 1 ? CAUSAL_ARCHIVE_SINGLE_RECEIPT_MAX_BYTES : CAUSAL_ARCHIVE_PACKET_MAX_BYTES)) {
               throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
             }
             payloadParts.push(json);

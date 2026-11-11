@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WorldChunkData } from '../types';
 import { texturesFor } from './WorldSurfaceAtlas';
+import { starterCityGroundFactor } from './starterCityGround';
 
 export interface TerrainSplatDescriptor {
   version: number;
@@ -22,16 +23,16 @@ export function calculateSplatWeights(
   worldZ: number,
   chunk: WorldChunkData
 ): [number, number, number, number] {
-  // Height calculation matches WorldChunkManager exactly to ensure stable height
+  // Height calculation matches WorldChunkManager exactly to ensure stable height,
+  // including the flat starter-city plane and its blend ring.
   const eBase = chunk.elevationBase * 0.5;
-  const elev = Math.sin(worldX * 0.08) * Math.cos(worldZ * 0.08) * 1.8 + eBase;
+  const height = (x: number, z: number) => (Math.sin(x * 0.08) * Math.cos(z * 0.08) * 1.8 + eBase) * starterCityGroundFactor(x, z);
+  const elev = height(worldX, worldZ);
 
   // Slope via deterministic central difference within the chunk's formula domain
   const d = 0.1;
-  const ex = Math.sin((worldX + d) * 0.08) * Math.cos(worldZ * 0.08) * 1.8 + eBase;
-  const ez = Math.sin(worldX * 0.08) * Math.cos((worldZ + d) * 0.08) * 1.8 + eBase;
-  const slopeX = (ex - elev) / d;
-  const slopeZ = (ez - elev) / d;
+  const slopeX = (height(worldX + d, worldZ) - elev) / d;
+  const slopeZ = (height(worldX, worldZ + d) - elev) / d;
   const slope = Math.sqrt(slopeX * slopeX + slopeZ * slopeZ);
 
   // Masks

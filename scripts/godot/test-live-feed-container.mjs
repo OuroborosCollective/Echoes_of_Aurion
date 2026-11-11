@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import WebSocket from "ws";
 import { hello } from "../../deploy/readback-aurion-godot-bridge.mjs";
+import { runBoundedFeedProofCommand } from "./feed-proof-command.mjs";
 
 // Isolated hosted Docker proof. It never creates a player, zone, tick or receipt.
 // Authentication and the disabled write boundary are real network exchanges.
@@ -24,15 +25,49 @@ if (!/^\d+$/.test(runId) || databaseNetwork !== `aurion-runtime-database-verify-
     || !/^[a-f0-9]{48}$/.test(database.password) || database.search || database.hash) {
   throw new Error("FEED_CONTAINER_DATABASE_SCOPE_INVALID");
 }
+const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+// Fixture initialization belongs to this strictly run-bound hosted test harness.
+// Production DDL remains exclusively behind the allowlisted root promoter.
+const isolatedDatabase = JSON.parse(docker(["inspect", `aurion-runtime-db-verify-${runId}`]))[0];
+assert.equal(isolatedDatabase.Name, `/aurion-runtime-db-verify-${runId}`);
+assert.equal(isolatedDatabase.Config.Image, "mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1");
+assert.equal(isolatedDatabase.State.Running, true);
+assert.ok(isolatedDatabase.NetworkSettings.Networks[databaseNetwork]?.Aliases.includes("mariadb"));
+const databasePorts = isolatedDatabase.NetworkSettings.Ports["3306/tcp"];
+assert.equal(databasePorts?.length, 1);
+assert.equal(databasePorts[0].HostIp, "127.0.0.1");
+assert.match(databasePorts[0].HostPort, /^[1-9][0-9]{0,4}$/);
+assert.ok(Number(databasePorts[0].HostPort) <= 65535);
+const isolatedUrl = new URL(database.href);
+isolatedUrl.hostname = "127.0.0.1";
+isolatedUrl.port = databasePorts[0].HostPort;
+for (const args of [["verify:migrations"], ["exec", "drizzle-kit", "migrate"]]) {
+  const migrated = runBoundedFeedProofCommand("pnpm", args, { env: { ...process.env, DATABASE_URL: isolatedUrl.href } });
+  if (migrated.error || migrated.status !== 0) {
+    const category = migrated.error?.code === "ETIMEDOUT" ? "migration_command_timed_out" : (/ER_[A-Z_]+/.exec(String(migrated.stderr) + String(migrated.stdout))?.[0] ?? "migration_command_failed");
+    console.error(JSON.stringify({ status: "ISOLATED_FEED_SCHEMA_MIGRATION_FAILED", category, sourceRevision: revision, credentialReturned: false }));
+    throw new Error("ISOLATED_FEED_SCHEMA_MIGRATION_FAILED");
+  }
+}
+console.log(JSON.stringify({ status: "ISOLATED_FEED_SCHEMA_MIGRATED", sourceRevision: revision, databaseScope: "run-bound-loopback", productionEvidence: false }));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-feed-container-"));
 const tokenFile = path.join(directory, "feed.token");
 const token = randomBytes(32).toString("hex");
 fs.writeFileSync(tokenFile, token + "\n", { mode: 0o600 });
 execFileSync("sudo", ["chown", "0:1000", tokenFile]);
 execFileSync("sudo", ["chmod", "0440", tokenFile]);
-const docker = args => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 let container;
 let bridge;
+/** Report only bounded failure categories; never print container logs or credentials. */
+function reportFeedStartupFailure(exitCode) {
+  const result = spawnSync("docker", ["logs", "--tail", "80", container], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const raw = String(result.stdout ?? "") + String(result.stderr ?? "");
+  console.error(JSON.stringify({ status: "FEED_CONTAINER_STARTUP_FAILED", sourceRevision: revision, exitCode,
+    worldVisualReadbackFailed: raw.includes("WORLD_VISUAL_BOOT_READBACK_FAILED"),
+    missingSchema: /ER_NO_SUCH_TABLE|doesn't exist/.test(raw),
+    nativeModuleFailed: raw.includes("ERR_DLOPEN_FAILED"),
+    moduleMissing: raw.includes("ERR_MODULE_NOT_FOUND") }));
+}
 try {
   container = docker(["run", "--detach", "--network", databaseNetwork, "--env", "DATABASE_URL", "--publish", "127.0.0.1::39220", "--mount", `type=bind,source=${tokenFile},target=/run/secrets/aurion-godot-feed.token,readonly`, "-e", "AURION_GODOT_FEED_TOKEN_FILE=/run/secrets/aurion-godot-feed.token", "-e", "AURION_GODOT_FEED_BIND=0.0.0.0", "-e", "AURION_GODOT_FEED_PORT=39220", image]);
   assert.match(container, /^[a-f0-9]{64}$/);
@@ -81,7 +116,10 @@ try {
     catch (error) {
       if (error.message !== "FEED_CONTAINER_NOT_READY") throw error;
       const state = JSON.parse(docker(["inspect", container]))[0].State;
-      if (state.Status !== "running") throw new Error(`FEED_CONTAINER_EXITED:${state.ExitCode}`);
+      if (state.Status !== "running") {
+        reportFeedStartupFailure(state.ExitCode);
+        throw new Error(`FEED_CONTAINER_EXITED:${state.ExitCode}`);
+      }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }

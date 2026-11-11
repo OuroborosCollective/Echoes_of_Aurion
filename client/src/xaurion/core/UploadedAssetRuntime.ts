@@ -1,6 +1,8 @@
 import type { GlbCatalogEntry, GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
 import { WORLD_CHUNK_SIZE_MM, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
+import { WORLD_ROAD_WIDTH_MM } from "@shared/worldRoadNetwork";
+import { touchesStarterCityGround } from "../world/starterCityGround";
 import {
   AURION_RETURN_STONE_ASSET_ID,
   AURION_RETURN_STONE_CONTRACT_VERSION,
@@ -59,12 +61,78 @@ export type UploadedWorldVisualPlacement = Readonly<{
   scalePermille?: number;
 }>;
 
-const ENVIRONMENT_ANCHORS = Object.freeze([
-  [-24, -24], [24, -24], [-24, 24], [24, 24], [-24, 0], [24, 0],
-] as const);
-const NATURE_ANCHORS = Object.freeze([
-  [-24, -24], [-8, -24], [8, -24], [24, -24], [-24, 24], [-8, 24], [8, 24], [24, 24],
-] as const);
+/** Longest edge a world visual is fitted to, by catalog subcategory (metres). */
+export function targetSizeMeters(subcategory: string | null): number {
+  if (subcategory === "building") return 9;
+  if (subcategory === "structure") return 5;
+  if (subcategory === "teleporter") return 3.2;
+  if (subcategory === "fountain") return 2.4;
+  if (subcategory === "street-prop") return 1.8;
+  if (subcategory === "tree") return 7;
+  if (subcategory === "plant") return 1.2;
+  if (subcategory === "rock") return 2.6;
+  return 2.5;
+}
+
+/**
+ * Design rules of the automatic uploaded-model layout (owner design brief 2026-11-10),
+ * the same rules the Aurion placement plan follows (`shared/worldAssetProtocol`):
+ *  - nothing automatic inside the starter city walls (plus clearance);
+ *  - houses and structures only on a lot adjoining the canonical road network;
+ *  - nothing stands on a road;
+ *  - trees never outnumber flowers and grasses.
+ * An anchor index is a fixed location of its chunk and admits one class of model, so
+ * the admin reference `uploaded:<chunkX>:<chunkZ>:<anchor>` always means the same spot.
+ */
+export type UploadedAnchorClass = "road-lot" | "verge" | "garden" | "wild";
+type Anchor = Readonly<{ kind: UploadedAnchorClass; x: number; z: number; corner?: number }>;
+// Fixed 9 m envelope: 9 m houses touch the kerb, 5 m structures keep a 2 m frontage.
+const ROAD_LOT_GAP_M = 0;
+const VERGE_GAP_M = 0.6;
+const VERGE_ALONG_M = 16.25;
+const ROAD_WIDTH_M = WORLD_ROAD_WIDTH_MM / 1000;
+const CORNERS = Object.freeze([[1, 1], [-1, 1], [1, -1], [-1, -1]] as const);
+/** Road lots: the four corners of the chunk's crossing; x/z are the side of each road. */
+const ROAD_LOTS: readonly Anchor[] = Object.freeze(CORNERS.map(([x, z], corner) => Object.freeze({ kind: "road-lot" as const, x, z, corner })));
+/** Street furniture: on the verge of each road side, clear of lots and houses (x or z 0 = across that axis). */
+const VERGES: readonly Anchor[] = Object.freeze([
+  { kind: "verge" as const, x: 1, z: 0 }, { kind: "verge" as const, x: -1, z: 0 },
+  { kind: "verge" as const, x: 0, z: 1 }, { kind: "verge" as const, x: 0, z: -1 },
+].map(anchor => Object.freeze(anchor)));
+/** Gardens behind the houses of a settlement chunk. */
+const GARDENS: readonly Anchor[] = Object.freeze(CORNERS.map(([x, z]) => Object.freeze({ kind: "garden" as const, x: x * 24, z: z * 24 })));
+/** Wilderness: the four centre cells the Aurion placement plan leaves empty. */
+const WILDS: readonly Anchor[] = Object.freeze(CORNERS.map(([x, z], corner) => Object.freeze({ kind: "wild" as const, x: x * 8, z: z * 8, corner })));
+const SETTLEMENT_ANCHORS: readonly Anchor[] = Object.freeze([...ROAD_LOTS, ...VERGES, ...GARDENS]);
+/** A wilderness cell and the road lot of the same corner share ground: the lot, listed first, wins. */
+const NATURE_ANCHORS: readonly Anchor[] = Object.freeze([...ROAD_LOTS.slice(0, 2), ...WILDS]);
+
+export const isRoadBoundUploadedAsset = (asset: Pick<GlbCatalogEntry, "subcategory">) => asset.subcategory === "building" || asset.subcategory === "structure";
+const isUploadedTree = (asset: Pick<GlbCatalogEntry, "subcategory">) => asset.subcategory === "tree";
+const isUploadedFlora = (asset: Pick<GlbCatalogEntry, "subcategory">) => asset.subcategory === "plant";
+const isGardenAsset = (asset: Pick<GlbCatalogEntry, "subcategory">) => isUploadedTree(asset) || isUploadedFlora(asset) || asset.subcategory === "rock";
+const ANCHOR_POOL: Readonly<Record<UploadedAnchorClass, (asset: GlbCatalogEntry) => boolean>> = Object.freeze({
+  "road-lot": isRoadBoundUploadedAsset,
+  verge: asset => !isRoadBoundUploadedAsset(asset) && !isGardenAsset(asset),
+  garden: isGardenAsset,
+  wild: asset => !isRoadBoundUploadedAsset(asset),
+});
+/** Offset across a road strip `[0 m, 4 m)`: beside the kerb on the given side. */
+const besideRoad = (side: number, half: number, gap: number) => side < 0 ? -(gap + half) : ROAD_WIDTH_M + gap + half;
+/** Chunk-local centre (metres) of an anchor for a model with this half footprint. */
+/** Compute the fixed class-specific location; asset selection cannot move an anchor. */
+function anchorOffset(anchor: Anchor, half: number): readonly [number, number] {
+  if (anchor.kind === "road-lot") return [besideRoad(anchor.x, half, ROAD_LOT_GAP_M), besideRoad(anchor.z, half, ROAD_LOT_GAP_M)];
+  if (anchor.kind === "verge") return anchor.x ? [besideRoad(anchor.x, half, VERGE_GAP_M), VERGE_ALONG_M] : [VERGE_ALONG_M, besideRoad(anchor.z, half, VERGE_GAP_M)];
+  return [anchor.x, anchor.z];
+}
+/**
+ * Flowers and grasses the Aurion plan guarantees over its own trees in a chunk. Open
+ * wilderness: at least 6 flora against at most 3 trees. Settlements and the chunks the
+ * city wall reaches into guarantee none, so uploaded trees need uploaded flora there.
+ */
+const floraSurplus = (coordinate: WorldChunkCoordinate, settlement: boolean) =>
+  settlement || (Math.abs(coordinate.x) <= 1 && Math.abs(coordinate.z) <= 1) ? 0 : 3;
 
 /**
  * Resolve only the immutable owner-supplied return-stone GLB from the approved
@@ -168,7 +236,7 @@ export function villageStreetLampVisualPlacements(catalog: GlbRuntimeCatalog): r
 
 /**
  * Presentation-only deterministic placements for admin-approved uploaded world GLBs.
- * The central road/spawn cross stays clear and no collision, interaction, teleport,
+ * They follow the owner design rules above; no collision, interaction, teleport,
  * quest, loot or world mutation authority is derived from these placements.
  * The exact return-stone GLB is reserved for the dedicated city-centre projection.
  */
@@ -190,21 +258,43 @@ export function uploadedWorldVisualsForChunk(
     .sort(byIdentity);
   if (!assets.length) return Object.freeze([]);
 
-  const anchors = settlement ? ENVIRONMENT_ANCHORS : NATURE_ANCHORS;
-  const limit = Math.min(anchors.length, assets.length * 2, 8);
+  const anchors = settlement ? SETTLEMENT_ANCHORS : NATURE_ANCHORS;
   const start = fnv1a(`aurion-uploaded-world-v1:${catalog.revision}:${coordinate.x}:${coordinate.z}:${purpose}`);
+  const pools = new Map<UploadedAnchorClass, GlbCatalogEntry[]>();
+  const used = new Map<UploadedAnchorClass, number>();
+  const corners = new Set<number>();
   const result: UploadedWorldVisualPlacement[] = [];
-  for (let index = 0; index < limit; index += 1) {
+  for (let index = 0; index < anchors.length; index += 1) {
     const anchor = anchors[index]!;
-    const asset = assets[(start + index) % assets.length]!;
+    let pool = pools.get(anchor.kind);
+    if (!pool) pools.set(anchor.kind, pool = assets.filter(ANCHOR_POOL[anchor.kind]));
+    const count = used.get(anchor.kind) ?? 0;
+    // As before, a model repeats at most twice per chunk.
+    if (!pool.length || count >= pool.length * 2) continue;
+    if (anchor.corner !== undefined && corners.has(anchor.corner)) continue;
+    used.set(anchor.kind, count + 1);
+    const asset = pool[(start + index) % pool.length]!;
+    const half = targetSizeMeters(asset.subcategory) / 2;
+    const [dx, dz] = anchorOffset(anchor, anchor.kind === "road-lot" ? 4.5 : anchor.kind === "verge" ? 1.6 : half);
+    const xMm = coordinate.x * WORLD_CHUNK_SIZE_MM + Math.round(dx * 1000);
+    const zMm = coordinate.z * WORLD_CHUNK_SIZE_MM + Math.round(dz * 1000);
+    // The starter city inside the walls is hand-designed: nothing automatic stands there.
+    if (touchesStarterCityGround(xMm / 1000, zMm / 1000, half)) continue;
+    if (anchor.corner !== undefined) corners.add(anchor.corner);
     const rotationQuarterTurns = ((start >>> ((index % 4) * 4)) + index) % 4 as 0 | 1 | 2 | 3;
     result.push(Object.freeze({
       id: `uploaded:${catalog.revision.slice(0, 12)}:${coordinate.x}:${coordinate.z}:${index}:${asset.assetId}`,
       asset,
-      xMm: coordinate.x * WORLD_CHUNK_SIZE_MM + anchor[0] * 1000,
-      zMm: coordinate.z * WORLD_CHUNK_SIZE_MM + anchor[1] * 1000,
+      xMm,
+      zMm,
       rotationQuarterTurns,
     }));
+  }
+  // More flowers and grasses than trees: drop the trees the chunk's flora does not outnumber.
+  const flora = result.filter(placement => isUploadedFlora(placement.asset)).length;
+  let surplusTrees = result.filter(placement => isUploadedTree(placement.asset)).length - Math.max(0, floraSurplus(coordinate, settlement) + flora - 1);
+  for (let index = result.length - 1; index >= 0 && surplusTrees > 0; index -= 1) {
+    if (isUploadedTree(result[index]!.asset)) { result.splice(index, 1); surplusTrees -= 1; }
   }
   return Object.freeze(result);
 }

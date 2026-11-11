@@ -4,6 +4,12 @@ import { sha256Text } from "./sha256Text";
 export const WORLD_VISUAL_OVERRIDE_SCHEMA = "aurion.world-visual-overrides.v1" as const;
 /** Browser event: an admin changed a world visual; projections reload immediately. */
 export const WORLD_VISUALS_CHANGED_EVENT = "aurion:world-visuals-changed";
+/**
+ * Browser event: a confirmed override readback differs from the one shown (own admin
+ * write or another admin's). The Aurion world plan is re-read, because removed and
+ * replaced procedural placements are no longer part of it.
+ */
+export const WORLD_VISUAL_READBACK_CHANGED_EVENT = "aurion:world-visual-readback-changed";
 
 export type WorldVisualTargetKind = "uploaded_anchor" | "authored_placement" | "shipped_placement" | "surface_texture";
 
@@ -48,6 +54,31 @@ export function authoredPlacementRef(designKey: string, placementKey: string): s
   return `authored:sha256.${sha256Text(JSON.stringify([designKey, placementKey])).slice(0, 40)}`;
 }
 
+/** `shipped:<placementId>` reference of one procedural placement of the shipped world catalog. */
+export function shippedPlacementRef(placementId: string): string {
+  const ref = `shipped:${placementId}`;
+  if (worldVisualTargetKind(ref) !== "shipped_placement") throw new Error("WORLD_VISUAL_PLACEMENT_INVALID");
+  return ref;
+}
+
+/** Placement id of a `shipped:` reference, or null for every other reference. */
+export function shippedPlacementIdOf(placementRef: string): string | null {
+  return worldVisualTargetKind(placementRef) === "shipped_placement" ? placementRef.slice("shipped:".length) : null;
+}
+
+/**
+ * Reserved override asset: the placement shows nothing at all (owner brief 2026-11-10:
+ * every world model is removable by the admin). It is never a catalog asset; a later
+ * write with assetId null restores the original like for any other override.
+ */
+export const WORLD_VISUAL_REMOVED_ASSET_ID = "aurion.world-visual.removed" as const;
+export const isWorldVisualRemoval = (assetId: string | null | undefined): assetId is typeof WORLD_VISUAL_REMOVED_ASSET_ID =>
+  assetId === WORLD_VISUAL_REMOVED_ASSET_ID;
+/** A model can be removed; a ground material can only be replaced or restored. */
+export const worldVisualTargetIsRemovable = (targetKind: WorldVisualTargetKind | null | undefined): boolean =>
+  targetKind === "uploaded_anchor" || targetKind === "authored_placement" || targetKind === "shipped_placement";
+
+/** `assetId` is a runtime catalog asset (`glb_...`) or `WORLD_VISUAL_REMOVED_ASSET_ID`. */
 export type WorldVisualOverride = Readonly<{ placementRef: string; targetKind: WorldVisualTargetKind; assetId: string; revision: number }>;
 export type WorldVisualOverrideReadback = Readonly<{
   schemaVersion: typeof WORLD_VISUAL_OVERRIDE_SCHEMA;
@@ -60,7 +91,7 @@ export type WorldVisualOverrideReadback = Readonly<{
 
 export const WorldVisualOverrideSetInput = z.object({
   placementRef: z.string().max(160).refine(value => worldVisualTargetKind(value) !== null, "WORLD_VISUAL_PLACEMENT_INVALID"),
-  assetId: z.string().regex(/^glb_[A-Za-z0-9._:-]{4,91}$/).nullable(),
+  assetId: z.union([z.literal(WORLD_VISUAL_REMOVED_ASSET_ID), z.string().regex(/^glb_[A-Za-z0-9._:-]{4,91}$/)]).nullable(),
   expectedRevision: z.number().int().min(0).max(2_147_483_646),
 }).strict();
 

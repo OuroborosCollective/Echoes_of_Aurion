@@ -43,6 +43,7 @@ import { DeterministicSimulation } from '@shared/deterministicSimulation';
 import { syncManager } from './SyncManager';
 import { PartyManager } from './PartyManager';
 import { Ax1CameraDirector } from './Ax1CameraDirector';
+import { shippedWorldVisualTarget } from '../integration/shippedWorldVisualTarget';
 
 
 interface ActiveProjectile {
@@ -839,6 +840,7 @@ export class MMOEngine {
     );
   }
 
+  /** Resolve touch input against loaded ground meshes; missing terrain yields no destination. */
   public projectTouchDestination(screenX: number, screenY: number): { x: number; y: number; z: number } | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0 || screenX < rect.left || screenX > rect.right || screenY < rect.top || screenY > rect.bottom) return null;
@@ -848,9 +850,12 @@ export class MMOEngine {
     );
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, this.camera);
-    const hit = raycaster.intersectObject(this.landscape.groundMesh, false)[0];
-    if (!hit) return null;
-    return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+    const hits = [
+      ...raycaster.intersectObject(this.landscape.groundMesh, false),
+      ...raycaster.intersectObject(this.landscape.chunkManager.group, true).filter(hit => hit.object.userData.aurionGround === true),
+    ].sort((left, right) => left.distance - right.distance);
+    const hit = hits[0];
+    return hit ? { x: hit.point.x, y: hit.point.y, z: hit.point.z } : null;
   }
 
   public performAdminRaycast(screenX: number, screenY: number): any {
@@ -873,6 +878,10 @@ export class MMOEngine {
       // Try to find a parent that represents an entity or world asset
       let entityData: any = null;
       
+      // One instance of a shipped world model (tree, rock, flower, road house, ...).
+      const shippedTarget = shippedWorldVisualTarget(hit.object.userData, hit.instanceId);
+      if (shippedTarget) return { hit, entityData: { ...shippedTarget, worldVisualTarget: true }, point: hit.point };
+
       while (object) {
         // Replaceable world visuals (uploaded catalog anchors, World Design placements).
         if (object.userData?.worldVisualTarget) {

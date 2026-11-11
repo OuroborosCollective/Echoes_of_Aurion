@@ -8,6 +8,7 @@ import type { RuntimeRenderer } from "../core/RendererFactory";
 import { requireDecodedMaterialTextures } from "../core/GlbTextureEvidence";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import { worldAssetById, worldAssetLod, worldAssetRegionSchema, type WorldAssetPlacement, type WorldAssetRegion } from "@shared/worldAssetProtocol";
+import { WORLD_VISUAL_READBACK_CHANGED_EVENT } from "@shared/worldVisualOverrideContract";
 
 type Selection = { placement: WorldAssetPlacement; key: string; lod: 0|1|2; distance: number; visible: boolean };
 type Cached = { gltf: GLTF; access: number; textures: Set<string>; releaseBudget: ()=>void; format: string; drawn: boolean };
@@ -43,6 +44,7 @@ export class WorldAssetProjection {
  private region: WorldAssetRegion|null=null;
  private selected: Selection[]=[];
  private disposed=false;private elapsed=1;private lastCenter="";private readGeneration=0;private access=0;private readFailed=false;
+ private retryAfter=0;private retryDelay=1;private readClock=0;
  private previousLod=new Map<string,0|1|2>();
  private rendered=0;private drawCalls=0;private triangles=0;private activeLights=0;
  private readonly onConfirmedZoneSnapshot=(event:Event)=>{
@@ -54,18 +56,29 @@ export class WorldAssetProjection {
   // Zone snapshots carry canonical millimetres; update/camera positions use metres.
   this.update(1,{x:x/1000,z:z/1000},this.renderer?.domElement.clientWidth||this.viewportWidth);
  };
- constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer){
+ private readonly onVisualReadbackChanged=()=>this.refresh();
+ constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer,private readonly cancelRegion:()=>Promise<unknown>=()=>Promise.resolve()){
   this.root.name="aurion-optimized-world-assets";scene.add(this.root);
   // Detect KTX2 support once, but do not attach the decoder to a shared GLTFLoader.
   // A failed KTX2 worker must never poison the separately hash-verified raster fallback.
   if(this.renderer){try{this.ktx.detectSupport(this.renderer as Parameters<KTX2Loader["detectSupport"]>[0]);this.ktxEnabled=true;}catch{/* Verified raster alternatives remain available. */}}
-  if(typeof window!=="undefined")window.addEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);
+  if(typeof window!=="undefined"){window.addEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);window.addEventListener(WORLD_VISUAL_READBACK_CHANGED_EVENT,this.onVisualReadbackChanged);}
  }
  update(delta:number,position:{x:number;z:number},viewportWidth:number){
-  if(this.disposed)return;this.elapsed+=delta;if(this.elapsed<0.5)return;this.elapsed=0;
+  if(this.disposed)return;this.readClock+=delta;this.elapsed+=delta;if(this.elapsed<0.5)return;this.elapsed=0;
   const center=splitWorldChunkPositionMm({x:Math.round(position.x*1000),z:Math.round(position.z*1000)}).coordinate,key=`${center.x}:${center.z}`;
-  if(key!==this.lastCenter){this.lastCenter=key;const generation=++this.readGeneration;void this.fetchRegion(center).then(value=>{if(this.disposed||generation!==this.readGeneration)return;const region=worldAssetRegionSchema.parse(value);if(region.center.x!==center.x||region.center.z!==center.z)throw Error("WORLD_ASSET_CENTER_MISMATCH");this.region=region;this.readFailed=false;this.select(position,viewportWidth);}).catch(()=>{if(!this.disposed&&generation===this.readGeneration){this.readFailed=true;this.report(this.evidence());}});}
+  if(key!==this.lastCenter&&this.readClock>=this.retryAfter){this.lastCenter=key;const generation=++this.readGeneration;void this.fetchRegion(center).then(value=>{if(this.disposed||generation!==this.readGeneration)return;const region=worldAssetRegionSchema.parse(value);if(region.center.x!==center.x||region.center.z!==center.z)throw Error("WORLD_ASSET_CENTER_MISMATCH");this.region=region;this.readFailed=false;this.retryDelay=1;this.select(position,viewportWidth);}).catch(()=>{if(!this.disposed&&generation===this.readGeneration){this.lastCenter="";this.retryAfter=this.readClock+this.retryDelay;this.retryDelay=Math.min(30,this.retryDelay*2);this.readFailed=true;this.report(this.evidence());}});}
   this.select(position,viewportWidth);
+ }
+ /** Re-read the confirmed region on the next update (an admin removed, replaced or restored a placement). */
+ refresh(){
+  if(this.disposed)return;
+  const generation=++this.readGeneration;
+  this.retryAfter=Infinity;
+  void this.cancelRegion().catch(()=>{}).finally(()=>{
+   if(this.disposed||generation!==this.readGeneration)return;
+   this.lastCenter="";this.elapsed=1;this.retryAfter=0;this.retryDelay=1;
+  });
  }
  private select(position:{x:number;z:number},width:number){
   if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width,isTouchMobileOs())],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
@@ -158,6 +171,8 @@ export class WorldAssetProjection {
    const matrices=entries.map(({placement:p})=>new THREE.Matrix4().compose(new THREE.Vector3(p.xMm/1000-originX,this.terrain(p.xMm/1000,p.zMm/1000),p.zMm/1000-originZ),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),p.rotation*Math.PI/2),new THREE.Vector3(asset.scale,asset.scale,asset.scale)).multiply(anchor));
    let meshCount=0;cached.gltf.scene.traverse(node=>{if(!(node as THREE.Mesh).isMesh)return;const source=node as THREE.Mesh;if((source as THREE.SkinnedMesh).isSkinnedMesh)throw Error("STATIC_WORLD_ASSET_REQUIRED");
     const mesh=new THREE.InstancedMesh(source.geometry,source.material,entries.length);mesh.name=`world:${key}:${meshCount++}`;mesh.castShadow=false;mesh.receiveShadow=true;
+    // Instance index -> Aurion placement id, so the admin cursor can address one model.
+    mesh.userData.worldPlacementIds=entries.map(entry=>entry.placement.id);mesh.userData.worldPlacementAssetId=first.placement.assetId;
     mesh.onAfterRender=()=>{cached.drawn=true;};
     entries.forEach((_,i)=>mesh.setMatrixAt(i,matrices[i]!.clone().multiply(source.matrixWorld)));mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();this.root.add(mesh);this.drawCalls+=Array.isArray(mesh.material)?mesh.material.length:1;
    });
@@ -178,5 +193,5 @@ export class WorldAssetProjection {
   return {compressedTextures,transcodedMipPayloadBytes,rasterRgbaCeilingBytes,interpretation:"decoded texture upload payload and raster upper bound; not driver VRAM"};
  }
  evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{drawnKtxModels:[...this.cache.values()].filter(c=>c.drawn&&c.format==="ktx2").length,drawnFallbackModels:[...this.cache.values()].filter(c=>c.drawn&&c.format!=="ktx2"&&c.format!=="legacy").length,textures:this.textureEvidence(),manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth,isTouchMobileOs()),resources:glbResourcePool.evidence()}};}
- dispose(){if(this.disposed)return;this.disposed=true;if(typeof window!=="undefined")window.removeEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);this.readGeneration++;for(const request of this.requests)request.abort();this.ktx.dispose();this.clearInstances();this.root.removeFromParent();for(const entry of this.cache.values())this.release(entry);this.cache.clear();this.previousLod.clear();}
+ dispose(){if(this.disposed)return;this.disposed=true;if(typeof window!=="undefined"){window.removeEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);window.removeEventListener(WORLD_VISUAL_READBACK_CHANGED_EVENT,this.onVisualReadbackChanged);}this.readGeneration++;for(const request of this.requests)request.abort();this.ktx.dispose();this.clearInstances();this.root.removeFromParent();for(const entry of this.cache.values())this.release(entry);this.cache.clear();this.previousLod.clear();}
 }

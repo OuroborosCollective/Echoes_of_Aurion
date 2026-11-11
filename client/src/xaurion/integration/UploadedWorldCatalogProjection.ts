@@ -5,10 +5,12 @@ import type { WorldDesignReadback } from "@shared/aurionAuthoringContract";
 import { joinWorldChunkPositionMm, splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
-import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, villageStreetLampVisualPlacements, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
+import { returnStoneVisualPlacement, targetSizeMeters, uploadedWorldVisualsForChunk, villageFountainVisualPlacement, villageStreetLampVisualPlacements, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
 import { isStarterCityWallSource } from "@shared/aurionStarterCityWallContract";
 import { isPlaceableWorldAsset } from "@shared/adminPlacementPlan";
-import { authoredPlacementRef, uploadedAnchorRef, worldVisualTargetKind, type WorldVisualOverrideReadback, type WorldVisualTargetData } from "@shared/worldVisualOverrideContract";
+import { authoredPlacementRef, isWorldVisualRemoval, shippedPlacementIdOf, uploadedAnchorRef, worldVisualTargetKind, type WorldVisualOverrideReadback, type WorldVisualTargetData } from "@shared/worldVisualOverrideContract";
+import { findProceduralPlacement } from "@shared/worldAssetProtocol";
+import { GLOBAL_WORLD_SEED } from "@shared/worldIdentity";
 
 /** A placement plus the stable world reference the admin cursor and overrides address. */
 type ProjectedPlacement = UploadedWorldVisualPlacement & Readonly<{ placementRef: string }>;
@@ -39,17 +41,7 @@ const MAX_RENDERED = 18;
  */
 export const MAX_AUTHORED_RENDERED = 48;
 
-export function targetSizeMeters(subcategory: string | null): number {
-  if (subcategory === "building") return 9;
-  if (subcategory === "structure") return 5;
-  if (subcategory === "teleporter") return 3.2;
-  if (subcategory === "fountain") return 2.4;
-  if (subcategory === "street-prop") return 1.8;
-  if (subcategory === "tree") return 7;
-  if (subcategory === "plant") return 1.2;
-  if (subcategory === "rock") return 2.6;
-  return 2.5;
-}
+export { targetSizeMeters };
 
 function staticRenderable(scene: THREE.Group): boolean {
   let valid = true;
@@ -124,23 +116,58 @@ export class UploadedWorldCatalogProjection {
     this.signature = "";
   }
 
-  /** Persisted admin replacements (placement reference -> catalog asset). */
-  setVisualOverrides(readback: WorldVisualOverrideReadback | null): void {
-    if (this.disposed) return;
+  /**
+   * Persisted admin overrides (placement reference -> catalog asset, or the removal
+   * marker). Returns true when the confirmed readback differs from the one shown, so
+   * the caller can re-read the Aurion world plan (removed procedural placements).
+   */
+  setVisualOverrides(readback: WorldVisualOverrideReadback | null): boolean {
+    if (this.disposed) return false;
     const hash = readback?.readbackHash ?? "none";
-    if (hash === this.overridesHash) return;
+    if (hash === this.overridesHash) return false;
     this.overridesHash = hash;
     this.overrides = new Map((readback?.overrides ?? []).map(entry => [entry.placementRef, entry.assetId] as const));
     this.signature = "";
+    return true;
   }
 
-  private withOverride(placement: UploadedWorldVisualPlacement, placementRef: string): ProjectedPlacement {
+  /** Null when the admin removed the placement: it is not drawn at all. */
+  private withOverride(placement: UploadedWorldVisualPlacement, placementRef: string): ProjectedPlacement | null {
     const replacementId = this.overrides.get(placementRef);
+    if (isWorldVisualRemoval(replacementId)) return null;
     // Same rule as the server write: only approved world models (world purpose) replace world visuals.
     const replacement = replacementId ? this.catalog?.entries.find(entry => entry.assetId === replacementId && isPlaceableWorldAsset(entry)) : undefined;
     return Object.freeze({ ...placement, ...(replacement ? { asset: replacement } : {}), placementRef });
   }
 
+  /**
+   * Admin replacements of procedural Aurion placements (`shipped:<placementId>`). Aurion
+   * no longer plans the original (region read and collision omit it); the replacement
+   * is drawn here at the same spot and rotation, as a visual without collider.
+   */
+  private shippedReplacements(center: WorldChunkCoordinate): ProjectedPlacement[] {
+    const placements: ProjectedPlacement[] = [];
+    for (const [placementRef, assetId] of this.overrides) {
+      const placementId = shippedPlacementIdOf(placementRef);
+      if (placementId === null || isWorldVisualRemoval(assetId)) continue;
+      const asset = this.catalog?.entries.find(entry => entry.assetId === assetId && isPlaceableWorldAsset(entry));
+      const original = asset ? findProceduralPlacement(GLOBAL_WORLD_SEED, placementId) : null;
+      if (!asset || !original) continue;
+      const chunk = splitWorldChunkPositionMm({ x: original.xMm, z: original.zMm }).coordinate;
+      if (Math.abs(chunk.x - center.x) > 1 || Math.abs(chunk.z - center.z) > 1) continue;
+      placements.push(Object.freeze({
+        id: `shipped:${placementId}`,
+        asset,
+        xMm: original.xMm,
+        zMm: original.zMm,
+        rotationQuarterTurns: (original.rotation & 3) as 0 | 1 | 2 | 3,
+        placementRef,
+      }));
+    }
+    return placements;
+  }
+
+  /** Select nearby confirmed visuals with independent authored and automatic budgets. */
   private desired(position: { x: number; z: number }): { center: WorldChunkCoordinate; placements: ProjectedPlacement[] } {
     if (!this.catalog) return { center: { x: 0, z: 0 }, placements: [] };
     const center = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;
@@ -156,7 +183,9 @@ export class UploadedWorldCatalogProjection {
     if (Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) {
       generated.push(...villageStreetLampVisualPlacements(this.catalog));
     }
-    for (const placement of generated) placements.push(this.withOverride(placement, uploadedPlacementRef(placement.id)));
+    const push = (placement: ProjectedPlacement | null) => { if (placement) placements.push(placement); };
+    for (const placement of generated) push(this.withOverride(placement, uploadedPlacementRef(placement.id)));
+    placements.push(...this.shippedReplacements(center));
 
     for (const design of this.worldDesign?.designs ?? []) {
       for (const placement of design.placements) {
@@ -167,7 +196,7 @@ export class UploadedWorldCatalogProjection {
           coordinate: { x: placement.chunkX, z: placement.chunkZ },
           localPositionMm: { x: placement.xMm, z: placement.zMm },
         });
-        placements.push(this.withOverride(Object.freeze({
+        push(this.withOverride(Object.freeze({
           id: `authored:${design.designHash.slice(0, 12)}:${placement.placementKey}`,
           asset,
           xMm: worldPosition.x,
@@ -177,8 +206,8 @@ export class UploadedWorldCatalogProjection {
         }), authoredPlacementRef(design.designKey, placement.placementKey)));
       }
     }
-    // Dedicated village visuals first, then intentionally authored placements (World
-    // Design, admin placements), then automatic catalog anchors; nearest first within each.
+    // Dedicated village visuals first, then intentional admin work (World Design, admin
+    // placements, replaced Aurion placements), then automatic catalog anchors; nearest first within each.
     const dedicatedPriority = (placement: ProjectedPlacement) =>
       placement.id.startsWith("aurion.return-stone")
       || placement.id.startsWith("aurion.village-fountain")
@@ -226,6 +255,7 @@ export class UploadedWorldCatalogProjection {
     this.rendered.delete(id);
   }
 
+  /** Load one confirmed visual and recheck ownership before attaching its terrain projection. */
   private async project(placement: ProjectedPlacement, originX: number, originZ: number): Promise<void> {
     if (this.disposed || this.pending.has(placement.id)) return;
     const current = this.rendered.get(placement.id);

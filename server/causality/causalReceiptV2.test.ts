@@ -127,3 +127,60 @@ describe("Blocker 5 causal receipt v2", () => {
     }
   });
 });
+
+it("replays recorded collision inputs after live overrides change", async () => {
+ const {applyShippedPlacementReadback,resetShippedPlacementOverridesForTest}=await import("../worldShippedPlacementOverrides");
+ const {GLOBAL_WORLD_ID}=await import("../../shared/worldIdentity");
+ try {
+  resetShippedPlacementOverridesForTest();
+  const before=v2Fixture("collision-before");
+  applyShippedPlacementReadback({worldId:GLOBAL_WORLD_ID,overrides:[{placementRef:"shipped:aurion-world-assets.v1:0:-1:4",assetId:"removed"}] as any});
+  const after=v2Fixture("collision-after");
+  expect(after.receipt.stages[1].hiddenShippedPlacementIds).toEqual(["aurion-world-assets.v1:0:-1:4"]);
+  resetShippedPlacementOverridesForTest();
+  for(const fixture of [before,after]) expect(replayZoneTick({preState:fixture.preState,intents:fixture.intents,expectedReceipt:JSON.parse(JSON.stringify(fixture.receipt))}).verdict).toBe("MATCH");
+ } finally {resetShippedPlacementOverridesForTest();}
+});
+
+it("replays blocked and removed-tree ticks from the checkpoint tail", async () => {
+ const {applyShippedPlacementReadback,resetShippedPlacementOverridesForTest}=await import("../worldShippedPlacementOverrides");
+ const {GLOBAL_WORLD_ID}=await import("../../shared/worldIdentity");
+ try {
+  resetShippedPlacementOverridesForTest();
+  const setup=v2Fixture("collision-boundary");
+  const preState=JSON.parse(JSON.stringify(replayZoneTick({preState:setup.preState,intents:setup.intents,expectedReceipt:setup.receipt}).postState));
+  Object.assign(preState.players[0],{x:-21420,z:-73780,inputX:-1,inputZ:0});
+  const zone=new AuthoritativeMovementZone(preState.zoneId);
+  zone.restoreFromCanonicalState(preState,setup.receipt.receiptHash);
+  zone.tick();
+  const blocked=zone.getLatestReceipt()!;
+  const blockedState=zone.getCanonicalZoneState();
+  expect(blockedState.players[0].x).toBe(-21420);
+  applyShippedPlacementReadback({worldId:GLOBAL_WORLD_ID,overrides:[{placementRef:"shipped:aurion-world-assets.v1:0:-1:4",assetId:"removed"}] as any});
+  zone.tick();
+  const removed=zone.getLatestReceipt()!;
+  expect(zone.getCanonicalZoneState().players[0].x).toBe(-21760);
+  resetShippedPlacementOverridesForTest();
+  const first=replayZoneTick({preState,intents:[],expectedReceipt:JSON.parse(JSON.stringify(blocked))});
+  expect(first.verdict).toBe("MATCH");
+  expect(replayZoneTick({preState:first.postState!,intents:[],expectedReceipt:JSON.parse(JSON.stringify(removed))}).verdict).toBe("MATCH");
+ } finally {resetShippedPlacementOverridesForTest();}
+});
+
+// Offline deterministic regression, not a production-state fixture.
+it("preserves field-free serialized historical v2 movement stages", () => {
+ const f=v2Fixture("legacy-v2-collision");
+ const {receiptHash: _hash,...unsigned}=JSON.parse(JSON.stringify(f.receipt));
+ for(const stage of unsigned.stages) delete stage.hiddenShippedPlacementIds;
+ const expectedReceipt={...unsigned,receiptHash:computeReceiptHash(unsigned)};
+ expect(replayZoneTick({preState:f.preState,intents:f.intents,expectedReceipt}).verdict).toBe("MATCH");
+});
+
+it("reuses collision chunk caches for an unchanged immutable override snapshot", async () => {
+ const {snapshotWorldNatureCollision}=await import("../worldNatureCollision");
+ const a=snapshotWorldNatureCollision();
+ const hulls=a.obstaclesForChunk({x:3,z:3});
+ const b=snapshotWorldNatureCollision();
+ expect(b).toBe(a);
+ expect(b.obstaclesForChunk({x:3,z:3})).toBe(hulls);
+});
