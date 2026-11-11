@@ -63,7 +63,7 @@ jobs:
           historical_source="$(mktemp -d)"
           trap 'rm -rf "$historical_source"' EXIT
           git fetch --no-tags --depth=1 origin 3b050eb06e2903f359cb2554048e6a077f9102ae
-          git archive 3b050eb06e2903f359cb2554048e6a077f9102ae server shared drizzle package.json tsconfig.json | tar -x -C "$historical_source"
+          git archive 3b050eb06e2903f359cb2554048e6a077f9102ae server shared drizzle scripts config package.json tsconfig.json | tar -x -C "$historical_source"
           mkdir -p "$historical_source/scripts"
           cp scripts/generate-historical-collision-fixture.mts "$historical_source/scripts/"
           ln -s "$PWD/node_modules" "$historical_source/node_modules"
