@@ -34,11 +34,13 @@ const footprints = new Map(catalog.assets.map(asset => [asset.id, Object.freeze(
   halfX: Math.ceil(Math.max(...asset.lods.map(lod => lod.bounds.max[0]! - lod.bounds.min[0]!)) * asset.scale * 500),
   halfZ: Math.ceil(Math.max(...asset.lods.map(lod => lod.bounds.max[2]! - lod.bounds.min[2]!)) * asset.scale * 500),
 })]));
+/** Return conservative integer half-extents from all catalog LOD bounds, swapping axes for odd quarter-turns. Missing catalog assets fail closed. */
 export function worldAssetFootprintMm(asset: WorldAsset, rotation: number): { halfX: number; halfZ: number } {
   const base = footprints.get(asset.id);
   if (!base) throw Error("WORLD_ASSET_CATALOG_MISSING");
   return rotation % 2 === 0 ? { halfX: base.halfX, halfZ: base.halfZ } : { halfX: base.halfZ, halfZ: base.halfX };
 }
+/** Translate the rotated catalog footprint into the placement's canonical millimetre ground rectangle. */
 export function worldAssetGroundRectMm(asset: WorldAsset, placement: Pick<WorldAssetPlacement, "xMm" | "zMm" | "rotation">): WorldGroundRectMm {
   const { halfX, halfZ } = worldAssetFootprintMm(asset, placement.rotation);
   return { minX: placement.xMm - halfX, maxX: placement.xMm + halfX, minZ: placement.zMm - halfZ, maxZ: placement.zMm + halfZ };
@@ -54,6 +56,7 @@ export function worldAssetGroundRectMm(asset: WorldAsset, placement: Pick<WorldA
  * Only the authored starter-village contract of the origin chunk remains.
  */
 export const STARTER_CITY_PROCEDURAL_CLEARANCE_MM = 6_000;
+/** Test the full rotated asset footprint against the starter-city wall envelope plus procedural clearance; touching the outer boundary stays outside. */
 export function intersectsStarterCityWallClearance(
   asset: WorldAsset,
   placement: Pick<WorldAssetPlacement, "xMm" | "zMm" | "rotation">,
