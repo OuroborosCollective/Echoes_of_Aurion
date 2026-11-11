@@ -21,6 +21,7 @@ on:
       - "scripts/test_aurion_godot_release_handoff.py"
       - "scripts/godot/live-bridge-package.mjs"
       - "scripts/godot/test-live-feed-container.mjs"
+      - "scripts/godot/feed-proof-command*"
       - "package.json"
       - "pnpm-lock.yaml"
       - "patches/**"
@@ -128,6 +129,7 @@ jobs:
       - name: Verify optional Godot feed and hosted image boundaries
         run: |
           node scripts/test-aurion-godot-feed-compose.mjs
+          timeout --kill-after=5s 30s node --test scripts/godot/feed-proof-command.test.mjs
           sudo python3 scripts/test_aurion_godot_release_handoff.py
           bash -n deploy/install-aurion-godot-bridge.sh
 

@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import WebSocket from "ws";
 import { hello } from "../../deploy/readback-aurion-godot-bridge.mjs";
+import { runBoundedFeedProofCommand } from "./feed-proof-command.mjs";
 
 // Isolated hosted Docker proof. It never creates a player, zone, tick or receipt.
 // Authentication and the disabled write boundary are real network exchanges.
@@ -41,9 +42,9 @@ const isolatedUrl = new URL(database.href);
 isolatedUrl.hostname = "127.0.0.1";
 isolatedUrl.port = databasePorts[0].HostPort;
 for (const args of [["verify:migrations"], ["exec", "drizzle-kit", "migrate"]]) {
-  const migrated = spawnSync("pnpm", args, { env: { ...process.env, DATABASE_URL: isolatedUrl.href }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  if (migrated.status !== 0) {
-    const category = /ER_[A-Z_]+/.exec(String(migrated.stderr) + String(migrated.stdout))?.[0] ?? "migration_command_failed";
+  const migrated = runBoundedFeedProofCommand("pnpm", args, { env: { ...process.env, DATABASE_URL: isolatedUrl.href } });
+  if (migrated.error || migrated.status !== 0) {
+    const category = migrated.error?.code === "ETIMEDOUT" ? "migration_command_timed_out" : (/ER_[A-Z_]+/.exec(String(migrated.stderr) + String(migrated.stdout))?.[0] ?? "migration_command_failed");
     console.error(JSON.stringify({ status: "ISOLATED_FEED_SCHEMA_MIGRATION_FAILED", category, sourceRevision: revision, credentialReturned: false }));
     throw new Error("ISOLATED_FEED_SCHEMA_MIGRATION_FAILED");
   }

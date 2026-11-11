@@ -653,6 +653,9 @@ export class AuthoritativeMovementZone {
     return { result: "accepted", event: this.combatEvent(delta, peer.stamina, patch.defender.health, skillId), rngEvents: entropyBundle.events };
   }
 
+  /** Advance one canonical 100 ms authority tick and record its ordered stage evidence.
+   * Replay selects the receipt-compatible collision plan before any movement phase.
+   */
   tick(): boolean {
     const collisionIds = this.isReplay ? this.collisionSnapshotOverride : snapshotHiddenShippedPlacementIds();
     // The collision-input field was introduced together with the city-design plan.

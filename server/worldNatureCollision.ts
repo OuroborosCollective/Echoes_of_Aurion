@@ -143,6 +143,7 @@ export class WorldNatureCollision {
   invalidate(): void {
     this.chunks.clear();
   }
+  /** Derive canonical integer hulls for one chunk; bounded cache eviction never changes results. */
   obstaclesForChunk(
     coordinate: WorldChunkCoordinate
   ): readonly NatureObstacle[] {
