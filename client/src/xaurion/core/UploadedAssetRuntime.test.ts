@@ -303,7 +303,7 @@ describe("uploaded world visual design rules", () => {
     forEachChunk(placements => {
       for (const value of placements) {
         const [, , chunkX, chunkZ, anchor] = value.id.split(":");
-        const key = `${chunkX}:${chunkZ}:${anchor}:${value.asset.subcategory}`;
+        const key = `${chunkX}:${chunkZ}:${anchor}`;
         const spot = `${value.xMm}:${value.zMm}`;
         expect(spots.get(key) ?? spot).toBe(spot);
         spots.set(key, spot);

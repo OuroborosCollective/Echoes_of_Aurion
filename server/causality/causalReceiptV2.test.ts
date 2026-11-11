@@ -166,3 +166,21 @@ it("replays blocked and removed-tree ticks from the checkpoint tail", async () =
   expect(replayZoneTick({preState:first.postState!,intents:[],expectedReceipt:JSON.parse(JSON.stringify(removed))}).verdict).toBe("MATCH");
  } finally {resetShippedPlacementOverridesForTest();}
 });
+
+// Offline deterministic regression, not a production-state fixture.
+it("preserves field-free serialized historical v2 movement stages", () => {
+ const f=v2Fixture("legacy-v2-collision");
+ const {receiptHash: _hash,...unsigned}=JSON.parse(JSON.stringify(f.receipt));
+ for(const stage of unsigned.stages) delete stage.hiddenShippedPlacementIds;
+ const expectedReceipt={...unsigned,receiptHash:computeReceiptHash(unsigned)};
+ expect(replayZoneTick({preState:f.preState,intents:f.intents,expectedReceipt}).verdict).toBe("MATCH");
+});
+
+it("reuses collision chunk caches for an unchanged immutable override snapshot", async () => {
+ const {snapshotWorldNatureCollision}=await import("../worldNatureCollision");
+ const a=snapshotWorldNatureCollision();
+ const hulls=a.obstaclesForChunk({x:3,z:3});
+ const b=snapshotWorldNatureCollision();
+ expect(b).toBe(a);
+ expect(b.obstaclesForChunk({x:3,z:3})).toBe(hulls);
+});
