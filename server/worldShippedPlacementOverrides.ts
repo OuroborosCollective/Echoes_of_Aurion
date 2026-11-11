@@ -20,8 +20,10 @@ let generation = 0;
 let snapshot: readonly string[] = Object.freeze([]);
 const listeners = new Set<() => void>();
 
+/** Canonical set identity; iteration order cannot alter cache invalidation. */
 const fingerprintOf = (ids: ReadonlySet<string>) => [...ids].sort().join("\n");
 
+/** Atomically replace the derived index and notify only on an effective change. */
 function replace(next: ReadonlySet<string>): void {
   loaded = true;
   const nextFingerprint = fingerprintOf(next);
@@ -62,12 +64,15 @@ export function applyShippedPlacementWrite(worldId: string, placementRef: string
 /** Without a database there are no persisted overrides: the shipped plan is complete. */
 export function markShippedPlacementOverridesEmpty(): void { replace(new Set()); }
 
+/** Whether the canonical override index completed its first readback. */
 export const shippedPlacementOverridesLoaded = () => loaded;
+/** Membership query against the current committed derived index. */
 export const isShippedPlacementHidden = (placementId: string) => hidden.has(placementId);
 /** Revision guard for asynchronous global readbacks, not simulation time. */
 export const shippedPlacementIndexGeneration = () => generation;
 /** Reuse immutable collision input identity until the effective hidden set changes. */
 export const snapshotHiddenShippedPlacementIds = (): readonly string[] => snapshot;
+/** Count effective removals/replacements without exposing mutable index state. */
 export const hiddenShippedPlacementCount = () => hidden.size;
 
 /** Derived caches (movement collision) drop their state when the index changes. */

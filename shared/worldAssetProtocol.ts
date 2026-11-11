@@ -16,9 +16,12 @@ export const legacyWorldAssetRegionSchema = z.object({ version: z.literal(WORLD_
 export const worldAssetRegionSchema = legacyWorldAssetRegionSchema.extend({ version: z.literal("aurion-world-assets.v2"), collisionHash: z.literal(collision.manifestSha256), collisionVersion: z.literal(collision.version) }).strict();
 export type WorldAssetPlacement = z.infer<typeof placement>;
 export type WorldAssetRegion = z.infer<typeof worldAssetRegionSchema>;
+/** Nonnegative Euclidean remainder for negative world chunk coordinates. */
 const mod = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;
+/** Stable unsigned FNV-style seed hash; never consults ambient entropy. */
 function seedHash(seed: string): number { let hash=2166136261; for(const c of seed) hash=Math.imul(hash^c.charCodeAt(0),16777619); return hash>>>0; }
 /** Deterministic 32-bit integer mix; no clock, no Math.random, identical on server and client. */
+/** Deterministically mix integer slot coordinates into an unsigned placement selector. */
 function mix(...values: number[]): number {
   let hash = 0x811c9dc5;
   for (const value of values) { hash = Math.imul(hash ^ (value | 0), 0x9e3779b1); hash ^= hash >>> 15; hash = Math.imul(hash, 0x85ebca6b); hash ^= hash >>> 13; }
@@ -70,11 +73,13 @@ export const WORLD_SCATTER_EXCLUSIONS = Object.freeze([
   Object.freeze({ rule: "complete-trees-only", pattern: /^city-trunk/, reason: "loose trunk prop" }),
   Object.freeze({ rule: "bridges-need-a-crossing", pattern: /^city-bridge/, reason: "a bridge is only meaningful at a hand-designed crossing" }),
 ]);
+/** Admit only complete scatter models; excluded assets remain manually addressable. */
 export const isProceduralScatterAsset = (assetId: string) => !WORLD_SCATTER_EXCLUSIONS.some(entry => entry.pattern.test(assetId));
 /** A complete tree: trunk and crown in one model. Bare trees and fragments never qualify. */
 export const isCompleteTreeAsset = (asset: WorldAsset) => asset.family === "nature" && asset.category === "tree" && isProceduralScatterAsset(asset.id);
 /** Flowers and grasses; they must outnumber trees in every chunk. */
 export const isFloraAsset = (asset: WorldAsset) => /^nature-(flower|grass-clump)-/.test(asset.id);
+/** Identify city-building catalog members for canonical road-frontage lots. */
 export const isHouseAsset = (asset: WorldAsset) => asset.family === "city" && asset.category === "building";
 
 const completeTrees = nature.filter(isCompleteTreeAsset);
@@ -111,6 +116,7 @@ const STREET_END_LOTS = Object.freeze([
 ] as const);
 /** Offset from the chunk centre across a road strip: beside the kerb on the given side. */
 const besideRoad = (side: number, half: number, gapMm: number) => side < 0 ? -(gapMm + half) : WORLD_ROAD_WIDTH_MM + gapMm + half;
+/** Seeded Fisher-Yates permutation preserving the exact multiset of slot roles. */
 function shuffled<T>(values: readonly T[], hash: number): T[] {
   const result = [...values];
   for (let index = result.length - 1; index > 0; index--) { const other = mix(hash, index) % (index + 1); [result[index], result[other]] = [result[other]!, result[index]!]; }
@@ -187,6 +193,7 @@ export function worldAssetsForChunk(worldSeed: string, coordinate: WorldChunkCoo
   for (let index = result.length - 1; index >= 0 && trees > 0 && floraCount <= trees; index--) if (isTree(result[index]!)) { result.splice(index, 1); trees--; }
   return result;
 }
+/** Escape every regular-expression metacharacter before embedding a version literal. */
 function escapeRegexLiteral(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
@@ -203,6 +210,7 @@ export function findProceduralPlacement(worldSeed: string, placementId: string):
   const coordinate = proceduralPlacementChunk(placementId);
   return coordinate ? worldAssetsForChunk(worldSeed, coordinate).find(candidate => candidate.id === placementId) : undefined;
 }
+/** Assemble and strictly validate the bounded nine-chunk canonical region readback. */
 export function worldAssetRegion(worldId: string, worldSeed: string, center: WorldChunkCoordinate): WorldAssetRegion {
   worldAssetRegionInput.parse(center);const placements: WorldAssetPlacement[]=[];
   for(let z=center.z-1;z<=center.z+1;z++)for(let x=center.x-1;x<=center.x+1;x++)if(Math.abs(x)<=WORLD_CHUNK_COORDINATE_LIMIT&&Math.abs(z)<=WORLD_CHUNK_COORDINATE_LIMIT)placements.push(...worldAssetsForChunk(worldSeed,{x,z}));

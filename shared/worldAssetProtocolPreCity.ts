@@ -15,7 +15,9 @@ export const legacyWorldAssetRegionSchema = z.object({ version: z.literal(WORLD_
 export const worldAssetRegionSchema = legacyWorldAssetRegionSchema.extend({ version: z.literal("aurion-world-assets.v2"), collisionHash: z.literal(collision.manifestSha256), collisionVersion: z.literal(collision.version) }).strict();
 export type WorldAssetPlacement = z.infer<typeof placement>;
 export type WorldAssetRegion = z.infer<typeof worldAssetRegionSchema>;
+/** Historical replay: nonnegative remainder for the unchanged pre-city plan. */
 const mod = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;
+/** Historical replay: preserve the exact original seed hash arithmetic. */
 function seedHash(seed: string): number { let hash=2166136261; for(const c of seed) hash=Math.imul(hash^c.charCodeAt(0),16777619); return hash>>>0; }
 const city = catalog.assets.filter(a => a.family === "city"), nature = catalog.assets.filter(a => a.family === "nature");
 /**
@@ -68,6 +70,7 @@ export function worldAssetsForChunk(worldSeed: string, coordinate: WorldChunkCoo
   }
   return result;
 }
+/** Historical replay: preserve the original nine-chunk transport assembly. */
 export function worldAssetRegion(worldId: string, worldSeed: string, center: WorldChunkCoordinate): WorldAssetRegion {
   worldAssetRegionInput.parse(center);const placements: WorldAssetPlacement[]=[];
   for(let z=center.z-1;z<=center.z+1;z++)for(let x=center.x-1;x<=center.x+1;x++)if(Math.abs(x)<=WORLD_CHUNK_COORDINATE_LIMIT&&Math.abs(z)<=WORLD_CHUNK_COORDINATE_LIMIT)placements.push(...worldAssetsForChunk(worldSeed,{x,z}));

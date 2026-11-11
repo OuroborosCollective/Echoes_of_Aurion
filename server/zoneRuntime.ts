@@ -52,7 +52,7 @@ import {
 import { ZoneMobRuntime } from "./zoneMobRuntime";
 import { ZoneResourceRuntime } from "./zoneResourceRuntime";
 import { resolveWasdMobCollisionMovement } from "./wasdMobCollisionProtocol";
-import { worldNatureCollision, snapshotWorldNatureCollision } from "./worldNatureCollision";
+import { worldNatureCollision, snapshotWorldNatureCollision, preCityWorldNatureCollision } from "./worldNatureCollision";
 import { snapshotHiddenShippedPlacementIds } from "./worldShippedPlacementOverrides";
 import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
 import { mobDistance } from "./wasdMobFsmProtocol";
@@ -655,7 +655,11 @@ export class AuthoritativeMovementZone {
 
   tick(): boolean {
     const collisionIds = this.isReplay ? this.collisionSnapshotOverride : snapshotHiddenShippedPlacementIds();
-    this.tickCollision = snapshotWorldNatureCollision(collisionIds ?? []);
+    // The collision-input field was introduced together with the city-design plan.
+    // Field-free persisted receipts must execute their unchanged historical plan.
+    const historicalPlan = (this.isReplay && collisionIds === undefined)
+      || (this.receiptSchemaOverride ?? AURION_ACTIVE_CAUSAL_TICK_SCHEMA) === AURION_CAUSAL_TICK_SCHEMA_V1;
+    this.tickCollision = historicalPlan ? preCityWorldNatureCollision : snapshotWorldNatureCollision(collisionIds ?? []);
     const preState = this.lastCommittedState;
     const preStateHash = hashCanonicalZoneState(preState);
     const intentsToProcess = orderCanonicalZoneIntents(this.pendingIntents);

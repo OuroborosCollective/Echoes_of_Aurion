@@ -26,6 +26,7 @@ export function ensureShippedPlacementOverridesLoaded(): Promise<void> {
   return loading;
 }
 
+/** Filter the projection by the same confirmed removal index used for collision. */
 const visible = <T extends { id: string }>(placements: readonly T[]): T[] => placements.filter(placement => !isShippedPlacementHidden(placement.id));
 
 /**
@@ -39,6 +40,7 @@ export async function confirmedWorldAssetRegion(center: WorldChunkCoordinate): P
   return { ...region, placements: visible(region.placements) };
 }
 
+/** Preserve the legacy transport shape while applying confirmed current overrides. */
 export async function confirmedLegacyWorldAssetRegion(center: WorldChunkCoordinate) {
   await ensureShippedPlacementOverridesLoaded();
   const region = legacyWorldAssetRegion(GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED, center);

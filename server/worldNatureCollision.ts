@@ -4,6 +4,7 @@ import {
   worldAssetCatalog,
   worldAssetsForChunk,
 } from "../shared/worldAssetProtocol";
+import { worldAssetsForChunk as preCityPlacementsForChunk } from "../shared/worldAssetProtocolPreCity";
 import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import {
   isShippedPlacementHidden,
@@ -135,7 +136,8 @@ export class WorldNatureCollision {
    */
   constructor(
     private readonly worldSeed = GLOBAL_WORLD_SEED,
-    private readonly hidden: (placementId: string) => boolean = () => false
+    private readonly hidden: (placementId: string) => boolean = () => false,
+    private readonly placementPlan = worldAssetsForChunk
   ) {}
   /** Drop the derived cache after the set of hidden placements changed. */
   invalidate(): void {
@@ -151,7 +153,7 @@ export class WorldNatureCollision {
       this.chunks.set(key, cached);
       return cached;
     }
-    const obstacles = worldAssetsForChunk(this.worldSeed, coordinate).flatMap(
+    const obstacles = this.placementPlan(this.worldSeed, coordinate).flatMap(
       p => {
         const source = footprints.get(p.assetId);
         if (!source?.blocksMovement || this.hidden(p.id)) return [];
@@ -241,6 +243,14 @@ export const worldNatureCollision = new WorldNatureCollision(
   isShippedPlacementHidden
 );
 onShippedPlacementOverridesChanged(() => worldNatureCollision.invalidate());
+
+/** Historical field-free receipts predate admin overrides and the city-design plan.
+ * This bounded derived cache uses the byte-pinned prior plan only during replay
+ * (or the historical v1 test override), never as a second live-world authority.
+ */
+export const preCityWorldNatureCollision = new WorldNatureCollision(
+  GLOBAL_WORLD_SEED, () => false, preCityPlacementsForChunk
+);
 
 const immutableCollisionViews = new WeakMap<readonly string[], WorldNatureCollision>();
 
