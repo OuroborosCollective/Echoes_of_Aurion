@@ -108,7 +108,7 @@ describe("Aurion CAG deterministic design oracle", () => {
     expect(probe.expectedExact).toBe(
       `{${summary.totalTiles},${summary.grassTiles},${summary.forestFloorTiles},${summary.riverbankTiles},${summary.stoneTiles},${summary.ashTiles},${summary.ruinPathTiles}}`
     );
-    expect(probe.code).toContain("Prepend[BinCounts[surfaces");
+    expect(probe.code).toContain("Prepend[BinCounts[Flatten[surfaces]");
     expect(probe.truthNotice).toContain("does not assign textures or modify world state");
   });
 
@@ -153,7 +153,7 @@ describe("Aurion CAG deterministic design oracle", () => {
     const probe = buildVisualGeometryCagProbe(candidate);
     expect(probe.kind).toBe("visual_geometry");
     expect(probe.expectedExact).toBe("{-398,0,-283,397,2020,277,795,2020,560}");
-    expect(probe.code).toContain("Join[mn,mx,mx-mn]");
+    expect(probe.code).toContain("Flatten[{mn,mx,mx-mn}]");
     expect(candidate).toEqual(original);
     expect((await verifyAurionCagDesignProbe(probe, fakeClient("Out[1]= {-398, 0, -283, 397, 2020, 277, 795, 2020, 560}"))).verdict).toBe("SUPPORTED");
     expect((await verifyAurionCagDesignProbe(probe, fakeClient("{-398,0,-283,398,2020,277,796,2020,560}"))).verdict).toBe("CONTRADICTED");

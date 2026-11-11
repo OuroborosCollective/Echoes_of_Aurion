@@ -201,19 +201,16 @@ export function buildTerrainTexturizationCagProbe(chunk: BaseWorldChunk): Aurion
   const matrix = canonicalSurfaceMatrix(chunk);
   const summary = summarizeWorldChunkTexturization(chunk);
   let code = "surfaces={";
-  let first = true;
   for (let z = 0; z < matrix.length; z++) {
+    if (z > 0) code += ",";
+    code += "{";
     for (let x = 0; x < matrix[z]!.length; x++) {
-      if (!first) {
-        code += ",";
-      } else {
-        first = false;
-      }
-      const continuityCode = matrix[z]![x]!;
-      code += continuityCode;
+      if (x > 0) code += ",";
+      code += matrix[z]![x]!;
     }
+    code += "}";
   }
-  code += "};Prepend[BinCounts[surfaces, {1, 7, 1}], Length[surfaces]]";
+  code += "};Prepend[BinCounts[Flatten[surfaces], {1, 7, 1}], Length[Flatten[surfaces]]]";
 
   return Object.freeze({
     kind: "terrain_texturization",
@@ -391,8 +388,10 @@ export function normalizeModelBounds(bounds: ModelBounds, targetMaxExtent: numbe
     bounds.max[1]! - bounds.min[1]!,
     bounds.max[2]! - bounds.min[2]!
   ];
-  extents.forEach((value, index) => finitePositive(value, `extent${index}`));
-  const sourceMaxExtent = Math.max(...extents);
+  finitePositive(extents[0], "extent0");
+  finitePositive(extents[1], "extent1");
+  finitePositive(extents[2], "extent2");
+  const sourceMaxExtent = Math.max(extents[0], extents[1], extents[2]);
   const scaleE8 = Math.round((targetMaxExtent / sourceMaxExtent) * SCALE_E8);
   if (!Number.isSafeInteger(scaleE8) || scaleE8 <= 0) throw new Error("normalized model scale is outside the safe integer envelope");
   const scale = scaleE8 / SCALE_E8;
@@ -462,13 +461,17 @@ export function buildVisualGeometryCagProbe(input: AurionVisualGeometryBoundsMm)
       throw new Error("visual geometry millimeter bounds invalid");
     }
   }
-  const extents = max.map((value, axis) => value - min[axis]!) as [number, number, number];
-  if (extents.every(value => value === 0)) throw new Error("visual geometry is empty");
-  const coordinates = "p={{" + min.join(",") + "},{" + max.join(",") + "}}";
+  const min0 = min[0]!; const min1 = min[1]!; const min2 = min[2]!;
+  const max0 = max[0]!; const max1 = max[1]!; const max2 = max[2]!;
+  const ext0 = max0 - min0; const ext1 = max1 - min1; const ext2 = max2 - min2;
+
+  if (ext0 === 0 && ext1 === 0 && ext2 === 0) throw new Error("visual geometry is empty");
+
+  const coordinates = "p={{" + min0 + "," + min1 + "," + min2 + "},{" + max0 + "," + max1 + "," + max2 + "}}";
   return Object.freeze({
     kind: "visual_geometry",
-    code: coordinates + ";mn=Min/@Transpose[p];mx=Max/@Transpose[p];Join[mn,mx,mx-mn]",
-    expectedExact: "{" + [...min, ...max, ...extents].join(",") + "}",
+    code: coordinates + ";mn=Min/@Transpose[p];mx=Max/@Transpose[p];Flatten[{mn,mx,mx-mn}]",
+    expectedExact: "{" + min0 + "," + min1 + "," + min2 + "," + max0 + "," + max1 + "," + max2 + "," + ext0 + "," + ext1 + "," + ext2 + "}",
     truthNotice: "CAG independently checks bounded observed GLB mesh dimensions; server-owned collision, game behavior and world revisions are never changed.",
   });
 }

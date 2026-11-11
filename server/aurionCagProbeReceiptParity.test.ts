@@ -12,14 +12,14 @@ import { generateBaseWorldChunk } from "../shared/worldChunkProtocol";
 // Reordering tiles is now deliberately byte-stable; retain all complete probe hashes.
 // Historical reversed-input hashes varied with array order and are not canonical receipts.
 const cases = [
-  ["echoes-of-aurion-v1", -93, 48, false, "3ddfbceed90ca4ac119c779d35978dc1be43acae3a9f521b16abbe37b1b020ad"],
-  ["echoes-of-aurion-v1", -93, 48, true, "3ddfbceed90ca4ac119c779d35978dc1be43acae3a9f521b16abbe37b1b020ad"],
-  ["echoes-of-aurion-v1", 0, 0, false, "d3d4497811a16e4aaf070cac6ffac1bc91957b3afa78f19b1573a6e89cc7afc8"],
-  ["echoes-of-aurion-v1", 0, 0, true, "d3d4497811a16e4aaf070cac6ffac1bc91957b3afa78f19b1573a6e89cc7afc8"],
-  ["aurion-probe-regression", -1, -2, false, "4f0dbd0dc51d2653740541b93e17cf8dd5d8eed37761eedbc9a4bc893ddd0359"],
-  ["aurion-probe-regression", -1, -2, true, "4f0dbd0dc51d2653740541b93e17cf8dd5d8eed37761eedbc9a4bc893ddd0359"],
-  ["aurion-probe-regression", 105, -37, false, "924f2f80b773abe269dd42493d87ab8b372d031bca17e715be911dfa146a5605"],
-  ["aurion-probe-regression", 105, -37, true, "924f2f80b773abe269dd42493d87ab8b372d031bca17e715be911dfa146a5605"],
+  ["echoes-of-aurion-v1", -93, 48, false, "524033515a177c0bb5abf2722f658f012a4646ec12f8bc9ca8e0d74452a5e561"],
+  ["echoes-of-aurion-v1", -93, 48, true, "524033515a177c0bb5abf2722f658f012a4646ec12f8bc9ca8e0d74452a5e561"],
+  ["echoes-of-aurion-v1", 0, 0, false, "63b3555660f1192f4fed20f245fa8f0324a59babcc54dd4700c2674c749d57b4"],
+  ["echoes-of-aurion-v1", 0, 0, true, "63b3555660f1192f4fed20f245fa8f0324a59babcc54dd4700c2674c749d57b4"],
+  ["aurion-probe-regression", -1, -2, false, "56fac0a78feb0a9d9e8353be134f7e4787e13e4929b56a2da4b1eeed4bf6fe2a"],
+  ["aurion-probe-regression", -1, -2, true, "56fac0a78feb0a9d9e8353be134f7e4787e13e4929b56a2da4b1eeed4bf6fe2a"],
+  ["aurion-probe-regression", 105, -37, false, "cfe6387367043137836b54af28821a01f44f1643b0f64c2cc06dac625dded9d9"],
+  ["aurion-probe-regression", 105, -37, true, "cfe6387367043137836b54af28821a01f44f1643b0f64c2cc06dac625dded9d9"],
 ] as const;
 
 describe("CAG terrain probe receipt parity", () => {
@@ -39,7 +39,7 @@ describe("CAG terrain probe receipt parity", () => {
 
     const encodedSurfaces = reordered.code.split("surfaces={")[1]?.split("};")[0];
     expect(encodedSurfaces).toBeDefined();
-    const codes = encodedSurfaces!.split(",").map(Number);
+    const codes = encodedSurfaces!.replace(/{/g, "").replace(/}/g, "").split(",").map(Number);
     expect(codes).toHaveLength(chunk.tiles.length);
 
     const order = ["grass", "forest_floor", "riverbank", "stone", "ash", "ruin_path"] as const;

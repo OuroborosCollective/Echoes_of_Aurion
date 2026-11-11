@@ -50,10 +50,24 @@ function canonicalSerialize(value: unknown): string {
   if (typeof value === "string" || typeof value === "boolean" || typeof value === "number") {
     return JSON.stringify(value);
   }
-  if (Array.isArray(value)) return `[${value.map(canonicalSerialize).join(",")}]`;
+  if (Array.isArray(value)) {
+    let str = "[";
+    for (let i = 0; i < value.length; i++) {
+      if (i > 0) str += ",";
+      str += canonicalSerialize(value[i]);
+    }
+    return str + "]";
+  }
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonicalSerialize(record[key])}`).join(",")}}`;
+    const keys = Object.keys(record).sort();
+    let str = "{";
+    for (let i = 0; i < keys.length; i++) {
+      if (i > 0) str += ",";
+      const key = keys[i]!;
+      str += `${JSON.stringify(key)}:${canonicalSerialize(record[key])}`;
+    }
+    return str + "}";
   }
   return JSON.stringify(String(value));
 }
