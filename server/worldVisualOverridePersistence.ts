@@ -15,7 +15,7 @@ import {
   type WorldVisualOverride,
   type WorldVisualOverrideReadback,
 } from "../shared/worldVisualOverrideContract";
-import { applyShippedPlacementReadback, applyShippedPlacementWrite } from "./worldShippedPlacementOverrides";
+import { applyShippedPlacementReadback, applyShippedPlacementWrite, shippedPlacementIndexGeneration } from "./worldShippedPlacementOverrides";
 
 /**
  * Bound on distinct addressed placements (hand-authored by an administrator). Writes
@@ -41,6 +41,8 @@ export async function readWorldVisualOverrides(worldId = GLOBAL_WORLD_ID): Promi
   const table = aurionWorldVisualOverrides;
   const heads = db.select({ placementRef: table.placementRef, headRevision: sql<number>`MAX(${table.revision})`.as("headRevision") })
     .from(table).where(eq(table.worldId, worldId)).groupBy(table.placementRef).as("heads");
+  for (let attempt = 0; attempt < 4; attempt++) {
+  const generation = shippedPlacementIndexGeneration();
   const joined = await db.select({ row: table }).from(table)
     .innerJoin(heads, and(eq(table.placementRef, heads.placementRef), eq(table.revision, heads.headRevision)))
     .where(eq(table.worldId, worldId))
@@ -48,8 +50,11 @@ export async function readWorldVisualOverrides(worldId = GLOBAL_WORLD_ID): Promi
   if (joined.length > MAX_WORLD_VISUAL_PLACEMENTS + READBACK_SLACK) throw new Error("WORLD_VISUAL_READBACK_OVERFLOW");
   const readback = buildWorldVisualOverrideReadback(worldId, joined.map(({ row }) => row));
   // Every confirmed readback of the global world refreshes the derived placement index.
+  if (worldId === GLOBAL_WORLD_ID && generation !== shippedPlacementIndexGeneration()) continue;
   applyShippedPlacementReadback(readback);
   return readback;
+  }
+  throw new Error("WORLD_VISUAL_READBACK_BUSY");
 }
 
 const DEADLOCK_ATTEMPTS = 4;

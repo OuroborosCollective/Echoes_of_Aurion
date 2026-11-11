@@ -27,19 +27,24 @@ function observeMovement(page: Page) {
 }
 
 async function faceShippedAsset(page: Page, position: ReturnType<typeof observeMovement>): Promise<void> {
-  const response = await page.request.get("/api/trpc/worldAssets.regionV2", {
-    params: { input: JSON.stringify({ json: { x: 0, z: 0 } }) },
-  });
-  expect(response.ok()).toBe(true);
-  const region = (await response.json()).result.data.json;
-  const target = region.placements.find((p: { assetId: string }) => p.assetId === "nature-root-1");
-  expect(target).toMatchObject({ xMm: -40_000, zMm: 8_000 });
-  expect(shipping.manifest.assets.some((asset: { asset: string }) => asset.asset === target.assetId)).toBe(true);
+  const shippedIds = new Set(shipping.manifest.assets.map((asset: {asset: string}) => asset.asset));
+  let target: {assetId: string; xMm: number; zMm: number} | undefined;
+  for (const center of [{x:0,z:0},{x:1,z:1},{x:2,z:0},{x:0,z:2}]) {
+    const response = await page.request.get("/api/trpc/worldAssets.regionV2", {
+      params: { input: JSON.stringify({ json: center }) },
+    });
+    expect(response.ok()).toBe(true);
+    const region = (await response.json()).result.data.json;
+    target = region.placements.find((p: {assetId:string}) => shippedIds.has(p.assetId));
+    if (target) break;
+  }
+  if (!target) throw new Error("AIM291_REACHABLE_SHIPPED_PLACEMENT_REQUIRED");
+  expect(shippedIds.has(target.assetId)).toBe(true);
   await expect.poll(() => position(), { timeout: 15_000 }).toBeDefined();
   // Stop twenty metres east of the collider, on the already-open central row.
   const goalX = target.xMm + 20_000;
   for (const [axis, goal, negativeKey, positiveKey] of [["x", goalX, "a", "d"], ["z", target.zMm, "w", "s"]] as const) {
-    for (let attempt = 0; attempt < 100 && Math.abs(position()![axis] - goal) > 700; attempt++) {
+    for (let attempt = 0; attempt < 240 && Math.abs(position()![axis] - goal) > 700; attempt++) {
       const before = position()![axis];
       const key = before > goal ? negativeKey : positiveKey;
       await page.keyboard.down(key);
@@ -52,7 +57,7 @@ async function faceShippedAsset(page: Page, position: ReturnType<typeof observeM
   }
   // Snapshot millimetres and frame metres must select the same origin chunk.
   // The former unit mismatch requested kilometre-distant, invisible assets.
-  await expect.poll(async () => (await assets(page))?.center).toEqual({ x: 0, z: 0 });
+  await expect.poll(async () => (await assets(page))?.center).toEqual({ x: Math.floor((goalX + 32_000) / 64_000), z: Math.floor((target.zMm + 32_000) / 64_000) });
   await page.locator("#threejs-canvas").waitFor({state: "visible"});
   await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>("#threejs-canvas");

@@ -368,3 +368,17 @@ describe("city wall admission under device memory contention", () => {
     expect(glbResourcePool.evidence().heldHeadroom).toEqual({});
   });
 });
+
+it("reserves all authored slots when a nearer shipped replacement is visible", async () => {
+ const prop={assetId:"glb_budget_prop",sha256:"d".repeat(64),displayName:"Prop",purpose:"world-environment",assetType:"arena",targetKey:null,subcategory:"street-prop",equipmentSlot:null,storageUrl:`/api/assets/glb/${"d".repeat(64)}.glb`} as GlbCatalogEntry;
+ vi.spyOn(glbManager,"loadStaticLodFamily").mockImplementation(async()=>({scene:new THREE.Group(),animations:[],lodLevels:[0]}));
+ const original=worldAssetsForChunk(GLOBAL_WORLD_SEED,{x:1,z:1})[0]!;
+ const projection=new UploadedWorldCatalogProjection({scene:new THREE.Scene(),player:{position:new THREE.Vector3(60,0,60)},landscape:{chunkManager:{getElevationAt:()=>0}}} as never);
+ projection.setCatalog({version:"aurion.glb-import.v1",revision:"a".repeat(64),entries:[prop]});
+ projection.setWorldDesign({schemaVersion:"aurion.world-design.v1",revision:"b".repeat(64),designs:[{designKey:"budget",version:1,title:"Budget",designHash:"c".repeat(64),expectedCatalogRevision:"a".repeat(64),placements:Array.from({length:MAX_AUTHORED_RENDERED},(_,i)=>({placementKey:`p${i}`,assetId:prop.assetId,chunkX:1,chunkZ:1,xMm:32000+i,zMm:32000,rotationQuarterTurns:0 as const,scalePermille:1000}))}]});
+ const ref=shippedPlacementRef(original.id);
+ projection.setVisualOverrides({schemaVersion:"aurion.world-visual-overrides.v1",worldId:"w",overrides:[{placementRef:ref,targetKind:"shipped_placement",assetId:prop.assetId,revision:1}],revisions:{[ref]:1},readbackHash:"budget"});
+ projection.update();await vi.waitFor(()=>expect(projection.evidence().pending).toBe(0));
+ expect(projection.evidence().assets.filter(a=>a.id.startsWith("authored:"))).toHaveLength(MAX_AUTHORED_RENDERED);
+ projection.dispose();
+});

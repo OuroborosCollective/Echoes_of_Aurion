@@ -17,7 +17,7 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
       idx: 49,
       tag: "0049_aurion_causal_receipt_v2",
     });
-    expect(journal.entries).toHaveLength(78);
+    expect(journal.entries).toHaveLength(79);
     expect(journal.entries[68]).toMatchObject({ idx: 68, tag: "0068_aurion_item_manipulation_runtime" });
     expect(journal.entries[69]).toMatchObject({ idx: 69, tag: "0069_aurion_combat_victory_events" });
     expect(journal.entries[70]).toMatchObject({ idx: 70, tag: "0071_aurion_npc_guild_authority" });
@@ -25,7 +25,8 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
     expect(journal.entries[74]).toMatchObject({ idx: 74, tag: "0075_aurion_native_auth_sessions" });
     expect(journal.entries[75]).toMatchObject({ idx: 75, tag: "0076_aurion_investigation_deduction_receipts" });
     expect(journal.entries[76]).toMatchObject({ idx: 76, tag: "0077_aurion_npc_archetype_registry" });
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 77, tag: "0078_aurion_world_visual_overrides" });
+    expect(journal.entries[77]).toMatchObject({ idx: 77, tag: "0078_aurion_world_visual_overrides" });
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 78, tag: "0079_aurion_collision_receipt_capacity" });
     expect(manifest.waveId).toBe("aurion-production-0021-0075");
     expect(manifest.migrations.some((migration: { tag: string }) => migration.tag === "0049_aurion_causal_receipt_v2")).toBe(true);
     expect(manifest.migrations.at(-1)?.tag).toBe("0075_aurion_native_auth_sessions");
@@ -33,7 +34,7 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
     expect(sql).toContain("ADD COLUMN `receiptSchema`");
     expect(sql).toContain("ADD COLUMN `stageReceiptsJson`");
     expect(drizzle).toContain('receiptSchema: varchar("receiptSchema"');
-    expect(drizzle).toContain('stageReceiptsJson: text("stageReceiptsJson")');
+    expect(drizzle).toContain('stageReceiptsJson: mediumtext("stageReceiptsJson")');
     expect(persistence).toContain("CAUSAL_V2_STAGE_EVIDENCE_MISSING");
     expect(persistence).toContain("CAUSAL_PERSISTED_RECEIPT_HASH_MISMATCH");
     expect(AURION_ACTIVE_CAUSAL_TICK_SCHEMA).toBe(AURION_CAUSAL_TICK_SCHEMA_V2);

@@ -97,6 +97,28 @@ describe("bounded Aurion schema repair plan", () => {
     const j = full(); j.drizzleJournal[0].rows!.push({ hash: "f".repeat(64), createdAt: "1" });
     expect(plan(j).blockers).toContain("JOURNAL_IDENTITY_CONFLICT");
   });
+  it("widens only the two pinned receipt columns while preserving metadata", () => {
+    const o = full();
+    const pairs = ["aurionCausalTickReceipts.stageReceiptsJson", "aurionCausalArchive.payloadJson"];
+    o.observedTables = o.observedTables.map(t => ({ ...t, columns: t.columns.map(c =>
+      pairs.includes(`${t.name}.${c.name}`) ? { ...c, columnType: "text" } : c) }));
+    const capacityHash = journal.find(e => e.tag === "0079_aurion_collision_receipt_capacity")!.hash;
+    o.drizzleJournal[0].rows = o.drizzleJournal[0].rows!.filter(r => r.hash !== capacityHash);
+    const p = plan(classify(o));
+    expect(p.blockers).toEqual([]);
+    expect(p.operations.map(op => op.kind)).toEqual(["WIDEN_RECEIPT_TEXT", "WIDEN_RECEIPT_TEXT"]);
+    expect(p.operations.every(op => op.tag === "0079_aurion_collision_receipt_capacity")).toBe(true);
+    for (const type of ["varchar(255)", "longtext"]) {
+      const drift = structuredClone(o);
+      drift.observedTables.find(t => t.name === "aurionCausalArchive")!.columns.find(c => c.name === "payloadJson")!.columnType = type;
+      const rejected = plan(classify(drift));
+      expect(rejected.decision).toBe("BLOCKED_OPERATOR_REVIEW");
+      expect(rejected.operations.filter(op => op.kind === "WIDEN_RECEIPT_TEXT")).toHaveLength(1);
+    }
+    const nullable = structuredClone(o);
+    nullable.observedTables.find(t => t.name === "aurionCausalArchive")!.columns.find(c => c.name === "payloadJson")!.nullable = true;
+    expect(plan(classify(nullable)).decision).toBe("BLOCKED_OPERATOR_REVIEW");
+  });
   it("rejects stale, future and wrong-revision readbacks", () => {
     expect(() => plan(full(), nowMs + 900001)).toThrow("REPAIR_READBACK_STALE");
     expect(() => plan(full(), nowMs - 1)).toThrow("REPAIR_READBACK_STALE");

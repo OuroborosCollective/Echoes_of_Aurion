@@ -110,6 +110,7 @@ on:
       - "drizzle/0076_aurion_investigation_deduction_receipts.sql"
       - "drizzle/0077_aurion_npc_archetype_registry.sql"
       - "drizzle/0078_aurion_world_visual_overrides.sql"
+      - "drizzle/0079_aurion_collision_receipt_capacity.sql"
       - "config/aurion-migration-wave-0021-0078-manifest.json"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
@@ -499,7 +500,7 @@ jobs:
           assert.equal(r.apply.reviewedRecovery.preservedJournalRows.length,2);
           assert.ok(r.apply.repairedJournalTags.includes("0020_wasd_aurion_dialogue_quest_intents"));
           assert.ok(r.apply.operations.every(o=>o.result==="APPLIED"&&o.startedAt&&o.endedAt&&o.backupSha256===r.backup.sha256));
-          assert.deepEqual(r.postflight.summary,{migrationCount:57,matchCount:57,absentCount:0,driftCount:0});
+          assert.deepEqual(r.postflight.summary,{migrationCount:58,matchCount:58,absentCount:0,driftCount:0});
           NODE
           fixture verify-reviewed
           fixture prepare-unknown

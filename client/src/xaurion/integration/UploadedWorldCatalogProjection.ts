@@ -213,7 +213,7 @@ export class UploadedWorldCatalogProjection {
       || placement.id.startsWith("aurion.village-street-lamp")
       || isStarterCityWallSource(placement.asset.sha256)
         ? 0
-        : placement.id.startsWith("authored:") || placement.id.startsWith("shipped:") ? 1 : 2;
+        : placement.id.startsWith("authored:") ? 1 : 2;
     placements.sort((left, right) => {
       const priority = dedicatedPriority(left) - dedicatedPriority(right);
       if (priority) return priority;

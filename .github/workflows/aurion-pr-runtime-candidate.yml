@@ -172,6 +172,7 @@ jobs:
             --name "${db}" \
             --network "${network}" \
             --network-alias mariadb \
+            -p 127.0.0.1::3306 \
             -e MARIADB_ROOT_PASSWORD="${password}" \
             -e MARIADB_DATABASE=aurion_runtime \
             -e MARIADB_USER=aurion_runtime \
@@ -187,6 +188,10 @@ jobs:
             sleep 2
           done
           test "${ready}" = 1
+          database_port="$(docker port "${db}" 3306/tcp | sed 's/.*://')"
+          export DATABASE_URL="mysql://aurion_runtime:${password}@127.0.0.1:${database_port}/aurion_runtime"
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
 
           docker build --pull=false --build-arg "AURION_RELEASE_SHA=${EXPECTED_HEAD}" --tag "${image}" dist-traefik-runtime
           image_id="$(docker image inspect --format '{{.Id}}' "${image}")"

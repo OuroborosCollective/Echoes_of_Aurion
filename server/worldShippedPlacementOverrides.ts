@@ -16,6 +16,8 @@ import { shippedPlacementIdOf, type WorldVisualOverrideReadback } from "../share
 let hidden: ReadonlySet<string> = new Set();
 let fingerprint = "";
 let loaded = false;
+let generation = 0;
+let snapshot: readonly string[] = Object.freeze([]);
 const listeners = new Set<() => void>();
 
 const fingerprintOf = (ids: ReadonlySet<string>) => [...ids].sort().join("\n");
@@ -26,6 +28,7 @@ function replace(next: ReadonlySet<string>): void {
   if (nextFingerprint === fingerprint) return;
   hidden = next;
   fingerprint = nextFingerprint;
+  snapshot = Object.freeze([...next].sort());
   for (const listener of listeners) listener();
 }
 
@@ -47,6 +50,7 @@ export function applyShippedPlacementReadback(readback: Pick<WorldVisualOverride
 
 /** Apply one committed override write of the global world (assetId null restores). */
 export function applyShippedPlacementWrite(worldId: string, placementRef: string, assetId: string | null): void {
+  if (worldId === GLOBAL_WORLD_ID) generation += 1;
   const placementId = shippedPlacementIdOf(placementRef);
   if (worldId !== GLOBAL_WORLD_ID || placementId === null || !loaded) return;
   if ((assetId !== null) === hidden.has(placementId)) return;
@@ -60,7 +64,10 @@ export function markShippedPlacementOverridesEmpty(): void { replace(new Set());
 
 export const shippedPlacementOverridesLoaded = () => loaded;
 export const isShippedPlacementHidden = (placementId: string) => hidden.has(placementId);
-export const snapshotHiddenShippedPlacementIds = (): readonly string[] => Object.freeze([...hidden].sort());
+/** Revision guard for asynchronous global readbacks, not simulation time. */
+export const shippedPlacementIndexGeneration = () => generation;
+/** Reuse immutable collision input identity until the effective hidden set changes. */
+export const snapshotHiddenShippedPlacementIds = (): readonly string[] => snapshot;
 export const hiddenShippedPlacementCount = () => hidden.size;
 
 /** Derived caches (movement collision) drop their state when the index changes. */
@@ -72,6 +79,8 @@ export function onShippedPlacementOverridesChanged(listener: () => void): () => 
 /** Test seam: back to the unloaded, empty state. */
 export function resetShippedPlacementOverridesForTest(): void {
   loaded = false;
+  generation += 1;
+  snapshot = Object.freeze([]);
   if (!hidden.size) { fingerprint = ""; return; }
   hidden = new Set();
   fingerprint = "";

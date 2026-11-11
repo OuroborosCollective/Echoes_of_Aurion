@@ -22,7 +22,7 @@ describe("Aurion post-deploy production schema readback", () => {
     expect(journalTags).toEqual(tags);
     const release=read(".github/workflows/deploy-aurion-zone-runtime.yml");
     expect(release).toContain('const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-0021-0078-manifest.json","utf8"))');
-    expect(tags.at(-1)).toBe("0078_aurion_world_visual_overrides");
+    expect(tags.at(-1)).toBe("0079_aurion_collision_receipt_capacity");
     const migrationCount=tags.length;
     expect(migrationCount).toBeGreaterThan(0);
     const sourceRevision="a".repeat(40),imageDigest="sha256:"+"b".repeat(64);

@@ -242,8 +242,14 @@ export const worldNatureCollision = new WorldNatureCollision(
 );
 onShippedPlacementOverridesChanged(() => worldNatureCollision.invalidate());
 
-/** Tick-local immutable index; cache invalidation of the live view cannot change it. */
+const immutableCollisionViews = new WeakMap<readonly string[], WorldNatureCollision>();
+
+/** Reuse immutable collision inputs and their bounded chunk cache between ticks. */
 export function snapshotWorldNatureCollision(ids = snapshotHiddenShippedPlacementIds()): WorldNatureCollision {
+  const cached = immutableCollisionViews.get(ids);
+  if (cached) return cached;
   const hidden = new Set(ids);
-  return new WorldNatureCollision(GLOBAL_WORLD_SEED, id => hidden.has(id));
+  const view = new WorldNatureCollision(GLOBAL_WORLD_SEED, id => hidden.has(id));
+  immutableCollisionViews.set(ids, view);
+  return view;
 }

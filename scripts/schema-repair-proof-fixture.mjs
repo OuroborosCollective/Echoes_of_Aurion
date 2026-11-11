@@ -50,6 +50,14 @@ try {
     assert.equal(run("reconcile").status, 0);
   } else if (["prepare-additive", "prepare-reviewed"].includes(mode)) {
     const history = JSON.parse(fs.readFileSync("dist-production-apply/drizzle/meta/repair-history.json", "utf8"));
+    for (const [table, column, nullable] of [["aurionCausalTickReceipts", "stageReceiptsJson", true], ["aurionCausalArchive", "payloadJson", false]]) {
+      const [rows] = await db.query(`SELECT COUNT(*) AS n FROM \`${table}\` WHERE OCTET_LENGTH(\`${column}\`)>65535`);
+      assert.equal(Number(rows[0].n), 0, "fixture must not truncate existing receipt evidence");
+      await db.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` text${nullable ? "" : " NOT NULL"}`);
+    }
+    const capacityEntry = history.find(entry => entry.tag === "0079_aurion_collision_receipt_capacity");
+    const [capacityDeleted] = await db.query("DELETE FROM __drizzle_migrations WHERE hash=? AND created_at=?", [capacityEntry.hash, capacityEntry.when]);
+    assert.equal(capacityDeleted.affectedRows, 1);
     for (const tag of ["0067_aurion_npc_decision_log", "0069_aurion_combat_victory_events", "0071_aurion_npc_guild_authority", "0072_aurion_production_probe_approvals", "0073_aurion_production_probe_session_fence", "0074_aurion_stat_allocation_receipts", "0075_aurion_native_auth_sessions", "0076_aurion_investigation_deduction_receipts", "0077_aurion_npc_archetype_registry", "0078_aurion_world_visual_overrides"]) {
       const sql = fs.readFileSync(`drizzle/${tag}.sql`, "utf8");
       for (const match of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)? `([^`]+)`/g)) {

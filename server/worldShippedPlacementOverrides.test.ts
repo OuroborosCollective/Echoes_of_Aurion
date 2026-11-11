@@ -181,3 +181,15 @@ describe("movement collision follows the confirmed world plan", () => {
     expect(worldNatureCollision.obstaclesForChunk(blocking.coordinate)).toHaveLength(before);
   });
 });
+
+it("advances the readback guard for every committed global override", () => {
+ const before=index.shippedPlacementIndexGeneration();
+ index.applyShippedPlacementWrite(GLOBAL_WORLD_ID,shippedPlacementRef(plan[0]!.id),WORLD_VISUAL_REMOVED_ASSET_ID);
+ expect(index.shippedPlacementIndexGeneration()).toBe(before+1);
+ index.applyShippedPlacementReadback(readbackOf(GLOBAL_WORLD_ID,[]));
+ const frozen=index.snapshotHiddenShippedPlacementIds();
+ expect(index.snapshotHiddenShippedPlacementIds()).toBe(frozen);
+ index.applyShippedPlacementWrite(GLOBAL_WORLD_ID,shippedPlacementRef(plan[0]!.id),WORLD_VISUAL_REMOVED_ASSET_ID);
+ expect(index.snapshotHiddenShippedPlacementIds()).not.toBe(frozen);
+ expect(frozen).toEqual([]);
+});

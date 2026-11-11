@@ -69,6 +69,6 @@ jobs:
       - name: Migrate isolated MariaDB
         run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
       - name: Run world authoring transaction and compatibility tests
-        run: pnpm exec vitest run server/questCompiler/fadenwerkAuthoring.test.ts server/aiFabric server/aurionWorldAuthoringMariaDb.test.ts server/worldVisualOverrideMariaDb.test.ts server/npcShellPurposeMariaDb.test.ts server/databaseSmoke.test.ts
+        run: pnpm exec vitest run server/questCompiler/fadenwerkAuthoring.test.ts server/aiFabric server/aurionWorldAuthoringMariaDb.test.ts server/worldVisualOverrideMariaDb.test.ts server/worldShippedPlacementMariaDb.test.ts server/causality/collisionCapacityMariaDb.test.ts server/npcShellPurposeMariaDb.test.ts server/databaseSmoke.test.ts
       - name: TypeScript check
         run: pnpm check

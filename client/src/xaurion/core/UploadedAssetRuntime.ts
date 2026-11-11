@@ -86,7 +86,8 @@ export function targetSizeMeters(subcategory: string | null): number {
  */
 export type UploadedAnchorClass = "road-lot" | "verge" | "garden" | "wild";
 type Anchor = Readonly<{ kind: UploadedAnchorClass; x: number; z: number; corner?: number }>;
-const ROAD_LOT_GAP_M = 1;
+// Fixed 9 m envelope: 9 m houses touch the kerb, 5 m structures keep a 2 m frontage.
+const ROAD_LOT_GAP_M = 0;
 const VERGE_GAP_M = 0.6;
 const VERGE_ALONG_M = 16.25;
 const ROAD_WIDTH_M = WORLD_ROAD_WIDTH_MM / 1000;
@@ -273,7 +274,7 @@ export function uploadedWorldVisualsForChunk(
     used.set(anchor.kind, count + 1);
     const asset = pool[(start + index) % pool.length]!;
     const half = targetSizeMeters(asset.subcategory) / 2;
-    const [dx, dz] = anchorOffset(anchor, half);
+    const [dx, dz] = anchorOffset(anchor, anchor.kind === "road-lot" ? 4.5 : anchor.kind === "verge" ? 1.6 : half);
     const xMm = coordinate.x * WORLD_CHUNK_SIZE_MM + Math.round(dx * 1000);
     const zMm = coordinate.z * WORLD_CHUNK_SIZE_MM + Math.round(dz * 1000);
     // The starter city inside the walls is hand-designed: nothing automatic stands there.

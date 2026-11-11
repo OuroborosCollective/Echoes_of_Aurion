@@ -507,6 +507,7 @@ export class WorldChunkManager {
     terrainGeo.computeVertexNormals();
 
     const terrainMesh = new THREE.Mesh(terrainGeo, this.getSplatMaterial());
+    terrainMesh.userData.aurionGround = true;
     terrainMesh.receiveShadow = true;
     group.add(terrainMesh);
 

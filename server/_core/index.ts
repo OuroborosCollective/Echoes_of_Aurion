@@ -67,9 +67,10 @@ async function startServer(){
   assertProductionDatabaseConnected(process.env.NODE_ENV, databaseConnected);
   if (databaseConnected) {
     // Admin-removed/replaced procedural placements must not block movement after a restart.
-    for (;;) {
+    for (let attempt = 1; ; attempt++) {
       try { await ensureShippedPlacementOverridesLoaded(); break; }
       catch (error) {
+        if (attempt >= 5) throw new Error("WORLD_VISUAL_BOOT_READBACK_FAILED", { cause: error });
         console.error("[WorldVisual] shipped placement overrides not loaded; retrying before zone startup", error instanceof Error ? error.message : error);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
