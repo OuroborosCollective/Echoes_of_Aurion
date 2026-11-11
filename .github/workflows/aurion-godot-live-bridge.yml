@@ -55,9 +55,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install exact lock and run unchanged full repository regression
+      - name: Install exact lock
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate old-source collision receipt and replay against this candidate
         run: |
-          pnpm install --frozen-lockfile --ignore-scripts
+          set -euo pipefail
+          historical_source="$(mktemp -d)"
+          trap 'rm -rf "$historical_source"' EXIT
+          git fetch --no-tags --depth=1 origin 3b050eb06e2903f359cb2554048e6a077f9102ae
+          git archive 3b050eb06e2903f359cb2554048e6a077f9102ae server shared drizzle package.json tsconfig.json | tar -x -C "$historical_source"
+          mkdir -p "$historical_source/scripts"
+          cp scripts/generate-historical-collision-fixture.mts "$historical_source/scripts/"
+          ln -s "$PWD/node_modules" "$historical_source/node_modules"
+          env -u DATABASE_URL pnpm exec tsx --tsconfig "$historical_source/tsconfig.json" "$historical_source/scripts/generate-historical-collision-fixture.mts" "$RUNNER_TEMP/pre-city-receipt.json"
+          AURION_HISTORICAL_COLLISION_FIXTURE="$RUNNER_TEMP/pre-city-receipt.json" pnpm exec vitest run server/causality/historicalCollisionReplay.test.ts
+      - name: Run unchanged full repository regression
+        run: |
           pnpm check
           pnpm test
           git diff --check
