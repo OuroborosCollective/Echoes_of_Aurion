@@ -121,9 +121,11 @@ export function evaluateMasteryEligibility(event: ScopedMasteryEvent): MasteryEl
 }
 
 function canonicalMetrics(metrics: MasteryContextMetrics | undefined): MasteryContextMetrics {
-  const entries = Object.entries(metrics ?? {}).sort(([left], [right]) => compareText(left, right));
+  const safeMetrics = metrics ?? {};
+  const metricKeys = Object.keys(safeMetrics).sort((left, right) => compareText(left, right));
   const result: Record<string, string> = {};
-  for (const [key, value] of entries) {
+  for (const key of metricKeys) {
+    const value = safeMetrics[key]!;
     if (!safeId.test(key)) throw new Error("invalid mastery context metric key");
     result[key] = exact(value, `context:${key}`).toString(10);
   }
