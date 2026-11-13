@@ -66,7 +66,8 @@ function sha256(input: string): string {
 function canonicalJson(value: unknown): string {
   return JSON.stringify(value, (_key, current) => {
     if (current && typeof current === "object" && !Array.isArray(current)) {
-      const sortedObj: Record<string, unknown> = {};
+      // Keep own "__proto__" keys as data, never mutate the prototype of the result.
+      const sortedObj: Record<string, unknown> = Object.create(null);
       for (const key of Object.keys(current).sort((a, b) => a.localeCompare(b))) {
         sortedObj[key] = (current as Record<string, unknown>)[key];
       }
