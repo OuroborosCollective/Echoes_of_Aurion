@@ -193,13 +193,16 @@ function validAffix(affix: LootAffixDefinition, base: LootBaseDefinition, level:
 }
 
 function resolveAffixStats(context: ServerConfirmedLootContext, affix: LootAffixDefinition, index: number): Readonly<Record<string, number>> {
-  const entries = Object.entries(affix.statRanges).sort(([left], [right]) => textCompare(left, right));
-  if (entries.length === 0) throw new Error(`loot affix ${affix.id} requires at least one stat range`);
-  return Object.freeze(Object.fromEntries(entries.map(([stat, range]) => {
+  const statKeys = Object.keys(affix.statRanges).sort((left, right) => textCompare(left, right));
+  if (statKeys.length === 0) throw new Error(`loot affix ${affix.id} requires at least one stat range`);
+  const resolvedStats: Record<string, number> = {};
+  for (const stat of statKeys) {
+    const range = affix.statRanges[stat]!;
     if (!Number.isSafeInteger(range.min) || !Number.isSafeInteger(range.max) || range.min > range.max) throw new Error(`loot affix ${affix.id} has an invalid ${stat} range`);
     const value = range.min + deterministicRoll(context, `affix-stat:${affix.id}:${stat}:${index}`, range.max - range.min + 1);
-    return [stat, value];
-  })));
+    resolvedStats[stat] = value;
+  }
+  return Object.freeze(resolvedStats);
 }
 
 function chooseAffixes(context: ServerConfirmedLootContext, base: LootBaseDefinition, quality: AurionLootQuality, definitions: readonly LootAffixDefinition[], level: bigint): readonly ResolvedLootAffix[] {
@@ -255,7 +258,7 @@ export function resolveDeterministicLoot(input: Readonly<{
   const setId = chooseSet(input.context, quality, base, input.sets);
   const itemPower = sumStats(base.baseStats) + resolvedAffixes.reduce((total, affix) => total + sumStats(affix.stats), 0);
   const resolvedContextHash = contextHash(input.context);
-  const deterministicHash = digest(AURION_LOOT_RULESET_VERSION, resolvedContextHash, base.id, quality, itemLevel.toString(10), ...resolvedAffixes.flatMap(affix => [affix.id, affix.slot, affix.groupId, ...Object.entries(affix.stats).sort(([left], [right]) => textCompare(left, right)).map(([stat, value]) => `${stat}:${value}`)]), setId ?? "none", String(itemPower));
+  const deterministicHash = digest(AURION_LOOT_RULESET_VERSION, resolvedContextHash, base.id, quality, itemLevel.toString(10), ...resolvedAffixes.flatMap(affix => [affix.id, affix.slot, affix.groupId, ...Object.keys(affix.stats).sort((left, right) => textCompare(left, right)).map((stat) => `${stat}:${affix.stats[stat]}`)]), setId ?? "none", String(itemPower));
   if (v3) {
     const stats: Record<string, number> = { ...base.baseStats };
     for (const affix of resolvedAffixes) for (const [key, value] of Object.entries(affix.stats)) stats[key] = (stats[key] ?? 0) + value;
@@ -334,7 +337,8 @@ export function resolveEquippedSetBonuses(input: Readonly<{ equippedBaseItemIds:
       .sort((left, right) => left.threshold - right.threshold);
     for (const { threshold, bonuses } of thresholds) {
       if (!Number.isSafeInteger(threshold) || threshold < 1 || pieces < threshold) continue;
-      for (const [stat, amount] of Object.entries(bonuses).sort(([left], [right]) => textCompare(left, right))) {
+      for (const stat of Object.keys(bonuses).sort((left, right) => textCompare(left, right))) {
+        const amount = bonuses[stat]!;
         if (!Number.isSafeInteger(amount)) throw new Error(`set ${definition.id} has a non-integer bonus`);
         totals.set(stat, (totals.get(stat) ?? 0) + amount);
       }
