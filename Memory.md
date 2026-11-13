@@ -6017,6 +6017,13 @@ Abschließende Review-Korrektur dieses Eintrags: Die isolierten Migrationskomman
 Dokumentationsnachtrag desselben Eintrags: Head 5050c85a besteht alle 59 PR-Actions-Workflows, 551 Dateien/2.943 Tests, 103 echte MariaDB-Tests, 3 Prozessgruppenfälle und den echten isolierten Container-/Feed-Prüfstand. Die mobile GLB-Wheel-Prüfung bestand unverändert in Versuch 2; erster Trace bleibt als Artifact 13834703535 erhalten, Ursache offen. Review am Head ohne offene Threads; Dokumentationsquote 79,37 %. Ergänzt werden die bisher undokumentierten Verträge von worldAssetFootprintMm, worldAssetGroundRectMm und intersectsStarterCityWallClearance. Der Code bleibt bytegleich nach Entfernen genau dieser drei neuen JSDoc-Blöcke; der neue Dokumentations-Head benötigt seinen eigenen CI-/Review-Readback.
 
 
+### 2026-11-13 — PR #1362 Maps-Query-Optimierung
+Status: REVIEW / exact-head CI pending; no production, map-proxy or deployment claim.
+Änderung: maps API parameter iteration uses own-key-guarded for-in in place of Object.entries().forEach; preserves own enumerable key order and null/undefined omission. Unrelated AIM296 BVH performance receipt restored byte-for-byte from main (blob 0e04d084dde8124f49ea8f4e75d8f5faee83a4a5); no invented benchmark speedup.
+Evidence: original PR head 10aa530b3cc1bf1e6e4edd6b998a8809c588f17d; https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1362 ; four head-specific PR workflows completed success (runs 43094382419, 43094382433, 43094382447, 43094382571). Final repaired-head CI and runtime/API proof to be read separately; no change to Aurion authority or 100-ms tick.
+Next: review final diff and independent exact-head CI, only then SHA-bound merge and main readback.
+
+
 ### 2026-11-13 — PR #1363 Kanonische NPC-Need-Iteration
 Status: REVIEW, final-head CI pending, no production effect confirmed.
 Änderung: npcAutonomy iterates the existing canonical npcNeedKeys order (safety, resources, belonging, status, wealth, power), equal to the server-owned resolveWorldReaction object's insertion order. Missing fields are not projected; no tick/authority change. Unrelated AIM296 BVH receipt restored byte-exact from main (blob 0e04d084dde8124f49ea8f4e75d8f5faee83a4a5); existing AIM265 source hash follows the changed code and requires exact-head parity gate.
