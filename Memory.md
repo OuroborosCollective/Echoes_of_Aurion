@@ -6017,6 +6017,20 @@ Abschließende Review-Korrektur dieses Eintrags: Die isolierten Migrationskomman
 Dokumentationsnachtrag desselben Eintrags: Head 5050c85a besteht alle 59 PR-Actions-Workflows, 551 Dateien/2.943 Tests, 103 echte MariaDB-Tests, 3 Prozessgruppenfälle und den echten isolierten Container-/Feed-Prüfstand. Die mobile GLB-Wheel-Prüfung bestand unverändert in Versuch 2; erster Trace bleibt als Artifact 13834703535 erhalten, Ursache offen. Review am Head ohne offene Threads; Dokumentationsquote 79,37 %. Ergänzt werden die bisher undokumentierten Verträge von worldAssetFootprintMm, worldAssetGroundRectMm und intersectsStarterCityWallClearance. Der Code bleibt bytegleich nach Entfernen genau dieser drei neuen JSDoc-Blöcke; der neue Dokumentations-Head benötigt seinen eigenen CI-/Review-Readback.
 
 
+### 2026-11-13 — PR #1362 Maps-Query-Optimierung
+Status: REVIEW / exact-head CI pending; no production, map-proxy or deployment claim.
+Änderung: maps API parameter iteration uses own-key-guarded for-in in place of Object.entries().forEach; preserves own enumerable key order and null/undefined omission. Unrelated AIM296 BVH performance receipt restored byte-for-byte from main (blob 0e04d084dde8124f49ea8f4e75d8f5faee83a4a5); no invented benchmark speedup.
+Evidence: original PR head 10aa530b3cc1bf1e6e4edd6b998a8809c588f17d; https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1362 ; four head-specific PR workflows completed success (runs 43094382419, 43094382433, 43094382447, 43094382571). Final repaired-head CI and runtime/API proof to be read separately; no change to Aurion authority or 100-ms tick.
+Next: review final diff and independent exact-head CI, only then SHA-bound merge and main readback.
+
+
+### 2026-11-13 — PR #1363 Kanonische NPC-Need-Iteration
+Status: REVIEW, final-head CI pending, no production effect confirmed.
+Änderung: npcAutonomy iterates the existing canonical npcNeedKeys order (safety, resources, belonging, status, wealth, power), equal to the server-owned resolveWorldReaction object's insertion order. Missing fields are not projected; no tick/authority change. Unrelated AIM296 BVH receipt restored byte-exact from main (blob 0e04d084dde8124f49ea8f4e75d8f5faee83a4a5); existing AIM265 source hash follows the changed code and requires exact-head parity gate.
+Evidence: old head 7ea47e4d3b5caaf870992b73ae1bdd139b48427a; https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/1363 ; 7 matching earlier PR workflows success, including AIM265 run 43101728241 and runtime candidate 43101728270. No measured speedup proven. Final repaired-head CI, review, merge SHA and live-readback pending.
+Next: pass exact-head NPC/replay and AIM265 regression and SHA-bound merge, independently read main; no mocks as live.
+
+
 ### 2026-11-13 — PR #1361 kanonische Objekt-Iteration
 Status: REPAIR / exact-head CI pending; no production proof.
 Änderung: optimization of Object.entries sorting in loot/mastery/companion/graph/ANN canonical paths. Two sorted JSON replacers originally used bare {} assignment: a supplied own "__proto__" key can change its prototype and omit a canonical field. Repaired both to Object.create(null) for own-key preservation. Unrelated AIM296 benchmark receipt restored unchanged (blob 0e04d084dde8124f49ea8f4e75d8f5faee83a4a5); AIM265 source hash change must pass its provenance validation.
