@@ -1,5 +1,5 @@
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
-import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
+import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, npcNeedKeys, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
 import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./aurion/civilizationProtocol";
 import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
 import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyAction, resolveRelationship } from "./wasdAurionSocietyProtocol";
@@ -185,9 +185,11 @@ export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZone
 function npcAutonomy(input: { npcId: "lyra" | "orun"; reaction: WorldReaction; resolutionIndex: number; dialectId: string; baseNeeds: Readonly<Record<NpcNeedKey, number>> }) {
   // Own keys only; preserve canonical receipt ordering below.
   const events = [];
-  for (const need of Object.keys(input.reaction.npcNeedDeltas) as NpcNeedKey[]) {
+  for (const need of npcNeedKeys) {
     const delta = input.reaction.npcNeedDeltas[need];
-    events.push({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need, delta, sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex });
+    if (delta !== undefined) {
+      events.push({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need, delta, sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex });
+    }
   }
   const needs = resolveNpcNeeds({
     current: input.baseNeeds,
