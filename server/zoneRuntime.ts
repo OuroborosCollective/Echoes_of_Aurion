@@ -837,7 +837,21 @@ export class AuthoritativeMovementZone {
         this.mobTargetPresences.push(presence);
       }
     }
-    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, new Set([...this.tactics.windups.map(w => w.mobId), ...Object.entries(this.tactics.effects).filter(([, effect]) => (effect.slowUntil ?? 0) > this.tickNumber && this.tickNumber % 2 === 0).map(([id]) => id)]));
+    const frozenEntityIds = new Set<string>();
+    for (let i = 0; i < this.tactics.windups.length; i++) {
+      frozenEntityIds.add(this.tactics.windups[i]!.mobId);
+    }
+    if (this.tickNumber % 2 === 0) {
+      for (const id in this.tactics.effects) {
+        if (Object.prototype.hasOwnProperty.call(this.tactics.effects, id)) {
+          const effect = this.tactics.effects[id];
+          if (effect && (effect.slowUntil ?? 0) > this.tickNumber) {
+            frozenEntityIds.add(id);
+          }
+        }
+      }
+    }
+    const mobsChanged = this.mobRuntime.tick(this.mobTargetPresences, this.tickNumber, frozenEntityIds);
     captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
@@ -945,7 +959,14 @@ export class AuthoritativeMovementZone {
       else effects.overdriveUntil = this.tickNumber + 50;
       result.changed = true;
     } else {
-      const targets = skillId === "k_whirlwind" ? this.mobRuntime.orderedStates().filter(m => m.health > 0 && mobDistance(peer.position, m.position) <= rule.range).map(m => m.definition.entityId) : [targetId];
+      const targets: string[] = [];
+      if (skillId === "k_whirlwind") {
+        for (const m of this.mobRuntime.orderedStates()) {
+          if (m.health > 0 && mobDistance(peer.position, m.position) <= rule.range) targets.push(m.definition.entityId);
+        }
+      } else {
+        targets.push(targetId);
+      }
       const initialStamina = peer.stamina;
       for (const target of targets) {
         peer.stamina = initialStamina;
@@ -1058,23 +1079,26 @@ export class AuthoritativeMovementZone {
 
   private combatants(): readonly ConfirmedZoneCombatant[] {
     this.refreshPeerOrder();
-    const out: ConfirmedZoneCombatant[] = [];
-    let peerIndex = 0;
     const mobs = this.mobRuntime.orderedStates();
+    // ⚡ Bolt: Pre-allocate array to avoid dynamic sizing overhead per tick
+    const out = new Array<ConfirmedZoneCombatant>(this.sortedPeersByEntityId.length + mobs.length);
+    let peerIndex = 0;
     let mobIndex = 0;
+    let outIndex = 0;
     while (peerIndex < this.sortedPeersByEntityId.length || mobIndex < mobs.length) {
       const peer = this.sortedPeersByEntityId[peerIndex];
       const mob = mobs[mobIndex];
       const peerId = peer ? `player:${peer.userId}` : null;
       const mobId = mob ? mob.definition.entityId : null;
       if (peerId && (!mobId || compareBinary(peerId, mobId) < 0)) {
-        out.push(Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence, ...(this.tacticalCombat ? { effects: { ...this.tactics.effects[peerId] }, skillCooldowns: Object.fromEntries(peer.skillCooldownUntilTick) } : {}) }));
+        out[outIndex++] = Object.freeze({ entityId: peerId, health: peer.health, maxHealth: peer.maxHealth, stamina: peer.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: peer.health > 0, combatLevel: peer.combatLevel, lastCombatSequence: peer.lastCombatSequence, ...(this.tacticalCombat ? { effects: { ...this.tactics.effects[peerId] }, skillCooldowns: Object.fromEntries(peer.skillCooldownUntilTick) } : {}) });
         peerIndex += 1;
       } else if (mobId) {
-        out.push(Object.freeze({ entityId: mobId, health: mob.health, maxHealth: mob.maxHealth, stamina: mob.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: mob.health > 0, combatLevel: mob.definition.level, lastCombatSequence: 0 }));
+        out[outIndex++] = Object.freeze({ entityId: mobId, health: mob.health, maxHealth: mob.maxHealth, stamina: mob.stamina, maxStamina: ZONE_COMBAT_MAX_STAMINA, alive: mob.health > 0, combatLevel: mob.definition.level, lastCombatSequence: 0 });
         mobIndex += 1;
       }
     }
+    out.length = outIndex;
     return Object.freeze(out);
   }
 

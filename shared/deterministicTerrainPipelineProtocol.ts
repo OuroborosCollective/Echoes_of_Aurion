@@ -279,16 +279,20 @@ function maxAdjacentDelta(
   z: number
 ): number {
   const current = heights[z * TERRAIN_GRID_SIZE + x]!;
-  const adjacent: number[] = [];
-  if (x > 0) adjacent.push(heights[z * TERRAIN_GRID_SIZE + x - 1]!);
+  let maxDelta = 0;
+  if (x > 0) {
+    maxDelta = Math.max(maxDelta, Math.abs(current - heights[z * TERRAIN_GRID_SIZE + x - 1]!));
+  }
   if (x + 1 < TERRAIN_GRID_SIZE) {
-    adjacent.push(heights[z * TERRAIN_GRID_SIZE + x + 1]!);
+    maxDelta = Math.max(maxDelta, Math.abs(current - heights[z * TERRAIN_GRID_SIZE + x + 1]!));
   }
-  if (z > 0) adjacent.push(heights[(z - 1) * TERRAIN_GRID_SIZE + x]!);
+  if (z > 0) {
+    maxDelta = Math.max(maxDelta, Math.abs(current - heights[(z - 1) * TERRAIN_GRID_SIZE + x]!));
+  }
   if (z + 1 < TERRAIN_GRID_SIZE) {
-    adjacent.push(heights[(z + 1) * TERRAIN_GRID_SIZE + x]!);
+    maxDelta = Math.max(maxDelta, Math.abs(current - heights[(z + 1) * TERRAIN_GRID_SIZE + x]!));
   }
-  return Math.max(...adjacent.map(value => Math.abs(current - value)), 0);
+  return maxDelta;
 }
 
 function slopeBps(deltaMm: number): number {
@@ -392,8 +396,12 @@ export function generateDeterministicTerrainChunk(
     });
   });
   const tiles = Object.freeze(rawTiles);
-  const minHeightMm = Math.min(...heights);
-  const maxHeightMm = Math.max(...heights);
+  let minHeightMm = heights[0]!;
+  let maxHeightMm = heights[0]!;
+  for (let i = 1; i < heights.length; i++) {
+    if (heights[i]! < minHeightMm) minHeightMm = heights[i]!;
+    if (heights[i]! > maxHeightMm) maxHeightMm = heights[i]!;
+  }
   let maxAdjacentDeltaMm = 0;
   for (let z = 0; z < TERRAIN_GRID_SIZE; z += 1) {
     for (let x = 0; x < TERRAIN_GRID_SIZE; x += 1) {
