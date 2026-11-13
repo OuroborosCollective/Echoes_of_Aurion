@@ -65,11 +65,14 @@ export async function makeRequest<T = unknown>(
   url.searchParams.append("key", apiKey);
 
   // Add other query parameters
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      url.searchParams.append(key, String(value));
+  for (const key in params) {
+    if (Object.prototype.hasOwnProperty.call(params, key)) {
+      const value = params[key];
+      if (value !== undefined && value !== null) {
+        url.searchParams.append(key, String(value));
+      }
     }
-  });
+  }
 
   const response = await fetch(url.toString(), {
     method: options.method || "GET",
