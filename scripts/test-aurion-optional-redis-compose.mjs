@@ -27,6 +27,8 @@ try {
   assert.equal(compose.services.aurion.environment.REDIS_URL, "");
   // The Compose override must supersede a stale 4 GiB owner-managed environment.
   assert.equal(compose.services.aurion.environment.NODE_OPTIONS, "--max-old-space-size=8800");
+  // Node runs as PID 1 and never reaps re-parented grandchildren; an init process must.
+  assert.equal(compose.services.aurion.init, true);
   assert.equal(fs.readFileSync(envFile, "utf8"), previous);
   const mount = compose.services.aurion.volumes.find(item => item.target === "/var/lib/aurion/companion-memory");
   assert.equal(mount?.type, "volume");
