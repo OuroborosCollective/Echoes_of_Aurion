@@ -1,0 +1,136 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/settings.gd" id="1_settings"]
+
+[node name="SettingsScreen" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+script = ExtResource("1_settings")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+color = Color(0.005, 0.012, 0.025, 0.86)
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.83, 0.52, 1)
+theme_override_font_sizes/font_size = 22
+text = "Steuerung & Spielerpräferenzen"
+
+[node name="Scope" type="Label" parent="Panel/Content"]
+layout_mode = 2
+autowrap_mode = 3
+text = "Servergespeicherte Spielsteuerung wird getrennt von lokalen Gerätepräferenzen geladen und gespeichert."
+
+[node name="Status" type="Label" parent="Panel/Content"]
+layout_mode = 2
+autowrap_mode = 3
+text = "Noch nicht vom Server geladen."
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+
+[node name="Rows" type="VBoxContainer" parent="Panel/Content/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="Revision" type="Label" parent="Panel/Content/Scroll/Rows"]
+layout_mode = 2
+text = "Serverrevision: —"
+
+[node name="LocalAudioLabel" type="Label" parent="Panel/Content/Scroll/Rows"]
+layout_mode = 2
+text = "Lokale Master-Lautstärke"
+
+[node name="MasterVolume" type="HSlider" parent="Panel/Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+
+[node name="LocalDisplayLabel" type="Label" parent="Panel/Content/Scroll/Rows"]
+layout_mode = 2
+text = "Lokale Schriftgröße dieser Einstellungsmaske"
+
+[node name="UiScale" type="HSlider" parent="Panel/Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.85
+max_value = 1.25
+step = 0.05
+
+[node name="MovementLabel" type="Label" parent="Panel/Content/Scroll/Rows"]
+layout_mode = 2
+text = "Bewegungsmodus"
+
+[node name="MovementMode" type="OptionButton" parent="Panel/Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AutoLoot" type="CheckBox" parent="Panel/Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Auto-Loot für gewöhnliche und magische Beute"
+
+[node name="AnalyticsConsent" type="CheckBox" parent="Panel/Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Optionale Nutzungsanalyse erlauben"
+
+[node name="HotbarLabel" type="Label" parent="Panel/Content/Scroll/Rows"]
+layout_mode = 2
+text = "Skillbelegung (fünf verschiedene Kommandos)"
+
+[node name="Hotbar" type="GridContainer" parent="Panel/Content/Scroll/Rows"]
+layout_mode = 2
+size_flags_horizontal = 3
+columns = 5
+theme_override_constants/h_separation = 4
+
+[node name="AnalyticsNotice" type="Label" parent="Panel/Content/Scroll/Rows"]
+layout_mode = 2
+autowrap_mode = 3
+text = "Analyse ist optional und betrifft nur serverseitig bestätigte Spielaktionen. Änderungen werden erst nach erfolgreichem Speichern und unabhängigem Readback als bestätigt angezeigt."
+
+[node name="Buttons" type="HBoxContainer" parent="Panel/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 2
+
+[node name="Reload" type="Button" parent="Panel/Content/Buttons"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Erneut laden"
+
+[node name="Save" type="Button" parent="Panel/Content/Buttons"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Serverseitig speichern"
+
+[node name="Close" type="Button" parent="Panel/Content/Buttons"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Schließen"
