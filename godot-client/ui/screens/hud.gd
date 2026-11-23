@@ -5,6 +5,7 @@ signal skill_requested(skill_id: String)
 signal attack_requested
 signal diagnostics_requested
 signal world_studio_requested
+signal settings_requested
 signal camera_zoom_requested(factor: float)
 signal menu_changed(open: bool)
 signal exit_requested
@@ -53,6 +54,9 @@ func _ready() -> void:
 	$MenuPanel/Scroll/Content/WorldStudio.pressed.connect(func():
 		set_menu_open(false)
 		world_studio_requested.emit())
+	$MenuPanel/Scroll/Content/Settings.pressed.connect(func():
+		set_menu_open(false)
+		settings_requested.emit())
 	exit_confirmation.confirmed.connect(func(): exit_requested.emit())
 
 func set_menu_open(open: bool) -> void:
@@ -139,10 +143,11 @@ func fit_layout(view_size: Vector2, safe_area: Rect2, density: float = 1.0) -> v
 		if not button is Button: continue
 		button.custom_minimum_size.y = 48.0 * scale_factor
 		button.add_theme_font_size_override("font_size", font_size)
-	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Scroll/Content/Diagnostics, $MenuPanel/Scroll/Content/WorldStudio, $MenuPanel/Scroll/Content/QuestAvailability, $MenuPanel/Scroll/Content/Close, notice_text]:
+	for label: Control in [player_name, health_label, stamina_label, connection, target_name, target_health, menu_button, attack_button, $MenuPanel/Scroll/Content/Diagnostics, $MenuPanel/Scroll/Content/WorldStudio, $MenuPanel/Scroll/Content/Settings, $MenuPanel/Scroll/Content/QuestAvailability, $MenuPanel/Scroll/Content/Close, notice_text]:
 		label.add_theme_font_size_override("font_size", font_size)
 	$MenuPanel/Scroll/Content/Diagnostics.custom_minimum_size.y = 48.0 * scale_factor
 	$MenuPanel/Scroll/Content/WorldStudio.custom_minimum_size.y = 48.0 * scale_factor
+	$MenuPanel/Scroll/Content/Settings.custom_minimum_size.y = 48.0 * scale_factor
 	$MenuPanel/Scroll/Content/Close.custom_minimum_size.y = 48.0 * scale_factor
 	var margin := 16.0 * scale_factor
 	var usable_width := maxf(0.0, safe.size.x - 2.0 * margin)

@@ -18,6 +18,8 @@ const CatalogModelCache = preload("res://actors/catalog_model_cache.gd")
 const RemoteActorRegistry = preload("res://actors/remote_actor_registry.gd")
 const PublicAppearanceApi = preload("res://net/api/public_actor_appearance_api.gd")
 const QuestNpcApi = preload("res://net/api/quest_npc_api.gd")
+const PlayerUiApi = preload("res://net/api/player_ui_api.gd")
+const SettingsScene = preload("res://ui/screens/settings.tscn")
 const QuestNpcRegistry = preload("res://actors/quest_npc_registry.gd")
 const ChunkSurfaceApi = preload("res://net/api/chunk_surface_api.gd")
 const ChunkTerrain = preload("res://world/chunk_terrain.gd")
@@ -94,6 +96,8 @@ var _selected_target_id := ""
 var _config: Dictionary
 var _auth_start: Node
 var _api: Node
+var _player_ui_api: Node
+var _settings_screen: Control
 var _appearance_api: Node
 var _chunk_api: Node
 var _world_design_api: Node
@@ -184,6 +188,17 @@ func _ready() -> void:
 	add_child(_api)
 	_api.zone_ticket_succeeded.connect(_on_zone_ticket_succeeded)
 	_api.request_failed.connect(_on_zone_ticket_failed)
+	_player_ui_api = PlayerUiApi.new(_auth_start)
+	add_child(_player_ui_api)
+	_player_ui_api.player_ui_ready.connect(_on_player_ui_ready)
+	_player_ui_api.controls_saved.connect(_on_player_controls_saved)
+	_player_ui_api.request_failed.connect(_on_player_ui_failed)
+	_settings_screen = SettingsScene.instantiate()
+	_settings_screen.name = "SettingsScreen"
+	add_child(_settings_screen)
+	_settings_screen.close_requested.connect(_close_settings)
+	_settings_screen.reload_requested.connect(_reload_settings)
+	_settings_screen.save_requested.connect(_save_player_controls)
 	_appearance_api = AppearanceApi.new(_auth_start)
 	add_child(_appearance_api)
 	_appearance_api.appearance_ready.connect(_on_appearance_ready)
@@ -288,6 +303,7 @@ func _ready() -> void:
 	)
 	mobile_hud.diagnostics_requested.connect(_toggle_world_diagnostics)
 	mobile_hud.world_studio_requested.connect(_open_world_studio)
+	mobile_hud.settings_requested.connect(_open_settings)
 	mobile_hud.menu_changed.connect(_on_mobile_menu_changed)
 	mobile_hud.exit_requested.connect(_on_mobile_exit_requested)
 	mobile_hud.exit_confirmation.canceled.connect(_restore_mobile_joystick)
@@ -311,6 +327,12 @@ func _ready() -> void:
 	studio_button.custom_minimum_size.y = 48
 	studio_button.pressed.connect(_open_world_studio)
 	$WorldHUD/WorldBar.add_child(studio_button)
+	var settings_button := Button.new()
+	settings_button.name = "SettingsButton"
+	settings_button.text = "Einstellungen"
+	settings_button.custom_minimum_size.y = 48
+	settings_button.pressed.connect(_open_settings)
+	$WorldHUD/WorldBar.add_child(settings_button)
 	if _mobile_hud_enabled:
 		get_tree().set_quit_on_go_back(false)
 	login.disabled = true
@@ -434,6 +456,10 @@ func _reset_projection() -> void:
 		_set_tabletop(false)
 		_clear_tabletop()
 	# An old HTTP completion/actor must not survive a new authenticated zone.
+	if _player_ui_api != null:
+		_player_ui_api.cancel()
+	if _settings_screen != null:
+		_settings_screen.close_settings()
 	if _world_studio != null:
 		_world_studio.close_session()
 	if _appearance_api != null:
@@ -796,11 +822,86 @@ func _on_mobile_menu_changed(open: bool) -> void:
 		_cancel_move_intent()
 	_restore_mobile_joystick()
 
+func _open_settings() -> void:
+	if _settings_screen == null or not world_view.visible or _settings_screen.visible:
+		return
+	_camera_router.cancel()
+	_cancel_move_intent()
+	_settings_screen.open_settings()
+	if _mobile_hud_enabled:
+		mobile_hud.set_menu_open(true)
+	if not _auth_start.protected_response_allowed():
+		_settings_screen.show_error("Melde dich an, um servergespeicherte Steuerungen zu laden.")
+		return
+	if not _player_ui_api.request_player_ui(_config.server_base_url):
+		if _settings_screen.is_pending():
+			_settings_screen.show_error("Aurion konnte den Einstellungs-Readback nicht starten. Bitte erneut laden.")
+
+func _reload_settings() -> void:
+	if _settings_screen == null or not _settings_screen.visible:
+		return
+	if not _auth_start.protected_response_allowed():
+		_settings_screen.show_error("Anmeldung abgelaufen. Melde dich erneut an.")
+		return
+	_settings_screen.set_loading("Serverwerte werden erneut gelesen …")
+	if not _player_ui_api.request_player_ui(_config.server_base_url) and _settings_screen.is_pending():
+		_settings_screen.show_error("Aurion konnte den Readback nicht starten. Es wurde nichts geändert.")
+
+func _save_player_controls(user_id: int, settings: Dictionary) -> void:
+	if _settings_screen == null or not _settings_screen.visible:
+		return
+	if not _auth_start.protected_response_allowed():
+		_settings_screen.show_error("Anmeldung abgelaufen. Speichere nach erneutem Anmelden erneut.")
+		return
+	if not _player_ui_api.save_controls(_config.server_base_url, user_id, settings):
+		if _settings_screen.is_pending():
+			_settings_screen.show_error("Speichern konnte nicht gestartet werden. Lade die aktuellen Serverwerte neu.")
+
+func _close_settings() -> void:
+	if _settings_screen == null or not _settings_screen.visible or _settings_screen.is_saving():
+		return
+	if _player_ui_api != null:
+		_player_ui_api.cancel()
+	_settings_screen.close_settings()
+	if _mobile_hud_enabled:
+		mobile_hud.set_menu_open(false)
+	_restore_mobile_joystick()
+
+func _on_player_ui_ready(readback: Dictionary) -> void:
+	if _settings_screen != null and _settings_screen.visible:
+		_settings_screen.show_readback(readback)
+
+func _on_player_controls_saved(readback: Dictionary) -> void:
+	if _settings_screen != null and _settings_screen.visible:
+		_settings_screen.show_readback(readback, "Änderungen serverseitig gespeichert und unabhängig zurückgelesen.")
+
+func _on_player_ui_failed(reason: String) -> void:
+	if _settings_screen == null or not _settings_screen.visible:
+		return
+	var message := "Aurion hat die Einstellungen nicht bestätigt. Lade die Serverwerte erneut."
+	match reason:
+		"PLAYER_UI_AUTH_REQUIRED", "PLAYER_UI_SESSION_CHANGED":
+			message = "Anmeldung abgelaufen oder geändert. Melde dich erneut an und lade die Serverwerte neu."
+		"PLAYER_UI_SETTINGS_STALE":
+			message = "Die Serverrevision ist veraltet. Lade die aktuellen Einstellungen neu."
+		"PLAYER_UI_SETTINGS_INVALID":
+			message = "Aurion hat diese Belegung abgewiesen. Prüfe die Skillplätze und lade erneut."
+		"PLAYER_UI_SAVE_NOT_CONFIRMED":
+			message = "Der Speicherstatus ist nicht bestätigt. Prüfe zuerst den aktuellen Server-Readback; die Änderung wird nicht als gespeichert angezeigt."
+	if reason in ["PLAYER_UI_AUTH_REQUIRED", "PLAYER_UI_SESSION_CHANGED", "PLAYER_UI_SETTINGS_STALE", "PLAYER_UI_RESPONSE_INVALID", "PLAYER_UI_SAVE_NOT_CONFIRMED"]:
+		_settings_screen.require_reload(message)
+	else:
+		_settings_screen.show_error(message)
+
 func _restore_mobile_joystick() -> void:
 	if _mobile_hud_enabled:
-		mobile_joystick.visible = not _tabletop_active and world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible
+		mobile_joystick.visible = not _tabletop_active and world_view.visible and not $SafeMargin.visible and not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible and not _world_studio.visible and (_settings_screen == null or not _settings_screen.visible)
 
 func _handle_mobile_back() -> void:
+	if _settings_screen != null and _settings_screen.visible:
+		if not _settings_screen.is_saving():
+			_close_settings()
+		return
 	if _world_studio.visible:
 		_world_studio._close_requested()
 		_restore_mobile_joystick()
@@ -830,7 +931,7 @@ func _on_mobile_exit_requested() -> void:
 ## G21: camera-only gestures never send move/attack or alter confirmed state.
 ## The existing G20 joystick still exclusively owns its own finger index.
 func _world_input_permitted() -> bool:
-	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and not _world_studio.visible and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
+	return _zone_socket != null and _zone_socket.state_name() == "connected" and _confirmed_zone.has_state() and not _lifecycle.is_suspended() and not _world_is_stale and not _world_studio.visible and (_settings_screen == null or not _settings_screen.visible) and world_view.visible and not $SafeMargin.visible and (not _mobile_hud_enabled or (not mobile_hud.menu_is_open() and not mobile_hud.exit_confirmation.visible))
 
 func _open_world_studio() -> void:
 	if _tabletop_active: return

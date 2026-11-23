@@ -71,6 +71,9 @@ for (const [id, script, marker] of [
   ['camera-pinch-zoom', 'test_camera_zoom.gd', 'GODOT_CAMERA_PINCH_ZOOM_PASS (synthetic input; no physical device or live receipts)'],
   ['g21-target-action', 'test_g21_target_action.gd', 'G21 target UI and canonical attack over isolated local WebSocket verified (fixture, not live Aurion)'],
   ['g22-native-hud', 'test_hud_projection.gd', 'G22_NATIVE_HUD_PROJECTION_TOUCH_PASS (synthetic fixtures; no physical device)'],
+  ['player-ui-contract', 'test_player_ui_api_contract.gd', 'Godot player.ui strict contract and settings validation verified'],
+  ['local-preferences', 'test_preferences.gd', 'G30 local audio/UI preferences persistence and domain separation verified'],
+  ['settings-screen', 'test_settings_screen.gd', 'Godot native settings screen readback and revision flow verified'],
   ['world-design-projection', 'test_world_design_projection.gd', 'GODOT_WORLD_DESIGN_PROJECTION_PASS'],
   ['visual-recipe', 'test_visual_recipe.gd', 'AURION_VISUAL_RECIPE_GLTF_PASS'],
   ['starter-city-wall-scale', 'test_starter_city_wall.gd', 'GODOT_STARTER_CITY_WALL_SCALE_PASS'],
@@ -126,6 +129,13 @@ await stage(
   process.execPath,
   ['scripts/godot/aurion-api-runtime.mjs', executable, project],
   'Godot protected zone ticket client regression verified',
+);
+await stage(
+  'player-ui-api-http',
+  'headless',
+  process.execPath,
+  ['scripts/godot/player-ui-api-runtime.mjs', executable, project],
+  'Godot player.ui GET, revision-bound save, independent readback and re-login identity verified (isolated HTTP fixture)',
 );
 await stage(
   'appearance-api-http',
